@@ -1,6 +1,11 @@
 # Servika virtual mailboxes. This file is installed as a single Dovecot drop-in.
 protocols = imap lmtp
 
+# Both address families, written explicitly rather than left to the packaged
+# default. `listen = [::]` alone would serve IPv6 ONLY on most systems, and a
+# distribution that changes its default would drop one family without saying so.
+listen = *, ::
+
 mail_location = maildir:~/
 
 # The stock `!include auth-system.conf.ext` in 10-auth.conf MUST be commented

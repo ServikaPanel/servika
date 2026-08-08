@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"sort"
@@ -133,9 +134,20 @@ func replaceManagedBlock(master, block string) string {
 // renderTransportServices produces one bound smtp service per address.
 //
 // The shape follows the Postfix documentation for sending from a specific
-// address: an extra smtp service in master.cf with smtp_bind_address set. An
+// address: an extra smtp service in master.cf with the bind address set. An
 // empty pool produces an empty block, which removes the services entirely rather
 // than leaving dead ones behind.
+//
+// The parameter differs by FAMILY. Postfix takes smtp_bind_address for IPv4 and
+// smtp_bind_address6 for IPv6; feeding an IPv6 address to the first is a
+// configuration Postfix refuses, which rolls the whole write back and leaves the
+// operator with no working explanation for why adding an address failed.
+//
+// inet_protocols is pinned on the same service. A transport bound to only one
+// family falls back to the DEFAULT source address for the other one, so a domain
+// the operator moved onto a specific address would still send from the server's
+// main address whenever the recipient answered on the other family. That defeats
+// the entire point of assigning an outbound address, and it does so invisibly.
 func renderTransportServices(addresses []string) string {
 	if len(addresses) == 0 {
 		return ""
@@ -144,12 +156,22 @@ func renderTransportServices(addresses []string) string {
 	out.WriteString(blockBegin)
 	out.WriteByte('\n')
 	for _, value := range addresses {
-		fmt.Fprintf(&out, "%s unix - - n - - smtp\n  -o smtp_bind_address=%s\n  -o syslog_name=postfix/%s\n",
-			transportName(value), value, transportName(value))
+		bindParam, protocols := bindParameters(value)
+		fmt.Fprintf(&out, "%s unix - - n - - smtp\n  -o %s=%s\n  -o inet_protocols=%s\n  -o syslog_name=postfix/%s\n",
+			transportName(value), bindParam, value, protocols, transportName(value))
 	}
 	out.WriteString(blockEnd)
 	out.WriteByte('\n')
 	return out.String()
+}
+
+// bindParameters returns the Postfix bind parameter and protocol restriction
+// for one outbound address.
+func bindParameters(value string) (bindParam, protocols string) {
+	if ip := net.ParseIP(value); ip != nil && ip.To4() == nil {
+		return "smtp_bind_address6", "ipv6"
+	}
+	return "smtp_bind_address", "ipv4"
 }
 
 // renderSenderTransport maps each assigned domain to its transport.

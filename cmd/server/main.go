@@ -198,6 +198,11 @@ func main() {
 	// too, but it can exit before that step and this repair also has to reach
 	// hosts that were installed before it existed.
 	mail.HealDovecotAuth(context.Background())
+	// The three Postfix delivery settings and the Dovecot listen line reach a
+	// NEW install through servika-mail-setup; an existing one never reruns it,
+	// so without this repair IPv6 mail would work only on hosts installed after
+	// the change.
+	mail.HealMailIPv6(context.Background())
 	// Mail hostnames are served their own certificate through SNI. The map is
 	// generated from the installed certificates, so this picks up a host that
 	// already had them and drops one whose certificate has expired.

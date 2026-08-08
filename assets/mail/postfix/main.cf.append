@@ -1,6 +1,17 @@
 
 # ===== servika-mail =====
 inet_interfaces = all
+# Accept and deliver over both address families. inet_protocols is written
+# explicitly rather than left to the packaged default, which was ipv4 on older
+# RHEL releases and would silently make the server IPv4-only for mail.
+inet_protocols = all
+# Outgoing delivery does NOT prefer IPv6. The Postfix documentation calls
+# smtp_address_preference = ipv6 unsafe: during an IPv6 outage every message
+# waits out its timeout before falling back, which fills the queue. "any" plus
+# smtp_balance_inet_protocols spreads attempts across both families, so IPv6 is
+# used where it works and IPv4 never stops working.
+smtp_address_preference = any
+smtp_balance_inet_protocols = yes
 mydestination = localhost
 virtual_mailbox_domains = mysql:/etc/postfix/mysql-virtual-domains.cf
 virtual_mailbox_maps    = mysql:/etc/postfix/mysql-virtual-mailboxes.cf

@@ -244,6 +244,20 @@ postconf -e 'inet_interfaces = all' 2>/dev/null || {
     || printf '\ninet_interfaces = all\n' >> /etc/postfix/main.cf
 }
 log "postfix listens on all interfaces"
+# Both address families, explicitly. The packaged default was ipv4 on older
+# RHEL releases, which makes the server IPv4-only for mail without saying so.
+# Outgoing delivery uses "any" rather than preferring IPv6: the Postfix
+# documentation calls an ipv6 preference unsafe, because during an IPv6 outage
+# every message waits out its timeout before falling back and the queue fills.
+for setting in 'inet_protocols = all' 'smtp_address_preference = any' 'smtp_balance_inet_protocols = yes'; do
+  key=${setting%% *}
+  postconf -e "$setting" 2>/dev/null || {
+    grep -qE "^${key}[[:space:]]*=" /etc/postfix/main.cf 2>/dev/null \
+      && sed -i "s/^${key}[[:space:]]*=.*/${setting}/" /etc/postfix/main.cf \
+      || printf '\n%s\n' "$setting" >> /etc/postfix/main.cf
+  }
+done
+log "postfix accepts and delivers over IPv4 and IPv6"
 if ! grep -qE '^submission[[:space:]]+inet' /etc/postfix/master.cf; then
   cat "$TMPL/postfix/master.cf.append" >> /etc/postfix/master.cf
   log "submission service added to master.cf"
