@@ -13,10 +13,13 @@ package middleware
 //     password-only requests to keep the counter at zero and brute-force the
 //     TOTP code indefinitely. The counter ages out when the window expires.
 //   - Policy: 5 failed attempts in 15 minutes → IP banned for 30 minutes.
+//   - The counted unit is httpx.RateLimitKey, which is the full address for IPv4
+//     and the /64 for IPv6. An IPv6 client owns every address in its /64, so a
+//     per-address counter never fills for them at all.
 //   - A SECOND counter keys on the account being tried, because the per-IP one
-//     never fills for an attacker who rotates addresses (a botnet, or anyone
-//     holding an IPv6 prefix), leaving a single account open to unlimited online
-//     guessing.
+//     never fills for an attacker who rotates across MANY allocations (a botnet,
+//     or a prefix shorter than /64), leaving a single account open to unlimited
+//     online guessing.
 //   - Graduated delay: each failed attempt slows the request (capped).
 //   - Records are periodically pruned (memory-bloat/DoS prevention).
 //
@@ -278,7 +281,7 @@ func genReaper() {
 func RateLimit(name string, maxRequests int, window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := name + "|" + httpx.ClientIP(r)
+			key := name + "|" + httpx.RateLimitKey(httpx.ClientIP(r))
 			now := time.Now()
 			cutoff := now.Add(-window)
 			genMu.Lock()
@@ -312,7 +315,9 @@ func RateLimit(name string, maxRequests int, window time.Duration) func(http.Han
 // (counts 401 responses per IP).
 func LoginRateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := httpx.ClientIP(r)
+		// The /64, not the address: see httpx.RateLimitKey. Both the lookup and
+		// the recording below use this one value, so they cannot drift apart.
+		ip := httpx.RateLimitKey(httpx.ClientIP(r))
 		count, remain := loginStatus(ip)
 		if remain > 0 {
 			sec := int(remain.Seconds()) + 1

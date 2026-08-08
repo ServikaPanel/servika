@@ -62,6 +62,38 @@ func rateZoneName(rps int) string { return fmt.Sprintf("servika_rl_%d", rps) }
 // repeated in each of those shapes and would silently miss one.
 const staticExtensions = `jpg|jpeg|png|gif|ico|css|js|woff2?|svg|webp|avif|mp4|webm|pdf|zip|gz`
 
+// rateLimitAddrRules collapse a client address to the unit a rate limit counts:
+// the full address for IPv4, the /64 for IPv6.
+//
+// An IPv6 client is handed a /64 NETWORK and every address inside it is theirs,
+// so counting per address means one allocation can present a fresh source on
+// every request and never reach any limit. That is what $binary_remote_addr did
+// here before, which left the whole rate limit unenforceable over IPv6.
+//
+// The rules are ORDERED, which is how nginx evaluates map regexes, and each one
+// exists for a form nginx really produces:
+//
+//   - An IPv4-mapped address keys as the plain IPv4 address. It must be matched
+//     FIRST: the /64 of ::ffff:203.0.113.5 is ::/64, which every IPv4 client on
+//     earth would share, and five failed logins would lock out the internet.
+//   - Four explicit leading hextets is the ordinary case.
+//   - nginx renders the canonical RFC 5952 form, so an address whose third or
+//     fourth hextet is zero arrives COMPRESSED (2001:db8::1) and has no four
+//     explicit hextets to take. Its prefix is the part before the "::" padded
+//     with zeros, and that leading part alone identifies the /64.
+//
+// An address none of them match falls through to $remote_addr, which is the
+// previous behaviour: a miss narrows the key, it never merges two clients.
+//
+// This is text matching, not address arithmetic, because nginx cannot do
+// arithmetic on an address. The Go side (httpx.RateLimitKey) masks properly, and
+// the two are asserted to agree in geo_test.go.
+var rateLimitAddrRules = []struct{ pattern, value string }{
+	{`^::ffff:(?<v4>[0-9.]+)$`, "$v4"},
+	{`^(?<p4>[0-9a-f]+:[0-9a-f]+:[0-9a-f]+:[0-9a-f]+):`, "$p4::/64"},
+	{`^(?<ph>[0-9a-f]+(?::[0-9a-f]+){0,2})::`, "$ph::/64"},
+}
+
 // buildSharedConf renders the http-context file.
 //
 // It is a pure function of what the callers ask for so the whole shape can be
@@ -93,15 +125,29 @@ func buildSharedConf(countries []string, ranges geoip.Ranges, rates []int) strin
 	body.WriteString("    ~^/\\.well-known/  \"_exempt\";\n")
 	body.WriteString("    default           $servika_geo_country;\n}\n\n")
 
+	// Every pattern is QUOTED. nginx reads an unquoted `{` as a block opener, so
+	// a repetition count in a regex ends the directive early and the whole
+	// configuration is refused with "unexpected {".
+	body.WriteString("map $remote_addr $servika_rl_addr {\n")
+	for _, rule := range rateLimitAddrRules {
+		fmt.Fprintf(&body, "    \"~*%s\"  \"%s\";\n", rule.pattern, rule.value)
+	}
+	body.WriteString("    default  \"$remote_addr\";\n}\n\n")
+
 	body.WriteString("map $request_uri $servika_rl_key {\n")
 	fmt.Fprintf(&body, "    ~*\\.(%s)$  \"\";\n", staticExtensions)
 	body.WriteString("    ~^/\\.well-known/  \"\";\n")
-	body.WriteString("    default  \"$binary_remote_addr$server_name\";\n}\n\n")
+	body.WriteString("    default  \"$servika_rl_addr$server_name\";\n}\n\n")
 
 	// Deduplicated HERE rather than trusted from the caller. This function is
 	// what bounds the zone count, so a caller passing one entry per domain must
 	// still produce one zone per distinct rate; nginx rejects a repeated zone
 	// name outright, which would take every vhost down at once.
+	//
+	// The key is longer than the 4 or 16 raw bytes $binary_remote_addr held, so
+	// the same 10m zone now tracks fewer clients before it starts evicting. That
+	// is the price of the limit applying to IPv6 at all; the alternative is a
+	// zone that tracks more clients and stops none of them.
 	sorted := slices.Clone(rates)
 	sort.Ints(sorted)
 	sorted = slices.Compact(sorted)

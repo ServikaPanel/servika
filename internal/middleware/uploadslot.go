@@ -66,7 +66,7 @@ func uploadAccount(r *http.Request) string {
 	if claims := ClaimsFrom(r); claims != nil {
 		return "user:" + strconv.FormatInt(claims.UserID, 10)
 	}
-	return "ip:" + httpx.ClientIP(r)
+	return "ip:" + httpx.RateLimitKey(httpx.ClientIP(r))
 }
 
 // UploadSlot caps concurrent uploads per account.
