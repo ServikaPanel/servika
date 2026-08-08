@@ -131,20 +131,7 @@ func (h *Handlers) serverIPv4() string {
 	if h.ServerIPv4 != "" {
 		return h.ServerIPv4
 	}
-	if value := strings.TrimSpace(os.Getenv("SERVIKA_PUBLIC_IPV4")); value != "" {
-		return value
-	}
-	addrs, _ := net.InterfaceAddrs()
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok || ipNet.IP.IsLoopback() {
-			continue
-		}
-		if ip := ipNet.IP.To4(); ip != nil {
-			return ip.String()
-		}
-	}
-	return ""
+	return config.PublicIPv4()
 }
 
 func issuePanelCertificate(domain string) error {

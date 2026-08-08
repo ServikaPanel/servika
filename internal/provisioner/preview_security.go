@@ -2,8 +2,9 @@ package provisioner
 
 import (
 	"net"
-	"os"
 	"strings"
+
+	"servika/internal/config"
 )
 
 // panelFrameAncestors builds the CSP frame-ancestors allowlist that authorizes the
@@ -20,7 +21,9 @@ func panelFrameAncestors() string {
 			sources = append(sources, s)
 		}
 	}
-	ip := strings.TrimSpace(os.Getenv("SERVIKA_PUBLIC_IPV4"))
+	// config answers the environment-and-interfaces half; the database fallback
+	// below stays here because config cannot reach the database.
+	ip := config.PublicIPv4()
 	if net.ParseIP(ip).To4() == nil {
 		ip = ""
 		if packageDB != nil {

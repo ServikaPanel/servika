@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -160,8 +159,9 @@ func main() {
 		log.Printf("DNS zone include heal warn: %v", err)
 	}
 
-	ipv4 := detectIPv4()
-	log.Printf("server ipv4: %s", ipv4)
+	ipv4 := config.PublicIPv4()
+	ipv6 := config.PublicIPv6()
+	log.Printf("server ipv4: %s ipv6: %q kernel ipv6: %t", ipv4, ipv6, config.HasIPv6())
 
 	if err := domains.SeedIfEmpty(context.Background(), d, ipv4); err != nil {
 		log.Printf("seed warn: %v", err)
@@ -1065,20 +1065,4 @@ func applyMigration(d *sql.DB, name, body, checksum string) {
 	if err := tx.Commit(); err != nil {
 		log.Fatalf("migrations: commit %s: %v", name, err)
 	}
-}
-
-func detectIPv4() string {
-	if v := strings.TrimSpace(os.Getenv("SERVIKA_PUBLIC_IPV4")); v != "" {
-		return v
-	}
-	// Return the first non-loopback IPv4 address as a simple fallback.
-	addrs, _ := net.InterfaceAddrs()
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ip := ipnet.IP.To4(); ip != nil {
-				return ip.String()
-			}
-		}
-	}
-	return ""
 }
