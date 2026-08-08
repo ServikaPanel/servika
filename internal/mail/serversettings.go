@@ -66,6 +66,41 @@ func ReadServerSettings(ctx context.Context, db *sql.DB) (ServerSettings, error)
 	return settings, err
 }
 
+// PrimaryAddress is the blocklist and reverse-DNS state of the server's own
+// outbound address, as the background scanner last measured it.
+//
+// Scanned is separate from Listed on purpose. An address the scanner could not
+// query (an IPv6 one, since a blocklist is asked by reversing an IPv4 address
+// under its zone) has no hits, and without this flag that is indistinguishable
+// from a clean result: a false assurance about an address nothing ever checked.
+type PrimaryAddress struct {
+	IP      string `json:"ip"`
+	PTRName string `json:"ptr_name"`
+	PTROK   bool   `json:"ptr_ok"`
+	Scanned bool   `json:"dnsbl_scanned"`
+	Listed  bool   `json:"dnsbl_listed"`
+	Zones   string `json:"dnsbl_zones,omitempty"`
+	ScanAt  string `json:"scan_at,omitempty"`
+}
+
+// ReadPrimaryAddress returns the primary address state.
+func ReadPrimaryAddress(ctx context.Context, db *sql.DB) (PrimaryAddress, error) {
+	var primary PrimaryAddress
+	var ptrOK, scanned int
+	err := db.QueryRowContext(ctx,
+		`SELECT primary_ip, primary_ptr_name, primary_ptr_ok, primary_dnsbl_scanned,
+		        primary_dnsbl_zones, COALESCE(DATE_FORMAT(primary_scan_at,'%Y-%m-%d %H:%i'),'')
+		   FROM mail_server_settings WHERE id = 1`).
+		Scan(&primary.IP, &primary.PTRName, &ptrOK, &scanned, &primary.Zones, &primary.ScanAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return PrimaryAddress{}, nil
+	}
+	primary.PTROK = ptrOK == 1
+	primary.Scanned = scanned == 1
+	primary.Listed = strings.TrimSpace(primary.Zones) != ""
+	return primary, err
+}
+
 // ServerSettingsGet answers GET /admin/mail/settings.
 func (h *Handlers) ServerSettingsGet(w http.ResponseWriter, r *http.Request) {
 	settings, err := ReadServerSettings(r.Context(), h.DB)
@@ -73,7 +108,22 @@ func (h *Handlers) ServerSettingsGet(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the mail settings")
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, settings)
+	// The primary address rides on the settings response rather than getting an
+	// endpoint of its own: it is server-wide state measured against the zones
+	// configured here, and a screen that shows the zones has to be able to show
+	// what they said about this server.
+	primary, err := ReadPrimaryAddress(r.Context(), h.DB)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read the mail settings")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"max_message_size_mb":    settings.MaxMessageSizeMB,
+		"domain_send_limit_hour": settings.DomainSendLimitHour,
+		"client_send_limit_hour": settings.ClientSendLimitHour,
+		"dnsbl_zones":            settings.DNSBLZones,
+		"primary_address":        primary,
+	})
 }
 
 // ServerSettingsPut saves and applies them. PUT /admin/mail/settings.

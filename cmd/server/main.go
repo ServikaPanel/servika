@@ -220,7 +220,10 @@ func main() {
 	mail.StartDeliveryLogCollector(d)
 	// Blocklist state changes on the scale of hours and answers over someone
 	// else's DNS, so it is measured in the background rather than per request.
-	mail.StartPoolScanner(d)
+	// The pool is empty on a default install, so the address every domain
+	// actually sends from is passed in beside it: without that, a server that
+	// never configured a pool had no blocklist monitoring at all.
+	mail.StartPoolScanner(d, ipv4)
 	// Every domain's _dmarc record already asks the world to send aggregate
 	// reports to postmaster@. This reads them out of that mailbox without
 	// writing to it; the mailbox belongs to the customer.

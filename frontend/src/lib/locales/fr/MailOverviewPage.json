@@ -51,6 +51,15 @@
     "saved": "Enregistré et appliqué à Postfix.",
     "saveFailed": "Les paramètres n'ont pas pu être enregistrés."
   },
+  "primaryAddress": {
+    "title": "Ce serveur envoie depuis {{ip}}",
+    "notScanned": "Non vérifiée auprès d'aucune liste de blocage. Une liste de blocage se consulte en inversant une adresse IPv4 sous sa zone, donc une adresse uniquement IPv6 n'est jamais interrogée.",
+    "listed": "Listée sur : {{zones}}",
+    "clean": "Sur aucune liste de blocage configurée.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "Aucun enregistrement PTR confirmé",
+    "scannedAt": "vérifiée le {{at}}"
+  },
   "filters": {
     "title": "Listes d'autorisation et de blocage des expéditeurs",
     "subtitle": "Le score répond à la plupart des cas ; voici les instructions qu'il ne peut pas recevoir. Une entrée s'applique à tous les domaines de ce serveur.",

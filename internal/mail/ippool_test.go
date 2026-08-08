@@ -136,10 +136,30 @@ func TestUnreachableBlocklistIsNotAHit(t *testing.T) {
 			"5.113.0.203.listed.test": {"127.0.0.2"},
 		}}
 	}
-	hits := dnsblHits(context.Background(), "203.0.113.5",
+	hits, queried := dnsblHits(context.Background(), "203.0.113.5",
 		[]string{"listed.test", "unreachable.test"})
 	if len(hits) != 1 || hits[0] != "listed.test" {
 		t.Errorf("hits = %v, want only listed.test", hits)
+	}
+	if !queried {
+		t.Error("an IPv4 address with zones configured was reported as not queried")
+	}
+}
+
+// "Queried and clean" and "never queried" are different answers. They used to
+// be the same one: an IPv6 address has no reversed IPv4 form, so it returned no
+// hits and read as clean, which is a false assurance about an address nothing
+// ever checked.
+func TestAnAddressThatCannotBeQueriedIsNotReportedClean(t *testing.T) {
+	original := poolResolver
+	t.Cleanup(func() { poolResolver = original })
+	poolResolver = func() addrLookup { return scanResolver{} }
+
+	if hits, queried := dnsblHits(context.Background(), "2001:db8::1", []string{"listed.test"}); queried {
+		t.Errorf("an IPv6 address was reported as queried (hits = %v)", hits)
+	}
+	if _, queried := dnsblHits(context.Background(), "203.0.113.5", []string{"listed.test"}); !queried {
+		t.Error("an IPv4 address was reported as not queried")
 	}
 }
 
@@ -153,8 +173,8 @@ func TestNoZonesMeansNoQueries(t *testing.T) {
 		queried = true
 		return scanResolver{}
 	}
-	if hits := dnsblHits(context.Background(), "203.0.113.5", nil); len(hits) != 0 {
-		t.Errorf("hits = %v, want none", hits)
+	if hits, queried := dnsblHits(context.Background(), "203.0.113.5", nil); len(hits) != 0 || queried {
+		t.Errorf("hits = %v queried = %v, want none and not queried", hits, queried)
 	}
 	if queried {
 		t.Error("a resolver was built even though no zone is configured")

@@ -51,6 +51,15 @@
     "saved": "Kaydedildi ve Postfix'e uygulandı.",
     "saveFailed": "Ayarlar kaydedilemedi."
   },
+  "primaryAddress": {
+    "title": "Bu sunucu {{ip}} adresinden gönderiyor",
+    "notScanned": "Hiçbir engel listesine sorulmadı. Engel listesi, IPv4 adresini ters çevirip kendi bölgesinde sorgulayarak yanıt verir, bu yüzden yalnızca IPv6 olan bir adres hiç sorulmaz.",
+    "listed": "Şu listelerde: {{zones}}",
+    "clean": "Yapılandırılmış hiçbir engel listesinde değil.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "İleri yönde doğrulanan PTR kaydı yok",
+    "scannedAt": "{{at}} tarihinde bakıldı"
+  },
   "filters": {
     "title": "Gönderen izin ve engel listeleri",
     "subtitle": "Puanlama çoğu durumu çözer; bunlar ise puanlamanın alamayacağı talimatlardır. Bir kayıt sunucudaki her alan adı için geçerlidir.",

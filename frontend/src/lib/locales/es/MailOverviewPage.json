@@ -51,6 +51,15 @@
     "saved": "Guardado y aplicado a Postfix.",
     "saveFailed": "No se pudieron guardar los ajustes."
   },
+  "primaryAddress": {
+    "title": "Este servidor envía desde {{ip}}",
+    "notScanned": "No comprobada contra ninguna lista de bloqueo. Una lista de bloqueo se consulta invirtiendo una dirección IPv4 bajo su zona, por lo que nunca se pregunta por una dirección solo IPv6.",
+    "listed": "Incluida en: {{zones}}",
+    "clean": "En ninguna lista de bloqueo configurada.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "Sin registro PTR confirmado",
+    "scannedAt": "comprobada el {{at}}"
+  },
   "filters": {
     "title": "Listas de remitentes permitidos y bloqueados",
     "subtitle": "La puntuación resuelve casi todos los casos; estas son las instrucciones que no puede recibir. Una entrada se aplica a todos los dominios de este servidor.",

@@ -51,6 +51,15 @@
     "saved": "Gespeichert und auf Postfix angewendet.",
     "saveFailed": "Die Einstellungen konnten nicht gespeichert werden."
   },
+  "primaryAddress": {
+    "title": "Dieser Server sendet von {{ip}}",
+    "notScanned": "Gegen keine Blockliste geprüft. Eine Blockliste wird abgefragt, indem eine IPv4-Adresse umgekehrt unter ihrer Zone gesucht wird, daher wird nach einer reinen IPv6-Adresse nie gefragt.",
+    "listed": "Gelistet auf: {{zones}}",
+    "clean": "Auf keiner konfigurierten Blockliste gelistet.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "Kein vorwärts bestätigter PTR-Eintrag",
+    "scannedAt": "geprüft am {{at}}"
+  },
   "filters": {
     "title": "Absender-Freigabe- und Sperrlisten",
     "subtitle": "Die Bewertung löst die meisten Fälle; dies sind die Anweisungen, die sie nicht entgegennehmen kann. Ein Eintrag gilt für jede Domain auf diesem Server.",

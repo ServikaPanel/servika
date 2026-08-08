@@ -51,6 +51,15 @@
     "saved": "Salvat și aplicat pe Postfix.",
     "saveFailed": "Setările nu au putut fi salvate."
   },
+  "primaryAddress": {
+    "title": "Acest server trimite de la {{ip}}",
+    "notScanned": "Neverificată pe nicio listă de blocare. O listă de blocare se interoghează inversând o adresă IPv4 sub zona ei, deci o adresă doar IPv6 nu este niciodată întrebată.",
+    "listed": "Listată pe: {{zones}}",
+    "clean": "Pe nicio listă de blocare configurată.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "Niciun înregistrare PTR confirmată",
+    "scannedAt": "verificată la {{at}}"
+  },
   "filters": {
     "title": "Liste de expeditori permiși și blocați",
     "subtitle": "Scorul rezolvă majoritatea cazurilor; acestea sunt instrucțiunile pe care nu le poate primi. O intrare se aplică fiecărui domeniu de pe acest server.",

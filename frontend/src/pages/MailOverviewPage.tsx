@@ -39,6 +39,27 @@ type ServerSettings = {
   dnsbl_zones: string
 }
 
+// The blocklist state of the server's own sending address, measured in the
+// background against the zones configured above.
+//
+// dnsbl_scanned is separate from dnsbl_listed because an address the scanner
+// could not query has no hits, which without the flag looks exactly like a
+// clean result.
+type PrimaryAddress = {
+  ip: string
+  ptr_name: string
+  ptr_ok: boolean
+  dnsbl_scanned: boolean
+  dnsbl_listed: boolean
+  dnsbl_zones?: string
+  scan_at?: string
+}
+
+// The settings endpoint answers with the editable settings plus this read-only
+// block. It is read into its own state so the PUT body carries only what the
+// operator can actually change.
+type SettingsResponse = ServerSettings & { primary_address?: PrimaryAddress }
+
 type Row = {
   domain_id: number
   domain_name: string
@@ -97,6 +118,7 @@ export default function MailOverviewPage() {
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueBusy, setQueueBusy] = useState('')
   const [settings, setSettings] = useState<ServerSettings | null>(null)
+  const [primaryAddress, setPrimaryAddress] = useState<PrimaryAddress | null>(null)
   const [settingsError, setSettingsError] = useState<string | null>(null)
   const [settingsSaved, setSettingsSaved] = useState(false)
   const [settingsSaving, setSettingsSaving] = useState(false)
@@ -132,8 +154,12 @@ export default function MailOverviewPage() {
   useEffect(() => { fetchQueue() }, [fetchQueue])
 
   useEffect(() => {
-    api.get<ServerSettings>('/admin/mail/settings')
-      .then(response => setSettings(response.data))
+    api.get<SettingsResponse>('/admin/mail/settings')
+      .then(response => {
+        const { primary_address, ...editable } = response.data
+        setSettings(editable)
+        setPrimaryAddress(primary_address ?? null)
+      })
       .catch(report('mailServerSettings'))
   }, [report])
 
@@ -308,6 +334,30 @@ export default function MailOverviewPage() {
                   className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono" />
               </label>
               <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{t('serverSettings.zeroNote')}</p>
+
+              {primaryAddress?.ip && (
+                <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+                  primaryAddress.dnsbl_listed
+                    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'
+                }`}>
+                  <div className="font-medium">{t('primaryAddress.title', { ip: primaryAddress.ip })}</div>
+                  <div className="mt-1">
+                    {!primaryAddress.dnsbl_scanned
+                      ? t('primaryAddress.notScanned')
+                      : primaryAddress.dnsbl_listed
+                        ? t('primaryAddress.listed', { zones: primaryAddress.dnsbl_zones })
+                        : t('primaryAddress.clean')}
+                  </div>
+                  <div className="mt-0.5 font-mono text-[11px] opacity-80">
+                    {primaryAddress.ptr_ok
+                      ? t('primaryAddress.ptrOk', { name: primaryAddress.ptr_name })
+                      : t('primaryAddress.ptrMissing')}
+                    {primaryAddress.scan_at ? ' · ' + t('primaryAddress.scannedAt', { at: primaryAddress.scan_at }) : ''}
+                  </div>
+                </div>
+              )}
+
               {settingsError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{settingsError}</p>}
               {settingsSaved && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{t('serverSettings.saved')}</p>}
               <button disabled={settingsSaving} className="mt-3 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">

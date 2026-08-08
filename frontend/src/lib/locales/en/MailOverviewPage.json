@@ -51,6 +51,15 @@
     "saved": "Saved and applied to Postfix.",
     "saveFailed": "The settings could not be saved."
   },
+  "primaryAddress": {
+    "title": "This server sends from {{ip}}",
+    "notScanned": "Not checked against any blocklist. A blocklist is queried by reversing an IPv4 address under its zone, so an IPv6-only address is never asked about.",
+    "listed": "Listed on: {{zones}}",
+    "clean": "Not listed on any configured blocklist.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "No forward-confirmed PTR record",
+    "scannedAt": "checked {{at}}"
+  },
   "filters": {
     "title": "Sender allow and block lists",
     "subtitle": "Scoring answers most cases; these are the instructions it cannot take. An entry applies to every domain on this server.",

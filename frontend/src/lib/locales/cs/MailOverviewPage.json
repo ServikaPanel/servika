@@ -51,6 +51,15 @@
     "saved": "Uloženo a aplikováno na Postfix.",
     "saveFailed": "Nastavení se nepodařilo uložit."
   },
+  "primaryAddress": {
+    "title": "Tento server odesílá z {{ip}}",
+    "notScanned": "Neověřeno proti žádnému seznamu blokovaných adres. Seznam se dotazuje obrácením adresy IPv4 v jeho zóně, takže na adresu pouze IPv6 se nikdy nezeptá.",
+    "listed": "Uvedeno na: {{zones}}",
+    "clean": "Na žádném nastaveném seznamu blokovaných adres.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "Žádný dopředně ověřený záznam PTR",
+    "scannedAt": "ověřeno {{at}}"
+  },
   "filters": {
     "title": "Seznamy povolených a blokovaných odesílatelů",
     "subtitle": "Skóre vyřeší většinu případů; toto jsou pokyny, které přijmout nemůže. Položka platí pro každou doménu na tomto serveru.",

@@ -51,6 +51,15 @@
     "saved": "Salvato e applicato a Postfix.",
     "saveFailed": "Non è stato possibile salvare le impostazioni."
   },
+  "primaryAddress": {
+    "title": "Questo server invia da {{ip}}",
+    "notScanned": "Non verificata su alcuna blocklist. Una blocklist si interroga invertendo un indirizzo IPv4 sotto la sua zona, quindi un indirizzo solo IPv6 non viene mai chiesto.",
+    "listed": "Elencata su: {{zones}}",
+    "clean": "Su nessuna blocklist configurata.",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "Nessun record PTR confermato",
+    "scannedAt": "verificata il {{at}}"
+  },
   "filters": {
     "title": "Elenchi di mittenti consentiti e bloccati",
     "subtitle": "Il punteggio risolve quasi tutti i casi; queste sono le istruzioni che non può ricevere. Una voce vale per ogni dominio su questo server.",

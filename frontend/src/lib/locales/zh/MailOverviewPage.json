@@ -51,6 +51,15 @@
     "saved": "已保存并应用到 Postfix。",
     "saveFailed": "无法保存设置。"
   },
+  "primaryAddress": {
+    "title": "本服务器从 {{ip}} 发信",
+    "notScanned": "未向任何黑名单查询。黑名单通过把 IPv4 地址反转后在其区域下查询作答，因此仅有 IPv6 的地址永远不会被询问。",
+    "listed": "已被列入：{{zones}}",
+    "clean": "不在任何已配置的黑名单中。",
+    "ptrOk": "PTR {{name}}",
+    "ptrMissing": "没有正向确认的 PTR 记录",
+    "scannedAt": "{{at}} 已检查"
+  },
   "filters": {
     "title": "发件人允许与阻止列表",
     "subtitle": "评分能处理大多数情况；这里是评分无法接受的明确指令。一条记录对本服务器上的所有域名生效。",
