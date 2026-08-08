@@ -61,6 +61,7 @@ export default function DomainDashboard({ domain }: { domain: Domain }) {
 
       <Group title={t('groups.email')}>
         <ToolCard label={t('mail.label')} description={t('mail.desc')} icon={ICONS.mail} color="indigo" onClick={navigateTo('mail')} />
+        <ToolCard label={t('mailReports.label')} description={t('mailReports.desc')} icon={ICONS.stats} color="sky" onClick={navigateTo('mail/reports')} />
       </Group>
 
       <Group title={t('groups.filesAndDatabases')}>

@@ -43,6 +43,7 @@
     "dnsSettings": "Nastavení DNS",
     "sslTls": "SSL/TLS",
     "email": "E-mail",
+    "mailReports": "Doručitelnost",
     "scheduledTasks": "Naplánované úlohy",
     "applications": "Aplikace",
     "gitDeploy": "Nasazení Git",

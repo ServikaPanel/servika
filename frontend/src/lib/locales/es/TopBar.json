@@ -55,6 +55,7 @@
     "databases": { "title": "Bases de datos", "subtitle": "Bases de datos MySQL" },
     "ftp": { "title": "Cuentas FTP", "subtitle": "Acceso FTP" },
     "mail": { "title": "Correo", "subtitle": "Buzones" },
+    "mailReports": { "title": "Entregabilidad", "subtitle": "DMARC y MTA-STS" },
     "backups": { "title": "Copias de seguridad", "subtitle": "Copias del dominio" },
     "copy": { "title": "Copiar sitio", "subtitle": "Clonación del sitio" },
     "git": { "title": "Git Deploy", "subtitle": "Despliegue Git" },

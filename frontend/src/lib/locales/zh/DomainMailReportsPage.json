@@ -1,0 +1,103 @@
+{
+  "title": "送达率报告",
+  "subtitle": "互联网上的其他各方对以您的名义发送的邮件所作的报告。",
+  "loading": "加载中...",
+  "breadcrumb": {
+    "home": "首页",
+    "domains": "域名",
+    "email": "邮件",
+    "reports": "报告"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "TLS 报告",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} 天"
+  },
+  "mailbox": {
+    "missingTitle": "没有邮箱接收这些报告",
+    "missingBody": "您的 DNS 已经要求外界将报告发送到 {{address}}，但该邮箱不存在，因此报告被拒收。创建它之后，报告就会在这里出现。",
+    "missingAction": "创建邮箱",
+    "lastError": "上次读取报告邮箱失败：{{reason}}",
+    "lastScan": "上次读取时间 {{at}}，来自 {{address}}。",
+    "neverScanned": "报告邮箱 {{address}} 尚未被读取。"
+  },
+  "dmarc": {
+    "title": "谁在以您的名义发信",
+    "help": "根据收件方的报告，列出所有在 From 头中使用您域名发信的地址。您不认识的地址，要么是被遗忘的服务，要么是别人。",
+    "empty": "该时间段内没有收到任何报告。",
+    "delivered": "已送达",
+    "acted": "{{quarantined}} 封隔离，{{rejected}} 封拒收",
+    "columns": {
+      "source": "发送地址",
+      "messages": "邮件数",
+      "dkim": "DKIM 通过",
+      "spf": "SPF 通过",
+      "action": "收件方处理",
+      "reporter": "报告方"
+    }
+  },
+  "tlsrpt": {
+    "title": "TLS 会话",
+    "sessions": "成功 {{success}} 次，失败 {{failure}} 次",
+    "noFailures": "该时间段内没有报告失败的会话。",
+    "reportsTitle": "已收到的报告",
+    "columns": {
+      "result": "结果",
+      "mx": "接收服务器",
+      "sessions": "会话",
+      "reporter": "报告方",
+      "period": "时间段"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS 告知发送服务器，发往您域名的邮件必须通过已验证的 TLS 送达。它分步发布，因为每一步都要等待 DNS 和您的证书。",
+    "mxHosts": "策略指定的主机：{{hosts}}",
+    "changedAt": "上次变更 {{at}}。",
+    "withdrawNotice": "策略正在撤回。在所有发送方的缓存副本过期之前，它会继续以 \"none\" 发布，这可能需要一周。提前删除会让发送方继续套用旧策略。",
+    "modes": {
+      "off": "未发布任何策略。",
+      "pending_dns": "正在等待 DNS 发布策略主机。",
+      "pending_cert": "正在等待覆盖策略主机的证书。",
+      "testing": "已以测试模式发布。发送方会报告不匹配，而不是拒绝投递。",
+      "enforce": "已以强制模式发布。发送方会拒绝通过未经验证的连接投递。",
+      "withdrawing": "正在撤回。"
+    },
+    "steps": {
+      "dnsWaiting": "正在等待策略主机解析到本服务器。",
+      "dnsDone": "策略主机已解析到本服务器。",
+      "certWaiting": "正在等待证书覆盖策略主机。",
+      "certDone": "证书已覆盖策略主机。"
+    },
+    "actions": {
+      "enable": "以测试模式发布",
+      "enforce": "切换到强制模式",
+      "withdraw": "撤回策略",
+      "refresh": "重新检查"
+    },
+    "reasons": {
+      "notTesting": "策略以测试模式发布后，强制模式才可用。",
+      "soakIncomplete": "策略在测试模式下运行足够长时间、首批 TLS 报告到达之后，强制模式才可用。",
+      "mxCertificateMissing": "您的邮件服务器证书未覆盖策略指定的每一个主机名。在强制模式下，发送方会拒绝投递，而且不会退信。",
+      "unknown": "强制模式尚不可用。"
+    },
+    "confirmEnforce": {
+      "title": "切换到强制模式？",
+      "message": "发送服务器将拒绝通过无法验证的连接向您投递邮件，并且这些邮件不会退回。只有在您的邮件证书正确时才继续。",
+      "confirm": "切换到强制模式"
+    },
+    "confirmWithdraw": {
+      "title": "撤回策略？",
+      "message": "在所有发送方的缓存副本过期之前，策略会继续以 \"none\" 发布，这可能需要一周。这是有意为之：立即删除会让发送方继续对一台不再提供证明的服务器套用旧策略。",
+      "confirm": "撤回"
+    }
+  },
+  "errors": {
+    "loadFailed": "无法加载报告。",
+    "modeFailed": "无法更改模式。",
+    "withdrawFailed": "无法撤回策略。"
+  }
+}

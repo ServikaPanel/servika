@@ -55,6 +55,7 @@
     "databases": { "title": "Databáze", "subtitle": "Databáze MySQL" },
     "ftp": { "title": "Účty FTP", "subtitle": "Přístup FTP" },
     "mail": { "title": "E-mail", "subtitle": "Schránky" },
+    "mailReports": { "title": "Doručitelnost", "subtitle": "DMARC a MTA-STS" },
     "backups": { "title": "Zálohy", "subtitle": "Zálohy domény" },
     "copy": { "title": "Kopírovat web", "subtitle": "Klonování webu" },
     "git": { "title": "Nasazení Git", "subtitle": "Nasazení Git" },

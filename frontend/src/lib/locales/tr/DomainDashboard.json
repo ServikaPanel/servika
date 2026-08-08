@@ -13,6 +13,7 @@
   "subdomains": { "label": "Alt Alan Adları", "desc": "Alt alan adları" },
   "addonDomains": { "label": "Ek Alan Adları", "desc": "Ek ve park edilmiş alan adları · yönlendirmeler" },
   "mail": { "label": "E-posta Hesapları", "desc": "Postfix ve Dovecot posta kutuları · SMTP" },
+  "mailReports": { "label": "Teslim Edilebilirlik Raporları", "desc": "DMARC · TLS raporlama · MTA-STS" },
   "connection": { "label": "Bağlantı Bilgileri", "desc": "FTP, veritabanı" },
   "files": { "label": "Dosyalar", "desc": "Dosya yöneticisi" },
   "databases": { "label": "Veritabanları" },

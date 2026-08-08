@@ -13,6 +13,7 @@
   "subdomains": { "label": "サブドメイン", "desc": "サブドメイン" },
   "addonDomains": { "label": "アドオンドメイン", "desc": "アドオンドメインとパークドメイン · リダイレクト" },
   "mail": { "label": "メールアカウント", "desc": "Postfix と Dovecot のメールボックス · SMTP" },
+  "mailReports": { "label": "配信到達性レポート", "desc": "DMARC・TLS レポート・MTA-STS" },
   "connection": { "label": "接続情報", "desc": "FTP、データベース" },
   "files": { "label": "ファイル", "desc": "ファイルマネージャー" },
   "databases": { "label": "データベース" },

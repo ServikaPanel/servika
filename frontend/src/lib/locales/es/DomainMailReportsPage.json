@@ -1,0 +1,103 @@
+{
+  "title": "Informes de entregabilidad",
+  "subtitle": "Lo que el resto de Internet informa sobre los mensajes enviados en su nombre.",
+  "loading": "Cargando...",
+  "breadcrumb": {
+    "home": "Inicio",
+    "domains": "Dominios",
+    "email": "Correo",
+    "reports": "Informes"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "Informes TLS",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} días"
+  },
+  "mailbox": {
+    "missingTitle": "Ningún buzón recibe estos informes",
+    "missingBody": "Su DNS ya pide al mundo que envíe informes a {{address}}, pero ese buzón no existe, así que se rechazan. Créelo y los informes empezarán a aparecer aquí.",
+    "missingAction": "Crear el buzón",
+    "lastError": "La última lectura del buzón de informes falló: {{reason}}",
+    "lastScan": "Última lectura {{at}} desde {{address}}.",
+    "neverScanned": "El buzón de informes {{address}} aún no se ha leído."
+  },
+  "dmarc": {
+    "title": "Quién envía mensajes en su nombre",
+    "help": "Cada dirección que ha enviado mensajes con su dominio en la cabecera From, según informan los destinatarios. Una dirección que no reconozca es un servicio olvidado o bien otra persona.",
+    "empty": "No han llegado informes para este periodo.",
+    "delivered": "Entregado",
+    "acted": "{{quarantined}} en cuarentena, {{rejected}} rechazados",
+    "columns": {
+      "source": "Dirección remitente",
+      "messages": "Mensajes",
+      "dkim": "DKIM superado",
+      "spf": "SPF superado",
+      "action": "Acción del destinatario",
+      "reporter": "Informado por"
+    }
+  },
+  "tlsrpt": {
+    "title": "Sesiones TLS",
+    "sessions": "{{success}} correctas, {{failure}} fallidas",
+    "noFailures": "No se han informado sesiones fallidas para este periodo.",
+    "reportsTitle": "Informes recibidos",
+    "columns": {
+      "result": "Resultado",
+      "mx": "Servidor receptor",
+      "sessions": "Sesiones",
+      "reporter": "Informado por",
+      "period": "Periodo"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS indica a los servidores remitentes que el correo de su dominio debe llegar por TLS verificado. Se publica por pasos, porque cada uno espera al DNS y a su certificado.",
+    "mxHosts": "La política nombra: {{hosts}}",
+    "changedAt": "Último cambio {{at}}.",
+    "withdrawNotice": "La política se está retirando. Sigue publicada como \"none\" hasta que caduque la copia en caché de cada remitente, lo que puede tardar una semana. Quitarla antes dejaría a los remitentes aplicando la política anterior.",
+    "modes": {
+      "off": "No hay ninguna política publicada.",
+      "pending_dns": "Esperando a que el DNS publique el host de la política.",
+      "pending_cert": "Esperando un certificado que cubra el host de la política.",
+      "testing": "Publicada en modo de prueba. Los remitentes informan de las discrepancias en lugar de rechazar la entrega.",
+      "enforce": "Publicada en modo estricto. Los remitentes se niegan a entregar por una conexión no verificada.",
+      "withdrawing": "En retirada."
+    },
+    "steps": {
+      "dnsWaiting": "Esperando a que el host de la política apunte a este servidor.",
+      "dnsDone": "El host de la política apunta a este servidor.",
+      "certWaiting": "Esperando a que el certificado cubra el host de la política.",
+      "certDone": "El certificado cubre el host de la política."
+    },
+    "actions": {
+      "enable": "Publicar en modo de prueba",
+      "enforce": "Cambiar a modo estricto",
+      "withdraw": "Retirar la política",
+      "refresh": "Comprobar de nuevo"
+    },
+    "reasons": {
+      "notTesting": "El modo estricto estará disponible una vez publicada la política en modo de prueba.",
+      "soakIncomplete": "El modo estricto estará disponible cuando la política lleve en prueba el tiempo suficiente para que lleguen los primeros informes TLS.",
+      "mxCertificateMissing": "El certificado de su servidor de correo no cubre todos los nombres de host que nombra la política. En modo estricto los remitentes rechazarían la entrega, sin devolver el mensaje.",
+      "unknown": "El modo estricto aún no está disponible."
+    },
+    "confirmEnforce": {
+      "title": "¿Cambiar a modo estricto?",
+      "message": "Los servidores remitentes se negarán a entregarle correo por una conexión que no puedan verificar, y esos mensajes no se devuelven. Continúe solo si su certificado de correo es correcto.",
+      "confirm": "Cambiar a modo estricto"
+    },
+    "confirmWithdraw": {
+      "title": "¿Retirar la política?",
+      "message": "La política sigue publicada como \"none\" hasta que caduque la copia en caché de cada remitente, lo que puede tardar una semana. Es deliberado: quitarla de inmediato dejaría a los remitentes aplicando la política anterior contra un servidor que ya no la demuestra.",
+      "confirm": "Retirar"
+    }
+  },
+  "errors": {
+    "loadFailed": "No se han podido cargar los informes.",
+    "modeFailed": "No se ha podido cambiar el modo.",
+    "withdrawFailed": "No se ha podido retirar la política."
+  }
+}

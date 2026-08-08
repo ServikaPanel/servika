@@ -13,6 +13,7 @@
   "subdomains": { "label": "Sottodomini", "desc": "Sottodomini" },
   "addonDomains": { "label": "Domini aggiuntivi", "desc": "Domini aggiuntivi e parcheggiati · reindirizzamenti" },
   "mail": { "label": "Account email", "desc": "Caselle Postfix e Dovecot · SMTP" },
+  "mailReports": { "label": "Report di recapitabilità", "desc": "DMARC · report TLS · MTA-STS" },
   "connection": { "label": "Informazioni di connessione", "desc": "FTP, database" },
   "files": { "label": "File", "desc": "Gestione file" },
   "databases": { "label": "Database" },

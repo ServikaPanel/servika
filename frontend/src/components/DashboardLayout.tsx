@@ -113,6 +113,7 @@ function domainNav(id: string): NavGroup[] {
       { to: s('/dns'), labelKey: 'dnsSettings', icon: ICONS.domain },
       { to: s('/ssl'), labelKey: 'sslTls', icon: ICONS.lock },
       { to: s('/mail'), labelKey: 'email', icon: ICONS.mail },
+      { to: s('/mail/reports'), labelKey: 'mailReports', icon: ICONS.stats },
       { to: s('/cron'), labelKey: 'scheduledTasks', icon: ICONS.monitoring },
       { to: s('/apps'), labelKey: 'applications', icon: ICONS.extensions },
       { to: s('/git'), labelKey: 'gitDeploy', icon: ICONS.extensions },

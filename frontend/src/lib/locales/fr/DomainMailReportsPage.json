@@ -1,0 +1,103 @@
+{
+  "title": "Rapports de délivrabilité",
+  "subtitle": "Ce que le reste d'Internet rapporte sur les messages envoyés en votre nom.",
+  "loading": "Chargement...",
+  "breadcrumb": {
+    "home": "Accueil",
+    "domains": "Domaines",
+    "email": "E-mail",
+    "reports": "Rapports"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "Rapports TLS",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} jours"
+  },
+  "mailbox": {
+    "missingTitle": "Aucune boîte aux lettres ne reçoit ces rapports",
+    "missingBody": "Votre DNS demande déjà au monde entier d'envoyer les rapports à {{address}}, mais cette boîte n'existe pas, ils sont donc rejetés. Créez-la et les rapports commenceront à apparaître ici.",
+    "missingAction": "Créer la boîte aux lettres",
+    "lastError": "La dernière lecture de la boîte de rapports a échoué : {{reason}}",
+    "lastScan": "Dernière lecture {{at}} depuis {{address}}.",
+    "neverScanned": "La boîte de rapports {{address}} n'a pas encore été lue."
+  },
+  "dmarc": {
+    "title": "Qui envoie des messages en votre nom",
+    "help": "Toute adresse ayant envoyé un message portant votre domaine dans l'en-tête From, selon les destinataires. Une adresse que vous ne reconnaissez pas est soit un service oublié, soit quelqu'un d'autre.",
+    "empty": "Aucun rapport reçu pour cette période.",
+    "delivered": "Remis",
+    "acted": "{{quarantined}} en quarantaine, {{rejected}} rejetés",
+    "columns": {
+      "source": "Adresse émettrice",
+      "messages": "Messages",
+      "dkim": "DKIM réussi",
+      "spf": "SPF réussi",
+      "action": "Action du destinataire",
+      "reporter": "Signalé par"
+    }
+  },
+  "tlsrpt": {
+    "title": "Sessions TLS",
+    "sessions": "{{success}} réussies, {{failure}} échouées",
+    "noFailures": "Aucune session en échec signalée pour cette période.",
+    "reportsTitle": "Rapports reçus",
+    "columns": {
+      "result": "Résultat",
+      "mx": "Serveur destinataire",
+      "sessions": "Sessions",
+      "reporter": "Signalé par",
+      "period": "Période"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS indique aux serveurs émetteurs que le courrier destiné à votre domaine doit arriver via un TLS vérifié. La publication se fait par étapes, car chacune attend le DNS et votre certificat.",
+    "mxHosts": "La politique nomme : {{hosts}}",
+    "changedAt": "Dernière modification {{at}}.",
+    "withdrawNotice": "La politique est en cours de retrait. Elle reste publiée en « none » jusqu'à l'expiration de la copie en cache de chaque expéditeur, ce qui peut prendre une semaine. La retirer plus tôt laisserait les expéditeurs appliquer l'ancienne politique.",
+    "modes": {
+      "off": "Aucune politique n'est publiée.",
+      "pending_dns": "En attente de la publication de l'hôte de politique dans le DNS.",
+      "pending_cert": "En attente d'un certificat couvrant l'hôte de politique.",
+      "testing": "Publiée en mode test. Les expéditeurs signalent les écarts au lieu de refuser la remise.",
+      "enforce": "Publiée en mode strict. Les expéditeurs refusent de remettre sur une connexion non vérifiée.",
+      "withdrawing": "En cours de retrait."
+    },
+    "steps": {
+      "dnsWaiting": "En attente que l'hôte de politique pointe vers ce serveur.",
+      "dnsDone": "L'hôte de politique pointe vers ce serveur.",
+      "certWaiting": "En attente que le certificat couvre l'hôte de politique.",
+      "certDone": "Le certificat couvre l'hôte de politique."
+    },
+    "actions": {
+      "enable": "Publier en mode test",
+      "enforce": "Passer en mode strict",
+      "withdraw": "Retirer la politique",
+      "refresh": "Vérifier à nouveau"
+    },
+    "reasons": {
+      "notTesting": "Le mode strict devient disponible une fois la politique publiée en mode test.",
+      "soakIncomplete": "Le mode strict devient disponible après que la politique est restée en mode test assez longtemps pour que les premiers rapports TLS arrivent.",
+      "mxCertificateMissing": "Le certificat de votre serveur de messagerie ne couvre pas tous les noms d'hôte nommés par la politique. En mode strict, les expéditeurs refuseraient la remise, sans retour à l'envoyeur.",
+      "unknown": "Le mode strict n'est pas encore disponible."
+    },
+    "confirmEnforce": {
+      "title": "Passer en mode strict ?",
+      "message": "Les serveurs émetteurs refuseront de vous remettre du courrier sur une connexion qu'ils ne peuvent pas vérifier, et ces messages ne reviennent pas. Ne continuez que si votre certificat de messagerie est correct.",
+      "confirm": "Passer en mode strict"
+    },
+    "confirmWithdraw": {
+      "title": "Retirer la politique ?",
+      "message": "La politique reste publiée en « none » jusqu'à l'expiration de la copie en cache de chaque expéditeur, ce qui peut prendre une semaine. C'est délibéré : la supprimer immédiatement laisserait les expéditeurs appliquer l'ancienne politique face à un serveur qui ne la prouve plus.",
+      "confirm": "Retirer"
+    }
+  },
+  "errors": {
+    "loadFailed": "Les rapports n'ont pas pu être chargés.",
+    "modeFailed": "Le mode n'a pas pu être modifié.",
+    "withdrawFailed": "La politique n'a pas pu être retirée."
+  }
+}

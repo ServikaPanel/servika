@@ -1,0 +1,103 @@
+{
+  "title": "Teslim edilebilirlik raporları",
+  "subtitle": "İnternetin geri kalanının, sizin adınıza gönderilen mailler hakkında bildirdikleri.",
+  "loading": "Yükleniyor...",
+  "breadcrumb": {
+    "home": "Ana sayfa",
+    "domains": "Alan adları",
+    "email": "E-posta",
+    "reports": "Raporlar"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "TLS raporlama",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} gün"
+  },
+  "mailbox": {
+    "missingTitle": "Bu raporları alan bir posta kutusu yok",
+    "missingBody": "DNS kaydınız dünyadan raporları {{address}} adresine göndermesini zaten istiyor, ama o posta kutusu yok, bu yüzden raporlar reddediliyor. Kutuyu açın, raporlar burada görünmeye başlar.",
+    "missingAction": "Posta kutusunu aç",
+    "lastError": "Rapor posta kutusunun son okunması başarısız oldu: {{reason}}",
+    "lastScan": "Son okuma {{at}}, {{address}} adresinden.",
+    "neverScanned": "{{address}} rapor posta kutusu henüz okunmadı."
+  },
+  "dmarc": {
+    "title": "Sizin adınıza kim mail gönderiyor",
+    "help": "From başlığında alan adınızı taşıyan mail gönderen her adres, alıcıların bildirdiği şekliyle. Tanımadığınız bir adres ya unuttuğunuz bir servistir ya da bir başkasıdır.",
+    "empty": "Bu dönem için hiç rapor gelmedi.",
+    "delivered": "Teslim edildi",
+    "acted": "{{quarantined}} karantinaya alındı, {{rejected}} reddedildi",
+    "columns": {
+      "source": "Gönderen adres",
+      "messages": "Mesaj",
+      "dkim": "DKIM geçen",
+      "spf": "SPF geçen",
+      "action": "Alıcının işlemi",
+      "reporter": "Bildiren"
+    }
+  },
+  "tlsrpt": {
+    "title": "TLS oturumları",
+    "sessions": "{{success}} başarılı, {{failure}} başarısız",
+    "noFailures": "Bu dönem için başarısız oturum bildirilmedi.",
+    "reportsTitle": "Gelen raporlar",
+    "columns": {
+      "result": "Sonuç",
+      "mx": "Alıcı sunucu",
+      "sessions": "Oturum",
+      "reporter": "Bildiren",
+      "period": "Dönem"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS, gönderen sunuculara alan adınızın mailinin doğrulanmış TLS üzerinden ulaşması gerektiğini söyler. Adım adım yayınlanır, çünkü her adım DNS'i ve sertifikanızı bekler.",
+    "mxHosts": "Politikanın adlandırdıkları: {{hosts}}",
+    "changedAt": "Son değişiklik {{at}}.",
+    "withdrawNotice": "Politika geri çekiliyor. Her göndericinin önbelleğindeki kopya sona erene kadar \"none\" olarak yayında kalır, bu bir haftayı bulabilir. Daha erken kaldırmak, göndericilerin eski politikayı uygulamaya devam etmesine yol açar.",
+    "modes": {
+      "off": "Yayınlanmış bir politika yok.",
+      "pending_dns": "DNS'in politika ana makinesini yayınlaması bekleniyor.",
+      "pending_cert": "Politika ana makinesini kapsayan bir sertifika bekleniyor.",
+      "testing": "Test modunda yayında. Göndericiler uyuşmazlığı teslim etmeyi reddetmek yerine bildirir.",
+      "enforce": "Zorunlu modda yayında. Göndericiler doğrulanmamış bir bağlantı üzerinden teslim etmeyi reddeder.",
+      "withdrawing": "Geri çekiliyor."
+    },
+    "steps": {
+      "dnsWaiting": "Politika ana makinesinin bu sunucuya çözümlenmesi bekleniyor.",
+      "dnsDone": "Politika ana makinesi bu sunucuya çözümleniyor.",
+      "certWaiting": "Sertifikanın politika ana makinesini kapsaması bekleniyor.",
+      "certDone": "Sertifika politika ana makinesini kapsıyor."
+    },
+    "actions": {
+      "enable": "Test modunda yayınla",
+      "enforce": "Zorunlu moda geç",
+      "withdraw": "Politikayı geri çek",
+      "refresh": "Yeniden denetle"
+    },
+    "reasons": {
+      "notTesting": "Zorunlu mod, politika test modunda yayınlandıktan sonra kullanılabilir olur.",
+      "soakIncomplete": "Zorunlu mod, politika ilk TLS raporlarının gelmesine yetecek kadar test modunda kaldıktan sonra kullanılabilir olur.",
+      "mxCertificateMissing": "Mail sunucunuzun sertifikası, politikanın adlandırdığı her ana makine adını kapsamıyor. Zorunlu modda göndericiler teslim etmeyi reddeder ve geri bildirim de dönmez.",
+      "unknown": "Zorunlu mod henüz kullanılabilir değil."
+    },
+    "confirmEnforce": {
+      "title": "Zorunlu moda geçilsin mi?",
+      "message": "Gönderen sunucular, doğrulayamadıkları bir bağlantı üzerinden size mail teslim etmeyi reddeder ve o mesajlar geri de dönmez. Yalnızca mail sertifikanız doğruysa devam edin.",
+      "confirm": "Zorunlu moda geç"
+    },
+    "confirmWithdraw": {
+      "title": "Politika geri çekilsin mi?",
+      "message": "Politika, her göndericinin önbelleğindeki kopya sona erene kadar \"none\" olarak yayında kalır, bu bir haftayı bulabilir. Bu bilinçli bir seçim: hemen kaldırmak, göndericilerin eski politikayı artık onu kanıtlamayan bir sunucuya karşı uygulamasına yol açar.",
+      "confirm": "Geri çek"
+    }
+  },
+  "errors": {
+    "loadFailed": "Raporlar yüklenemedi.",
+    "modeFailed": "Mod değiştirilemedi.",
+    "withdrawFailed": "Politika geri çekilemedi."
+  }
+}

@@ -55,6 +55,7 @@
     "databases": { "title": "データベース", "subtitle": "MySQL データベース" },
     "ftp": { "title": "FTP アカウント", "subtitle": "FTP アクセス" },
     "mail": { "title": "メール", "subtitle": "メールボックス" },
+    "mailReports": { "title": "配信到達性", "subtitle": "DMARC と MTA-STS" },
     "backups": { "title": "バックアップ", "subtitle": "ドメインバックアップ" },
     "copy": { "title": "サイトをコピー", "subtitle": "サイトの複製" },
     "git": { "title": "Git デプロイ", "subtitle": "Git デプロイ" },

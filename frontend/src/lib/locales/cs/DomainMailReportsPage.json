@@ -1,0 +1,103 @@
+{
+  "title": "Zprávy o doručitelnosti",
+  "subtitle": "Co zbytek internetu hlásí o poště odeslané vaším jménem.",
+  "loading": "Načítání...",
+  "breadcrumb": {
+    "home": "Domů",
+    "domains": "Domény",
+    "email": "E-mail",
+    "reports": "Zprávy"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "Zprávy TLS",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} dní"
+  },
+  "mailbox": {
+    "missingTitle": "Tyto zprávy nepřijímá žádná schránka",
+    "missingBody": "Váš DNS už světu říká, aby zprávy posílal na {{address}}, ale tato schránka neexistuje, takže jsou odmítány. Vytvořte ji a zprávy se zde začnou objevovat.",
+    "missingAction": "Vytvořit schránku",
+    "lastError": "Poslední čtení schránky se zprávami selhalo: {{reason}}",
+    "lastScan": "Naposledy čteno {{at}} ze schránky {{address}}.",
+    "neverScanned": "Schránka se zprávami {{address}} zatím nebyla čtena."
+  },
+  "dmarc": {
+    "title": "Kdo posílá poštu vaším jménem",
+    "help": "Každá adresa, která odeslala poštu s vaší doménou v hlavičce From, podle hlášení příjemců. Adresa, kterou nepoznáváte, je buď zapomenutá služba, nebo někdo jiný.",
+    "empty": "Za toto období nedorazily žádné zprávy.",
+    "delivered": "Doručeno",
+    "acted": "{{quarantined}} v karanténě, {{rejected}} odmítnuto",
+    "columns": {
+      "source": "Odesílající adresa",
+      "messages": "Zprávy",
+      "dkim": "DKIM prošlo",
+      "spf": "SPF prošlo",
+      "action": "Akce příjemce",
+      "reporter": "Nahlásil"
+    }
+  },
+  "tlsrpt": {
+    "title": "Relace TLS",
+    "sessions": "{{success}} úspěšných, {{failure}} neúspěšných",
+    "noFailures": "Za toto období nebyly nahlášeny žádné neúspěšné relace.",
+    "reportsTitle": "Přijaté zprávy",
+    "columns": {
+      "result": "Výsledek",
+      "mx": "Přijímající server",
+      "sessions": "Relace",
+      "reporter": "Nahlásil",
+      "period": "Období"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS sděluje odesílajícím serverům, že pošta pro vaši doménu musí dorazit přes ověřené TLS. Publikuje se po krocích, protože každý čeká na DNS a na váš certifikát.",
+    "mxHosts": "Zásada uvádí: {{hosts}}",
+    "changedAt": "Naposledy změněno {{at}}.",
+    "withdrawNotice": "Zásada se stahuje. Zůstává publikována jako \"none\", dokud nevyprší kopie v mezipaměti každého odesílatele, což může trvat týden. Dřívější odstranění by nechalo odesílatele používat starou zásadu.",
+    "modes": {
+      "off": "Není publikována žádná zásada.",
+      "pending_dns": "Čeká se, až DNS zveřejní hostitele zásady.",
+      "pending_cert": "Čeká se na certifikát, který pokrývá hostitele zásady.",
+      "testing": "Publikováno v testovacím režimu. Odesílatelé neshody hlásí, místo aby odmítli doručení.",
+      "enforce": "Publikováno v přísném režimu. Odesílatelé odmítnou doručit přes neověřené spojení.",
+      "withdrawing": "Probíhá stažení."
+    },
+    "steps": {
+      "dnsWaiting": "Čeká se, až se hostitel zásady přeloží na tento server.",
+      "dnsDone": "Hostitel zásady se překládá na tento server.",
+      "certWaiting": "Čeká se, až certifikát pokryje hostitele zásady.",
+      "certDone": "Certifikát pokrývá hostitele zásady."
+    },
+    "actions": {
+      "enable": "Publikovat v testovacím režimu",
+      "enforce": "Přepnout na přísný režim",
+      "withdraw": "Stáhnout zásadu",
+      "refresh": "Zkontrolovat znovu"
+    },
+    "reasons": {
+      "notTesting": "Přísný režim bude dostupný, jakmile bude zásada publikována v testovacím režimu.",
+      "soakIncomplete": "Přísný režim bude dostupný poté, co zásada zůstane v testovacím režimu dost dlouho na to, aby dorazily první zprávy TLS.",
+      "mxCertificateMissing": "Certifikát vašeho poštovního serveru nepokrývá každé jméno hostitele, které zásada uvádí. V přísném režimu by odesílatelé odmítli doručení, aniž by zprávu vrátili.",
+      "unknown": "Přísný režim zatím není dostupný."
+    },
+    "confirmEnforce": {
+      "title": "Přepnout na přísný režim?",
+      "message": "Odesílající servery odmítnou doručit vám poštu přes spojení, které nedokážou ověřit, a tyto zprávy se nevracejí. Pokračujte jen tehdy, je-li váš poštovní certifikát správný.",
+      "confirm": "Přepnout na přísný režim"
+    },
+    "confirmWithdraw": {
+      "title": "Stáhnout zásadu?",
+      "message": "Zásada zůstává publikována jako \"none\", dokud nevyprší kopie v mezipaměti každého odesílatele, což může trvat týden. Je to záměr: okamžité odstranění by nechalo odesílatele používat starou zásadu proti serveru, který ji už nedokládá.",
+      "confirm": "Stáhnout"
+    }
+  },
+  "errors": {
+    "loadFailed": "Zprávy se nepodařilo načíst.",
+    "modeFailed": "Režim se nepodařilo změnit.",
+    "withdrawFailed": "Zásadu se nepodařilo stáhnout."
+  }
+}

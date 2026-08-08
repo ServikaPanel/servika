@@ -75,6 +75,7 @@ const DOMAIN_PAGES: ReadonlyArray<readonly [string, string]> = [
   ['/databases', 'databases'],
   ['/ftp', 'ftp'],
   ['/mail', 'mail'],
+  ['/mail/reports', 'mailReports'],
   ['/backups', 'backups'],
   ['/copy', 'copy'],
   ['/git', 'git'],

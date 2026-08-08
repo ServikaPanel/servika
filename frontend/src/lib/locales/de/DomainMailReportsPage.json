@@ -1,0 +1,103 @@
+{
+  "title": "Zustellbarkeitsberichte",
+  "subtitle": "Was der Rest des Internets über in Ihrem Namen gesendete E-Mails meldet.",
+  "loading": "Wird geladen...",
+  "breadcrumb": {
+    "home": "Start",
+    "domains": "Domains",
+    "email": "E-Mail",
+    "reports": "Berichte"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "TLS-Berichte",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} Tage"
+  },
+  "mailbox": {
+    "missingTitle": "Kein Postfach empfängt diese Berichte",
+    "missingBody": "Ihr DNS bittet die Welt bereits, Berichte an {{address}} zu senden, doch dieses Postfach existiert nicht, sodass sie abgewiesen werden. Legen Sie es an, dann erscheinen die Berichte hier.",
+    "missingAction": "Postfach anlegen",
+    "lastError": "Das letzte Lesen des Berichtspostfachs ist fehlgeschlagen: {{reason}}",
+    "lastScan": "Zuletzt gelesen {{at}} aus {{address}}.",
+    "neverScanned": "Das Berichtspostfach {{address}} wurde noch nicht gelesen."
+  },
+  "dmarc": {
+    "title": "Wer in Ihrem Namen sendet",
+    "help": "Jede Adresse, die E-Mails mit Ihrer Domain im From-Header gesendet hat, wie von den Empfängern gemeldet. Eine unbekannte Adresse ist entweder ein vergessener Dienst oder jemand anderes.",
+    "empty": "Für diesen Zeitraum sind keine Berichte eingegangen.",
+    "delivered": "Zugestellt",
+    "acted": "{{quarantined}} in Quarantäne, {{rejected}} abgewiesen",
+    "columns": {
+      "source": "Sendende Adresse",
+      "messages": "Nachrichten",
+      "dkim": "DKIM bestanden",
+      "spf": "SPF bestanden",
+      "action": "Aktion des Empfängers",
+      "reporter": "Gemeldet von"
+    }
+  },
+  "tlsrpt": {
+    "title": "TLS-Sitzungen",
+    "sessions": "{{success}} erfolgreich, {{failure}} fehlgeschlagen",
+    "noFailures": "Für diesen Zeitraum wurden keine fehlgeschlagenen Sitzungen gemeldet.",
+    "reportsTitle": "Empfangene Berichte",
+    "columns": {
+      "result": "Ergebnis",
+      "mx": "Empfangender Server",
+      "sessions": "Sitzungen",
+      "reporter": "Gemeldet von",
+      "period": "Zeitraum"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS teilt sendenden Servern mit, dass E-Mails für Ihre Domain über geprüftes TLS ankommen müssen. Die Veröffentlichung erfolgt in Schritten, weil jeder auf DNS und Ihr Zertifikat wartet.",
+    "mxHosts": "Die Richtlinie nennt: {{hosts}}",
+    "changedAt": "Zuletzt geändert {{at}}.",
+    "withdrawNotice": "Die Richtlinie wird zurückgezogen. Sie bleibt als \"none\" veröffentlicht, bis die zwischengespeicherte Kopie jedes Senders abgelaufen ist, was eine Woche dauern kann. Ein früheres Entfernen würde dazu führen, dass Sender weiterhin die alte Richtlinie anwenden.",
+    "modes": {
+      "off": "Es ist keine Richtlinie veröffentlicht.",
+      "pending_dns": "Warten darauf, dass DNS den Richtlinien-Host veröffentlicht.",
+      "pending_cert": "Warten auf ein Zertifikat, das den Richtlinien-Host abdeckt.",
+      "testing": "Im Testmodus veröffentlicht. Sender melden Abweichungen, statt die Zustellung zu verweigern.",
+      "enforce": "Im Enforce-Modus veröffentlicht. Sender verweigern die Zustellung über eine ungeprüfte Verbindung.",
+      "withdrawing": "Wird zurückgezogen."
+    },
+    "steps": {
+      "dnsWaiting": "Warten darauf, dass der Richtlinien-Host auf diesen Server auflöst.",
+      "dnsDone": "Der Richtlinien-Host löst auf diesen Server auf.",
+      "certWaiting": "Warten darauf, dass das Zertifikat den Richtlinien-Host abdeckt.",
+      "certDone": "Das Zertifikat deckt den Richtlinien-Host ab."
+    },
+    "actions": {
+      "enable": "Im Testmodus veröffentlichen",
+      "enforce": "Zu Enforce wechseln",
+      "withdraw": "Richtlinie zurückziehen",
+      "refresh": "Erneut prüfen"
+    },
+    "reasons": {
+      "notTesting": "Enforce wird verfügbar, sobald die Richtlinie im Testmodus veröffentlicht ist.",
+      "soakIncomplete": "Enforce wird verfügbar, nachdem die Richtlinie lange genug im Testmodus war, damit die ersten TLS-Berichte eintreffen konnten.",
+      "mxCertificateMissing": "Das Zertifikat Ihres Mailservers deckt nicht jeden von der Richtlinie genannten Hostnamen ab. Im Enforce-Modus würden Sender die Zustellung verweigern, ohne eine Unzustellbarkeitsnachricht zu senden.",
+      "unknown": "Enforce ist noch nicht verfügbar."
+    },
+    "confirmEnforce": {
+      "title": "Zu Enforce wechseln?",
+      "message": "Sendende Server verweigern die Zustellung an Sie über eine Verbindung, die sie nicht prüfen können, und diese Nachrichten kommen nicht zurück. Fahren Sie nur fort, wenn Ihr Mailzertifikat korrekt ist.",
+      "confirm": "Zu Enforce wechseln"
+    },
+    "confirmWithdraw": {
+      "title": "Richtlinie zurückziehen?",
+      "message": "Die Richtlinie bleibt als \"none\" veröffentlicht, bis die zwischengespeicherte Kopie jedes Senders abgelaufen ist, was eine Woche dauern kann. Das ist Absicht: Ein sofortiges Entfernen würde dazu führen, dass Sender die alte Richtlinie gegen einen Server anwenden, der sie nicht mehr belegt.",
+      "confirm": "Zurückziehen"
+    }
+  },
+  "errors": {
+    "loadFailed": "Die Berichte konnten nicht geladen werden.",
+    "modeFailed": "Der Modus konnte nicht geändert werden.",
+    "withdrawFailed": "Die Richtlinie konnte nicht zurückgezogen werden."
+  }
+}

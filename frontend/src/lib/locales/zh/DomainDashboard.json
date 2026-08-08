@@ -13,6 +13,7 @@
   "subdomains": { "label": "子域名", "desc": "子域名" },
   "addonDomains": { "label": "附加域名", "desc": "附加和停放域名 · 重定向" },
   "mail": { "label": "电子邮件账户", "desc": "Postfix 和 Dovecot 邮箱 · SMTP" },
+  "mailReports": { "label": "送达率报告", "desc": "DMARC · TLS 报告 · MTA-STS" },
   "connection": { "label": "连接信息", "desc": "FTP、数据库" },
   "files": { "label": "文件", "desc": "文件管理器" },
   "databases": { "label": "数据库" },

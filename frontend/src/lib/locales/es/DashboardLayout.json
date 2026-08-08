@@ -43,6 +43,7 @@
     "dnsSettings": "Configuración DNS",
     "sslTls": "SSL/TLS",
     "email": "Correo",
+    "mailReports": "Entregabilidad",
     "scheduledTasks": "Tareas programadas",
     "applications": "Aplicaciones",
     "gitDeploy": "Despliegue Git",

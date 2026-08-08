@@ -1,0 +1,103 @@
+{
+  "title": "Report di recapitabilità",
+  "subtitle": "Ciò che il resto di Internet segnala sui messaggi inviati a vostro nome.",
+  "loading": "Caricamento...",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Domini",
+    "email": "E-mail",
+    "reports": "Report"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "Report TLS",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} giorni"
+  },
+  "mailbox": {
+    "missingTitle": "Nessuna casella riceve questi report",
+    "missingBody": "Il vostro DNS chiede già al mondo di inviare i report a {{address}}, ma quella casella non esiste, quindi vengono rifiutati. Createla e i report inizieranno a comparire qui.",
+    "missingAction": "Crea la casella",
+    "lastError": "L'ultima lettura della casella dei report non è riuscita: {{reason}}",
+    "lastScan": "Ultima lettura {{at}} da {{address}}.",
+    "neverScanned": "La casella dei report {{address}} non è ancora stata letta."
+  },
+  "dmarc": {
+    "title": "Chi invia messaggi a vostro nome",
+    "help": "Ogni indirizzo che ha inviato messaggi con il vostro dominio nell'intestazione From, secondo quanto segnalato dai destinatari. Un indirizzo che non riconoscete è un servizio dimenticato oppure qualcun altro.",
+    "empty": "Nessun report è arrivato per questo periodo.",
+    "delivered": "Recapitato",
+    "acted": "{{quarantined}} in quarantena, {{rejected}} rifiutati",
+    "columns": {
+      "source": "Indirizzo mittente",
+      "messages": "Messaggi",
+      "dkim": "DKIM superato",
+      "spf": "SPF superato",
+      "action": "Azione del destinatario",
+      "reporter": "Segnalato da"
+    }
+  },
+  "tlsrpt": {
+    "title": "Sessioni TLS",
+    "sessions": "{{success}} riuscite, {{failure}} non riuscite",
+    "noFailures": "Nessuna sessione non riuscita segnalata per questo periodo.",
+    "reportsTitle": "Report ricevuti",
+    "columns": {
+      "result": "Risultato",
+      "mx": "Server ricevente",
+      "sessions": "Sessioni",
+      "reporter": "Segnalato da",
+      "period": "Periodo"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS indica ai server mittenti che la posta per il vostro dominio deve arrivare tramite TLS verificato. La pubblicazione avviene per passi, perché ognuno attende il DNS e il vostro certificato.",
+    "mxHosts": "La policy indica: {{hosts}}",
+    "changedAt": "Ultima modifica {{at}}.",
+    "withdrawNotice": "La policy è in fase di ritiro. Resta pubblicata come \"none\" finché non scade la copia nella cache di ogni mittente, il che può richiedere una settimana. Rimuoverla prima lascerebbe i mittenti ad applicare la vecchia policy.",
+    "modes": {
+      "off": "Nessuna policy è pubblicata.",
+      "pending_dns": "In attesa che il DNS pubblichi l'host della policy.",
+      "pending_cert": "In attesa di un certificato che copra l'host della policy.",
+      "testing": "Pubblicata in modalità di prova. I mittenti segnalano le discrepanze invece di rifiutare il recapito.",
+      "enforce": "Pubblicata in modalità rigorosa. I mittenti rifiutano il recapito su una connessione non verificata.",
+      "withdrawing": "In fase di ritiro."
+    },
+    "steps": {
+      "dnsWaiting": "In attesa che l'host della policy risolva a questo server.",
+      "dnsDone": "L'host della policy risolve a questo server.",
+      "certWaiting": "In attesa che il certificato copra l'host della policy.",
+      "certDone": "Il certificato copre l'host della policy."
+    },
+    "actions": {
+      "enable": "Pubblica in modalità di prova",
+      "enforce": "Passa alla modalità rigorosa",
+      "withdraw": "Ritira la policy",
+      "refresh": "Controlla di nuovo"
+    },
+    "reasons": {
+      "notTesting": "La modalità rigorosa diventa disponibile una volta pubblicata la policy in modalità di prova.",
+      "soakIncomplete": "La modalità rigorosa diventa disponibile dopo che la policy è rimasta in prova abbastanza a lungo perché arrivino i primi report TLS.",
+      "mxCertificateMissing": "Il certificato del vostro server di posta non copre ogni nome host indicato dalla policy. In modalità rigorosa i mittenti rifiuterebbero il recapito, senza restituire il messaggio.",
+      "unknown": "La modalità rigorosa non è ancora disponibile."
+    },
+    "confirmEnforce": {
+      "title": "Passare alla modalità rigorosa?",
+      "message": "I server mittenti rifiuteranno di recapitarvi posta su una connessione che non possono verificare, e quei messaggi non tornano indietro. Proseguite solo se il vostro certificato di posta è corretto.",
+      "confirm": "Passa alla modalità rigorosa"
+    },
+    "confirmWithdraw": {
+      "title": "Ritirare la policy?",
+      "message": "La policy resta pubblicata come \"none\" finché non scade la copia nella cache di ogni mittente, il che può richiedere una settimana. È voluto: rimuoverla subito lascerebbe i mittenti ad applicare la vecchia policy verso un server che non la dimostra più.",
+      "confirm": "Ritira"
+    }
+  },
+  "errors": {
+    "loadFailed": "Non è stato possibile caricare i report.",
+    "modeFailed": "Non è stato possibile cambiare la modalità.",
+    "withdrawFailed": "Non è stato possibile ritirare la policy."
+  }
+}

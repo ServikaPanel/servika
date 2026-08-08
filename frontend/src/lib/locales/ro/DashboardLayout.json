@@ -43,6 +43,7 @@
     "dnsSettings": "Setări DNS",
     "sslTls": "SSL/TLS",
     "email": "E-mail",
+    "mailReports": "Livrabilitate",
     "scheduledTasks": "Sarcini programate",
     "applications": "Aplicații",
     "gitDeploy": "Deploy Git",

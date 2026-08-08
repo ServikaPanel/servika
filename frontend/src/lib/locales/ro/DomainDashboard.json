@@ -13,6 +13,7 @@
   "subdomains": { "label": "Subdomenii", "desc": "Subdomenii" },
   "addonDomains": { "label": "Domenii suplimentare", "desc": "Domenii suplimentare și parcate · redirecționări" },
   "mail": { "label": "Conturi de email", "desc": "Cutii poștale Postfix și Dovecot · SMTP" },
+  "mailReports": { "label": "Rapoarte de livrabilitate", "desc": "DMARC · rapoarte TLS · MTA-STS" },
   "connection": { "label": "Informații de conexiune", "desc": "FTP, bază de date" },
   "files": { "label": "Fișiere", "desc": "Manager de fișiere" },
   "databases": { "label": "Baze de date" },

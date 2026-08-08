@@ -55,6 +55,7 @@
     "databases": { "title": "Veritabanları", "subtitle": "MySQL veritabanları" },
     "ftp": { "title": "FTP Hesapları", "subtitle": "FTP erişimi" },
     "mail": { "title": "E-posta", "subtitle": "Posta kutuları" },
+    "mailReports": { "title": "Teslim Edilebilirlik", "subtitle": "DMARC ve MTA-STS" },
     "backups": { "title": "Yedekler", "subtitle": "Domain yedekleri" },
     "copy": { "title": "Siteyi Kopyala", "subtitle": "Site klonlama" },
     "git": { "title": "Git Deploy", "subtitle": "Git dağıtımı" },

@@ -43,6 +43,7 @@
     "dnsSettings": "DNS 设置",
     "sslTls": "SSL/TLS",
     "email": "电子邮件",
+    "mailReports": "送达率",
     "scheduledTasks": "计划任务",
     "applications": "应用",
     "gitDeploy": "Git 部署",

@@ -55,6 +55,7 @@
     "databases": { "title": "Baze de date", "subtitle": "Baze de date MySQL" },
     "ftp": { "title": "Conturi FTP", "subtitle": "Acces FTP" },
     "mail": { "title": "Email", "subtitle": "Cutii poștale" },
+    "mailReports": { "title": "Livrabilitate", "subtitle": "DMARC și MTA-STS" },
     "backups": { "title": "Copii de rezervă", "subtitle": "Copii de rezervă domeniu" },
     "copy": { "title": "Copiere site", "subtitle": "Clonare site" },
     "git": { "title": "Git Deploy", "subtitle": "Git deploy" },

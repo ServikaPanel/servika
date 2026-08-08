@@ -13,6 +13,7 @@
   "subdomains": { "label": "Subdomény", "desc": "Subdomény" },
   "addonDomains": { "label": "Doplňkové domény", "desc": "Doplňkové a parkované domény · přesměrování" },
   "mail": { "label": "E-mailové účty", "desc": "Schránky Postfix a Dovecot · SMTP" },
+  "mailReports": { "label": "Zprávy o doručitelnosti", "desc": "DMARC · zprávy TLS · MTA-STS" },
   "connection": { "label": "Informace o připojení", "desc": "FTP, databáze" },
   "files": { "label": "Soubory", "desc": "Správce souborů" },
   "databases": { "label": "Databáze" },

@@ -55,6 +55,7 @@
     "databases": { "title": "数据库", "subtitle": "MySQL 数据库" },
     "ftp": { "title": "FTP 账户", "subtitle": "FTP 访问" },
     "mail": { "title": "电子邮件", "subtitle": "邮箱" },
+    "mailReports": { "title": "送达率", "subtitle": "DMARC 和 MTA-STS" },
     "backups": { "title": "备份", "subtitle": "域名备份" },
     "copy": { "title": "复制站点", "subtitle": "站点克隆" },
     "git": { "title": "Git 部署", "subtitle": "Git 部署" },

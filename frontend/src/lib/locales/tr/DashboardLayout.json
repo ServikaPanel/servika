@@ -43,6 +43,7 @@
     "dnsSettings": "DNS Ayarları",
     "sslTls": "SSL/TLS",
     "email": "E-posta",
+    "mailReports": "Teslim Edilebilirlik",
     "scheduledTasks": "Zamanlanmış Görevler",
     "applications": "Uygulamalar",
     "gitDeploy": "Git Deploy",

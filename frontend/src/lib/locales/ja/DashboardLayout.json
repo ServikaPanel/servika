@@ -43,6 +43,7 @@
     "dnsSettings": "DNS 設定",
     "sslTls": "SSL/TLS",
     "email": "メール",
+    "mailReports": "配信到達性",
     "scheduledTasks": "スケジュールされたタスク",
     "applications": "アプリケーション",
     "gitDeploy": "Git デプロイ",

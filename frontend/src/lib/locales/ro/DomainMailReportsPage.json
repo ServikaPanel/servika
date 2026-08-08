@@ -1,0 +1,103 @@
+{
+  "title": "Rapoarte de livrabilitate",
+  "subtitle": "Ce raportează restul internetului despre mesajele trimise în numele dumneavoastră.",
+  "loading": "Se încarcă...",
+  "breadcrumb": {
+    "home": "Acasă",
+    "domains": "Domenii",
+    "email": "E-mail",
+    "reports": "Rapoarte"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "Rapoarte TLS",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} zile"
+  },
+  "mailbox": {
+    "missingTitle": "Nicio căsuță poștală nu primește aceste rapoarte",
+    "missingBody": "DNS-ul dumneavoastră cere deja lumii să trimită rapoarte la {{address}}, dar acea căsuță nu există, așa că sunt respinse. Creați-o și rapoartele vor începe să apară aici.",
+    "missingAction": "Creați căsuța poștală",
+    "lastError": "Ultima citire a căsuței de rapoarte a eșuat: {{reason}}",
+    "lastScan": "Ultima citire {{at}} din {{address}}.",
+    "neverScanned": "Căsuța de rapoarte {{address}} nu a fost încă citită."
+  },
+  "dmarc": {
+    "title": "Cine trimite mesaje în numele dumneavoastră",
+    "help": "Fiecare adresă care a trimis mesaje purtând domeniul dumneavoastră în antetul From, conform raportărilor destinatarilor. O adresă pe care nu o recunoașteți este fie un serviciu uitat, fie altcineva.",
+    "empty": "Nu au sosit rapoarte pentru această perioadă.",
+    "delivered": "Livrat",
+    "acted": "{{quarantined}} în carantină, {{rejected}} respinse",
+    "columns": {
+      "source": "Adresa expeditoare",
+      "messages": "Mesaje",
+      "dkim": "DKIM trecut",
+      "spf": "SPF trecut",
+      "action": "Acțiunea destinatarului",
+      "reporter": "Raportat de"
+    }
+  },
+  "tlsrpt": {
+    "title": "Sesiuni TLS",
+    "sessions": "{{success}} reușite, {{failure}} eșuate",
+    "noFailures": "Nu au fost raportate sesiuni eșuate pentru această perioadă.",
+    "reportsTitle": "Rapoarte primite",
+    "columns": {
+      "result": "Rezultat",
+      "mx": "Server destinatar",
+      "sessions": "Sesiuni",
+      "reporter": "Raportat de",
+      "period": "Perioadă"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS le spune serverelor expeditoare că mesajele pentru domeniul dumneavoastră trebuie să ajungă prin TLS verificat. Se publică în pași, pentru că fiecare așteaptă DNS-ul și certificatul dumneavoastră.",
+    "mxHosts": "Politica numește: {{hosts}}",
+    "changedAt": "Ultima modificare {{at}}.",
+    "withdrawNotice": "Politica este retrasă. Rămâne publicată ca \"none\" până când expiră copia din cache a fiecărui expeditor, ceea ce poate dura o săptămână. Eliminarea mai devreme ar lăsa expeditorii să aplice politica veche.",
+    "modes": {
+      "off": "Nu este publicată nicio politică.",
+      "pending_dns": "Se așteaptă ca DNS-ul să publice gazda politicii.",
+      "pending_cert": "Se așteaptă un certificat care acoperă gazda politicii.",
+      "testing": "Publicată în modul de testare. Expeditorii raportează neconcordanțele în loc să refuze livrarea.",
+      "enforce": "Publicată în modul strict. Expeditorii refuză livrarea printr-o conexiune neverificată.",
+      "withdrawing": "În curs de retragere."
+    },
+    "steps": {
+      "dnsWaiting": "Se așteaptă ca gazda politicii să se rezolve către acest server.",
+      "dnsDone": "Gazda politicii se rezolvă către acest server.",
+      "certWaiting": "Se așteaptă ca certificatul să acopere gazda politicii.",
+      "certDone": "Certificatul acoperă gazda politicii."
+    },
+    "actions": {
+      "enable": "Publicați în modul de testare",
+      "enforce": "Treceți la modul strict",
+      "withdraw": "Retrageți politica",
+      "refresh": "Verificați din nou"
+    },
+    "reasons": {
+      "notTesting": "Modul strict devine disponibil după ce politica este publicată în modul de testare.",
+      "soakIncomplete": "Modul strict devine disponibil după ce politica a stat în testare suficient de mult încât să sosească primele rapoarte TLS.",
+      "mxCertificateMissing": "Certificatul serverului dumneavoastră de e-mail nu acoperă fiecare nume de gazdă numit de politică. În modul strict, expeditorii ar refuza livrarea, fără a returna mesajul.",
+      "unknown": "Modul strict nu este încă disponibil."
+    },
+    "confirmEnforce": {
+      "title": "Treceți la modul strict?",
+      "message": "Serverele expeditoare vor refuza să vă livreze mesaje printr-o conexiune pe care nu o pot verifica, iar acele mesaje nu se întorc. Continuați doar dacă certificatul dumneavoastră de e-mail este corect.",
+      "confirm": "Treceți la modul strict"
+    },
+    "confirmWithdraw": {
+      "title": "Retrageți politica?",
+      "message": "Politica rămâne publicată ca \"none\" până când expiră copia din cache a fiecărui expeditor, ceea ce poate dura o săptămână. Este intenționat: eliminarea imediată ar lăsa expeditorii să aplice politica veche față de un server care nu o mai dovedește.",
+      "confirm": "Retrageți"
+    }
+  },
+  "errors": {
+    "loadFailed": "Rapoartele nu au putut fi încărcate.",
+    "modeFailed": "Modul nu a putut fi schimbat.",
+    "withdrawFailed": "Politica nu a putut fi retrasă."
+  }
+}

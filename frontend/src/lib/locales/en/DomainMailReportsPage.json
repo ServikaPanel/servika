@@ -1,0 +1,103 @@
+{
+  "title": "Deliverability reports",
+  "subtitle": "What the rest of the internet reports about mail sent in your name.",
+  "loading": "Loading...",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Domains",
+    "email": "Email",
+    "reports": "Reports"
+  },
+  "tabs": {
+    "dmarc": "DMARC",
+    "tlsrpt": "TLS reporting",
+    "mtasts": "MTA-STS"
+  },
+  "window": {
+    "days": "{{days}} days"
+  },
+  "mailbox": {
+    "missingTitle": "No mailbox is receiving these reports",
+    "missingBody": "Your DNS already asks the world to send reports to {{address}}, but that mailbox does not exist, so they are being rejected. Create it and reports will start appearing here.",
+    "missingAction": "Create the mailbox",
+    "lastError": "The last read of the report mailbox failed: {{reason}}",
+    "lastScan": "Last read {{at}} from {{address}}.",
+    "neverScanned": "The report mailbox {{address}} has not been read yet."
+  },
+  "dmarc": {
+    "title": "Who sends mail as you",
+    "help": "Every address that sent mail carrying your domain in the From header, as reported by the receivers. An address you do not recognise is either a service you forgot about or someone else.",
+    "empty": "No reports have arrived for this period.",
+    "delivered": "Delivered",
+    "acted": "{{quarantined}} quarantined, {{rejected}} rejected",
+    "columns": {
+      "source": "Sending address",
+      "messages": "Messages",
+      "dkim": "DKIM pass",
+      "spf": "SPF pass",
+      "action": "Receiver action",
+      "reporter": "Reported by"
+    }
+  },
+  "tlsrpt": {
+    "title": "TLS sessions",
+    "sessions": "{{success}} succeeded, {{failure}} failed",
+    "noFailures": "No failed sessions were reported for this period.",
+    "reportsTitle": "Reports received",
+    "columns": {
+      "result": "Result",
+      "mx": "Receiving server",
+      "sessions": "Sessions",
+      "reporter": "Reported by",
+      "period": "Period"
+    }
+  },
+  "mtasts": {
+    "title": "MTA-STS",
+    "help": "MTA-STS tells sending servers that mail for your domain must arrive over verified TLS. It is published in steps because each one waits on DNS and on your certificate.",
+    "mxHosts": "The policy names: {{hosts}}",
+    "changedAt": "Last changed {{at}}.",
+    "withdrawNotice": "The policy is being withdrawn. It stays published as \"none\" until every sender's cached copy has expired, which can take a week. Removing it sooner would leave senders applying the old policy.",
+    "modes": {
+      "off": "No policy is published.",
+      "pending_dns": "Waiting for DNS to publish the policy host.",
+      "pending_cert": "Waiting for a certificate that covers the policy host.",
+      "testing": "Published in testing mode. Senders report mismatches instead of refusing to deliver.",
+      "enforce": "Published in enforce mode. Senders refuse to deliver over an unverified connection.",
+      "withdrawing": "Being withdrawn."
+    },
+    "steps": {
+      "dnsWaiting": "Waiting for the policy host to resolve to this server.",
+      "dnsDone": "The policy host resolves to this server.",
+      "certWaiting": "Waiting for the certificate to cover the policy host.",
+      "certDone": "The certificate covers the policy host."
+    },
+    "actions": {
+      "enable": "Publish in testing mode",
+      "enforce": "Switch to enforce",
+      "withdraw": "Withdraw the policy",
+      "refresh": "Check again"
+    },
+    "reasons": {
+      "notTesting": "Enforce becomes available once the policy is published in testing mode.",
+      "soakIncomplete": "Enforce becomes available after the policy has been in testing long enough for the first TLS reports to arrive.",
+      "mxCertificateMissing": "Your mail server's certificate does not cover every hostname the policy names. In enforce mode senders would refuse to deliver, without bouncing.",
+      "unknown": "Enforce is not available yet."
+    },
+    "confirmEnforce": {
+      "title": "Switch to enforce?",
+      "message": "Sending servers will refuse to deliver mail to you over a connection they cannot verify, and those messages do not bounce. Only continue if your mail certificate is correct.",
+      "confirm": "Switch to enforce"
+    },
+    "confirmWithdraw": {
+      "title": "Withdraw the policy?",
+      "message": "The policy stays published as \"none\" until every sender's cached copy has expired, which can take a week. This is deliberate: removing it immediately would leave senders applying the old policy against a server that no longer proves it.",
+      "confirm": "Withdraw"
+    }
+  },
+  "errors": {
+    "loadFailed": "The reports could not be loaded.",
+    "modeFailed": "The mode could not be changed.",
+    "withdrawFailed": "The policy could not be withdrawn."
+  }
+}
