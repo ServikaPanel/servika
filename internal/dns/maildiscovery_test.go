@@ -36,21 +36,29 @@ func TestTemplateCarriesTheMailClientNames(t *testing.T) {
 }
 
 // The two discovery hostnames are published because a vhost now answers them,
-// and their A records point at this server like every other host record.
+// and their address records point at this server like every other host record.
+//
+// The A record is required. The AAAA is allowed beside it and is seeded only
+// when the domain actually has an IPv6 address, so a client that prefers IPv6
+// is never sent to an address this server does not answer on.
 func TestTemplatePublishesTheDiscoveryHostnames(t *testing.T) {
-	found := map[string]bool{}
+	foundA := map[string]bool{}
 	for _, row := range builtinDefaults() {
 		if row.Name != "autoconfig" && row.Name != "autodiscover" {
 			continue
 		}
-		found[row.Name] = true
-		if row.Type != "A" || row.Value != "{IP}" {
-			t.Errorf("%s = %s %q, want an A record pointing at this server", row.Name, row.Type, row.Value)
+		switch {
+		case row.Type == "A" && row.Value == "{IP}":
+			foundA[row.Name] = true
+		case row.Type == "AAAA" && row.Value == "{IP6}":
+			// Allowed beside the A record.
+		default:
+			t.Errorf("%s = %s %q, want an address record pointing at this server", row.Name, row.Type, row.Value)
 		}
 	}
 	for _, name := range []string{"autoconfig", "autodiscover"} {
-		if !found[name] {
-			t.Errorf("the template does not publish %s", name)
+		if !foundA[name] {
+			t.Errorf("the template does not publish an A record for %s", name)
 		}
 	}
 }

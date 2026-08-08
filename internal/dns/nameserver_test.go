@@ -84,14 +84,14 @@ func TestBuiltinTemplateUsesSharedNameservers(t *testing.T) {
 
 func TestSubstituteTemplateResolvesNameserverPlaceholders(t *testing.T) {
 	const ns1, ns2 = "ns1.provider.com", "ns2.provider.com"
-	if got := substituteTemplate("{NS1}", "customer.com", "192.0.2.10", "default", "", ns1, ns2); got != ns1 {
+	if got := substituteTemplate("{NS1}", "customer.com", "192.0.2.10", "", "default", "", ns1, ns2); got != ns1 {
 		t.Errorf("{NS1} = %q, want %q", got, ns1)
 	}
-	if got := substituteTemplate("{NS2}", "customer.com", "192.0.2.10", "default", "", ns1, ns2); got != ns2 {
+	if got := substituteTemplate("{NS2}", "customer.com", "192.0.2.10", "", "default", "", ns1, ns2); got != ns2 {
 		t.Errorf("{NS2} = %q, want %q", got, ns2)
 	}
 	// The existing placeholders must keep working.
-	if got := substituteTemplate("mail.{DOMAIN}", "customer.com", "192.0.2.10", "default", "", ns1, ns2); got != "mail.customer.com" {
+	if got := substituteTemplate("mail.{DOMAIN}", "customer.com", "192.0.2.10", "", "default", "", ns1, ns2); got != "mail.customer.com" {
 		t.Errorf("{DOMAIN} = %q, want mail.customer.com", got)
 	}
 }

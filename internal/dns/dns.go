@@ -348,6 +348,12 @@ func SeedDefaults(ctx context.Context, db *sql.DB, domainID int64, domainName, i
 	if ipv4 == "" {
 		ipv4 = "127.0.0.1"
 	}
+	// The IPv6 address is read from the row rather than taken as a parameter.
+	// Six call sites reach this function and every one of them would have to
+	// grow an argument it does not own, while the address has exactly one
+	// source: domains.ipv6. The ipv4 parameter stays as it is so today's
+	// behaviour is unchanged.
+	ipv6 := domainIPv6(ctx, db, domainID)
 	rows, err := LoadTemplate(ctx, db)
 	if err != nil || len(rows) == 0 {
 		rows = builtinDefaults()
@@ -377,8 +383,16 @@ func SeedDefaults(ctx context.Context, db *sql.DB, domainID int64, domainName, i
 		if strings.Contains(row.Value, "{DKIM}") && (!meta.DKIMEnabled || dkimTXT == "") {
 			continue
 		}
-		name := substituteTemplate(row.Name, domainName, ipv4, selector, dkimTXT, ns1, ns2)
-		value := substituteTemplate(row.Value, domainName, ipv4, selector, dkimTXT, ns1, ns2)
+		// THE fail-closed rule for IPv6. A record that exists ONLY to carry the
+		// address is not written at all when there is no address. A AAAA
+		// pointing nowhere is worse than no AAAA: an IPv6-preferring client
+		// gets a dead site, and Let's Encrypt tries the AAAA FIRST, so
+		// certificate renewal stops too, silently, weeks later.
+		if ipv6 == "" && recordNeedsIPv6(row.Type, row.Value) {
+			continue
+		}
+		name := substituteTemplate(row.Name, domainName, ipv4, ipv6, selector, dkimTXT, ns1, ns2)
+		value := substituteTemplate(row.Value, domainName, ipv4, ipv6, selector, dkimTXT, ns1, ns2)
 		recordType := strings.ToUpper(strings.TrimSpace(row.Type))
 		var count int
 		_ = db.QueryRowContext(ctx,
@@ -406,6 +420,36 @@ func SeedDefaults(ctx context.Context, db *sql.DB, domainID int64, domainName, i
 	}
 	seedSOAFromMeta(ctx, db, domainID, domainName, meta)
 	return added, nil
+}
+
+// domainIPv6 returns the address this domain answers on over IPv6, or empty.
+//
+// An unreadable row returns empty rather than failing the seed: empty means no
+// AAAA is written, which is the safe direction. Writing one against a value the
+// panel could not confirm is the failure that takes the site down for IPv6
+// clients and stops certificate renewal.
+func domainIPv6(ctx context.Context, db *sql.DB, domainID int64) string {
+	var value string
+	if err := db.QueryRowContext(ctx,
+		`SELECT COALESCE(ipv6,'') FROM domains WHERE id=?`, domainID).Scan(&value); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(value)
+}
+
+// recordNeedsIPv6 reports whether a template row exists only to carry the IPv6
+// address, so it must not be written when there is none.
+//
+// A record whose value is nothing but the placeholder is such a row. A record
+// that merely MENTIONS it among other terms, such as the SPF string, is kept:
+// substituteTemplate drops the ip6 term out of it instead, because publishing
+// no SPF at all is worse than publishing one without an IPv6 mechanism.
+func recordNeedsIPv6(recordType, value string) bool {
+	if !strings.Contains(value, "{IP6}") {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(recordType), "AAAA") ||
+		strings.TrimSpace(value) == "{IP6}"
 }
 
 func seedSOAFromMeta(ctx context.Context, db *sql.DB, domainID int64, domainName string, meta TemplateMeta) {

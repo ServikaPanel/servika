@@ -56,10 +56,13 @@ type TemplateMeta struct {
 func builtinDefaults() []TemplateRow {
 	rows := []TemplateRow{
 		{Name: "@", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 10, Enabled: true},
+		{Name: "@", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 11, Enabled: true},
 		{Name: "www", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 20, Enabled: true},
+		{Name: "www", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 21, Enabled: true},
 		{Name: "mail", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 30, Enabled: true},
+		{Name: "mail", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 35, Enabled: true},
 		{Name: "@", Type: "MX", Value: "mail.{DOMAIN}", TTL: 3600, Priority: 10, SortOrder: 40, Enabled: true},
-		{Name: "@", Type: "TXT", Value: "v=spf1 a mx ip4:{IP} ~all", TTL: 3600, SortOrder: 50, Enabled: true},
+		{Name: "@", Type: "TXT", Value: "v=spf1 a mx ip4:{IP} ip6:{IP6} ~all", TTL: 3600, SortOrder: 50, Enabled: true},
 		{Name: "_dmarc", Type: "TXT", Value: "v=DMARC1; p=quarantine; rua=mailto:postmaster@{DOMAIN}; ruf=mailto:postmaster@{DOMAIN}; fo=1; adkim=r; aspf=r", TTL: 3600, SortOrder: 60, Enabled: true},
 		{Name: "{SELECTOR}._domainkey", Type: "TXT", Value: "{DKIM}", TTL: 3600, SortOrder: 70, Enabled: true},
 		// The NS records name the SHARED nameserver pair. No ns1/ns2 A record is
@@ -99,9 +102,13 @@ func builtinDefaults() []TemplateRow {
 func MailDiscoveryRows() []TemplateRow {
 	return []TemplateRow{
 		{Name: "smtp", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 31, Enabled: true},
+		{Name: "smtp", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 36, Enabled: true},
 		{Name: "imap", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 32, Enabled: true},
+		{Name: "imap", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 37, Enabled: true},
 		{Name: "autoconfig", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 33, Enabled: true},
+		{Name: "autoconfig", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 38, Enabled: true},
 		{Name: "autodiscover", Type: "A", Value: "{IP}", TTL: 3600, SortOrder: 34, Enabled: true},
+		{Name: "autodiscover", Type: "AAAA", Value: "{IP6}", TTL: 3600, SortOrder: 39, Enabled: true},
 		// SRV value is "weight port target"; the priority lives in its own column.
 		{Name: "_imap._tcp", Type: "SRV", Value: "1 143 mail.{DOMAIN}", TTL: 3600, Priority: 10, SortOrder: 120, Enabled: true},
 		{Name: "_submission._tcp", Type: "SRV", Value: "1 587 mail.{DOMAIN}", TTL: 3600, Priority: 10, SortOrder: 122, Enabled: true},
@@ -173,13 +180,42 @@ func LoadTemplateMeta(ctx context.Context, db *sql.DB) TemplateMeta {
 	return meta
 }
 
-func substituteTemplate(value, domainName, ipv4, selector, dkim, ns1, ns2 string) string {
+func substituteTemplate(value, domainName, ipv4, ipv6, selector, dkim, ns1, ns2 string) string {
+	// The IPv6 term goes first and, with no address, takes its whole mechanism
+	// with it. See dropIPv6Mechanisms.
+	if ipv6 == "" {
+		value = dropIPv6Mechanisms(value)
+	}
 	value = strings.ReplaceAll(value, "{DOMAIN}", domainName)
+	value = strings.ReplaceAll(value, "{IP6}", ipv6)
 	value = strings.ReplaceAll(value, "{IP}", ipv4)
 	value = strings.ReplaceAll(value, "{SELECTOR}", selector)
 	value = strings.ReplaceAll(value, "{DKIM}", dkim)
 	value = strings.ReplaceAll(value, "{NS1}", ns1)
 	return strings.ReplaceAll(value, "{NS2}", ns2)
+}
+
+// dropIPv6Mechanisms removes any SPF term built around the IPv6 placeholder.
+//
+// Leaving `ip6:` with an empty value is not a harmless blank: it is an invalid
+// SPF term, and a receiver that cannot parse a policy returns permerror for the
+// WHOLE record rather than skipping the bad term. That takes SPF down for the
+// domain, and DMARC with it, on a domain that simply has no IPv6. So the term
+// is removed entirely, and the surrounding spacing is normalized so the record
+// does not end up with a double space a strict parser could trip on.
+func dropIPv6Mechanisms(value string) string {
+	if !strings.Contains(value, "{IP6}") {
+		return value
+	}
+	fields := strings.Fields(value)
+	kept := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if strings.Contains(field, "{IP6}") {
+			continue
+		}
+		kept = append(kept, field)
+	}
+	return strings.Join(kept, " ")
 }
 
 // EnsureDKIM returns a domain's existing DKIM public record or creates a 2048-bit key pair.

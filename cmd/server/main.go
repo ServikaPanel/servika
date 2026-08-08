@@ -155,6 +155,10 @@ func main() {
 	if err := dns.SeedTemplateIfEmpty(context.Background(), d); err != nil {
 		log.Printf("DNS template seed warn: %v", err)
 	}
+	// Right after the seed, because the seed only ever writes into an EMPTY
+	// template: every server that already runs Servika would otherwise never
+	// receive the AAAA rows added to the built-in set.
+	datamigrate.BackfillDNSTemplateIPv6(context.Background(), d)
 	if err := dns.HealZoneIncludes(context.Background(), d); err != nil {
 		log.Printf("DNS zone include heal warn: %v", err)
 	}
