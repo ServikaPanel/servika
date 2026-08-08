@@ -679,7 +679,7 @@ server {
 
     # ---- Security headers (managed by the panel) ----
 {{.SecHeaders}}
-{{.ModSec}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}{{.WebmailBlock}}{{.AutoconfigBlock}}
+{{.ModSec}}{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}{{.WebmailBlock}}{{.AutoconfigBlock}}
 
     access_log /var/log/nginx/{{.DomainName}}.access.log;
     error_log  /var/log/nginx/{{.DomainName}}.error.log warn;
@@ -768,7 +768,7 @@ server {
         try_files $uri =404;
     }
 
-{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}
+{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}
 
 {{.ErrorPageBlock}}
 {{.AppBlocks}}
@@ -1070,10 +1070,17 @@ type VhostOpts struct {
 	Backend string
 
 	// Render-time security blocks that are not persisted in the database.
-	SecHeaders      string
-	DenyBlocks      string
-	ModSec          string // WAF (ModSecurity) server-context directive block; empty when WAF is off or module absent
-	IPRules         string // IP allow/deny directives; empty when access control is off
+	SecHeaders string
+	DenyBlocks string
+	ModSec     string // WAF (ModSecurity) server-context directive block; empty when WAF is off or module absent
+	IPRules    string // IP allow/deny directives; empty when access control is off
+	// GeoBlock refuses a request by the country its address belongs to, and
+	// RateLimit caps how fast one address may make dynamic requests. Both are
+	// empty when the domain has not turned them on, and GeoBlock is also empty
+	// when no country database has been downloaded, because a country rule with
+	// no ranges behind it refuses nobody in deny mode and everybody in allow.
+	GeoBlock        string
+	RateLimit       string
 	HotlinkLocation string // valid_referers image location; empty when hotlink protection is off
 	// WebmailBlock is the `location ^~ /webmail/` block that serves Roundcube
 	// from the domain's own name. It is computed on every render rather than
@@ -1489,6 +1496,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	if !opts.Suspended {
 		opts.ModSec = buildModSec(systemUser)
 		opts.IPRules = buildIPRules(opts.DomainName)
+		opts.GeoBlock, opts.RateLimit = domainProtection(opts.DomainName)
 		opts.HotlinkLocation = buildHotlink(opts.DomainName)
 		// Webmail only on the TLS vhost. On a domain without a certificate the
 		// block would carry mailbox passwords in the clear; the mail page keeps
@@ -1588,12 +1596,27 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 			return err
 		}
 	}
+	// The country and rate-limit declarations live in http context, so they have
+	// to exist before a vhost names the variables and zones they declare. They
+	// are rolled back with the vhost below: nginx keeps serving its loaded
+	// configuration after a failed test, so a shared file left broken here would
+	// take the whole server down at the next unrelated reload instead.
+	sharedRestorers, sharedErr := ensureProtectionConf()
+	if sharedErr != nil {
+		for _, saved := range sharedRestorers {
+			saved.restore()
+		}
+		return sharedErr
+	}
 	if out, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
 		if hadPreviousConfig {
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 			_ = os.WriteFile(cfgPath, previousConfig, 0644)
 		} else {
 			_ = os.Remove(cfgPath)
+		}
+		for _, saved := range sharedRestorers {
+			saved.restore()
 		}
 		return fmt.Errorf("nginx -t failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}
