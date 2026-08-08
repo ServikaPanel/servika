@@ -171,6 +171,8 @@
       "ns": "Delegação dos servidores de nomes",
       "a": "Registro A ({{host}})",
       "mail_a": "Registro A ({{host}})",
+      "aaaa": "Registro AAAA ({{host}})",
+      "mail_aaaa": "Registro AAAA ({{host}})",
       "mx": "Registro MX",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "A consulta falhou, o registro não pôde ser lido.",
       "missing": "O registro não está publicado.",
       "elsewhere": "O registro não aponta para este servidor.",
+      "aaaa_missing": "Nenhum registro AAAA está publicado, então os clientes IPv6 não conseguem alcançar este domínio.",
+      "aaaa_elsewhere": "O registro AAAA aponta para outro lugar. Os clientes IPv6 vão para lá e a renovação do certificado falha, porque o Let's Encrypt tenta IPv6 primeiro.",
+      "aaaa_unmanaged": "Existe um registro AAAA publicado mas nenhum endereço IPv6 está atribuído aqui, então o painel não consegue dizer se está correto.",
       "ns": {
         "missing": "O domínio não tem registros de servidores de nomes; confirme que ele está registrado e ativo.",
         "partial": "Só um dos servidores de nomes pertence a este servidor; defina os dois no registrador.",

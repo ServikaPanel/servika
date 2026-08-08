@@ -171,6 +171,8 @@
       "ns": "域名服务器委派",
       "a": "A 记录（{{host}}）",
       "mail_a": "A 记录（{{host}}）",
+      "aaaa": "AAAA 记录（{{host}}）",
+      "mail_aaaa": "AAAA 记录（{{host}}）",
       "mx": "MX 记录",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "查询失败，无法读取该记录。",
       "missing": "该记录未发布。",
       "elsewhere": "该记录未指向本服务器。",
+      "aaaa_missing": "未发布 AAAA 记录，因此 IPv6 客户端无法访问该域名。",
+      "aaaa_elsewhere": "AAAA 记录指向了别处。IPv6 客户端会被送往那里，而且 Let's Encrypt 会优先尝试 IPv6，证书续期也会失败。",
+      "aaaa_unmanaged": "已发布 AAAA 记录，但这里没有分配 IPv6 地址，因此面板无法判断它是否正确。",
       "ns": {
         "missing": "该域名没有域名服务器记录；请确认它已注册且处于有效状态。",
         "partial": "域名服务器中只有一个属于本服务器；请在注册商处同时设置两个。",

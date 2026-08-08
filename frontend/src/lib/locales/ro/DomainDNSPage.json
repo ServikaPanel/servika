@@ -171,6 +171,8 @@
       "ns": "Delegarea serverelor de nume",
       "a": "Înregistrare A ({{host}})",
       "mail_a": "Înregistrare A ({{host}})",
+      "aaaa": "Înregistrare AAAA ({{host}})",
+      "mail_aaaa": "Înregistrare AAAA ({{host}})",
       "mx": "Înregistrare MX",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "Interogarea a eșuat, înregistrarea nu a putut fi citită.",
       "missing": "Înregistrarea nu este publicată.",
       "elsewhere": "Înregistrarea nu indică acest server.",
+      "aaaa_missing": "Nu este publicată nicio înregistrare AAAA, așa că clienții IPv6 nu pot ajunge la acest domeniu.",
+      "aaaa_elsewhere": "Înregistrarea AAAA indică în altă parte. Clienții IPv6 ajung acolo, iar reînnoirea certificatului eșuează, pentru că Let's Encrypt încearcă mai întâi IPv6.",
+      "aaaa_unmanaged": "Există o înregistrare AAAA publicată, dar aici nu este atribuită nicio adresă IPv6, așa că panoul nu poate spune dacă este corectă.",
       "ns": {
         "missing": "Domeniul nu are înregistrări de servere de nume; verificați dacă este înregistrat și activ.",
         "partial": "Doar unul dintre serverele de nume aparține acestui server; setați-le pe amândouă la registrar.",

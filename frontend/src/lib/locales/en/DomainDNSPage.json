@@ -171,6 +171,8 @@
       "ns": "Nameserver delegation",
       "a": "A record ({{host}})",
       "mail_a": "A record ({{host}})",
+      "aaaa": "AAAA record ({{host}})",
+      "mail_aaaa": "AAAA record ({{host}})",
       "mx": "MX record",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "The lookup failed, so the record could not be read.",
       "missing": "The record is not published.",
       "elsewhere": "The record does not point at this server.",
+      "aaaa_missing": "No AAAA record is published, so IPv6 clients cannot reach this domain.",
+      "aaaa_elsewhere": "The AAAA record points somewhere else. IPv6 clients go there instead, and certificate renewal fails because Let's Encrypt tries IPv6 first.",
+      "aaaa_unmanaged": "An AAAA record is published but no IPv6 address is assigned here, so the panel cannot tell whether it is correct.",
       "ns": {
         "missing": "The domain has no nameserver records; check that it is registered and active.",
         "partial": "Only one of the nameservers belongs to this server; set both at the registrar.",

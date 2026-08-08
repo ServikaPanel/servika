@@ -171,6 +171,8 @@
       "ns": "Délégation des serveurs de noms",
       "a": "Enregistrement A ({{host}})",
       "mail_a": "Enregistrement A ({{host}})",
+      "aaaa": "Enregistrement AAAA ({{host}})",
+      "mail_aaaa": "Enregistrement AAAA ({{host}})",
       "mx": "Enregistrement MX",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "La requête a échoué, l'enregistrement n'a pas pu être lu.",
       "missing": "L'enregistrement n'est pas publié.",
       "elsewhere": "L'enregistrement ne pointe pas vers ce serveur.",
+      "aaaa_missing": "Aucun enregistrement AAAA n'est publié, les clients IPv6 ne peuvent donc pas atteindre ce domaine.",
+      "aaaa_elsewhere": "L'enregistrement AAAA pointe ailleurs. Les clients IPv6 y sont dirigés et le renouvellement du certificat échoue, car Let's Encrypt essaie d'abord IPv6.",
+      "aaaa_unmanaged": "Un enregistrement AAAA est publié mais aucune adresse IPv6 n'est attribuée ici, le panneau ne peut donc pas dire s'il est correct.",
       "ns": {
         "missing": "Le domaine n'a aucun enregistrement de serveur de noms ; vérifiez qu'il est enregistré et actif.",
         "partial": "Un seul des serveurs de noms appartient à ce serveur ; déclarez les deux chez le registraire.",

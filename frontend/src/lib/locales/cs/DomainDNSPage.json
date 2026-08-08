@@ -171,6 +171,8 @@
       "ns": "Delegování jmenných serverů",
       "a": "Záznam A ({{host}})",
       "mail_a": "Záznam A ({{host}})",
+      "aaaa": "Záznam AAAA ({{host}})",
+      "mail_aaaa": "Záznam AAAA ({{host}})",
       "mx": "Záznam MX",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "Dotaz selhal, záznam nebylo možné přečíst.",
       "missing": "Záznam není publikován.",
       "elsewhere": "Záznam neukazuje na tento server.",
+      "aaaa_missing": "Není publikován žádný záznam AAAA, takže klienti s IPv6 se na tuto doménu nedostanou.",
+      "aaaa_elsewhere": "Záznam AAAA ukazuje jinam. Klienti s IPv6 skončí tam a obnova certifikátu selže, protože Let's Encrypt zkouší nejdřív IPv6.",
+      "aaaa_unmanaged": "Záznam AAAA je publikován, ale zde není přiřazena žádná adresa IPv6, takže panel nedokáže posoudit, zda je správný.",
       "ns": {
         "missing": "Doména nemá žádné záznamy jmenných serverů; ověřte, že je registrovaná a aktivní.",
         "partial": "Jen jeden ze jmenných serverů patří tomuto serveru; nastavte u registrátora oba.",

@@ -171,6 +171,8 @@
       "ns": "Delega dei server dei nomi",
       "a": "Record A ({{host}})",
       "mail_a": "Record A ({{host}})",
+      "aaaa": "Record AAAA ({{host}})",
+      "mail_aaaa": "Record AAAA ({{host}})",
       "mx": "Record MX",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "La query è fallita, il record non è stato letto.",
       "missing": "Il record non è pubblicato.",
       "elsewhere": "Il record non punta a questo server.",
+      "aaaa_missing": "Nessun record AAAA è pubblicato, quindi i client IPv6 non possono raggiungere questo dominio.",
+      "aaaa_elsewhere": "Il record AAAA punta altrove. I client IPv6 finiscono lì e il rinnovo del certificato fallisce, perché Let's Encrypt prova prima IPv6.",
+      "aaaa_unmanaged": "Un record AAAA è pubblicato ma qui non è assegnato alcun indirizzo IPv6, quindi il pannello non può stabilire se sia corretto.",
       "ns": {
         "missing": "Il dominio non ha record dei server dei nomi; verifica che sia registrato e attivo.",
         "partial": "Solo uno dei server dei nomi appartiene a questo server; impostali entrambi presso il registrar.",

@@ -171,6 +171,8 @@
       "ns": "Nameserver-Delegierung",
       "a": "A-Eintrag ({{host}})",
       "mail_a": "A-Eintrag ({{host}})",
+      "aaaa": "AAAA-Eintrag ({{host}})",
+      "mail_aaaa": "AAAA-Eintrag ({{host}})",
       "mx": "MX-Eintrag",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "Die Abfrage ist fehlgeschlagen, der Eintrag konnte nicht gelesen werden.",
       "missing": "Der Eintrag ist nicht veröffentlicht.",
       "elsewhere": "Der Eintrag verweist nicht auf diesen Server.",
+      "aaaa_missing": "Es ist kein AAAA-Eintrag veröffentlicht, daher können IPv6-Clients diese Domain nicht erreichen.",
+      "aaaa_elsewhere": "Der AAAA-Eintrag verweist woanders hin. IPv6-Clients landen dort, und die Zertifikatserneuerung schlägt fehl, weil Let's Encrypt zuerst IPv6 versucht.",
+      "aaaa_unmanaged": "Ein AAAA-Eintrag ist veröffentlicht, aber hier ist keine IPv6-Adresse zugewiesen, daher kann das Panel nicht beurteilen, ob er korrekt ist.",
       "ns": {
         "missing": "Die Domain hat keine Nameserver-Einträge; prüfen Sie, ob sie registriert und aktiv ist.",
         "partial": "Nur einer der Nameserver gehört zu diesem Server; tragen Sie beim Registrar beide ein.",

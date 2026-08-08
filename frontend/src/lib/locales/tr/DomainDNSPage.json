@@ -171,6 +171,8 @@
       "ns": "Ad sunucusu delegasyonu",
       "a": "A kaydı ({{host}})",
       "mail_a": "A kaydı ({{host}})",
+      "aaaa": "AAAA kaydı ({{host}})",
+      "mail_aaaa": "AAAA kaydı ({{host}})",
       "mx": "MX kaydı",
       "spf": "SPF",
       "dkim": "DKIM",
@@ -182,6 +184,9 @@
       "unreadable": "Sorgu başarısız oldu, kayıt okunamadı.",
       "missing": "Kayıt yayında değil.",
       "elsewhere": "Kayıt bu sunucuyu göstermiyor.",
+      "aaaa_missing": "Hiç AAAA kaydı yayınlanmamış, bu yüzden IPv6 istemcileri bu alan adına ulaşamaz.",
+      "aaaa_elsewhere": "AAAA kaydı başka bir yeri gösteriyor. IPv6 istemcileri oraya gider ve Let's Encrypt önce IPv6'yı denediği için sertifika yenilemesi başarısız olur.",
+      "aaaa_unmanaged": "Bir AAAA kaydı yayınlanmış ama burada atanmış bir IPv6 adresi yok, bu yüzden panel kaydın doğru olup olmadığını söyleyemez.",
       "ns": {
         "missing": "Alan adının ad sunucusu kaydı yok; kayıtlı ve etkin olduğunu doğrulayın.",
         "partial": "Ad sunucularından yalnız biri bu sunucuya ait; kayıt şirketinde ikisini de tanımlayın.",
