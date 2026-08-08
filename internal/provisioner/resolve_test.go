@@ -128,7 +128,28 @@ func TestDiscoveryNamesJoinTheSANOnlyWhenTheyPointHere(t *testing.T) {
 			want: []string{
 				"example.com", "www.example.com",
 				"autoconfig.example.com", "autodiscover.example.com",
+				"mta-sts.example.com",
 			},
+		},
+		{
+			// The real-world shape for a domain that has NOT enabled MTA-STS:
+			// mta-sts.<domain> has no A record until the panel writes one, so
+			// the SAN set has to come back byte for byte what it always was.
+			// Otherwise every stored certificate fails the reuse check in
+			// ssl_heal.bestCertificate at once and each attempt orders a fresh
+			// one, against Let's Encrypt's weekly per-registered-domain limit.
+			name: "MTA-STS has not been enabled",
+			answer: func(host string) ([]string, error) {
+				if host == "mta-sts.example.com" {
+					return nil, errors.New("no such host")
+				}
+				return []string{apexAddress}, nil
+			},
+			want: []string{
+				"example.com", "www.example.com",
+				"autoconfig.example.com", "autodiscover.example.com",
+			},
+			wantNot: []string{"mta-sts.example.com"},
 		},
 		{
 			name: "discovery names do not exist",
@@ -139,7 +160,7 @@ func TestDiscoveryNamesJoinTheSANOnlyWhenTheyPointHere(t *testing.T) {
 				return nil, errors.New("no such host")
 			},
 			want:    []string{"example.com", "www.example.com"},
-			wantNot: []string{"autoconfig.example.com", "autodiscover.example.com"},
+			wantNot: []string{"autoconfig.example.com", "autodiscover.example.com", "mta-sts.example.com"},
 		},
 		{
 			name: "a discovery name points at another server",
@@ -149,7 +170,8 @@ func TestDiscoveryNamesJoinTheSANOnlyWhenTheyPointHere(t *testing.T) {
 				}
 				return []string{apexAddress}, nil
 			},
-			want:    []string{"example.com", "www.example.com", "autoconfig.example.com"},
+			want: []string{"example.com", "www.example.com",
+				"autoconfig.example.com", "mta-sts.example.com"},
 			wantNot: []string{"autodiscover.example.com"},
 		},
 	}

@@ -60,6 +60,25 @@ func autoconfigBlock() string { return autoconfigNginx }
 // There is no port 80 block. Both clients fetch these URLs over HTTPS, and the
 // ACME challenge for the names is already answered by the port 80 catch-all
 // (assets/nginx/_default80.conf) from the shared webroot.
+// mtaSTSNginx serves the MTA-STS policy from mta-sts.<domain>.
+//
+// RFC 8461 fixes both the hostname and the path, so neither is a choice. The
+// panel answers rather than a file on disk because the policy has to name the
+// current MX and carry the id the _mta-sts TXT record advertises, and a stale
+// file would be worse than none: a sender caches what it fetched.
+const mtaSTSNginx = `
+    # ---- MTA-STS policy (answered by the panel) ----
+    location = /.well-known/mta-sts.txt {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 15s;
+    }
+`
+
 const discoveryVhostNginx = `
 # Mail client auto-configuration hostnames for {{.DomainName}}.
 server {
@@ -75,7 +94,7 @@ server {
     ssl_prefer_server_ciphers on;
     ssl_session_cache shared:SSL:10m;
     ssl_session_timeout 1d;
-` + autoconfigNginx + `
+{{.DiscoveryBlocks}}
     location / { return 404; }
 
     access_log /var/log/nginx/{{.DomainName}}.access.log;

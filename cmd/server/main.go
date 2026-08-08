@@ -45,6 +45,7 @@ import (
 	"servika/internal/metrics"
 	"servika/internal/middleware"
 	"servika/internal/monitor"
+	"servika/internal/mtasts"
 	"servika/internal/nginxset"
 	"servika/internal/overview"
 	"servika/internal/packages"
@@ -228,6 +229,11 @@ func main() {
 	// reports to postmaster@. This reads them out of that mailbox without
 	// writing to it; the mailbox belongs to the customer.
 	mailreport.StartCollector(d)
+	// Every step of an MTA-STS publication after the customer presses the button
+	// waits on the world: a DNS record to propagate, then a certificate to be
+	// reissued with the policy host in it. Neither has a completion signal, so
+	// the sequence is advanced by re-measuring rather than by a callback.
+	mtasts.StartHeal(d)
 	// Called synchronously: this publishes the running version to internal/system,
 	// which /system/usage reports as panel_version. Only local file work happens
 	// here; the 24-hour manifest poll starts its own goroutine.
@@ -287,6 +293,7 @@ func main() {
 	addonH := &addondomains.Handlers{DB: d, IPv4: ipv4}
 	mailH := &mail.Handlers{DB: d}
 	mailReportH := &mailreport.Handlers{DB: d}
+	mtastsH := &mtasts.Handlers{DB: d, IPv4: ipv4}
 	transfersH := &transfers.Handlers{DB: d, Domains: domainsH, Mail: mailH, Cron: cronH}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
@@ -346,6 +353,12 @@ func main() {
 		Get("/.well-known/autoconfig/mail/config-v1.1.xml", autoconfigH.Thunderbird)
 	r.With(middleware.RateLimit("autoconfig", 60, time.Minute)).
 		Post("/autodiscover/autodiscover.xml", autoconfigH.Outlook)
+	// The MTA-STS policy, fetched by a SENDING mail server, which has no panel
+	// session either. RFC 8461 fixes both the hostname and this path, so neither
+	// is a choice; the vhost only proxies it once the certificate names the
+	// policy host, so an unauthenticated request here is already TLS-verified.
+	r.With(middleware.RateLimit("mtasts", 60, time.Minute)).
+		Get("/.well-known/mta-sts.txt", mtastsH.Policy)
 	r.Get("/api/v1/plugin-bundle/{name}/app.js", pluginH.Bundle)
 
 	r.Get("/healthz", func(w http.ResponseWriter, req *http.Request) {
@@ -550,6 +563,12 @@ func main() {
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-reports", mailReportH.Status)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-reports/dmarc", mailReportH.DMARC)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-reports/tlsrpt", mailReportH.TLSRPT)
+				// MTA-STS publication, mounted beside the reports for the same
+				// reason. Enforce is refused on this write path, not only on the
+				// screen that renders the control.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-mtasts", mtastsH.Get)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/mail-mtasts", mtastsH.Post)
+				r.With(middleware.CustomerScope).Delete("/domains/{id}/mail-mtasts", mtastsH.Delete)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail/spam", mailH.SpamGet)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/mail/spam", mailH.SpamPut)
 				r.With(middleware.AdminOnly).Get("/admin/mail/settings", mailH.ServerSettingsGet)

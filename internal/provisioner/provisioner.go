@@ -1175,9 +1175,51 @@ func (o VhostOpts) RedirectFromHost() string {
 	return "www." + o.DomainName
 }
 
+// MTASTSHost is the hostname an MTA-STS policy is fetched from (RFC 8461).
+func MTASTSHost(domain string) string { return "mta-sts." + domain }
+
 // DiscoveryHosts returns the server_name list for the auto-configuration vhost.
+//
+// Only names the installed certificate actually covers are listed. The vhost
+// carries two independent capabilities now, and a name served from a
+// certificate that omits it is worse than one that goes unanswered: the client
+// gets a mismatch on the very connection it made to learn something.
 func (o VhostOpts) DiscoveryHosts() string {
-	return strings.Join(discoverySANHosts(o.DomainName), " ")
+	var hosts []string
+	if o.discoveryEligible() {
+		hosts = append(hosts, discoverySANHosts(o.DomainName)...)
+	}
+	if o.mtaSTSEligible() {
+		hosts = append(hosts, MTASTSHost(o.DomainName))
+	}
+	return strings.Join(hosts, " ")
+}
+
+// DiscoveryBlocks returns the location blocks the auto-configuration vhost
+// serves, each gated on its own name being covered.
+func (o VhostOpts) DiscoveryBlocks() string {
+	var blocks strings.Builder
+	if o.discoveryEligible() {
+		blocks.WriteString(autoconfigNginx)
+	}
+	if o.mtaSTSEligible() {
+		blocks.WriteString(mtaSTSNginx)
+	}
+	return blocks.String()
+}
+
+// mtaSTSEligible reports whether mta-sts.<domain> may be served.
+//
+// It is deliberately SEPARATE from discoveryEligible rather than another name
+// in discoverySANHosts. That set is the one discoveryEligible requires in full,
+// so adding a name to it would make every certificate issued before this
+// feature fail the check and silently stop the auto-configuration vhost from
+// rendering at all, breaking working mail client setup on every domain.
+func (o VhostOpts) mtaSTSEligible() bool {
+	if o.Suspended || !o.SSL() {
+		return false
+	}
+	return certValid(o.CertPath, o.KeyPath, 0, MTASTSHost(o.DomainName))
 }
 
 // discoveryEligible reports whether the auto-configuration vhost may be
@@ -1279,6 +1321,32 @@ func CertificateCoversHost(certPath, keyPath, host string) bool {
 	return certValid(certPath, keyPath, 0, host)
 }
 
+// MTASTSResolvesToApex reports whether mta-sts.<domain> resolves to the same
+// address(es) as the apex.
+//
+// This is the gate that keeps the name out of certSANHosts until the customer
+// has actually written the record, so a domain that never enables MTA-STS orders
+// exactly the same SAN set it ordered before the feature existed.
+func MTASTSResolvesToApex(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	return sanEligible(lookupHostRetrying(domain), MTASTSHost(domain))
+}
+
+// MTASTSCertificateReady reports whether the certificate the vhost would serve
+// currently names mta-sts.<domain>.
+//
+// It asks bestCertificate rather than a fixed path because that is the same
+// selection renderAndReload makes, so the answer is about the certificate a
+// sender will actually be shown and not about a file that happens to exist.
+func MTASTSCertificateReady(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	certPath, keyPath, _ := bestCertificate(domain, 0)
+	if certPath == "" {
+		return false
+	}
+	return certValid(certPath, keyPath, 0, MTASTSHost(domain))
+}
+
 // certSANHosts returns the hostnames a real certificate must cover for a domain:
 // the apex always, plus www and the mail-discovery names when DNS supports them.
 // This is the DNS aware counterpart to wwwHostNames, used by ACME issuance and
@@ -1309,6 +1377,16 @@ func certSANHosts(domain string) []string {
 		if sanEligible(apex, host) {
 			hosts = append(hosts, host)
 		}
+	}
+	// The MTA-STS hostname goes through the SAME gate, which is what keeps this
+	// inert for every domain that has not asked for it: mta-sts.<domain> has no
+	// A record until MTA-STS is enabled, so sanEligible answers false and the
+	// SAN set is byte for byte what it was. A name added unconditionally here
+	// would fail the reuse check in ssl_heal.bestCertificate for every stored
+	// certificate at once and order a re-issuance on every attempt, against Let's
+	// Encrypt's weekly per-registered-domain limit.
+	if sanEligible(apex, MTASTSHost(domain)) {
+		hosts = append(hosts, MTASTSHost(domain))
 	}
 	return hosts
 }
@@ -1482,7 +1560,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 				return fmt.Errorf("canonical redirect render: %w", err)
 			}
 		}
-		if opts.discoveryEligible() {
+		if opts.discoveryEligible() || opts.mtaSTSEligible() {
 			if err := discoveryVhostTmpl.Execute(&buf, opts); err != nil {
 				return fmt.Errorf("auto-configuration vhost render: %w", err)
 			}
