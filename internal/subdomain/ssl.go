@@ -246,15 +246,13 @@ func fileExists(path string) bool {
 func vhostSSL(fqdn, docroot, socket, certPath, keyPath, protected string, web webRender) string {
 	return fmt.Sprintf(`server {
     listen 80;
-    listen [::]:80;
-    server_name %[1]s;
+`+provisioner.ListenIPv6("80")+`    server_name %[1]s;
     location /.well-known/acme-challenge/ { auth_basic off; root /var/www/_acme; try_files $uri =404; }
     location / { return 301 https://$host$request_uri; }
 }
 server {
     listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+`+provisioner.ListenIPv6("443 ssl")+`    http2 on;
     server_name %[1]s;
 
     ssl_certificate     %[3]s;

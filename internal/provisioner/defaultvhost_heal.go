@@ -112,7 +112,20 @@ func HealDefaultVhostsOnStartup() {
 }
 
 // healManagedVhost applies one file and reports whether it wrote anything.
-func healManagedVhost(path, wanted string, known []string) bool {
+//
+// The wanted text is shaped to what this host can bind before anything is
+// compared. The hash list gains the OTHER variant of the same canonical text,
+// so a file this heal itself stripped of its IPv6 listen lines is recognised as
+// shipped rather than mistaken for an operator edit: without that, a host
+// without IPv6 would warn on every boot and never receive a template update
+// again.
+func healManagedVhost(path, canonical string, known []string) bool {
+	wanted := adjustIPv6Listen(canonical)
+	other := withIPv6Listen(canonical)
+	if wanted == other {
+		other = withoutIPv6Listen(canonical)
+	}
+	known = append(slices.Clone(known), contentHash(other))
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	original, readErr := os.ReadFile(path)
 	exists := readErr == nil

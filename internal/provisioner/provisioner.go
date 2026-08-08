@@ -204,6 +204,9 @@ func Init(db *sql.DB) {
 	EnsureBrandAssets() // Lottie animations + player (shared, served at /_srv/)
 	healCacheZoneOnStartup()
 	HealDefaultVhostsOnStartup() // port 80/443 catch-all vhosts, install-only until now
+	// Before every other panel-vhost heal: a file nginx cannot bind makes each
+	// of those heals fail its own nginx -t and revert work that was correct.
+	HealPanelIPv6Listen()
 	healPanelVhostHeadersOnStartup()
 	healPanelLoginRateLimitOnStartup()
 	HealPanelProxyTrustOnStartup() // :8080 proxy secret + pma-redeem deny + slowloris/limit_conn
@@ -641,12 +644,11 @@ func SamePHPVersion(a, b string) bool {
 }
 
 // vhostTmpl covers vhosts both with and without SSL.
-var vhostTmpl = template.Must(template.New("v").Parse(`{{- if .SSL -}}
+var vhostTmpl = template.Must(template.New("v").Funcs(vhostFuncs).Parse(`{{- if .SSL -}}
 # {{.DomainName}} — port 80 remains open for the HTTP-01 challenge; all other traffic redirects to 443
 server {
     listen 80;
-    listen [::]:80;
-    server_name {{.ServerNames}};
+{{listen6 "80"}}    server_name {{.ServerNames}};
 
     location /.well-known/acme-challenge/ {
         root /var/www/_acme;
@@ -661,8 +663,7 @@ server {
 
 server {
     listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+{{listen6 "443 ssl"}}    http2 on;
     server_name {{.ServerNames}};
 
     ssl_certificate     {{.CertPath}};
@@ -750,8 +751,7 @@ server {
 {{- else -}}
 server {
     listen 80;
-    listen [::]:80;
-    server_name {{.ServerNames}};
+{{listen6 "80"}}    server_name {{.ServerNames}};
 
     root {{.WebRoot}};
     index index.php index.html index.htm;
@@ -844,16 +844,14 @@ server {
 // The ACME challenge location stays open here: HTTP-01 validation for the
 // redirected host must still be answerable, or the certificate could not be
 // renewed with both hostnames on it.
-var discoveryVhostTmpl = template.Must(template.New("discovery").Parse(discoveryVhostNginx))
+var discoveryVhostTmpl = template.Must(template.New("discovery").Funcs(vhostFuncs).Parse(discoveryVhostNginx))
 
-var wwwRedirectTmpl = template.Must(template.New("wwwredirect").Parse(`
+var wwwRedirectTmpl = template.Must(template.New("wwwredirect").Funcs(vhostFuncs).Parse(`
 # {{.RedirectFromHost}} — redirected to the canonical hostname {{.RedirectToHost}}
 server {
     listen 80;
-    listen [::]:80;
-{{if .SSL}}    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+{{listen6 "80"}}{{if .SSL}}    listen 443 ssl;
+{{listen6 "443 ssl"}}    http2 on;
     ssl_certificate     {{.CertPath}};
     ssl_certificate_key {{.KeyPath}};
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -911,11 +909,10 @@ func buildSecurityHeaders(opts VhostOpts) string {
 	return headers.String()
 }
 
-var suspendedVhostTmpl = template.Must(template.New("suspended").Parse(`# {{.DomainName}} suspended by Servika
+var suspendedVhostTmpl = template.Must(template.New("suspended").Funcs(vhostFuncs).Parse(`# {{.DomainName}} suspended by Servika
 server {
     listen 80;
-    listen [::]:80;
-    server_name {{.ServerNames}};
+{{listen6 "80"}}    server_name {{.ServerNames}};
 
     location /.well-known/acme-challenge/ {
         root /var/www/_acme;
@@ -937,8 +934,7 @@ server {
 {{if .SSL}}
 server {
     listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+{{listen6 "443 ssl"}}    http2 on;
     server_name {{.ServerNames}};
 
     ssl_certificate {{.CertPath}};
@@ -959,11 +955,10 @@ server {
 }
 {{end}}`))
 
-var redirectVhostTmpl = template.Must(template.New("redirect").Parse(`# {{.DomainName}} redirect managed by Servika
+var redirectVhostTmpl = template.Must(template.New("redirect").Funcs(vhostFuncs).Parse(`# {{.DomainName}} redirect managed by Servika
 server {
     listen 80;
-    listen [::]:80;
-    server_name {{.ServerNames}};
+{{listen6 "80"}}    server_name {{.ServerNames}};
 
     location /.well-known/acme-challenge/ {
         root /var/www/_acme;
@@ -981,8 +976,7 @@ server {
 {{if .SSL}}
 server {
     listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+{{listen6 "443 ssl"}}    http2 on;
     server_name {{.ServerNames}};
 
     ssl_certificate {{.CertPath}};

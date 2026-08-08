@@ -92,6 +92,16 @@ func checkNginxSyntax(t *testing.T, prefix, body, whatFailed string) {
 		t.Fatalf("the configuration has no http block to sandbox:\n%s", body)
 	}
 
+	// A PHP vhost carries `include fastcgi_params;`, which nginx resolves under
+	// the prefix and which only the distribution package installs. Without a
+	// stub here the gate fails on a missing file and says nothing about the
+	// configuration it was asked to judge. Its CONTENT does not matter: the
+	// directives it would carry are fastcgi_param lines nginx never validates
+	// against a backend at -t time.
+	if err := os.WriteFile(filepath.Join(prefix, "fastcgi_params"), nil, 0o600); err != nil {
+		t.Fatalf("write the fastcgi_params stub: %v", err)
+	}
+
 	config := filepath.Join(prefix, "nginx.conf")
 	if err := os.WriteFile(config, []byte(sandboxed), 0o600); err != nil {
 		t.Fatalf("write the configuration: %v", err)

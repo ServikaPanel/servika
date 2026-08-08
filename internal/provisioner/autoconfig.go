@@ -83,8 +83,7 @@ const discoveryVhostNginx = `
 # Mail client auto-configuration hostnames for {{.DomainName}}.
 server {
     listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+{{listen6 "443 ssl"}}    http2 on;
     server_name {{.DiscoveryHosts}};
 
     ssl_certificate     {{.CertPath}};

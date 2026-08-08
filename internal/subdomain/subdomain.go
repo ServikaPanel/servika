@@ -362,8 +362,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 func vhost(fqdn, docroot, socket, protected string, web webRender) string {
 	return fmt.Sprintf(`server {
     listen 80;
-    listen [::]:80;
-    server_name %[1]s;
+`+provisioner.ListenIPv6("80")+`    server_name %[1]s;
 
     root %[2]s;
     index index.php index.html index.htm;
