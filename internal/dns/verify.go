@@ -43,7 +43,7 @@ const (
 // Check is the result of one DNS check. Key names the check, Reason names the
 // outcome; the frontend turns both into localized text.
 type Check struct {
-	Key      string `json:"key"` // ns | a | mail_a | mx | spf | dkim | dmarc | ptr | mail_ports
+	Key      string `json:"key"` // ns | a | aaaa | mail_a | mail_aaaa | mx | spf | dkim | dmarc | ptr | mail_ports
 	Host     string `json:"host,omitempty"`
 	Status   string `json:"status"`
 	Reason   string `json:"reason,omitempty"`
@@ -63,9 +63,9 @@ type VerifyResult struct {
 // Verify answers GET /domains/{id}/dns/verify.
 func (h *Handlers) Verify(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var domainName, ipv4 string
+	var domainName, ipv4, ipv6 string
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, COALESCE(ipv4,'') FROM domains WHERE id=?`, id).Scan(&domainName, &ipv4); err != nil {
+		`SELECT domain_name, COALESCE(ipv4,''), COALESCE(ipv6,'') FROM domains WHERE id=?`, id).Scan(&domainName, &ipv4, &ipv6); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
@@ -73,7 +73,7 @@ func (h *Handlers) Verify(w http.ResponseWriter, r *http.Request) {
 	// with no side effects, so a caller that gives up should stop the work.
 	ctx, cancel := context.WithTimeout(r.Context(), verifyTimeout)
 	defer cancel()
-	httpx.WriteJSON(w, http.StatusOK, RunVerification(ctx, h.DB, publicResolver(), id, domainName, ipv4))
+	httpx.WriteJSON(w, http.StatusOK, RunVerification(ctx, h.DB, publicResolver(), id, domainName, ipv4, ipv6))
 }
 
 // publicResolver returns a resolver that queries a public recursive server
@@ -92,7 +92,7 @@ func publicResolver() *net.Resolver {
 }
 
 // RunVerification executes the checks in order and summarizes them.
-func RunVerification(ctx context.Context, db *sql.DB, resolver *net.Resolver, domainID int64, domainName, ipv4 string) VerifyResult {
+func RunVerification(ctx context.Context, db *sql.DB, resolver *net.Resolver, domainID int64, domainName, ipv4, ipv6 string) VerifyResult {
 	result := VerifyResult{DomainName: domainName, Checks: []Check{}}
 	ns1, ns2 := NameserverPair(ctx, db, domainID, domainName)
 	result.Checks = append(result.Checks,
@@ -111,6 +111,17 @@ func RunVerification(ctx context.Context, db *sql.DB, resolver *net.Resolver, do
 		checkPTR(ctx, resolver, ipv4),
 		checkMailPorts(ctx, ipv4),
 	)
+	// The AAAA checks report nothing at all on a domain that uses no IPv6 and
+	// publishes none, so they are appended only when they have something to
+	// say. An IPv4-only install must not read as misconfigured.
+	for _, check := range []*Check{
+		checkAddressIPv6(ctx, resolver, "aaaa", domainName, ipv6),
+		checkAddressIPv6(ctx, resolver, "mail_aaaa", "mail."+domainName, ipv6),
+	} {
+		if check != nil {
+			result.Checks = append(result.Checks, *check)
+		}
+	}
 	for _, check := range result.Checks {
 		switch check.Status {
 		case StatusOK:
