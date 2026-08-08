@@ -46,7 +46,13 @@ const (
 	// DefaultAppEnvDir holds one EnvironmentFile per application, each 0600
 	// root-owned: systemd parses the file in the manager process as root, so
 	// the service's own user never opens it and needs no access.
-	DefaultAppEnvDir          = "/etc/servika/apps"
+	DefaultAppEnvDir = "/etc/servika/apps"
+	// DefaultGeoIPDir holds the downloaded country database and the nginx
+	// include generated from it. It sits on persistent state rather than under
+	// /opt/servika because servika-update replaces bin/, frontend-dist and src/
+	// only, and a database re-downloaded on every update would spend the
+	// operator's MaxMind allowance for nothing.
+	DefaultGeoIPDir           = "/var/lib/servika/geoip"
 	DefaultMailLog            = "/var/log/maillog"
 	DefaultInstallationID     = "/etc/servika/installation-id"
 	DefaultVersionCache       = "/opt/servika/version-cache.json"
@@ -159,6 +165,7 @@ func RuntimeOpWrapper() string {
 func NodeRoot() string  { return mustAbsPath("SERVIKA_NODE_ROOT", DefaultNodeRoot) }
 func AppLogDir() string { return mustAbsPath("SERVIKA_APP_LOG_DIR", DefaultAppLogDir) }
 func AppEnvDir() string { return mustAbsPath("SERVIKA_APP_ENV_DIR", DefaultAppEnvDir) }
+func GeoIPDir() string  { return mustAbsPath("SERVIKA_GEOIP_DIR", DefaultGeoIPDir) }
 
 // MailLog is where Postfix and Dovecot write. AlmaLinux keeps it at
 // /var/log/maillog; a host that sends mail logging elsewhere overrides it.
