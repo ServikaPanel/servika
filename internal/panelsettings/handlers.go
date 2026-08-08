@@ -40,6 +40,12 @@ type statusResponse struct {
 	SSLError     string `json:"ssl_error,omitempty"`
 	SSLExpires   string `json:"ssl_expires,omitempty"`
 	ServerIPv4   string `json:"server_ipv4"`
+	// ServerIPv6 is empty on a host with no globally routable IPv6 address,
+	// which is the ordinary state and not a fault. The screen distinguishes it
+	// from a host with no IPv6 stack at all, because the two need different
+	// things done about them.
+	ServerIPv6 string `json:"server_ipv6"`
+	HasIPv6    bool   `json:"has_ipv6"`
 }
 
 type saveRequest struct {
@@ -53,6 +59,8 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings.ServerIPv4 = h.serverIPv4()
+	settings.ServerIPv6 = config.PublicIPv6()
+	settings.HasIPv6 = config.HasIPv6()
 	httpx.WriteJSON(w, http.StatusOK, settings)
 }
 

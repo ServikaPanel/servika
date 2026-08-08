@@ -8,6 +8,11 @@ type PanelDomainStatus = {
   ssl_error?: string
   ssl_expires?: string
   server_ipv4: string
+  // Empty means this server has no globally routable IPv6 address. That is the
+  // ordinary state on an IPv4-only host, not a fault, so the screen says which
+  // of the two it is rather than showing a blank.
+  server_ipv6: string
+  has_ipv6: boolean
 }
 
 export default function PanelDomain() {
@@ -95,6 +100,7 @@ export default function PanelDomain() {
           </label>
           <div className="text-xs text-slate-500 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900">
             <div>{t('serverIpv4')} <span className="font-mono text-slate-800 dark:text-slate-100">{status?.server_ipv4 || t('unknown')}</span></div>
+            <div>{t('serverIpv6')} <span className="font-mono text-slate-800 dark:text-slate-100">{status?.server_ipv6 || (status?.has_ipv6 ? t('ipv6NoRoutable') : t('ipv6None'))}</span></div>
             <div>{t('sslStatus')} <span className="font-semibold text-slate-800 dark:text-slate-100">{status?.ssl_status || t('sslNone')}</span></div>
             {status?.ssl_status === 'active' && status.custom_domain && <div>{t('portlessUrl')} <span className="font-mono text-slate-800 dark:text-slate-100">https://{status.custom_domain}</span></div>}
             {status?.ssl_expires && <div>{t('expires')} <span className="font-mono text-slate-800 dark:text-slate-100">{status.ssl_expires}</span></div>}
