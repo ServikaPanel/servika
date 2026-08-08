@@ -35,6 +35,7 @@ import (
 	"servika/internal/domains"
 	"servika/internal/files"
 	"servika/internal/firewall"
+	"servika/internal/geoip"
 	"servika/internal/git"
 	githubpkg "servika/internal/github"
 	"servika/internal/httpx"
@@ -234,6 +235,9 @@ func main() {
 	// reissued with the policy host in it. Neither has a completion signal, so
 	// the sequence is advanced by re-measuring rather than by a callback.
 	mtasts.StartHeal(d)
+	// The country database is the operator's own MaxMind download. With no
+	// credentials this does nothing at all rather than failing once a day.
+	geoip.StartUpdater(d)
 	// Called synchronously: this publishes the running version to internal/system,
 	// which /system/usage reports as panel_version. Only local file work happens
 	// here; the 24-hour manifest poll starts its own goroutine.
@@ -842,6 +846,12 @@ func main() {
 				r.With(middleware.CustomerScope).Put("/domains/{id}/ip-rules/mode", domainsH.SetIPRulesMode)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/ip-rules", domainsH.AddIPRule)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/ip-rules/{ruleID}", domainsH.DeleteIPRule)
+				// Country rules and the request ceiling sit beside the IP rules:
+				// same screen, same scope, same re-render.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/geo", domainsH.GetGeo)
+				r.With(middleware.CustomerScope).Put("/domains/{id}/geo", domainsH.SetGeo)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/rate-limit", domainsH.GetRateLimit)
+				r.With(middleware.CustomerScope).Put("/domains/{id}/rate-limit", domainsH.SetRateLimit)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/nginx-settings", nginxsetH.Show)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/nginx-settings", nginxsetH.Save)
 				// Same handlers, scoped to a subdomain by the optional {sid}.
