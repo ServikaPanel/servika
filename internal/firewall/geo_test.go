@@ -1,6 +1,8 @@
 package firewall
 
 import (
+	"bytes"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -110,9 +112,15 @@ func TestBothSetsAreDeclaredWhenNoCountryIsBlocked(t *testing.T) {
 	}
 }
 
-// nft needs the elements comma-separated inside one brace pair, and a trailing
-// comma is a syntax error that would fail the whole ruleset.
-func TestElementsAreRenderedWithoutATrailingComma(t *testing.T) {
+// The two families must not mix. Measured with `nft -c`: an IPv6 prefix in an
+// ipv4_addr set is refused with "Could not resolve hostname", which fails the
+// WHOLE ruleset, so one misfiled range would leave the server on whatever rules
+// it happened to have.
+//
+// A trailing comma, by contrast, is NOT an error: nft accepts it. The elements
+// are still rendered without one, but that is formatting, not a boundary, so it
+// is not asserted here as though it were.
+func TestTheAddressFamiliesAreKeptApart(t *testing.T) {
 	body := string(buildGeoSets(geoip.Ranges{
 		V4: []geoip.Network{
 			{CIDR: "1.0.1.0/24", Country: "CN"},
@@ -123,16 +131,72 @@ func TestElementsAreRenderedWithoutATrailingComma(t *testing.T) {
 	if !strings.Contains(body, "1.0.1.0/24,\n") {
 		t.Errorf("elements are not comma-separated:\n%s", body)
 	}
-	if strings.Contains(body, "1.0.2.0/23,\n") {
-		t.Errorf("the last IPv4 element carries a trailing comma:\n%s", body)
-	}
-	if strings.Contains(body, "2001:250::/32,\n") {
-		t.Errorf("the last IPv6 element carries a trailing comma:\n%s", body)
-	}
-	// Families are kept apart: nft refuses an IPv6 prefix in an ipv4_addr set.
 	v4Block := body[strings.Index(body, geoSetV4):strings.Index(body, geoSetV6)]
 	if strings.Contains(v4Block, "2001:") {
 		t.Errorf("an IPv6 range landed in the IPv4 set:\n%s", v4Block)
+	}
+	if !strings.Contains(body[strings.Index(body, geoSetV6):], "2001:250::/32") {
+		t.Errorf("the IPv6 range did not land in the IPv6 set:\n%s", body)
+	}
+	// A prefix element needs `flags interval`; without it nft refuses the set.
+	if strings.Count(body, "flags interval") != 2 {
+		t.Errorf("a set declares prefix elements without `flags interval`:\n%s", body)
+	}
+}
+
+// requireNFT skips unless nft can actually check a document here.
+//
+// Finding the binary is not enough: `nft -c` still initializes its netlink
+// cache, which an unprivileged container refuses with "Operation not
+// permitted". Probing with a document that is certainly valid separates
+// "cannot run here" from "was rejected", so a permission problem can never be
+// read as a syntax error, nor a syntax error dismissed as a permission problem.
+func requireNFT(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("nft"); err != nil {
+		t.Skip("nft is not installed; the generated document cannot be parsed here")
+	}
+	probe := exec.Command("nft", "-c", "-f", "-")
+	probe.Stdin = strings.NewReader("table inet servika_nft_probe {}\n")
+	if output, err := probe.CombinedOutput(); err != nil {
+		t.Skipf("nft cannot check a document here: %v: %s", err, bytes.TrimSpace(output))
+	}
+}
+
+// The ruleset and the element file are written apart but PARSED together, and
+// nft rejects the whole document on one bad line, which would leave the server
+// with whatever ruleset it happened to have. This composes both halves the way
+// the include does and hands them to `nft -c`.
+//
+// nft is Linux-only and needs a privilege even to check, so the test skips where
+// it cannot run rather than pretending to have proved anything.
+func TestTheComposedDocumentParses(t *testing.T) {
+	requireNFT(t)
+	sets := buildGeoSets(geoip.Ranges{
+		V4: []geoip.Network{
+			{CIDR: "1.0.1.0/24", Country: "CN"},
+			{CIDR: "5.44.16.0/22", Country: "RU"},
+		},
+		V6: []geoip.Network{{CIDR: "2001:250::/32", Country: "CN"}},
+	})
+	ruleset := buildRuleset(
+		[]string{"\t\tip saddr 1.2.3.4 accept"},
+		[]string{"\t\ttcp dport 3306 drop"},
+		[]string{"\t\ttcp dport 21 drop"},
+		[]string{"\t\tip saddr 9.9.9.9 drop"},
+	)
+	// The include cannot be followed from a test (the path is root-owned), so
+	// the element file is spliced in exactly where nft would read it.
+	include := []byte("\tinclude \"" + geoIncludeFile + "\"\n")
+	if !bytes.Contains(ruleset, include) {
+		t.Fatalf("the include line is missing, so this test would prove nothing:\n%s", ruleset)
+	}
+	document := bytes.Replace(ruleset, include, sets, 1)
+
+	command := exec.Command("nft", "-c", "-f", "-")
+	command.Stdin = bytes.NewReader(document)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("nft refused the generated document: %v\n%s\n--- document ---\n%s", err, output, document)
 	}
 }
 
