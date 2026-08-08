@@ -41,6 +41,7 @@ import (
 	"servika/internal/laravel"
 	"servika/internal/logs"
 	"servika/internal/mail"
+	"servika/internal/mailreport"
 	"servika/internal/metrics"
 	"servika/internal/middleware"
 	"servika/internal/monitor"
@@ -220,6 +221,10 @@ func main() {
 	// Blocklist state changes on the scale of hours and answers over someone
 	// else's DNS, so it is measured in the background rather than per request.
 	mail.StartPoolScanner(d)
+	// Every domain's _dmarc record already asks the world to send aggregate
+	// reports to postmaster@. This reads them out of that mailbox without
+	// writing to it; the mailbox belongs to the customer.
+	mailreport.StartCollector(d)
 	// Called synchronously: this publishes the running version to internal/system,
 	// which /system/usage reports as panel_version. Only local file work happens
 	// here; the 24-hour manifest poll starts its own goroutine.
@@ -278,6 +283,7 @@ func main() {
 	subdomain.HealSubdomainPHPVersions(d)
 	addonH := &addondomains.Handlers{DB: d, IPv4: ipv4}
 	mailH := &mail.Handlers{DB: d}
+	mailReportH := &mailreport.Handlers{DB: d}
 	transfersH := &transfers.Handlers{DB: d, Domains: domainsH, Mail: mailH, Cron: cronH}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
@@ -534,6 +540,13 @@ func main() {
 				r.With(middleware.CustomerScope).Put("/domains/{id}/mail/{mid}/password", mailH.ResetPassword)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/mail/{mid}/status", mailH.SetStatus)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail/delivery-log", mailH.DeliveryLog)
+				// Deliverability reports. Mounted beside /domains/{id}/mail rather
+				// than under it, because every route there takes a {mid} mailbox
+				// parameter and a literal segment next to that wildcard reads as a
+				// mailbox named "reports".
+				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-reports", mailReportH.Status)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-reports/dmarc", mailReportH.DMARC)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/mail-reports/tlsrpt", mailReportH.TLSRPT)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail/spam", mailH.SpamGet)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/mail/spam", mailH.SpamPut)
 				r.With(middleware.AdminOnly).Get("/admin/mail/settings", mailH.ServerSettingsGet)
