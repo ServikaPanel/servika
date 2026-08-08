@@ -30,10 +30,12 @@ func windowDays(r *http.Request) int {
 	return days
 }
 
-func domainID(r *http.Request) int64 {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	return id
-}
+// The domain id is parsed inline in each handler rather than through a shared
+// helper. gosec's taint analysis follows the raw URL parameter across a function
+// boundary but not across strconv.ParseInt within one function, so a helper
+// turns every log line mentioning the id into a G706 report. The value is an
+// int64 rendered with %d and cannot carry a newline either way; parsing it
+// locally lets the analyzer see that, instead of four suppressions asserting it.
 
 // The routes are mounted under /domains/{id}/mail-reports rather than under
 // /domains/{id}/mail, where every other mail route takes a {mid} mailbox
@@ -48,7 +50,7 @@ func domainID(r *http.Request) int64 {
 // to be able to say so in the customer's own language rather than showing
 // nothing.
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
-	id := domainID(r)
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var domainName, mailboxLocal, lastError string
 	var lastScan sql.NullString
 	var mailboxExists int
@@ -70,7 +72,6 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "domain not found")
 			return
 		}
-		// #nosec G706 -- the logged id is an int64 from strconv.ParseInt, so it cannot carry CR/LF; err is a database driver error.
 		log.Printf("mail report status for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the report status could not be read")
 		return
@@ -82,14 +83,12 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	// would read as "no reports have ever arrived".
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM dmarc_reports WHERE domain_id=?`, id).Scan(&dmarcCount); err != nil {
-		// #nosec G706 -- the logged id is an int64 from strconv.ParseInt, so it cannot carry CR/LF; err is a database driver error.
 		log.Printf("mail report count for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the report status could not be read")
 		return
 	}
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM tlsrpt_reports WHERE domain_id=?`, id).Scan(&tlsCount); err != nil {
-		// #nosec G706 -- the logged id is an int64 from strconv.ParseInt, so it cannot carry CR/LF; err is a database driver error.
 		log.Printf("mail report count for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the report status could not be read")
 		return
@@ -109,10 +108,10 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 // DMARC returns the sending addresses seen for the domain.
 func (h *Handlers) DMARC(w http.ResponseWriter, r *http.Request) {
 	days := windowDays(r)
-	sources, err := Sources(r.Context(), h.DB, domainID(r), days)
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	sources, err := Sources(r.Context(), h.DB, id, days)
 	if err != nil {
-		// #nosec G706 -- the logged id is an int64 from strconv.ParseInt, so it cannot carry CR/LF; err is a database driver error.
-		log.Printf("mail report sources for domain %d: %v", domainID(r), err)
+		log.Printf("mail report sources for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the reports could not be read")
 		return
 	}
@@ -122,10 +121,10 @@ func (h *Handlers) DMARC(w http.ResponseWriter, r *http.Request) {
 // TLSRPT returns the TLS reporting view for the domain.
 func (h *Handlers) TLSRPT(w http.ResponseWriter, r *http.Request) {
 	days := windowDays(r)
-	summary, err := TLSOverview(r.Context(), h.DB, domainID(r), days)
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	summary, err := TLSOverview(r.Context(), h.DB, id, days)
 	if err != nil {
-		// #nosec G706 -- the logged id is an int64 from strconv.ParseInt, so it cannot carry CR/LF; err is a database driver error.
-		log.Printf("mail report TLS overview for domain %d: %v", domainID(r), err)
+		log.Printf("mail report TLS overview for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the reports could not be read")
 		return
 	}
