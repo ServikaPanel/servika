@@ -129,5 +129,65 @@
     "addRule": "Could not add the rule",
     "deleteRule": "Could not delete the rule"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Country Blocking",
+    "sectionHint": "Drops every packet from a country at the firewall. This covers every port, including SSH, mail and FTP, not only the web server.",
+    "credentials": {
+      "title": "MaxMind account",
+      "hint": "Country data comes from MaxMind GeoLite2. Create a free account, accept its licence, then paste the account ID and a licence key here. Without them this feature stays off.",
+      "accountLabel": "Account ID",
+      "keyLabel": "Licence key",
+      "keyPlaceholder": "Paste the licence key",
+      "keyStored": "A key is stored and is never shown again",
+      "save": "Save Account",
+      "saving": "Saving…"
+    },
+    "status": {
+      "database": "Database",
+      "ready": "Ready",
+      "notDownloaded": "Not downloaded",
+      "notConfigured": "No account",
+      "buildDate": "Edition",
+      "updatedAt": "Last update",
+      "coverage": "Coverage",
+      "countryCount": "{{n}} countries",
+      "ipv4Only": "IPv4 only",
+      "lastError": "Last error: {{message}}"
+    },
+    "updateNow": "Download Now",
+    "updating": "Downloading…",
+    "blocked": {
+      "title": "Blocked countries",
+      "pickLabel": "Country",
+      "pickPlaceholder": "Select a country…",
+      "block": "Block",
+      "blocking": "Blocking…",
+      "empty": "No country is blocked."
+    },
+    "confirm": {
+      "block": "Block every address in {{country}}? This closes every port on the server to that country, including SSH.",
+      "unblock": "Stop blocking {{country}}?"
+    },
+    "success": {
+      "credentialsSaved": "The MaxMind account was saved.",
+      "credentialsCleared": "The MaxMind account was removed. Country blocking is now off.",
+      "updated": "The country database was downloaded. Edition: {{date}}.",
+      "blocked": "{{country}} is now blocked on every port.",
+      "unblocked": "{{country}} is no longer blocked."
+    },
+    "error": {
+      "credentials": "Could not save the MaxMind account",
+      "update": "Could not download the country database",
+      "block": "Could not block the country",
+      "unblock": "Could not remove the country block"
+    },
+    "reasons": {
+      "geoip_unavailable": "No country database has been downloaded yet. Save a MaxMind account and download it first.",
+      "country_unknown": "The country database does not carry that country."
+    },
+    "noteAllPorts": "The block applies to every port, so a blocked country loses SSH, mail and FTP as well as the website.",
+    "noteWhitelist": "The country block is evaluated before the allowlist, so allowing a single address cannot reopen a blocked country.",
+    "noteApproximate": "GeoLite2 is approximate and carries wrong records even at country level. Use IP rules where the decision must be exact."
+  }
 }

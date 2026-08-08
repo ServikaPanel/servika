@@ -129,5 +129,65 @@
     "addRule": "Die Regel konnte nicht hinzugefügt werden",
     "deleteRule": "Die Regel konnte nicht gelöscht werden"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Ländersperre",
+    "sectionHint": "Verwirft jedes Paket aus einem Land in der Firewall. Das gilt für jeden Port, auch SSH, E-Mail und FTP, nicht nur für den Webserver.",
+    "credentials": {
+      "title": "MaxMind-Konto",
+      "hint": "Die Länderdaten stammen von MaxMind GeoLite2. Legen Sie ein kostenloses Konto an, akzeptieren Sie die Lizenz und fügen Sie hier die Konto-ID und einen Lizenzschlüssel ein. Ohne sie bleibt diese Funktion aus.",
+      "accountLabel": "Konto-ID",
+      "keyLabel": "Lizenzschlüssel",
+      "keyPlaceholder": "Lizenzschlüssel einfügen",
+      "keyStored": "Ein Schlüssel ist gespeichert und wird nie wieder angezeigt",
+      "save": "Konto speichern",
+      "saving": "Wird gespeichert…"
+    },
+    "status": {
+      "database": "Datenbank",
+      "ready": "Bereit",
+      "notDownloaded": "Nicht heruntergeladen",
+      "notConfigured": "Kein Konto",
+      "buildDate": "Ausgabe",
+      "updatedAt": "Letzte Aktualisierung",
+      "coverage": "Abdeckung",
+      "countryCount": "{{n}} Länder",
+      "ipv4Only": "nur IPv4",
+      "lastError": "Letzter Fehler: {{message}}"
+    },
+    "updateNow": "Jetzt herunterladen",
+    "updating": "Wird heruntergeladen…",
+    "blocked": {
+      "title": "Gesperrte Länder",
+      "pickLabel": "Land",
+      "pickPlaceholder": "Land auswählen…",
+      "block": "Sperren",
+      "blocking": "Wird gesperrt…",
+      "empty": "Es ist kein Land gesperrt."
+    },
+    "confirm": {
+      "block": "Jede Adresse in {{country}} sperren? Damit wird jeder Port des Servers für dieses Land geschlossen, auch SSH.",
+      "unblock": "Sperre für {{country}} aufheben?"
+    },
+    "success": {
+      "credentialsSaved": "Das MaxMind-Konto wurde gespeichert.",
+      "credentialsCleared": "Das MaxMind-Konto wurde entfernt. Die Ländersperre ist jetzt aus.",
+      "updated": "Die Länderdatenbank wurde heruntergeladen. Ausgabe: {{date}}.",
+      "blocked": "{{country}} ist jetzt auf jedem Port gesperrt.",
+      "unblocked": "{{country}} ist nicht mehr gesperrt."
+    },
+    "error": {
+      "credentials": "Das MaxMind-Konto konnte nicht gespeichert werden",
+      "update": "Die Länderdatenbank konnte nicht heruntergeladen werden",
+      "block": "Das Land konnte nicht gesperrt werden",
+      "unblock": "Die Ländersperre konnte nicht aufgehoben werden"
+    },
+    "reasons": {
+      "geoip_unavailable": "Es wurde noch keine Länderdatenbank heruntergeladen. Speichern Sie zuerst ein MaxMind-Konto und laden Sie sie herunter.",
+      "country_unknown": "Die Länderdatenbank enthält dieses Land nicht."
+    },
+    "noteAllPorts": "Die Sperre gilt für jeden Port. Ein gesperrtes Land verliert daher neben der Website auch SSH, E-Mail und FTP.",
+    "noteWhitelist": "Die Ländersperre wird vor der Erlaubnisliste ausgewertet. Eine einzelne erlaubte Adresse kann ein gesperrtes Land daher nicht wieder öffnen.",
+    "noteApproximate": "GeoLite2 ist ungenau und enthält selbst auf Länderebene falsche Einträge. Verwenden Sie IP-Regeln, wenn die Entscheidung exakt sein muss."
+  }
 }

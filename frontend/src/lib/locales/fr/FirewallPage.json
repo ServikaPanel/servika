@@ -129,5 +129,65 @@
     "addRule": "Impossible d'ajouter la règle",
     "deleteRule": "Impossible de supprimer la règle"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Blocage par pays",
+    "sectionHint": "Rejette dans le pare-feu tout paquet venant d'un pays. Cela couvre tous les ports, y compris SSH, la messagerie et le FTP, pas seulement le serveur web.",
+    "credentials": {
+      "title": "Compte MaxMind",
+      "hint": "Les données de pays proviennent de MaxMind GeoLite2. Créez un compte gratuit, acceptez sa licence, puis collez ici l'identifiant de compte et une clé de licence. Sans eux, cette fonction reste désactivée.",
+      "accountLabel": "Identifiant de compte",
+      "keyLabel": "Clé de licence",
+      "keyPlaceholder": "Collez la clé de licence",
+      "keyStored": "Une clé est enregistrée et n'est plus jamais affichée",
+      "save": "Enregistrer le compte",
+      "saving": "Enregistrement…"
+    },
+    "status": {
+      "database": "Base de données",
+      "ready": "Prête",
+      "notDownloaded": "Non téléchargée",
+      "notConfigured": "Aucun compte",
+      "buildDate": "Édition",
+      "updatedAt": "Dernière mise à jour",
+      "coverage": "Couverture",
+      "countryCount": "{{n}} pays",
+      "ipv4Only": "IPv4 seulement",
+      "lastError": "Dernière erreur : {{message}}"
+    },
+    "updateNow": "Télécharger maintenant",
+    "updating": "Téléchargement…",
+    "blocked": {
+      "title": "Pays bloqués",
+      "pickLabel": "Pays",
+      "pickPlaceholder": "Choisissez un pays…",
+      "block": "Bloquer",
+      "blocking": "Blocage…",
+      "empty": "Aucun pays bloqué."
+    },
+    "confirm": {
+      "block": "Bloquer toutes les adresses de {{country}} ? Cela ferme tous les ports du serveur à ce pays, y compris SSH.",
+      "unblock": "Débloquer {{country}} ?"
+    },
+    "success": {
+      "credentialsSaved": "Le compte MaxMind a été enregistré.",
+      "credentialsCleared": "Le compte MaxMind a été supprimé. Le blocage par pays est désormais désactivé.",
+      "updated": "La base de données de pays a été téléchargée. Édition : {{date}}.",
+      "blocked": "{{country}} est désormais bloqué sur tous les ports.",
+      "unblocked": "{{country}} n'est plus bloqué."
+    },
+    "error": {
+      "credentials": "Impossible d'enregistrer le compte MaxMind",
+      "update": "Impossible de télécharger la base de données de pays",
+      "block": "Impossible de bloquer le pays",
+      "unblock": "Impossible de retirer le blocage du pays"
+    },
+    "reasons": {
+      "geoip_unavailable": "Aucune base de données de pays n'a encore été téléchargée. Enregistrez d'abord un compte MaxMind et téléchargez-la.",
+      "country_unknown": "La base de données de pays ne contient pas ce pays."
+    },
+    "noteAllPorts": "Le blocage vaut pour tous les ports : un pays bloqué perd aussi SSH, la messagerie et le FTP, en plus du site web.",
+    "noteWhitelist": "Le blocage par pays est évalué avant la liste d'autorisation ; autoriser une seule adresse ne peut donc pas rouvrir un pays bloqué.",
+    "noteApproximate": "GeoLite2 est approximatif et contient des enregistrements erronés même au niveau du pays. Utilisez les règles IP lorsque la décision doit être exacte."
+  }
 }

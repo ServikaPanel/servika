@@ -60,5 +60,55 @@
     "modeFailed": "Impossibile salvare la modalità di accesso IP",
     "addFailed": "Impossibile aggiungere la regola IP",
     "deleteFailed": "Impossibile eliminare la regola IP"
+  },
+  "geo": {
+    "title": "Regole per paese",
+    "description": "Stabilisce da quali paesi si può raggiungere questo sito. Il controllo avviene sul server web e riguarda quindi solo HTTP e HTTPS.",
+    "notConfigured": "Le regole per paese richiedono un database dei paesi. Il tuo provider di hosting non ne ha ancora configurato uno.",
+    "notDownloaded": "Un database dei paesi è configurato ma non è ancora stato scaricato. Fino ad allora non si può salvare alcuna regola per paese.",
+    "modes": {
+      "off": {
+        "label": "Disattivate",
+        "description": "Nessuna regola per paese viene scritta nella configurazione del sito."
+      },
+      "allow": {
+        "label": "Consenti solo i paesi scelti",
+        "description": "Solo i visitatori dai paesi scelti raggiungono il sito. Tutti gli altri ricevono 403."
+      },
+      "deny": {
+        "label": "Blocca i paesi scelti",
+        "description": "I visitatori dai paesi scelti ricevono 403. Tutti gli altri raggiungono il sito."
+      }
+    },
+    "search": "Cerca paese",
+    "noMatch": "Nessun paese corrisponde.",
+    "selected": "{{n}} di {{max}} selezionati",
+    "limitReached": "È stato raggiunto il limite di {{max}} paesi. Rimuovine uno per aggiungerne un altro.",
+    "noteAcme": "Le richieste di validazione del certificato passano sempre, quindi un elenco di consenso non può impedire il rinnovo del certificato.",
+    "noteIpRules": "Il controllo per paese precede le regole IP, quindi un indirizzo IP consentito non raggiunge il sito da un paese bloccato.",
+    "noteCdn": "Dietro una CDN il paese viene letto dall'indirizzo della CDN, non da quello del visitatore.",
+    "noteNoIpv6": "Il database dei paesi non contiene intervalli IPv6, quindi i visitatori IPv6 non vengono riconosciuti.",
+    "buildDate": "Edizione dei dati dei paesi: {{date}}",
+    "save": "Salva le regole per paese",
+    "saving": "Salvataggio…",
+    "saved": "Le regole per paese sono state salvate.",
+    "failed": "Impossibile salvare le regole per paese"
+  },
+  "rate": {
+    "title": "Limite di frequenza delle richieste",
+    "description": "Limita quante richieste dinamiche al secondo può fare un indirizzo. Immagini, fogli di stile, script e altri file statici non vengono mai contati.",
+    "off": "Disattivato",
+    "perSecond": "{{rate}} ric./s",
+    "noteStatic": "Vengono contate solo le richieste dinamiche. I file statici sono serviti senza limite.",
+    "noteBurst": "Prima che il limite si applichi è ammesso un breve picco fino a {{burst}} richieste.",
+    "noteStatus": "Una richiesta oltre il limite riceve 429 Too Many Requests.",
+    "saved": "Il limite di frequenza è stato salvato.",
+    "failed": "Impossibile salvare il limite di frequenza"
+  },
+  "reasons": {
+    "geoip_unavailable": "Nessun database dei paesi è stato scaricato, quindi una regola per paese non bloccherebbe nessuno. Chiedi al tuo provider di hosting di scaricarlo.",
+    "country_unknown": "Il database dei paesi non contiene quel paese.",
+    "too_many_countries": "Sono stati selezionati troppi paesi.",
+    "rate_not_allowed": "Quella frequenza di richieste non è disponibile. Scegli uno dei valori proposti."
   }
 }

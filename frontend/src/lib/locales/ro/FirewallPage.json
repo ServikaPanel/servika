@@ -130,5 +130,65 @@
     "addRule": "Nu s-a putut adăuga regula",
     "deleteRule": "Nu s-a putut șterge regula"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Blocare pe țări",
+    "sectionHint": "Aruncă în firewall fiecare pachet venit dintr-o țară. Acoperă fiecare port, inclusiv SSH, poșta și FTP, nu doar serverul web.",
+    "credentials": {
+      "title": "Cont MaxMind",
+      "hint": "Datele despre țări vin de la MaxMind GeoLite2. Creați un cont gratuit, acceptați licența, apoi lipiți aici identificatorul contului și o cheie de licență. Fără ele această funcție rămâne oprită.",
+      "accountLabel": "Identificator cont",
+      "keyLabel": "Cheie de licență",
+      "keyPlaceholder": "Lipiți cheia de licență",
+      "keyStored": "O cheie este salvată și nu mai este afișată niciodată",
+      "save": "Salvează contul",
+      "saving": "Se salvează…"
+    },
+    "status": {
+      "database": "Bază de date",
+      "ready": "Pregătită",
+      "notDownloaded": "Nedescărcată",
+      "notConfigured": "Fără cont",
+      "buildDate": "Ediție",
+      "updatedAt": "Ultima actualizare",
+      "coverage": "Acoperire",
+      "countryCount": "{{n}} țări",
+      "ipv4Only": "doar IPv4",
+      "lastError": "Ultima eroare: {{message}}"
+    },
+    "updateNow": "Descarcă acum",
+    "updating": "Se descarcă…",
+    "blocked": {
+      "title": "Țări blocate",
+      "pickLabel": "Țară",
+      "pickPlaceholder": "Alegeți o țară…",
+      "block": "Blochează",
+      "blocking": "Se blochează…",
+      "empty": "Nicio țară nu este blocată."
+    },
+    "confirm": {
+      "block": "Blocați fiecare adresă din {{country}}? Astfel se închide pentru acea țară fiecare port al serverului, inclusiv SSH.",
+      "unblock": "Ridicați blocarea pentru {{country}}?"
+    },
+    "success": {
+      "credentialsSaved": "Contul MaxMind a fost salvat.",
+      "credentialsCleared": "Contul MaxMind a fost eliminat. Blocarea pe țări este acum oprită.",
+      "updated": "Baza de date a țărilor a fost descărcată. Ediție: {{date}}.",
+      "blocked": "{{country}} este acum blocată pe fiecare port.",
+      "unblocked": "{{country}} nu mai este blocată."
+    },
+    "error": {
+      "credentials": "Contul MaxMind nu a putut fi salvat",
+      "update": "Baza de date a țărilor nu a putut fi descărcată",
+      "block": "Țara nu a putut fi blocată",
+      "unblock": "Blocarea țării nu a putut fi ridicată"
+    },
+    "reasons": {
+      "geoip_unavailable": "Nu a fost descărcată încă nicio bază de date a țărilor. Salvați mai întâi un cont MaxMind și descărcați-o.",
+      "country_unknown": "Baza de date a țărilor nu conține acea țară."
+    },
+    "noteAllPorts": "Blocarea se aplică fiecărui port, așa că o țară blocată pierde SSH, poșta și FTP pe lângă site.",
+    "noteWhitelist": "Blocarea pe țări este evaluată înaintea listei de permise, așa că permiterea unei singure adrese nu poate redeschide o țară blocată.",
+    "noteApproximate": "GeoLite2 este aproximativ și conține înregistrări greșite chiar și la nivel de țară. Folosiți reguli IP acolo unde decizia trebuie să fie exactă."
+  }
 }

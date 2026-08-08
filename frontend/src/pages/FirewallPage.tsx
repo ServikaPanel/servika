@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { api, apiError } from '@/lib/api'
+import { api, apiError, apiReason } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { countryFlag, countryNamer, sortByName } from '@/lib/countries'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -20,6 +21,19 @@ type Rule = {
 }
 type ListResponse = { rules: Rule[]; protected_ports: number[] }
 
+type DatabaseStatus = {
+  configured: boolean
+  account_id?: string
+  available: boolean
+  build_date?: string
+  updated_at?: string
+  last_error?: string
+  countries: string[]
+  ipv6: boolean
+}
+
+type GeoResponse = { countries: string[]; database: DatabaseStatus }
+
 // Presets for closing commonly exposed ports with one click. Text is resolved via i18n.
 const TEMPLATES = [
   { key: 'close_mysql', icon: '🗄️', ports: '3306' },
@@ -36,7 +50,7 @@ const MODES = {
 } as const
 
 export default function FirewallPage() {
-  const { t } = useTranslation('FirewallPage')
+  const { t, i18n } = useTranslation('FirewallPage')
   const { confirm } = useDialog()
   const [rules, setRules] = useState<Rule[]>([])
   const [protectedPorts, setProtectedPorts] = useState<number[]>([])
@@ -44,6 +58,19 @@ export default function FirewallPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+
+  const [database, setDatabase] = useState<DatabaseStatus | null>(null)
+  const [blocked, setBlocked] = useState<string[]>([])
+  const [newCountry, setNewCountry] = useState('')
+  const [accountId, setAccountId] = useState('')
+  const [licenseKey, setLicenseKey] = useState('')
+
+  // Country names come from the browser in the reader's language; the panel
+  // ships codes only.
+  const nameOf = useMemo(() => countryNamer(i18n.language), [i18n.language])
+  const selectable = useMemo(
+    () => sortByName((database?.countries || []).filter(code => !blocked.includes(code)), nameOf),
+    [database, blocked, nameOf])
 
   const [type, setType] = useState<'ban' | 'whitelist' | 'close'>('ban')
   const [ip, setIp] = useState('')
@@ -55,8 +82,17 @@ export default function FirewallPage() {
   // settles only through promise callbacks, and load() adds the spinner for the
   // refresh button and the refreshes that follow a write.
   const fetchRules = useCallback(() => {
-    api.get<ListResponse>('/firewall')
-      .then(response => { setRules(response.data.rules || []); setProtectedPorts(response.data.protected_ports || []) })
+    Promise.all([
+      api.get<ListResponse>('/firewall'),
+      api.get<GeoResponse>('/firewall/geo'),
+    ])
+      .then(([listResponse, geoResponse]) => {
+        setRules(listResponse.data.rules || [])
+        setProtectedPorts(listResponse.data.protected_ports || [])
+        setBlocked(geoResponse.data.countries || [])
+        setDatabase(geoResponse.data.database || null)
+        setAccountId(geoResponse.data.database?.account_id || '')
+      })
       .catch(e => setError(apiError(e)))
       .finally(() => setLoading(false))
   }, [])
@@ -108,6 +144,60 @@ export default function FirewallPage() {
     setError(null); setSuccess(null); setBusy('remove:' + rule.id)
     try { await api.delete(`/firewall/${rule.id}`); load() }
     catch (caughtError) { setError(apiError(caughtError, t('error.deleteRule'))) }
+    finally { setBusy(null) }
+  }
+
+  async function saveCredentials(event: React.FormEvent) {
+    event.preventDefault()
+    setError(null); setSuccess(null); setBusy('credentials')
+    try {
+      await api.put('/system/geoip/credentials', { account_id: accountId.trim(), license_key: licenseKey.trim() })
+      // The key is never read back, so the field is cleared rather than left
+      // holding a value the panel would not return on the next load.
+      setLicenseKey('')
+      setSuccess(accountId.trim() ? t('geo.success.credentialsSaved') : t('geo.success.credentialsCleared'))
+      load()
+    } catch (caught) { setError(apiError(caught, t('geo.error.credentials'))) }
+    finally { setBusy(null) }
+  }
+
+  async function updateDatabase() {
+    setError(null); setSuccess(null); setBusy('update')
+    try {
+      const { data } = await api.post<DatabaseStatus>('/system/geoip/update', {})
+      setDatabase(data)
+      setSuccess(t('geo.success.updated', { date: data.build_date || '-' }))
+      load()
+    } catch (caught) { setError(apiError(caught, t('geo.error.update'))) }
+    finally { setBusy(null) }
+  }
+
+  async function blockCountry(event: React.FormEvent) {
+    event.preventDefault()
+    const code = newCountry
+    if (!code) return
+    if (!(await confirm({ message: t('geo.confirm.block', { country: nameOf(code) }), dangerous: true }))) return
+    setError(null); setSuccess(null); setBusy('geo:add')
+    try {
+      await api.post('/firewall/geo', { country: code })
+      setNewCountry('')
+      setSuccess(t('geo.success.blocked', { country: nameOf(code) }))
+      load()
+    } catch (caught) {
+      const reason = apiReason(caught)
+      setError(reason ? t(`geo.reasons.${reason}`) : apiError(caught, t('geo.error.block')))
+    }
+    finally { setBusy(null) }
+  }
+
+  async function unblockCountry(code: string) {
+    if (!(await confirm({ message: t('geo.confirm.unblock', { country: nameOf(code) }) }))) return
+    setError(null); setSuccess(null); setBusy('geo:' + code)
+    try {
+      await api.delete(`/firewall/geo/${code}`)
+      setSuccess(t('geo.success.unblocked', { country: nameOf(code) }))
+      load()
+    } catch (caught) { setError(apiError(caught, t('geo.error.unblock'))) }
     finally { setBusy(null) }
   }
 
@@ -234,6 +324,102 @@ export default function FirewallPage() {
           {busy === 'manual' ? t('form.submitting') : t('form.submit')}
         </button>
       </form>
+
+      {/* ---------- COUNTRY BLOCKING ---------- */}
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">🌍 {t('geo.sectionTitle')}</h2>
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-6">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('geo.sectionHint')}</p>
+
+        <form onSubmit={saveCredentials} className="mb-4">
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">{t('geo.credentials.title')}</div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{t('geo.credentials.hint')}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.credentials.accountLabel')}</span>
+              <input value={accountId} onChange={e => setAccountId(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" placeholder="123456"
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.credentials.keyLabel')}</span>
+              <input type="password" autoComplete="off" value={licenseKey} onChange={e => setLicenseKey(e.target.value)}
+                placeholder={database?.configured ? t('geo.credentials.keyStored') : t('geo.credentials.keyPlaceholder')}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+            </label>
+          </div>
+          <button disabled={busy === 'credentials'} className="mt-3 px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+            {busy === 'credentials' ? t('geo.credentials.saving') : t('geo.credentials.save')}
+          </button>
+        </form>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 mb-3">
+          <div>
+            <div className="text-[11px] text-slate-400">{t('geo.status.database')}</div>
+            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+              {database?.available ? t('geo.status.ready') : database?.configured ? t('geo.status.notDownloaded') : t('geo.status.notConfigured')}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] text-slate-400">{t('geo.status.buildDate')}</div>
+            <div className="text-sm font-mono text-slate-800 dark:text-slate-100">{database?.build_date || '-'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-slate-400">{t('geo.status.updatedAt')}</div>
+            <div className="text-sm font-mono text-slate-800 dark:text-slate-100">{database?.updated_at || '-'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-slate-400">{t('geo.status.coverage')}</div>
+            <div className="text-sm text-slate-800 dark:text-slate-100">
+              {database?.available ? t('geo.status.countryCount', { n: database.countries.length }) : '-'}
+              {database?.available && !database.ipv6 && <span className="ml-1 text-amber-600 dark:text-amber-400">{t('geo.status.ipv4Only')}</span>}
+            </div>
+          </div>
+        </div>
+
+        {database?.last_error && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 break-all">
+            {t('geo.status.lastError', { message: database.last_error })}
+          </div>
+        )}
+
+        <button type="button" onClick={updateDatabase} disabled={!database?.configured || busy === 'update'}
+          className="mb-4 px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">
+          {busy === 'update' ? t('geo.updating') : t('geo.updateNow')}
+        </button>
+
+        <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">{t('geo.blocked.title')}</div>
+        <form onSubmit={blockCountry} className="flex flex-wrap items-end gap-2 mb-3">
+          <label className="block flex-1 min-w-[220px]">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.blocked.pickLabel')}</span>
+            <select value={newCountry} onChange={e => setNewCountry(e.target.value)} disabled={!database?.available}
+              className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none disabled:opacity-50">
+              <option value="">{t('geo.blocked.pickPlaceholder')}</option>
+              {selectable.map(code => <option key={code} value={code}>{nameOf(code)} ({code})</option>)}
+            </select>
+          </label>
+          <button disabled={!newCountry || busy === 'geo:add'} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+            {busy === 'geo:add' ? t('geo.blocked.blocking') : t('geo.blocked.block')}
+          </button>
+        </form>
+
+        {blocked.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('geo.blocked.empty')}</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {sortByName(blocked, nameOf).map(code => (
+              <button key={code} type="button" onClick={() => unblockCountry(code)} disabled={!!busy}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 disabled:opacity-50">
+                <span aria-hidden="true">{countryFlag(code)}</span>{nameOf(code)}<span className="text-red-400">×</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <ul className="mt-3 space-y-1 text-[11px] text-slate-500 dark:text-slate-400 list-disc list-inside">
+          <li>{t('geo.noteAllPorts')}</li>
+          <li>{t('geo.noteWhitelist')}</li>
+          <li>{t('geo.noteApproximate')}</li>
+        </ul>
+      </div>
 
       {/* ---------- ACTIVE RULES ---------- */}
       <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden">

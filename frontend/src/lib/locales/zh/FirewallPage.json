@@ -128,5 +128,65 @@
     "addRule": "无法添加规则",
     "deleteRule": "无法删除规则"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "国家/地区封锁",
+    "sectionHint": "在防火墙丢弃来自某个国家/地区的所有数据包。它覆盖所有端口，包括 SSH、邮件和 FTP，而不只是 Web 服务器。",
+    "credentials": {
+      "title": "MaxMind 账户",
+      "hint": "国家/地区数据来自 MaxMind GeoLite2。请注册免费账户、接受其许可，然后把账户 ID 和许可密钥粘贴到这里。没有它们，此功能保持关闭。",
+      "accountLabel": "账户 ID",
+      "keyLabel": "许可密钥",
+      "keyPlaceholder": "粘贴许可密钥",
+      "keyStored": "已保存一个密钥，且不再显示",
+      "save": "保存账户",
+      "saving": "保存中…"
+    },
+    "status": {
+      "database": "数据库",
+      "ready": "就绪",
+      "notDownloaded": "未下载",
+      "notConfigured": "无账户",
+      "buildDate": "版本",
+      "updatedAt": "上次更新",
+      "coverage": "覆盖范围",
+      "countryCount": "{{n}} 个国家/地区",
+      "ipv4Only": "仅 IPv4",
+      "lastError": "上次错误：{{message}}"
+    },
+    "updateNow": "立即下载",
+    "updating": "下载中…",
+    "blocked": {
+      "title": "已封锁的国家/地区",
+      "pickLabel": "国家/地区",
+      "pickPlaceholder": "选择国家/地区…",
+      "block": "封锁",
+      "blocking": "封锁中…",
+      "empty": "没有封锁任何国家/地区。"
+    },
+    "confirm": {
+      "block": "封锁 {{country}} 的所有地址吗？这会对该国家/地区关闭服务器的所有端口，包括 SSH。",
+      "unblock": "解除对 {{country}} 的封锁吗？"
+    },
+    "success": {
+      "credentialsSaved": "MaxMind 账户已保存。",
+      "credentialsCleared": "MaxMind 账户已移除。国家/地区封锁现已关闭。",
+      "updated": "国家/地区数据库已下载。版本：{{date}}。",
+      "blocked": "{{country}} 现已在所有端口被封锁。",
+      "unblocked": "{{country}} 不再被封锁。"
+    },
+    "error": {
+      "credentials": "无法保存 MaxMind 账户",
+      "update": "无法下载国家/地区数据库",
+      "block": "无法封锁该国家/地区",
+      "unblock": "无法解除该国家/地区的封锁"
+    },
+    "reasons": {
+      "geoip_unavailable": "尚未下载任何国家/地区数据库。请先保存 MaxMind 账户并下载。",
+      "country_unknown": "国家/地区数据库中没有该国家/地区。"
+    },
+    "noteAllPorts": "封锁适用于所有端口，因此被封锁的国家/地区除网站外还会失去 SSH、邮件和 FTP。",
+    "noteWhitelist": "国家/地区封锁先于允许列表求值，因此允许单个地址无法重新打开被封锁的国家/地区。",
+    "noteApproximate": "GeoLite2 只是近似值，即便在国家/地区级别也存在错误记录。需要精确判定时请使用 IP 规则。"
+  }
 }

@@ -60,5 +60,55 @@
     "modeFailed": "IP erişim modu kaydedilemedi",
     "addFailed": "IP kuralı eklenemedi",
     "deleteFailed": "IP kuralı silinemedi"
+  },
+  "geo": {
+    "title": "Ülke Kuralları",
+    "description": "Bu siteye hangi ülkelerden erişilebileceğini belirler. Denetim web sunucusunda çalışır, yani yalnız HTTP ve HTTPS için geçerlidir.",
+    "notConfigured": "Ülke kuralları bir ülke veritabanı gerektirir. Barındırma sağlayıcınız henüz tanımlamadı.",
+    "notDownloaded": "Bir ülke veritabanı tanımlı ama henüz indirilmedi. İndirilene kadar ülke kuralı kaydedilemez.",
+    "modes": {
+      "off": {
+        "label": "Kapalı",
+        "description": "Site yapılandırmasına hiçbir ülke kuralı yazılmaz."
+      },
+      "allow": {
+        "label": "Yalnız seçilenlere izin ver",
+        "description": "Siteye yalnız seçilen ülkelerden gelen ziyaretçiler erişir. Diğer herkes 403 alır."
+      },
+      "deny": {
+        "label": "Seçilenleri engelle",
+        "description": "Seçilen ülkelerden gelen ziyaretçiler 403 alır. Diğer herkes siteye erişir."
+      }
+    },
+    "search": "Ülke ara",
+    "noMatch": "Eşleşen ülke yok.",
+    "selected": "{{max}} ülkeden {{n}} tanesi seçildi",
+    "limitReached": "{{max}} ülkelik sınıra ulaşıldı. Yenisini eklemek için birini çıkarın.",
+    "noteAcme": "Sertifika doğrulama istekleri her zaman geçer, bu yüzden bir izin listesi sertifikanızın yenilenmesini durduramaz.",
+    "noteIpRules": "Ülke denetimi IP kurallarından önce çalışır, bu yüzden izin verilen bir IP adresi engellenen bir ülkeden siteye erişemez.",
+    "noteCdn": "Bir CDN arkasında ülke, ziyaretçinin değil CDN'in adresinden okunur.",
+    "noteNoIpv6": "Ülke veritabanı IPv6 aralıkları taşımıyor, bu yüzden IPv6 ziyaretçileri eşleşmez.",
+    "buildDate": "Ülke verisi sürümü: {{date}}",
+    "save": "Ülke Kurallarını Kaydet",
+    "saving": "Kaydediliyor…",
+    "saved": "Ülke kuralları kaydedildi.",
+    "failed": "Ülke kuralları kaydedilemedi"
+  },
+  "rate": {
+    "title": "İstek Hızı Sınırı",
+    "description": "Bir adresin saniyede kaç dinamik istek yapabileceğini sınırlar. Görseller, stil dosyaları, betikler ve diğer statik dosyalar hiç sayılmaz.",
+    "off": "Kapalı",
+    "perSecond": "{{rate}} istek/sn",
+    "noteStatic": "Yalnız dinamik istekler sayılır. Statik dosyalar sınırsız sunulur.",
+    "noteBurst": "Sınır uygulanmadan önce {{burst}} isteğe kadar kısa bir ani artışa izin verilir.",
+    "noteStatus": "Sınırı aşan bir istek 429 Too Many Requests alır.",
+    "saved": "İstek hızı sınırı kaydedildi.",
+    "failed": "İstek hızı sınırı kaydedilemedi"
+  },
+  "reasons": {
+    "geoip_unavailable": "Hiçbir ülke veritabanı indirilmedi, bu yüzden bir ülke kuralı kimseyi engellemez. Barındırma sağlayıcınızdan indirmesini isteyin.",
+    "country_unknown": "Ülke veritabanı bu ülkeyi taşımıyor.",
+    "too_many_countries": "Çok fazla ülke seçildi.",
+    "rate_not_allowed": "Bu istek hızı kullanılamaz. Sunulan değerlerden birini seçin."
   }
 }

@@ -60,5 +60,55 @@
     "modeFailed": "Impossible d'enregistrer le mode d'accès IP",
     "addFailed": "Impossible d'ajouter la règle IP",
     "deleteFailed": "Impossible de supprimer la règle IP"
+  },
+  "geo": {
+    "title": "Règles par pays",
+    "description": "Détermine depuis quels pays ce site est accessible. Le contrôle a lieu sur le serveur web et ne couvre donc que HTTP et HTTPS.",
+    "notConfigured": "Les règles par pays exigent une base de données de pays. Votre hébergeur n'en a pas encore configuré.",
+    "notDownloaded": "Une base de données de pays est configurée mais pas encore téléchargée. Aucune règle par pays ne peut être enregistrée avant cela.",
+    "modes": {
+      "off": {
+        "label": "Désactivé",
+        "description": "Aucune règle par pays n'est écrite dans la configuration du site."
+      },
+      "allow": {
+        "label": "Autoriser seulement les pays choisis",
+        "description": "Seuls les visiteurs des pays choisis atteignent le site. Tous les autres reçoivent 403."
+      },
+      "deny": {
+        "label": "Bloquer les pays choisis",
+        "description": "Les visiteurs des pays choisis reçoivent 403. Tous les autres atteignent le site."
+      }
+    },
+    "search": "Rechercher un pays",
+    "noMatch": "Aucun pays ne correspond.",
+    "selected": "{{n}} sur {{max}} sélectionnés",
+    "limitReached": "La limite de {{max}} pays est atteinte. Retirez-en un pour en ajouter un autre.",
+    "noteAcme": "Les requêtes de validation de certificat passent toujours. Une liste d'autorisation ne peut donc pas empêcher le renouvellement de votre certificat.",
+    "noteIpRules": "Le contrôle par pays précède les règles IP. Une adresse IP autorisée n'atteint donc pas le site depuis un pays bloqué.",
+    "noteCdn": "Derrière un CDN, le pays est lu sur l'adresse du CDN, pas sur celle du visiteur.",
+    "noteNoIpv6": "La base de données de pays ne contient pas de plages IPv6. Les visiteurs IPv6 ne sont donc pas reconnus.",
+    "buildDate": "Édition des données de pays : {{date}}",
+    "save": "Enregistrer les règles par pays",
+    "saving": "Enregistrement…",
+    "saved": "Les règles par pays ont été enregistrées.",
+    "failed": "Impossible d'enregistrer les règles par pays"
+  },
+  "rate": {
+    "title": "Limite de débit des requêtes",
+    "description": "Limite le nombre de requêtes dynamiques par seconde pour une adresse. Les images, feuilles de style, scripts et autres fichiers statiques ne sont jamais comptés.",
+    "off": "Désactivée",
+    "perSecond": "{{rate}} req/s",
+    "noteStatic": "Seules les requêtes dynamiques sont comptées. Les fichiers statiques sont servis sans limite.",
+    "noteBurst": "Une courte pointe allant jusqu'à {{burst}} requêtes est admise avant que la limite ne s'applique.",
+    "noteStatus": "Une requête au-delà de la limite reçoit 429 Too Many Requests.",
+    "saved": "La limite de débit a été enregistrée.",
+    "failed": "Impossible d'enregistrer la limite de débit"
+  },
+  "reasons": {
+    "geoip_unavailable": "Aucune base de données de pays n'a été téléchargée. Une règle par pays ne bloquerait personne. Demandez à votre hébergeur d'en télécharger une.",
+    "country_unknown": "La base de données de pays ne contient pas ce pays.",
+    "too_many_countries": "Trop de pays ont été sélectionnés.",
+    "rate_not_allowed": "Ce débit de requêtes est indisponible. Choisissez une des valeurs proposées."
   }
 }

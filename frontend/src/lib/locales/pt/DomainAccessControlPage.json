@@ -60,5 +60,55 @@
     "modeFailed": "Não foi possível guardar o modo de acesso por IP",
     "addFailed": "Não foi possível adicionar a regra IP",
     "deleteFailed": "Não foi possível eliminar a regra IP"
+  },
+  "geo": {
+    "title": "Regras por país",
+    "description": "Define a partir de que países este site é acessível. A verificação ocorre no servidor web, por isso abrange apenas HTTP e HTTPS.",
+    "notConfigured": "As regras por país exigem uma base de dados de países. O seu fornecedor de alojamento ainda não configurou nenhuma.",
+    "notDownloaded": "Existe uma base de dados de países configurada, mas ainda não foi transferida. Até lá não é possível guardar regras por país.",
+    "modes": {
+      "off": {
+        "label": "Desligado",
+        "description": "Não é escrita qualquer regra por país na configuração do site."
+      },
+      "allow": {
+        "label": "Permitir apenas os selecionados",
+        "description": "Apenas os visitantes dos países selecionados chegam ao site. Todos os outros recebem 403."
+      },
+      "deny": {
+        "label": "Bloquear os selecionados",
+        "description": "Os visitantes dos países selecionados recebem 403. Todos os outros chegam ao site."
+      }
+    },
+    "search": "Procurar país",
+    "noMatch": "Nenhum país corresponde.",
+    "selected": "{{n}} de {{max}} selecionados",
+    "limitReached": "Foi atingido o limite de {{max}} países. Remova um para adicionar outro.",
+    "noteAcme": "Os pedidos de validação de certificado passam sempre, por isso uma lista de permissões não impede a renovação do certificado.",
+    "noteIpRules": "A verificação por país corre antes das regras de IP, por isso um endereço IP permitido não chega ao site a partir de um país bloqueado.",
+    "noteCdn": "Atrás de uma CDN, o país é lido no endereço da CDN e não no do visitante.",
+    "noteNoIpv6": "A base de dados de países não contém intervalos IPv6, por isso os visitantes IPv6 não são reconhecidos.",
+    "buildDate": "Edição dos dados de países: {{date}}",
+    "save": "Guardar regras por país",
+    "saving": "A guardar…",
+    "saved": "As regras por país foram guardadas.",
+    "failed": "Não foi possível guardar as regras por país"
+  },
+  "rate": {
+    "title": "Limite de pedidos",
+    "description": "Limita quantos pedidos dinâmicos um endereço pode fazer por segundo. Imagens, folhas de estilo, scripts e outros ficheiros estáticos nunca são contados.",
+    "off": "Desligado",
+    "perSecond": "{{rate}} ped./s",
+    "noteStatic": "Só os pedidos dinâmicos são contados. Os ficheiros estáticos são servidos sem limite.",
+    "noteBurst": "Antes de o limite se aplicar é permitido um pico curto até {{burst}} pedidos.",
+    "noteStatus": "Um pedido acima do limite recebe 429 Too Many Requests.",
+    "saved": "O limite de pedidos foi guardado.",
+    "failed": "Não foi possível guardar o limite de pedidos"
+  },
+  "reasons": {
+    "geoip_unavailable": "Não foi transferida qualquer base de dados de países, por isso uma regra por país não bloquearia ninguém. Peça ao seu fornecedor de alojamento que a transfira.",
+    "country_unknown": "A base de dados de países não contém esse país.",
+    "too_many_countries": "Foram selecionados demasiados países.",
+    "rate_not_allowed": "Esse limite de pedidos não está disponível. Escolha um dos valores oferecidos."
   }
 }

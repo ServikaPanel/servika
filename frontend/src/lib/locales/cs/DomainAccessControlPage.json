@@ -60,5 +60,55 @@
     "modeFailed": "Režim přístupu IP nelze uložit",
     "addFailed": "Pravidlo IP nelze přidat",
     "deleteFailed": "Pravidlo IP nelze smazat"
+  },
+  "geo": {
+    "title": "Pravidla podle zemí",
+    "description": "Určuje, ze kterých zemí je tento web dostupný. Kontrola probíhá na webovém serveru, takže se týká jen HTTP a HTTPS.",
+    "notConfigured": "Pravidla podle zemí vyžadují databázi zemí. Váš poskytovatel hostingu ji zatím nenastavil.",
+    "notDownloaded": "Databáze zemí je nastavená, ale ještě nebyla stažena. Do té doby nelze pravidlo podle zemí uložit.",
+    "modes": {
+      "off": {
+        "label": "Vypnuto",
+        "description": "Do konfigurace webu se nezapisuje žádné pravidlo podle zemí."
+      },
+      "allow": {
+        "label": "Povolit jen vybrané",
+        "description": "Na web se dostanou jen návštěvníci z vybraných zemí. Všichni ostatní obdrží 403."
+      },
+      "deny": {
+        "label": "Blokovat vybrané",
+        "description": "Návštěvníci z vybraných zemí obdrží 403. Všichni ostatní se na web dostanou."
+      }
+    },
+    "search": "Hledat zemi",
+    "noMatch": "Žádná země neodpovídá.",
+    "selected": "Vybráno {{n}} z {{max}}",
+    "limitReached": "Byl dosažen limit {{max}} zemí. Chcete-li přidat další, jednu odeberte.",
+    "noteAcme": "Požadavky na ověření certifikátu vždy projdou, takže seznam povolených nemůže zastavit obnovu certifikátu.",
+    "noteIpRules": "Kontrola podle zemí běží před pravidly IP, takže povolená IP adresa se na web z blokované země nedostane.",
+    "noteCdn": "Za CDN se země čte z adresy CDN, nikoli z adresy návštěvníka.",
+    "noteNoIpv6": "Databáze zemí neobsahuje rozsahy IPv6, takže návštěvníci s IPv6 nejsou rozpoznáni.",
+    "buildDate": "Vydání dat o zemích: {{date}}",
+    "save": "Uložit pravidla podle zemí",
+    "saving": "Ukládání…",
+    "saved": "Pravidla podle zemí byla uložena.",
+    "failed": "Pravidla podle zemí se nepodařilo uložit"
+  },
+  "rate": {
+    "title": "Limit rychlosti požadavků",
+    "description": "Omezuje, kolik dynamických požadavků smí jedna adresa poslat za sekundu. Obrázky, styly, skripty a další statické soubory se nikdy nepočítají.",
+    "off": "Vypnuto",
+    "perSecond": "{{rate}} pož./s",
+    "noteStatic": "Počítají se jen dynamické požadavky. Statické soubory se doručují bez omezení.",
+    "noteBurst": "Než se limit uplatní, je povolena krátká špička až {{burst}} požadavků.",
+    "noteStatus": "Požadavek nad limit obdrží 429 Too Many Requests.",
+    "saved": "Limit rychlosti požadavků byl uložen.",
+    "failed": "Limit rychlosti požadavků se nepodařilo uložit"
+  },
+  "reasons": {
+    "geoip_unavailable": "Nebyla stažena žádná databáze zemí, takže pravidlo podle zemí by nikoho neblokovalo. Požádejte poskytovatele hostingu, aby ji stáhl.",
+    "country_unknown": "Databáze zemí tuto zemi neobsahuje.",
+    "too_many_countries": "Bylo vybráno příliš mnoho zemí.",
+    "rate_not_allowed": "Tato rychlost požadavků není k dispozici. Vyberte jednu z nabízených hodnot."
   }
 }

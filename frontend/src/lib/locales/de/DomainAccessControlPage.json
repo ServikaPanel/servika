@@ -60,5 +60,55 @@
     "modeFailed": "IP-Zugriffsmodus konnte nicht gespeichert werden",
     "addFailed": "IP-Regel konnte nicht hinzugefügt werden",
     "deleteFailed": "IP-Regel konnte nicht gelöscht werden"
+  },
+  "geo": {
+    "title": "Länderregeln",
+    "description": "Legt fest, aus welchen Ländern diese Website erreichbar ist. Die Prüfung läuft im Webserver und gilt daher nur für HTTP und HTTPS.",
+    "notConfigured": "Länderregeln brauchen eine Länderdatenbank. Ihr Hosting-Anbieter hat noch keine eingerichtet.",
+    "notDownloaded": "Eine Länderdatenbank ist eingerichtet, aber noch nicht heruntergeladen. Bis dahin lässt sich keine Länderregel speichern.",
+    "modes": {
+      "off": {
+        "label": "Aus",
+        "description": "Es wird keine Länderregel in die Website-Konfiguration geschrieben."
+      },
+      "allow": {
+        "label": "Nur ausgewählte erlauben",
+        "description": "Nur Besucher aus den ausgewählten Ländern erreichen die Website. Alle anderen erhalten 403."
+      },
+      "deny": {
+        "label": "Ausgewählte sperren",
+        "description": "Besucher aus den ausgewählten Ländern erhalten 403. Alle anderen erreichen die Website."
+      }
+    },
+    "search": "Land suchen",
+    "noMatch": "Kein Land gefunden.",
+    "selected": "{{n}} von {{max}} ausgewählt",
+    "limitReached": "Die Grenze von {{max}} Ländern ist erreicht. Entfernen Sie eines, um ein weiteres hinzuzufügen.",
+    "noteAcme": "Anfragen zur Zertifikatsprüfung werden immer durchgelassen. Eine Erlaubnisliste kann die Zertifikatserneuerung daher nicht stoppen.",
+    "noteIpRules": "Die Länderprüfung läuft vor den IP-Regeln. Eine erlaubte IP-Adresse erreicht die Website aus einem gesperrten Land daher nicht.",
+    "noteCdn": "Hinter einem CDN wird das Land aus der Adresse des CDN gelesen, nicht aus der des Besuchers.",
+    "noteNoIpv6": "Die Länderdatenbank enthält keine IPv6-Bereiche. IPv6-Besucher werden daher nicht erfasst.",
+    "buildDate": "Ausgabe der Länderdaten: {{date}}",
+    "save": "Länderregeln speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Die Länderregeln wurden gespeichert.",
+    "failed": "Länderregeln konnten nicht gespeichert werden"
+  },
+  "rate": {
+    "title": "Anfragelimit",
+    "description": "Begrenzt, wie viele dynamische Anfragen eine Adresse pro Sekunde stellen darf. Bilder, Stylesheets, Skripte und andere statische Dateien werden nie gezählt.",
+    "off": "Aus",
+    "perSecond": "{{rate}} Anfr./s",
+    "noteStatic": "Nur dynamische Anfragen werden gezählt. Statische Dateien werden ohne Limit ausgeliefert.",
+    "noteBurst": "Vor dem Limit ist eine kurze Spitze von bis zu {{burst}} Anfragen erlaubt.",
+    "noteStatus": "Eine Anfrage über dem Limit erhält 429 Too Many Requests.",
+    "saved": "Das Anfragelimit wurde gespeichert.",
+    "failed": "Das Anfragelimit konnte nicht gespeichert werden"
+  },
+  "reasons": {
+    "geoip_unavailable": "Es wurde keine Länderdatenbank heruntergeladen. Eine Länderregel würde niemanden sperren. Bitten Sie Ihren Hosting-Anbieter, eine herunterzuladen.",
+    "country_unknown": "Die Länderdatenbank enthält dieses Land nicht.",
+    "too_many_countries": "Es wurden zu viele Länder ausgewählt.",
+    "rate_not_allowed": "Dieses Anfragelimit steht nicht zur Verfügung. Wählen Sie einen der angebotenen Werte."
   }
 }

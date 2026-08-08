@@ -28,3 +28,15 @@ export function apiError(err: unknown, fallback = 'An unexpected error occurred'
   if (error?.message) return error.message
   return fallback
 }
+
+/**
+ * Returns the stable reason CODE some endpoints send beside the message.
+ *
+ * The message is English because the API is; the code is what a screen maps to
+ * a sentence in the reader's own language. A screen that renders `apiError`
+ * alone shows English to a Japanese reader, which is why this exists.
+ */
+export function apiReason(err: unknown): string {
+  const error = err as AxiosError<{ reason?: string }>
+  return error?.response?.data?.reason || ''
+}

@@ -128,5 +128,65 @@
     "addRule": "ルールを追加できませんでした",
     "deleteRule": "ルールを削除できませんでした"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "国別ブロック",
+    "sectionHint": "ある国からのパケットをファイアウォールですべて破棄します。ウェブサーバーだけでなく、SSH、メール、FTP を含むすべてのポートが対象です。",
+    "credentials": {
+      "title": "MaxMind アカウント",
+      "hint": "国データは MaxMind GeoLite2 から取得します。無料アカウントを作成してライセンスに同意し、アカウント ID とライセンスキーをここに貼り付けてください。これらがなければこの機能はオフのままです。",
+      "accountLabel": "アカウント ID",
+      "keyLabel": "ライセンスキー",
+      "keyPlaceholder": "ライセンスキーを貼り付け",
+      "keyStored": "キーは保存済みで、二度と表示されません",
+      "save": "アカウントを保存",
+      "saving": "保存中…"
+    },
+    "status": {
+      "database": "データベース",
+      "ready": "準備完了",
+      "notDownloaded": "未ダウンロード",
+      "notConfigured": "アカウントなし",
+      "buildDate": "版",
+      "updatedAt": "最終更新",
+      "coverage": "収録範囲",
+      "countryCount": "{{n}} か国",
+      "ipv4Only": "IPv4 のみ",
+      "lastError": "最後のエラー: {{message}}"
+    },
+    "updateNow": "今すぐダウンロード",
+    "updating": "ダウンロード中…",
+    "blocked": {
+      "title": "ブロック中の国",
+      "pickLabel": "国",
+      "pickPlaceholder": "国を選択…",
+      "block": "ブロック",
+      "blocking": "ブロック中…",
+      "empty": "ブロックしている国はありません。"
+    },
+    "confirm": {
+      "block": "{{country}} のすべてのアドレスをブロックしますか。サーバーのすべてのポートが、SSH を含めてその国に対して閉じられます。",
+      "unblock": "{{country}} のブロックを解除しますか。"
+    },
+    "success": {
+      "credentialsSaved": "MaxMind アカウントを保存しました。",
+      "credentialsCleared": "MaxMind アカウントを削除しました。国別ブロックはオフになりました。",
+      "updated": "国データベースをダウンロードしました。版: {{date}}。",
+      "blocked": "{{country}} をすべてのポートでブロックしました。",
+      "unblocked": "{{country}} のブロックを解除しました。"
+    },
+    "error": {
+      "credentials": "MaxMind アカウントを保存できませんでした",
+      "update": "国データベースをダウンロードできませんでした",
+      "block": "国をブロックできませんでした",
+      "unblock": "国のブロックを解除できませんでした"
+    },
+    "reasons": {
+      "geoip_unavailable": "国データベースはまだダウンロードされていません。先に MaxMind アカウントを保存してダウンロードしてください。",
+      "country_unknown": "国データベースにその国はありません。"
+    },
+    "noteAllPorts": "ブロックはすべてのポートに適用されるため、ブロックした国はウェブサイトに加えて SSH、メール、FTP も失います。",
+    "noteWhitelist": "国別ブロックは許可リストより先に評価されるため、単一のアドレスを許可してもブロックした国を再び開くことはできません。",
+    "noteApproximate": "GeoLite2 は近似であり、国レベルでも誤った記録を含みます。判定が正確でなければならない場所では IP ルールを使ってください。"
+  }
 }

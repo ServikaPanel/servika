@@ -129,5 +129,65 @@
     "addRule": "Impossibile aggiungere la regola",
     "deleteRule": "Impossibile eliminare la regola"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Blocco per paese",
+    "sectionHint": "Scarta nel firewall ogni pacchetto proveniente da un paese. Riguarda ogni porta, compresi SSH, posta e FTP, non solo il server web.",
+    "credentials": {
+      "title": "Account MaxMind",
+      "hint": "I dati dei paesi provengono da MaxMind GeoLite2. Crea un account gratuito, accetta la sua licenza, poi incolla qui l'ID account e una chiave di licenza. Senza di essi questa funzione resta disattivata.",
+      "accountLabel": "ID account",
+      "keyLabel": "Chiave di licenza",
+      "keyPlaceholder": "Incolla la chiave di licenza",
+      "keyStored": "Una chiave è salvata e non viene mai più mostrata",
+      "save": "Salva account",
+      "saving": "Salvataggio…"
+    },
+    "status": {
+      "database": "Database",
+      "ready": "Pronto",
+      "notDownloaded": "Non scaricato",
+      "notConfigured": "Nessun account",
+      "buildDate": "Edizione",
+      "updatedAt": "Ultimo aggiornamento",
+      "coverage": "Copertura",
+      "countryCount": "{{n}} paesi",
+      "ipv4Only": "solo IPv4",
+      "lastError": "Ultimo errore: {{message}}"
+    },
+    "updateNow": "Scarica ora",
+    "updating": "Scaricamento…",
+    "blocked": {
+      "title": "Paesi bloccati",
+      "pickLabel": "Paese",
+      "pickPlaceholder": "Scegli un paese…",
+      "block": "Blocca",
+      "blocking": "Blocco…",
+      "empty": "Nessun paese è bloccato."
+    },
+    "confirm": {
+      "block": "Bloccare ogni indirizzo di {{country}}? Questo chiude a quel paese ogni porta del server, compreso SSH.",
+      "unblock": "Togliere il blocco a {{country}}?"
+    },
+    "success": {
+      "credentialsSaved": "L'account MaxMind è stato salvato.",
+      "credentialsCleared": "L'account MaxMind è stato rimosso. Il blocco per paese ora è disattivato.",
+      "updated": "Il database dei paesi è stato scaricato. Edizione: {{date}}.",
+      "blocked": "{{country}} ora è bloccato su ogni porta.",
+      "unblocked": "{{country}} non è più bloccato."
+    },
+    "error": {
+      "credentials": "Impossibile salvare l'account MaxMind",
+      "update": "Impossibile scaricare il database dei paesi",
+      "block": "Impossibile bloccare il paese",
+      "unblock": "Impossibile togliere il blocco del paese"
+    },
+    "reasons": {
+      "geoip_unavailable": "Non è ancora stato scaricato alcun database dei paesi. Salva prima un account MaxMind e scaricalo.",
+      "country_unknown": "Il database dei paesi non contiene quel paese."
+    },
+    "noteAllPorts": "Il blocco vale per ogni porta, quindi un paese bloccato perde anche SSH, posta e FTP oltre al sito web.",
+    "noteWhitelist": "Il blocco per paese viene valutato prima dell'elenco di consenso, quindi consentire un singolo indirizzo non può riaprire un paese bloccato.",
+    "noteApproximate": "GeoLite2 è approssimativo e contiene voci errate anche a livello di paese. Usa le regole IP dove la decisione deve essere esatta."
+  }
 }

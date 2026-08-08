@@ -129,5 +129,65 @@
     "addRule": "Kural eklenemedi",
     "deleteRule": "Kural silinemedi"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Ülke Engelleme",
+    "sectionHint": "Bir ülkeden gelen her paketi güvenlik duvarında düşürür. Bu, yalnız web sunucusunu değil SSH, e-posta ve FTP dahil her portu kapsar.",
+    "credentials": {
+      "title": "MaxMind hesabı",
+      "hint": "Ülke verisi MaxMind GeoLite2 kaynağından gelir. Ücretsiz bir hesap açın, lisansını kabul edin, sonra hesap kimliğini ve bir lisans anahtarını buraya yapıştırın. Bunlar olmadan özellik kapalı kalır.",
+      "accountLabel": "Hesap kimliği",
+      "keyLabel": "Lisans anahtarı",
+      "keyPlaceholder": "Lisans anahtarını yapıştırın",
+      "keyStored": "Bir anahtar saklı ve bir daha gösterilmez",
+      "save": "Hesabı Kaydet",
+      "saving": "Kaydediliyor…"
+    },
+    "status": {
+      "database": "Veritabanı",
+      "ready": "Hazır",
+      "notDownloaded": "İndirilmedi",
+      "notConfigured": "Hesap yok",
+      "buildDate": "Sürüm",
+      "updatedAt": "Son güncelleme",
+      "coverage": "Kapsam",
+      "countryCount": "{{n}} ülke",
+      "ipv4Only": "yalnız IPv4",
+      "lastError": "Son hata: {{message}}"
+    },
+    "updateNow": "Şimdi İndir",
+    "updating": "İndiriliyor…",
+    "blocked": {
+      "title": "Engellenen ülkeler",
+      "pickLabel": "Ülke",
+      "pickPlaceholder": "Bir ülke seçin…",
+      "block": "Engelle",
+      "blocking": "Engelleniyor…",
+      "empty": "Engellenen ülke yok."
+    },
+    "confirm": {
+      "block": "{{country}} ülkesindeki her adres engellensin mi? Bu, sunucudaki her portu, SSH dahil, o ülkeye kapatır.",
+      "unblock": "{{country}} engeli kaldırılsın mı?"
+    },
+    "success": {
+      "credentialsSaved": "MaxMind hesabı kaydedildi.",
+      "credentialsCleared": "MaxMind hesabı kaldırıldı. Ülke engelleme artık kapalı.",
+      "updated": "Ülke veritabanı indirildi. Sürüm: {{date}}.",
+      "blocked": "{{country}} artık her portta engelli.",
+      "unblocked": "{{country}} artık engelli değil."
+    },
+    "error": {
+      "credentials": "MaxMind hesabı kaydedilemedi",
+      "update": "Ülke veritabanı indirilemedi",
+      "block": "Ülke engellenemedi",
+      "unblock": "Ülke engeli kaldırılamadı"
+    },
+    "reasons": {
+      "geoip_unavailable": "Henüz hiçbir ülke veritabanı indirilmedi. Önce bir MaxMind hesabı kaydedin ve indirin.",
+      "country_unknown": "Ülke veritabanı bu ülkeyi taşımıyor."
+    },
+    "noteAllPorts": "Engel her porta uygulanır, yani engellenen bir ülke web sitesinin yanında SSH, e-posta ve FTP erişimini de kaybeder.",
+    "noteWhitelist": "Ülke engeli izin listesinden önce değerlendirilir, bu yüzden tek bir adrese izin vermek engellenen bir ülkeyi yeniden açamaz.",
+    "noteApproximate": "GeoLite2 yaklaşıktır ve ülke düzeyinde bile hatalı kayıtlar taşır. Kararın kesin olması gereken yerde IP kurallarını kullanın."
+  }
 }

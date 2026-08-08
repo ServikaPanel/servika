@@ -60,5 +60,55 @@
     "modeFailed": "Nu s-a putut salva modul de acces IP",
     "addFailed": "Nu s-a putut adăuga regula IP",
     "deleteFailed": "Nu s-a putut șterge regula IP"
+  },
+  "geo": {
+    "title": "Reguli pe țări",
+    "description": "Stabilește din ce țări poate fi accesat acest site. Verificarea are loc pe serverul web, deci acoperă doar HTTP și HTTPS.",
+    "notConfigured": "Regulile pe țări au nevoie de o bază de date a țărilor. Furnizorul dumneavoastră de găzduire nu a configurat încă una.",
+    "notDownloaded": "O bază de date a țărilor este configurată, dar nu a fost încă descărcată. Până atunci nu se poate salva nicio regulă pe țări.",
+    "modes": {
+      "off": {
+        "label": "Oprit",
+        "description": "Nu se scrie nicio regulă pe țări în configurația site-ului."
+      },
+      "allow": {
+        "label": "Permite doar cele selectate",
+        "description": "Doar vizitatorii din țările selectate ajung pe site. Toți ceilalți primesc 403."
+      },
+      "deny": {
+        "label": "Blochează cele selectate",
+        "description": "Vizitatorii din țările selectate primesc 403. Toți ceilalți ajung pe site."
+      }
+    },
+    "search": "Caută țara",
+    "noMatch": "Nicio țară nu corespunde.",
+    "selected": "{{n}} din {{max}} selectate",
+    "limitReached": "S-a atins limita de {{max}} țări. Eliminați una pentru a adăuga alta.",
+    "noteAcme": "Cererile de validare a certificatului trec întotdeauna, așa că o listă de permise nu poate opri reînnoirea certificatului.",
+    "noteIpRules": "Verificarea pe țări rulează înaintea regulilor IP, așa că o adresă IP permisă nu ajunge pe site dintr-o țară blocată.",
+    "noteCdn": "În spatele unui CDN, țara este citită din adresa CDN, nu din cea a vizitatorului.",
+    "noteNoIpv6": "Baza de date a țărilor nu conține intervale IPv6, așa că vizitatorii IPv6 nu sunt recunoscuți.",
+    "buildDate": "Ediția datelor despre țări: {{date}}",
+    "save": "Salvează regulile pe țări",
+    "saving": "Se salvează…",
+    "saved": "Regulile pe țări au fost salvate.",
+    "failed": "Regulile pe țări nu au putut fi salvate"
+  },
+  "rate": {
+    "title": "Limită de cereri",
+    "description": "Limitează câte cereri dinamice poate face o adresă pe secundă. Imaginile, foile de stil, scripturile și celelalte fișiere statice nu sunt niciodată numărate.",
+    "off": "Oprită",
+    "perSecond": "{{rate}} cereri/s",
+    "noteStatic": "Se numără doar cererile dinamice. Fișierele statice sunt servite fără limită.",
+    "noteBurst": "Înainte ca limita să se aplice este permis un vârf scurt de până la {{burst}} cereri.",
+    "noteStatus": "O cerere peste limită primește 429 Too Many Requests.",
+    "saved": "Limita de cereri a fost salvată.",
+    "failed": "Limita de cereri nu a putut fi salvată"
+  },
+  "reasons": {
+    "geoip_unavailable": "Nu a fost descărcată nicio bază de date a țărilor, așa că o regulă pe țări nu ar bloca pe nimeni. Cereți furnizorului de găzduire să descarce una.",
+    "country_unknown": "Baza de date a țărilor nu conține acea țară.",
+    "too_many_countries": "Au fost selectate prea multe țări.",
+    "rate_not_allowed": "Acea rată de cereri nu este disponibilă. Alegeți una dintre valorile oferite."
   }
 }

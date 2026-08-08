@@ -130,5 +130,65 @@
     "addRule": "Pravidlo nelze přidat",
     "deleteRule": "Pravidlo nelze smazat"
   },
-  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443"
+  "protectedPortsFallback": "22, 53, 80, 443, 8080, 8443",
+  "geo": {
+    "sectionTitle": "Blokování zemí",
+    "sectionHint": "Zahodí ve firewallu každý paket z dané země. Týká se každého portu, včetně SSH, pošty a FTP, nejen webového serveru.",
+    "credentials": {
+      "title": "Účet MaxMind",
+      "hint": "Data o zemích pocházejí z MaxMind GeoLite2. Založte si bezplatný účet, přijměte jeho licenci a vložte sem ID účtu a licenční klíč. Bez nich zůstane tato funkce vypnutá.",
+      "accountLabel": "ID účtu",
+      "keyLabel": "Licenční klíč",
+      "keyPlaceholder": "Vložte licenční klíč",
+      "keyStored": "Klíč je uložen a už se nikdy nezobrazí",
+      "save": "Uložit účet",
+      "saving": "Ukládání…"
+    },
+    "status": {
+      "database": "Databáze",
+      "ready": "Připravena",
+      "notDownloaded": "Nestažena",
+      "notConfigured": "Žádný účet",
+      "buildDate": "Vydání",
+      "updatedAt": "Poslední aktualizace",
+      "coverage": "Pokrytí",
+      "countryCount": "{{n}} zemí",
+      "ipv4Only": "jen IPv4",
+      "lastError": "Poslední chyba: {{message}}"
+    },
+    "updateNow": "Stáhnout nyní",
+    "updating": "Stahování…",
+    "blocked": {
+      "title": "Blokované země",
+      "pickLabel": "Země",
+      "pickPlaceholder": "Vyberte zemi…",
+      "block": "Blokovat",
+      "blocking": "Blokování…",
+      "empty": "Není blokována žádná země."
+    },
+    "confirm": {
+      "block": "Blokovat každou adresu v zemi {{country}}? Tím se této zemi uzavře každý port serveru, včetně SSH.",
+      "unblock": "Zrušit blokování země {{country}}?"
+    },
+    "success": {
+      "credentialsSaved": "Účet MaxMind byl uložen.",
+      "credentialsCleared": "Účet MaxMind byl odebrán. Blokování zemí je nyní vypnuté.",
+      "updated": "Databáze zemí byla stažena. Vydání: {{date}}.",
+      "blocked": "{{country}} je nyní blokována na každém portu.",
+      "unblocked": "{{country}} již není blokována."
+    },
+    "error": {
+      "credentials": "Účet MaxMind se nepodařilo uložit",
+      "update": "Databázi zemí se nepodařilo stáhnout",
+      "block": "Zemi se nepodařilo blokovat",
+      "unblock": "Blokování země se nepodařilo zrušit"
+    },
+    "reasons": {
+      "geoip_unavailable": "Zatím nebyla stažena žádná databáze zemí. Nejprve uložte účet MaxMind a stáhněte ji.",
+      "country_unknown": "Databáze zemí tuto zemi neobsahuje."
+    },
+    "noteAllPorts": "Blokování platí pro každý port, takže blokovaná země přijde vedle webu i o SSH, poštu a FTP.",
+    "noteWhitelist": "Blokování zemí se vyhodnocuje před seznamem povolených, takže povolení jediné adresy nemůže blokovanou zemi znovu otevřít.",
+    "noteApproximate": "GeoLite2 je přibližný a obsahuje chybné záznamy i na úrovni zemí. Tam, kde musí být rozhodnutí přesné, použijte pravidla IP."
+  }
 }

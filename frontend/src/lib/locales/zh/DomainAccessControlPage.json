@@ -60,5 +60,55 @@
     "modeFailed": "无法保存 IP 访问模式",
     "addFailed": "无法添加 IP 规则",
     "deleteFailed": "无法删除 IP 规则"
+  },
+  "geo": {
+    "title": "国家/地区规则",
+    "description": "决定哪些国家/地区可以访问本站点。判断在 Web 服务器上进行，因此只覆盖 HTTP 和 HTTPS。",
+    "notConfigured": "国家/地区规则需要国家/地区数据库。您的主机服务商尚未配置。",
+    "notDownloaded": "已配置国家/地区数据库，但尚未下载。在此之前无法保存国家/地区规则。",
+    "modes": {
+      "off": {
+        "label": "关闭",
+        "description": "不会向站点配置写入任何国家/地区规则。"
+      },
+      "allow": {
+        "label": "仅允许所选",
+        "description": "只有来自所选国家/地区的访客能访问站点。其他访客都会收到 403。"
+      },
+      "deny": {
+        "label": "阻止所选",
+        "description": "来自所选国家/地区的访客会收到 403。其他访客都能访问站点。"
+      }
+    },
+    "search": "搜索国家/地区",
+    "noMatch": "没有匹配的国家/地区。",
+    "selected": "已选择 {{n}} / {{max}}",
+    "limitReached": "已达到 {{max}} 个国家/地区的上限。请先移除一个再添加。",
+    "noteAcme": "证书验证请求始终放行，因此允许列表不会阻止证书续期。",
+    "noteIpRules": "国家/地区判断先于 IP 规则执行，因此被允许的 IP 地址也无法从被阻止的国家/地区访问站点。",
+    "noteCdn": "在 CDN 后面，国家/地区取自 CDN 的地址，而非访客的地址。",
+    "noteNoIpv6": "国家/地区数据库不含 IPv6 范围，因此不会匹配 IPv6 访客。",
+    "buildDate": "国家/地区数据版本：{{date}}",
+    "save": "保存国家/地区规则",
+    "saving": "保存中…",
+    "saved": "国家/地区规则已保存。",
+    "failed": "无法保存国家/地区规则"
+  },
+  "rate": {
+    "title": "请求速率限制",
+    "description": "限制单个地址每秒可发起的动态请求数。图片、样式表、脚本等静态文件从不计入。",
+    "off": "关闭",
+    "perSecond": "{{rate}} 次/秒",
+    "noteStatic": "只统计动态请求。静态文件不受限制地提供。",
+    "noteBurst": "在限制生效之前，允许最多 {{burst}} 个请求的短暂突发。",
+    "noteStatus": "超出限制的请求会收到 429 Too Many Requests。",
+    "saved": "请求速率限制已保存。",
+    "failed": "无法保存请求速率限制"
+  },
+  "reasons": {
+    "geoip_unavailable": "尚未下载国家/地区数据库，因此国家/地区规则不会阻止任何人。请让主机服务商先下载。",
+    "country_unknown": "国家/地区数据库中没有该国家/地区。",
+    "too_many_countries": "选择的国家/地区过多。",
+    "rate_not_allowed": "该请求速率不可用。请从提供的值中选择。"
   }
 }

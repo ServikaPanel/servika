@@ -60,5 +60,55 @@
     "modeFailed": "Could not save IP access mode",
     "addFailed": "Could not add IP rule",
     "deleteFailed": "Could not delete IP rule"
+  },
+  "geo": {
+    "title": "Country Rules",
+    "description": "Decides which countries may reach this site. The check runs at the web server, so it covers HTTP and HTTPS only.",
+    "notConfigured": "Country rules need a country database. Your hosting provider has not set one up yet.",
+    "notDownloaded": "A country database is configured but has not been downloaded yet. Country rules cannot be saved until it is.",
+    "modes": {
+      "off": {
+        "label": "Off",
+        "description": "No country rule is written into the site configuration."
+      },
+      "allow": {
+        "label": "Allow selected only",
+        "description": "Only visitors from the selected countries reach the site. Everyone else receives 403."
+      },
+      "deny": {
+        "label": "Block selected",
+        "description": "Visitors from the selected countries receive 403. Everyone else reaches the site."
+      }
+    },
+    "search": "Search country",
+    "noMatch": "No country matches.",
+    "selected": "{{n}} of {{max}} selected",
+    "limitReached": "The limit of {{max}} countries has been reached. Remove one to add another.",
+    "noteAcme": "Certificate validation requests always pass, so an allow list cannot stop your certificate from renewing.",
+    "noteIpRules": "The country check runs before the IP rules, so an allowed IP address cannot reach the site from a blocked country.",
+    "noteCdn": "Behind a CDN the country is read from the CDN's address, not the visitor's.",
+    "noteNoIpv6": "The country database carries no IPv6 ranges, so IPv6 visitors are not matched.",
+    "buildDate": "Country data edition: {{date}}",
+    "save": "Save Country Rules",
+    "saving": "Saving…",
+    "saved": "Country rules were saved.",
+    "failed": "Could not save country rules"
+  },
+  "rate": {
+    "title": "Request Rate Limit",
+    "description": "Caps how many dynamic requests one address may make per second. Images, stylesheets, scripts and other static files are never counted.",
+    "off": "Off",
+    "perSecond": "{{rate}} req/s",
+    "noteStatic": "Only dynamic requests are counted. Static files are served without a limit.",
+    "noteBurst": "A short burst of up to {{burst}} requests is allowed before the limit applies.",
+    "noteStatus": "A request over the limit receives 429 Too Many Requests.",
+    "saved": "The request rate limit was saved.",
+    "failed": "Could not save the request rate limit"
+  },
+  "reasons": {
+    "geoip_unavailable": "No country database has been downloaded, so a country rule would block nobody. Ask your hosting provider to download one.",
+    "country_unknown": "The country database does not carry that country.",
+    "too_many_countries": "Too many countries were selected.",
+    "rate_not_allowed": "That request rate is not available. Pick one of the offered values."
   }
 }
