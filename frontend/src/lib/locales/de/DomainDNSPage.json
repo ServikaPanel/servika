@@ -157,6 +157,23 @@
     "update": "Aktualisieren",
     "saveFailed": "Eintrag konnte nicht gespeichert werden"
   },
+  "ipv6": {
+    "title": "IPv6-Adresse",
+    "hint": "Die Adresse, unter der diese Domain über IPv6 antwortet. Eine Änderung schreibt die AAAA-Einträge der Domain neu.",
+    "none": "Keine (kein AAAA-Eintrag)",
+    "save": "Speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "Gespeichert. {{count}} AAAA-Einträge aktualisiert.",
+    "saveFailed": "Die Adresse konnte nicht gespeichert werden.",
+    "clearWarning": "Das Entfernen der Adresse löscht die AAAA-Einträge dieser Domain, IPv6-Clients fallen dann auf IPv4 zurück.",
+    "noRoutable": "Dieser Server hat keine global routbare IPv6-Adresse, daher kann kein AAAA-Eintrag veröffentlicht werden.",
+    "noStack": "Dieser Server hat überhaupt kein IPv6. Das Panel liefert alle Websites nur über IPv4 aus.",
+    "reasons": {
+      "ipv6_not_local": "Dieser Server antwortet nicht unter dieser Adresse. Sie zu veröffentlichen würde die Website für IPv6-Clients unerreichbar machen und die Zertifikatserneuerung stoppen.",
+      "ipv6_not_v6": "Das ist eine IPv4-Adresse. Dieses Feld nimmt eine IPv6-Adresse.",
+      "ipv6_invalid": "Das ist keine gültige IP-Adresse."
+    }
+  },
   "verify": {
     "title": "DNS-Prüfung",
     "hint": "fragt einen öffentlichen Resolver, was tatsächlich veröffentlicht ist",

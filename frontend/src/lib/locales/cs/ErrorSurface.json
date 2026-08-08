@@ -11,6 +11,7 @@
     "soa": "záznam SOA v DNS",
     "dnssec": "stav DNSSEC",
     "nameservers": "jmenné servery",
+    "serverIPv6": "adresy IPv6 serveru",
     "auditActions": "akce auditního protokolu",
     "backupJobs": "úlohy zálohování",
     "backupSummary": "souhrn záloh",

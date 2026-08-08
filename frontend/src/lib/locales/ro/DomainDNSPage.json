@@ -157,6 +157,23 @@
     "update": "Actualizare",
     "saveFailed": "Nu s-a putut salva înregistrarea"
   },
+  "ipv6": {
+    "title": "Adresă IPv6",
+    "hint": "Adresa pe care acest domeniu răspunde prin IPv6. Modificarea rescrie înregistrările AAAA ale domeniului.",
+    "none": "Niciuna (fără înregistrare AAAA)",
+    "save": "Salvează",
+    "saving": "Se salvează…",
+    "saved": "Salvat. {{count}} înregistrări AAAA actualizate.",
+    "saveFailed": "Adresa nu a putut fi salvată.",
+    "clearWarning": "Ștergerea adresei elimină înregistrările AAAA ale acestui domeniu; clienții IPv6 vor reveni la IPv4.",
+    "noRoutable": "Acest server nu are nicio adresă IPv6 accesibilă din internet, așa că nu se poate publica nicio înregistrare AAAA.",
+    "noStack": "Acest server nu are deloc IPv6. Panoul servește toate site-urile doar prin IPv4.",
+    "reasons": {
+      "ipv6_not_local": "Acest server nu răspunde la adresa respectivă. Publicarea ei ar face site-ul inaccesibil pentru clienții IPv6 și ar opri reînnoirea certificatului.",
+      "ipv6_not_v6": "Aceasta este o adresă IPv4. Acest câmp acceptă o adresă IPv6.",
+      "ipv6_invalid": "Aceasta nu este o adresă IP validă."
+    }
+  },
   "verify": {
     "title": "Verificare DNS",
     "hint": "întreabă un resolver public ce este publicat cu adevărat",

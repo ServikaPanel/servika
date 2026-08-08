@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { api, apiError as apiError } from '@/lib/api'
+import { api, apiError as apiError, apiReason } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import { useAuth } from '@/store/auth'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
 import Modal from '@/components/Modal'
@@ -30,7 +31,11 @@ type RecordItem = {
   created_at: string
 }
 
-type Domain = { id: number; domain_name: string; ipv4: string }
+type Domain = { id: number; domain_name: string; ipv4: string; ipv6: string }
+// What this server can answer on over IPv6. An empty list is the ordinary state
+// on a host without IPv6, not an error, so the screen says so rather than
+// offering a field nothing can be typed into.
+type ServerIPv6 = { addresses: string[]; has_ipv6: boolean; server_ip6: string }
 type SOA = { primary_ns: string; hostmaster: string; refresh: number; retry: number; expire: number; minimum: number; ttl: number }
 type DNSSECStatus = { active: boolean; signed: boolean; ds: string[]; status: string }
 // The shared nameserver pair a customer points the domain at. It is resolved on
@@ -100,6 +105,10 @@ export default function DomainDNSPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importReplace, setImportReplace] = useState(false)
   const [importing, setImporting] = useState(false)
+  const isAdmin = useAuth(state => state.username?.role) === 'admin'
+  const [serverIPv6, setServerIPv6] = useState<ServerIPv6 | null>(null)
+  const [ipv6Choice, setIPv6Choice] = useState('')
+  const [savingIPv6, setSavingIPv6] = useState(false)
 
   async function exportZone() {
     try {
@@ -176,13 +185,36 @@ export default function DomainDNSPage() {
   }
   useEffect(() => {
     if (id) {
-      api.get<Domain>(`/domains/${id}`).then(r => setDomain(r.data)).catch(report('subscription'))
+      api.get<Domain>(`/domains/${id}`).then(r => { setDomain(r.data); setIPv6Choice(r.data.ipv6 || '') }).catch(report('subscription'))
       api.get<SOA>(`/domains/${id}/dns/soa`).then(r => setSOA(r.data)).catch(report('soa'))
       api.get<DNSSECStatus>(`/domains/${id}/dns/dnssec`).then(r => setDNSSEC(r.data)).catch(report('dnssec'))
       api.get<Nameservers>(`/domains/${id}/nameservers`).then(r => setNameservers(r.data)).catch(report('nameservers'))
+      if (isAdmin) api.get<ServerIPv6>('/system/ipv6-addresses').then(r => setServerIPv6(r.data)).catch(report('serverIPv6'))
     }
     fetchRecords()
-  }, [id, fetchRecords, report])
+  }, [id, fetchRecords, report, isAdmin])
+
+  // Saving the address rewrites this domain's AAAA records and the zone file,
+  // so the record list is reloaded rather than left showing the old values.
+  async function saveIPv6() {
+    if (!id) return
+    setSavingIPv6(true); setError(null); setSuccess(null)
+    try {
+      const { data } = await api.put<{ ipv6: string; records: number }>(`/domains/${id}/ipv6`, { ipv6: ipv6Choice })
+      setDomain(current => current ? { ...current, ipv6: data.ipv6 } : current)
+      setSuccess(t('ipv6.saved', { count: data.records }))
+      setVerification(null)
+      fetchRecords()
+    } catch (caught) {
+      // The backend answers with a stable reason code, because this screen is
+      // rendered in twelve languages and an English sentence from the API
+      // could not be shown in the other eleven.
+      const reason = apiReason(caught)
+      setError(reason ? t([`ipv6.reasons.${reason}`, 'ipv6.saveFailed']) : apiError(caught, t('ipv6.saveFailed')))
+    } finally {
+      setSavingIPv6(false)
+    }
+  }
 
   // Verification is on demand rather than on load: it makes seven live DNS
   // lookups, which is not something to spend on every visit to the page.
@@ -280,6 +312,54 @@ export default function DomainDNSPage() {
           <strong>{t('authoritative.label')}</strong>{t('authoritative.pre')}<span className="font-mono">{nameservers.ns1}</span>{t('authoritative.mid')}<span className="font-mono">{nameservers.ns2}</span>{t('authoritative.post')}
           {nameservers.source === 'none' && (
             <span className="block mt-1 text-amber-800 dark:text-amber-300">{t('authoritative.unconfigured')}</span>
+          )}
+        </div>
+      )}
+
+      {/* The address this domain answers on over IPv6. Administrator-only,
+          because it has to be an address this server really carries and the
+          operator is the only party who knows which those are. */}
+      {isAdmin && serverIPv6 && (
+        <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 px-4 py-3">
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('ipv6.title')}</div>
+          {serverIPv6.addresses.length === 0 ? (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {serverIPv6.has_ipv6 ? t('ipv6.noRoutable') : t('ipv6.noStack')}
+            </p>
+          ) : (
+            <>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('ipv6.hint')}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  aria-label={t('ipv6.title')}
+                  value={ipv6Choice}
+                  onChange={event => setIPv6Choice(event.target.value)}
+                  className="text-sm px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+                >
+                  <option value="">{t('ipv6.none')}</option>
+                  {serverIPv6.addresses.map(address => (
+                    <option key={address} value={address}>{address}</option>
+                  ))}
+                  {/* An address stored before it left the interface list is kept
+                      selectable, or the screen would silently show a different
+                      value from the one the zone actually publishes. */}
+                  {domain?.ipv6 && !serverIPv6.addresses.includes(domain.ipv6) && (
+                    <option value={domain.ipv6}>{domain.ipv6}</option>
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={saveIPv6}
+                  disabled={savingIPv6 || ipv6Choice === (domain?.ipv6 || '')}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {savingIPv6 ? t('ipv6.saving') : t('ipv6.save')}
+                </button>
+              </div>
+              {ipv6Choice === '' && domain?.ipv6 && (
+                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{t('ipv6.clearWarning')}</p>
+              )}
+            </>
           )}
         </div>
       )}

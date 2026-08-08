@@ -157,6 +157,23 @@
     "update": "Güncelle",
     "saveFailed": "Kayıt kaydedilemedi"
   },
+  "ipv6": {
+    "title": "IPv6 adresi",
+    "hint": "Bu alan adının IPv6 üzerinden yanıt verdiği adres. Değiştirmek alan adının AAAA kayıtlarını yeniden yazar.",
+    "none": "Yok (AAAA kaydı olmasın)",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "saved": "Kaydedildi. {{count}} AAAA kaydı güncellendi.",
+    "saveFailed": "Adres kaydedilemedi.",
+    "clearWarning": "Adresi kaldırmak bu alan adının AAAA kayıtlarını siler, IPv6 istemcileri IPv4'e döner.",
+    "noRoutable": "Bu sunucuda internetten erişilebilen bir IPv6 adresi yok, bu yüzden AAAA kaydı yayınlanamaz.",
+    "noStack": "Bu sunucuda hiç IPv6 yok. Panel bütün siteleri yalnız IPv4 üzerinden sunuyor.",
+    "reasons": {
+      "ipv6_not_local": "Bu sunucu o adres üzerinden yanıt vermiyor. Yayınlamak siteyi IPv6 istemcileri için erişilemez yapar ve sertifika yenilemesini durdurur.",
+      "ipv6_not_v6": "Bu bir IPv4 adresi. Bu alan bir IPv6 adresi alır.",
+      "ipv6_invalid": "Bu geçerli bir IP adresi değil."
+    }
+  },
   "verify": {
     "title": "DNS doğrulama",
     "hint": "gerçekten yayında olanı genel bir çözümleyiciye sorar",

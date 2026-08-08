@@ -41,18 +41,22 @@ type Domain struct {
 	TrafficKB  int64  `json:"traffic_kb"`
 	CreatedAt  string `json:"created_at"`
 	IPv4       string `json:"ipv4"`
-	FTPHost    string `json:"ftp_host"`
-	FTPUser    string `json:"ftp_user"`
-	DBHost     string `json:"db_host"`
-	DBUser     string `json:"db_user"`
-	DBName     string `json:"db_name"`
-	WebRoot    string `json:"web_root"`
-	IsDemo     bool   `json:"is_demo"`
-	Notes      string `json:"notes,omitempty"`
-	PlanID     *int64 `json:"plan_id,omitempty"`
-	PlanName   string `json:"plan_name,omitempty"`
-	SshAccess  bool   `json:"ssh_access"`
-	Suspended  bool   `json:"suspended"`
+	// IPv6 is the address this domain answers on over IPv6, empty when it has
+	// none. Empty is the ordinary state, not a fault: a server without IPv6
+	// publishes no AAAA record at all, which is the only safe answer.
+	IPv6      string `json:"ipv6"`
+	FTPHost   string `json:"ftp_host"`
+	FTPUser   string `json:"ftp_user"`
+	DBHost    string `json:"db_host"`
+	DBUser    string `json:"db_user"`
+	DBName    string `json:"db_name"`
+	WebRoot   string `json:"web_root"`
+	IsDemo    bool   `json:"is_demo"`
+	Notes     string `json:"notes,omitempty"`
+	PlanID    *int64 `json:"plan_id,omitempty"`
+	PlanName  string `json:"plan_name,omitempty"`
+	SshAccess bool   `json:"ssh_access"`
+	Suspended bool   `json:"suspended"`
 	// ResellerName is the username of the reseller who owns the domain's customer.
 	// Empty means the customer is directly under admin (no reseller).
 	ResellerName string `json:"reseller_name,omitempty"`
@@ -100,7 +104,7 @@ const selectAll = `SELECT d.id, d.domain_name, d.system_user, d.php_version, d.s
   d.db_host, d.db_user, d.db_name, d.web_root, d.size_kb, d.traffic_kb, d.is_demo,
   COALESCE(d.notes,''), DATE_FORMAT(d.created_at,'%Y-%m-%d'),
   d.plan_id, COALESCE(p.name,''), d.ssh_access, COALESCE(d.suspended,0),
-  COALESCE(ru.username,''), d.site_type, COALESCE(d.ssl_source,'')
+  COALESCE(ru.username,''), d.site_type, COALESCE(d.ssl_source,''), COALESCE(d.ipv6,'')
   FROM domains d
   LEFT JOIN service_plans p ON p.id=d.plan_id
   LEFT JOIN customers cu ON cu.id=d.customer_id
@@ -115,7 +119,7 @@ func scan(rs interface{ Scan(...any) error }) (Domain, error) {
 		&d.DBHost, &d.DBUser, &d.DBName, &d.WebRoot, &d.SizeKB, &d.TrafficKB, &demo,
 		&d.Notes, &d.CreatedAt,
 		&planID, &d.PlanName, &sshE, &suspended,
-		&d.ResellerName, &d.SiteType, &d.SSLSource)
+		&d.ResellerName, &d.SiteType, &d.SSLSource, &d.IPv6)
 	d.SSL = ssl == 1
 	d.IsDemo = demo == 1
 	d.SshAccess = sshE == 1

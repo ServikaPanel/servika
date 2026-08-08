@@ -157,6 +157,23 @@
     "update": "Update",
     "saveFailed": "Could not save record"
   },
+  "ipv6": {
+    "title": "IPv6 address",
+    "hint": "The address this domain answers on over IPv6. Changing it rewrites the domain's AAAA records.",
+    "none": "None (no AAAA record)",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved. {{count}} AAAA records updated.",
+    "saveFailed": "The address could not be saved.",
+    "clearWarning": "Clearing the address removes this domain's AAAA records, so IPv6 clients will fall back to IPv4.",
+    "noRoutable": "This server carries no globally routable IPv6 address, so no AAAA record can be published.",
+    "noStack": "This server has no IPv6 at all. The panel serves every site over IPv4 only.",
+    "reasons": {
+      "ipv6_not_local": "This server does not answer on that address. Publishing it would make the site unreachable for IPv6 clients and stop certificate renewal.",
+      "ipv6_not_v6": "That is an IPv4 address. This field takes an IPv6 address.",
+      "ipv6_invalid": "That is not a valid IP address."
+    }
+  },
   "verify": {
     "title": "DNS verification",
     "hint": "asks a public resolver what is actually published",

@@ -157,6 +157,23 @@
     "update": "Mettre à jour",
     "saveFailed": "Impossible d'enregistrer l'enregistrement"
   },
+  "ipv6": {
+    "title": "Adresse IPv6",
+    "hint": "L'adresse sur laquelle ce domaine répond en IPv6. La modifier réécrit les enregistrements AAAA du domaine.",
+    "none": "Aucune (pas d'enregistrement AAAA)",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré. {{count}} enregistrements AAAA mis à jour.",
+    "saveFailed": "L'adresse n'a pas pu être enregistrée.",
+    "clearWarning": "Effacer l'adresse supprime les enregistrements AAAA de ce domaine ; les clients IPv6 reviendront à IPv4.",
+    "noRoutable": "Ce serveur n'a aucune adresse IPv6 routable sur Internet, aucun enregistrement AAAA ne peut donc être publié.",
+    "noStack": "Ce serveur n'a pas d'IPv6 du tout. Le panneau sert tous les sites uniquement en IPv4.",
+    "reasons": {
+      "ipv6_not_local": "Ce serveur ne répond pas sur cette adresse. La publier rendrait le site inaccessible aux clients IPv6 et arrêterait le renouvellement du certificat.",
+      "ipv6_not_v6": "Il s'agit d'une adresse IPv4. Ce champ attend une adresse IPv6.",
+      "ipv6_invalid": "Ce n'est pas une adresse IP valide."
+    }
+  },
   "verify": {
     "title": "Vérification DNS",
     "hint": "demande à un résolveur public ce qui est réellement publié",

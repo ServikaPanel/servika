@@ -157,6 +157,23 @@
     "update": "Aktualizovat",
     "saveFailed": "Záznam nelze uložit"
   },
+  "ipv6": {
+    "title": "Adresa IPv6",
+    "hint": "Adresa, na které tato doména odpovídá přes IPv6. Změna přepíše záznamy AAAA této domény.",
+    "none": "Žádná (bez záznamu AAAA)",
+    "save": "Uložit",
+    "saving": "Ukládání…",
+    "saved": "Uloženo. Aktualizováno záznamů AAAA: {{count}}.",
+    "saveFailed": "Adresu se nepodařilo uložit.",
+    "clearWarning": "Odstranění adresy smaže záznamy AAAA této domény; klienti s IPv6 se vrátí k IPv4.",
+    "noRoutable": "Tento server nemá žádnou veřejně směrovatelnou adresu IPv6, takže nelze publikovat žádný záznam AAAA.",
+    "noStack": "Tento server nemá IPv6 vůbec. Panel obsluhuje všechny weby jen přes IPv4.",
+    "reasons": {
+      "ipv6_not_local": "Tento server na této adrese neodpovídá. Publikovat ji by znamenalo, že web bude pro klienty s IPv6 nedostupný a přestane se obnovovat certifikát.",
+      "ipv6_not_v6": "To je adresa IPv4. Toto pole přijímá adresu IPv6.",
+      "ipv6_invalid": "To není platná IP adresa."
+    }
+  },
   "verify": {
     "title": "Ověření DNS",
     "hint": "zeptá se veřejného resolveru, co je skutečně publikováno",

@@ -11,6 +11,7 @@
     "soa": "DNS SOA レコード",
     "dnssec": "DNSSEC の状態",
     "nameservers": "ネームサーバー",
+    "serverIPv6": "サーバーの IPv6 アドレス",
     "auditActions": "監査ログの操作",
     "backupJobs": "バックアップジョブ",
     "backupSummary": "バックアップの概要",

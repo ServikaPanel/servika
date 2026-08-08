@@ -11,6 +11,7 @@
     "soa": "înregistrarea SOA din DNS",
     "dnssec": "starea DNSSEC",
     "nameservers": "servere de nume",
+    "serverIPv6": "adresele IPv6 ale serverului",
     "auditActions": "acțiunile din jurnalul de audit",
     "backupJobs": "sarcinile de backup",
     "backupSummary": "rezumatul backupurilor",

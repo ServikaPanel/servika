@@ -11,6 +11,7 @@
     "soa": "DNS SOA 记录",
     "dnssec": "DNSSEC 状态",
     "nameservers": "名称服务器",
+    "serverIPv6": "服务器的 IPv6 地址",
     "auditActions": "审计日志操作",
     "backupJobs": "备份任务",
     "backupSummary": "备份摘要",

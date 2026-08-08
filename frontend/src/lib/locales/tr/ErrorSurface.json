@@ -11,6 +11,7 @@
     "soa": "DNS SOA kaydı",
     "dnssec": "DNSSEC durumu",
     "nameservers": "ad sunucuları",
+    "serverIPv6": "sunucunun IPv6 adresleri",
     "auditActions": "denetim günlüğü işlemleri",
     "backupJobs": "yedekleme işleri",
     "backupSummary": "yedekleme özeti",

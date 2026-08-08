@@ -157,6 +157,23 @@
     "update": "Atualizar",
     "saveFailed": "Não foi possível salvar o registro"
   },
+  "ipv6": {
+    "title": "Endereço IPv6",
+    "hint": "O endereço em que este domínio responde por IPv6. Alterá-lo reescreve os registros AAAA do domínio.",
+    "none": "Nenhum (sem registro AAAA)",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saved": "Salvo. {{count}} registros AAAA atualizados.",
+    "saveFailed": "Não foi possível salvar o endereço.",
+    "clearWarning": "Remover o endereço apaga os registros AAAA deste domínio; os clientes IPv6 voltam para IPv4.",
+    "noRoutable": "Este servidor não tem nenhum endereço IPv6 acessível pela Internet, então nenhum registro AAAA pode ser publicado.",
+    "noStack": "Este servidor não tem IPv6 nenhum. O painel serve todos os sites apenas por IPv4.",
+    "reasons": {
+      "ipv6_not_local": "Este servidor não responde nesse endereço. Publicá-lo deixaria o site inacessível para clientes IPv6 e pararia a renovação do certificado.",
+      "ipv6_not_v6": "Esse é um endereço IPv4. Este campo aceita um endereço IPv6.",
+      "ipv6_invalid": "Esse não é um endereço IP válido."
+    }
+  },
   "verify": {
     "title": "Verificação de DNS",
     "hint": "pergunta a um resolvedor público o que está realmente publicado",

@@ -157,6 +157,23 @@
     "update": "更新",
     "saveFailed": "无法保存记录"
   },
+  "ipv6": {
+    "title": "IPv6 地址",
+    "hint": "该域名通过 IPv6 响应的地址。修改后会重写该域名的 AAAA 记录。",
+    "none": "无（不创建 AAAA 记录）",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "已保存。更新了 {{count}} 条 AAAA 记录。",
+    "saveFailed": "地址保存失败。",
+    "clearWarning": "清除地址会删除该域名的 AAAA 记录，IPv6 客户端将回退到 IPv4。",
+    "noRoutable": "本服务器没有可从互联网访问的 IPv6 地址，因此无法发布 AAAA 记录。",
+    "noStack": "本服务器完全没有 IPv6。面板仅通过 IPv4 提供所有站点。",
+    "reasons": {
+      "ipv6_not_local": "本服务器不在该地址上响应。发布它会让 IPv6 客户端无法访问站点，并导致证书续期停止。",
+      "ipv6_not_v6": "这是一个 IPv4 地址。此字段需要 IPv6 地址。",
+      "ipv6_invalid": "这不是有效的 IP 地址。"
+    }
+  },
   "verify": {
     "title": "DNS 验证",
     "hint": "向公共解析器查询实际已发布的内容",

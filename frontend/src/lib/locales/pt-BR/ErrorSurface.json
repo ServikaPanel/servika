@@ -11,6 +11,7 @@
     "soa": "registro SOA do DNS",
     "dnssec": "status do DNSSEC",
     "nameservers": "servidores de nomes",
+    "serverIPv6": "os endereços IPv6 do servidor",
     "auditActions": "ações do log de auditoria",
     "backupJobs": "tarefas de backup",
     "backupSummary": "resumo dos backups",
