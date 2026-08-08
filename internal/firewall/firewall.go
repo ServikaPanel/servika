@@ -11,6 +11,7 @@ package firewall
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -340,6 +341,12 @@ func (h *Handlers) rebuild() error {
 		}
 	}
 
+	// The element file is regenerated first: nft validates the include as part
+	// of the document below, so a stale file would be what gets checked.
+	if err := writeGeoSets(context.Background(), h.DB); err != nil {
+		return err
+	}
+
 	ruleset := buildRuleset(allowlisted, restricted, closed, banned)
 
 	// 1. Validate so an invalid ruleset is never applied.
@@ -369,6 +376,10 @@ func buildRuleset(allowlisted, restricted, closed, banned []string) []byte {
 	fmt.Fprintf(&b, "table inet %s {}\n", tableName)
 	fmt.Fprintf(&b, "delete table inet %s\n", tableName)
 	fmt.Fprintf(&b, "table inet %s {\n", tableName)
+	// The country element lists are included rather than inlined: one country
+	// is thousands of intervals, and keeping them out of this function is what
+	// leaves the base-rule ORDER above assertable in a unit test.
+	fmt.Fprintf(&b, "\tinclude \"%s\"\n", geoIncludeFile)
 	b.WriteString("\tchain input {\n")
 	b.WriteString("\t\ttype filter hook input priority filter; policy accept;\n")
 	b.WriteString("\t\tct state established,related accept\n")
@@ -380,6 +391,12 @@ func buildRuleset(allowlisted, restricted, closed, banned []string) []byte {
 	// per-domain IP rules. The drop comes after the loopback accept above, so
 	// nginx still reaches the application.
 	fmt.Fprintf(&b, "\t\ttcp dport %d-%d drop\n", appPortMin, appPortMax)
+	// Country blocks drop BEFORE the whitelist accepts below, so a per-IP
+	// permission cannot reopen a country the operator closed. That is the
+	// stricter reading and the one the screen states: an operator who wants one
+	// address back from a blocked country has to unblock the country.
+	fmt.Fprintf(&b, "\t\tip saddr @%s drop\n", geoSetV4)
+	fmt.Fprintf(&b, "\t\tip6 saddr @%s drop\n", geoSetV6)
 	// Ordering matters: whitelist accepts, allowlist drops, closed-port drops, then banned drops.
 	for _, r := range allowlisted {
 		fmt.Fprintf(&b, "%s\n", r)

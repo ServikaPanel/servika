@@ -283,6 +283,7 @@ func main() {
 	importH := &siteimport.Handlers{DB: d}
 	wpH := &wordpress.Handlers{DB: d}
 	fwH := &firewall.Handlers{DB: d}
+	geoIPH := &geoip.Handlers{DB: d}
 	wafH := &waf.Handlers{DB: d}
 	redisH := &redis.Handlers{DB: d}
 	// Tenants provisioned before scan/randomkey were denied can still enumerate
@@ -456,6 +457,12 @@ func main() {
 			r.With(middleware.AdminOnly).Post("/system/panel-domain", panelSettingsH.Save)
 			r.With(middleware.AdminOnly).Delete("/system/panel-domain", panelSettingsH.Delete)
 			r.With(middleware.AdminOnly).Put("/system/panel-language", panelSettingsH.SaveLanguage)
+			// The country database is a server-wide integration, so its credentials
+			// and download live with the other system settings rather than on a
+			// domain. The license key is never returned by any of these.
+			r.With(middleware.AdminOnly).Get("/system/geoip", geoIPH.Status)
+			r.With(middleware.AdminOnly).Put("/system/geoip/credentials", geoIPH.SaveCredentials)
+			r.With(middleware.AdminOnly).Post("/system/geoip/update", geoIPH.Update)
 			r.With(middleware.ResellerOrAbove).Get("/system/update", system.UpdateStatus)
 			r.With(middleware.AdminOnly).Post("/system/update/start", system.StartUpdate)
 			r.With(middleware.AdminOnly).Get("/system/update/log", system.UpdateLog)
@@ -668,6 +675,12 @@ func main() {
 				r.With(middleware.AdminOnly).Post("/firewall/template", fwH.Template)
 				r.With(middleware.AdminOnly).Delete("/firewall/{id}", fwH.Delete)
 				r.With(middleware.AdminOnly).Post("/firewall/{id}/status", fwH.Status)
+				// Server-wide country blocks. They drop at the packet level, so unlike
+				// the per-domain rules they cover every port; nftables never sees a
+				// Host header, so this cannot be scoped to one site.
+				r.With(middleware.AdminOnly).Get("/firewall/geo", fwH.ListGeo)
+				r.With(middleware.AdminOnly).Post("/firewall/geo", fwH.AddGeo)
+				r.With(middleware.AdminOnly).Delete("/firewall/geo/{code}", fwH.DeleteGeo)
 				r.With(middleware.ResellerOrAbove).Get("/subdomains", subH.ListAll)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain", subH.List)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/subdomain", subH.Create)
