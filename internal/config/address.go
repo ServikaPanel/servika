@@ -3,6 +3,7 @@ package config
 import (
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -88,20 +89,81 @@ func HasIPv6() bool {
 	return hasIPv6
 }
 
-// firstInterfaceAddress returns the first configured address matching want.
-func firstInterfaceAddress(want func(net.IP) bool) string {
+// GlobalIPv6Addresses returns every globally routable IPv6 address this machine
+// carries, so an operator can be shown what is actually assignable rather than
+// being asked to type an address from memory.
+//
+// The SERVIKA_PUBLIC_IPV6 override is included even when no interface carries
+// it. An operator who declared the server's public address has already said
+// which address the outside world reaches, and a list that omitted it would
+// leave them unable to select the one address they know is correct.
+func GlobalIPv6Addresses() []string {
+	found := interfaceAddresses(globalUnicastV6)
+	override := strings.TrimSpace(os.Getenv("SERVIKA_PUBLIC_IPV6"))
+	if override != "" && !slices.Contains(found, override) {
+		found = append([]string{override}, found...)
+	}
+	return found
+}
+
+// AddressIsLocal reports whether value is one this server may claim as its own.
+//
+// This is the guard on every address a domain can be pointed at. An address the
+// machine does not answer on, published as a AAAA record, makes the site dead
+// for every IPv6 client while the panel shows a healthy domain, and it stops
+// certificate renewal because Let's Encrypt tries the AAAA first.
+//
+// The SERVIKA_PUBLIC_IPV6 override counts as local for the reason above: it is
+// the operator's own statement of what this server answers on, and it is the
+// only correct answer on a host whose public address is not on an interface.
+func AddressIsLocal(value string) bool {
+	target := net.ParseIP(strings.TrimSpace(value))
+	if target == nil {
+		return false
+	}
+	if override := net.ParseIP(strings.TrimSpace(os.Getenv("SERVIKA_PUBLIC_IPV6"))); override != nil && override.Equal(target) {
+		return true
+	}
+	if override := net.ParseIP(strings.TrimSpace(os.Getenv("SERVIKA_PUBLIC_IPV4"))); override != nil && override.Equal(target) {
+		return true
+	}
 	addresses, err := net.InterfaceAddrs()
 	if err != nil {
-		return ""
+		// Fail CLOSED. An unreadable interface list is not evidence that the
+		// address is fine; storing it on a guess is what publishes a dead AAAA.
+		return false
 	}
+	for _, address := range addresses {
+		if network, ok := address.(*net.IPNet); ok && network.IP.Equal(target) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstInterfaceAddress returns the first configured address matching want.
+func firstInterfaceAddress(want func(net.IP) bool) string {
+	if found := interfaceAddresses(want); len(found) > 0 {
+		return found[0]
+	}
+	return ""
+}
+
+// interfaceAddresses returns every configured address matching want.
+func interfaceAddresses(want func(net.IP) bool) []string {
+	addresses, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	var found []string
 	for _, address := range addresses {
 		network, ok := address.(*net.IPNet)
 		if !ok {
 			continue
 		}
 		if want(network.IP) {
-			return network.IP.String()
+			found = append(found, network.IP.String())
 		}
 	}
-	return ""
+	return found
 }

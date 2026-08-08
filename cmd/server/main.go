@@ -460,6 +460,7 @@ func main() {
 			r.With(middleware.ResellerOrAbove).Get("/system/services", system.ServiceStatuses)
 			r.With(middleware.AdminOnly).Post("/system/service-action", system.ServiceAction)
 			r.With(middleware.AdminOnly).Post("/system/reboot", system.Reboot)
+			r.With(middleware.AdminOnly).Get("/system/ipv6-addresses", domains.ServerIPv6Addresses)
 			r.With(middleware.AdminOnly).Get("/system/hostname", system.HostnameStatus)
 			r.With(middleware.AdminOnly).Put("/system/hostname", system.HostnameSave)
 			r.With(middleware.AdminOnly).Get("/system/panel-domain", panelSettingsH.Status)
@@ -504,6 +505,10 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Post("/domains", domainsH.Create)
 				r.With(middleware.AdminOnly).Post("/domains/{id}/suspend", domainsH.Suspend)
 				r.With(middleware.AdminOnly).Post("/domains/{id}/resume", domainsH.Resume)
+				// The address a domain answers on over IPv6. Administrator-only
+				// because it must be an address this server really carries, and
+				// the operator is the only party who knows which those are.
+				r.With(middleware.AdminOnly).Put("/domains/{id}/ipv6", domainsH.SetIPv6)
 				// Deleting a whole subscription is destructive and irreversible, so it
 				// requires an administrator; a customer token must not delete its own
 				// domain, databases, Linux user, and service state without admin mediation.
