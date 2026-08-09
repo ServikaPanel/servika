@@ -50,7 +50,11 @@ CREATE TABLE apps (
   -- key below can cascade, but NULLs do not collide in a UNIQUE index, which
   -- would let "/" be claimed on the same domain any number of times. The
   -- generated column carries the NULL case as 0 so the constraint holds.
-  subdomain_key   INT NOT NULL AS (COALESCE(subdomain_id, 0)) PERSISTENT,
+  --
+  -- It carries no NOT NULL clause: MariaDB refuses one on a generated column in
+  -- every position, and a migration that fails stops the panel from starting.
+  -- COALESCE cannot return NULL anyway, so the constraint holds regardless.
+  subdomain_key   INT GENERATED ALWAYS AS (COALESCE(subdomain_id, 0)) PERSISTENT,
   UNIQUE KEY uq_apps_mount (domain_id, subdomain_key, mount_path),
 
   KEY ix_apps_domain (domain_id),
