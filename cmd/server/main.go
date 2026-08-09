@@ -576,8 +576,6 @@ func main() {
 				r.With(middleware.CustomerScope).Get("/domains/{id}/laravel/app-candidates", laravelH.AppCandidates)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/laravel/app-root", laravelH.SetAppRoot)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/laravel/schedule", laravelH.Schedule)
-				r.With(middleware.CustomerScope).Post("/domains/{id}/laravel/queue", laravelH.Queue)
-				r.With(middleware.CustomerScope).Get("/domains/{id}/laravel/queue/status", laravelH.QueueStatus)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/redis", redisH.Status)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/redis", redisH.Open)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/redis", redisH.Close)

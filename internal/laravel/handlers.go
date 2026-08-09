@@ -25,10 +25,6 @@ type record struct {
 	PHPVersion       string
 	NodeVersion      string
 	ScheduleEnabled  bool
-	QueueEnabled     bool
-	QueueTimeout     int
-	QueueMaxJobs     int
-	QueueConnection  string
 	Maintenance      bool
 	LastCommit       string
 	LastDeployStatus string
@@ -47,19 +43,18 @@ func (h *Handlers) lookup(r *http.Request) (id int64, systemUser, phpVersion str
 
 func (h *Handlers) getRecord(ctx context.Context, id int64) record {
 	var rec record
-	var schedule, queue, maintenance int
+	var schedule, maintenance int
 	err := h.DB.QueryRowContext(ctx,
-		`SELECT app_root, deploy_mode, php_version, node_version, schedule_enabled, queue_enabled,
-		        queue_timeout, queue_max_jobs, queue_connection, maintenance, last_commit, last_deploy_status
+		`SELECT app_root, deploy_mode, php_version, node_version, schedule_enabled,
+		        maintenance, last_commit, last_deploy_status
 		 FROM cp_laravel_apps WHERE domain_id=?`, id).
-		Scan(&rec.AppRoot, &rec.DeployMode, &rec.PHPVersion, &rec.NodeVersion, &schedule, &queue,
-			&rec.QueueTimeout, &rec.QueueMaxJobs, &rec.QueueConnection, &maintenance, &rec.LastCommit, &rec.LastDeployStatus)
+		Scan(&rec.AppRoot, &rec.DeployMode, &rec.PHPVersion, &rec.NodeVersion, &schedule,
+			&maintenance, &rec.LastCommit, &rec.LastDeployStatus)
 	if err != nil {
-		return record{AppRoot: "public_html", DeployMode: "remote", QueueTimeout: 60, QueueMaxJobs: 1000, QueueConnection: "database"}
+		return record{AppRoot: "public_html", DeployMode: "remote"}
 	}
 	rec.Exists = true
 	rec.ScheduleEnabled = schedule == 1
-	rec.QueueEnabled = queue == 1
 	rec.Maintenance = maintenance == 1
 	return rec
 }
@@ -139,10 +134,6 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 		"last_commit":        lastCommit,
 		"maintenance":        maintenanceActive(appDir),
 		"schedule_enabled":   rec.ScheduleEnabled,
-		"queue_enabled":      rec.QueueEnabled,
-		"queue_timeout":      rec.QueueTimeout,
-		"queue_max_jobs":     rec.QueueMaxJobs,
-		"queue_connection":   rec.QueueConnection,
 		"last_deploy_status": rec.LastDeployStatus,
 		"php_binary":         phpBin(php),
 	})
