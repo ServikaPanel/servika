@@ -329,8 +329,22 @@ func CloseDomain(db *sql.DB, id int64, systemUser string) error {
 	if err := disableUser(systemUser); err != nil {
 		errs = append(errs, fmt.Errorf("disable ACL user %s: %w", systemUser, err))
 	}
-	if _, err := db.Exec(`DELETE FROM domain_redis WHERE domain_id=?`, id); err != nil {
-		errs = append(errs, fmt.Errorf("delete domain_redis row %d: %w", id, err))
+	if err := ForgetDomain(db, id); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
+}
+
+// ForgetDomain removes only the domain_redis row, leaving the ACL user and the
+// WordPress drop-in in place.
+//
+// It exists for the one case where the Valkey account is not this domain's to
+// revoke: the account is named after the SYSTEM USER, and an upgraded panel can
+// still carry two domains sharing one, so disabling it would cut the surviving
+// domain's cache off.
+func ForgetDomain(db *sql.DB, id int64) error {
+	if _, err := db.Exec(`DELETE FROM domain_redis WHERE domain_id=?`, id); err != nil {
+		return fmt.Errorf("delete domain_redis row %d: %w", id, err)
+	}
+	return nil
 }

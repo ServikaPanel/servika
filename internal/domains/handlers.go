@@ -685,21 +685,43 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		log.Printf("remove maintenance page for domain %d: %v", id, err)
 	}
 
+	// Read BEFORE anything is torn down and before the row goes: an upgraded panel
+	// can still carry two domains that share one system user, and every teardown
+	// below that is named after the user rather than the domain would take the
+	// survivor's cgroup limits, cache account and files with it. A failed lookup
+	// counts as shared, because the cost of guessing wrong is a live tenant's
+	// resources.
+	siblings, siblingErr := provisioner.OtherTopLevelDomainsUsing(sk, domainName)
+	if siblingErr != nil {
+		log.Printf("delete %q: cannot tell whether the system user is shared, keeping tenant resources: %v", domainName, siblingErr)
+	}
+	systemUserShared := siblingErr != nil || len(siblings) > 0
+
 	if isDemo == 0 {
 		// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
 		if err := credentials.MySQLDropAllForDomain(h.DB, id); err != nil {
 			log.Printf("mysql drop-all warn (%s): %v", domainName, err)
 		}
-		// nginx vhost + PHP pool + Linux user
+		// nginx vhost + PHP pool + Linux user. Deprovision asks the same question
+		// again for itself, so a caller that never learned about sharing cannot
+		// reintroduce the data loss.
 		if err := provisioner.Deprovision(domainName, sk); err != nil {
 			log.Printf("deprovision warn (%s): %v", domainName, err)
 		}
-		if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
-			log.Printf("resource slice cleanup warn (%s): %v", sk, err)
+		if !systemUserShared {
+			if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
+				log.Printf("resource slice cleanup warn (%s): %v", sk, err)
+			}
 		}
 		// Redis tenant cache: Valkey ACL user + WP drop-in + domain_redis row.
 		// Since domain_redis has no CASCADE FK, the row was orphaned when the domain was deleted.
-		if err := redis.CloseDomain(h.DB, id, sk); err != nil {
+		// While the system user is shared, the ACL account belongs to the survivor,
+		// so only this domain's row goes.
+		if systemUserShared {
+			if err := redis.ForgetDomain(h.DB, id); err != nil {
+				log.Printf("redis row cleanup warn (%d): %v", id, err)
+			}
+		} else if err := redis.CloseDomain(h.DB, id, sk); err != nil {
 			log.Printf("redis close-domain warn (%s): %v", sk, err)
 		}
 		// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
@@ -729,6 +751,15 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domains WHERE id=?`, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "domain deletion failed")
 		return
+	}
+
+	// A shared vhost file is named after the SYSTEM USER, so it still carries the
+	// deleted domain in server_name. Render it again from the survivor's own row,
+	// AFTER the delete so the table no longer contains the domain that just went.
+	for _, otherID := range siblings {
+		if err := provisioner.RerenderVhost(h.DB, otherID); err != nil {
+			log.Printf("re-render the vhost of domain %d after %q was deleted: %v", otherID, domainName, err)
+		}
 	}
 
 	// BIND zone cleanup AFTER the DELETE: updateZoneIncludes regenerates zones.conf from the domains
