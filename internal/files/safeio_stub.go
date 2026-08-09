@@ -102,6 +102,14 @@ func MkdirAllBeneath(_, _, _ string) error {
 
 func RestoreconBeneath(_, _ string) {}
 
+func ChmodBeneath(_, _ string, _ uint32) error {
+	return errSafeIOLinuxOnly
+}
+
+func OpenBeneath(_, _ string) (*os.File, error) {
+	return nil, errSafeIOLinuxOnly
+}
+
 func ReadFileBeneath(_, _ string, _ int64) ([]byte, error) {
 	return nil, errSafeIOLinuxOnly
 }

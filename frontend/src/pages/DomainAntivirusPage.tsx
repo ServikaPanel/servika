@@ -16,7 +16,7 @@ import {
   responsiveTableRowClass,
 } from '@/lib/table'
 
-type Finding = { file: string; signature: string; engine: string; quarantined: number }
+type Finding = { id: number; file: string; signature: string; engine: string; quarantined: number }
 type Scan = { id: number; status: string; engine: string; scanned: number; infected: number; started_at: string; finished_at: string }
 type Status = { clamav: boolean; signature_date: string; username: string; last_scan: Scan | null; findings: Finding[] }
 
@@ -74,7 +74,9 @@ export default function DomainAntivirusPage() {
   async function quarantineFinding(b: Finding) {
     if (!(await confirm({ message: t('confirmQuarantine', { file: b.file }), dangerous: true }))) return
     setError(null)
-    try { await api.post(`/domains/${id}/antivirus/quarantine`, { file: b.file }); load() }
+    // The finding is named by its id: the server reads the path from that row and
+    // refuses to take one from the request.
+    try { await api.post(`/domains/${id}/antivirus/quarantine`, { finding_id: b.id }); load() }
     catch (e) { setError(apiError(e, t('toast.quarantineFailed'))) }
   }
 

@@ -798,6 +798,28 @@ func RestoreconBeneath(home, rel string) {
 	_, _ = exec.Command("restorecon", "-R", real).CombinedOutput()
 }
 
+// ChmodBeneath sets the mode of rel beneath home. A leaf that is a symlink is
+// refused rather than followed, so a tenant cannot aim a root-privileged chmod
+// at a file outside their own tree.
+func ChmodBeneath(home, rel string, mode uint32) error {
+	return chmodBeneath(home, rel, mode)
+}
+
+// OpenBeneath opens rel beneath home for reading and hands the caller the
+// descriptor, for content that must be STREAMED rather than held in memory.
+//
+// ReadFileBeneath answers the same question for a bounded file; this exists for
+// the one that may be arbitrarily large, where reading it whole would let a
+// tenant decide how much of the panel's memory to take. Every path component is
+// pinned with openat2, so a tenant symlink at any level cannot redirect a
+// root-privileged read at a file outside the home.
+//
+// The caller closes the descriptor and must assert IsRegular on it, because a
+// named pipe or a device node under the home opens successfully.
+func OpenBeneath(home, rel string) (*os.File, error) {
+	return openReadBeneath(home, rel)
+}
+
 // ReadFileBeneath reads rel beneath home, refusing anything that is not a
 // regular file and anything larger than maxBytes. Every path component is
 // pinned with openat2, so a tenant symlink at any level cannot redirect a
