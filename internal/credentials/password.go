@@ -20,10 +20,22 @@ func MySQLChangePassword(panelDB *sql.DB, dbUser, newPassword string) error {
 	if !mysqlPasswordPattern.MatchString(newPassword) {
 		return fmt.Errorf("%w: database password", ErrInvalidMySQLCredentials)
 	}
-	if err := runRootSQL(
+	// Every host the user answers on, not only localhost. MariaDB keeps one
+	// account per host component with its own password, so changing localhost
+	// alone leaves each remote client working on the credential the customer
+	// just believed they rotated.
+	statements := []string{
 		fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(newPassword)),
-		"FLUSH PRIVILEGES;",
-	); err != nil {
+	}
+	remote, err := remoteHostStatements(panelDB, dbUser, func(host string) []string {
+		return []string{fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", dbUser, host, escapeSQLString(newPassword))}
+	})
+	if err != nil {
+		return fmt.Errorf("remote hosts: %w", err)
+	}
+	statements = append(statements, remote...)
+	statements = append(statements, "FLUSH PRIVILEGES;")
+	if err := runRootSQL(statements...); err != nil {
 		return fmt.Errorf("alter user: %w", err)
 	}
 	// Store the new password encrypted at rest (bound to the database user).

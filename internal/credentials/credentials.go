@@ -481,11 +481,24 @@ func MySQLCreateDBForUser(db *sql.DB, domainID int64, dbName, dbUser string) err
 	}
 	// Create the database and grant the existing user access. No CREATE/ALTER USER statement, so
 	// the user's password is preserved.
-	if err := runRootSQL(
+	//
+	// The grant goes to every host this user answers on, not only localhost.
+	// A remote account is a separate account with separate grants, so skipping it
+	// would let the customer connect from outside and then not see the database
+	// they just created.
+	statements := []string{
 		fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", dbName),
 		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
-		"FLUSH PRIVILEGES;",
-	); err != nil {
+	}
+	remote, err := remoteHostStatements(db, dbUser, func(host string) []string {
+		return []string{fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", dbName, dbUser, host)}
+	})
+	if err != nil {
+		return fmt.Errorf("remote hosts: %w", err)
+	}
+	statements = append(statements, remote...)
+	statements = append(statements, "FLUSH PRIVILEGES;")
+	if err := runRootSQL(statements...); err != nil {
 		return err
 	}
 	encPass, err := encryptDBPass(dbUser, pass)
@@ -507,14 +520,29 @@ func MySQLDropDB(db *sql.DB, dbName, dbUser string) error {
 	if !mysqlIdentifierPattern.MatchString(dbUser) {
 		return fmt.Errorf("%w: database user", ErrInvalidMySQLCredentials)
 	}
-	if err := runRootSQL(
+	// The user goes away entirely here, so every host it answers on has to go
+	// too. The db_remote_hosts row would be removed by the domain's cascade, but
+	// a cascade cannot drop a MariaDB account: without this the credential
+	// outlives the panel's record of it and still authenticates.
+	statements := []string{
 		fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", dbName),
 		fmt.Sprintf("DROP USER IF EXISTS '%s'@'localhost';", dbUser),
-		"FLUSH PRIVILEGES;",
-	); err != nil {
+	}
+	remote, err := remoteHostStatements(db, dbUser, func(host string) []string {
+		return []string{fmt.Sprintf("DROP USER IF EXISTS '%s'@'%s';", dbUser, host)}
+	})
+	if err != nil {
+		return fmt.Errorf("remote hosts: %w", err)
+	}
+	statements = append(statements, remote...)
+	statements = append(statements, "FLUSH PRIVILEGES;")
+	if err := runRootSQL(statements...); err != nil {
 		return err
 	}
-	_, err := db.Exec(`DELETE FROM db_accounts WHERE db_name=?`, dbName)
+	if _, err := db.Exec(`DELETE FROM db_remote_hosts WHERE db_user=?`, dbUser); err != nil {
+		return fmt.Errorf("remote host rows: %w", err)
+	}
+	_, err = db.Exec(`DELETE FROM db_accounts WHERE db_name=?`, dbName)
 	return err
 }
 
