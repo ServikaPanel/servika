@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "Quarantine all {{count}} finding(s)? The files leave your site and can be put back from this page.",
+  "held": {"loadFailed":"The held file list could not be read, so it is not shown here.","title":"Quarantined files","subtitle":"Kept outside your site. Restore one you believe is safe, or destroy it for good.","empty":"Nothing is being held.","colFile":"Original path","colSignature":"Signature","colDate":"Date","restore":"Restore","delete":"Delete for good","restoredOn":"restored on {{date}}","confirmRestore":"Put {{file}} back where it was?","confirmDelete":"Destroy {{file}}? This cannot be undone.","restoreFailed":"The file could not be restored.","deleteFailed":"The file could not be deleted."},
   "loading": "Loading...",
   "notFound": "Not found",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Antivirus Malware Scan",
   "subtitlePrefix": "is scanned using ClamAV signatures and built-in webshell heuristics.",
   "toast": {
+    "quarantineAllPartial": "{{done}} file(s) quarantined, {{failed}} could not be: they are still in place.",
     "startScanFailed": "Could not start scan",
     "quarantineFailed": "Could not quarantine file",
     "updateSignatureFailed": "Could not update signatures"
@@ -28,6 +31,7 @@
     "resourceWarning": "A scan raises CPU use for as long as it runs, so a large document root can slow the whole server down for a few minutes."
   },
   "findings": {
+    "quarantineAll": "Quarantine all ({{count}})",
     "title": "Findings",
     "fromLatest": "from the latest scan",
     "noScans": "No scans yet. Select “Scan Now” to begin.",

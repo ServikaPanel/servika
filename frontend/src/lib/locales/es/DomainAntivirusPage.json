@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "¿Poner en cuarentena las {{count}} detecciones? Los archivos salen de su sitio y pueden restaurarse desde esta página.",
+  "held": {"loadFailed":"No se pudo leer la lista de archivos guardados, por eso no se muestra aquí.","title":"Archivos en cuarentena","subtitle":"Guardados fuera de su sitio. Restaure el que considere seguro o elimínelo para siempre.","empty":"No se guarda nada.","colFile":"Ruta original","colSignature":"Firma","colDate":"Fecha","restore":"Restaurar","delete":"Eliminar para siempre","restoredOn":"restaurado el {{date}}","confirmRestore":"¿Devolver {{file}} a su sitio?","confirmDelete":"¿Eliminar {{file}} para siempre? No se puede deshacer.","restoreFailed":"No se pudo restaurar el archivo.","deleteFailed":"No se pudo eliminar el archivo."},
   "loading": "Cargando...",
   "notFound": "No encontrado",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Análisis antivirus de malware",
   "subtitlePrefix": "se analiza con firmas ClamAV y heurísticas de webshell integradas.",
   "toast": {
+    "quarantineAllPartial": "{{done}} archivo(s) en cuarentena, {{failed}} no: esos siguen en su sitio.",
     "startScanFailed": "No se pudo iniciar el análisis",
     "quarantineFailed": "No se pudo poner en cuarentena el archivo",
     "updateSignatureFailed": "No se pudieron actualizar las firmas"
@@ -28,6 +31,7 @@
     "resourceWarning": "Un análisis aumenta el uso de CPU mientras dura, por lo que una raíz de documentos grande puede ralentizar todo el servidor durante unos minutos."
   },
   "findings": {
+    "quarantineAll": "Poner todo en cuarentena ({{count}})",
     "title": "Hallazgos",
     "fromLatest": "del último análisis",
     "noScans": "Aún no hay análisis. Seleccione «Analizar ahora» para comenzar.",

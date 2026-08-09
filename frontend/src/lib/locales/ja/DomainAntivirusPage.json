@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "{{count}} 件の検出をすべて隔離しますか？ファイルはサイトから取り除かれ、このページから元に戻せます。",
+  "held": {"loadFailed":"保管中のファイル一覧を読み込めなかったため、ここには表示していません。","title":"隔離中のファイル","subtitle":"サイトの外で保管しています。安全だと判断したものは元に戻し、そうでなければ完全に削除してください。","empty":"保管中のファイルはありません。","colFile":"元のパス","colSignature":"シグネチャ","colDate":"日時","restore":"元に戻す","delete":"完全に削除","restoredOn":"{{date}} に復元","confirmRestore":"{{file}} を元の場所に戻しますか？","confirmDelete":"{{file}} を完全に削除しますか？元に戻せません。","restoreFailed":"ファイルを元に戻せませんでした。","deleteFailed":"ファイルを削除できませんでした。"},
   "loading": "読み込み中...",
   "notFound": "見つかりません",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "アンチウイルスマルウェアスキャン",
   "subtitlePrefix": "は ClamAV シグネチャと組み込みのウェブシェルヒューリスティックを使用してスキャンされます。",
   "toast": {
+    "quarantineAllPartial": "{{done}} 件を隔離しました。{{failed}} 件は隔離できず、そのまま残っています。",
     "startScanFailed": "スキャンを開始できませんでした",
     "quarantineFailed": "ファイルを隔離できませんでした",
     "updateSignatureFailed": "シグネチャを更新できませんでした"
@@ -28,6 +31,7 @@
     "resourceWarning": "スキャンは実行中ずっと CPU 使用率を上げるため、ドキュメントルートが大きいとサーバー全体が数分間遅くなることがあります。"
   },
   "findings": {
+    "quarantineAll": "すべて隔離 ({{count}})",
     "title": "検出結果",
     "fromLatest": "最新のスキャンより",
     "noScans": "まだスキャンがありません。「今すぐスキャン」を選択して開始してください。",

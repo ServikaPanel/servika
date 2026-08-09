@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "{{count}} bulgunun hepsi karantinaya alınsın mı? Dosyalar sitenizden çıkar ve bu sayfadan geri getirilebilir.",
+  "held": {"loadFailed":"Tutulan dosya listesi okunamadı, bu yüzden burada gösterilmiyor.","title":"Karantinadaki dosyalar","subtitle":"Sitenizin dışında tutuluyor. Güvenli olduğuna inandığınızı geri getirin ya da kalıcı olarak silin.","empty":"Tutulan dosya yok.","colFile":"Özgün yol","colSignature":"İmza","colDate":"Tarih","restore":"Geri getir","delete":"Kalıcı sil","restoredOn":"{{date}} tarihinde geri getirildi","confirmRestore":"{{file}} eski yerine konsun mu?","confirmDelete":"{{file}} kalıcı olarak silinsin mi? Bu geri alınamaz.","restoreFailed":"Dosya geri getirilemedi.","deleteFailed":"Dosya silinemedi."},
   "loading": "Yükleniyor...",
   "notFound": "Bulunamadı",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Antivirüs Kötü Amaçlı Yazılım Taraması",
   "subtitlePrefix": "dizini ClamAV imzaları ve yerleşik webshell sezgisel yöntemleriyle taranır.",
   "toast": {
+    "quarantineAllPartial": "{{done}} dosya karantinaya alındı, {{failed}} tanesi alınamadı: onlar hâlâ yerinde.",
     "startScanFailed": "Tarama başlatılamadı",
     "quarantineFailed": "Dosya karantinaya alınamadı",
     "updateSignatureFailed": "İmzalar güncellenemedi"
@@ -28,6 +31,7 @@
     "resourceWarning": "Tarama, sürdüğü süre boyunca CPU kullanımını yükseltir; büyük bir belge kökünde sunucunun tamamı birkaç dakika yavaşlayabilir."
   },
   "findings": {
+    "quarantineAll": "Hepsini karantinaya al ({{count}})",
     "title": "Bulgular",
     "fromLatest": "son taramadan",
     "noScans": "Henüz tarama yok. Başlamak için “Şimdi Tara” seçin.",

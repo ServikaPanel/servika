@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "Mettre en quarantaine les {{count}} détections ? Les fichiers quittent votre site et peuvent être restaurés depuis cette page.",
+  "held": {"loadFailed":"La liste des fichiers conservés n'a pas pu être lue, elle n'est donc pas affichée ici.","title":"Fichiers en quarantaine","subtitle":"Conservés hors de votre site. Restaurez celui que vous jugez sûr, ou détruisez-le définitivement.","empty":"Rien n'est conservé.","colFile":"Chemin d'origine","colSignature":"Signature","colDate":"Date","restore":"Restaurer","delete":"Supprimer définitivement","restoredOn":"restauré le {{date}}","confirmRestore":"Remettre {{file}} à sa place ?","confirmDelete":"Détruire {{file}} ? Cette action est irréversible.","restoreFailed":"Le fichier n'a pas pu être restauré.","deleteFailed":"Le fichier n'a pas pu être supprimé."},
   "loading": "Chargement...",
   "notFound": "Introuvable",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Analyse antivirus des logiciels malveillants",
   "subtitlePrefix": "est analysé à l'aide des signatures ClamAV et d'heuristiques webshell intégrées.",
   "toast": {
+    "quarantineAllPartial": "{{done}} fichier(s) mis en quarantaine, {{failed}} non : ceux-ci restent en place.",
     "startScanFailed": "Impossible de démarrer l'analyse",
     "quarantineFailed": "Impossible de mettre le fichier en quarantaine",
     "updateSignatureFailed": "Impossible de mettre à jour les signatures"
@@ -28,6 +31,7 @@
     "resourceWarning": "Une analyse augmente l'usage du CPU pendant toute sa durée : avec une racine de documents volumineuse, tout le serveur peut ralentir quelques minutes."
   },
   "findings": {
+    "quarantineAll": "Tout mettre en quarantaine ({{count}})",
     "title": "Résultats",
     "fromLatest": "de la dernière analyse",
     "noScans": "Aucune analyse pour l'instant. Sélectionnez « Analyser maintenant » pour commencer.",

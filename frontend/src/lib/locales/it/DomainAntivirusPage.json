@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "Mettere in quarantena tutte le {{count}} rilevazioni? I file lasciano il sito e possono essere ripristinati da questa pagina.",
+  "held": {"loadFailed":"Non è stato possibile leggere l'elenco dei file conservati, quindi non viene mostrato qui.","title":"File in quarantena","subtitle":"Conservati fuori dal sito. Ripristina quello che ritieni sicuro oppure eliminalo definitivamente.","empty":"Non è conservato nulla.","colFile":"Percorso originale","colSignature":"Firma","colDate":"Data","restore":"Ripristina","delete":"Elimina definitivamente","restoredOn":"ripristinato il {{date}}","confirmRestore":"Rimettere {{file}} al suo posto?","confirmDelete":"Eliminare {{file}} definitivamente? L'operazione non è reversibile.","restoreFailed":"Non è stato possibile ripristinare il file.","deleteFailed":"Non è stato possibile eliminare il file."},
   "loading": "Caricamento...",
   "notFound": "Non trovato",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Scansione antivirus malware",
   "subtitlePrefix": "viene analizzato usando le firme ClamAV e le euristiche webshell integrate.",
   "toast": {
+    "quarantineAllPartial": "{{done}} file in quarantena, {{failed}} no: questi restano al loro posto.",
     "startScanFailed": "Impossibile avviare la scansione",
     "quarantineFailed": "Impossibile mettere il file in quarantena",
     "updateSignatureFailed": "Impossibile aggiornare le firme"
@@ -28,6 +31,7 @@
     "resourceWarning": "Una scansione aumenta l'uso della CPU per tutta la sua durata, quindi una document root grande può rallentare l'intero server per qualche minuto."
   },
   "findings": {
+    "quarantineAll": "Metti tutto in quarantena ({{count}})",
     "title": "Risultati",
     "fromLatest": "dall'ultima scansione",
     "noScans": "Ancora nessuna scansione. Seleziona “Scansiona ora” per iniziare.",

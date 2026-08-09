@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "Přesunout do karantény všech {{count}} nálezů? Soubory opustí web a lze je z této stránky vrátit.",
+  "held": {"loadFailed":"Seznam uložených souborů se nepodařilo načíst, proto se zde nezobrazuje.","title":"Soubory v karanténě","subtitle":"Uloženy mimo váš web. Vraťte ten, který považujete za bezpečný, nebo jej trvale odstraňte.","empty":"Nic není uloženo.","colFile":"Původní cesta","colSignature":"Signatura","colDate":"Datum","restore":"Vrátit zpět","delete":"Trvale odstranit","restoredOn":"vráceno {{date}}","confirmRestore":"Vrátit {{file}} na původní místo?","confirmDelete":"Trvale odstranit {{file}}? Akci nelze vzít zpět.","restoreFailed":"Soubor se nepodařilo vrátit.","deleteFailed":"Soubor se nepodařilo odstranit."},
   "loading": "Načítání...",
   "notFound": "Nenalezeno",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Antivirová kontrola malwaru",
   "subtitlePrefix": "je kontrolována pomocí signatur ClamAV a vestavěné heuristiky webshellů.",
   "toast": {
+    "quarantineAllPartial": "{{done}} soubor(ů) v karanténě, {{failed}} se nepodařilo: ty zůstávají na místě.",
     "startScanFailed": "Kontrolu nelze spustit",
     "quarantineFailed": "Soubor nelze umístit do karantény",
     "updateSignatureFailed": "Signatury nelze aktualizovat"
@@ -28,6 +31,7 @@
     "resourceWarning": "Kontrola po celou dobu běhu zvyšuje využití CPU, takže velký kořen dokumentů může na několik minut zpomalit celý server."
   },
   "findings": {
+    "quarantineAll": "Přesunout vše do karantény ({{count}})",
     "title": "Nálezy",
     "fromLatest": "z poslední kontroly",
     "noScans": "Zatím žádné kontroly. Zvolte „Zkontrolovat nyní“ pro zahájení.",

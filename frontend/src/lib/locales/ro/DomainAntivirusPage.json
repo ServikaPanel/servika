@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "Pui în carantină toate cele {{count}} detecții? Fișierele părăsesc site-ul și pot fi readuse din această pagină.",
+  "held": {"loadFailed":"Lista fișierelor păstrate nu a putut fi citită, așa că nu este afișată aici.","title":"Fișiere în carantină","subtitle":"Păstrate în afara site-ului. Readu-l pe cel pe care îl consideri sigur sau șterge-l definitiv.","empty":"Nu este păstrat nimic.","colFile":"Cale originală","colSignature":"Semnătură","colDate":"Dată","restore":"Readu","delete":"Șterge definitiv","restoredOn":"readus pe {{date}}","confirmRestore":"Pui {{file}} înapoi unde era?","confirmDelete":"Ștergi definitiv {{file}}? Operația nu poate fi anulată.","restoreFailed":"Fișierul nu a putut fi readus.","deleteFailed":"Fișierul nu a putut fi șters."},
   "loading": "Se încarcă...",
   "notFound": "Negăsit",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Scanare antivirus malware",
   "subtitlePrefix": "este scanat folosind semnături ClamAV și euristici webshell integrate.",
   "toast": {
+    "quarantineAllPartial": "{{done}} fișier(e) în carantină, {{failed}} nu: acelea rămân la locul lor.",
     "startScanFailed": "Nu s-a putut porni scanarea",
     "quarantineFailed": "Nu s-a putut pune în carantină fișierul",
     "updateSignatureFailed": "Nu s-au putut actualiza semnăturile"
@@ -28,6 +31,7 @@
     "resourceWarning": "O scanare crește utilizarea CPU cât timp rulează, așa că o rădăcină de documente mare poate încetini întregul server câteva minute."
   },
   "findings": {
+    "quarantineAll": "Pune totul în carantină ({{count}})",
     "title": "Rezultate",
     "fromLatest": "din ultima scanare",
     "noScans": "Nicio scanare încă. Selectați „Scanați acum” pentru a începe.",

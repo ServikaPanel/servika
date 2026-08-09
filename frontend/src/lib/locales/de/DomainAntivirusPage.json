@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "Alle {{count}} Funde in Quarantäne verschieben? Die Dateien verlassen Ihre Website und lassen sich hier zurückholen.",
+  "held": {"loadFailed":"Die Liste der verwahrten Dateien konnte nicht gelesen werden und wird daher nicht angezeigt.","title":"Dateien in Quarantäne","subtitle":"Außerhalb Ihrer Website verwahrt. Holen Sie eine zurück, die Sie für unbedenklich halten, oder löschen Sie sie endgültig.","empty":"Es wird nichts verwahrt.","colFile":"Ursprünglicher Pfad","colSignature":"Signatur","colDate":"Datum","restore":"Zurückholen","delete":"Endgültig löschen","restoredOn":"zurückgeholt am {{date}}","confirmRestore":"{{file}} an den ursprünglichen Ort zurücklegen?","confirmDelete":"{{file}} endgültig löschen? Das lässt sich nicht rückgängig machen.","restoreFailed":"Die Datei konnte nicht zurückgeholt werden.","deleteFailed":"Die Datei konnte nicht gelöscht werden."},
   "loading": "Laden...",
   "notFound": "Nicht gefunden",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "Antivirus-Malware-Scan",
   "subtitlePrefix": "wird mit ClamAV-Signaturen und integrierten Webshell-Heuristiken gescannt.",
   "toast": {
+    "quarantineAllPartial": "{{done}} Datei(en) in Quarantäne, {{failed}} nicht: diese liegen weiterhin an ihrem Platz.",
     "startScanFailed": "Scan konnte nicht gestartet werden",
     "quarantineFailed": "Datei konnte nicht in Quarantäne verschoben werden",
     "updateSignatureFailed": "Signaturen konnten nicht aktualisiert werden"
@@ -28,6 +31,7 @@
     "resourceWarning": "Ein Scan erhöht die CPU-Last, solange er läuft, sodass ein großes Dokumentenverzeichnis den gesamten Server einige Minuten lang verlangsamen kann."
   },
   "findings": {
+    "quarantineAll": "Alle in Quarantäne ({{count}})",
     "title": "Funde",
     "fromLatest": "vom letzten Scan",
     "noScans": "Noch keine Scans. Wählen Sie „Jetzt scannen“, um zu beginnen.",

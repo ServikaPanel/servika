@@ -1,4 +1,6 @@
 {
+  "confirmQuarantineAll": "要隔离全部 {{count}} 项检出吗？文件将从站点移出，可从本页恢复。",
+  "held": {"loadFailed":"无法读取已保存文件列表，因此这里不显示。","title":"已隔离的文件","subtitle":"保存在站点之外。确认安全的可以恢复，否则可彻底删除。","empty":"没有正在保存的文件。","colFile":"原始路径","colSignature":"特征","colDate":"日期","restore":"恢复","delete":"彻底删除","restoredOn":"已于 {{date}} 恢复","confirmRestore":"将 {{file}} 放回原处吗？","confirmDelete":"彻底删除 {{file}}？此操作无法撤销。","restoreFailed":"无法恢复该文件。","deleteFailed":"无法删除该文件。"},
   "loading": "加载中...",
   "notFound": "未找到",
   "breadcrumb": {
@@ -9,6 +11,7 @@
   "title": "杀毒恶意软件扫描",
   "subtitlePrefix": "使用 ClamAV 特征库和内置 webshell 启发式规则进行扫描。",
   "toast": {
+    "quarantineAllPartial": "已隔离 {{done}} 个文件，{{failed}} 个未能隔离，仍留在原处。",
     "startScanFailed": "无法启动扫描",
     "quarantineFailed": "无法隔离文件",
     "updateSignatureFailed": "无法更新特征库"
@@ -28,6 +31,7 @@
     "resourceWarning": "扫描在运行期间会持续提高 CPU 占用，因此文档根目录较大时整台服务器可能会变慢几分钟。"
   },
   "findings": {
+    "quarantineAll": "全部隔离 ({{count}})",
     "title": "发现结果",
     "fromLatest": "来自最近的扫描",
     "noScans": "尚无扫描。选择“立即扫描”开始。",

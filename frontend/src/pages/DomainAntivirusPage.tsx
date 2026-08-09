@@ -17,6 +17,16 @@ import {
 } from '@/lib/table'
 
 type Finding = { id: number; file: string; signature: string; engine: string; quarantined: number }
+type Quarantined = {
+  id: number
+  finding_id: number | null
+  orig_path: string
+  size: number
+  signature: string
+  engine: string
+  created_at: string
+  restored_at: string
+}
 type Scan = { id: number; status: string; engine: string; scanned: number; infected: number; started_at: string; finished_at: string }
 type Status = { clamav: boolean; signature_date: string; username: string; last_scan: Scan | null; findings: Finding[] }
 
@@ -33,6 +43,9 @@ export default function DomainAntivirusPage() {
   const [pollScanID, setPollScanID] = useState<number | null>(null)
   const scanning = startingScan || pollScanID !== null
   const [signatureLoading, setSignatureLoading] = useState(false)
+  const [held, setHeld] = useState<Quarantined[]>([])
+  const [heldFailed, setHeldFailed] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {
     if (!id) return
@@ -40,6 +53,14 @@ export default function DomainAntivirusPage() {
       setD(r.data)
       setPollScanID(r.data.last_scan?.status === 'running' ? r.data.last_scan.id : null)
     }).catch(e => setError(apiError(e))).finally(() => setLoading(false))
+    // The held files are read separately: they outlive the scan that produced
+    // them, so a domain with no scan at all can still be holding something.
+    // A list that could not be read says so. Drawing "nothing is being held" over
+    // a failed request tells the owner their site is clear of something that may
+    // still be sitting in the store.
+    api.get<{ entries: Quarantined[] }>(`/domains/${id}/antivirus/quarantine`)
+      .then(r => { setHeld(r.data.entries); setHeldFailed(false) })
+      .catch(() => { setHeld([]); setHeldFailed(true) })
   }, [id])
 
   useEffect(() => { load() }, [load])
@@ -78,6 +99,36 @@ export default function DomainAntivirusPage() {
     // refuses to take one from the request.
     try { await api.post(`/domains/${id}/antivirus/quarantine`, { finding_id: b.id }); load() }
     catch (e) { setError(apiError(e, t('toast.quarantineFailed'))) }
+  }
+
+  async function quarantineAll(scanID: number, count: number) {
+    if (!(await confirm({ message: t('confirmQuarantineAll', { count }), dangerous: true }))) return
+    setError(null); setBusy(true)
+    try {
+      const { data } = await api.post<{ quarantined: number; failed: number }>(
+        `/domains/${id}/antivirus/quarantine/all`, { scan_id: scanID })
+      // A partial result is said out loud. Reporting a cleanup that left files
+      // behind as a success is how a compromised site looks clean.
+      if (data.failed > 0) setError(t('toast.quarantineAllPartial', { done: data.quarantined, failed: data.failed }))
+      load()
+    } catch (e) { setError(apiError(e, t('toast.quarantineFailed'))) }
+    finally { setBusy(false) }
+  }
+
+  async function restore(entry: Quarantined) {
+    if (!(await confirm({ message: t('held.confirmRestore', { file: entry.orig_path }), dangerous: true }))) return
+    setError(null); setBusy(true)
+    try { await api.post(`/domains/${id}/antivirus/quarantine/${entry.id}/restore`, {}); load() }
+    catch (e) { setError(apiError(e, t('held.restoreFailed'))) }
+    finally { setBusy(false) }
+  }
+
+  async function purge(entry: Quarantined) {
+    if (!(await confirm({ message: t('held.confirmDelete', { file: entry.orig_path }), dangerous: true }))) return
+    setError(null); setBusy(true)
+    try { await api.delete(`/domains/${id}/antivirus/quarantine/${entry.id}`); load() }
+    catch (e) { setError(apiError(e, t('held.deleteFailed'))) }
+    finally { setBusy(false) }
   }
 
   async function updateSignature() {
@@ -145,9 +196,20 @@ export default function DomainAntivirusPage() {
 
         {/* Findings */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
-            {t('findings.title')} {d.last_scan && <span className="text-xs font-normal text-slate-400">{t('findings.fromLatest')}</span>}
-          </h3>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {t('findings.title')} {d.last_scan && <span className="text-xs font-normal text-slate-400">{t('findings.fromLatest')}</span>}
+            </h3>
+            {d.last_scan && activeFindings.length > 0 && (
+              <button
+                onClick={() => quarantineAll(d.last_scan!.id, activeFindings.length)}
+                disabled={busy || scanning}
+                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+              >
+                {t('findings.quarantineAll', { count: activeFindings.length })}
+              </button>
+            )}
+          </div>
           {!d.last_scan ? (
             <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">{t('findings.noScans')}</div>
           ) : activeFindings.length === 0 && d.findings.length === 0 ? (
@@ -179,6 +241,54 @@ export default function DomainAntivirusPage() {
                       </td>
                       <td className={responsiveTableActionCellClass}>
                         {!b.quarantined && <button onClick={() => quarantineFinding(b)} className="text-xs text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">{t('findings.quarantine')}</button>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Held files. Listed even when no scan has run, because they outlive the
+            scan that produced them and a false positive has to be reachable. */}
+        <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('held.title')}</h3>
+          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('held.subtitle')}</p>
+          {heldFailed ? (
+            <div className="py-6 text-center text-sm text-red-600 dark:text-red-400">{t('held.loadFailed')}</div>
+          ) : held.length === 0 ? (
+            <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('held.empty')}</div>
+          ) : (
+            <div className={responsiveTableContainerClass}>
+              <table className={responsiveTableClass}>
+                <thead className={responsiveTableHeadClass}>
+                  <tr>
+                    <th className="py-2 pr-3 text-left">{t('held.colFile')}</th>
+                    <th className="py-2 pr-3 text-left">{t('held.colSignature')}</th>
+                    <th className="py-2 pr-3 text-left">{t('held.colDate')}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody className={responsiveTableBodyClass}>
+                  {held.map(entry => (
+                    <tr key={entry.id} className={responsiveTableRowClass}>
+                      <td data-label={t('held.colFile')} className={`${responsiveTableCodeCellClass} break-all`}>{entry.orig_path}</td>
+                      <td data-label={t('held.colSignature')} className={responsiveTableCellClass}>{entry.signature || '-'}</td>
+                      <td data-label={t('held.colDate')} className={responsiveTableCellClass}>
+                        {entry.restored_at ? t('held.restoredOn', { date: entry.restored_at }) : entry.created_at}
+                      </td>
+                      <td className={responsiveTableActionCellClass}>
+                        {!entry.restored_at && (
+                          <div className="flex gap-3 whitespace-nowrap">
+                            <button onClick={() => restore(entry)} disabled={busy}
+                              className="text-xs text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400">
+                              {t('held.restore')}</button>
+                            <button onClick={() => purge(entry)} disabled={busy}
+                              className="text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400">
+                              {t('held.delete')}</button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
