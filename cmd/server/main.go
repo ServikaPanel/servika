@@ -290,6 +290,10 @@ func main() {
 	statH := &stats.Handlers{DB: d}
 	perfH := &performance.Handlers{DB: d}
 	slowQueryH := &slowquery.Handlers{DB: d}
+	// The rebuild is handed over as a function: internal/firewall reads
+	// internal/dbremote's table, so importing it the other way would close a
+	// cycle.
+	dbRemoteH := &dbremote.Handlers{DB: d, RebuildFirewall: func() error { return firewall.Reapply(d) }}
 	compH := &composer.Handlers{DB: d}
 	laravelH := &laravel.Handlers{DB: d}
 	protectionH := &passwordprotect.Handlers{DB: d}
@@ -510,6 +514,8 @@ func main() {
 			r.With(middleware.AdminOnly).Get("/admin/slow-queries", slowQueryH.List)
 			r.With(middleware.AdminOnly).Get("/admin/slow-queries/status", slowQueryH.Status)
 			r.With(middleware.AdminOnly).Put("/admin/slow-queries/settings", slowQueryH.Save)
+			r.With(middleware.AdminOnly).Get("/admin/db-remote", dbRemoteH.ServerGet)
+			r.With(middleware.AdminOnly).Put("/admin/db-remote", dbRemoteH.ServerSet)
 			r.With(middleware.CustomerScope).Get("/domains/{id}/health", monitorH.Health)
 
 			// Write + customer-scope routes — authorised per-route with AdminOnly/CustomerScope
@@ -541,6 +547,9 @@ func main() {
 				// A site owner sees their own slowest query shapes. The server-wide
 				// view names every tenant, so it is admin-only and mounted below.
 				r.With(middleware.CustomerScope).Get("/domains/{id}/slow-queries", slowQueryH.ListForDomain)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/db-remote", dbRemoteH.DomainList)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/db-remote", dbRemoteH.DomainAdd)
+				r.With(middleware.CustomerScope).Delete("/domains/{id}/db-remote/{hid}", dbRemoteH.DomainDelete)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/composer", compH.Status)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/composer", compH.Run)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain/{sid}/composer", compH.Status)
