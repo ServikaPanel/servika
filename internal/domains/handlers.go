@@ -19,6 +19,7 @@ import (
 	"servika/internal/credentials"
 	"servika/internal/dns"
 	"servika/internal/httpx"
+	"servika/internal/laravel"
 	"servika/internal/mail"
 	"servika/internal/middleware"
 	"servika/internal/provisioner"
@@ -691,6 +692,11 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// but not their units, environment files or logs, and a unit left behind
 	// holds its port out of the allocator's reach for good.
 	apps.TeardownForDomain(r.Context(), h.DB, id)
+	// Laravel queue workers and the schedule cron are the same shape of
+	// artefact and were left behind until now: the unit kept running as a login
+	// userdel had just removed, and the cron entry kept trying to run a
+	// scheduler in a directory that was gone.
+	laravel.TeardownForDomain(r.Context(), h.DB, id)
 	// The generated maintenance page is a host artefact: the foreign key
 	// cascade removes the database rows and nothing on disk, so a deleted
 	// domain would leave its page behind for good.
