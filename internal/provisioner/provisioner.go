@@ -1833,7 +1833,70 @@ func DeprovisionAddonDomain(domainName, systemUser string) error {
 	return nil
 }
 
+// OtherTopLevelDomainsUsing lists the domains that still answer to a system
+// user once the named one is gone.
+//
+// The exception is by domain NAME because that column is UNIQUE, so it names
+// exactly the row being torn down whether or not it has been deleted yet, and no
+// caller has to pass an id it may not have. Addon and subdomain rows are
+// excluded: they carry their parent's system user and are removed with it, so
+// counting them would make every parent look shared.
+//
+// A read failure is returned, never swallowed. The caller treats it as "still in
+// use", because the alternative is deleting a live tenant's home directory on
+// the strength of a query that did not run.
+func OtherTopLevelDomainsUsing(systemUser, exceptDomainName string) ([]int64, error) {
+	if systemUser == "" {
+		return nil, nil
+	}
+	if packageDB == nil {
+		return nil, fmt.Errorf("provisioner: the panel database is not wired up")
+	}
+	rows, err := packageDB.Query(
+		`SELECT id FROM domains
+		  WHERE system_user=? AND parent_domain_id IS NULL AND domain_name<>?`,
+		systemUser, strings.ToLower(strings.TrimSpace(exceptDomainName)))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func Deprovision(domainName, systemUser string) error {
+	// Everything below except the certificate directory is keyed on the system
+	// user, and an upgraded panel can still carry two domains that share one:
+	// until allocateSystemUser existed, the slug rule mapped `.` and `-` to the
+	// same separator. Removing any of it while a sibling is live takes that
+	// sibling's home directory, its FTP account and its backups with it.
+	//
+	// A failed lookup counts as shared. An orphaned user is recoverable; a
+	// deleted tenant home is not.
+	siblings, err := OtherTopLevelDomainsUsing(systemUser, domainName)
+	if err != nil {
+		log.Printf("deprovision %q: cannot tell whether the system user is shared, keeping it: %v", domainName, err)
+	}
+	if err != nil || len(siblings) > 0 {
+		if domainName != "" && ValidateDomain(domainName) == nil {
+			_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
+		}
+		_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
+		purgeFastCGICache(systemUser)
+		if err == nil {
+			log.Printf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
+				domainName, systemUser, len(siblings))
+		}
+		return nil
+	}
+
 	cfgPath := "/etc/nginx/conf.d/dom_" + systemUser + ".conf"
 	_ = os.Remove(cfgPath)
 	subdomainVhosts, _ := filepath.Glob("/etc/nginx/conf.d/sub_" + systemUser + "_*.conf")
