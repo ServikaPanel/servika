@@ -153,6 +153,10 @@ func main() {
 	// gained encryption (GitHub PATs, remote backup passwords). Idempotent.
 	datamigrate.EncryptStoredCredentials(context.Background(), d)
 	provisioner.Init(d)
+	// Reports only, and only on a panel upgraded from before system user names
+	// were allocated uniquely. Two domains sharing one cannot be separated by
+	// anything but an operator, because their files live in one home directory.
+	provisioner.ReportSystemUserCollisions()
 	middleware.Init(d)
 	if err := dns.SeedTemplateIfEmpty(context.Background(), d); err != nil {
 		log.Printf("DNS template seed warn: %v", err)

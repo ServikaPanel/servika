@@ -1871,6 +1871,47 @@ func OtherTopLevelDomainsUsing(systemUser, exceptDomainName string) ([]int64, er
 	return ids, rows.Err()
 }
 
+// ReportSystemUserCollisions logs every system user that more than one
+// top-level domain answers to.
+//
+// It CHANGES NOTHING. Two such domains have one home directory with both
+// tenants' files interleaved, and nothing in the panel can tell which file
+// belongs to which, so separating them is an operator's decision. What this
+// gives them is the knowledge that the pair exists, which until now nothing
+// reported.
+//
+// New domains cannot land here any more (allocateSystemUser), so on a panel
+// installed after that this is silent for good.
+func ReportSystemUserCollisions() {
+	if packageDB == nil {
+		return
+	}
+	rows, err := packageDB.Query(
+		`SELECT system_user, GROUP_CONCAT(domain_name ORDER BY id SEPARATOR ', ')
+		   FROM domains
+		  WHERE parent_domain_id IS NULL AND system_user<>''
+		  GROUP BY system_user
+		 HAVING COUNT(*) > 1`)
+	if err != nil {
+		log.Printf("system user collision check failed: %v", err)
+		return
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var systemUser, domainNames string
+		if err := rows.Scan(&systemUser, &domainNames); err != nil {
+			log.Printf("system user collision check failed: %v", err)
+			return
+		}
+		log.Printf("system user %q is shared by more than one domain (%s): they share a home directory, "+
+			"an FTP account and a database namespace, and deleting one no longer removes the account",
+			systemUser, domainNames)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("system user collision check failed: %v", err)
+	}
+}
+
 func Deprovision(domainName, systemUser string) error {
 	// Everything below except the certificate directory is keyed on the system
 	// user, and an upgraded panel can still carry two domains that share one:

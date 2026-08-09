@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -79,6 +80,9 @@ func (s *domainsStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if s.recorder.failWith != nil {
 		return nil, s.recorder.failWith
 	}
+	if strings.Contains(s.query, "GROUP BY system_user") {
+		return s.grouped(), nil
+	}
 	var wantUser, exceptName string
 	for _, arg := range args {
 		if value, ok := arg.(string); ok {
@@ -108,6 +112,38 @@ func (s *domainsStmt) Query(args []driver.Value) (driver.Rows, error) {
 		result.values = append(result.values, []driver.Value{row.id})
 	}
 	return result, nil
+}
+
+// grouped answers the collision report the way MariaDB's GROUP BY would.
+//
+// The HAVING is applied only when the QUERY carries it, exactly like the other
+// conditions here: a report that dropped it would name every tenant on the
+// server as a collision, and a recorder that filtered on its own would keep
+// passing through that.
+func (s *domainsStmt) grouped() *domainsRows {
+	onlyTopLevel := strings.Contains(s.query, "parent_domain_id IS NULL")
+	moreThanOne := strings.Contains(s.query, "HAVING COUNT(*) > 1")
+
+	order := []string{}
+	names := map[string][]string{}
+	for _, row := range s.recorder.rows {
+		if row.systemUser == "" || (onlyTopLevel && !row.topLevel) {
+			continue
+		}
+		if _, seen := names[row.systemUser]; !seen {
+			order = append(order, row.systemUser)
+		}
+		names[row.systemUser] = append(names[row.systemUser], row.domainName)
+	}
+	result := &domainsRows{columns: []string{"system_user", "domain_names"}}
+	for _, systemUser := range order {
+		if moreThanOne && len(names[systemUser]) < 2 {
+			continue
+		}
+		result.values = append(result.values,
+			[]driver.Value{systemUser, strings.Join(names[systemUser], ", ")})
+	}
+	return result
 }
 
 type domainsRows struct {
@@ -216,6 +252,38 @@ func TestAMissingDatabaseIsAnError(t *testing.T) {
 
 	if _, err := OtherTopLevelDomainsUsing("c_example_com", "example.com"); err == nil {
 		t.Fatal("a missing database was reported as no siblings")
+	}
+}
+
+// The report names a collided pair and stays silent otherwise. An operator who
+// is never told cannot act on a pair that only a person can separate.
+func TestTheCollisionReportOnlySpeaksWhenThereIsACollision(t *testing.T) {
+	var written strings.Builder
+	previousOutput := log.Writer()
+	previousFlags := log.Flags()
+	log.SetOutput(&written)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(previousOutput)
+		log.SetFlags(previousFlags)
+	})
+
+	withDomains(t, &domainsRecorder{rows: []domainRow{
+		{id: 1, domainName: "blog.example.com", systemUser: "c_blog_example_com", topLevel: true},
+		{id: 2, domainName: "blog-example.com", systemUser: "c_blog_example_com", topLevel: true},
+		{id: 3, domainName: "alone.example.net", systemUser: "c_alone_example_net", topLevel: true},
+		// An addon domain carries its parent's system user. Counting it would
+		// report every parent that has one as a collision.
+		{id: 4, domainName: "shop.example.org", systemUser: "c_alone_example_net", topLevel: false},
+	}})
+
+	ReportSystemUserCollisions()
+	report := written.String()
+	if !strings.Contains(report, "c_blog_example_com") {
+		t.Errorf("the collided pair was not reported:\n%s", report)
+	}
+	if strings.Contains(report, "c_alone_example_net") {
+		t.Errorf("a domain with no sibling was reported:\n%s", report)
 	}
 }
 
