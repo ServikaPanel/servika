@@ -1003,6 +1003,7 @@ func main() {
 	dbremote.HealBind(d)                       // realign the remote-access bind drop-in; never restarts MariaDB here
 	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
 	laravel.HealOnStartup(d)                   // realign queue worker units, and remove the ones whose row is gone
+	laravel.HealLogRotation()                  // rotate the worker and application logs, which grew without bound
 	firewall.TakeOverFirewalld()
 	if err := firewall.Reapply(d); err != nil {
 		log.Printf("firewall reapply warn: %v", err)
