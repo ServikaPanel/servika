@@ -64,9 +64,13 @@ func CollectDeliveryLog(ctx context.Context, db *sql.DB) error {
 	}
 	size := info.Size()
 
+	// `offset` is backticked because OFFSET is a reserved word from MariaDB 10.6
+	// onward. Unquoted it is a parse error, and the error is discarded here, so
+	// the cursor would silently read as zero and every pass would re-read the
+	// whole log from the beginning and store its rows again.
 	var offset, previousSize int64
 	_ = db.QueryRowContext(ctx,
-		`SELECT offset, size FROM mail_log_cursor WHERE id = 1`).Scan(&offset, &previousSize)
+		"SELECT `offset`, `size` FROM mail_log_cursor WHERE id = 1").Scan(&offset, &previousSize)
 	start := offset
 	// A file that shrank was rotated, so the old offset points into the middle of
 	// a different file. Starting over is the only correct reading.
@@ -242,8 +246,8 @@ func flushDeliveries(ctx context.Context, db *sql.DB, pending []storedDelivery, 
 		}
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO mail_log_cursor(id, offset, size) VALUES(1,?,?)
-		 ON DUPLICATE KEY UPDATE offset=VALUES(offset), size=VALUES(size)`,
+		"INSERT INTO mail_log_cursor(id, `offset`, `size`) VALUES(1,?,?)\n"+
+			" ON DUPLICATE KEY UPDATE `offset`=VALUES(`offset`), `size`=VALUES(`size`)",
 		consumed, size); err != nil {
 		return err
 	}
