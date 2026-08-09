@@ -45,9 +45,9 @@ type Result struct {
 // CREATED. An existing customer is returned untouched: changing who owns an
 // account already in use is a transfer, which is its own operation with its own
 // authorization, not a side effect of adding a domain. The caller learns this
-// from Result.Reused. This is reachable in practice because
-// provisioner.SlugFromDomain truncates the system user at 26 characters, so two
-// long domains can share one tenant account.
+// from Result.Reused. A NEW domain no longer reaches the reuse branch, because
+// provisioner.allocateSystemUser gives every domain a system user of its own;
+// a panel upgraded from before that can still carry two domains sharing one.
 //
 // A RESELLER never reaches this path: it cannot create a domain without naming
 // one of its own customers, so the auto-creation branch only runs on an

@@ -209,8 +209,10 @@ const (
 // the reseller the caller asked for was not applied because the tenant already
 // had a customer record and an existing record keeps the owner it had.
 //
-// Reachable because provisioner.SlugFromDomain truncates the system user at 26
-// characters, so two long domain names can resolve to the same tenant.
+// A NEW domain no longer reaches this: allocateSystemUser gives every domain a
+// system user of its own, so a create cannot land on another tenant's account.
+// It stays because a panel upgraded from before that can still carry two domains
+// sharing one, and a reseller named for the second of them is still not applied.
 const warningOwnerNotApplied = "owner_not_applied"
 
 // referencedAccountsExist checks that the rows a create request points at are
