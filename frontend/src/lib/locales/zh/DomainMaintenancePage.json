@@ -1,0 +1,73 @@
+{
+  "title": "维护模式",
+  "description": "对访客关闭站点并改为显示一个页面。站点返回 503，这会告诉搜索引擎中断是暂时的，不影响其收录。",
+  "breadcrumb": {
+    "home": "首页",
+    "domains": "订阅",
+    "maintenance": "维护模式"
+  },
+  "state": {
+    "on": "维护模式已开启",
+    "off": "维护模式已关闭",
+    "until": "将在 {{time}} 自动结束",
+    "openEnded": "在你关闭之前一直开启"
+  },
+  "action": {
+    "on": "开启",
+    "off": "关闭",
+    "savePage": "保存页面",
+    "saving": "保存中…"
+  },
+  "duration": {
+    "label": "持续多久",
+    "openEnded": "直到我手动关闭",
+    "minutes": "{{count}} 分钟",
+    "hint": "时段结束后站点会自动重新开放。"
+  },
+  "page": {
+    "title": "访客看到的页面",
+    "heading": "标题",
+    "headingPlaceholder": "我们很快回来",
+    "message": "消息",
+    "messagePlaceholder": "本站正在进行维护，暂时无法访问。",
+    "accent": "强调色",
+    "logo": "标志地址",
+    "logoHint": "仅限 https。页面通过 TLS 提供，http 图片会被拦截。",
+    "previewTitle": "我们很快回来",
+    "previewMessage": "本站正在进行维护，暂时无法访问。"
+  },
+  "ips": {
+    "title": "仍可访问站点的地址",
+    "hint": "列表中的地址看到的是真实站点，而不是维护页面。仅支持精确地址，不支持网段。",
+    "placeholder": "203.0.113.5",
+    "add": "添加",
+    "addOwn": "添加我的地址（{{ip}}）",
+    "remove": "移除",
+    "empty": "没有任何例外地址，因此所有人都会看到维护页面。",
+    "yours": "你的"
+  },
+  "confirmOff": {
+    "title": "关闭维护模式？",
+    "message": "站点将立即对所有人重新可见。",
+    "confirm": "关闭"
+  },
+  "saved": {
+    "on": "维护模式已开启。",
+    "off": "维护模式已关闭。"
+  },
+  "saveFailed": "维护设置保存失败。",
+  "ipAddFailed": "地址添加失败。",
+  "ipRemoveFailed": "地址移除失败。",
+  "notes": {
+    "subdomains": "子域名不在范围内。每个子域名使用自己的配置，会继续正常运行。",
+    "wordpress": "这是整站开关，且在 WordPress 运行之前生效，因此优先于 WordPress 的维护工具。",
+    "seo": "访客和搜索引擎收到 503，即暂时不可用。短暂中断不会影响你的搜索排名。"
+  },
+  "reasons": {
+    "unavailable": "该域名无法使用维护模式。",
+    "maintenance_custom_vhost": "该域名使用自定义的 nginx 配置，面板不会修改它。移除后才能使用维护模式。",
+    "maintenance_redirect_only": "该域名只是跳转，没有可进入维护的站点。",
+    "maintenance_bad_address": "这不是有效的 IP 地址。",
+    "maintenance_too_many_ips": "例外列表已满。请先移除一个地址再添加。"
+  }
+}

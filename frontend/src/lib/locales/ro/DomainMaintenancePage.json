@@ -1,0 +1,73 @@
+{
+  "title": "Mod mentenanță",
+  "description": "Închideți site-ul pentru vizitatori și afișați o pagină în locul lui. Site-ul răspunde 503, ceea ce spune motoarelor de căutare că întreruperea este temporară și nu îi afectează indexarea.",
+  "breadcrumb": {
+    "home": "Acasă",
+    "domains": "Abonamente",
+    "maintenance": "Mod mentenanță"
+  },
+  "state": {
+    "on": "Modul mentenanță este pornit",
+    "off": "Modul mentenanță este oprit",
+    "until": "Se încheie automat la {{time}}",
+    "openEnded": "Rămâne pornit până îl opriți"
+  },
+  "action": {
+    "on": "Pornește",
+    "off": "Oprește",
+    "savePage": "Salvează pagina",
+    "saving": "Se salvează…"
+  },
+  "duration": {
+    "label": "Cât timp",
+    "openEnded": "Până îl opresc eu",
+    "minutes": "{{count}} minute",
+    "hint": "La finalul intervalului site-ul se redeschide singur."
+  },
+  "page": {
+    "title": "Pagina pe care o văd vizitatorii",
+    "heading": "Titlu",
+    "headingPlaceholder": "Revenim în scurt timp",
+    "message": "Mesaj",
+    "messagePlaceholder": "Acest site este temporar indisponibil pentru lucrări de mentenanță.",
+    "accent": "Culoare de accent",
+    "logo": "URL siglă",
+    "logoHint": "Doar https. Pagina este servită prin TLS, deci o imagine http este blocată.",
+    "previewTitle": "Revenim în scurt timp",
+    "previewMessage": "Acest site este temporar indisponibil pentru lucrări de mentenanță."
+  },
+  "ips": {
+    "title": "Adrese care ajung în continuare la site",
+    "hint": "O adresă din această listă vede site-ul real în locul paginii de mentenanță. Doar adrese exacte, nu intervale.",
+    "placeholder": "203.0.113.5",
+    "add": "Adaugă",
+    "addOwn": "Adaugă adresa mea ({{ip}})",
+    "remove": "Elimină",
+    "empty": "Nicio adresă nu este exceptată, deci toată lumea vede pagina de mentenanță.",
+    "yours": "a dumneavoastră"
+  },
+  "confirmOff": {
+    "title": "Opriți modul mentenanță?",
+    "message": "Site-ul devine imediat vizibil pentru toată lumea.",
+    "confirm": "Oprește"
+  },
+  "saved": {
+    "on": "Modul mentenanță este pornit.",
+    "off": "Modul mentenanță este oprit."
+  },
+  "saveFailed": "Setările de mentenanță nu au putut fi salvate.",
+  "ipAddFailed": "Adresa nu a putut fi adăugată.",
+  "ipRemoveFailed": "Adresa nu a putut fi eliminată.",
+  "notes": {
+    "subdomains": "Subdomeniile nu sunt incluse. Fiecare servește propria configurație și continuă să funcționeze.",
+    "wordpress": "Acesta este comutatorul pentru tot site-ul și acționează înainte de rularea WordPress, deci are prioritate față de unealta de mentenanță din WordPress.",
+    "seo": "Vizitatorii și motoarele de căutare primesc 503, adică temporar indisponibil. O întrerupere scurtă nu vă afectează clasarea."
+  },
+  "reasons": {
+    "unavailable": "Modul mentenanță nu este disponibil pentru acest domeniu.",
+    "maintenance_custom_vhost": "Acest domeniu servește o configurație nginx personalizată, pe care panoul nu o modifică. Eliminați-o pentru a folosi modul mentenanță.",
+    "maintenance_redirect_only": "Acest domeniu doar redirecționează, deci nu are un site care să fie pus în mentenanță.",
+    "maintenance_bad_address": "Aceasta nu este o adresă IP validă.",
+    "maintenance_too_many_ips": "Lista de excepții este plină. Eliminați o adresă înainte de a adăuga alta."
+  }
+}

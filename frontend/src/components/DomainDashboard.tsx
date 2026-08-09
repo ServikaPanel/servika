@@ -31,6 +31,7 @@ const ICONS = {
   dns:       'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01',
   redis:     'M13 10V3L4 14h7v7l9-11h-7z',
   mail:      'M3 8l9 6 9-6m-9 6V4m0 0v16',
+  maintenance: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
 }
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
@@ -106,6 +107,14 @@ export default function DomainDashboard({ domain }: { domain: Domain }) {
         <ToolCard label={t('passwordProtection.label')} description={t('passwordProtection.desc')}       icon={ICONS.lock}      color="amber" phase="F7" onClick={navigateTo('password-protection')} />
         <ToolCard label={t('stats.label')}            description={t('stats.desc')}  icon={ICONS.stats} color="indigo" phase="F10" onClick={navigateTo('stats')} />
         <ToolCard label={t('accessControl.label')} description={t('accessControl.desc')} icon={ICONS.accessControl} color="rose" onClick={navigateTo('access-control')} />
+        <ToolCard
+          label={t('maintenance.label')}
+          description={domain.maintenance_enabled ? t('maintenance.on') : t('maintenance.desc')}
+          icon={ICONS.maintenance}
+          color={domain.maintenance_enabled ? 'amber' : 'slate'}
+          warning={domain.maintenance_enabled ? t('maintenance.warning') : undefined}
+          onClick={navigateTo('maintenance')}
+        />
         <ToolCard label={t('imunify.label')}                  description={t('imunify.desc')}        icon={ICONS.imunify}    color="emerald" onClick={navigateTo('imunify')} />
         <ToolCard
           label={t('ssh.label')}

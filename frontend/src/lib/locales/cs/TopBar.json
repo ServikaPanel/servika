@@ -66,6 +66,10 @@
     "logs": { "title": "Protokoly", "subtitle": "Přístupové a chybové protokoly" },
     "waf": { "title": "WAF", "subtitle": "Firewall webových aplikací" },
     "accessControl": { "title": "Řízení přístupu", "subtitle": "Pravidla přístupu IP" },
+    "maintenance": {
+      "title": "Režim údržby",
+      "subtitle": "Dočasně zavřít web"
+    },
     "passwordProtection": { "title": "Ochrana heslem", "subtitle": "Heslo adresáře" },
     "imunify": { "title": "Imunify", "subtitle": "Kontrola malwaru" },
     "stats": { "title": "Statistiky", "subtitle": "Data o využití domény" },

@@ -68,6 +68,10 @@ type Domain struct {
 	// browser-trusted one from the self-signed fail-safe instead of showing both
 	// as simply "SSL". Empty means unknown, which is not the same as bad.
 	SSLSource string `json:"ssl_source,omitempty"`
+	// MaintenanceEnabled lets a list say a site is deliberately closed rather
+	// than broken. Without it the overview shows a healthy domain while every
+	// visitor is getting a 503.
+	MaintenanceEnabled bool `json:"maintenance_enabled"`
 }
 
 // The values domains.ssl_source can hold. Every writer is in this package
@@ -104,7 +108,8 @@ const selectAll = `SELECT d.id, d.domain_name, d.system_user, d.php_version, d.s
   d.db_host, d.db_user, d.db_name, d.web_root, d.size_kb, d.traffic_kb, d.is_demo,
   COALESCE(d.notes,''), DATE_FORMAT(d.created_at,'%Y-%m-%d'),
   d.plan_id, COALESCE(p.name,''), d.ssh_access, COALESCE(d.suspended,0),
-  COALESCE(ru.username,''), d.site_type, COALESCE(d.ssl_source,''), COALESCE(d.ipv6,'')
+  COALESCE(ru.username,''), d.site_type, COALESCE(d.ssl_source,''), COALESCE(d.ipv6,''),
+  COALESCE(d.maintenance_enabled,0)
   FROM domains d
   LEFT JOIN service_plans p ON p.id=d.plan_id
   LEFT JOIN customers cu ON cu.id=d.customer_id
@@ -112,18 +117,19 @@ const selectAll = `SELECT d.id, d.domain_name, d.system_user, d.php_version, d.s
 
 func scan(rs interface{ Scan(...any) error }) (Domain, error) {
 	var d Domain
-	var ssl, demo, sshE, suspended int
+	var ssl, demo, sshE, suspended, maintenance int
 	var planID sql.NullInt64
 	err := rs.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.PHPVersion, &ssl,
 		&d.SSLExpiry, &d.Status, &d.IPv4, &d.FTPHost, &d.FTPUser,
 		&d.DBHost, &d.DBUser, &d.DBName, &d.WebRoot, &d.SizeKB, &d.TrafficKB, &demo,
 		&d.Notes, &d.CreatedAt,
 		&planID, &d.PlanName, &sshE, &suspended,
-		&d.ResellerName, &d.SiteType, &d.SSLSource, &d.IPv6)
+		&d.ResellerName, &d.SiteType, &d.SSLSource, &d.IPv6, &maintenance)
 	d.SSL = ssl == 1
 	d.IsDemo = demo == 1
 	d.SshAccess = sshE == 1
 	d.Suspended = suspended == 1
+	d.MaintenanceEnabled = maintenance == 1
 	if planID.Valid {
 		v := planID.Int64
 		d.PlanID = &v

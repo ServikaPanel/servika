@@ -30,6 +30,7 @@
     "mailFilterLists": "Absender-Filterlisten",
     "mailAddressPool": "Pool ausgehender Adressen",
     "appRuntimes": "Anwendungslaufzeitumgebungen",
-    "subdomains": "Subdomains"
+    "subdomains": "Subdomains",
+    "maintenance": "Wartungsmodus"
   }
 }

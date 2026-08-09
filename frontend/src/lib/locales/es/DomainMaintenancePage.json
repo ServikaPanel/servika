@@ -1,0 +1,73 @@
+{
+  "title": "Modo de mantenimiento",
+  "description": "Cierre el sitio a los visitantes y muestre una página en su lugar. El sitio responde 503, lo que indica a los buscadores que la interrupción es temporal y no afecta a su indexación.",
+  "breadcrumb": {
+    "home": "Inicio",
+    "domains": "Suscripciones",
+    "maintenance": "Modo de mantenimiento"
+  },
+  "state": {
+    "on": "El modo de mantenimiento está activado",
+    "off": "El modo de mantenimiento está desactivado",
+    "until": "Termina automáticamente a las {{time}}",
+    "openEnded": "Sigue activo hasta que lo desactive"
+  },
+  "action": {
+    "on": "Activar",
+    "off": "Desactivar",
+    "savePage": "Guardar página",
+    "saving": "Guardando…"
+  },
+  "duration": {
+    "label": "Durante cuánto tiempo",
+    "openEnded": "Hasta que lo desactive",
+    "minutes": "{{count}} minutos",
+    "hint": "Al final del periodo el sitio se reabre solo."
+  },
+  "page": {
+    "title": "La página que ven los visitantes",
+    "heading": "Título",
+    "headingPlaceholder": "Volvemos enseguida",
+    "message": "Mensaje",
+    "messagePlaceholder": "Este sitio no está disponible temporalmente por tareas de mantenimiento.",
+    "accent": "Color de acento",
+    "logo": "URL del logotipo",
+    "logoHint": "Solo https. La página se sirve por TLS, así que una imagen http queda bloqueada.",
+    "previewTitle": "Volvemos enseguida",
+    "previewMessage": "Este sitio no está disponible temporalmente por tareas de mantenimiento."
+  },
+  "ips": {
+    "title": "Direcciones que siguen llegando al sitio",
+    "hint": "Una dirección de esta lista ve el sitio real en lugar de la página de mantenimiento. Solo direcciones exactas, no rangos.",
+    "placeholder": "203.0.113.5",
+    "add": "Añadir",
+    "addOwn": "Añadir mi dirección ({{ip}})",
+    "remove": "Quitar",
+    "empty": "No hay ninguna dirección exenta, así que todo el mundo ve la página de mantenimiento.",
+    "yours": "la suya"
+  },
+  "confirmOff": {
+    "title": "¿Desactivar el modo de mantenimiento?",
+    "message": "El sitio vuelve a ser visible para todos de inmediato.",
+    "confirm": "Desactivar"
+  },
+  "saved": {
+    "on": "El modo de mantenimiento está activado.",
+    "off": "El modo de mantenimiento está desactivado."
+  },
+  "saveFailed": "No se pudieron guardar los ajustes de mantenimiento.",
+  "ipAddFailed": "No se pudo añadir la dirección.",
+  "ipRemoveFailed": "No se pudo quitar la dirección.",
+  "notes": {
+    "subdomains": "Los subdominios no están incluidos. Cada uno sirve su propia configuración y sigue funcionando.",
+    "wordpress": "Este es el interruptor de todo el sitio y actúa antes de que se ejecute WordPress, así que tiene prioridad sobre la herramienta de mantenimiento de WordPress.",
+    "seo": "Los visitantes y los buscadores reciben 503, es decir, no disponible temporalmente. Una interrupción corta no afecta a su posicionamiento."
+  },
+  "reasons": {
+    "unavailable": "El modo de mantenimiento no está disponible para este dominio.",
+    "maintenance_custom_vhost": "Este dominio sirve una configuración de nginx personalizada, que el panel no modifica. Quítela para usar el modo de mantenimiento.",
+    "maintenance_redirect_only": "Este dominio solo redirige, así que no tiene un sitio que poner en mantenimiento.",
+    "maintenance_bad_address": "Esa no es una dirección IP válida.",
+    "maintenance_too_many_ips": "La lista de excepciones está llena. Quite una dirección antes de añadir otra."
+  }
+}

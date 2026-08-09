@@ -66,6 +66,10 @@
     "logs": { "title": "Jurnale", "subtitle": "Jurnale de acces și de erori" },
     "waf": { "title": "WAF", "subtitle": "Web application firewall" },
     "accessControl": { "title": "Control acces", "subtitle": "Reguli de acces IP" },
+    "maintenance": {
+      "title": "Mod mentenanță",
+      "subtitle": "Închideți temporar site-ul"
+    },
     "passwordProtection": { "title": "Protecție cu parolă", "subtitle": "Parolă director" },
     "imunify": { "title": "Imunify", "subtitle": "Scanare malware" },
     "stats": { "title": "Statistici", "subtitle": "Date de utilizare domeniu" },

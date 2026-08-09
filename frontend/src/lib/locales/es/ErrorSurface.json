@@ -30,6 +30,7 @@
     "mailFilterLists": "listas de filtro de remitentes",
     "mailAddressPool": "grupo de direcciones de salida",
     "appRuntimes": "runtimes de aplicación",
-    "subdomains": "subdominios"
+    "subdomains": "subdominios",
+    "maintenance": "el modo de mantenimiento"
   }
 }

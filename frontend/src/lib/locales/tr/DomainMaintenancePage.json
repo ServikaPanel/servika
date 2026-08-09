@@ -1,0 +1,73 @@
+{
+  "title": "Bakım modu",
+  "description": "Siteyi ziyaretçilere kapatın ve yerine bir sayfa gösterin. Site 503 yanıtı verir; bu, arama motorlarına kesintinin geçici olduğunu söyler ve sitenin indekslenmesini bozmaz.",
+  "breadcrumb": {
+    "home": "Ana sayfa",
+    "domains": "Abonelikler",
+    "maintenance": "Bakım modu"
+  },
+  "state": {
+    "on": "Bakım modu açık",
+    "off": "Bakım modu kapalı",
+    "until": "{{time}} saatinde kendiliğinden kapanır",
+    "openEnded": "Siz kapatana kadar açık kalır"
+  },
+  "action": {
+    "on": "Aç",
+    "off": "Kapat",
+    "savePage": "Sayfayı kaydet",
+    "saving": "Kaydediliyor…"
+  },
+  "duration": {
+    "label": "Ne kadar sürecek",
+    "openEnded": "Ben kapatana kadar",
+    "minutes": "{{count}} dakika",
+    "hint": "Sürenin sonunda site kendiliğinden açılır."
+  },
+  "page": {
+    "title": "Ziyaretçilerin göreceği sayfa",
+    "heading": "Başlık",
+    "headingPlaceholder": "Kısa süre sonra döneceğiz",
+    "message": "Mesaj",
+    "messagePlaceholder": "Bakım çalışması nedeniyle bu site geçici olarak kapalıdır.",
+    "accent": "Vurgu rengi",
+    "logo": "Logo adresi",
+    "logoHint": "Yalnız https. Sayfa TLS üzerinden sunulduğu için http bir görsel engellenir.",
+    "previewTitle": "Kısa süre sonra döneceğiz",
+    "previewMessage": "Bakım çalışması nedeniyle bu site geçici olarak kapalıdır."
+  },
+  "ips": {
+    "title": "Siteye ulaşmaya devam eden adresler",
+    "hint": "Bu listedeki bir adres, bakım sayfası yerine gerçek siteyi görür. Yalnız tam adres, aralık değil.",
+    "placeholder": "203.0.113.5",
+    "add": "Ekle",
+    "addOwn": "Kendi adresimi ekle ({{ip}})",
+    "remove": "Kaldır",
+    "empty": "Hiçbir adres istisna değil, yani herkes bakım sayfasını görür.",
+    "yours": "sizin"
+  },
+  "confirmOff": {
+    "title": "Bakım modu kapatılsın mı?",
+    "message": "Site hemen herkese yeniden görünür olur.",
+    "confirm": "Kapat"
+  },
+  "saved": {
+    "on": "Bakım modu açık.",
+    "off": "Bakım modu kapalı."
+  },
+  "saveFailed": "Bakım ayarları kaydedilemedi.",
+  "ipAddFailed": "Adres eklenemedi.",
+  "ipRemoveFailed": "Adres kaldırılamadı.",
+  "notes": {
+    "subdomains": "Alt alan adları kapsam dışıdır. Her biri kendi yapılandırmasıyla sunulur ve çalışmaya devam eder.",
+    "wordpress": "Bu, site geneli anahtardır ve WordPress çalışmadan önce devreye girer, bu yüzden WordPress bakım aracının önüne geçer.",
+    "seo": "Ziyaretçiler ve arama motorları 503 alır; bu geçici olarak kapalı demektir. Kısa bir kesinti arama sıralamanızı etkilemez."
+  },
+  "reasons": {
+    "unavailable": "Bu alan adı için bakım modu kullanılamıyor.",
+    "maintenance_custom_vhost": "Bu alan adı özel bir nginx yapılandırması sunuyor ve panel ona dokunmuyor. Bakım modunu kullanmak için onu kaldırın.",
+    "maintenance_redirect_only": "Bu alan adı yalnız başka bir yere yönlendiriyor, yani bakıma alınacak bir sitesi yok.",
+    "maintenance_bad_address": "Bu geçerli bir IP adresi değil.",
+    "maintenance_too_many_ips": "İstisna listesi dolu. Yeni bir adres eklemeden önce birini kaldırın."
+  }
+}

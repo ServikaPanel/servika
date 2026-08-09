@@ -66,6 +66,10 @@
     "logs": { "title": "ログ", "subtitle": "アクセスログとエラーログ" },
     "waf": { "title": "WAF", "subtitle": "Web アプリケーションファイアウォール" },
     "accessControl": { "title": "アクセス制御", "subtitle": "IP アクセスルール" },
+    "maintenance": {
+      "title": "メンテナンスモード",
+      "subtitle": "サイトを一時的に閉じる"
+    },
     "passwordProtection": { "title": "パスワード保護", "subtitle": "ディレクトリのパスワード" },
     "imunify": { "title": "Imunify", "subtitle": "マルウェアスキャン" },
     "stats": { "title": "統計", "subtitle": "ドメイン使用データ" },

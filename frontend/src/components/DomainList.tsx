@@ -24,4 +24,6 @@ export type Domain = {
   web_root: string
   notes?: string
   ssh_access?: boolean
+  /** True while the site deliberately answers 503 behind a maintenance page. */
+  maintenance_enabled?: boolean
 }

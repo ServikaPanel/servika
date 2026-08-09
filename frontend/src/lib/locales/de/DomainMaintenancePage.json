@@ -1,0 +1,73 @@
+{
+  "title": "Wartungsmodus",
+  "description": "Schließen Sie die Website für Besucher und zeigen Sie stattdessen eine Seite. Die Website antwortet mit 503, was Suchmaschinen sagt, dass die Störung vorübergehend ist, und die Indexierung unberührt lässt.",
+  "breadcrumb": {
+    "home": "Start",
+    "domains": "Abonnements",
+    "maintenance": "Wartungsmodus"
+  },
+  "state": {
+    "on": "Wartungsmodus ist an",
+    "off": "Wartungsmodus ist aus",
+    "until": "Endet automatisch um {{time}}",
+    "openEnded": "Bleibt an, bis Sie ihn ausschalten"
+  },
+  "action": {
+    "on": "Einschalten",
+    "off": "Ausschalten",
+    "savePage": "Seite speichern",
+    "saving": "Wird gespeichert…"
+  },
+  "duration": {
+    "label": "Wie lange",
+    "openEnded": "Bis ich ihn ausschalte",
+    "minutes": "{{count}} Minuten",
+    "hint": "Am Ende des Zeitfensters öffnet die Website sich von selbst wieder."
+  },
+  "page": {
+    "title": "Die Seite, die Besucher sehen",
+    "heading": "Überschrift",
+    "headingPlaceholder": "Wir sind gleich zurück",
+    "message": "Nachricht",
+    "messagePlaceholder": "Diese Website ist wegen Wartungsarbeiten vorübergehend nicht verfügbar.",
+    "accent": "Akzentfarbe",
+    "logo": "Logo-URL",
+    "logoHint": "Nur https. Die Seite wird über TLS ausgeliefert, daher wird ein http-Bild blockiert.",
+    "previewTitle": "Wir sind gleich zurück",
+    "previewMessage": "Diese Website ist wegen Wartungsarbeiten vorübergehend nicht verfügbar."
+  },
+  "ips": {
+    "title": "Adressen, die die Website weiterhin erreichen",
+    "hint": "Eine Adresse auf dieser Liste sieht die echte Website statt der Wartungsseite. Nur genaue Adressen, keine Bereiche.",
+    "placeholder": "203.0.113.5",
+    "add": "Hinzufügen",
+    "addOwn": "Meine Adresse hinzufügen ({{ip}})",
+    "remove": "Entfernen",
+    "empty": "Keine Adresse ist ausgenommen, also sehen alle die Wartungsseite.",
+    "yours": "Ihre"
+  },
+  "confirmOff": {
+    "title": "Wartungsmodus ausschalten?",
+    "message": "Die Website wird sofort wieder für alle sichtbar.",
+    "confirm": "Ausschalten"
+  },
+  "saved": {
+    "on": "Wartungsmodus ist an.",
+    "off": "Wartungsmodus ist aus."
+  },
+  "saveFailed": "Die Wartungseinstellungen konnten nicht gespeichert werden.",
+  "ipAddFailed": "Die Adresse konnte nicht hinzugefügt werden.",
+  "ipRemoveFailed": "Die Adresse konnte nicht entfernt werden.",
+  "notes": {
+    "subdomains": "Subdomains sind nicht eingeschlossen. Jede liefert ihre eigene Konfiguration aus und funktioniert weiter.",
+    "wordpress": "Dies ist der websiteweite Schalter und greift, bevor WordPress läuft, daher hat er Vorrang vor dem WordPress-Wartungswerkzeug.",
+    "seo": "Besucher und Suchmaschinen erhalten 503, das heißt vorübergehend nicht verfügbar. Eine kurze Störung wirkt sich nicht auf Ihr Ranking aus."
+  },
+  "reasons": {
+    "unavailable": "Der Wartungsmodus ist für diese Domain nicht verfügbar.",
+    "maintenance_custom_vhost": "Diese Domain liefert eine eigene nginx-Konfiguration aus, die das Panel nicht verändert. Entfernen Sie sie, um den Wartungsmodus zu nutzen.",
+    "maintenance_redirect_only": "Diese Domain leitet nur weiter, hat also keine Website, die in Wartung gehen könnte.",
+    "maintenance_bad_address": "Das ist keine gültige IP-Adresse.",
+    "maintenance_too_many_ips": "Die Ausnahmeliste ist voll. Entfernen Sie eine Adresse, bevor Sie eine weitere hinzufügen."
+  }
+}

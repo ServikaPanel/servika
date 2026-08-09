@@ -30,6 +30,7 @@
     "mailFilterLists": "sender filter lists",
     "mailAddressPool": "outbound address pool",
     "appRuntimes": "application runtimes",
-    "subdomains": "subdomains"
+    "subdomains": "subdomains",
+    "maintenance": "maintenance mode"
   }
 }

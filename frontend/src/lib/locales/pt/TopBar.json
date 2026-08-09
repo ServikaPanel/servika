@@ -66,6 +66,10 @@
     "logs": { "title": "Registos", "subtitle": "Registos de acesso e erros" },
     "waf": { "title": "WAF", "subtitle": "Firewall de aplicações web" },
     "accessControl": { "title": "Controlo de Acesso", "subtitle": "Regras de acesso por IP" },
+    "maintenance": {
+      "title": "Modo de manutenção",
+      "subtitle": "Fechar o site temporariamente"
+    },
     "passwordProtection": { "title": "Proteção por Palavra-passe", "subtitle": "Palavra-passe de diretório" },
     "imunify": { "title": "Imunify", "subtitle": "Análise de malware" },
     "stats": { "title": "Estatísticas", "subtitle": "Dados de uso do domínio" },

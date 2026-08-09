@@ -38,6 +38,12 @@
   },
   "passwordProtection": { "label": "Password-Protected Directories", "desc": ".htpasswd" },
   "stats": { "label": "Statistics", "desc": "Traffic analysis" },
+  "maintenance": {
+    "label": "Maintenance Mode",
+    "desc": "Close the site with a 503 page",
+    "on": "The site is closed to visitors",
+    "warning": "Maintenance mode is on"
+  },
   "accessControl": { "label": "Access Control", "desc": "Hotlink protection · IP allow/block" },
   "imunify": { "label": "Imunify", "desc": "Antivirus" },
   "ssh": {

@@ -1,0 +1,73 @@
+{
+  "title": "Mode maintenance",
+  "description": "Fermez le site aux visiteurs et affichez une page à la place. Le site répond 503, ce qui indique aux moteurs de recherche que l'interruption est temporaire et laisse son indexation intacte.",
+  "breadcrumb": {
+    "home": "Accueil",
+    "domains": "Abonnements",
+    "maintenance": "Mode maintenance"
+  },
+  "state": {
+    "on": "Le mode maintenance est actif",
+    "off": "Le mode maintenance est inactif",
+    "until": "Se termine automatiquement à {{time}}",
+    "openEnded": "Reste actif jusqu'à ce que vous le désactiviez"
+  },
+  "action": {
+    "on": "Activer",
+    "off": "Désactiver",
+    "savePage": "Enregistrer la page",
+    "saving": "Enregistrement…"
+  },
+  "duration": {
+    "label": "Durée",
+    "openEnded": "Jusqu'à ce que je le désactive",
+    "minutes": "{{count}} minutes",
+    "hint": "Le site rouvre de lui-même à la fin de la période."
+  },
+  "page": {
+    "title": "La page que voient les visiteurs",
+    "heading": "Titre",
+    "headingPlaceholder": "Nous revenons bientôt",
+    "message": "Message",
+    "messagePlaceholder": "Ce site est temporairement indisponible pour cause de maintenance.",
+    "accent": "Couleur d'accent",
+    "logo": "URL du logo",
+    "logoHint": "https uniquement. La page est servie en TLS, une image http serait donc bloquée.",
+    "previewTitle": "Nous revenons bientôt",
+    "previewMessage": "Ce site est temporairement indisponible pour cause de maintenance."
+  },
+  "ips": {
+    "title": "Adresses qui atteignent encore le site",
+    "hint": "Une adresse de cette liste voit le vrai site au lieu de la page de maintenance. Adresses exactes uniquement, pas de plages.",
+    "placeholder": "203.0.113.5",
+    "add": "Ajouter",
+    "addOwn": "Ajouter mon adresse ({{ip}})",
+    "remove": "Retirer",
+    "empty": "Aucune adresse n'est exemptée, donc tout le monde voit la page de maintenance.",
+    "yours": "la vôtre"
+  },
+  "confirmOff": {
+    "title": "Désactiver le mode maintenance ?",
+    "message": "Le site redevient immédiatement visible par tous.",
+    "confirm": "Désactiver"
+  },
+  "saved": {
+    "on": "Le mode maintenance est actif.",
+    "off": "Le mode maintenance est inactif."
+  },
+  "saveFailed": "Les paramètres de maintenance n'ont pas pu être enregistrés.",
+  "ipAddFailed": "L'adresse n'a pas pu être ajoutée.",
+  "ipRemoveFailed": "L'adresse n'a pas pu être retirée.",
+  "notes": {
+    "subdomains": "Les sous-domaines ne sont pas concernés. Chacun sert sa propre configuration et continue de fonctionner.",
+    "wordpress": "C'est l'interrupteur qui vaut pour tout le site et il agit avant l'exécution de WordPress, il prime donc sur l'outil de maintenance de WordPress.",
+    "seo": "Les visiteurs et les moteurs de recherche reçoivent 503, c'est-à-dire temporairement indisponible. Une courte interruption n'affecte pas votre classement."
+  },
+  "reasons": {
+    "unavailable": "Le mode maintenance n'est pas disponible pour ce domaine.",
+    "maintenance_custom_vhost": "Ce domaine sert une configuration nginx personnalisée, que le panneau ne modifie pas. Retirez-la pour utiliser le mode maintenance.",
+    "maintenance_redirect_only": "Ce domaine ne fait que rediriger, il n'a donc pas de site à mettre en maintenance.",
+    "maintenance_bad_address": "Ce n'est pas une adresse IP valide.",
+    "maintenance_too_many_ips": "La liste d'exceptions est pleine. Retirez une adresse avant d'en ajouter une autre."
+  }
+}

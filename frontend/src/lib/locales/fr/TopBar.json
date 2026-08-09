@@ -66,6 +66,10 @@
     "logs": { "title": "Journaux", "subtitle": "Journaux d'accès et d'erreurs" },
     "waf": { "title": "WAF", "subtitle": "Pare-feu applicatif web" },
     "accessControl": { "title": "Contrôle d'accès", "subtitle": "Règles d'accès IP" },
+    "maintenance": {
+      "title": "Mode maintenance",
+      "subtitle": "Fermer le site temporairement"
+    },
     "passwordProtection": { "title": "Protection par mot de passe", "subtitle": "Mot de passe de répertoire" },
     "imunify": { "title": "Imunify", "subtitle": "Analyse de logiciels malveillants" },
     "stats": { "title": "Statistiques", "subtitle": "Données d'utilisation du domaine" },

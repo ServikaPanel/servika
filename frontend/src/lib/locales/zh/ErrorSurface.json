@@ -30,6 +30,7 @@
     "mailFilterLists": "发件人过滤列表",
     "mailAddressPool": "发信地址池",
     "appRuntimes": "应用 runtime",
-    "subdomains": "子域名"
+    "subdomains": "子域名",
+    "maintenance": "维护模式"
   }
 }

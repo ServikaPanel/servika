@@ -38,6 +38,12 @@
   },
   "passwordProtection": { "label": "Heslem chráněné adresáře", "desc": ".htpasswd" },
   "stats": { "label": "Statistiky", "desc": "Analýza provozu" },
+  "maintenance": {
+    "label": "Režim údržby",
+    "desc": "Zavřít web stránkou 503",
+    "on": "Web je pro návštěvníky zavřený",
+    "warning": "Režim údržby je zapnutý"
+  },
   "accessControl": { "label": "Řízení přístupu", "desc": "Ochrana proti hotlinkingu · povolení/blokování IP" },
   "imunify": { "label": "Imunify", "desc": "Antivirus" },
   "ssh": {

@@ -30,6 +30,7 @@
     "mailFilterLists": "送信者フィルターリスト",
     "mailAddressPool": "送信元アドレスのプール",
     "appRuntimes": "アプリケーションの runtime",
-    "subdomains": "サブドメイン"
+    "subdomains": "サブドメイン",
+    "maintenance": "メンテナンスモード"
   }
 }

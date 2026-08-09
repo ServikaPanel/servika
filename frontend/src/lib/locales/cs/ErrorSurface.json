@@ -30,6 +30,7 @@
     "mailFilterLists": "seznamy filtrů odesílatelů",
     "mailAddressPool": "fond odchozích adres",
     "appRuntimes": "běhová prostředí aplikací",
-    "subdomains": "subdomény"
+    "subdomains": "subdomény",
+    "maintenance": "režim údržby"
   }
 }

@@ -1,0 +1,73 @@
+{
+  "title": "Maintenance mode",
+  "description": "Close the site to visitors and show a page instead. The site answers 503, which tells search engines the outage is temporary and leaves its indexing alone.",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Subscriptions",
+    "maintenance": "Maintenance mode"
+  },
+  "state": {
+    "on": "Maintenance mode is on",
+    "off": "Maintenance mode is off",
+    "until": "Ends automatically at {{time}}",
+    "openEnded": "Stays on until you turn it off"
+  },
+  "action": {
+    "on": "Turn on",
+    "off": "Turn off",
+    "savePage": "Save page",
+    "saving": "Saving…"
+  },
+  "duration": {
+    "label": "How long",
+    "openEnded": "Until I turn it off",
+    "minutes": "{{count}} minutes",
+    "hint": "The site reopens by itself at the end of the window."
+  },
+  "page": {
+    "title": "The page visitors see",
+    "heading": "Heading",
+    "headingPlaceholder": "We will be back shortly",
+    "message": "Message",
+    "messagePlaceholder": "This website is temporarily unavailable while we carry out maintenance.",
+    "accent": "Accent colour",
+    "logo": "Logo URL",
+    "logoHint": "https only. The page is served over TLS, so an http image is blocked.",
+    "previewTitle": "We will be back shortly",
+    "previewMessage": "This website is temporarily unavailable while we carry out maintenance."
+  },
+  "ips": {
+    "title": "Addresses that still reach the site",
+    "hint": "An address on this list sees the real site instead of the maintenance page. Exact addresses only, not ranges.",
+    "placeholder": "203.0.113.5",
+    "add": "Add",
+    "addOwn": "Add my address ({{ip}})",
+    "remove": "Remove",
+    "empty": "No address is excepted, so everyone sees the maintenance page.",
+    "yours": "yours"
+  },
+  "confirmOff": {
+    "title": "Turn maintenance mode off?",
+    "message": "The site becomes visible to everyone again straight away.",
+    "confirm": "Turn off"
+  },
+  "saved": {
+    "on": "Maintenance mode is on.",
+    "off": "Maintenance mode is off."
+  },
+  "saveFailed": "The maintenance settings could not be saved.",
+  "ipAddFailed": "The address could not be added.",
+  "ipRemoveFailed": "The address could not be removed.",
+  "notes": {
+    "subdomains": "Subdomains are not covered. Each one serves its own configuration and keeps working.",
+    "wordpress": "This is the site-wide switch and it takes effect before WordPress runs, so it overrides the WordPress maintenance tool.",
+    "seo": "Visitors and search engines get 503, which means temporarily unavailable. Your search ranking is not affected by a short outage."
+  },
+  "reasons": {
+    "unavailable": "Maintenance mode is not available for this domain.",
+    "maintenance_custom_vhost": "This domain serves a custom nginx configuration, which the panel does not modify. Remove it to use maintenance mode.",
+    "maintenance_redirect_only": "This domain only redirects somewhere else, so it has no site to put into maintenance.",
+    "maintenance_bad_address": "That is not a valid IP address.",
+    "maintenance_too_many_ips": "The exception list is full. Remove an address before adding another."
+  }
+}

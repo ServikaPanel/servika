@@ -38,6 +38,12 @@
   },
   "passwordProtection": { "label": "Directoare protejate cu parolă", "desc": ".htpasswd" },
   "stats": { "label": "Statistici", "desc": "Analiză trafic" },
+  "maintenance": {
+    "label": "Mod mentenanță",
+    "desc": "Închideți site-ul cu o pagină 503",
+    "on": "Site-ul este închis pentru vizitatori",
+    "warning": "Modul mentenanță este pornit"
+  },
   "accessControl": { "label": "Control acces", "desc": "Protecție hotlink · permitere/blocare IP" },
   "imunify": { "label": "Imunify", "desc": "Antivirus" },
   "ssh": {

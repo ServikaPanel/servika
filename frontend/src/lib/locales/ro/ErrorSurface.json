@@ -30,6 +30,7 @@
     "mailFilterLists": "listele de filtrare a expeditorilor",
     "mailAddressPool": "grupul de adrese de trimitere",
     "appRuntimes": "runtime-uri de aplicație",
-    "subdomains": "subdomenii"
+    "subdomains": "subdomenii",
+    "maintenance": "modul mentenanță"
   }
 }

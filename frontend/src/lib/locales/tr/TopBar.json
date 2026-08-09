@@ -66,6 +66,10 @@
     "logs": { "title": "Günlükler", "subtitle": "Erişim ve hata günlükleri" },
     "waf": { "title": "WAF", "subtitle": "Web uygulaması güvenlik duvarı" },
     "accessControl": { "title": "Erişim Kontrolü", "subtitle": "IP erişim kuralları" },
+    "maintenance": {
+      "title": "Bakım Modu",
+      "subtitle": "Siteyi geçici olarak kapatın"
+    },
     "passwordProtection": { "title": "Parola Koruması", "subtitle": "Dizin parolası" },
     "imunify": { "title": "Imunify", "subtitle": "Zararlı yazılım tarama" },
     "stats": { "title": "İstatistikler", "subtitle": "Domain kullanım verileri" },

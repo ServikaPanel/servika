@@ -1,0 +1,73 @@
+{
+  "title": "Modalità manutenzione",
+  "description": "Chiudi il sito ai visitatori e mostra una pagina al suo posto. Il sito risponde 503, il che dice ai motori di ricerca che l'interruzione è temporanea e lascia intatta l'indicizzazione.",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Abbonamenti",
+    "maintenance": "Modalità manutenzione"
+  },
+  "state": {
+    "on": "La modalità manutenzione è attiva",
+    "off": "La modalità manutenzione non è attiva",
+    "until": "Termina automaticamente alle {{time}}",
+    "openEnded": "Resta attiva finché non la disattivi"
+  },
+  "action": {
+    "on": "Attiva",
+    "off": "Disattiva",
+    "savePage": "Salva pagina",
+    "saving": "Salvataggio…"
+  },
+  "duration": {
+    "label": "Per quanto tempo",
+    "openEnded": "Finché non la disattivo",
+    "minutes": "{{count}} minuti",
+    "hint": "Alla fine della finestra il sito si riapre da solo."
+  },
+  "page": {
+    "title": "La pagina che vedono i visitatori",
+    "heading": "Titolo",
+    "headingPlaceholder": "Torniamo a breve",
+    "message": "Messaggio",
+    "messagePlaceholder": "Questo sito è temporaneamente non disponibile per manutenzione.",
+    "accent": "Colore di accento",
+    "logo": "URL del logo",
+    "logoHint": "Solo https. La pagina è servita su TLS, quindi un'immagine http viene bloccata.",
+    "previewTitle": "Torniamo a breve",
+    "previewMessage": "Questo sito è temporaneamente non disponibile per manutenzione."
+  },
+  "ips": {
+    "title": "Indirizzi che raggiungono ancora il sito",
+    "hint": "Un indirizzo in questo elenco vede il sito reale invece della pagina di manutenzione. Solo indirizzi esatti, non intervalli.",
+    "placeholder": "203.0.113.5",
+    "add": "Aggiungi",
+    "addOwn": "Aggiungi il mio indirizzo ({{ip}})",
+    "remove": "Rimuovi",
+    "empty": "Nessun indirizzo è escluso, quindi tutti vedono la pagina di manutenzione.",
+    "yours": "il tuo"
+  },
+  "confirmOff": {
+    "title": "Disattivare la modalità manutenzione?",
+    "message": "Il sito torna subito visibile a tutti.",
+    "confirm": "Disattiva"
+  },
+  "saved": {
+    "on": "La modalità manutenzione è attiva.",
+    "off": "La modalità manutenzione non è attiva."
+  },
+  "saveFailed": "Non è stato possibile salvare le impostazioni di manutenzione.",
+  "ipAddFailed": "Non è stato possibile aggiungere l'indirizzo.",
+  "ipRemoveFailed": "Non è stato possibile rimuovere l'indirizzo.",
+  "notes": {
+    "subdomains": "I sottodomini non sono inclusi. Ognuno serve la propria configurazione e continua a funzionare.",
+    "wordpress": "Questo è l'interruttore dell'intero sito e agisce prima che WordPress venga eseguito, quindi ha la precedenza sullo strumento di manutenzione di WordPress.",
+    "seo": "Visitatori e motori di ricerca ricevono 503, cioè temporaneamente non disponibile. Una breve interruzione non incide sul posizionamento."
+  },
+  "reasons": {
+    "unavailable": "La modalità manutenzione non è disponibile per questo dominio.",
+    "maintenance_custom_vhost": "Questo dominio serve una configurazione nginx personalizzata, che il pannello non modifica. Rimuovila per usare la modalità manutenzione.",
+    "maintenance_redirect_only": "Questo dominio esegue solo un reindirizzamento, quindi non ha un sito da mettere in manutenzione.",
+    "maintenance_bad_address": "Questo non è un indirizzo IP valido.",
+    "maintenance_too_many_ips": "L'elenco delle eccezioni è pieno. Rimuovi un indirizzo prima di aggiungerne un altro."
+  }
+}

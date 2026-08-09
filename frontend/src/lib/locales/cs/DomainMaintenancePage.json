@@ -1,0 +1,73 @@
+{
+  "title": "Režim údržby",
+  "description": "Zavřete web návštěvníkům a místo něj zobrazte stránku. Web odpoví 503, což vyhledávačům říká, že výpadek je dočasný, a nechá indexaci beze změny.",
+  "breadcrumb": {
+    "home": "Domů",
+    "domains": "Předplatné",
+    "maintenance": "Režim údržby"
+  },
+  "state": {
+    "on": "Režim údržby je zapnutý",
+    "off": "Režim údržby je vypnutý",
+    "until": "Automaticky skončí v {{time}}",
+    "openEnded": "Zůstane zapnutý, dokud ho nevypnete"
+  },
+  "action": {
+    "on": "Zapnout",
+    "off": "Vypnout",
+    "savePage": "Uložit stránku",
+    "saving": "Ukládání…"
+  },
+  "duration": {
+    "label": "Jak dlouho",
+    "openEnded": "Dokud to nevypnu",
+    "minutes": "{{count}} minut",
+    "hint": "Na konci intervalu se web otevře sám."
+  },
+  "page": {
+    "title": "Stránka, kterou vidí návštěvníci",
+    "heading": "Nadpis",
+    "headingPlaceholder": "Za chvíli jsme zpět",
+    "message": "Zpráva",
+    "messagePlaceholder": "Tento web je kvůli údržbě dočasně nedostupný.",
+    "accent": "Barva zvýraznění",
+    "logo": "URL loga",
+    "logoHint": "Pouze https. Stránka se doručuje přes TLS, takže obrázek přes http bude zablokován.",
+    "previewTitle": "Za chvíli jsme zpět",
+    "previewMessage": "Tento web je kvůli údržbě dočasně nedostupný."
+  },
+  "ips": {
+    "title": "Adresy, které se na web stále dostanou",
+    "hint": "Adresa v tomto seznamu uvidí skutečný web místo stránky údržby. Jen přesné adresy, ne rozsahy.",
+    "placeholder": "203.0.113.5",
+    "add": "Přidat",
+    "addOwn": "Přidat mou adresu ({{ip}})",
+    "remove": "Odebrat",
+    "empty": "Žádná adresa není vyňata, takže stránku údržby vidí všichni.",
+    "yours": "vaše"
+  },
+  "confirmOff": {
+    "title": "Vypnout režim údržby?",
+    "message": "Web bude okamžitě znovu viditelný pro všechny.",
+    "confirm": "Vypnout"
+  },
+  "saved": {
+    "on": "Režim údržby je zapnutý.",
+    "off": "Režim údržby je vypnutý."
+  },
+  "saveFailed": "Nastavení údržby se nepodařilo uložit.",
+  "ipAddFailed": "Adresu se nepodařilo přidat.",
+  "ipRemoveFailed": "Adresu se nepodařilo odebrat.",
+  "notes": {
+    "subdomains": "Subdomény zahrnuté nejsou. Každá doručuje vlastní konfiguraci a funguje dál.",
+    "wordpress": "Toto je přepínač pro celý web a uplatní se dřív, než se spustí WordPress, takže má přednost před nástrojem údržby ve WordPressu.",
+    "seo": "Návštěvníci i vyhledávače dostanou 503, tedy dočasně nedostupné. Krátký výpadek vaše umístění neovlivní."
+  },
+  "reasons": {
+    "unavailable": "Režim údržby není pro tuto doménu k dispozici.",
+    "maintenance_custom_vhost": "Tato doména doručuje vlastní konfiguraci nginx, kterou panel nemění. Odeberte ji, chcete-li režim údržby použít.",
+    "maintenance_redirect_only": "Tato doména jen přesměrovává, takže nemá web, který by šlo dát do údržby.",
+    "maintenance_bad_address": "To není platná IP adresa.",
+    "maintenance_too_many_ips": "Seznam výjimek je plný. Než přidáte další adresu, jednu odeberte."
+  }
+}

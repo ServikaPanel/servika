@@ -30,6 +30,7 @@
     "mailFilterLists": "gönderen filtre listeleri",
     "mailAddressPool": "giden adres havuzu",
     "appRuntimes": "uygulama runtime'ları",
-    "subdomains": "alt alan adları"
+    "subdomains": "alt alan adları",
+    "maintenance": "bakım modu"
   }
 }

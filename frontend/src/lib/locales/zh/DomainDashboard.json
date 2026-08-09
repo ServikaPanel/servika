@@ -38,6 +38,12 @@
   },
   "passwordProtection": { "label": "密码保护目录", "desc": ".htpasswd" },
   "stats": { "label": "统计", "desc": "流量分析" },
+  "maintenance": {
+    "label": "维护模式",
+    "desc": "用 503 页面关闭站点",
+    "on": "站点已对访客关闭",
+    "warning": "维护模式已开启"
+  },
   "accessControl": { "label": "访问控制", "desc": "防盗链 · IP 允许/阻止" },
   "imunify": { "label": "Imunify", "desc": "杀毒" },
   "ssh": {

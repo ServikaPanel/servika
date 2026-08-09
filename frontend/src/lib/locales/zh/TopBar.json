@@ -66,6 +66,10 @@
     "logs": { "title": "日志", "subtitle": "访问和错误日志" },
     "waf": { "title": "WAF", "subtitle": "Web 应用防火墙" },
     "accessControl": { "title": "访问控制", "subtitle": "IP 访问规则" },
+    "maintenance": {
+      "title": "维护模式",
+      "subtitle": "临时关闭站点"
+    },
     "passwordProtection": { "title": "密码保护", "subtitle": "目录密码" },
     "imunify": { "title": "Imunify", "subtitle": "恶意软件扫描" },
     "stats": { "title": "统计", "subtitle": "域名使用数据" },

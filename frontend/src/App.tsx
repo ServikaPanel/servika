@@ -60,6 +60,7 @@ const DomainSubdomainsPage = lazy(() => import('@/pages/DomainSubdomainsPage'))
 const DomainSubdomainPage = lazy(() => import('@/pages/DomainSubdomainPage'))
 const DomainAddonDomainsPage = lazy(() => import('@/pages/DomainAddonDomainsPage'))
 const DomainAccessControlPage = lazy(() => import('@/pages/DomainAccessControlPage'))
+const DomainMaintenancePage = lazy(() => import('@/pages/DomainMaintenancePage'))
 const StatisticsPage = lazy(() => import('@/pages/StatisticsPage'))
 const MonitoringPage = lazy(() => import('@/pages/MonitoringPage'))
 const DnsOverviewPage = lazy(() => import('@/pages/DnsOverviewPage'))
@@ -139,6 +140,7 @@ export default function App() {
         <Route path="domains/:id/subdomain/:sid/php"          element={<DomainPHPPage />} />
         <Route path="domains/:id/subdomain/:sid/web-server"   element={<DomainWebServerPage />} />
         <Route path="subscriptions/:id/access-control" element={<DomainAccessControlPage />} />
+        <Route path="subscriptions/:id/maintenance" element={<DomainMaintenancePage />} />
         <Route path="subscriptions/:id/cron"          element={<DomainCronPage />} />
         <Route path="subscriptions/:id/apps"          element={<DomainAppsPage />} />
         <Route path="subscriptions/:id/logs"     element={<DomainLogsPage />} />

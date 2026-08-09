@@ -38,6 +38,12 @@
   },
   "passwordProtection": { "label": "Parola Korumalı Dizinler", "desc": ".htpasswd" },
   "stats": { "label": "İstatistikler", "desc": "Trafik analizi" },
+  "maintenance": {
+    "label": "Bakım Modu",
+    "desc": "Siteyi 503 sayfasıyla kapatın",
+    "on": "Site ziyaretçilere kapalı",
+    "warning": "Bakım modu açık"
+  },
   "accessControl": { "label": "Erişim Denetimi", "desc": "Hotlink koruması · IP izin/engelleme" },
   "imunify": { "label": "Imunify", "desc": "Antivirüs" },
   "ssh": {

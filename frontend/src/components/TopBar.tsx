@@ -86,6 +86,7 @@ const DOMAIN_PAGES: ReadonlyArray<readonly [string, string]> = [
   ['/logs', 'logs'],
   ['/waf', 'waf'],
   ['/access-control', 'accessControl'],
+  ['/maintenance', 'maintenance'],
   ['/password-protection', 'passwordProtection'],
   ['/imunify', 'imunify'],
   ['/stats', 'stats'],
