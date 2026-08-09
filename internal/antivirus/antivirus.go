@@ -123,6 +123,39 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
+// RecordScan writes a finished scan and its findings, for a source of findings
+// other than this package's own file scan.
+//
+// It exists so a second detector reaches the SAME screen, the same quarantine
+// and the same bulk cleanup instead of growing a parallel finding model that
+// would need its own listing and its own containment path. The caller owns the
+// engine name, which is what the screen groups by.
+//
+// The paths must already be absolute and under the tenant home: the quarantine
+// path refuses anything else, but a caller that records a bad path leaves a
+// finding nothing can act on.
+func RecordScan(db *sql.DB, domainID int64, engine string, scanned int, findings []Finding) (int64, error) {
+	result, err := db.Exec(
+		`INSERT INTO av_scans (domain_id, status, engine, scanned, infected, finished_at)
+		 VALUES (?, 'finished', ?, ?, ?, NOW())`,
+		domainID, engine, scanned, len(findings))
+	if err != nil {
+		return 0, err
+	}
+	scanID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	for _, finding := range findings {
+		if _, err := db.Exec(
+			`INSERT INTO av_findings (scan_id, domain_id, file, signature, engine) VALUES (?,?,?,?,?)`,
+			scanID, domainID, finding.File, finding.Signature, finding.Engine); err != nil {
+			return scanID, err
+		}
+	}
+	return scanID, nil
+}
+
 func (h *Handlers) findings(ctx context.Context, sid int64) []Finding {
 	out := []Finding{}
 	rows, err := h.DB.QueryContext(ctx, `SELECT id, file, signature, engine, quarantined FROM av_findings WHERE scan_id=? ORDER BY id`, sid)

@@ -1,0 +1,5 @@
+Warning: File doesn't exist: wp-includes/blocks/index.php
+Warning: File doesn't verify against checksum: wp-includes/version.php
+Warning: File should not exist: wp-includes/js/tinymce/a b.php
+Warning: File should not exist: wp-admin/evil.php
+Error: WordPress installation doesn't verify against checksums.

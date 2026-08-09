@@ -705,6 +705,7 @@ func main() {
 				r.With(middleware.CustomerScope).Get("/domains/{id}/wordpress/users", wpH.Users)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress/user-password", wpH.UserPassword)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress/repair", wpH.Repair)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress/verify", wpH.VerifyChecksums)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress/tool", wpH.ToolAction)
 				r.With(middleware.ResellerOrAbove).Get("/wordpress/all", wpH.ListAll)
 
