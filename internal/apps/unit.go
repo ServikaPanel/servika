@@ -55,11 +55,22 @@ func systemCommand(name string, arguments ...string) *exec.Cmd {
 // The environment is NOT written into this file. Any local user reads
 // `systemctl show <unit>` and gets every Environment= value back, and an
 // application's environment carries its database password.
+//
+// The two StartLimit keys belong to [Unit] and NOWHERE else. systemd 257 on
+// AlmaLinux 10 answers `Unknown key 'StartLimitIntervalSec' in section
+// [Service], ignoring.` while silently accepting StartLimitBurst there
+// (measured with systemd-analyze verify), so putting them in [Service] leaves
+// the burst against the DEFAULT ten-second interval. With RestartSec=5 only two
+// starts fit that window, the burst is never reached, and an application that
+// cannot start restarts every five seconds for good instead of landing in
+// failed where the panel would show it.
 func RenderUnit(app App, systemUser, appDir string, execStart []string) string {
 	var body strings.Builder
 	fmt.Fprintf(&body, `[Unit]
 Description=Servika application %d (%s)
 After=network.target mariadb.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -71,8 +82,6 @@ EnvironmentFile=%s
 ExecStart=%s
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=300
-StartLimitBurst=10
 StandardOutput=append:%s
 StandardError=append:%s
 NoNewPrivileges=yes

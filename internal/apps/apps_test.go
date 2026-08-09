@@ -94,6 +94,32 @@ func TestTheLogTargetIsNotInsideATenantHome(t *testing.T) {
 	}
 }
 
+// The restart rate limit only applies from [Unit]. systemd 257 answers
+// `Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.` and
+// silently accepts StartLimitBurst there, so the [Service] spelling leaves the
+// burst counting against the default ten-second window. RestartSec=5 fits two
+// starts in that window, the burst of ten is never reached, and an application
+// that cannot start restarts every five seconds for good rather than landing in
+// failed where the screen would show it.
+func TestTheRestartRateLimitIsDeclaredWhereSystemdReadsIt(t *testing.T) {
+	unit := RenderUnit(App{ID: 7, Name: "api"}, "c_example", "/home/c_example/api",
+		[]string{"/usr/bin/node", "server.js"})
+
+	service := strings.Index(unit, "\n[Service]")
+	if service < 0 {
+		t.Fatal("the unit has no [Service] section")
+	}
+	for _, key := range []string{"StartLimitIntervalSec=300", "StartLimitBurst=10"} {
+		at := strings.Index(unit, key)
+		switch {
+		case at < 0:
+			t.Errorf("the unit no longer declares %s", key)
+		case at > service:
+			t.Errorf("%s sits in [Service], where systemd ignores it", key)
+		}
+	}
+}
+
 // ---- environment ----
 
 func TestAnEnvironmentValueCannotDefineASecondVariable(t *testing.T) {
