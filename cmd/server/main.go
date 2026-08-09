@@ -288,6 +288,7 @@ func main() {
 	sshH := &sshaccess.Handlers{DB: d, IPv4: ipv4}
 	statH := &stats.Handlers{DB: d}
 	perfH := &performance.Handlers{DB: d}
+	slowQueryH := &slowquery.Handlers{DB: d}
 	compH := &composer.Handlers{DB: d}
 	laravelH := &laravel.Handlers{DB: d}
 	protectionH := &passwordprotect.Handlers{DB: d}
@@ -502,6 +503,12 @@ func main() {
 			r.With(middleware.AdminOnly).Get("/system/processes", monitor.Processes)
 			r.With(middleware.ResellerOrAbove).Get("/system/load-history", monitorH.LoadHistory)
 			r.With(middleware.AdminOnly).Get("/admin/system/logs", monitorH.ServerLog)
+			// Server-wide slow query shapes. AdminOnly, not ResellerOrAbove: the
+			// list names every tenant on the host, and a reseller sees only its
+			// own customers everywhere else.
+			r.With(middleware.AdminOnly).Get("/admin/slow-queries", slowQueryH.List)
+			r.With(middleware.AdminOnly).Get("/admin/slow-queries/status", slowQueryH.Status)
+			r.With(middleware.AdminOnly).Put("/admin/slow-queries/settings", slowQueryH.Save)
 			r.With(middleware.CustomerScope).Get("/domains/{id}/health", monitorH.Health)
 
 			// Write + customer-scope routes — authorised per-route with AdminOnly/CustomerScope
@@ -530,6 +537,9 @@ func main() {
 				r.With(middleware.CustomerScope).Get("/domains/{id}/statistics", statH.Show)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain/{sid}/statistics", statH.Show)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/performance", perfH.Show)
+				// A site owner sees their own slowest query shapes. The server-wide
+				// view names every tenant, so it is admin-only and mounted below.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/slow-queries", slowQueryH.ListForDomain)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/composer", compH.Status)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/composer", compH.Run)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain/{sid}/composer", compH.Status)
