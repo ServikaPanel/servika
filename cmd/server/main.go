@@ -65,6 +65,7 @@ import (
 	"servika/internal/secret"
 	"servika/internal/sitecopy"
 	"servika/internal/siteimport"
+	"servika/internal/slowquery"
 	"servika/internal/sshaccess"
 	"servika/internal/stats"
 	"servika/internal/subdomain"
@@ -961,6 +962,7 @@ func main() {
 
 	monitor.StartLoadSampler(d, 60*time.Second) // dashboard load-history sampler
 	stats.StartTrafficAggregator(d, 5*time.Minute)
+	slowquery.StartCollector(d)                // per-tenant slow query shapes, drained from the MariaDB slow log
 	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
 	firewall.TakeOverFirewalld()
 	if err := firewall.Reapply(d); err != nil {
