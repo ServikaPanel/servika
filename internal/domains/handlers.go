@@ -531,6 +531,16 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		h.IPv4, pr.SystemUser, dbUser, dbName, pr.WebRoot, siteType)
 	if err != nil {
 		_ = provisioner.Deprovision(req.DomainName, pr.SystemUser)
+		// The domain name was already checked above, so the only key left to break
+		// here is uq_domains_system_user_top: two creates running together read the
+		// same free system user name, and the database refused the second. The
+		// teardown just above correctly leaves the host alone, because the winner's
+		// row now answers to that name. Retrying allocates the next one.
+		if strings.Contains(err.Error(), "uq_domains_system_user_top") {
+			log.Printf("create %q lost the race for system user %q", req.DomainName, pr.SystemUser)
+			httpx.WriteError(w, http.StatusConflict, "another domain took this system user name; try again")
+			return
+		}
 		httpx.WriteError(w, http.StatusInternalServerError, "domain record creation failed")
 		return
 	}
