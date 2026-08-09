@@ -13,7 +13,7 @@ import (
 // application answers straight from the internet, past nginx, TLS, the WAF and
 // the per-domain IP rules.
 func TestTheApplicationPortRangeIsDroppedFromOutside(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}))
 
 	if !strings.Contains(ruleset, "policy accept;") {
 		t.Fatal("the chain no longer defaults to accept; this test's premise needs rechecking")
@@ -27,7 +27,7 @@ func TestTheApplicationPortRangeIsDroppedFromOutside(t *testing.T) {
 // The drop must come AFTER the loopback accept, or nginx loses its own path to
 // the application and every published application returns 502.
 func TestTheDropComesAfterTheLoopbackAccept(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}))
 
 	loopback := strings.Index(ruleset, `iif "lo" accept`)
 	drop := strings.Index(ruleset, "tcp dport 30000-30999 drop")
@@ -46,6 +46,7 @@ func TestTheDropPrecedesTheOperatorsOwnRules(t *testing.T) {
 		[]string{"\t\tip saddr 203.0.113.7 accept"}, nil,
 		[]string{"\t\ttcp dport 8080 drop"},
 		[]string{"\t\tip saddr 198.51.100.4 drop"},
+		remoteAccess{},
 	))
 
 	drop := strings.Index(ruleset, "tcp dport 30000-30999 drop")

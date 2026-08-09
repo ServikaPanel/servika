@@ -32,6 +32,7 @@ func TestTheCountryDropSitsBetweenLoopbackAndTheWhitelist(t *testing.T) {
 		[]string{"\t\ttcp dport 3306 drop"},
 		[]string{"\t\ttcp dport 21 drop"},
 		[]string{"\t\tip saddr 9.9.9.9 drop"},
+		remoteAccess{},
 	))
 	lines := strings.Split(ruleset, "\n")
 
@@ -65,7 +66,7 @@ func TestTheCountryDropSitsBetweenLoopbackAndTheWhitelist(t *testing.T) {
 // The established-connection accept must stay first, or applying a country
 // block would cut the operator's own SSH session.
 func TestEstablishedConnectionsStillComeFirst(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}))
 	lines := strings.Split(ruleset, "\n")
 	established := lineIndex(lines, "ct state established,related accept")
 	geoV4 := lineIndex(lines, "@"+geoSetV4)
@@ -80,7 +81,7 @@ func TestEstablishedConnectionsStillComeFirst(t *testing.T) {
 // The table body references the sets unconditionally, so the include has to be
 // there whatever is blocked.
 func TestTheTableIncludesTheCountrySets(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}))
 	if !strings.Contains(ruleset, `include "`+geoIncludeFile+`"`) {
 		t.Fatalf("the element file is not included:\n%s", ruleset)
 	}
@@ -184,6 +185,17 @@ func TestTheComposedDocumentParses(t *testing.T) {
 		[]string{"\t\ttcp dport 3306 drop"},
 		[]string{"\t\ttcp dport 21 drop"},
 		[]string{"\t\tip saddr 9.9.9.9 drop"},
+		// The remote database block is included so nft judges the whole document
+		// the panel actually writes. A rule nft refuses fails the WHOLE ruleset,
+		// which would take every other rule down with it, not just this feature.
+		remoteAccess{
+			enabled: true,
+			accepts: []string{
+				"\t\tip saddr 203.0.113.7 tcp dport 3306 accept",
+				"\t\tip saddr 198.51.100.0/24 tcp dport 3306 accept",
+				"\t\tip6 saddr 2001:db8::5 tcp dport 3306 accept",
+			},
+		},
 	)
 	// The include cannot be followed from a test (the path is root-owned), so
 	// the element file is spliced in exactly where nft would read it.

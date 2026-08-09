@@ -14,6 +14,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -347,7 +348,12 @@ func (h *Handlers) rebuild() error {
 		return err
 	}
 
-	ruleset := buildRuleset(allowlisted, restricted, closed, banned)
+	remote, err := h.remoteAccess()
+	if err != nil {
+		return err
+	}
+
+	ruleset := buildRuleset(allowlisted, restricted, closed, banned, remote)
 
 	// 1. Validate so an invalid ruleset is never applied.
 	if out, err := nftCheck(ruleset); err != nil {
@@ -370,7 +376,68 @@ func (h *Handlers) rebuild() error {
 // chain is `policy accept`, so every restriction here is an explicit drop, and a
 // drop placed before the loopback accept above it would cut nginx off from the
 // service it is meant to reach.
-func buildRuleset(allowlisted, restricted, closed, banned []string) []byte {
+// remoteAccess reads the per-account remote MySQL allowlist.
+//
+// It fails CLOSED in the sense that matters: a read error aborts the whole
+// rebuild rather than producing a ruleset with the port open and no accepts,
+// which would be a listener exposed to everybody.
+func (h *Handlers) remoteAccess() (remoteAccess, error) {
+	var enabled int
+	err := h.DB.QueryRow(`SELECT COALESCE(db_remote_enabled,0) FROM panel_settings WHERE id=1`).Scan(&enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return remoteAccess{}, nil
+	}
+	if err != nil {
+		return remoteAccess{}, fmt.Errorf("remote database switch: %w", err)
+	}
+	if enabled != 1 {
+		return remoteAccess{}, nil
+	}
+
+	rows, err := h.DB.Query(`SELECT DISTINCT host_cidr FROM db_remote_hosts ORDER BY host_cidr`)
+	if err != nil {
+		return remoteAccess{}, fmt.Errorf("remote database hosts: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	access := remoteAccess{enabled: true}
+	for rows.Next() {
+		var host string
+		if err := rows.Scan(&host); err != nil {
+			return remoteAccess{}, err
+		}
+		// A stored value that is not an address is dropped rather than rendered:
+		// nft would refuse the whole document, which takes every other rule down
+		// with it, including the drop this block depends on.
+		if !validIP(host) {
+			log.Printf("firewall: ignoring unusable remote database host %q", host)
+			continue
+		}
+		access.accepts = append(access.accepts, "\t\t"+saddr(host)+"tcp dport 3306 accept")
+	}
+	if err := rows.Err(); err != nil {
+		return remoteAccess{}, err
+	}
+	return access, nil
+}
+
+// remoteAccess is the per-account remote MySQL allowlist, rendered as its own
+// block rather than as `firewall_rules` rows.
+//
+// It is derived state owned by internal/dbremote: an operator deleting a row
+// from the firewall screen would silently break a customer's access, and the
+// next rebuild would put it back, so the two never share a table.
+type remoteAccess struct {
+	// enabled mirrors panel_settings.db_remote_enabled. The drop comes with the
+	// LISTENER: while the switch is off MariaDB binds loopback and there is
+	// nothing to drop, and emitting the rule anyway would cut off an operator who
+	// configured their own remote MariaDB outside the panel.
+	enabled bool
+	// accepts are the rendered `<family> saddr <addr> tcp dport 3306 accept`
+	// lines, one per allowed source.
+	accepts []string
+}
+
+func buildRuleset(allowlisted, restricted, closed, banned []string, remote remoteAccess) []byte {
 	var b bytes.Buffer
 	// Replace atomically and idempotently by ensuring, deleting, and rebuilding the table.
 	fmt.Fprintf(&b, "table inet %s {}\n", tableName)
@@ -409,6 +476,20 @@ func buildRuleset(allowlisted, restricted, closed, banned []string) []byte {
 	}
 	for _, r := range banned {
 		fmt.Fprintf(&b, "%s\n", r)
+	}
+	// The remote database allowlist comes LAST, after the country drops, the
+	// operator's own rules and the bans. The chain is `policy accept`, so the
+	// first matching rule wins: an address the operator blocked by country or by
+	// ban must not get back in because a customer allowed it to their database.
+	//
+	// The drop is emitted whenever the switch is on, even with an empty
+	// allowlist. Without it the port that has just been opened is reachable by
+	// the whole internet, so this single line is the entire boundary.
+	if remote.enabled {
+		for _, r := range remote.accepts {
+			fmt.Fprintf(&b, "%s\n", r)
+		}
+		b.WriteString("\t\ttcp dport 3306 drop\n")
 	}
 	b.WriteString("\t}\n}\n")
 	return b.Bytes()
