@@ -52,7 +52,13 @@ const (
 	// /opt/servika because servika-update replaces bin/, frontend-dist and src/
 	// only, and a database re-downloaded on every update would spend the
 	// operator's MaxMind allowance for nothing.
-	DefaultGeoIPDir           = "/var/lib/servika/geoip"
+	DefaultGeoIPDir = "/var/lib/servika/geoip"
+	// DefaultMariaDBSlowLog is the panel's OWN slow query log, deliberately not
+	// MariaDB's default mariadb-slow.log name: an operator who already turned the
+	// slow log on keeps their file and their logrotate rule, and the panel never
+	// reads or truncates it. The file records every tenant's SQL, so the heal that
+	// enables it also closes the directory to everyone but root and mysql.
+	DefaultMariaDBSlowLog     = "/var/log/mariadb/servika-slow.log"
 	DefaultMailLog            = "/var/log/maillog"
 	DefaultInstallationID     = "/etc/servika/installation-id"
 	DefaultVersionCache       = "/opt/servika/version-cache.json"
@@ -167,6 +173,12 @@ func AppLogDir() string { return mustAbsPath("SERVIKA_APP_LOG_DIR", DefaultAppLo
 func AppEnvDir() string { return mustAbsPath("SERVIKA_APP_ENV_DIR", DefaultAppEnvDir) }
 func GeoIPDir() string  { return mustAbsPath("SERVIKA_GEOIP_DIR", DefaultGeoIPDir) }
 
+// MariaDBSlowLog is where the panel asks MariaDB to write slow queries, and the
+// only file internal/slowquery reads.
+func MariaDBSlowLog() string {
+	return mustAbsPath("SERVIKA_MARIADB_SLOW_LOG", DefaultMariaDBSlowLog)
+}
+
 // MailLog is where Postfix and Dovecot write. AlmaLinux keeps it at
 // /var/log/maillog; a host that sends mail logging elsewhere overrides it.
 func MailLog() string { return mustAbsPath("SERVIKA_MAIL_LOG", DefaultMailLog) }
@@ -262,6 +274,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_NODE_ROOT", DefaultNodeRoot, false},
 		{"SERVIKA_APP_LOG_DIR", DefaultAppLogDir, false},
 		{"SERVIKA_APP_ENV_DIR", DefaultAppEnvDir, false},
+		{"SERVIKA_MARIADB_SLOW_LOG", DefaultMariaDBSlowLog, false},
 		{"SERVIKA_MAIL_LOG", DefaultMailLog, false},
 		{"SERVIKA_INSTALLATION_ID", DefaultInstallationID, false},
 		{"SERVIKA_VERSION_CACHE", DefaultVersionCache, false},

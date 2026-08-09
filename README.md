@@ -212,6 +212,7 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_NGINX_CACHE_TEMP_CONF` | `/etc/nginx/conf.d/00-servikacache-temporary.conf` | Temporary nginx cache bypass config path.               |
 | `SERVIKA_NGINX_CACHE_LOG_CONF`  | `/etc/nginx/conf.d/00-servika-cache-log.conf`      | nginx cache log format config path.                     |
 | `SERVIKA_NGINX_UPGRADE_MAP_CONF` | `/etc/nginx/conf.d/00-servika-upgrade-map.conf`   | nginx WebSocket upgrade map config path.                |
+| `SERVIKA_MARIADB_SLOW_LOG`      | `/var/log/mariadb/servika-slow.log`                | MariaDB slow query log the panel writes and reads.      |
 | `SERVIKA_MAIL_LOG`              | `/var/log/maillog`                                 | Postfix and Dovecot log file read by the delivery log.  |
 | `SERVIKA_ROUNDCUBE_CONFIG`      | `/opt/roundcube/config/config.inc.php`             | Roundcube webmail config file path.                     |
 | `SERVIKA_ROUNDCUBE_PLUGINS`     | `/opt/roundcube/plugins`                           | Roundcube plugin directory, used by the sign-on bridge. |
