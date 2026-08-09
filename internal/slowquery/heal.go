@@ -111,7 +111,16 @@ func Apply(ctx context.Context, enabled bool, seconds float64) error {
 	if err := hardenLogPerms(ctx, path); err != nil {
 		log.Printf("slow query log: could not harden %s: %v", filepath.Dir(path), err)
 	}
-	return applyGlobals(enabled, seconds, path)
+	if err := applyGlobals(enabled, seconds, path); err != nil {
+		return err
+	}
+	// Again, because MariaDB creates the file only once the switch is on, and it
+	// creates it 0660. Without this second pass a fresh host would leave the
+	// file group-readable until the next panel start.
+	if err := hardenLogPerms(ctx, path); err != nil {
+		log.Printf("slow query log: could not harden %s: %v", path, err)
+	}
+	return nil
 }
 
 func readSetting(ctx context.Context, db *sql.DB) (bool, float64, error) {
@@ -205,8 +214,16 @@ func hardenLogPerms(ctx context.Context, path string) error {
 	dir := filepath.Dir(path)
 	info, err := os.Stat(dir)
 	if err != nil {
-		// The directory appears when MariaDB first writes; nothing to harden yet.
-		return nil
+		// MariaDB does NOT create this directory: it REFUSES
+		// "SET GLOBAL slow_query_log_file" outright when the parent is missing
+		// (measured on 10.11: ERROR 1231), so the whole apply fails and the
+		// feature is silently off. Create it here, already closed.
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		if info, err = os.Stat(dir); err != nil {
+			return err
+		}
 	}
 	if info.Mode().Perm() != 0o700 {
 		// #nosec G302 -- 0700 is the minimum for a DIRECTORY the owner must traverse, and this tightens the mode rather than loosening it.
@@ -220,6 +237,9 @@ func hardenLogPerms(ctx context.Context, path string) error {
 	if out, err := healCommand(ctx, "chown", "mysql:mysql", dir).CombinedOutput(); err != nil {
 		log.Printf("slow query log: could not set the owner of %s: %s", dir, bytes.TrimSpace(out))
 	}
+	// The mask covers GROUP as well as other, which is what catches the 0660
+	// MariaDB creates. It only ever tightens: a file already stricter than 0600
+	// is left alone rather than widened to it.
 	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {
 		if err := os.Chmod(path, 0o600); err != nil {
 			return err

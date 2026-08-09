@@ -237,6 +237,64 @@ func TestTheLogDirectoryIsClosedToOtherTenants(t *testing.T) {
 	}
 }
 
+// MariaDB does NOT create the log's parent directory: it refuses
+// "SET GLOBAL slow_query_log_file" with ERROR 1231 when the parent is missing
+// (measured on 10.11), which would fail the whole apply and leave the feature
+// silently off on a host whose MariaDB package never shipped that directory.
+func TestTheLogDirectoryIsCreatedWhenItIsMissing(t *testing.T) {
+	dir := withTempPaths(t)
+	captureRootSQL(t)
+	// A path one level deeper than anything the fixture created.
+	missing := filepath.Join(dir, "mariadb")
+	t.Setenv("SERVIKA_MARIADB_SLOW_LOG", filepath.Join(missing, "servika-slow.log"))
+
+	if err := Apply(context.Background(), true, 2); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	info, err := os.Stat(missing)
+	if err != nil {
+		t.Fatalf("the heal did not create %s: %v", missing, err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Errorf("directory mode is %o, want 700", info.Mode().Perm())
+	}
+}
+
+// On a host where the log does not exist yet, the first hardening pass has
+// nothing to harden: MariaDB creates the file (0660, measured) only once the
+// switch is applied. Without a second pass afterwards the file would stay
+// group-readable until the next panel start, and it carries every tenant's SQL.
+func TestTheLogFileMariaDBCreatesIsTightened(t *testing.T) {
+	dir := withTempPaths(t)
+	logPath := filepath.Join(dir, "servika-slow.log")
+
+	// The privileged runner stands in for MariaDB: the file appears only once
+	// the switch is applied, which is after the first hardening pass.
+	previous := rootSQL
+	rootSQL = func(...string) error {
+		if err := os.WriteFile(logPath, []byte("# User@Host: a[a] @ localhost []\n"), 0o660); err != nil {
+			return err
+		}
+		// Explicitly, because the process umask would otherwise strip the group
+		// write bit and leave a mode MariaDB does not actually produce.
+		return os.Chmod(logPath, 0o660)
+	}
+	t.Cleanup(func() { rootSQL = previous })
+
+	if err := Apply(context.Background(), true, 2); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	fi, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("file mode is %o, want 600", fi.Mode().Perm())
+	}
+}
+
 // A path crossing into SQL is quoted, even though the only caller passes a
 // configured absolute path.
 func TestThePathIsQuotedIntoTheStatement(t *testing.T) {
