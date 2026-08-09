@@ -25,7 +25,10 @@ INSERT INTO mail_server_settings(id) VALUES(1);
 -- log never recorded. Rows written before this column exists count towards the
 -- per-mailbox and per-domain windows as they always did, and simply do not
 -- match any client.
+--
+-- ix_sendlog_domain_ts is NOT created here: 0059_mail_send_limits.sql already
+-- adds it. Adding it a second time is `Duplicate key name`, which fails this
+-- whole migration and stops the panel from starting.
 ALTER TABLE mail_send_log
   ADD COLUMN client_ip VARCHAR(45) NOT NULL DEFAULT '',
-  ADD KEY ix_sendlog_domain_ts (domain_id, ts),
   ADD KEY ix_sendlog_client_ts (client_ip, ts);
