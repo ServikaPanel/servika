@@ -633,6 +633,13 @@ func main() {
 				r.With(middleware.CustomerScope, migrationLogin).Post("/domains/{id}/mail/{mid}/migration", mailH.StartMigration)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/mail/{mid}/migration", mailH.MigrationStatus)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/mail/{mid}/migration", mailH.CancelMigration)
+				// Maintenance mode. The site owner turns their own site off, so
+				// this is CustomerScope like the other per-domain protections;
+				// CustomerScope already refuses a suspended customer.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/maintenance", domainsH.MaintenanceStatus)
+				r.With(middleware.CustomerScope).Put("/domains/{id}/maintenance", domainsH.MaintenanceSave)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/maintenance/ips", domainsH.MaintenanceIPAdd)
+				r.With(middleware.CustomerScope).Delete("/domains/{id}/maintenance/ips/{ipid}", domainsH.MaintenanceIPDelete)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/protection", protectionH.List)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/protection", protectionH.Add)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/protection/{kid}", protectionH.Delete)

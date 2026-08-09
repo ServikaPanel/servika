@@ -672,6 +672,12 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// but not their units, environment files or logs, and a unit left behind
 	// holds its port out of the allocator's reach for good.
 	apps.TeardownForDomain(r.Context(), h.DB, id)
+	// The generated maintenance page is a host artefact: the foreign key
+	// cascade removes the database rows and nothing on disk, so a deleted
+	// domain would leave its page behind for good.
+	if err := provisioner.RemoveMaintenancePage(id); err != nil {
+		log.Printf("remove maintenance page for domain %d: %v", id, err)
+	}
 
 	if isDemo == 0 {
 		// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
