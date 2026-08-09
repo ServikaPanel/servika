@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -613,14 +614,94 @@ func HealSSLCertPathsOnStartup() {
 	}
 }
 
+// slugBodyMax is the longest slug body SlugFromDomain produces, and the ceiling
+// every suffixed candidate is held to as well.
+//
+// Keeping the ceiling where it already is means no downstream path meets a
+// length it has never seen: the systemd slice name, the MariaDB account name,
+// the PHP-FPM socket path and the nginx config name are all derived from this
+// value and none of them declares its own limit.
+const slugBodyMax = 26
+
 func SlugFromDomain(d string) string {
 	s := strings.ToLower(strings.TrimSpace(d))
 	s = slugSan.ReplaceAllString(s, "_")
 	s = strings.Trim(s, "_")
-	if len(s) > 26 {
-		s = s[:26]
+	if len(s) > slugBodyMax {
+		s = s[:slugBodyMax]
 	}
 	return "c_" + s
+}
+
+// errSystemUserExhausted is returned when a hundred candidates were all taken,
+// which means something is wrong with the caller rather than with the names.
+var errSystemUserExhausted = errors.New("provisioner: no free system user name")
+
+// allocateSystemUser returns the system user name for a domain that no other
+// tenant already answers to.
+//
+// SlugFromDomain is NOT injective, and truncation is not the main reason: it
+// maps every non-alphanumeric character to `_`, so `blog.example.com` and
+// `blog-example.com` produce one name without either being long enough to be
+// cut. Everything downstream assumes a system user names exactly ONE top-level
+// domain: the vhost is `dom_<system user>.conf`, so the second domain's creation
+// would overwrite the first one's file, and the tenant home, FTP account, cron
+// spool and `c_<system user>_` database namespace would all be shared by two
+// domains that can belong to two different customers.
+//
+// The first candidate is what SlugFromDomain has always produced, so no
+// existing domain is ever renamed; only a name already in use gains a suffix.
+//
+// A failing `taken` refuses rather than falling through to the candidate. A name
+// that MIGHT be shared is exactly what this exists to prevent, and refusing to
+// create a domain is recoverable where handing two tenants one identity is not.
+func allocateSystemUser(domainName string, taken func(string) (bool, error)) (string, error) {
+	base := SlugFromDomain(domainName)
+	for attempt := 1; attempt <= 99; attempt++ {
+		candidate := base
+		if attempt > 1 {
+			suffix := "_" + strconv.Itoa(attempt)
+			// ValidateDomain runs before this and requires the name to start with
+			// an alphanumeric character, so the body is never empty.
+			body := strings.TrimPrefix(base, "c_")
+			if len(body)+len(suffix) > slugBodyMax {
+				body = strings.TrimRight(body[:slugBodyMax-len(suffix)], "_")
+			}
+			candidate = "c_" + body + suffix
+		}
+		used, err := taken(candidate)
+		if err != nil {
+			return "", err
+		}
+		if !used {
+			return candidate, nil
+		}
+	}
+	return "", errSystemUserExhausted
+}
+
+// systemUserTaken reports whether a candidate name is already answered to, by
+// the host or by the panel.
+//
+// Both sources are asked because either alone is incomplete: a restored panel
+// database can name a tenant whose Linux user has not been recreated yet, and a
+// host can carry a user for a domain the panel no longer has. The domain query
+// is NOT narrowed to top-level rows, because an addon domain or a subdomain row
+// carries its parent's system user and that name is taken all the same.
+func systemUserTaken(candidate string) (bool, error) {
+	if userExists(candidate) {
+		return true, nil
+	}
+	var one int
+	err := packageDB.QueryRow(
+		`SELECT 1 FROM domains WHERE system_user=? LIMIT 1`, candidate).Scan(&one)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	return true, nil
 }
 
 func normalizePHP(v string) string {
@@ -1646,7 +1727,16 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 	}
 	phpVersion = normalizePHP(phpVersion)
 	domainName = strings.ToLower(strings.TrimSpace(domainName))
-	systemUser := SlugFromDomain(domainName)
+	if packageDB == nil {
+		// Without the panel database the allocator cannot tell an unused name from
+		// one another domain already answers to, and falling back to the bare slug
+		// is precisely the behaviour this replaced.
+		return nil, fmt.Errorf("provisioning: the panel database is not wired up")
+	}
+	systemUser, err := allocateSystemUser(domainName, systemUserTaken)
+	if err != nil {
+		return nil, fmt.Errorf("allocate system user: %w", err)
+	}
 	home := "/home/" + systemUser
 
 	if !userExists(systemUser) {
