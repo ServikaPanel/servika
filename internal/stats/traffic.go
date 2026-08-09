@@ -68,8 +68,12 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 	}
 	size := info.Size()
 
+	// `offset` is backticked because OFFSET is a reserved word from MariaDB 10.6
+	// onward. Unquoted it is a parse error, and the error is discarded here, so
+	// the cursor would silently read as zero and every pass would count the whole
+	// access log again on top of what it had already stored.
 	var offset, previousSize int64
-	_ = db.QueryRow(`SELECT offset, size FROM domain_traffic_cursor WHERE domain_id=?`, domainID).Scan(&offset, &previousSize)
+	_ = db.QueryRow("SELECT `offset`, `size` FROM domain_traffic_cursor WHERE domain_id=?", domainID).Scan(&offset, &previousSize)
 	start := offset
 	if size < offset || size < previousSize {
 		start = 0
@@ -127,8 +131,8 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 		}
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO domain_traffic_cursor(domain_id, offset, size) VALUES(?,?,?)
-		 ON DUPLICATE KEY UPDATE offset=VALUES(offset), size=VALUES(size)`,
+		"INSERT INTO domain_traffic_cursor(domain_id, `offset`, `size`) VALUES(?,?,?)\n"+
+			" ON DUPLICATE KEY UPDATE `offset`=VALUES(`offset`), `size`=VALUES(`size`)",
 		domainID, consumed, size); err != nil {
 		log.Printf("traffic cursor update domain=%d: %v", domainID, err)
 		return false
