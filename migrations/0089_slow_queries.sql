@@ -51,8 +51,9 @@ CREATE TABLE slow_query_stats (
   -- The merge key names db_user, NOT domain_id. A UNIQUE index treats every
   -- NULL as distinct, so keying on a nullable domain_id would stop the
   -- unattributed rows from ever merging and let them accumulate one row per
-  -- collector pass. db_accounts.db_user is globally UNIQUE, so it already
-  -- determines domain_id, and it is NOT NULL here.
+  -- collector pass. db_accounts.db_user is NOT globally unique (0036 dropped
+  -- that index so one user can own several databases), but it does determine
+  -- domain_id through its c_<system user>_ prefix, and it is NOT NULL here.
   UNIQUE KEY uq_slow_bucket (digest, bucket_hour, db_user),
   KEY ix_slow_domain_bucket (domain_id, bucket_hour),
   KEY ix_slow_bucket (bucket_hour),
