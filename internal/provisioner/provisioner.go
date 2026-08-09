@@ -680,7 +680,7 @@ server {
 
     # ---- Security headers (managed by the panel) ----
 {{.SecHeaders}}
-{{.ModSec}}{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}{{.WebmailBlock}}{{.AutoconfigBlock}}
+{{.ModSec}}{{.MaintenanceBlock}}{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}{{.WebmailBlock}}{{.AutoconfigBlock}}
 
     access_log /var/log/nginx/{{.DomainName}}.access.log;
     error_log  /var/log/nginx/{{.DomainName}}.error.log warn;
@@ -768,7 +768,7 @@ server {
         try_files $uri =404;
     }
 
-{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}
+{{.MaintenanceBlock}}{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}
 
 {{.ErrorPageBlock}}
 {{.AppBlocks}}
@@ -1068,6 +1068,11 @@ type VhostOpts struct {
 	DenyBlocks string
 	ModSec     string // WAF (ModSecurity) server-context directive block; empty when WAF is off or module absent
 	IPRules    string // IP allow/deny directives; empty when access control is off
+	// MaintenanceBlock takes the whole site to a 503 page while leaving the
+	// excepted addresses and the ACME challenge path through. It is empty
+	// unless the domain has maintenance mode on, and it is never computed for
+	// a suspended domain, which renders a different template entirely.
+	MaintenanceBlock string
 	// GeoBlock refuses a request by the country its address belongs to, and
 	// RateLimit caps how fast one address may make dynamic requests. Both are
 	// empty when the domain has not turned them on, and GeoBlock is also empty
@@ -1490,6 +1495,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	if !opts.Suspended {
 		opts.ModSec = buildModSec(systemUser)
 		opts.IPRules = buildIPRules(opts.DomainName)
+		opts.MaintenanceBlock = buildMaintenanceBlock(opts.DomainName)
 		opts.GeoBlock, opts.RateLimit = domainProtection(opts.DomainName)
 		opts.HotlinkLocation = buildHotlink(opts.DomainName)
 		// Webmail only on the TLS vhost. On a domain without a certificate the
