@@ -122,9 +122,12 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 		if bytes <= 0 {
 			continue
 		}
+		// `year_month` is backticked for the same reason as `offset` above: it is
+		// an interval unit, so MariaDB reserves it and reads it unquoted as
+		// syntax rather than a column name.
 		if _, err := tx.Exec(
-			`INSERT INTO domain_traffic(domain_id, year_month, bytes) VALUES(?,?,?)
-			 ON DUPLICATE KEY UPDATE bytes=bytes+VALUES(bytes)`,
+			"INSERT INTO domain_traffic(domain_id, `year_month`, bytes) VALUES(?,?,?)\n"+
+				" ON DUPLICATE KEY UPDATE bytes=bytes+VALUES(bytes)",
 			domainID, month, bytes); err != nil {
 			log.Printf("traffic upsert domain=%d month=%s: %v", domainID, month, err)
 			return false
@@ -148,7 +151,7 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 func refreshTrafficKB(db *sql.DB, domainID int64) {
 	month := time.Now().UTC().Format("2006-01")
 	var bytes int64
-	_ = db.QueryRow(`SELECT bytes FROM domain_traffic WHERE domain_id=? AND year_month=?`, domainID, month).Scan(&bytes)
+	_ = db.QueryRow("SELECT bytes FROM domain_traffic WHERE domain_id=? AND `year_month`=?", domainID, month).Scan(&bytes)
 	_, _ = db.Exec(`UPDATE domains SET traffic_kb=? WHERE id=?`, bytes/1024, domainID)
 }
 
