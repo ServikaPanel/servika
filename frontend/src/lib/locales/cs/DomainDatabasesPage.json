@@ -1,4 +1,5 @@
 {
+  "remote": {"title": "Vzdálený přístup — {{user}}"},
   "breadcrumb": {
     "home": "Domů",
     "domains": "Domény",
@@ -26,6 +27,8 @@
     "copy": "Kopírovat"
   },
   "row": {
+    "remoteAccess": "Vzdálený přístup",
+    "remoteAccessTitle": "Které adresy se k tomuto účtu dostanou zvenčí",
     "pma": "🔓 phpMyAdmin",
     "pmaTitle": "Otevřít phpMyAdmin v nové kartě",
     "resetPassword": "🔑 Obnovit heslo",

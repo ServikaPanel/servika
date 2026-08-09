@@ -1,5 +1,6 @@
 {
   "tabs": {
+    "remote": "Uzak erişim",
     "databases": "Veritabanları",
     "slow": "Yavaş sorgular"
   },

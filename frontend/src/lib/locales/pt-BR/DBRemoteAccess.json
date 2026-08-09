@@ -1,0 +1,49 @@
+{
+  "loading": "Carregando…",
+  "add": "Permitir",
+  "remove": "Remover",
+  "empty": "Nenhum endereço alcança esta conta de fora do servidor.",
+  "addFailed": "Não foi possível permitir o endereço.",
+  "removeFailed": "Não foi possível remover o endereço.",
+  "serverOff": "O acesso remoto ao banco de dados está desligado neste servidor. Peça ao seu provedor para ligá-lo.",
+  "security": "Só os endereços listados aqui alcançam o banco de dados de fora. Todo o resto é recusado antes de chegar.",
+  "field": {
+    "host": "Endereço",
+    "hostPlaceholder": "203.0.113.7 ou 203.0.113.0/24",
+    "label": "Observação",
+    "labelPlaceholder": "Escritório",
+    "hint": "Um único endereço IP ou uma faixa. Uma faixa IPv6 não é possível porque o servidor de banco de dados não consegue corresponder a ela; informe um único endereço IPv6."
+  },
+  "column": {
+    "domain": "Site",
+    "user": "Usuário",
+    "host": "Endereço",
+    "label": "Observação",
+    "added": "Adicionado",
+    "actions": "Ações"
+  },
+  "switch": {
+    "label": "Acesso remoto ao banco de dados",
+    "onHint": "O banco de dados está escutando na porta {{port}}; só passam os endereços permitidos.",
+    "offHint": "O banco de dados só escuta neste servidor.",
+    "appliedAt": "última alteração {{time}}",
+    "confirmOnTitle": "Abrir o acesso remoto",
+    "confirmOffTitle": "Fechar o acesso remoto",
+    "confirmOn": "O servidor de banco de dados reinicia e todas as conexões abertas caem. Os sites se reconectam sozinhos, mas as consultas em andamento falham. Continuar?",
+    "confirmOff": "O servidor de banco de dados reinicia e deixa de escutar conexões de fora. Todos os clientes remotos perdem o acesso. Continuar?",
+    "confirmAction": "Reiniciar o banco de dados",
+    "failed": "Não foi possível aplicar a configuração.",
+    "lastError": "A última tentativa falhou: {{message}}",
+    "portRuleConflict": "Uma regra de firewall já mira a porta {{port}}. Remova-a primeiro, senão ela bloqueia silenciosamente tudo o que for permitido aqui."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "O acesso remoto ao banco de dados está desligado neste servidor.",
+    "db_remote_host_invalid": "Informe um endereço IP ou uma faixa CIDR.",
+    "db_remote_ipv6_range_unsupported": "O servidor de banco de dados não consegue corresponder a uma faixa IPv6. Informe um único endereço IPv6.",
+    "db_remote_host_too_broad": "Essa faixa é ampla demais. Permita uma mais estreita ou use uma VPN com endereço fixo.",
+    "db_remote_port_rule_conflict": "Uma regra de firewall já mira a porta do banco de dados. Remova-a primeiro.",
+    "db_remote_duplicate": "Esse endereço já está permitido.",
+    "db_remote_unknown_user": "Esse usuário do banco de dados não pertence a este site.",
+    "db_remote_apply_failed": "O servidor de banco de dados não aceitou a alteração, então nada foi mudado."
+  }
+}

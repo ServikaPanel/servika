@@ -2,6 +2,7 @@
   "title": "Nu s-a putut încărca: {{context}}",
   "dismiss": "Închide",
   "contexts": {
+    "dbRemote": "acces la distanță la baza de date",
     "slowQueries": "interogări lente",
     "subscription": "detaliile abonamentului",
     "domains": "lista de domenii",

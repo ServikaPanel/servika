@@ -1,0 +1,49 @@
+{
+  "loading": "Caricamento…",
+  "add": "Consenti",
+  "remove": "Rimuovi",
+  "empty": "Nessun indirizzo raggiunge questo account dall'esterno del server.",
+  "addFailed": "Non è stato possibile consentire l'indirizzo.",
+  "removeFailed": "Non è stato possibile rimuovere l'indirizzo.",
+  "serverOff": "L'accesso remoto al database è disattivato su questo server. Chiedi al tuo provider di attivarlo.",
+  "security": "Solo gli indirizzi elencati qui raggiungono il database dall'esterno. Tutto il resto viene rifiutato prima di arrivare.",
+  "field": {
+    "host": "Indirizzo",
+    "hostPlaceholder": "203.0.113.7 oppure 203.0.113.0/24",
+    "label": "Nota",
+    "labelPlaceholder": "Ufficio",
+    "hint": "Un singolo indirizzo IP o un intervallo. Un intervallo IPv6 non è utilizzabile perché il server del database non riesce a farlo corrispondere; inserisci un singolo indirizzo IPv6."
+  },
+  "column": {
+    "domain": "Sito",
+    "user": "Utente",
+    "host": "Indirizzo",
+    "label": "Nota",
+    "added": "Aggiunto",
+    "actions": "Azioni"
+  },
+  "switch": {
+    "label": "Accesso remoto al database",
+    "onHint": "Il database è in ascolto sulla porta {{port}}; passano solo gli indirizzi consentiti.",
+    "offHint": "Il database è in ascolto solo su questo server.",
+    "appliedAt": "ultima modifica {{time}}",
+    "confirmOnTitle": "Apri l'accesso remoto",
+    "confirmOffTitle": "Chiudi l'accesso remoto",
+    "confirmOn": "Il server del database si riavvia e ogni connessione aperta cade. I siti si riconnettono da soli, ma le query in corso falliscono. Continuare?",
+    "confirmOff": "Il server del database si riavvia e smette di ascoltare le connessioni esterne. Ogni client remoto perde l'accesso. Continuare?",
+    "confirmAction": "Riavvia il database",
+    "failed": "Non è stato possibile applicare l'impostazione.",
+    "lastError": "L'ultimo tentativo non è riuscito: {{message}}",
+    "portRuleConflict": "Una regola del firewall punta già alla porta {{port}}. Rimuovila prima, altrimenti bloccherà silenziosamente tutto ciò che viene consentito qui."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "L'accesso remoto al database è disattivato su questo server.",
+    "db_remote_host_invalid": "Inserisci un indirizzo IP o un intervallo CIDR.",
+    "db_remote_ipv6_range_unsupported": "Il server del database non riesce a far corrispondere un intervallo IPv6. Inserisci un singolo indirizzo IPv6.",
+    "db_remote_host_too_broad": "Questo intervallo è troppo ampio. Consentine uno più stretto oppure usa una VPN con indirizzo fisso.",
+    "db_remote_port_rule_conflict": "Una regola del firewall punta già alla porta del database. Rimuovila prima.",
+    "db_remote_duplicate": "Questo indirizzo è già consentito.",
+    "db_remote_unknown_user": "Questo utente del database non appartiene a questo sito.",
+    "db_remote_apply_failed": "Il server del database non ha accettato la modifica, quindi nulla è cambiato."
+  }
+}

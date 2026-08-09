@@ -1,4 +1,5 @@
 {
+  "remote": {"title": "Acces la distanță — {{user}}"},
   "breadcrumb": {
     "home": "Acasă",
     "domains": "Domenii",
@@ -26,6 +27,8 @@
     "copy": "Copiere"
   },
   "row": {
+    "remoteAccess": "Acces la distanță",
+    "remoteAccessTitle": "Ce adrese ajung la acest cont din exterior",
     "pma": "🔓 phpMyAdmin",
     "pmaTitle": "Deschideți phpMyAdmin într-o filă nouă",
     "resetPassword": "🔑 Resetare parolă",

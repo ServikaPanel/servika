@@ -2,6 +2,7 @@
   "title": "Nepodařilo se načíst: {{context}}",
   "dismiss": "Zavřít",
   "contexts": {
+    "dbRemote": "vzdálený přístup k databázi",
     "slowQueries": "pomalé dotazy",
     "subscription": "podrobnosti předplatného",
     "domains": "seznam domén",

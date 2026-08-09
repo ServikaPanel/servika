@@ -1,5 +1,6 @@
 {
   "tabs": {
+    "remote": "远程访问",
     "databases": "数据库",
     "slow": "慢查询"
   },

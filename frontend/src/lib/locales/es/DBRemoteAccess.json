@@ -1,0 +1,49 @@
+{
+  "loading": "Cargando…",
+  "add": "Permitir",
+  "remove": "Quitar",
+  "empty": "Ninguna dirección llega a esta cuenta desde fuera del servidor.",
+  "addFailed": "No se pudo permitir la dirección.",
+  "removeFailed": "No se pudo quitar la dirección.",
+  "serverOff": "El acceso remoto a la base de datos está desactivado en este servidor. Pida a su proveedor que lo active.",
+  "security": "Solo las direcciones listadas aquí llegan a la base de datos desde fuera. Todo lo demás se rechaza antes de llegar.",
+  "field": {
+    "host": "Dirección",
+    "hostPlaceholder": "203.0.113.7 o 203.0.113.0/24",
+    "label": "Nota",
+    "labelPlaceholder": "Oficina",
+    "hint": "Una sola dirección IP o un rango. Un rango IPv6 no es posible porque el servidor de base de datos no puede compararlo; introduzca una sola dirección IPv6."
+  },
+  "column": {
+    "domain": "Sitio",
+    "user": "Usuario",
+    "host": "Dirección",
+    "label": "Nota",
+    "added": "Añadida",
+    "actions": "Acciones"
+  },
+  "switch": {
+    "label": "Acceso remoto a la base de datos",
+    "onHint": "La base de datos escucha en el puerto {{port}}; solo pasan las direcciones permitidas.",
+    "offHint": "La base de datos solo escucha en este servidor.",
+    "appliedAt": "último cambio {{time}}",
+    "confirmOnTitle": "Abrir el acceso remoto",
+    "confirmOffTitle": "Cerrar el acceso remoto",
+    "confirmOn": "El servidor de base de datos se reinicia y todas las conexiones abiertas se caen. Los sitios se reconectan solos, pero las consultas en curso fallan. ¿Continuar?",
+    "confirmOff": "El servidor de base de datos se reinicia y deja de escuchar conexiones de fuera. Todos los clientes remotos pierden el acceso. ¿Continuar?",
+    "confirmAction": "Reiniciar la base de datos",
+    "failed": "No se pudo aplicar el ajuste.",
+    "lastError": "El último intento falló: {{message}}",
+    "portRuleConflict": "Una regla del cortafuegos ya apunta al puerto {{port}}. Quítela primero o bloqueará en silencio todo lo permitido aquí."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "El acceso remoto a la base de datos está desactivado en este servidor.",
+    "db_remote_host_invalid": "Introduzca una dirección IP o un rango CIDR.",
+    "db_remote_ipv6_range_unsupported": "El servidor de base de datos no puede comparar un rango IPv6. Introduzca una sola dirección IPv6.",
+    "db_remote_host_too_broad": "Ese rango es demasiado amplio. Permita uno más estrecho o use una VPN con dirección fija.",
+    "db_remote_port_rule_conflict": "Una regla del cortafuegos ya apunta al puerto de la base de datos. Quítela primero.",
+    "db_remote_duplicate": "Esa dirección ya está permitida.",
+    "db_remote_unknown_user": "Ese usuario de base de datos no pertenece a este sitio.",
+    "db_remote_apply_failed": "El servidor de base de datos no aceptó el cambio, así que no se modificó nada."
+  }
+}

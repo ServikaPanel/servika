@@ -1,0 +1,49 @@
+{
+  "loading": "Chargement…",
+  "add": "Autoriser",
+  "remove": "Retirer",
+  "empty": "Aucune adresse n'atteint ce compte depuis l'extérieur du serveur.",
+  "addFailed": "L'adresse n'a pas pu être autorisée.",
+  "removeFailed": "L'adresse n'a pas pu être retirée.",
+  "serverOff": "L'accès distant à la base de données est désactivé sur ce serveur. Demandez à votre hébergeur de l'activer.",
+  "security": "Seules les adresses listées ici atteignent la base de données depuis l'extérieur. Tout le reste est refusé avant d'arriver.",
+  "field": {
+    "host": "Adresse",
+    "hostPlaceholder": "203.0.113.7 ou 203.0.113.0/24",
+    "label": "Note",
+    "labelPlaceholder": "Bureau",
+    "hint": "Une seule adresse IP ou une plage. Une plage IPv6 est impossible car le serveur de base de données ne sait pas la faire correspondre ; saisissez une seule adresse IPv6."
+  },
+  "column": {
+    "domain": "Site",
+    "user": "Utilisateur",
+    "host": "Adresse",
+    "label": "Note",
+    "added": "Ajoutée",
+    "actions": "Actions"
+  },
+  "switch": {
+    "label": "Accès distant à la base de données",
+    "onHint": "La base de données écoute sur le port {{port}} ; seules les adresses autorisées passent.",
+    "offHint": "La base de données n'écoute que sur ce serveur.",
+    "appliedAt": "dernière modification {{time}}",
+    "confirmOnTitle": "Ouvrir l'accès distant",
+    "confirmOffTitle": "Fermer l'accès distant",
+    "confirmOn": "Le serveur de base de données redémarre et toutes les connexions ouvertes tombent. Les sites se reconnectent seuls, mais les requêtes en cours échouent. Continuer ?",
+    "confirmOff": "Le serveur de base de données redémarre et cesse d'écouter les connexions extérieures. Tous les clients distants perdent l'accès. Continuer ?",
+    "confirmAction": "Redémarrer la base de données",
+    "failed": "Le réglage n'a pas pu être appliqué.",
+    "lastError": "La dernière tentative a échoué : {{message}}",
+    "portRuleConflict": "Une règle de pare-feu vise déjà le port {{port}}. Retirez-la d'abord, sinon elle bloquera silencieusement tout ce qui est autorisé ici."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "L'accès distant à la base de données est désactivé sur ce serveur.",
+    "db_remote_host_invalid": "Saisissez une adresse IP ou une plage CIDR.",
+    "db_remote_ipv6_range_unsupported": "Le serveur de base de données ne sait pas faire correspondre une plage IPv6. Saisissez une seule adresse IPv6.",
+    "db_remote_host_too_broad": "Cette plage est trop large. Autorisez-en une plus étroite ou utilisez un VPN à adresse fixe.",
+    "db_remote_port_rule_conflict": "Une règle de pare-feu vise déjà le port de la base de données. Retirez-la d'abord.",
+    "db_remote_duplicate": "Cette adresse est déjà autorisée.",
+    "db_remote_unknown_user": "Cet utilisateur de base de données n'appartient pas à ce site.",
+    "db_remote_apply_failed": "Le serveur de base de données n'a pas accepté la modification, rien n'a été changé."
+  }
+}

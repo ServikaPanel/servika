@@ -1,0 +1,49 @@
+{
+  "loading": "Načítání…",
+  "add": "Povolit",
+  "remove": "Odebrat",
+  "empty": "K tomuto účtu se zvenčí serveru nedostane žádná adresa.",
+  "addFailed": "Adresu se nepodařilo povolit.",
+  "removeFailed": "Adresu se nepodařilo odebrat.",
+  "serverOff": "Vzdálený přístup k databázi je na tomto serveru vypnutý. Požádejte poskytovatele o zapnutí.",
+  "security": "K databázi se zvenčí dostanou jen adresy uvedené zde. Vše ostatní je odmítnuto dřív, než dorazí.",
+  "field": {
+    "host": "Adresa",
+    "hostPlaceholder": "203.0.113.7 nebo 203.0.113.0/24",
+    "label": "Poznámka",
+    "labelPlaceholder": "Kancelář",
+    "hint": "Jedna IP adresa nebo rozsah. Rozsah IPv6 použít nelze, protože databázový server jej neumí porovnat; zadejte jednu adresu IPv6."
+  },
+  "column": {
+    "domain": "Web",
+    "user": "Uživatel",
+    "host": "Adresa",
+    "label": "Poznámka",
+    "added": "Přidáno",
+    "actions": "Akce"
+  },
+  "switch": {
+    "label": "Vzdálený přístup k databázi",
+    "onHint": "Databáze naslouchá na portu {{port}}; projdou jen povolené adresy.",
+    "offHint": "Databáze naslouchá jen na tomto serveru.",
+    "appliedAt": "poslední změna {{time}}",
+    "confirmOnTitle": "Otevřít vzdálený přístup",
+    "confirmOffTitle": "Zavřít vzdálený přístup",
+    "confirmOn": "Databázový server se restartuje a každé otevřené spojení spadne. Weby se připojí samy, ale probíhající dotazy selžou. Pokračovat?",
+    "confirmOff": "Databázový server se restartuje a přestane naslouchat spojením zvenčí. Všichni vzdálení klienti ztratí přístup. Pokračovat?",
+    "confirmAction": "Restartovat databázi",
+    "failed": "Nastavení se nepodařilo použít.",
+    "lastError": "Poslední pokus selhal: {{message}}",
+    "portRuleConflict": "Pravidlo firewallu už míří na port {{port}}. Nejprve je odeberte, jinak tiše zablokuje vše, co je zde povoleno."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "Vzdálený přístup k databázi je na tomto serveru vypnutý.",
+    "db_remote_host_invalid": "Zadejte IP adresu nebo rozsah CIDR.",
+    "db_remote_ipv6_range_unsupported": "Databázový server neumí porovnat rozsah IPv6. Zadejte jednu adresu IPv6.",
+    "db_remote_host_too_broad": "Tento rozsah je příliš široký. Povolte užší nebo použijte VPN s pevnou adresou.",
+    "db_remote_port_rule_conflict": "Pravidlo firewallu už míří na port databáze. Nejprve je odeberte.",
+    "db_remote_duplicate": "Tato adresa je už povolena.",
+    "db_remote_unknown_user": "Tento databázový uživatel k tomuto webu nepatří.",
+    "db_remote_apply_failed": "Databázový server změnu nepřijal, takže se nic nezměnilo."
+  }
+}

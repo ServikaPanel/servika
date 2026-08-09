@@ -2,6 +2,7 @@
   "title": "Impossibile caricare: {{context}}",
   "dismiss": "Chiudi",
   "contexts": {
+    "dbRemote": "accesso remoto al database",
     "slowQueries": "query lente",
     "subscription": "dettagli dell'abbonamento",
     "domains": "elenco dei domini",

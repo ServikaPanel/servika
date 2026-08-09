@@ -2,6 +2,7 @@
   "title": "Could not load: {{context}}",
   "dismiss": "Dismiss",
   "contexts": {
+    "dbRemote": "remote database access",
     "slowQueries": "slow queries",
     "subscription": "subscription details",
     "domains": "domain list",

@@ -1,0 +1,49 @@
+{
+  "loading": "Loading…",
+  "add": "Allow",
+  "remove": "Remove",
+  "empty": "No address may reach this account from outside the server.",
+  "addFailed": "The address could not be allowed.",
+  "removeFailed": "The address could not be removed.",
+  "serverOff": "Remote database access is switched off for this server. Ask your provider to turn it on.",
+  "security": "Only the addresses listed here can reach the database from outside. Everything else is refused before it arrives.",
+  "field": {
+    "host": "Address",
+    "hostPlaceholder": "203.0.113.7 or 203.0.113.0/24",
+    "label": "Note",
+    "labelPlaceholder": "Office",
+    "hint": "A single IP address or a range. An IPv6 range cannot be used because the database server cannot match one; enter a single IPv6 address instead."
+  },
+  "column": {
+    "domain": "Site",
+    "user": "User",
+    "host": "Address",
+    "label": "Note",
+    "added": "Added",
+    "actions": "Actions"
+  },
+  "switch": {
+    "label": "Remote database access",
+    "onHint": "The database is listening on port {{port}}; only allowed addresses get through.",
+    "offHint": "The database listens on this server only.",
+    "appliedAt": "last changed {{time}}",
+    "confirmOnTitle": "Open remote access",
+    "confirmOffTitle": "Close remote access",
+    "confirmOn": "The database server restarts, which drops every open connection. Sites reconnect on their own, but anything mid-query fails. Continue?",
+    "confirmOff": "The database server restarts and stops listening for outside connections. Every remote client loses access. Continue?",
+    "confirmAction": "Restart the database",
+    "failed": "The setting could not be applied.",
+    "lastError": "The last attempt failed: {{message}}",
+    "portRuleConflict": "A firewall rule already targets port {{port}}. Remove it first, or it will silently block everything allowed here."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "Remote database access is switched off for this server.",
+    "db_remote_host_invalid": "Enter an IP address or a CIDR range.",
+    "db_remote_ipv6_range_unsupported": "The database server cannot match an IPv6 range. Enter a single IPv6 address.",
+    "db_remote_host_too_broad": "That range is too broad. Allow a narrower one, or use a VPN with a fixed address.",
+    "db_remote_port_rule_conflict": "A firewall rule already targets the database port. Remove it first.",
+    "db_remote_duplicate": "That address is already allowed.",
+    "db_remote_unknown_user": "That database user does not belong to this site.",
+    "db_remote_apply_failed": "The database server did not accept the change, so nothing was altered."
+  }
+}

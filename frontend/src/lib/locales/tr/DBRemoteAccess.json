@@ -1,0 +1,49 @@
+{
+  "loading": "Yükleniyor…",
+  "add": "İzin ver",
+  "remove": "Kaldır",
+  "empty": "Bu hesaba sunucu dışından hiçbir adres erişemiyor.",
+  "addFailed": "Adrese izin verilemedi.",
+  "removeFailed": "Adres kaldırılamadı.",
+  "serverOff": "Bu sunucuda uzak veritabanı erişimi kapalı. Açılması için sağlayıcınıza başvurun.",
+  "security": "Veritabanına dışarıdan yalnız burada listelenen adresler erişebilir. Diğer her şey ulaşmadan reddedilir.",
+  "field": {
+    "host": "Adres",
+    "hostPlaceholder": "203.0.113.7 ya da 203.0.113.0/24",
+    "label": "Not",
+    "labelPlaceholder": "Ofis",
+    "hint": "Tek bir IP adresi ya da bir aralık. IPv6 aralığı kullanılamaz, çünkü veritabanı sunucusu bunu eşleştiremiyor; tek bir IPv6 adresi girin."
+  },
+  "column": {
+    "domain": "Site",
+    "user": "Kullanıcı",
+    "host": "Adres",
+    "label": "Not",
+    "added": "Eklendi",
+    "actions": "İşlemler"
+  },
+  "switch": {
+    "label": "Uzak veritabanı erişimi",
+    "onHint": "Veritabanı {{port}} portunu dinliyor; yalnız izin verilen adresler geçebiliyor.",
+    "offHint": "Veritabanı yalnız bu sunucuyu dinliyor.",
+    "appliedAt": "son değişiklik {{time}}",
+    "confirmOnTitle": "Uzak erişimi aç",
+    "confirmOffTitle": "Uzak erişimi kapat",
+    "confirmOn": "Veritabanı sunucusu yeniden başlar ve açık olan her bağlantı düşer. Siteler kendiliğinden yeniden bağlanır, ama o an süren sorgular başarısız olur. Devam edilsin mi?",
+    "confirmOff": "Veritabanı sunucusu yeniden başlar ve dışarıdan gelen bağlantıları dinlemeyi bırakır. Her uzak istemci erişimini kaybeder. Devam edilsin mi?",
+    "confirmAction": "Veritabanını yeniden başlat",
+    "failed": "Ayar uygulanamadı.",
+    "lastError": "Son deneme başarısız oldu: {{message}}",
+    "portRuleConflict": "Bir güvenlik duvarı kuralı zaten {{port}} portunu hedefliyor. Önce onu kaldırın, yoksa burada verilen her izni sessizce engeller."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "Bu sunucuda uzak veritabanı erişimi kapalı.",
+    "db_remote_host_invalid": "Bir IP adresi ya da CIDR aralığı girin.",
+    "db_remote_ipv6_range_unsupported": "Veritabanı sunucusu IPv6 aralığını eşleştiremiyor. Tek bir IPv6 adresi girin.",
+    "db_remote_host_too_broad": "Bu aralık çok geniş. Daha dar bir aralık verin ya da sabit adresli bir VPN kullanın.",
+    "db_remote_port_rule_conflict": "Bir güvenlik duvarı kuralı zaten veritabanı portunu hedefliyor. Önce onu kaldırın.",
+    "db_remote_duplicate": "Bu adrese zaten izin verilmiş.",
+    "db_remote_unknown_user": "Bu veritabanı kullanıcısı bu siteye ait değil.",
+    "db_remote_apply_failed": "Veritabanı sunucusu değişikliği kabul etmedi, dolayısıyla hiçbir şey değişmedi."
+  }
+}

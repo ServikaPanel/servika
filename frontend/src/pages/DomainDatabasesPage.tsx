@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Modal from '@/components/Modal'
 import DBPasswordResetModal from '@/components/DBPasswordResetModal'
+import DBRemoteAccess from '@/components/DBRemoteAccess'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -36,6 +37,7 @@ export default function DomainDatabasesPage() {
   const [error, setError] = useState<string | null>(null)
   const [databaseToDelete, setDatabaseToDelete] = useState<DB | null>(null)
   const [pwResetFor, setPwResetFor] = useState<DB | null>(null)
+  const [remoteFor, setRemoteFor] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [passwordVisibility, setPasswordVisibility] = useState<Record<number, boolean>>({})
   const [copiedValue, setCopiedValue] = useState<number | null>(null)
@@ -160,6 +162,8 @@ export default function DomainDatabasesPage() {
                 <td className={responsiveTableActionCellClass}>
                   <button onClick={() => openPma(d)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded" title={t('row.pmaTitle')}>{t('row.pma')}</button>
                   <button onClick={() => setPwResetFor(d)} className="text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded">{t('row.resetPassword')}</button>
+                  <button onClick={() => setRemoteFor(d.db_user)} className="text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded" title={t('row.remoteAccessTitle')}>{t('row.remoteAccess')}</button>
+                  <button onClick={() => setRemoteFor(d.db_user)} className="text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded">{t('row.remoteAccess')}</button>
                   <button onClick={() => setDatabaseToDelete(d)} className="text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 px-2 py-1 rounded">{t('row.delete')}</button>
                 </td>
               </tr>
@@ -185,6 +189,17 @@ export default function DomainDatabasesPage() {
           onDone={() => { setPwResetFor(null); load() }}
         />
       )}
+
+      {/* Keyed by the database USER, not by the row: one user can own several
+          databases and a remote account is granted all of them at once. */}
+      <Modal
+        open={!!remoteFor}
+        title={t('remote.title', { user: remoteFor })}
+        width="lg"
+        onClose={() => setRemoteFor(null)}
+      >
+        {remoteFor && <DBRemoteAccess domainId={Number(id)} dbUser={remoteFor} />}
+      </Modal>
 
       <ConfirmDialog
         open={!!databaseToDelete}

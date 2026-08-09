@@ -18,6 +18,8 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import DBPasswordResetModal from '@/components/DBPasswordResetModal'
 import SlowQuerySettings from '@/components/SlowQuerySettings'
 import SlowQueryTable from '@/components/SlowQueryTable'
+import DBRemoteAccess from '@/components/DBRemoteAccess'
+import DBRemoteServerSwitch from '@/components/DBRemoteServerSwitch'
 
 type Row = {
   id: number
@@ -48,10 +50,13 @@ export default function DatabasesOverviewPage() {
   const [rowToDelete, setRowToDelete] = useState<Row | null>(null)
   const [pwResetFor, setPwResetFor] = useState<Row | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  const [tab, setTab] = useState<'databases' | 'slow'>('databases')
+  const [tab, setTab] = useState<'databases' | 'slow' | 'remote'>('databases')
   // Bumped when the threshold changes, so the table below reloads under the new
   // setting rather than keeping rows the operator just stopped collecting.
   const [slowKey, setSlowKey] = useState(0)
+  // Bumped when the switch flips, so the list below reloads under the new state
+  // rather than showing addresses that are no longer reachable.
+  const [remoteKey, setRemoteKey] = useState(0)
 
   async function openPma(s: Row) {
     try {
@@ -147,7 +152,7 @@ export default function DatabasesOverviewPage() {
   const tabs = isAdmin
     ? (
       <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-        {(['databases', 'slow'] as const).map(key => (
+        {(['databases', 'slow', 'remote'] as const).map(key => (
           <button
             key={key}
             type="button"
@@ -182,6 +187,11 @@ export default function DatabasesOverviewPage() {
           <>
             <SlowQuerySettings onChange={() => setSlowKey((n) => n + 1)} />
             <SlowQueryTable key={slowKey} endpoint="/admin/slow-queries" showDomain />
+          </>
+        ) : tab === 'remote' ? (
+          <>
+            <DBRemoteServerSwitch onChange={() => setRemoteKey((n) => n + 1)} />
+            <DBRemoteAccess key={remoteKey} showDomain />
           </>
         ) : undefined}
         summary={(list): Badge[] => {

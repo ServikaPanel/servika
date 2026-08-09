@@ -1,0 +1,49 @@
+{
+  "loading": "Se încarcă…",
+  "add": "Permite",
+  "remove": "Elimină",
+  "empty": "Nicio adresă nu ajunge la acest cont din afara serverului.",
+  "addFailed": "Adresa nu a putut fi permisă.",
+  "removeFailed": "Adresa nu a putut fi eliminată.",
+  "serverOff": "Accesul la distanță la baza de date este oprit pe acest server. Cereți furnizorului să îl pornească.",
+  "security": "Doar adresele listate aici ajung la baza de date din exterior. Restul este refuzat înainte să ajungă.",
+  "field": {
+    "host": "Adresă",
+    "hostPlaceholder": "203.0.113.7 sau 203.0.113.0/24",
+    "label": "Notă",
+    "labelPlaceholder": "Birou",
+    "hint": "O singură adresă IP sau un interval. Un interval IPv6 nu poate fi folosit, pentru că serverul de baze de date nu îl poate potrivi; introduceți o singură adresă IPv6."
+  },
+  "column": {
+    "domain": "Site",
+    "user": "Utilizator",
+    "host": "Adresă",
+    "label": "Notă",
+    "added": "Adăugată",
+    "actions": "Acțiuni"
+  },
+  "switch": {
+    "label": "Acces la distanță la baza de date",
+    "onHint": "Baza de date ascultă pe portul {{port}}; trec doar adresele permise.",
+    "offHint": "Baza de date ascultă doar pe acest server.",
+    "appliedAt": "ultima modificare {{time}}",
+    "confirmOnTitle": "Deschide accesul la distanță",
+    "confirmOffTitle": "Închide accesul la distanță",
+    "confirmOn": "Serverul de baze de date repornește și fiecare conexiune deschisă cade. Site-urile se reconectează singure, dar interogările în curs eșuează. Continuați?",
+    "confirmOff": "Serverul de baze de date repornește și nu mai ascultă conexiunile din exterior. Toți clienții la distanță pierd accesul. Continuați?",
+    "confirmAction": "Repornește baza de date",
+    "failed": "Setarea nu a putut fi aplicată.",
+    "lastError": "Ultima încercare a eșuat: {{message}}",
+    "portRuleConflict": "O regulă de firewall vizează deja portul {{port}}. Eliminați-o mai întâi, altfel blochează în tăcere tot ce este permis aici."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "Accesul la distanță la baza de date este oprit pe acest server.",
+    "db_remote_host_invalid": "Introduceți o adresă IP sau un interval CIDR.",
+    "db_remote_ipv6_range_unsupported": "Serverul de baze de date nu poate potrivi un interval IPv6. Introduceți o singură adresă IPv6.",
+    "db_remote_host_too_broad": "Acest interval este prea larg. Permiteți unul mai îngust sau folosiți un VPN cu adresă fixă.",
+    "db_remote_port_rule_conflict": "O regulă de firewall vizează deja portul bazei de date. Eliminați-o mai întâi.",
+    "db_remote_duplicate": "Această adresă este deja permisă.",
+    "db_remote_unknown_user": "Acest utilizator de bază de date nu aparține acestui site.",
+    "db_remote_apply_failed": "Serverul de baze de date nu a acceptat modificarea, deci nimic nu a fost schimbat."
+  }
+}

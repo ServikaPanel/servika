@@ -1,5 +1,6 @@
 {
   "tabs": {
+    "remote": "Vzdálený přístup",
     "databases": "Databáze",
     "slow": "Pomalé dotazy"
   },

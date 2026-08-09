@@ -2,6 +2,7 @@
   "title": "Chargement impossible : {{context}}",
   "dismiss": "Fermer",
   "contexts": {
+    "dbRemote": "accès distant à la base de données",
     "slowQueries": "requêtes lentes",
     "subscription": "détails de l'abonnement",
     "domains": "liste des domaines",

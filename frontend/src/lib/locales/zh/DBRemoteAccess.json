@@ -1,0 +1,49 @@
+{
+  "loading": "加载中…",
+  "add": "允许",
+  "remove": "移除",
+  "empty": "没有任何地址可以从服务器外部访问此账号。",
+  "addFailed": "无法允许该地址。",
+  "removeFailed": "无法移除该地址。",
+  "serverOff": "本服务器已关闭数据库远程访问。请联系服务商开启。",
+  "security": "只有这里列出的地址才能从外部访问数据库，其余请求在到达之前就被拒绝。",
+  "field": {
+    "host": "地址",
+    "hostPlaceholder": "203.0.113.7 或 203.0.113.0/24",
+    "label": "备注",
+    "labelPlaceholder": "办公室",
+    "hint": "单个 IP 地址或一个范围。IPv6 范围无法使用，因为数据库服务器不能匹配；请填写单个 IPv6 地址。"
+  },
+  "column": {
+    "domain": "站点",
+    "user": "用户",
+    "host": "地址",
+    "label": "备注",
+    "added": "添加时间",
+    "actions": "操作"
+  },
+  "switch": {
+    "label": "数据库远程访问",
+    "onHint": "数据库正在监听 {{port}} 端口，只有被允许的地址才能通过。",
+    "offHint": "数据库仅在本服务器上监听。",
+    "appliedAt": "上次变更 {{time}}",
+    "confirmOnTitle": "开启远程访问",
+    "confirmOffTitle": "关闭远程访问",
+    "confirmOn": "数据库服务器会重启，所有已建立的连接都会断开。站点会自动重连，但正在执行的查询会失败。是否继续？",
+    "confirmOff": "数据库服务器会重启并停止监听外部连接，所有远程客户端都会失去访问。是否继续？",
+    "confirmAction": "重启数据库",
+    "failed": "设置未能应用。",
+    "lastError": "上次尝试失败：{{message}}",
+    "portRuleConflict": "已有防火墙规则针对 {{port}} 端口。请先移除，否则它会静默拦截这里允许的一切。"
+  },
+  "reasons": {
+    "db_remote_server_disabled": "本服务器已关闭数据库远程访问。",
+    "db_remote_host_invalid": "请填写 IP 地址或 CIDR 范围。",
+    "db_remote_ipv6_range_unsupported": "数据库服务器无法匹配 IPv6 范围。请填写单个 IPv6 地址。",
+    "db_remote_host_too_broad": "该范围过大。请允许更小的范围，或使用固定地址的 VPN。",
+    "db_remote_port_rule_conflict": "已有防火墙规则针对数据库端口。请先移除。",
+    "db_remote_duplicate": "该地址已被允许。",
+    "db_remote_unknown_user": "该数据库用户不属于此站点。",
+    "db_remote_apply_failed": "数据库服务器未接受此变更，因此没有任何改动。"
+  }
+}

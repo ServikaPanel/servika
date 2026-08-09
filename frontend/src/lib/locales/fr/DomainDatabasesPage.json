@@ -1,4 +1,5 @@
 {
+  "remote": {"title": "Accès distant — {{user}}"},
   "breadcrumb": {
     "home": "Accueil",
     "domains": "Domaines",
@@ -26,6 +27,8 @@
     "copy": "Copier"
   },
   "row": {
+    "remoteAccess": "Accès distant",
+    "remoteAccessTitle": "Quelles adresses atteignent ce compte depuis l'extérieur",
     "pma": "🔓 phpMyAdmin",
     "pmaTitle": "Ouvrir phpMyAdmin dans un nouvel onglet",
     "resetPassword": "🔑 Réinitialiser le mot de passe",

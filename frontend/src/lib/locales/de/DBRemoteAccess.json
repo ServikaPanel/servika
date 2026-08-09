@@ -1,0 +1,49 @@
+{
+  "loading": "Wird geladen…",
+  "add": "Erlauben",
+  "remove": "Entfernen",
+  "empty": "Keine Adresse erreicht dieses Konto von außerhalb des Servers.",
+  "addFailed": "Die Adresse konnte nicht erlaubt werden.",
+  "removeFailed": "Die Adresse konnte nicht entfernt werden.",
+  "serverOff": "Der Fernzugriff auf die Datenbank ist für diesen Server ausgeschaltet. Bitten Sie Ihren Anbieter, ihn einzuschalten.",
+  "security": "Nur die hier aufgeführten Adressen erreichen die Datenbank von außen. Alles andere wird abgewiesen, bevor es ankommt.",
+  "field": {
+    "host": "Adresse",
+    "hostPlaceholder": "203.0.113.7 oder 203.0.113.0/24",
+    "label": "Notiz",
+    "labelPlaceholder": "Büro",
+    "hint": "Eine einzelne IP-Adresse oder ein Bereich. Ein IPv6-Bereich ist nicht möglich, weil der Datenbankserver ihn nicht zuordnen kann; geben Sie eine einzelne IPv6-Adresse ein."
+  },
+  "column": {
+    "domain": "Website",
+    "user": "Benutzer",
+    "host": "Adresse",
+    "label": "Notiz",
+    "added": "Hinzugefügt",
+    "actions": "Aktionen"
+  },
+  "switch": {
+    "label": "Fernzugriff auf die Datenbank",
+    "onHint": "Die Datenbank lauscht auf Port {{port}}; nur erlaubte Adressen kommen durch.",
+    "offHint": "Die Datenbank lauscht nur auf diesem Server.",
+    "appliedAt": "zuletzt geändert {{time}}",
+    "confirmOnTitle": "Fernzugriff öffnen",
+    "confirmOffTitle": "Fernzugriff schließen",
+    "confirmOn": "Der Datenbankserver startet neu und jede offene Verbindung bricht ab. Websites verbinden sich selbst neu, laufende Abfragen schlagen jedoch fehl. Fortfahren?",
+    "confirmOff": "Der Datenbankserver startet neu und nimmt keine Verbindungen von außen mehr an. Jeder entfernte Client verliert den Zugang. Fortfahren?",
+    "confirmAction": "Datenbank neu starten",
+    "failed": "Die Einstellung konnte nicht angewendet werden.",
+    "lastError": "Der letzte Versuch ist fehlgeschlagen: {{message}}",
+    "portRuleConflict": "Eine Firewall-Regel zielt bereits auf Port {{port}}. Entfernen Sie sie zuerst, sonst blockiert sie alles hier Erlaubte stillschweigend."
+  },
+  "reasons": {
+    "db_remote_server_disabled": "Der Fernzugriff auf die Datenbank ist für diesen Server ausgeschaltet.",
+    "db_remote_host_invalid": "Geben Sie eine IP-Adresse oder einen CIDR-Bereich ein.",
+    "db_remote_ipv6_range_unsupported": "Der Datenbankserver kann keinen IPv6-Bereich zuordnen. Geben Sie eine einzelne IPv6-Adresse ein.",
+    "db_remote_host_too_broad": "Dieser Bereich ist zu weit gefasst. Erlauben Sie einen engeren oder nutzen Sie ein VPN mit fester Adresse.",
+    "db_remote_port_rule_conflict": "Eine Firewall-Regel zielt bereits auf den Datenbank-Port. Entfernen Sie sie zuerst.",
+    "db_remote_duplicate": "Diese Adresse ist bereits erlaubt.",
+    "db_remote_unknown_user": "Dieser Datenbankbenutzer gehört nicht zu dieser Website.",
+    "db_remote_apply_failed": "Der Datenbankserver hat die Änderung nicht angenommen, es wurde nichts geändert."
+  }
+}

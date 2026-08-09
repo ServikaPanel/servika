@@ -1,5 +1,6 @@
 {
   "tabs": {
+    "remote": "Acesso remoto",
     "databases": "Bases de dados",
     "slow": "Consultas lentas"
   },
