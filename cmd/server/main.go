@@ -962,6 +962,7 @@ func main() {
 
 	monitor.StartLoadSampler(d, 60*time.Second) // dashboard load-history sampler
 	stats.StartTrafficAggregator(d, 5*time.Minute)
+	slowquery.HealConfig(d)                    // ask MariaDB for the slow log, without restarting it
 	slowquery.StartCollector(d)                // per-tenant slow query shapes, drained from the MariaDB slow log
 	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
 	firewall.TakeOverFirewalld()

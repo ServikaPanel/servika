@@ -80,6 +80,19 @@ func markerOffsets(text string) []int {
 	seenRecord := false
 
 	for i := 0; i < len(text); i++ {
+		// mysqld appends its own banner every time it opens the log, which
+		// happens on a restart and on any toggle of slow_query_log. The banner
+		// is neither SQL nor a header, so without this its last word would be
+		// read as the previous statement's last significant byte and every
+		// record after it would be swallowed. Measured against real 10.11
+		// output; testdata/mariadb-10.11-slow.log carries one mid-file.
+		if atLineStart && state.outsideCode() && isBannerLine(text[i:]) {
+			i = skipBanner(text, i)
+			atLineStart = true
+			state = newSQLState()
+			lastSignificant = ';'
+			continue
+		}
 		terminated := lastSignificant == ';' || !seenRecord
 		if atLineStart && state.outsideCode() && terminated &&
 			strings.HasPrefix(text[i:], recordMarker) {
@@ -113,6 +126,41 @@ func markerOffsets(text string) []int {
 		}
 	}
 	return offsets
+}
+
+// isBannerLine reports whether the text at a line start is the first line of
+// mysqld's log banner, which reads
+//
+//	mariadbd, Version: 10.11.16-MariaDB (…). started with:
+//
+// A tenant could write the same text through the comment vector already
+// documented on markerOffsets, which gains them nothing they did not already
+// have there.
+func isBannerLine(rest string) bool {
+	line := rest
+	if end := strings.IndexByte(line, '\n'); end >= 0 {
+		line = line[:end]
+	}
+	return strings.Contains(line, ", Version: ") &&
+		strings.HasSuffix(strings.TrimRight(line, "\r"), "started with:")
+}
+
+// skipBanner returns the index of the last byte of the banner block, so the loop
+// resumes at the line after it. The block ends at the first line that begins a
+// record header, which is what mysqld writes next.
+func skipBanner(text string, i int) int {
+	for i < len(text) {
+		end := strings.IndexByte(text[i:], '\n')
+		if end < 0 {
+			return len(text) - 1
+		}
+		next := i + end + 1
+		if next >= len(text) || text[next] == '#' {
+			return i + end
+		}
+		i = next
+	}
+	return len(text) - 1
 }
 
 // recordStart backs a marker offset up over the `# Time:` line that belongs to
