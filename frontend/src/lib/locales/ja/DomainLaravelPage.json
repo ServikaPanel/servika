@@ -21,6 +21,7 @@
     "actionFailed": "操作に失敗しました"
   },
   "overview": {
+    "workerSummary": "{{total}} 個のワーカーで {{running}} プロセス稼働中",
     "title": "アプリケーションステータス",
     "installed": "インストール済み",
     "yes": "はい",
@@ -72,16 +73,7 @@
     "disableMaintenance": "メンテナンスを無効化",
     "enableMaintenance": "メンテナンスを有効化"
   },
-  "workers": {
-    "title": "スケジュールとキューワーカー",
-    "queueTimeout": "キューのタイムアウト",
-    "maxJobs": "最大ジョブ数",
-    "connection": "接続",
-    "disableSchedule": "スケジュールを無効化",
-    "enableSchedule": "スケジュールを有効化",
-    "disableQueue": "キューを無効化",
-    "enableQueue": "キューを有効化"
-  },
+  "workers": {"title":"キューワーカー", "hint":"各定義は専用の systemd ユニットで動作します。優先度の高いキューには、すべてと同じ設定を共有させず専用のワーカーを割り当ててください。", "empty":"ワーカーは定義されていません。", "loadFailed":"ワーカー一覧を読み込めなかったため、ここには表示していません。", "add":"ワーカーを追加", "addTitle":"新しいワーカー", "editTitle":"ワーカー {{name}}", "cancel":"キャンセル", "scheduleTitle":"スケジューラ", "scheduleHint":"artisan schedule:run を毎分実行します。", "disableSchedule":"スケジューラを無効化", "enableSchedule":"スケジューラを有効化", "name":"名前", "namePlaceholder":"default", "connection":"接続", "queues":"キュー", "queuesPlaceholder":"high,default（空欄なら接続の既定キュー）", "processes":"プロセス数 (1-{{max}})", "tries":"ジョブごとの試行回数", "timeout":"ジョブのタイムアウト（秒）", "sleep":"待機時間（秒）", "maxJobs":"再起動までのジョブ数（0 は無制限）", "memory":"メモリ上限 (MB)", "defaultQueue":"接続の既定キュー", "summary":"{{connection}} · {{queues}} · タイムアウト {{timeout}}秒 · {{memory}} MB", "stateRunning":"{{total}} 個中 {{running}} 個が稼働中", "stateStopped":"停止中", "stateFailed":"{{failed}} 個のプロセスが停止しました", "restartCount":"{{restarts}} 回再起動しました", "edit":"編集", "start":"開始", "stop":"停止", "restart":"再起動", "log":"ログ", "delete":"削除", "logTitle":"ワーカーの出力", "logEmpty":"ワーカーはまだ何も書き込んでいません。", "restarted":"{{name}} を再起動しました。", "confirmStop":"{{name}} を停止しますか？再開するまでこのキューは処理されません。", "confirmDelete":"{{name}} を削除しますか？プロセスは停止し、定義もなくなります。", "saveFailed":"ワーカーを保存できませんでした。", "reasons":{"laravel_worker_name_invalid":"名前に使えるのは小文字、数字、ハイフン、アンダースコアだけで、先頭は英数字である必要があります。", "laravel_worker_connection_invalid":"接続名に使えるのは小文字、数字、アンダースコアだけです。", "laravel_worker_queues_invalid":"キュー名に使えるのは英字、数字、ドット、ハイフン、アンダースコアだけで、先頭は英数字である必要があり、最大 8 個までです。", "laravel_worker_value_out_of_range":"数値のいずれかが、項目の横に示された範囲を外れています。", "laravel_worker_name_taken":"このドメインには同じ名前のワーカーがすでにあります。", "laravel_worker_unknown":"そのワーカーはこのドメインのものではありません。", "laravel_worker_apply_failed":"定義は保存しましたが、ワーカーは起動しませんでした。"}},
   "common": {
     "save": "保存"
   }

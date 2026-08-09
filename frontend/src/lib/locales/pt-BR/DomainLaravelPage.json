@@ -21,6 +21,7 @@
     "actionFailed": "Falha na ação"
   },
   "overview": {
+    "workerSummary": "{{running}} processo(s) em {{total}} worker(s)",
     "title": "Status da aplicação",
     "installed": "Instalado",
     "yes": "Sim",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Desativar manutenção",
     "enableMaintenance": "Ativar manutenção"
   },
-  "workers": {
-    "title": "Agendamento e worker de fila",
-    "queueTimeout": "Timeout da fila",
-    "maxJobs": "Máximo de jobs",
-    "connection": "Conexão",
-    "disableSchedule": "Desativar agendamento",
-    "enableSchedule": "Ativar agendamento",
-    "disableQueue": "Desativar fila",
-    "enableQueue": "Ativar fila"
-  },
+  "workers": {"title":"Workers da fila", "hint":"Cada definição roda em unidades systemd próprias. Dê a uma fila de alta prioridade o seu próprio worker, em vez de compartilhar uma única configuração com todo o resto.", "empty":"Nenhum worker definido.", "loadFailed":"Não foi possível ler a lista de workers, por isso ela não é exibida aqui.", "add":"Adicionar um worker", "addTitle":"Novo worker", "editTitle":"Worker {{name}}", "cancel":"Cancelar", "scheduleTitle":"Agendador", "scheduleHint":"Executa artisan schedule:run uma vez por minuto.", "disableSchedule":"Desativar o agendador", "enableSchedule":"Ativar o agendador", "name":"Nome", "namePlaceholder":"default", "connection":"Conexão", "queues":"Filas", "queuesPlaceholder":"high,default (vazio significa a fila da própria conexão)", "processes":"Processos (1-{{max}})", "tries":"Tentativas por tarefa", "timeout":"Tempo limite da tarefa (segundos)", "sleep":"Espera ociosa (segundos)", "maxJobs":"Tarefas antes de reiniciar (0 significa sem limite)", "memory":"Limite de memória (MB)", "defaultQueue":"a fila da própria conexão", "summary":"{{connection}} · {{queues}} · tempo limite {{timeout}}s · {{memory}} MB", "stateRunning":"{{running}} de {{total}} em execução", "stateStopped":"parado", "stateFailed":"{{failed}} processo(s) desistiram", "restartCount":"reiniciado {{restarts}} vezes", "edit":"Editar", "start":"Iniciar", "stop":"Parar", "restart":"Reiniciar", "log":"Log", "delete":"Excluir", "logTitle":"Saída do worker", "logEmpty":"O worker ainda não escreveu nada.", "restarted":"{{name}} foi reiniciado.", "confirmStop":"Parar {{name}}? A fila dele não será processada até ser iniciado de novo.", "confirmDelete":"Excluir {{name}}? Os processos param e a definição desaparece.", "saveFailed":"Não foi possível salvar o worker.", "reasons":{"laravel_worker_name_invalid":"O nome aceita apenas minúsculas, dígitos, hifens e sublinhados, e precisa começar com uma letra ou um dígito.", "laravel_worker_connection_invalid":"O nome da conexão aceita apenas minúsculas, dígitos e sublinhados.", "laravel_worker_queues_invalid":"Um nome de fila aceita apenas letras, dígitos, pontos, hifens e sublinhados, precisa começar com uma letra ou um dígito, e são permitidos no máximo oito.", "laravel_worker_value_out_of_range":"Um dos números está fora do intervalo indicado ao lado do campo.", "laravel_worker_name_taken":"Já existe um worker com esse nome neste domínio.", "laravel_worker_unknown":"Esse worker não pertence a este domínio.", "laravel_worker_apply_failed":"A definição foi salva mas o worker não iniciou."}},
   "common": {
     "save": "Salvar"
   }

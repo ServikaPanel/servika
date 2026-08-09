@@ -21,6 +21,7 @@
     "actionFailed": "Azione non riuscita"
   },
   "overview": {
+    "workerSummary": "{{running}} processi su {{total}} worker",
     "title": "Stato dell'applicazione",
     "installed": "Installata",
     "yes": "Sì",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Disabilita manutenzione",
     "enableMaintenance": "Abilita manutenzione"
   },
-  "workers": {
-    "title": "Scheduler e queue worker",
-    "queueTimeout": "Timeout coda",
-    "maxJobs": "Job massimi",
-    "connection": "Connessione",
-    "disableSchedule": "Disabilita pianificazione",
-    "enableSchedule": "Abilita pianificazione",
-    "disableQueue": "Disabilita coda",
-    "enableQueue": "Abilita coda"
-  },
+  "workers": {"title":"Worker della coda", "hint":"Ogni definizione gira su unità systemd proprie. Dai a una coda ad alta priorità il suo worker, invece di condividere un'unica impostazione con tutto il resto.", "empty":"Nessun worker definito.", "loadFailed":"Non è stato possibile leggere l'elenco dei worker, quindi non viene mostrato qui.", "add":"Aggiungi un worker", "addTitle":"Nuovo worker", "editTitle":"Worker {{name}}", "cancel":"Annulla", "scheduleTitle":"Pianificatore", "scheduleHint":"Esegue artisan schedule:run una volta al minuto.", "disableSchedule":"Disattiva il pianificatore", "enableSchedule":"Attiva il pianificatore", "name":"Nome", "namePlaceholder":"default", "connection":"Connessione", "queues":"Code", "queuesPlaceholder":"high,default (vuoto significa la coda della connessione)", "processes":"Processi (1-{{max}})", "tries":"Tentativi per lavoro", "timeout":"Timeout del lavoro (secondi)", "sleep":"Attesa a vuoto (secondi)", "maxJobs":"Lavori prima del riavvio (0 significa nessun limite)", "memory":"Limite di memoria (MB)", "defaultQueue":"la coda della connessione", "summary":"{{connection}} · {{queues}} · timeout {{timeout}}s · {{memory}} MB", "stateRunning":"{{running}} su {{total}} in esecuzione", "stateStopped":"fermo", "stateFailed":"{{failed}} processi hanno rinunciato", "restartCount":"riavviato {{restarts}} volte", "edit":"Modifica", "start":"Avvia", "stop":"Ferma", "restart":"Riavvia", "log":"Log", "delete":"Elimina", "logTitle":"Output del worker", "logEmpty":"Il worker non ha ancora scritto nulla.", "restarted":"{{name}} è stato riavviato.", "confirmStop":"Fermare {{name}}? La sua coda non sarà elaborata fino al prossimo avvio.", "confirmDelete":"Eliminare {{name}}? I suoi processi si fermano e la definizione sparisce.", "saveFailed":"Non è stato possibile salvare il worker.", "reasons":{"laravel_worker_name_invalid":"Il nome accetta solo lettere minuscole, cifre, trattini e trattini bassi e deve iniziare con una lettera o una cifra.", "laravel_worker_connection_invalid":"Il nome della connessione accetta solo lettere minuscole, cifre e trattini bassi.", "laravel_worker_queues_invalid":"Un nome di coda accetta solo lettere, cifre, punti, trattini e trattini bassi, deve iniziare con una lettera o una cifra e se ne possono indicare al massimo otto.", "laravel_worker_value_out_of_range":"Uno dei numeri è fuori dall'intervallo indicato accanto al suo campo.", "laravel_worker_name_taken":"Su questo dominio esiste già un worker con quel nome.", "laravel_worker_unknown":"Quel worker non appartiene a questo dominio.", "laravel_worker_apply_failed":"La definizione è stata salvata ma il worker non è partito."}},
   "common": {
     "save": "Salva"
   }

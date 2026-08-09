@@ -21,6 +21,7 @@
     "actionFailed": "Échec de l'action"
   },
   "overview": {
+    "workerSummary": "{{running}} processus répartis sur {{total}} worker(s)",
     "title": "État de l'application",
     "installed": "Installée",
     "yes": "Oui",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Désactiver la maintenance",
     "enableMaintenance": "Activer la maintenance"
   },
-  "workers": {
-    "title": "Worker de planification et de file d'attente",
-    "queueTimeout": "Délai d'attente de la file",
-    "maxJobs": "Nombre max de jobs",
-    "connection": "Connexion",
-    "disableSchedule": "Désactiver la planification",
-    "enableSchedule": "Activer la planification",
-    "disableQueue": "Désactiver la file d'attente",
-    "enableQueue": "Activer la file d'attente"
-  },
+  "workers": {"title":"Workers de file", "hint":"Chaque définition tourne dans ses propres unités systemd. Donnez à une file prioritaire son propre worker au lieu de partager un seul réglage avec tout le reste.", "empty":"Aucun worker n'est défini.", "loadFailed":"La liste des workers n'a pas pu être lue, elle n'est donc pas affichée ici.", "add":"Ajouter un worker", "addTitle":"Nouveau worker", "editTitle":"Worker {{name}}", "cancel":"Annuler", "scheduleTitle":"Planificateur", "scheduleHint":"Exécute artisan schedule:run une fois par minute.", "disableSchedule":"Désactiver le planificateur", "enableSchedule":"Activer le planificateur", "name":"Nom", "namePlaceholder":"default", "connection":"Connexion", "queues":"Files", "queuesPlaceholder":"high,default (vide signifie la file de la connexion)", "processes":"Processus (1-{{max}})", "tries":"Tentatives par tâche", "timeout":"Délai de la tâche (secondes)", "sleep":"Attente au repos (secondes)", "maxJobs":"Tâches avant redémarrage (0 signifie sans limite)", "memory":"Plafond mémoire (Mo)", "defaultQueue":"la file de la connexion", "summary":"{{connection}} · {{queues}} · délai {{timeout}}s · {{memory}} Mo", "stateRunning":"{{running}} sur {{total}} en cours", "stateStopped":"arrêté", "stateFailed":"{{failed}} processus ont abandonné", "restartCount":"redémarré {{restarts}} fois", "edit":"Modifier", "start":"Démarrer", "stop":"Arrêter", "restart":"Redémarrer", "log":"Journal", "delete":"Supprimer", "logTitle":"Sortie du worker", "logEmpty":"Le worker n'a encore rien écrit.", "restarted":"{{name}} a été redémarré.", "confirmStop":"Arrêter {{name}} ? Sa file ne sera plus traitée jusqu'au prochain démarrage.", "confirmDelete":"Supprimer {{name}} ? Ses processus s'arrêtent et la définition disparaît.", "saveFailed":"Le worker n'a pas pu être enregistré.", "reasons":{"laravel_worker_name_invalid":"Le nom accepte uniquement des minuscules, des chiffres, des tirets et des tirets bas, et doit commencer par une lettre ou un chiffre.", "laravel_worker_connection_invalid":"Le nom de connexion accepte uniquement des minuscules, des chiffres et des tirets bas.", "laravel_worker_queues_invalid":"Un nom de file accepte uniquement des lettres, des chiffres, des points, des tirets et des tirets bas, doit commencer par une lettre ou un chiffre, et huit au maximum sont autorisés.", "laravel_worker_value_out_of_range":"L'un des nombres se situe hors de la plage indiquée à côté de son champ.", "laravel_worker_name_taken":"Un worker portant ce nom existe déjà sur ce domaine.", "laravel_worker_unknown":"Ce worker n'appartient pas à ce domaine.", "laravel_worker_apply_failed":"La définition a été enregistrée mais le worker n'a pas démarré."}},
   "common": {
     "save": "Enregistrer"
   }

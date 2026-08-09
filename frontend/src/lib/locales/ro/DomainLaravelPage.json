@@ -21,6 +21,7 @@
     "actionFailed": "Acțiunea a eșuat"
   },
   "overview": {
+    "workerSummary": "{{running}} proces(e) în {{total}} worker(i)",
     "title": "Stare aplicație",
     "installed": "Instalat",
     "yes": "Da",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Dezactivare mentenanță",
     "enableMaintenance": "Activare mentenanță"
   },
-  "workers": {
-    "title": "Programare și worker de coadă",
-    "queueTimeout": "Timp expirare coadă",
-    "maxJobs": "Sarcini maxime",
-    "connection": "Conexiune",
-    "disableSchedule": "Dezactivare programare",
-    "enableSchedule": "Activare programare",
-    "disableQueue": "Dezactivare coadă",
-    "enableQueue": "Activare coadă"
-  },
+  "workers": {"title":"Workeri de coadă", "hint":"Fiecare definiție rulează în propriile unități systemd. Dă unei cozi prioritare workerul ei, în loc să împartă o singură configurare cu tot restul.", "empty":"Nu este definit niciun worker.", "loadFailed":"Lista workerilor nu a putut fi citită, așa că nu este afișată aici.", "add":"Adaugă un worker", "addTitle":"Worker nou", "editTitle":"Workerul {{name}}", "cancel":"Renunță", "scheduleTitle":"Planificator", "scheduleHint":"Rulează artisan schedule:run o dată pe minut.", "disableSchedule":"Dezactivează planificatorul", "enableSchedule":"Activează planificatorul", "name":"Nume", "namePlaceholder":"default", "connection":"Conexiune", "queues":"Cozi", "queuesPlaceholder":"high,default (gol înseamnă coada proprie a conexiunii)", "processes":"Procese (1-{{max}})", "tries":"Încercări per sarcină", "timeout":"Timp limită pentru sarcină (secunde)", "sleep":"Așteptare în repaus (secunde)", "maxJobs":"Sarcini până la repornire (0 înseamnă fără limită)", "memory":"Plafon de memorie (MB)", "defaultQueue":"coada proprie a conexiunii", "summary":"{{connection}} · {{queues}} · timp limită {{timeout}}s · {{memory}} MB", "stateRunning":"{{running}} din {{total}} rulează", "stateStopped":"oprit", "stateFailed":"{{failed}} proces(e) au renunțat", "restartCount":"repornit de {{restarts}} ori", "edit":"Editează", "start":"Pornește", "stop":"Oprește", "restart":"Repornește", "log":"Jurnal", "delete":"Șterge", "logTitle":"Ieșirea workerului", "logEmpty":"Workerul nu a scris încă nimic.", "restarted":"{{name}} a fost repornit.", "confirmStop":"Oprești {{name}}? Coada lui nu va fi procesată până la următoarea pornire.", "confirmDelete":"Ștergi {{name}}? Procesele lui se opresc și definiția dispare.", "saveFailed":"Workerul nu a putut fi salvat.", "reasons":{"laravel_worker_name_invalid":"Numele acceptă doar litere mici, cifre, cratime și liniuțe de subliniere și trebuie să înceapă cu o literă sau o cifră.", "laravel_worker_connection_invalid":"Numele conexiunii acceptă doar litere mici, cifre și liniuțe de subliniere.", "laravel_worker_queues_invalid":"Un nume de coadă acceptă doar litere, cifre, puncte, cratime și liniuțe de subliniere, trebuie să înceapă cu o literă sau o cifră și sunt permise cel mult opt.", "laravel_worker_value_out_of_range":"Unul dintre numere este în afara intervalului scris lângă câmpul lui.", "laravel_worker_name_taken":"Pe acest domeniu există deja un worker cu acest nume.", "laravel_worker_unknown":"Acel worker nu aparține acestui domeniu.", "laravel_worker_apply_failed":"Definiția a fost salvată, dar workerul nu a pornit."}},
   "common": {
     "save": "Salvare"
   }

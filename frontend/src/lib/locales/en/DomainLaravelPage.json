@@ -21,6 +21,7 @@
     "actionFailed": "Action failed"
   },
   "overview": {
+    "workerSummary": "{{running}} process(es) across {{total}} worker(s)",
     "title": "Application Status",
     "installed": "Installed",
     "yes": "Yes",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Disable maintenance",
     "enableMaintenance": "Enable maintenance"
   },
-  "workers": {
-    "title": "Schedule and Queue Worker",
-    "queueTimeout": "Queue timeout",
-    "maxJobs": "Max jobs",
-    "connection": "Connection",
-    "disableSchedule": "Disable schedule",
-    "enableSchedule": "Enable schedule",
-    "disableQueue": "Disable queue",
-    "enableQueue": "Enable queue"
-  },
+  "workers": {"title":"Queue workers", "hint":"Each definition runs on its own systemd units. Give a high priority queue its own worker instead of sharing one set of timings with everything else.", "empty":"No worker is defined.", "loadFailed":"The worker list could not be read, so it is not shown here.", "add":"Add a worker", "addTitle":"New worker", "editTitle":"Worker {{name}}", "cancel":"Cancel", "scheduleTitle":"Scheduler", "scheduleHint":"Runs artisan schedule:run once a minute.", "disableSchedule":"Disable schedule", "enableSchedule":"Enable schedule", "name":"Name", "namePlaceholder":"default", "connection":"Connection", "queues":"Queues", "queuesPlaceholder":"high,default (empty means the connection's own)", "processes":"Processes (1-{{max}})", "tries":"Attempts per job", "timeout":"Job timeout (seconds)", "sleep":"Idle wait (seconds)", "maxJobs":"Jobs before restart (0 means no limit)", "memory":"Memory ceiling (MB)", "defaultQueue":"the connection's own queue", "summary":"{{connection}} · {{queues}} · timeout {{timeout}}s · {{memory}} MB", "stateRunning":"{{running}} of {{total}} running", "stateStopped":"stopped", "stateFailed":"{{failed}} process(es) gave up", "restartCount":"restarted {{restarts}} time(s)", "edit":"Edit", "start":"Start", "stop":"Stop", "restart":"Restart", "log":"Log", "delete":"Delete", "logTitle":"Worker output", "logEmpty":"The worker has written nothing yet.", "restarted":"{{name}} was restarted.", "confirmStop":"Stop {{name}}? Its queue will not be processed until it is started again.", "confirmDelete":"Delete {{name}}? Its processes stop and the definition is gone.", "saveFailed":"The worker could not be saved.", "reasons":{"laravel_worker_name_invalid":"The name may hold lowercase letters, digits, hyphens and underscores only, and must start with a letter or a digit.", "laravel_worker_connection_invalid":"The connection name may hold lowercase letters, digits and underscores only.", "laravel_worker_queues_invalid":"A queue name may hold letters, digits, dots, hyphens and underscores only, must start with a letter or a digit, and there may be at most eight of them.", "laravel_worker_value_out_of_range":"One of the numbers is outside the range shown beside its field.", "laravel_worker_name_taken":"A worker with that name already exists on this domain.", "laravel_worker_unknown":"That worker does not belong to this domain.", "laravel_worker_apply_failed":"The definition was saved but the worker did not start."}},
   "common": {
     "save": "Save"
   }

@@ -21,6 +21,7 @@
     "actionFailed": "Akce se nezdařila"
   },
   "overview": {
+    "workerSummary": "{{running}} proces(ů) v {{total}} workerech",
     "title": "Stav aplikace",
     "installed": "Nainstalováno",
     "yes": "Ano",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Zakázat údržbu",
     "enableMaintenance": "Povolit údržbu"
   },
-  "workers": {
-    "title": "Worker plánu a fronty",
-    "queueTimeout": "Časový limit fronty",
-    "maxJobs": "Max. úloh",
-    "connection": "Připojení",
-    "disableSchedule": "Zakázat plán",
-    "enableSchedule": "Povolit plán",
-    "disableQueue": "Zakázat frontu",
-    "enableQueue": "Povolit frontu"
-  },
+  "workers": {"title":"Workery fronty", "hint":"Každá definice běží ve vlastních systemd jednotkách. Dejte prioritní frontě vlastní worker místo sdílení jednoho nastavení se vším ostatním.", "empty":"Není definován žádný worker.", "loadFailed":"Seznam workerů se nepodařilo načíst, proto se zde nezobrazuje.", "add":"Přidat worker", "addTitle":"Nový worker", "editTitle":"Worker {{name}}", "cancel":"Zrušit", "scheduleTitle":"Plánovač", "scheduleHint":"Spouští artisan schedule:run jednou za minutu.", "disableSchedule":"Vypnout plánovač", "enableSchedule":"Zapnout plánovač", "name":"Název", "namePlaceholder":"default", "connection":"Připojení", "queues":"Fronty", "queuesPlaceholder":"high,default (prázdné znamená vlastní frontu připojení)", "processes":"Procesy (1-{{max}})", "tries":"Pokusů na úlohu", "timeout":"Časový limit úlohy (sekundy)", "sleep":"Čekání při nečinnosti (sekundy)", "maxJobs":"Úloh před restartem (0 znamená bez omezení)", "memory":"Limit paměti (MB)", "defaultQueue":"vlastní fronta připojení", "summary":"{{connection}} · {{queues}} · limit {{timeout}}s · {{memory}} MB", "stateRunning":"běží {{running}} z {{total}}", "stateStopped":"zastaveno", "stateFailed":"{{failed}} proces(ů) to vzdalo", "restartCount":"restartováno {{restarts}}krát", "edit":"Upravit", "start":"Spustit", "stop":"Zastavit", "restart":"Restartovat", "log":"Log", "delete":"Odstranit", "logTitle":"Výstup workeru", "logEmpty":"Worker zatím nic nezapsal.", "restarted":"{{name}} byl restartován.", "confirmStop":"Zastavit {{name}}? Jeho fronta se nebude zpracovávat, dokud jej znovu nespustíte.", "confirmDelete":"Odstranit {{name}}? Jeho procesy se zastaví a definice zmizí.", "saveFailed":"Worker se nepodařilo uložit.", "reasons":{"laravel_worker_name_invalid":"Název smí obsahovat jen malá písmena, číslice, pomlčky a podtržítka a musí začínat písmenem nebo číslicí.", "laravel_worker_connection_invalid":"Název připojení smí obsahovat jen malá písmena, číslice a podtržítka.", "laravel_worker_queues_invalid":"Název fronty smí obsahovat jen písmena, číslice, tečky, pomlčky a podtržítka, musí začínat písmenem nebo číslicí a nejvýše jich může být osm.", "laravel_worker_value_out_of_range":"Jedno z čísel je mimo rozsah uvedený vedle jeho pole.", "laravel_worker_name_taken":"Worker s tímto názvem už na této doméně existuje.", "laravel_worker_unknown":"Tento worker k této doméně nepatří.", "laravel_worker_apply_failed":"Definice byla uložena, ale worker se nespustil."}},
   "common": {
     "save": "Uložit"
   }

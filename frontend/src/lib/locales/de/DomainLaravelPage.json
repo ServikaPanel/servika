@@ -21,6 +21,7 @@
     "actionFailed": "Aktion fehlgeschlagen"
   },
   "overview": {
+    "workerSummary": "{{running}} Prozess(e) in {{total}} Worker(n)",
     "title": "Anwendungsstatus",
     "installed": "Installiert",
     "yes": "Ja",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Wartung deaktivieren",
     "enableMaintenance": "Wartung aktivieren"
   },
-  "workers": {
-    "title": "Zeitplan- und Queue-Worker",
-    "queueTimeout": "Queue-Timeout",
-    "maxJobs": "Max. Jobs",
-    "connection": "Verbindung",
-    "disableSchedule": "Zeitplan deaktivieren",
-    "enableSchedule": "Zeitplan aktivieren",
-    "disableQueue": "Queue deaktivieren",
-    "enableQueue": "Queue aktivieren"
-  },
+  "workers": {"title":"Queue-Worker", "hint":"Jede Definition läuft in eigenen systemd-Units. Geben Sie einer Queue mit hoher Priorität einen eigenen Worker, statt eine Einstellung mit allem zu teilen.", "empty":"Es ist kein Worker definiert.", "loadFailed":"Die Worker-Liste konnte nicht gelesen werden und wird daher nicht angezeigt.", "add":"Worker hinzufügen", "addTitle":"Neuer Worker", "editTitle":"Worker {{name}}", "cancel":"Abbrechen", "scheduleTitle":"Planer", "scheduleHint":"Führt artisan schedule:run einmal pro Minute aus.", "disableSchedule":"Planer deaktivieren", "enableSchedule":"Planer aktivieren", "name":"Name", "namePlaceholder":"default", "connection":"Verbindung", "queues":"Queues", "queuesPlaceholder":"high,default (leer bedeutet die Queue der Verbindung selbst)", "processes":"Prozesse (1-{{max}})", "tries":"Versuche je Job", "timeout":"Job-Zeitlimit (Sekunden)", "sleep":"Wartezeit im Leerlauf (Sekunden)", "maxJobs":"Jobs bis zum Neustart (0 bedeutet unbegrenzt)", "memory":"Speichergrenze (MB)", "defaultQueue":"die Queue der Verbindung selbst", "summary":"{{connection}} · {{queues}} · Zeitlimit {{timeout}}s · {{memory}} MB", "stateRunning":"{{running}} von {{total}} laufen", "stateStopped":"gestoppt", "stateFailed":"{{failed}} Prozess(e) haben aufgegeben", "restartCount":"{{restarts}}-mal neu gestartet", "edit":"Bearbeiten", "start":"Starten", "stop":"Stoppen", "restart":"Neu starten", "log":"Protokoll", "delete":"Löschen", "logTitle":"Worker-Ausgabe", "logEmpty":"Der Worker hat noch nichts geschrieben.", "restarted":"{{name}} wurde neu gestartet.", "confirmStop":"{{name}} stoppen? Seine Queue wird bis zum nächsten Start nicht verarbeitet.", "confirmDelete":"{{name}} löschen? Die Prozesse werden beendet und die Definition ist weg.", "saveFailed":"Der Worker konnte nicht gespeichert werden.", "reasons":{"laravel_worker_name_invalid":"Der Name darf nur Kleinbuchstaben, Ziffern, Bindestriche und Unterstriche enthalten und muss mit einem Buchstaben oder einer Ziffer beginnen.", "laravel_worker_connection_invalid":"Der Verbindungsname darf nur Kleinbuchstaben, Ziffern und Unterstriche enthalten.", "laravel_worker_queues_invalid":"Ein Queue-Name darf nur Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche enthalten, muss mit einem Buchstaben oder einer Ziffer beginnen, und es sind höchstens acht erlaubt.", "laravel_worker_value_out_of_range":"Eine der Zahlen liegt außerhalb des Bereichs, der neben ihrem Feld steht.", "laravel_worker_name_taken":"Auf dieser Domain gibt es bereits einen Worker mit diesem Namen.", "laravel_worker_unknown":"Dieser Worker gehört nicht zu dieser Domain.", "laravel_worker_apply_failed":"Die Definition wurde gespeichert, aber der Worker ist nicht gestartet."}},
   "common": {
     "save": "Speichern"
   }

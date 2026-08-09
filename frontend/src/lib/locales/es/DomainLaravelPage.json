@@ -21,6 +21,7 @@
     "actionFailed": "La acción falló"
   },
   "overview": {
+    "workerSummary": "{{running}} proceso(s) en {{total}} worker(s)",
     "title": "Estado de la aplicación",
     "installed": "Instalado",
     "yes": "Sí",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Desactivar mantenimiento",
     "enableMaintenance": "Activar mantenimiento"
   },
-  "workers": {
-    "title": "Worker de programación y cola",
-    "queueTimeout": "Tiempo de espera de la cola",
-    "maxJobs": "Máx. trabajos",
-    "connection": "Conexión",
-    "disableSchedule": "Desactivar programación",
-    "enableSchedule": "Activar programación",
-    "disableQueue": "Desactivar cola",
-    "enableQueue": "Activar cola"
-  },
+  "workers": {"title":"Workers de cola", "hint":"Cada definición corre en sus propias unidades de systemd. Dé a una cola de alta prioridad su propio worker en lugar de compartir una sola configuración con todo lo demás.", "empty":"No hay ningún worker definido.", "loadFailed":"No se pudo leer la lista de workers, por eso no se muestra aquí.", "add":"Añadir un worker", "addTitle":"Nuevo worker", "editTitle":"Worker {{name}}", "cancel":"Cancelar", "scheduleTitle":"Programador", "scheduleHint":"Ejecuta artisan schedule:run una vez por minuto.", "disableSchedule":"Desactivar el programador", "enableSchedule":"Activar el programador", "name":"Nombre", "namePlaceholder":"default", "connection":"Conexión", "queues":"Colas", "queuesPlaceholder":"high,default (vacío significa la cola de la propia conexión)", "processes":"Procesos (1-{{max}})", "tries":"Intentos por trabajo", "timeout":"Tiempo límite del trabajo (segundos)", "sleep":"Espera en reposo (segundos)", "maxJobs":"Trabajos antes de reiniciar (0 significa sin límite)", "memory":"Límite de memoria (MB)", "defaultQueue":"la cola de la propia conexión", "summary":"{{connection}} · {{queues}} · tiempo límite {{timeout}}s · {{memory}} MB", "stateRunning":"{{running}} de {{total}} en ejecución", "stateStopped":"detenido", "stateFailed":"{{failed}} proceso(s) se rindieron", "restartCount":"reiniciado {{restarts}} veces", "edit":"Editar", "start":"Iniciar", "stop":"Detener", "restart":"Reiniciar", "log":"Registro", "delete":"Eliminar", "logTitle":"Salida del worker", "logEmpty":"El worker todavía no ha escrito nada.", "restarted":"{{name}} se reinició.", "confirmStop":"¿Detener {{name}}? Su cola no se procesará hasta que se inicie de nuevo.", "confirmDelete":"¿Eliminar {{name}}? Sus procesos se detienen y la definición desaparece.", "saveFailed":"No se pudo guardar el worker.", "reasons":{"laravel_worker_name_invalid":"El nombre admite solo minúsculas, dígitos, guiones y guiones bajos, y debe empezar por una letra o un dígito.", "laravel_worker_connection_invalid":"El nombre de la conexión admite solo minúsculas, dígitos y guiones bajos.", "laravel_worker_queues_invalid":"Un nombre de cola admite solo letras, dígitos, puntos, guiones y guiones bajos, debe empezar por una letra o un dígito, y se permiten ocho como máximo.", "laravel_worker_value_out_of_range":"Uno de los números está fuera del rango que se indica junto a su campo.", "laravel_worker_name_taken":"Ya existe un worker con ese nombre en este dominio.", "laravel_worker_unknown":"Ese worker no pertenece a este dominio.", "laravel_worker_apply_failed":"La definición se guardó pero el worker no arrancó."}},
   "common": {
     "save": "Guardar"
   }

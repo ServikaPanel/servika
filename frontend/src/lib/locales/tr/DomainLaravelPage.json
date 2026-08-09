@@ -21,6 +21,7 @@
     "actionFailed": "İşlem başarısız"
   },
   "overview": {
+    "workerSummary": "{{total}} worker'da {{running}} process",
     "title": "Uygulama Durumu",
     "installed": "Kurulu",
     "yes": "Evet",
@@ -72,16 +73,7 @@
     "disableMaintenance": "Bakımı kapat",
     "enableMaintenance": "Bakımı aç"
   },
-  "workers": {
-    "title": "Zamanlama ve Kuyruk İşçisi",
-    "queueTimeout": "Kuyruk zaman aşımı",
-    "maxJobs": "Maksimum iş",
-    "connection": "Bağlantı",
-    "disableSchedule": "Zamanlamayı kapat",
-    "enableSchedule": "Zamanlamayı aç",
-    "disableQueue": "Kuyruğu kapat",
-    "enableQueue": "Kuyruğu aç"
-  },
+  "workers": {"title":"Kuyruk worker'ları", "hint":"Her tanım kendi systemd unit'lerinde çalışır. Yüksek öncelikli bir kuyruğa, her şeyle aynı ayarları paylaşmak yerine kendi worker'ını verin.", "empty":"Tanımlı worker yok.", "loadFailed":"Worker listesi okunamadı, bu yüzden burada gösterilmiyor.", "add":"Worker ekle", "addTitle":"Yeni worker", "editTitle":"{{name}} worker'ı", "cancel":"Vazgeç", "scheduleTitle":"Zamanlayıcı", "scheduleHint":"artisan schedule:run komutunu dakikada bir çalıştırır.", "disableSchedule":"Zamanlayıcıyı kapat", "enableSchedule":"Zamanlayıcıyı aç", "name":"Ad", "namePlaceholder":"default", "connection":"Bağlantı", "queues":"Kuyruklar", "queuesPlaceholder":"high,default (boş bırakırsanız bağlantının kendi kuyruğu)", "processes":"Process sayısı (1-{{max}})", "tries":"İş başına deneme", "timeout":"İş zaman aşımı (saniye)", "sleep":"Boşta bekleme (saniye)", "maxJobs":"Yeniden başlatmadan önceki iş sayısı (0 sınırsız)", "memory":"Bellek tavanı (MB)", "defaultQueue":"bağlantının kendi kuyruğu", "summary":"{{connection}} · {{queues}} · zaman aşımı {{timeout}}sn · {{memory}} MB", "stateRunning":"{{total}} process'ten {{running}} tanesi çalışıyor", "stateStopped":"durdurulmuş", "stateFailed":"{{failed}} process pes etti", "restartCount":"{{restarts}} kez yeniden başladı", "edit":"Düzenle", "start":"Başlat", "stop":"Durdur", "restart":"Yeniden başlat", "log":"Log", "delete":"Sil", "logTitle":"Worker çıktısı", "logEmpty":"Worker henüz bir şey yazmadı.", "restarted":"{{name}} yeniden başlatıldı.", "confirmStop":"{{name}} durdurulsun mu? Yeniden başlatılana kadar kuyruğu işlenmez.", "confirmDelete":"{{name}} silinsin mi? Process'leri durur ve tanım kaybolur.", "saveFailed":"Worker kaydedilemedi.", "reasons":{"laravel_worker_name_invalid":"Ad yalnız küçük harf, rakam, tire ve alt çizgi içerebilir ve harf ya da rakamla başlamalıdır.", "laravel_worker_connection_invalid":"Bağlantı adı yalnız küçük harf, rakam ve alt çizgi içerebilir.", "laravel_worker_queues_invalid":"Kuyruk adı yalnız harf, rakam, nokta, tire ve alt çizgi içerebilir, harf ya da rakamla başlamalıdır ve en çok sekiz tane olabilir.", "laravel_worker_value_out_of_range":"Sayılardan biri, alanının yanında yazan aralığın dışında.", "laravel_worker_name_taken":"Bu alan adında aynı adı taşıyan bir worker zaten var.", "laravel_worker_unknown":"Bu worker bu alan adına ait değil.", "laravel_worker_apply_failed":"Tanım kaydedildi ama worker başlamadı."}},
   "common": {
     "save": "Kaydet"
   }
