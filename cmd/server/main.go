@@ -157,6 +157,9 @@ func main() {
 	// were allocated uniquely. Two domains sharing one cannot be separated by
 	// anything but an operator, because their files live in one home directory.
 	provisioner.ReportSystemUserCollisions()
+	// The scan lock lives in memory, so a restart frees it while the row stays
+	// 'running' for good and the screen shows a scan that never ends.
+	antivirus.HealRunningScans(d)
 	middleware.Init(d)
 	if err := dns.SeedTemplateIfEmpty(context.Background(), d); err != nil {
 		log.Printf("DNS template seed warn: %v", err)

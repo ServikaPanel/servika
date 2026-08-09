@@ -1,6 +1,7 @@
 // Package antivirus provides per-domain malware scanning with ClamAV and lightweight heuristics.
 // A server-wide atomic lock allows only one scan at a time to limit memory pressure.
-// Quarantine uses a same-filesystem rename and restricts paths to the domain home.
+// Quarantine lives in quarantine.go: a file is copied out of the tenant tree into
+// a root-owned store outside every home, and the original is removed last.
 package antivirus
 
 import (
@@ -8,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,6 +34,30 @@ type Handlers struct{ DB *sql.DB }
 
 // scanning is a server-wide lock. A single slot prevents ClamAV database memory pressure.
 var scanning atomic.Int32
+
+// scanBudget bounds one scan. It is not tied to the request: the caller gets a
+// scan id immediately and polls, so closing the tab must not stop the sweep.
+const scanBudget = 8 * time.Minute
+
+// HealRunningScans closes the scans that were in flight when the panel stopped.
+//
+// The single-slot lock lives in memory, so a restart frees it while the row
+// stays 'running' for good: the screen then shows a scan that never ends and
+// never lets the customer start another. There is no process to wait for after a
+// restart, so every such row is failed rather than resumed.
+func HealRunningScans(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	result, err := db.Exec(`UPDATE av_scans SET status='failed', finished_at=NOW() WHERE status='running'`)
+	if err != nil {
+		log.Printf("antivirus: could not close the scans left running: %v", err)
+		return
+	}
+	if closed, err := result.RowsAffected(); err == nil && closed > 0 {
+		log.Printf("antivirus: closed %d scan(s) left running by a restart", closed)
+	}
+}
 
 var errCap = errors.New("file-limit-reached")
 
@@ -207,15 +233,24 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 	sid, _ := res.LastInsertId()
 	go func() {
 		defer scanning.Store(0)
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
 		defer cancel()
 		scanned, findings := runScan(ctx, root)
 		for _, f := range findings {
 			_, _ = h.DB.Exec(`INSERT INTO av_findings (scan_id, domain_id, file, signature, engine) VALUES (?,?,?,?,?)`,
 				sid, id, f.File, f.Signature, f.Engine)
 		}
-		_, _ = h.DB.Exec(`UPDATE av_scans SET status='finished', scanned=?, infected=?, finished_at=NOW() WHERE id=?`,
-			scanned, len(findings), sid)
+		// A scan that ran out of its budget covered part of the tree, so it is
+		// recorded as FAILED with the findings it did get. Calling it finished
+		// would present a partial sweep as a clean bill of health, which for a
+		// webshell in the part that was never reached is the worst answer the
+		// screen can give.
+		status := "finished"
+		if ctx.Err() != nil {
+			status = "failed"
+		}
+		_, _ = h.DB.Exec(`UPDATE av_scans SET status=?, scanned=?, infected=?, finished_at=NOW() WHERE id=?`,
+			status, scanned, len(findings), sid)
 	}()
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"scan_id": sid})
 }
