@@ -368,6 +368,15 @@ func runRootSQL(statements ...string) error {
 	return nil
 }
 
+// RunRootSQL executes statements against MariaDB as the OS root user.
+//
+// It is the single exported entry point for privileged SQL, so no other package
+// grows a second `mysql -e ...` habit: argv is world-readable through
+// /proc/<pid>/cmdline and a tenant reaches it through cron, while this runner
+// feeds everything on stdin. Callers outside this package are responsible for
+// validating whatever they interpolate; the runner cannot see the difference.
+func RunRootSQL(statements ...string) error { return runRootSQL(statements...) }
+
 // ErrInvalidMySQLCredentials indicates that a database name, user, or password is unsafe for SQL construction.
 var ErrInvalidMySQLCredentials = errors.New("invalid MySQL credentials")
 
