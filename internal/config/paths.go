@@ -53,6 +53,12 @@ const (
 	// only, and a database re-downloaded on every update would spend the
 	// operator's MaxMind allowance for nothing.
 	DefaultGeoIPDir = "/var/lib/servika/geoip"
+	// DefaultQuarantineDir holds files the malware scanner took out of a tenant
+	// tree. It sits OUTSIDE every home on purpose: the tenant owns their home, so
+	// a quarantine directory there can be emptied or carried back by the same
+	// account that planted the file, it is charged to their disk quota, and it
+	// joins their backups. Root-owned 0700, one directory per system user.
+	DefaultQuarantineDir = "/var/lib/servika/quarantine"
 	// DefaultMariaDBSlowLog is the panel's OWN slow query log, deliberately not
 	// MariaDB's default mariadb-slow.log name: an operator who already turned the
 	// slow log on keeps their file and their logrotate rule, and the panel never
@@ -173,6 +179,12 @@ func AppLogDir() string { return mustAbsPath("SERVIKA_APP_LOG_DIR", DefaultAppLo
 func AppEnvDir() string { return mustAbsPath("SERVIKA_APP_ENV_DIR", DefaultAppEnvDir) }
 func GeoIPDir() string  { return mustAbsPath("SERVIKA_GEOIP_DIR", DefaultGeoIPDir) }
 
+// QuarantineDir is where a file taken out of a tenant tree is kept, outside
+// every home so the account it came from cannot reach it.
+func QuarantineDir() string {
+	return mustAbsPath("SERVIKA_QUARANTINE_DIR", DefaultQuarantineDir)
+}
+
 // MariaDBSlowLog is where the panel asks MariaDB to write slow queries, and the
 // only file internal/slowquery reads.
 func MariaDBSlowLog() string {
@@ -258,6 +270,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_ACME_HOME", DefaultACMEHome, false},
 		{"SERVIKA_ACME_BIN", DefaultACMEBin, false},
 		{"SERVIKA_BACKUP_ROOT", DefaultBackupRoot, false},
+		{"SERVIKA_QUARANTINE_DIR", DefaultQuarantineDir, false},
 		{"SERVIKA_LARAVEL_LOG_DIR", DefaultLaravelLogDir, false},
 		{"SERVIKA_PLUGIN_ROOT", DefaultPluginRoot, false},
 		{"SERVIKA_LOG_DIR", DefaultLogDir, false},

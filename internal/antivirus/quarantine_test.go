@@ -153,20 +153,13 @@ func TestANonRegularFileIsRefusedOnTheDescriptor(t *testing.T) {
 
 // The endpoint must never accept a path from the request again.
 func TestTheEndpointTakesAFindingIDAndNotAPath(t *testing.T) {
-	source, err := os.ReadFile("antivirus.go")
+	source, err := os.ReadFile("quarantine.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	body := string(source)
-	start := strings.Index(body, "func (h *Handlers) Quarantine(")
-	if start < 0 {
+	if !strings.Contains(body, "func (h *Handlers) Quarantine(") {
 		t.Fatal("Quarantine was renamed; this test has to follow it")
-	}
-	end := strings.Index(body[start:], "\nfunc ")
-	if end > 0 {
-		body = body[start : start+end]
-	} else {
-		body = body[start:]
 	}
 
 	if !strings.Contains(body, `json:"finding_id"`) {
@@ -175,15 +168,24 @@ func TestTheEndpointTakesAFindingIDAndNotAPath(t *testing.T) {
 	if strings.Contains(body, `json:"file"`) {
 		t.Error("the endpoint accepts a path from the request again")
 	}
-	// Anchored to the SELECT, not to the fragment: the UPDATE at the end of the
-	// handler carries the same words, so an unanchored match stayed green with
-	// the read's ownership narrowing removed.
-	if !strings.Contains(body, "SELECT file FROM av_findings WHERE id=? AND domain_id=?") {
+	// Anchored to the whole SELECT, not to a fragment: the UPDATE that marks a
+	// finding quarantined carries the same words, so a fragment match stayed
+	// green with the read's ownership narrowing removed.
+	if !strings.Contains(body,
+		"SELECT file, signature, engine, quarantined FROM av_findings WHERE id=? AND domain_id=?") {
 		t.Error("the finding lookup is no longer narrowed by domain")
 	}
-	for _, raw := range []string{"os.Rename(", "os.Lstat(", "os.MkdirAll("} {
+	// Reads and removals inside a tenant tree go through the openat2 jail. The
+	// store is outside every home and root-owned, so os.* there is correct; what
+	// must never come back is a raw operation on a path under the home.
+	for _, raw := range []string{"os.Rename(", "os.Lstat("} {
 		if strings.Contains(body, raw) {
-			t.Errorf("the handler performs %s on a raw path instead of going through safeio", raw)
+			t.Errorf("a tenant path reaches %s instead of going through safeio", raw)
 		}
+	}
+	if !strings.Contains(body, "files.OpenBeneath(home, rel)") ||
+		!strings.Contains(body, "files.RemoveAllBeneath(home, rel)") ||
+		!strings.Contains(body, "files.StreamIntoBeneath(home, rel,") {
+		t.Error("the tenant-side read, removal or restore no longer goes through safeio")
 	}
 }

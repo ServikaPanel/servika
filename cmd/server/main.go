@@ -677,7 +677,11 @@ func main() {
 				r.With(middleware.CustomerScope).Get("/domains/{id}/antivirus", avH.Status)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/antivirus/scan", avH.Scan)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/antivirus/scan/{sid}", avH.ScanStatus)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/antivirus/quarantine", avH.QuarantineList)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/antivirus/quarantine", avH.Quarantine)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/antivirus/quarantine/all", avH.QuarantineAll)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/antivirus/quarantine/{qid}/restore", avH.QuarantineRestore)
+				r.With(middleware.CustomerScope).Delete("/domains/{id}/antivirus/quarantine/{qid}", avH.QuarantineDelete)
 				r.With(middleware.AdminOnly).Post("/domains/{id}/antivirus/update-signature", avH.UpdateSignature)
 				// Generic import: a site archive, a SQL dump and the config rewrite
 				// that points the imported application at its new database.

@@ -200,6 +200,7 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_APP_LOG_DIR`           | `/var/log/servika-apps`                            | Root-owned directory holding one log per application.   |
 | `SERVIKA_APP_ENV_DIR`           | `/etc/servika/apps`                                | Directory of per-application 0600 `EnvironmentFile`s.   |
 | `SERVIKA_GEOIP_DIR`             | `/var/lib/servika/geoip`                           | Country database and the nginx include generated from it. |
+| `SERVIKA_QUARANTINE_DIR`        | `/var/lib/servika/quarantine`                      | Files the malware scanner took out of a tenant tree, kept outside every home so the account they came from cannot reach them. |
 | `SERVIKA_INSTALLATION_ID`       | `/etc/servika/installation-id`                     | Random installation ID storage path for version checks. |
 | `SERVIKA_VERSION_CACHE`         | `/opt/servika/version-cache.json`                  | Cached version manifest path.                           |
 | `SERVIKA_PMA_TOKEN`             | `/etc/servika/pma-internal.token`                  | Internal phpMyAdmin signon token path.                  |

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"servika/internal/addondomains"
+	"servika/internal/antivirus"
 	"servika/internal/apps"
 	"servika/internal/credentials"
 	"servika/internal/dns"
@@ -723,6 +724,12 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		if !systemUserShared {
 			if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
 				log.Printf("resource slice cleanup warn (%s): %v", sk, err)
+			}
+			// The quarantine store lives OUTSIDE the home, so userdel -r never
+			// reaches it: the rows go with the foreign key and the files would stay
+			// for good, holding a tenant's malware after the tenant is gone.
+			if err := antivirus.RemoveStoreForUser(sk); err != nil {
+				log.Printf("quarantine store cleanup warn (%s): %v", sk, err)
 			}
 		}
 		// Redis tenant cache: Valkey ACL user + WP drop-in + domain_redis row.

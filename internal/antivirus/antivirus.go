@@ -6,7 +6,6 @@ package antivirus
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -20,7 +19,6 @@ import (
 	"time"
 
 	"servika/internal/config"
-	"servika/internal/files"
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
@@ -211,132 +209,6 @@ func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
 		"infected": infected, "started_at": startedAt, "finished_at": finishedAt.String,
 		"findings": h.findings(r.Context(), sid),
 	})
-}
-
-// Stable reason codes. The API answers in English and the panel draws twelve
-// languages, so a screen that matched the message would break on the first
-// wording change.
-// quarantineDir is the tenant-home directory a quarantined file is moved into,
-// relative to the home so every operation on it goes through safeio.
-const quarantineDir = ".quarantined"
-
-const (
-	reasonFindingUnknown  = "av_finding_unknown"
-	reasonFileMissing     = "av_file_missing"
-	reasonPathOutsideHome = "av_path_outside_home"
-	reasonQuarantineFail  = "av_quarantine_failed"
-)
-
-// homeRelative turns a finding's absolute path into a path relative to the
-// tenant home, refusing anything that does not sit under it.
-//
-// The finding rows are written by this package's own scan, so a mismatch is a
-// bug rather than an attack, but the conversion is the last point at which a
-// path that escaped the home can be caught before a root-privileged file
-// operation, so it refuses rather than repairing.
-func homeRelative(home, absolute string) (string, bool) {
-	clean := filepath.Clean(absolute)
-	if !strings.HasPrefix(clean, home+"/") {
-		return "", false
-	}
-	rel := strings.TrimPrefix(clean, home+"/")
-	if rel == "" || rel == "." {
-		return "", false
-	}
-	return rel, true
-}
-
-// POST /domains/{id}/antivirus/quarantine  {finding_id}
-//
-// The path is read from the FINDING, never from the request. It used to be sent
-// by the caller and checked with a string prefix, which is not a boundary: lstat
-// and rename follow symlinks in every component except the last, so a tenant who
-// planted a link inside their own public_html could have the panel move any file
-// on the host, as root, into their quarantine directory.
-func (h *Handlers) Quarantine(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, ok := h.domain(r)
-	if !ok {
-		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
-		return
-	}
-	if !strings.HasPrefix(systemUser, "c_") {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid user")
-		return
-	}
-	var req struct {
-		FindingID int64 `json:"finding_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	// Narrowed by domain in the QUERY: the caller owns this domain, which does not
-	// make every finding id theirs.
-	var absolute string
-	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT file FROM av_findings WHERE id=? AND domain_id=?`, req.FindingID, id).
-		Scan(&absolute); err != nil {
-		httpx.WriteJSON(w, http.StatusNotFound,
-			map[string]any{"error": "finding not found", "reason": reasonFindingUnknown})
-		return
-	}
-
-	home := "/home/" + systemUser
-	rel, inside := homeRelative(home, absolute)
-	if !inside {
-		httpx.WriteJSON(w, http.StatusBadRequest,
-			map[string]any{"error": "path is outside the domain directory", "reason": reasonPathOutsideHome})
-		return
-	}
-	// Every component is pinned with openat2 RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS,
-	// so a planted link at any level fails the open instead of redirecting it.
-	source, err := files.OpenBeneath(home, rel)
-	if err != nil {
-		httpx.WriteJSON(w, http.StatusBadRequest,
-			map[string]any{"error": "file not found", "reason": reasonFileMissing})
-		return
-	}
-	defer func() { _ = source.Close() }()
-	info, statErr := source.Stat()
-	// Asserted on the DESCRIPTOR, not on a separate stat of the path: a fifo or a
-	// device node under the home opens successfully and must not be read.
-	if statErr != nil || !info.Mode().IsRegular() {
-		httpx.WriteJSON(w, http.StatusBadRequest,
-			map[string]any{"error": "not a regular file", "reason": reasonFileMissing})
-		return
-	}
-
-	// The content is taken from the descriptor openat2 already pinned, and the
-	// source is removed through the same jail. Nothing here re-walks the path as
-	// text, so there is no window in which a component could be swapped between
-	// the check and the operation.
-	targetRel := quarantineDir + "/" + time.Now().Format("20060102_150405") + "_" + filepath.Base(rel)
-	if err := files.MkdirAllBeneath(home, quarantineDir, systemUser); err != nil {
-		httpx.WriteJSON(w, http.StatusInternalServerError,
-			map[string]any{"error": "could not create quarantine directory", "reason": reasonQuarantineFail})
-		return
-	}
-	if _, err := files.StreamIntoBeneath(home, targetRel, source, systemUser); err != nil {
-		httpx.WriteJSON(w, http.StatusInternalServerError,
-			map[string]any{"error": "operation failed", "reason": reasonQuarantineFail})
-		return
-	}
-	if err := files.RemoveAllBeneath(home, rel); err != nil {
-		// The copy landed but the original is still live, so the file is NOT
-		// quarantined. Take the copy back rather than report a containment that
-		// did not happen.
-		_ = files.RemoveAllBeneath(home, targetRel)
-		httpx.WriteJSON(w, http.StatusInternalServerError,
-			map[string]any{"error": "operation failed", "reason": reasonQuarantineFail})
-		return
-	}
-	_ = files.ChmodBeneath(home, targetRel, 0o000) // not executable, not readable
-	_, _ = h.DB.Exec(`UPDATE av_findings SET quarantined=1 WHERE id=? AND domain_id=?`, req.FindingID, id)
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "target": home + "/" + targetRel})
 }
 
 // POST /domains/{id}/antivirus/update-signature  → freshclam
