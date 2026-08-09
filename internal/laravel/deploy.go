@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -142,10 +143,51 @@ func (h *Handlers) finalizeDeploy(ctx context.Context, id int64, systemUser stri
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		_ = exec.Command("systemctl", "reset-failed", unit).Run()
 		_ = os.Remove(deployScriptPath(id))
+		h.restartWorkersAfterDeploy(ctx, id)
 	}
 	rec.LastDeployStatus = newStatus
 	rec.LastCommit = lastCommit
 	return rec
+}
+
+// restartWorkersAfterDeploy moves every running worker onto the code that was
+// just deployed.
+//
+// A PHP worker loads the application once and keeps it in memory, so without
+// this the old code keeps processing jobs until --max-time expires, which is up
+// to an hour after a deploy the customer watched succeed.
+//
+// The restart goes through systemd rather than `artisan queue:restart`. That
+// command writes a cache key the worker polls, so an application whose cache
+// driver is misconfigured loses the signal silently, which is exactly the state
+// somebody is most likely deploying to fix. systemd is the panel's own path and
+// depends on nothing the tenant configured. It is graceful all the same: SIGTERM
+// goes first and TimeoutStopSec is rendered above the job timeout, so the job in
+// hand finishes.
+//
+// It is called only from the single-winner branch that flipped the row out of
+// 'running', so a deploy restarts its workers exactly once however many callers
+// poll the status endpoint.
+func (h *Handlers) restartWorkersAfterDeploy(ctx context.Context, domainID int64) {
+	workers, err := WorkersForDomain(ctx, h.DB, domainID)
+	if err != nil {
+		// #nosec G706 -- the logged values are an integer id and a driver error from a SELECT whose only parameter is bound; no raw tenant string with CR/LF reaches the log.
+		log.Printf("laravel: deploy of domain %d finished but its workers could not be read: %v", domainID, err)
+		return
+	}
+	for _, worker := range workers {
+		if !worker.Enabled {
+			continue
+		}
+		if err := RestartWorker(worker); err != nil {
+			// The deploy itself succeeded, so this is reported rather than
+			// turned into a failure: saying nothing would leave the old code
+			// running with no trace of why.
+			// #nosec G706 -- the logged values are integer ids and systemctl output about a unit name derived from those ids; no raw tenant string with CR/LF reaches the log.
+			log.Printf("laravel: worker %d of domain %d did not restart after the deploy: %v",
+				worker.ID, domainID, err)
+		}
+	}
 }
 
 func (h *Handlers) DeployStatus(w http.ResponseWriter, r *http.Request) {
