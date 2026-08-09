@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // THE timezone rule for this column. The driver writes a Go time.Time as UTC
@@ -116,4 +117,62 @@ func readSource(t *testing.T, name string) string {
 		t.Fatalf("read %s: %v", name, err)
 	}
 	return string(body)
+}
+
+// The scheduler compares the deadline in SQL, not against a Go clock.
+//
+// maintenance_until was written with DATE_ADD(NOW(), ...), so the clock that
+// set it must be the clock that reads it. A Go comparison here would put back
+// exactly the timezone difference the write path exists to avoid.
+func TestTheSchedulerComparesTheDeadlineInSQL(t *testing.T) {
+	source := readSource(t, "maintenance_scheduler.go")
+
+	if !strings.Contains(source, "maintenance_until <= NOW()") {
+		t.Error("the scheduler does not compare the deadline in SQL")
+	}
+	if strings.Contains(source, "time.Now()") {
+		t.Error("the scheduler compares the deadline with a Go clock value")
+	}
+}
+
+// A domain whose vhost could not be re-rendered stays due, so the next tick
+// tries again. Clearing the row anyway would leave the panel reporting the site
+// as open while nginx still answered 503 to every visitor, with nothing left to
+// notice it.
+func TestAFailedRenderLeavesTheDomainDue(t *testing.T) {
+	source := readSource(t, "maintenance_scheduler.go")
+	lift := source[strings.Index(source, "func liftMaintenance"):]
+
+	render := strings.Index(lift, "provisioner.RerenderVhost(")
+	clearDeadline := strings.Index(lift, "maintenance_until=NULL")
+	if render < 0 || clearDeadline < 0 {
+		t.Fatalf("unexpected shape:\n%s", lift)
+	}
+	if clearDeadline < render {
+		t.Error("the deadline is cleared before the vhost is known to have changed")
+	}
+	// The failure branch puts the switch back rather than leaving the domain
+	// half-open.
+	if !strings.Contains(lift, "maintenance_enabled=1 WHERE id=?") {
+		t.Error("a failed render does not restore the switch, so the retry never happens")
+	}
+}
+
+// The pass runs under its own deadline, shorter than the interval, so a slow
+// pass cannot overlap the next one. main hands this package a context that
+// never cancels, so inheriting one would mean no deadline at all.
+func TestTheSchedulerPassHasItsOwnDeadline(t *testing.T) {
+	source := readSource(t, "maintenance_scheduler.go")
+	if !strings.Contains(source, "context.WithTimeout(context.Background()") {
+		t.Error("the pass does not set its own deadline")
+	}
+	if !strings.Contains(source, "maintenanceTick-") {
+		t.Error("the deadline is not derived from the tick interval, so it can exceed it")
+	}
+	if maintenanceTick <= 0 {
+		t.Fatal("the tick interval is not positive")
+	}
+	if maintenanceTick > time.Minute {
+		t.Errorf("the tick is %v; a customer's stated reopening time would be missed by that much", maintenanceTick)
+	}
 }

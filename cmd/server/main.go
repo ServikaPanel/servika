@@ -271,6 +271,9 @@ func main() {
 	accountsH := &accounts.Handlers{DB: d}
 	backupsH := &backups.Handlers{DB: d}
 	backups.StartScheduler(d)
+	// nginx has no notion of time, so a maintenance window that ends by itself
+	// needs something to re-render the vhost when its deadline passes.
+	domains.StartMaintenanceScheduler(d)
 	gitH := &git.Handlers{DB: d}
 	githubH := &githubpkg.Handlers{DB: d, WebhookBase: "https://" + ipv4 + ":8443"}
 	pmaH := &pma.Handlers{DB: d}
