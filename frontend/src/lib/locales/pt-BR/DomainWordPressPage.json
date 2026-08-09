@@ -35,6 +35,7 @@
     "off": "Desativado"
   },
   "overview": {
+    "verifyCore": "Verificar o núcleo",
     "updateVersion": "Atualizar versão · v{{version}}",
     "updateAll": "Atualizar tudo",
     "disableMaintenance": "Desativar modo de manutenção",
@@ -44,6 +45,8 @@
     "hint": "Ações rápidas de manutenção. Atualizações de versão disponíveis aparecem na métrica acima."
   },
   "messages": {
+    "verifyClean": "Os arquivos do núcleo correspondem às somas de verificação oficiais.",
+    "verifyFound": "{{extra}} arquivo(s) que não pertencem, {{modified}} modificados, {{missing}} ausentes. Os arquivos que não pertencem podem ir para quarentena na página de malware.",
     "coreUpdated": "Núcleo do WordPress atualizado.",
     "allUpdated": "Núcleo, plugins e temas atualizados.",
     "maintenanceEnabled": "Modo de manutenção ativado.",

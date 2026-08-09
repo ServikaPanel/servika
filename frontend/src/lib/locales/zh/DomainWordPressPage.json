@@ -35,6 +35,7 @@
     "off": "关"
   },
   "overview": {
+    "verifyCore": "校验核心",
     "updateVersion": "更新版本 · v{{version}}",
     "updateAll": "全部更新",
     "disableMaintenance": "禁用维护模式",
@@ -44,6 +45,8 @@
     "hint": "快速维护操作。可用的版本更新显示在上方指标中。"
   },
   "messages": {
+    "verifyClean": "核心文件与官方校验和一致。",
+    "verifyFound": "不应存在的文件 {{extra}} 个，被修改 {{modified}} 个，缺失 {{missing}} 个。不应存在的文件可在恶意软件页面隔离。",
     "coreUpdated": "WordPress 核心已更新。",
     "allUpdated": "核心、插件和主题已更新。",
     "maintenanceEnabled": "维护模式已启用。",

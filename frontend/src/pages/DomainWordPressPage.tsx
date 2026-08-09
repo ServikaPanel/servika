@@ -170,6 +170,24 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
   const maintenanceToggle = () => run('maintenance', async () => (await api.post(`${base}/wordpress/tool`, { dir, action: status?.maintenance ? 'maintenance-off' : 'maintenance-on' })).data, status?.maintenance ? t('messages.maintenanceDisabled') : t('messages.maintenanceEnabled'), loadStatus)
   const clearCache = () => run('cache', async () => (await api.post(`${base}/wordpress/tool`, { dir, action: 'cache-clear' })).data, t('messages.cacheCleared'))
   const repair = () => run('repair', async () => (await api.post(`${base}/wordpress/repair`, { dir })).data, t('messages.repairDone'), loadStatus)
+  // Verification only REPORTS, and the report decides the message, so it does not
+  // go through run(): that helper writes a fixed success line after the request
+  // resolves, which would announce a clean core over a dirty one. The three
+  // verdicts are three different actions: an extra file in a core directory is
+  // quarantined from the malware screen, while a modified or missing one is what
+  // "repair core" puts back.
+  async function verify() {
+    setBusy('verify'); setError(null); setSuccess(null); setOutput(null)
+    try {
+      const { data } = await api.post<{ extra: number; modified: number; missing: number; output?: string }>(
+        `${base}/wordpress/verify`, { dir })
+      const total = data.extra + data.modified + data.missing
+      if (total === 0) setSuccess(t('messages.verifyClean'))
+      else setError(t('messages.verifyFound', { extra: data.extra, modified: data.modified, missing: data.missing }))
+      if (data.output) setOutput(data.output)
+    } catch (error) { setError(apiError(error, t('errors.operationFailed'))) }
+    finally { setBusy(null) }
+  }
 
   // Dropping the cached list forces the tab to refetch the packages it shows.
   const invalidatePackages = (type: 'plugin' | 'theme') => {
@@ -263,6 +281,7 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
               <Btn onClick={updateAll} waiting={busy === 'all'} type={status?.update_available ? 'outline' : 'primary'}>{t('overview.updateAll')}</Btn>
               <Btn onClick={maintenanceToggle} waiting={busy === 'maintenance'}>{status?.maintenance ? t('overview.disableMaintenance') : t('overview.enableMaintenance')}</Btn>
               <Btn onClick={clearCache} waiting={busy === 'cache'}>{t('overview.clearCache')}</Btn>
+              <Btn onClick={verify} waiting={busy === 'verify'}>{t('overview.verifyCore')}</Btn>
               <Btn onClick={repair} waiting={busy === 'repair'}>{t('overview.repairCore')}</Btn>
             </div>
             {output && <Output text={output} />}

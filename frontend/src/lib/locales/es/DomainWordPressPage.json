@@ -16,6 +16,7 @@
   "toolkit": { "adminPanel": "Panel de administración", "remove": "Eliminar" },
   "metrics": { "version": "Versión", "php": "PHP", "database": "Base de datos", "maintenance": "Modo mantenimiento", "upToDate": "al día", "active": "activo", "on": "Activado", "off": "Desactivado" },
   "overview": {
+    "verifyCore": "Verificar el núcleo",
     "updateVersion": "Actualizar versión · v{{version}}",
     "updateAll": "Actualizar todo",
     "disableMaintenance": "Desactivar modo mantenimiento",
@@ -25,6 +26,8 @@
     "hint": "Acciones de mantenimiento rápido. Las actualizaciones de versión disponibles aparecen en la métrica de arriba."
   },
   "messages": {
+    "verifyClean": "Los archivos del núcleo coinciden con las sumas de comprobación oficiales.",
+    "verifyFound": "{{extra}} archivo(s) que no corresponden, {{modified}} modificados, {{missing}} ausentes. Los archivos que no corresponden pueden ponerse en cuarentena desde la página de malware.",
     "coreUpdated": "Núcleo de WordPress actualizado.",
     "allUpdated": "Núcleo, complementos y temas actualizados.",
     "maintenanceEnabled": "Modo mantenimiento activado.",

@@ -35,6 +35,7 @@
     "off": "オフ"
   },
   "overview": {
+    "verifyCore": "コアを検証",
     "updateVersion": "バージョンを更新 · v{{version}}",
     "updateAll": "すべて更新",
     "disableMaintenance": "メンテナンスモードを無効化",
@@ -44,6 +45,8 @@
     "hint": "クイックメンテナンス操作。利用可能なバージョン更新は上記のメトリックに表示されます。"
   },
   "messages": {
+    "verifyClean": "コアファイルは公式のチェックサムと一致しています。",
+    "verifyFound": "本来存在しないファイル {{extra}} 件、改変 {{modified}} 件、欠落 {{missing}} 件。本来存在しないファイルはマルウェアのページから隔離できます。",
     "coreUpdated": "WordPress コアを更新しました。",
     "allUpdated": "コア、プラグイン、テーマを更新しました。",
     "maintenanceEnabled": "メンテナンスモードを有効にしました。",

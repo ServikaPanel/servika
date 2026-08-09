@@ -35,6 +35,7 @@
     "off": "Aus"
   },
   "overview": {
+    "verifyCore": "Kern prüfen",
     "updateVersion": "Version aktualisieren · v{{version}}",
     "updateAll": "Alle aktualisieren",
     "disableMaintenance": "Wartungsmodus deaktivieren",
@@ -44,6 +45,8 @@
     "hint": "Schnelle Wartungsaktionen. Verfügbare Versionsaktualisierungen erscheinen in der Metrik oben."
   },
   "messages": {
+    "verifyClean": "Die Kerndateien stimmen mit den offiziellen Prüfsummen überein.",
+    "verifyFound": "{{extra}} fremde Datei(en), {{modified}} verändert, {{missing}} fehlend. Fremde Dateien lassen sich auf der Malware-Seite in Quarantäne verschieben.",
     "coreUpdated": "WordPress-Core aktualisiert.",
     "allUpdated": "Core, Plugins und Themes aktualisiert.",
     "maintenanceEnabled": "Wartungsmodus aktiviert.",

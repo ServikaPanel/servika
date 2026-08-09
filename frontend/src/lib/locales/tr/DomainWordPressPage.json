@@ -35,6 +35,7 @@
     "off": "Kapalı"
   },
   "overview": {
+    "verifyCore": "Çekirdeği doğrula",
     "updateVersion": "Sürümü güncelle · v{{version}}",
     "updateAll": "Tümünü güncelle",
     "disableMaintenance": "Bakım modunu kapat",
@@ -44,6 +45,8 @@
     "hint": "Hızlı bakım işlemleri. Kullanılabilir sürüm güncellemeleri yukarıdaki ölçümde görünür."
   },
   "messages": {
+    "verifyClean": "Çekirdek dosyalar resmi sağlama toplamlarıyla eşleşiyor.",
+    "verifyFound": "{{extra}} ait olmayan dosya, {{modified}} değiştirilmiş, {{missing}} eksik. Ait olmayan dosyalar zararlı yazılım sayfasından karantinaya alınabilir.",
     "coreUpdated": "WordPress çekirdeği güncellendi.",
     "allUpdated": "Çekirdek, eklentiler ve temalar güncellendi.",
     "maintenanceEnabled": "Bakım modu açıldı.",

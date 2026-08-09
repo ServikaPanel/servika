@@ -35,6 +35,7 @@
     "off": "Disattiva"
   },
   "overview": {
+    "verifyCore": "Verifica il core",
     "updateVersion": "Aggiorna versione · v{{version}}",
     "updateAll": "Aggiorna tutto",
     "disableMaintenance": "Disabilita modalità manutenzione",
@@ -44,6 +45,8 @@
     "hint": "Azioni di manutenzione rapide. Gli aggiornamenti di versione disponibili appaiono nella metrica qui sopra."
   },
   "messages": {
+    "verifyClean": "I file del core corrispondono ai checksum ufficiali.",
+    "verifyFound": "{{extra}} file estranei, {{modified}} modificati, {{missing}} mancanti. I file estranei possono essere messi in quarantena dalla pagina malware.",
     "coreUpdated": "Core di WordPress aggiornato.",
     "allUpdated": "Core, plugin e temi aggiornati.",
     "maintenanceEnabled": "Modalità manutenzione abilitata.",

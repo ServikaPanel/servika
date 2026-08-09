@@ -35,6 +35,7 @@
     "off": "Dezactivat"
   },
   "overview": {
+    "verifyCore": "Verifică nucleul",
     "updateVersion": "Actualizare versiune · v{{version}}",
     "updateAll": "Actualizare toate",
     "disableMaintenance": "Dezactivare mod de mentenanță",
@@ -44,6 +45,8 @@
     "hint": "Acțiuni rapide de mentenanță. Actualizările de versiune disponibile apar în metrica de mai sus."
   },
   "messages": {
+    "verifyClean": "Fișierele nucleului corespund sumelor de control oficiale.",
+    "verifyFound": "{{extra}} fișier(e) străine, {{modified}} modificate, {{missing}} lipsă. Fișierele străine pot fi puse în carantină din pagina de malware.",
     "coreUpdated": "Nucleul WordPress a fost actualizat.",
     "allUpdated": "Nucleul, pluginurile și temele au fost actualizate.",
     "maintenanceEnabled": "Mod de mentenanță activat.",

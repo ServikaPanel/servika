@@ -35,6 +35,7 @@
     "off": "Vypnuto"
   },
   "overview": {
+    "verifyCore": "Ověřit jádro",
     "updateVersion": "Aktualizovat verzi · v{{version}}",
     "updateAll": "Aktualizovat vše",
     "disableMaintenance": "Zakázat režim údržby",
@@ -44,6 +45,8 @@
     "hint": "Rychlé akce údržby. Dostupné aktualizace verzí se zobrazí v metrice výše."
   },
   "messages": {
+    "verifyClean": "Soubory jádra odpovídají oficiálním kontrolním součtům.",
+    "verifyFound": "{{extra}} cizí soubor(ů), {{modified}} změněných, {{missing}} chybějících. Cizí soubory lze přesunout do karantény na stránce malwaru.",
     "coreUpdated": "Jádro WordPress aktualizováno.",
     "allUpdated": "Jádro, pluginy a šablony aktualizovány.",
     "maintenanceEnabled": "Režim údržby povolen.",
