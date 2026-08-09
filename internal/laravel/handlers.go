@@ -121,8 +121,20 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 			lastCommit = strings.TrimSpace(out)
 		}
 	}
+	// The overview counts workers rather than repeating their settings: the
+	// definitions live on their own tab and a second copy here would be the one
+	// that goes stale.
+	workerCount, workersRunning := 0, 0
+	if workers, err := WorkersForDomain(r.Context(), h.DB, id); err == nil {
+		workerCount = len(workers)
+		for _, worker := range workers {
+			workersRunning += ReadWorkerStatus(worker).Running
+		}
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"installed":          artisan,
+		"worker_count":       workerCount,
+		"workers_running":    workersRunning,
 		"exists":             rec.Exists,
 		"app_root":           appRoot,
 		"system_user":        systemUser,

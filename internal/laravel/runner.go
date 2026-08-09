@@ -23,6 +23,7 @@ const (
 	shortTimeout = 120 * time.Second
 	systemPath   = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	cronDir      = "/etc/cron.d"
+	unitDir      = "/etc/systemd/system"
 	logSubdir    = "logs"
 )
 
@@ -57,6 +58,15 @@ var (
 	reComposerPkg = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]*)/[a-z0-9]([a-z0-9._-]*)(:[\^~<>=0-9.* |,-]+)?$`)
 	reNodeVersion = regexp.MustCompile(`^[0-9]{1,2}(\.[0-9]{1,3}){0,2}$`)
 	reANSI        = regexp.MustCompile("\x1b\\[[0-9;?]*[a-zA-Z]")
+
+	// Queue worker fields. Each of these reaches a systemd unit file, so the
+	// character classes are the boundary rather than a tidiness rule.
+	reWorkerName       = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+	reWorkerConnection = regexp.MustCompile(`^[a-z0-9_]{1,32}$`)
+	// The first character must be alphanumeric. A leading dash reads as a FLAG
+	// to Laravel's argument parser, so "--daemon" in the queue list would pass
+	// an arbitrary artisan option the panel never offered.
+	reQueueName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
 )
 
 func validSystemUser(systemUser string) bool {
