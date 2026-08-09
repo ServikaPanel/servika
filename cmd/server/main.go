@@ -30,6 +30,7 @@ import (
 	"servika/internal/customer"
 	"servika/internal/datamigrate"
 	"servika/internal/db"
+	"servika/internal/dbremote"
 	"servika/internal/dns"
 	"servika/internal/domains"
 	"servika/internal/files"
@@ -974,6 +975,7 @@ func main() {
 	stats.StartTrafficAggregator(d, 5*time.Minute)
 	slowquery.HealConfig(d)                    // ask MariaDB for the slow log, without restarting it
 	slowquery.StartCollector(d)                // per-tenant slow query shapes, drained from the MariaDB slow log
+	dbremote.HealBind(d)                       // realign the remote-access bind drop-in; never restarts MariaDB here
 	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
 	firewall.TakeOverFirewalld()
 	if err := firewall.Reapply(d); err != nil {
