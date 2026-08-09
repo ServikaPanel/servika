@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "数据库",
+    "slow": "慢查询"
+  },
   "title": "数据库",
   "description": "服务器上的每个数据库及其所属域名和大小。",
   "emptyMessage": "未找到数据库。",

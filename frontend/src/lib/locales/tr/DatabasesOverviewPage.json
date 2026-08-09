@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Veritabanları",
+    "slow": "Yavaş sorgular"
+  },
   "title": "Veritabanları",
   "description": "Sunucudaki her veritabanı; sahibi olan alan adı ve boyutuyla birlikte.",
   "emptyMessage": "Veritabanı bulunamadı.",

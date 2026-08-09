@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Bancos de dados",
+    "slow": "Consultas lentas"
+  },
   "title": "Bancos de dados",
   "description": "Todos os bancos de dados no servidor com o domínio proprietário e o tamanho.",
   "emptyMessage": "Nenhum banco de dados encontrado.",

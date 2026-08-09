@@ -1,0 +1,47 @@
+{
+  "loading": "Yükleniyor…",
+  "ranking": "En yavaş tek çalışmaya göre değil, harcanan toplam süreye göre sıralı",
+  "privacy": "Değerler saklanmadan önce ? ile değiştirilir, yani sorgularınızdaki hiçbir veri tutulmaz.",
+  "returned": "{{count}} dönen",
+  "saveFailed": "Ayar kaydedilemedi.",
+  "window": {
+    "label": "Aralık",
+    "hours": "{{count}} sa",
+    "days": "{{count}} gün"
+  },
+  "column": {
+    "domain": "Site",
+    "query": "Sorgu kalıbı",
+    "calls": "Çalışma",
+    "total": "Toplam süre",
+    "average": "Ortalama",
+    "max": "En yavaş",
+    "examined": "Okunan satır"
+  },
+  "badge": {
+    "fullScan": "tüm tabloyu okuyor"
+  },
+  "system": {
+    "label": "Sunucu",
+    "hint": "Müşteri hesabı değil: panelin kendisi, root ya da MariaDB'nin kendi işi."
+  },
+  "empty": {
+    "title": "Yavaş sorgu yok",
+    "description": "Bu aralıkta eşiği aşan hiçbir sorgu çalışmadı. Sağlıklı olan durum budur."
+  },
+  "settings": {
+    "enabled": "Yavaş sorguları topla",
+    "threshold": "Şu süreden sonra yavaş say",
+    "seconds": "{{count}} sn",
+    "logSize": "Günlük {{size}}",
+    "logMissing": "Henüz günlük dosyası yok",
+    "collectedAt": "son okuma {{time}}",
+    "retention": "{{count}} gün saklanır",
+    "lastError": "Son toplama başarısız oldu: {{message}}",
+    "offHint": "Bu kapalıyken MariaDB yavaş günlük yazmaz ve hiçbir şey toplanmaz."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "Eşik 0,1 ile 60 saniye arasında olmalıdır.",
+    "slow_log_apply_failed": "MariaDB ayarı kabul etmedi, dolayısıyla hiçbir şey değişmedi."
+  }
+}

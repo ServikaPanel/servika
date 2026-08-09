@@ -2,6 +2,7 @@
   "title": "読み込めませんでした: {{context}}",
   "dismiss": "閉じる",
   "contexts": {
+    "slowQueries": "遅いクエリ",
     "subscription": "サブスクリプションの詳細",
     "domains": "ドメイン一覧",
     "plans": "サービスプラン",

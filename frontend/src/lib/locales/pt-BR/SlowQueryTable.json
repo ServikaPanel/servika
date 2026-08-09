@@ -1,0 +1,47 @@
+{
+  "loading": "Carregando…",
+  "ranking": "Ordenado pelo tempo total gasto, não pela execução mais lenta",
+  "privacy": "Os valores são substituídos por ? antes de qualquer gravação, então nenhum dado das suas consultas é guardado.",
+  "returned": "{{count}} retornadas",
+  "saveFailed": "Não foi possível salvar a configuração.",
+  "window": {
+    "label": "Período",
+    "hours": "{{count}} h",
+    "days": "{{count}} d"
+  },
+  "column": {
+    "domain": "Site",
+    "query": "Forma da consulta",
+    "calls": "Execuções",
+    "total": "Tempo total",
+    "average": "Média",
+    "max": "Mais lenta",
+    "examined": "Linhas lidas"
+  },
+  "badge": {
+    "fullScan": "lê a tabela inteira"
+  },
+  "system": {
+    "label": "Servidor",
+    "hint": "Não é uma conta de cliente: o próprio painel, root ou o trabalho interno do MariaDB."
+  },
+  "empty": {
+    "title": "Sem consultas lentas",
+    "description": "Nada ultrapassou o limite neste período. Esse é o estado saudável."
+  },
+  "settings": {
+    "enabled": "Coletar consultas lentas",
+    "threshold": "Considerar lenta a partir de",
+    "seconds": "{{count}} s",
+    "logSize": "Log {{size}}",
+    "logMissing": "Ainda sem arquivo de log",
+    "collectedAt": "última leitura {{time}}",
+    "retention": "guardadas {{count}} dias",
+    "lastError": "A última coleta falhou: {{message}}",
+    "offHint": "Enquanto isto estiver desligado o MariaDB não escreve log e nada é coletado."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "O limite precisa estar entre 0,1 e 60 segundos.",
+    "slow_log_apply_failed": "O MariaDB não aceitou a configuração, então nada foi alterado."
+  }
+}

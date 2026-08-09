@@ -2,6 +2,7 @@
   "title": "Nepodařilo se načíst: {{context}}",
   "dismiss": "Zavřít",
   "contexts": {
+    "slowQueries": "pomalé dotazy",
     "subscription": "podrobnosti předplatného",
     "domains": "seznam domén",
     "plans": "servisní plány",

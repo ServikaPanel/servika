@@ -1,4 +1,5 @@
 {
+  "slowQueriesTitle": "Sus consultas más lentas",
   "breadcrumb": {
     "home": "Inicio",
     "domains": "Dominios",

@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Bases de dados",
+    "slow": "Consultas lentas"
+  },
   "title": "Bases de Dados",
   "description": "Todas as bases de dados no servidor com o domínio proprietário e tamanho.",
   "emptyMessage": "Nenhuma base de dados encontrada.",

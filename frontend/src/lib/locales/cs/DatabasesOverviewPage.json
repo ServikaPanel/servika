@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Databáze",
+    "slow": "Pomalé dotazy"
+  },
   "title": "Databáze",
   "description": "Každá databáze na serveru se svou vlastnící doménou a velikostí.",
   "emptyMessage": "Nebyly nalezeny žádné databáze.",

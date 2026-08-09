@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Database",
+    "slow": "Query lente"
+  },
   "title": "Database",
   "description": "Ogni database sul server con il dominio proprietario e la dimensione.",
   "emptyMessage": "Nessun database trovato.",

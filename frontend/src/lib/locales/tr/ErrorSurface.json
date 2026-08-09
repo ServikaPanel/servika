@@ -2,6 +2,7 @@
   "title": "Yüklenemedi: {{context}}",
   "dismiss": "Kapat",
   "contexts": {
+    "slowQueries": "yavaş sorgular",
     "subscription": "abonelik ayrıntıları",
     "domains": "alan adı listesi",
     "plans": "hizmet paketleri",

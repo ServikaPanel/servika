@@ -16,6 +16,8 @@ import { useAuth } from '@/store/auth'
 import OverviewList, { type Column, type Badge } from '@/components/OverviewList'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DBPasswordResetModal from '@/components/DBPasswordResetModal'
+import SlowQuerySettings from '@/components/SlowQuerySettings'
+import SlowQueryTable from '@/components/SlowQueryTable'
 
 type Row = {
   id: number
@@ -46,6 +48,10 @@ export default function DatabasesOverviewPage() {
   const [rowToDelete, setRowToDelete] = useState<Row | null>(null)
   const [pwResetFor, setPwResetFor] = useState<Row | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [tab, setTab] = useState<'databases' | 'slow'>('databases')
+  // Bumped when the threshold changes, so the table below reloads under the new
+  // setting rather than keeping rows the operator just stopped collecting.
+  const [slowKey, setSlowKey] = useState(0)
 
   async function openPma(s: Row) {
     try {
@@ -135,6 +141,30 @@ export default function DatabasesOverviewPage() {
     },
   ]
 
+  // The slow query tab is shown only to an admin, because its endpoint is
+  // AdminOnly while this page is ResellerOrAbove: offering it to a reseller
+  // would be a tab that answers 403 on every click.
+  const tabs = isAdmin
+    ? (
+      <div className="mb-4 inline-flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+        {(['databases', 'slow'] as const).map(key => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === key
+                ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+            }`}
+          >
+            {t(`tabs.${key}`)}
+          </button>
+        ))}
+      </div>
+      )
+    : undefined
+
   return (
     <>
       <OverviewList<Row>
@@ -147,6 +177,13 @@ export default function DatabasesOverviewPage() {
         rowKey={(s) => s.id}
         emptyMessage={t('emptyMessage')}
         refreshKey={refreshKey}
+        headerExtra={tabs}
+        body={tab === 'slow' ? (
+          <>
+            <SlowQuerySettings onChange={() => setSlowKey((n) => n + 1)} />
+            <SlowQueryTable key={slowKey} endpoint="/admin/slow-queries" showDomain />
+          </>
+        ) : undefined}
         summary={(list): Badge[] => {
           const totalKB = list.reduce((n, s) => n + Math.max(0, s.size_kb), 0)
           return [

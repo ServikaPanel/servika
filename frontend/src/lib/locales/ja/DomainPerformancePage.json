@@ -1,4 +1,5 @@
 {
+  "slowQueriesTitle": "最も遅いクエリ",
   "breadcrumb": {
     "home": "ホーム",
     "domains": "ドメイン",

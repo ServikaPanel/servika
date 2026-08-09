@@ -1,0 +1,47 @@
+{
+  "loading": "Načítání…",
+  "ranking": "Seřazeno podle celkového stráveného času, ne podle nejpomalejšího jednotlivého běhu",
+  "privacy": "Hodnoty se před uložením nahradí znakem ?, takže se z vašich dotazů neuchovávají žádná data.",
+  "returned": "{{count}} vráceno",
+  "saveFailed": "Nastavení se nepodařilo uložit.",
+  "window": {
+    "label": "Období",
+    "hours": "{{count}} h",
+    "days": "{{count}} d"
+  },
+  "column": {
+    "domain": "Web",
+    "query": "Tvar dotazu",
+    "calls": "Spuštění",
+    "total": "Celkový čas",
+    "average": "Průměr",
+    "max": "Nejpomalejší",
+    "examined": "Přečtené řádky"
+  },
+  "badge": {
+    "fullScan": "čte celou tabulku"
+  },
+  "system": {
+    "label": "Server",
+    "hint": "Není to zákaznický účet: panel sám, root nebo vlastní práce MariaDB."
+  },
+  "empty": {
+    "title": "Žádné pomalé dotazy",
+    "description": "V tomto období nic nepřekročilo práh. To je zdravý stav."
+  },
+  "settings": {
+    "enabled": "Sbírat pomalé dotazy",
+    "threshold": "Považovat za pomalý po",
+    "seconds": "{{count}} s",
+    "logSize": "Log {{size}}",
+    "logMissing": "Zatím žádný soubor logu",
+    "collectedAt": "poslední čtení {{time}}",
+    "retention": "uchováno {{count}} dní",
+    "lastError": "Poslední sběr selhal: {{message}}",
+    "offHint": "Dokud je toto vypnuté, MariaDB žádný log nezapisuje a nic se nesbírá."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "Práh musí být mezi 0,1 a 60 sekundami.",
+    "slow_log_apply_failed": "MariaDB nastavení nepřijala, takže se nic nezměnilo."
+  }
+}

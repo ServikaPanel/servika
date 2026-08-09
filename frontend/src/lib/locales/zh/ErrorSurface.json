@@ -2,6 +2,7 @@
   "title": "无法加载：{{context}}",
   "dismiss": "关闭",
   "contexts": {
+    "slowQueries": "慢查询",
     "subscription": "订阅详情",
     "domains": "域名列表",
     "plans": "服务套餐",

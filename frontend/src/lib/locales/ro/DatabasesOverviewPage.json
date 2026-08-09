@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Baze de date",
+    "slow": "Interogări lente"
+  },
   "title": "Baze de date",
   "description": "Fiecare bază de date de pe server, cu domeniul proprietar și dimensiunea sa.",
   "emptyMessage": "Nu s-au găsit baze de date.",

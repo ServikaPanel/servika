@@ -1,0 +1,47 @@
+{
+  "loading": "読み込み中…",
+  "ranking": "最も遅い 1 回ではなく、費やした合計時間の順",
+  "privacy": "値は保存前に ? に置き換えられるため、クエリのデータは一切保持されません。",
+  "returned": "{{count}} 件返却",
+  "saveFailed": "設定を保存できませんでした。",
+  "window": {
+    "label": "期間",
+    "hours": "{{count}} 時間",
+    "days": "{{count}} 日"
+  },
+  "column": {
+    "domain": "サイト",
+    "query": "クエリの形",
+    "calls": "実行回数",
+    "total": "合計時間",
+    "average": "平均",
+    "max": "最も遅い",
+    "examined": "読んだ行"
+  },
+  "badge": {
+    "fullScan": "テーブル全体を読んでいます"
+  },
+  "system": {
+    "label": "サーバー",
+    "hint": "顧客アカウントではありません。パネル自身、root、または MariaDB 自身の処理です。"
+  },
+  "empty": {
+    "title": "遅いクエリはありません",
+    "description": "この期間にしきい値を超えたものはありません。これが健全な状態です。"
+  },
+  "settings": {
+    "enabled": "遅いクエリを収集する",
+    "threshold": "遅いとみなす時間",
+    "seconds": "{{count}} 秒",
+    "logSize": "ログ {{size}}",
+    "logMissing": "ログファイルはまだありません",
+    "collectedAt": "最終読み取り {{time}}",
+    "retention": "{{count}} 日間保持",
+    "lastError": "前回の収集に失敗しました: {{message}}",
+    "offHint": "これがオフの間、MariaDB はログを書かず、何も収集されません。"
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "しきい値は 0.1 秒から 60 秒の間である必要があります。",
+    "slow_log_apply_failed": "MariaDB が設定を受け入れなかったため、何も変更されていません。"
+  }
+}

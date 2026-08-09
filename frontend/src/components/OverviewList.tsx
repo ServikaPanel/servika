@@ -27,6 +27,7 @@ const toneClass: Record<NonNullable<Badge['tone']>, string> = {
 
 export default function OverviewList<T>({
   title, icon, description, endpoint, columns, searchField, rowKey, emptyMessage, summary, refreshKey,
+  headerExtra, body,
 }: {
   title: string
   icon: string
@@ -43,6 +44,14 @@ export default function OverviewList<T>({
   // instead of blanking the table behind a spinner. Omitting it keeps the
   // read-only behaviour the other lists rely on.
   refreshKey?: number
+  // Rendered directly under the description, for a page that offers more than
+  // one view of the same subject. Tabs belong here rather than above the shell,
+  // so one breadcrumb and one title serve every tab.
+  headerExtra?: React.ReactNode
+  // When present, replaces the search box and the table. The shell still owns
+  // the breadcrumb, the title and headerExtra, so a second view does not have to
+  // rebuild the page header to sit beside the first.
+  body?: React.ReactNode
 }) {
   const { t } = useTranslation('OverviewList')
   const [list, setList] = useState<T[]>([])
@@ -79,6 +88,10 @@ export default function OverviewList<T>({
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{title}</h1>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{description}</p>
+
+      {headerExtra}
+
+      {body !== undefined ? body : (<>
 
       {badges.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
@@ -128,6 +141,8 @@ export default function OverviewList<T>({
           </table>
         </div>
       )}
+
+      </>)}
     </div>
   )
 }

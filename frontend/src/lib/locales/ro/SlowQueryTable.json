@@ -1,0 +1,47 @@
+{
+  "loading": "Se încarcă…",
+  "ranking": "Ordonat după timpul total consumat, nu după cea mai lentă execuție",
+  "privacy": "Valorile sunt înlocuite cu ? înainte de orice salvare, deci nu se păstrează niciun fel de date din interogările dumneavoastră.",
+  "returned": "{{count}} returnate",
+  "saveFailed": "Setarea nu a putut fi salvată.",
+  "window": {
+    "label": "Perioadă",
+    "hours": "{{count}} h",
+    "days": "{{count}} z"
+  },
+  "column": {
+    "domain": "Site",
+    "query": "Forma interogării",
+    "calls": "Execuții",
+    "total": "Timp total",
+    "average": "Medie",
+    "max": "Cea mai lentă",
+    "examined": "Rânduri citite"
+  },
+  "badge": {
+    "fullScan": "citește tot tabelul"
+  },
+  "system": {
+    "label": "Server",
+    "hint": "Nu este un cont de client: panoul însuși, root sau munca proprie a MariaDB."
+  },
+  "empty": {
+    "title": "Nicio interogare lentă",
+    "description": "Nimic nu a depășit pragul în această perioadă. Aceasta este starea sănătoasă."
+  },
+  "settings": {
+    "enabled": "Colectează interogările lente",
+    "threshold": "Consideră lentă după",
+    "seconds": "{{count}} s",
+    "logSize": "Jurnal {{size}}",
+    "logMissing": "Încă niciun fișier jurnal",
+    "collectedAt": "ultima citire {{time}}",
+    "retention": "păstrate {{count}} zile",
+    "lastError": "Ultima colectare a eșuat: {{message}}",
+    "offHint": "Cât timp este oprit, MariaDB nu scrie niciun jurnal și nu se colectează nimic."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "Pragul trebuie să fie între 0,1 și 60 de secunde.",
+    "slow_log_apply_failed": "MariaDB nu a acceptat setarea, deci nimic nu a fost schimbat."
+  }
+}

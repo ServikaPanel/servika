@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
+import SlowQueryTable from '@/components/SlowQueryTable'
 
 type Item = { name: string; enabled: boolean; value: string; setting: string; description: string }
 type Suggestion = { text: string; severity: string; setting: string }
@@ -111,6 +112,15 @@ export default function DomainPerformancePage() {
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* The slowest query shapes this domain's own database account ran.
+            It lives here rather than on the databases page because a customer
+            whose site is slow comes looking for the reason, not for a list of
+            schemas. */}
+        <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('slowQueriesTitle')}</h3>
+          <SlowQueryTable endpoint={`/domains/${id}/slow-queries`} />
         </div>
 
         <div className="mt-4"><Link to={`/subscriptions/${id}`} className="text-sm text-brand-600 dark:text-brand-400">{t('back')}</Link></div>

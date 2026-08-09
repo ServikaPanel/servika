@@ -2,6 +2,7 @@
   "title": "No se pudo cargar: {{context}}",
   "dismiss": "Cerrar",
   "contexts": {
+    "slowQueries": "consultas lentas",
     "subscription": "detalles de la suscripción",
     "domains": "lista de dominios",
     "plans": "planes de servicio",

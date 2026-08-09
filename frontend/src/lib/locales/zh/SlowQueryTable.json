@@ -1,0 +1,47 @@
+{
+  "loading": "加载中…",
+  "ranking": "按累计耗时排序，而不是按单次最慢的执行",
+  "privacy": "值在写入前会被替换为 ?，因此不会保留查询中的任何数据。",
+  "returned": "返回 {{count}} 行",
+  "saveFailed": "设置保存失败。",
+  "window": {
+    "label": "时间范围",
+    "hours": "{{count}} 小时",
+    "days": "{{count}} 天"
+  },
+  "column": {
+    "domain": "站点",
+    "query": "查询形态",
+    "calls": "执行次数",
+    "total": "累计耗时",
+    "average": "平均",
+    "max": "最慢",
+    "examined": "读取行数"
+  },
+  "badge": {
+    "fullScan": "读取整张表"
+  },
+  "system": {
+    "label": "服务器",
+    "hint": "不是客户账号：面板自身、root，或 MariaDB 自己的工作。"
+  },
+  "empty": {
+    "title": "没有慢查询",
+    "description": "此时间范围内没有任何查询超过阈值。这是健康状态。"
+  },
+  "settings": {
+    "enabled": "收集慢查询",
+    "threshold": "超过多久算慢",
+    "seconds": "{{count}} 秒",
+    "logSize": "日志 {{size}}",
+    "logMissing": "尚无日志文件",
+    "collectedAt": "上次读取 {{time}}",
+    "retention": "保留 {{count}} 天",
+    "lastError": "上次收集失败：{{message}}",
+    "offHint": "关闭期间 MariaDB 不会写日志，也不会收集任何内容。"
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "阈值必须在 0.1 到 60 秒之间。",
+    "slow_log_apply_failed": "MariaDB 未接受该设置，因此没有任何改动。"
+  }
+}

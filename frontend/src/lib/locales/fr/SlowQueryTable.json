@@ -1,0 +1,47 @@
+{
+  "loading": "Chargement…",
+  "ranking": "Classé par temps total passé, pas par l'exécution la plus lente",
+  "privacy": "Les valeurs sont remplacées par ? avant tout enregistrement, aucune donnée de vos requêtes n'est conservée.",
+  "returned": "{{count}} renvoyées",
+  "saveFailed": "Le réglage n'a pas pu être enregistré.",
+  "window": {
+    "label": "Période",
+    "hours": "{{count}} h",
+    "days": "{{count}} j"
+  },
+  "column": {
+    "domain": "Site",
+    "query": "Forme de requête",
+    "calls": "Exécutions",
+    "total": "Temps total",
+    "average": "Moyenne",
+    "max": "La plus lente",
+    "examined": "Lignes lues"
+  },
+  "badge": {
+    "fullScan": "lit toute la table"
+  },
+  "system": {
+    "label": "Serveur",
+    "hint": "Pas un compte client : le panneau lui-même, root ou le travail propre de MariaDB."
+  },
+  "empty": {
+    "title": "Aucune requête lente",
+    "description": "Rien n'a dépassé le seuil sur cette période. C'est l'état sain."
+  },
+  "settings": {
+    "enabled": "Collecter les requêtes lentes",
+    "threshold": "Considérer comme lente à partir de",
+    "seconds": "{{count}} s",
+    "logSize": "Journal {{size}}",
+    "logMissing": "Pas encore de fichier journal",
+    "collectedAt": "dernière lecture {{time}}",
+    "retention": "conservé {{count}} jours",
+    "lastError": "La dernière collecte a échoué : {{message}}",
+    "offHint": "Tant que c'est désactivé, MariaDB n'écrit aucun journal et rien n'est collecté."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "Le seuil doit être compris entre 0,1 et 60 secondes.",
+    "slow_log_apply_failed": "MariaDB n'a pas accepté le réglage, rien n'a été modifié."
+  }
+}

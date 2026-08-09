@@ -2,6 +2,7 @@
   "title": "Nu s-a putut încărca: {{context}}",
   "dismiss": "Închide",
   "contexts": {
+    "slowQueries": "interogări lente",
     "subscription": "detaliile abonamentului",
     "domains": "lista de domenii",
     "plans": "planurile de servicii",

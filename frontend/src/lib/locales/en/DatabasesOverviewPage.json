@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Databases",
+    "slow": "Slow queries"
+  },
   "title": "Databases",
   "description": "Every database on the server with its owning domain and size.",
   "emptyMessage": "No databases found.",

@@ -1,4 +1,5 @@
 {
+  "slowQueriesTitle": "Your slowest queries",
   "breadcrumb": {
     "home": "Home",
     "domains": "Domains",

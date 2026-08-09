@@ -1,4 +1,8 @@
 {
+  "tabs": {
+    "databases": "Datenbanken",
+    "slow": "Langsame Abfragen"
+  },
   "title": "Datenbanken",
   "description": "Jede Datenbank auf dem Server mit ihrer zugehörigen Domain und Größe.",
   "emptyMessage": "Keine Datenbanken gefunden.",

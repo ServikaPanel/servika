@@ -1,0 +1,47 @@
+{
+  "loading": "Wird geladen…",
+  "ranking": "Sortiert nach insgesamt verbrauchter Zeit, nicht nach dem langsamsten Einzellauf",
+  "privacy": "Werte werden vor dem Speichern durch ? ersetzt, es werden also keine Daten aus Ihren Abfragen aufbewahrt.",
+  "returned": "{{count}} zurückgegeben",
+  "saveFailed": "Die Einstellung konnte nicht gespeichert werden.",
+  "window": {
+    "label": "Zeitraum",
+    "hours": "{{count}} Std.",
+    "days": "{{count}} Tage"
+  },
+  "column": {
+    "domain": "Website",
+    "query": "Abfragemuster",
+    "calls": "Läufe",
+    "total": "Gesamtzeit",
+    "average": "Durchschnitt",
+    "max": "Langsamste",
+    "examined": "Gelesene Zeilen"
+  },
+  "badge": {
+    "fullScan": "liest die ganze Tabelle"
+  },
+  "system": {
+    "label": "Server",
+    "hint": "Kein Kundenkonto: das Panel selbst, root oder MariaDBs eigene Arbeit."
+  },
+  "empty": {
+    "title": "Keine langsamen Abfragen",
+    "description": "In diesem Zeitraum lief nichts länger als der Schwellenwert. Das ist der gesunde Zustand."
+  },
+  "settings": {
+    "enabled": "Langsame Abfragen erfassen",
+    "threshold": "Als langsam zählen ab",
+    "seconds": "{{count}} s",
+    "logSize": "Protokoll {{size}}",
+    "logMissing": "Noch keine Protokolldatei",
+    "collectedAt": "zuletzt gelesen {{time}}",
+    "retention": "{{count}} Tage aufbewahrt",
+    "lastError": "Die letzte Erfassung ist fehlgeschlagen: {{message}}",
+    "offHint": "Solange dies aus ist, schreibt MariaDB kein Protokoll und es wird nichts erfasst."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "Der Schwellenwert muss zwischen 0,1 und 60 Sekunden liegen.",
+    "slow_log_apply_failed": "MariaDB hat die Einstellung nicht angenommen, es wurde nichts geändert."
+  }
+}

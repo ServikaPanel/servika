@@ -1,0 +1,47 @@
+{
+  "loading": "Loading…",
+  "ranking": "Ranked by total time spent, not by the slowest single run",
+  "privacy": "Values are replaced with ? before anything is stored, so no data from your queries is kept.",
+  "returned": "{{count}} returned",
+  "saveFailed": "The setting could not be saved.",
+  "window": {
+    "label": "Window",
+    "hours": "{{count}} h",
+    "days": "{{count}} d"
+  },
+  "column": {
+    "domain": "Site",
+    "query": "Query shape",
+    "calls": "Runs",
+    "total": "Total time",
+    "average": "Average",
+    "max": "Slowest",
+    "examined": "Rows read"
+  },
+  "badge": {
+    "fullScan": "reads the whole table"
+  },
+  "system": {
+    "label": "Server",
+    "hint": "Not a customer account: the panel itself, root, or MariaDB's own work."
+  },
+  "empty": {
+    "title": "No slow queries",
+    "description": "Nothing ran longer than the threshold in this window. That is the healthy state."
+  },
+  "settings": {
+    "enabled": "Collect slow queries",
+    "threshold": "Count a query as slow after",
+    "seconds": "{{count}} s",
+    "logSize": "Log {{size}}",
+    "logMissing": "No log file yet",
+    "collectedAt": "last read {{time}}",
+    "retention": "kept {{count}} days",
+    "lastError": "The last collection failed: {{message}}",
+    "offHint": "While this is off MariaDB writes no slow log and nothing is collected."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "The threshold must be between 0.1 and 60 seconds.",
+    "slow_log_apply_failed": "MariaDB did not accept the setting, so nothing was changed."
+  }
+}

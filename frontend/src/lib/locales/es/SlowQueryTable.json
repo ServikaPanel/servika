@@ -1,0 +1,47 @@
+{
+  "loading": "Cargando…",
+  "ranking": "Ordenado por tiempo total consumido, no por la ejecución más lenta",
+  "privacy": "Los valores se sustituyen por ? antes de guardar nada, así que no se conserva ningún dato de sus consultas.",
+  "returned": "{{count}} devueltas",
+  "saveFailed": "No se pudo guardar el ajuste.",
+  "window": {
+    "label": "Periodo",
+    "hours": "{{count}} h",
+    "days": "{{count}} d"
+  },
+  "column": {
+    "domain": "Sitio",
+    "query": "Forma de la consulta",
+    "calls": "Ejecuciones",
+    "total": "Tiempo total",
+    "average": "Media",
+    "max": "La más lenta",
+    "examined": "Filas leídas"
+  },
+  "badge": {
+    "fullScan": "lee la tabla entera"
+  },
+  "system": {
+    "label": "Servidor",
+    "hint": "No es una cuenta de cliente: el propio panel, root o el trabajo interno de MariaDB."
+  },
+  "empty": {
+    "title": "Sin consultas lentas",
+    "description": "Nada superó el umbral en este periodo. Ese es el estado sano."
+  },
+  "settings": {
+    "enabled": "Recopilar consultas lentas",
+    "threshold": "Considerar lenta a partir de",
+    "seconds": "{{count}} s",
+    "logSize": "Registro {{size}}",
+    "logMissing": "Todavía no hay archivo de registro",
+    "collectedAt": "última lectura {{time}}",
+    "retention": "se conservan {{count}} días",
+    "lastError": "La última recopilación falló: {{message}}",
+    "offHint": "Mientras esto esté desactivado MariaDB no escribe registro y no se recopila nada."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "El umbral debe estar entre 0,1 y 60 segundos.",
+    "slow_log_apply_failed": "MariaDB no aceptó el ajuste, así que no se cambió nada."
+  }
+}

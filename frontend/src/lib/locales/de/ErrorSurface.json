@@ -2,6 +2,7 @@
   "title": "Konnte nicht geladen werden: {{context}}",
   "dismiss": "Schließen",
   "contexts": {
+    "slowQueries": "langsame Abfragen",
     "subscription": "Abonnementdetails",
     "domains": "Domainliste",
     "plans": "Servicepläne",

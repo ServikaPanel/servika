@@ -1,0 +1,47 @@
+{
+  "loading": "Caricamento…",
+  "ranking": "Ordinato per tempo totale impiegato, non per la singola esecuzione più lenta",
+  "privacy": "I valori vengono sostituiti con ? prima di essere salvati, quindi nessun dato delle tue query viene conservato.",
+  "returned": "{{count}} restituite",
+  "saveFailed": "Non è stato possibile salvare l'impostazione.",
+  "window": {
+    "label": "Periodo",
+    "hours": "{{count}} h",
+    "days": "{{count}} g"
+  },
+  "column": {
+    "domain": "Sito",
+    "query": "Forma della query",
+    "calls": "Esecuzioni",
+    "total": "Tempo totale",
+    "average": "Media",
+    "max": "Più lenta",
+    "examined": "Righe lette"
+  },
+  "badge": {
+    "fullScan": "legge tutta la tabella"
+  },
+  "system": {
+    "label": "Server",
+    "hint": "Non un account cliente: il pannello stesso, root o il lavoro interno di MariaDB."
+  },
+  "empty": {
+    "title": "Nessuna query lenta",
+    "description": "In questo periodo nulla ha superato la soglia. È lo stato sano."
+  },
+  "settings": {
+    "enabled": "Raccogli le query lente",
+    "threshold": "Considera lenta dopo",
+    "seconds": "{{count}} s",
+    "logSize": "Log {{size}}",
+    "logMissing": "Nessun file di log ancora",
+    "collectedAt": "ultima lettura {{time}}",
+    "retention": "conservate {{count}} giorni",
+    "lastError": "L'ultima raccolta non è riuscita: {{message}}",
+    "offHint": "Finché è disattivato MariaDB non scrive alcun log e non viene raccolto nulla."
+  },
+  "reasons": {
+    "slow_log_threshold_invalid": "La soglia deve essere compresa tra 0,1 e 60 secondi.",
+    "slow_log_apply_failed": "MariaDB non ha accettato l'impostazione, quindi nulla è cambiato."
+  }
+}

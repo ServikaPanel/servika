@@ -2,6 +2,7 @@
   "title": "Impossibile caricare: {{context}}",
   "dismiss": "Chiudi",
   "contexts": {
+    "slowQueries": "query lente",
     "subscription": "dettagli dell'abbonamento",
     "domains": "elenco dei domini",
     "plans": "piani di servizio",
