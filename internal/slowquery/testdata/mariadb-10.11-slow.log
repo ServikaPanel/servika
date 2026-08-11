@@ -1,0 +1,41 @@
+mariadbd, Version: 10.11.16-MariaDB-ubu2204 (mariadb.org binary distribution). started with:
+Tcp port: 3306  Unix socket: /run/mysqld/mysqld.sock
+Time		    Id Command	Argument
+mariadbd, Version: 10.11.16-MariaDB-ubu2204 (mariadb.org binary distribution). started with:
+Tcp port: 3306  Unix socket: /run/mysqld/mysqld.sock
+Time		    Id Command	Argument
+# Time: 260809  9:47:14
+# User@Host: u_shop_wp[u_shop_wp] @ localhost []
+# Thread_id: 7  Schema: shop  QC_hit: No
+# Query_time: 2.500324  Lock_time: 0.000000  Rows_sent: 1  Rows_examined: 0
+# Rows_affected: 0  Bytes_sent: 67
+use `shop`;
+SET timestamp=1786268834;
+SELECT SLEEP(2.5);
+# Time: 260809  9:47:17
+# User@Host: u_shop_wp[u_shop_wp] @ localhost []
+# Thread_id: 7  Schema: shop  QC_hit: No
+# Query_time: 2.500258  Lock_time: 0.000000  Rows_sent: 1  Rows_examined: 0
+# Rows_affected: 0  Bytes_sent: 115
+SET timestamp=1786268837;
+SELECT SLEEP(2.5), 'gizli@ornek.com' AS email;
+# Time: 260809  9:47:20
+# User@Host: u_shop_wp[u_shop_wp] @ localhost []
+# Thread_id: 7  Schema: shop  QC_hit: No
+# Query_time: 6.603503  Lock_time: 0.000169  Rows_sent: 3  Rows_examined: 3
+# Rows_affected: 0  Bytes_sent: 79
+# Full_scan: Yes  Full_join: No  Tmp_table: No  Tmp_table_on_disk: No
+# Filesort: No  Filesort_on_disk: No  Merge_passes: 0  Priority_queue: No
+SET timestamp=1786268840;
+SELECT SLEEP(2.2) FROM t WHERE name IN ('a','b','c');
+mariadbd, Version: 10.11.16-MariaDB-ubu2204 (mariadb.org binary distribution). started with:
+Tcp port: 3306  Unix socket: /run/mysqld/mysqld.sock
+Time		    Id Command	Argument
+# Time: 260809  9:48:03
+# User@Host: u_shop_wp[u_shop_wp] @ localhost []
+# Thread_id: 9  Schema: shop  QC_hit: No
+# Query_time: 2.304821  Lock_time: 0.000075  Rows_sent: 1  Rows_examined: 1
+# Rows_affected: 0  Bytes_sent: 67
+use `shop`;
+SET timestamp=1786268883;
+SELECT SLEEP(2.3) FROM t WHERE id=1;

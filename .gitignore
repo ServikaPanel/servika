@@ -30,6 +30,12 @@ id_ed25519*
 /logs/
 /backups/
 
+# A fixture under testdata/ is source, not runtime data. The rules above are
+# extension-only, so a captured log or database sample is swallowed silently and
+# the test that reads it passes locally and fails in CI, where the file was
+# never committed.
+!**/testdata/**
+
 # --- Release build outputs (produced by scripts/build-assets.sh and CI) ---
 release/
 *.tar.gz
