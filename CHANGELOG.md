@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-11
+
+### Added
+- Applications: a domain can now run a Node.js or Python process under the panel's supervision, on a loopback port the firewall closes to the internet, published by nginx under a path mount. Interpreter versions install and remove from the panel as detached work, and a plan decides how many applications an account may run.
+- Laravel queue workers: a domain defines as many named workers as it needs, each with its own connection, queue list, process count, retry, timeout and memory ceiling, with a live log and a manual restart. A deploy now restarts them so the new code is what processes jobs.
+- Country rules and a request ceiling per domain, plus a server-wide country block at the firewall. Address ranges come from a MaxMind GeoLite2 database the operator downloads with their own account, and both enforcement layers count an IPv6 client by the same unit.
+- Maintenance mode: a site owner closes their own site behind a page that answers 503, keeps the certificate renewing, and reopens by itself when its deadline passes. Named addresses bypass it.
+- Slow query visibility: MariaDB's slow query log is drained into normalised query shapes and attributed per account, so an administrator sees what is eating the server and a site owner sees their own. Only the shape is stored, never a literal value.
+- Remote MySQL access: a site owner opens one database account to a named address from outside the server. The panel converts what was typed into a form MariaDB actually matches, derives both the grant and the firewall rule from it, and keeps every account a user answers on in step.
+- Malware quarantine: a found file is taken away to a store outside the tenant's home and can be put back, in bulk or one at a time. WordPress core files are checked against the checksums the release shipped, and an extra file becomes an actionable finding.
+- MTA-STS and TLS reporting: the panel publishes an MTA-STS policy through a guarded sequence that refuses enforcement until the certificate proves it, and reads the DMARC and TLS-RPT reports the domain's DNS record has always been asking for.
+- IPv6 throughout: a domain answers on an assigned IPv6 address, its AAAA record is seeded and verified, mail is delivered over both address families with a correctly bound pool address, and the panel shows the server's IPv6 address beside its IPv4 one.
+
+### Changed
+- Two security fixes. Quarantine no longer takes the file path from the request: the endpoint takes a finding id and reads the path from the database, because `lstat` and `rename` follow symlinks in every component except the last, so a planted link moved an arbitrary host file out with root's hands. Rate limiting now counts an IPv6 client by its /64 rather than its address, since a client is handed the whole network and could otherwise present a fresh source on every request and reach no limit at all.
+- Every domain now gets a system user of its own. The slug rule was not injective, so two different domain names could produce one identity and share a home directory; the database now refuses a second top-level domain on the same user, and an installation that already collided is named at startup rather than silently repaired.
+- The nftables ruleset is now parsed by `nft` itself in CI, and the interpreter path for an application is decided in exactly one place.
+
+### Fixed
+- A broken application or queue worker restarted every five seconds for good and never reached `failed`, so the panel reported it as running: systemd was silently ignoring the restart rate limit because both keys sat in the wrong unit section.
+- A deleted domain left its queue workers and its schedule cron running on the host, under an account that no longer existed.
+- Four columns named after MariaDB reserved words were queried unquoted, so the traffic aggregator, its cursor, and the mail delivery log had been failing silently since they were written.
+- A migration used a clause MariaDB refuses on a generated column, and another added an index that already existed, either of which stops the panel from starting.
+- A malware scan that ran out of its budget was presented as a clean one.
+- The slow query log could not be enabled at all, because MariaDB refuses the path when its parent directory is missing and does not create it.
+- Application logs and Laravel worker logs grew without bound, with no rotation rule for either directory.
+- A suspended account's applications kept running, and mail reputation was watched on an address other than the one the server sends from.
+
 ## [1.2.1] - 2026-08-08
 
 ### Added

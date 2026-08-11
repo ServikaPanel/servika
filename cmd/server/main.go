@@ -83,7 +83,7 @@ import (
 // version is the panel's reported current version. Release builds override it at
 // build time via ldflags (see scripts/build-assets.sh: -X main.version=...). It
 // keeps this fallback value when built manually with `go build`.
-var version = "1.2.1"
+var version = "1.3.0"
 
 // buildDate is embedded at build time via ldflags (see scripts/build-assets.sh:
 // -X main.buildDate=...). It stays "development" when built manually with `go build`.
