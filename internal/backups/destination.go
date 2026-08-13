@@ -400,6 +400,42 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 
 // pushToDestinationAsync: triggers a background upload after the backup is created successfully.
 // Does not block the API response even on error; last_status/last_error are written to the DB.
+// removeRemoteCopy deletes a backup's copy from the domain's destination.
+//
+// Every path that removes a backup has to call it. Retention and the delete
+// button removed the local archive and the row and left the remote object in
+// place for good, so an S3 bucket or an SFTP directory grew without bound and a
+// backup the customer had deleted still existed off the server.
+//
+// It runs on its OWN context, detached from the caller's: the local file and the
+// row are already gone, and a destination that is briefly unreachable must not
+// fail the deletion that was asked for. The failure is logged, never returned,
+// for the same reason.
+//
+// remoteStatus gates the call. Only an upload that reported success wrote an
+// object, so a failed or never-started upload sends no delete for something that
+// was never there.
+func removeRemoteCopy(db *sql.DB, domainID int64, fileName, remoteStatus string) {
+	if remoteStatus != "successful" || fileName == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	d, err := readDestination(ctx, db, domainID)
+	if err != nil || d == nil {
+		if err != nil {
+			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+			log.Printf("backup remote delete domain=%d: destination unreadable: %v", domainID, err)
+		}
+		return
+	}
+	// A disabled destination still holds what was uploaded while it was on.
+	if err := deleteFromRemote(ctx, db, d, fileName); err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup remote delete domain=%d file=%s: %v", domainID, fileName, err)
+	}
+}
+
 func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fileName string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)

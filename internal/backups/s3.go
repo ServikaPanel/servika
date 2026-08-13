@@ -197,6 +197,7 @@ func deleteS3Object(ctx context.Context, d *Destination, objectName string) erro
 	if err != nil {
 		return err
 	}
+	// #nosec G704 -- URL derives from the destination's own S3 endpoint, validated as HTTPS in s3Endpoint and checked against internal ranges in doS3Request.
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
 	if err != nil {
 		return err

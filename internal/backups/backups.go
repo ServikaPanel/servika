@@ -242,11 +242,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	backupID, _ := strconv.ParseInt(chi.URLParam(r, "bid"), 10, 64)
-	var systemUser, file string
+	var systemUser, file, remoteStatus string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT d.system_user, b.file FROM backups b
+		`SELECT d.system_user, b.file, b.remote_status FROM backups b
 		 JOIN domains d ON d.id=b.domain_id
-		 WHERE b.id=? AND b.domain_id=?`, backupID, id).Scan(&systemUser, &file)
+		 WHERE b.id=? AND b.domain_id=?`, backupID, id).Scan(&systemUser, &file, &remoteStatus)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "backup not found")
 		return
@@ -259,6 +259,9 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = os.Remove(filepath.Join(backupRoot(), systemUser, file))
+	// The copy on the destination goes with it. Removing only the local archive
+	// left a backup the customer had deleted sitting on their S3 bucket.
+	removeRemoteCopy(h.DB, id, file, remoteStatus)
 	// domain_id is repeated here so the write is scoped exactly like the lookup.
 	_, _ = h.DB.ExecContext(r.Context(), `DELETE FROM backups WHERE id=? AND domain_id=?`, backupID, id)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -311,20 +314,21 @@ const manualBackupKeep = 10
 // fails the backup that just succeeded.
 func pruneManualBackups(db *sql.DB, domainID int64, systemUser string) {
 	rows, err := db.Query(
-		`SELECT id, file FROM backups
+		`SELECT id, file, remote_status FROM backups
 		 WHERE domain_id=? AND type='full'
 		 ORDER BY id DESC LIMIT 500 OFFSET ?`, domainID, manualBackupKeep)
 	if err != nil {
 		return
 	}
 	type item struct {
-		id   int64
-		file string
+		id           int64
+		file         string
+		remoteStatus string
 	}
 	var old []item
 	for rows.Next() {
 		var it item
-		if rows.Scan(&it.id, &it.file) == nil {
+		if rows.Scan(&it.id, &it.file, &it.remoteStatus) == nil {
 			old = append(old, it)
 		}
 	}
@@ -332,6 +336,7 @@ func pruneManualBackups(db *sql.DB, domainID int64, systemUser string) {
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	for _, it := range old {
 		_ = os.Remove(filepath.Join(backupRoot(), systemUser, it.file))
+		removeRemoteCopy(db, domainID, it.file, it.remoteStatus)
 		_, _ = db.Exec(`DELETE FROM backups WHERE id=?`, it.id)
 	}
 }

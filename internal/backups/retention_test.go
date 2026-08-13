@@ -143,7 +143,7 @@ func TestRetentionRunsEvenWhenTheBackupFails(t *testing.T) {
 	if !recorder.sawQueryContaining("INSERT INTO backup_jobs") {
 		t.Fatal("the tick never found the due domain, so this test proves nothing")
 	}
-	if !recorder.sawQueryContaining("SELECT id, file FROM backups", "type='scheduled'") {
+	if !recorder.sawQueryContaining("FROM backups", "type='scheduled'") {
 		t.Fatal("retention did not run after the backup failed")
 	}
 }

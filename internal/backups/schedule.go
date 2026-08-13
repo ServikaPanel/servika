@@ -169,7 +169,7 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 		retention = 1
 	}
 	rows, err := db.Query(
-		`SELECT id, file FROM backups
+		`SELECT id, file, remote_status FROM backups
 		 WHERE domain_id=? AND type='scheduled'
 		 ORDER BY id DESC`, domainID)
 	if err != nil {
@@ -178,13 +178,14 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 	defer func() { _ = rows.Close() }()
 
 	type item struct {
-		ID   int64
-		File string
+		ID           int64
+		File         string
+		RemoteStatus string
 	}
 	var all []item
 	for rows.Next() {
 		var it item
-		if err := rows.Scan(&it.ID, &it.File); err != nil {
+		if err := rows.Scan(&it.ID, &it.File, &it.RemoteStatus); err != nil {
 			continue
 		}
 		all = append(all, it)
@@ -199,6 +200,7 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 	for _, it := range old {
 		path := filepath.Join(backupRoot(), systemUser, it.File)
 		_ = os.Remove(path)
+		removeRemoteCopy(db, domainID, it.File, it.RemoteStatus)
 		_, _ = db.Exec(`DELETE FROM backups WHERE id=?`, it.ID)
 	}
 	log.Printf("backup retention domain=%d: %d old backups deleted (keep %d)", domainID, len(old), retention)
