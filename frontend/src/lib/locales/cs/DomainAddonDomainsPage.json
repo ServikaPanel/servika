@@ -48,6 +48,7 @@
     "hint": "Zvolte, na kterém názvu hostitele web odpovídá. Druhý na něj vrací 301, takže vyhledávače i odkazy skončí na jediné adrese.",
     "overridden": "Přepsáno přesměrováním celé domény",
     "wwwUnresolved": "www se zatím nepřekládá na tento server; přesměrování tam by web odpojilo.",
+    "certMissingTarget": "Certifikát tento název hostitele neuvádí, takže přesměrování zatím neplatí. Začne fungovat samo, jakmile jej certifikát pokryje.",
     "mode": {
       "off": "Obě (bez přesměrování)",
       "to_www": "Přesměrovat na www",

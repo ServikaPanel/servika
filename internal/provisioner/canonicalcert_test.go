@@ -100,6 +100,48 @@ func TestTheRealCertificateCheckDecidesTheSameWay(t *testing.T) {
 	})
 }
 
+// The screen reads the STORED mode, which is vetted against the certificate once
+// and never again. SSL installation is asynchronous, so a redirect set during
+// domain creation was checked while cert_path was still empty, and every later
+// render silently drops it when the certificate that eventually arrived does not
+// name the target. The screen and the render must therefore answer the same
+// question, or the panel reports a redirect as in force on a site where nobody
+// is redirected.
+func TestTheScreenReportsWhatTheRenderActuallyDoes(t *testing.T) {
+	apexOnlyCert, apexOnlyKey := writeSANCertificate(t, "example.com")
+	bothCert, bothKey := writeSANCertificate(t, "example.com", "www.example.com")
+
+	cases := []struct {
+		name       string
+		mode       string
+		cert, key  string
+		wantReason string
+	}{
+		{"a certificate naming only the apex", "to_www", apexOnlyCert, apexOnlyKey, CanonicalRedirectCertMissing},
+		{"a certificate naming both", "to_www", bothCert, bothKey, ""},
+		{"no redirect stored", "off", apexOnlyCert, apexOnlyKey, ""},
+		{"no certificate yet, so the redirect stays http", "to_www", "", "", ""},
+	}
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			reason := CanonicalRedirectDropReasonFor(item.mode, "example.com", item.cert, item.key)
+			if reason != item.wantReason {
+				t.Fatalf("the screen would say %q, want %q", reason, item.wantReason)
+			}
+			// The render is the authority; the screen only has to agree with it.
+			opts := VhostOpts{
+				DomainName: "example.com", WWWRedirect: item.mode,
+				CertPath: item.cert, KeyPath: item.key,
+			}
+			rendered := withCertifiableCanonicalRedirect(opts, CertificateCoversHost)
+			dropped := rendered.WWWRedirect != item.mode
+			if dropped != (reason != "") {
+				t.Fatalf("the render %v but the screen reported %q", map[bool]string{true: "dropped it", false: "kept it"}[dropped], reason)
+			}
+		})
+	}
+}
+
 // The shapes that keep both hostnames on one server_name clear WWWRedirect
 // before this runs, so there must be nothing left for it to decide about.
 func TestTheCheckIsANoOpOnceTheRedirectIsAlreadyCleared(t *testing.T) {

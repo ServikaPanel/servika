@@ -48,6 +48,7 @@
     "hint": "Wählen Sie, unter welchem Hostnamen die Website antwortet. Der andere gibt eine 301 darauf zurück, damit Suchmaschinen und Links sich auf eine Adresse festlegen.",
     "overridden": "Durch die Weiterleitung der gesamten Domain außer Kraft gesetzt",
     "wwwUnresolved": "www wird noch nicht auf diesen Server aufgelöst; eine Weiterleitung dorthin würde die Website offline nehmen.",
+    "certMissingTarget": "Das Zertifikat nennt diesen Hostnamen nicht, daher ist die Weiterleitung noch nicht aktiv. Sie greift von selbst, sobald das Zertifikat ihn abdeckt.",
     "mode": {
       "off": "Beide (keine Weiterleitung)",
       "to_www": "Auf www weiterleiten",

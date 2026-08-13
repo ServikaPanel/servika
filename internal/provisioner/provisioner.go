@@ -1239,18 +1239,45 @@ func (o VhostOpts) RedirectToHost() string {
 // covers is a parameter so the decision can be tested without a certificate on
 // disk; production always passes CertificateCoversHost.
 func withCertifiableCanonicalRedirect(opts VhostOpts, covers func(certPath, keyPath, host string) bool) VhostOpts {
-	target := opts.RedirectToHost()
-	// Nothing to emit, or the target stays http and no certificate is involved.
-	if target == "" || !opts.SSL() {
-		return opts
-	}
-	if covers(opts.CertPath, opts.KeyPath, target) {
+	if canonicalRedirectDropReason(opts, covers) == "" {
 		return opts
 	}
 	// #nosec G706 -- both values are validated hostnames (ValidateDomain) or template-derived, so no raw tenant string with CR/LF reaches the log.
-	log.Printf("canonical redirect for %q dropped from this render: the installed certificate does not cover %q", opts.DomainName, target)
+	log.Printf("canonical redirect for %q dropped from this render: the installed certificate does not cover %q", opts.DomainName, opts.RedirectToHost())
 	opts.WWWRedirect = ""
 	return opts
+}
+
+// CanonicalRedirectCertMissing is the reason code for a stored canonical
+// redirect the installed certificate cannot carry.
+const CanonicalRedirectCertMissing = "redirect_cert_missing_target"
+
+// canonicalRedirectDropReason answers why this render drops the redirect, or ""
+// when it emits it.
+func canonicalRedirectDropReason(opts VhostOpts, covers func(certPath, keyPath, host string) bool) string {
+	target := opts.RedirectToHost()
+	// Nothing to emit, or the target stays http and no certificate is involved.
+	if target == "" || !opts.SSL() {
+		return ""
+	}
+	if covers(opts.CertPath, opts.KeyPath, target) {
+		return ""
+	}
+	return CanonicalRedirectCertMissing
+}
+
+// CanonicalRedirectDropReasonFor answers the same question for a screen that
+// holds the domain's columns rather than a VhostOpts, so the panel cannot report
+// a redirect as in force while every render is dropping it. The setting is
+// stored once and vetted against a certificate that did not exist yet, so
+// reading the stored value alone is exactly how that misreport happened.
+func CanonicalRedirectDropReasonFor(mode, domainName, certPath, keyPath string) string {
+	return canonicalRedirectDropReason(VhostOpts{
+		DomainName:  domainName,
+		WWWRedirect: mode,
+		CertPath:    certPath,
+		KeyPath:     keyPath,
+	}, CertificateCoversHost)
 }
 
 // RedirectFromHost returns the hostname that answers with a 301, or "" when no

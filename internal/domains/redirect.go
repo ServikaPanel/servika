@@ -146,10 +146,11 @@ var wwwRedirectModes = map[string]bool{"off": true, "to_www": true, "to_apex": t
 // WWWRedirectStatus — GET /domains/{id}/www-redirect.
 func (h *Handlers) WWWRedirectStatus(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var mode, domainName string
+	var mode, domainName, certPath, keyPath string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT COALESCE(www_redirect,'off'), domain_name FROM domains WHERE id=?`, id).
-		Scan(&mode, &domainName)
+		`SELECT COALESCE(www_redirect,'off'), domain_name, COALESCE(cert_path,''), COALESCE(key_path,'')
+		   FROM domains WHERE id=?`, id).
+		Scan(&mode, &domainName, &certPath, &keyPath)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -158,11 +159,21 @@ func (h *Handlers) WWWRedirectStatus(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "redirect settings could not be read")
 		return
 	}
+	// The stored mode is not the mode in force. It is vetted against the
+	// certificate once, when it is stored, and SSL installation is asynchronous,
+	// so a redirect set during domain creation was checked when cert_path was
+	// still empty. Every later render asks again through
+	// withCertifiableCanonicalRedirect and silently drops it when the certificate
+	// that eventually arrived does not name the target. Reporting only the stored
+	// value showed the redirect as active on a site where nobody was redirected.
+	reason := provisioner.CanonicalRedirectDropReasonFor(mode, domainName, certPath, keyPath)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"mode":  mode,
 		"modes": []string{"off", "to_www", "to_apex"},
 		// Reported so the page can explain why to_www is refused before it is tried.
 		"www_resolves_to_apex": provisioner.WWWResolvesToApex(domainName),
+		"applied":              mode != "off" && reason == "",
+		"reason":               reason,
 	})
 }
 

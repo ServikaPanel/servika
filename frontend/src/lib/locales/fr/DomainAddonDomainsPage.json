@@ -48,6 +48,7 @@
     "hint": "Choisissez le nom d’hôte sur lequel le site répond. L’autre renvoie une 301 vers celui-ci, afin que les moteurs de recherche et les liens convergent vers une seule adresse.",
     "overridden": "Remplacé par la redirection de tout le domaine",
     "wwwUnresolved": "www ne pointe pas encore vers ce serveur ; y rediriger rendrait le site inaccessible.",
+    "certMissingTarget": "Le certificat ne nomme pas ce nom d'hôte, la redirection n'est donc pas encore active. Elle s'appliquera d'elle-même dès que le certificat le couvrira.",
     "mode": {
       "off": "Les deux (aucune redirection)",
       "to_www": "Rediriger vers www",

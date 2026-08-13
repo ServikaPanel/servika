@@ -48,6 +48,7 @@
     "hint": "Sitenin hangi alan adında yanıt vereceğini seçin. Diğeri ona 301 döndürür, böylece arama motorları ve bağlantılar tek bir adreste toplanır.",
     "overridden": "Tüm alan yönlendirmesi tarafından geçersiz kılındı",
     "wwwUnresolved": "www henüz bu sunucuya çözümlenmiyor, ona yönlendirmek siteyi erişilemez yapar.",
+    "certMissingTarget": "Sertifika bu ana makine adını içermiyor, bu yüzden yönlendirme henüz geçerli değil. Sertifika bu adı kapsadığında kendiliğinden çalışmaya başlar.",
     "mode": {
       "off": "İkisi de (yönlendirme yok)",
       "to_www": "www adresine yönlendir",

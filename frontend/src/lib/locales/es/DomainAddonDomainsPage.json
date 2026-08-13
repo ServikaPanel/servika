@@ -48,6 +48,7 @@
     "hint": "Elija en qué nombre de host responde el sitio. El otro devuelve un 301 hacia él, de modo que buscadores y enlaces se asienten en una sola dirección.",
     "overridden": "Anulado por la redirección de todo el dominio",
     "wwwUnresolved": "www todavía no apunta a este servidor; redirigir allí dejaría el sitio inaccesible.",
+    "certMissingTarget": "El certificado no incluye este nombre de host, por lo que la redirección aún no está activa. Empezará a funcionar por sí sola en cuanto el certificado lo cubra.",
     "mode": {
       "off": "Ambos (sin redirección)",
       "to_www": "Redirigir a www",

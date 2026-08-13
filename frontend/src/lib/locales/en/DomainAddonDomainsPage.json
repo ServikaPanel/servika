@@ -48,6 +48,7 @@
     "hint": "Choose which hostname the site answers on. The other one returns a 301 to it, so search engines and links settle on a single address.",
     "overridden": "Overridden by the whole-domain redirect",
     "wwwUnresolved": "www does not resolve to this server yet, so redirecting to it would take the site offline.",
+    "certMissingTarget": "The certificate does not name this hostname, so the redirect is not in force yet. It starts working on its own once the certificate covers it.",
     "mode": {
       "off": "Both (no redirect)",
       "to_www": "Redirect to www",

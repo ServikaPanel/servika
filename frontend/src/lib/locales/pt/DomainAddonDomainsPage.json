@@ -48,6 +48,7 @@
     "hint": "Escolha em que nome de anfitrião o site responde. O outro devolve um 301 para ele, para que motores de busca e ligações fiquem num único endereço.",
     "overridden": "Substituído pelo redirecionamento de todo o domínio",
     "wwwUnresolved": "www ainda não aponta para este servidor; redirecionar para lá deixaria o site inacessível.",
+    "certMissingTarget": "O certificado não inclui este nome de anfitrião, por isso o redirecionamento ainda não está ativo. Passa a funcionar sozinho assim que o certificado o abranger.",
     "mode": {
       "off": "Ambos (sem redirecionamento)",
       "to_www": "Redirecionar para www",

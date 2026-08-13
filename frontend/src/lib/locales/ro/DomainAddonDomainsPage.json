@@ -48,6 +48,7 @@
     "hint": "Alegeți pe ce nume de gazdă răspunde site-ul. Celălalt returnează un 301 către el, astfel încât motoarele de căutare și legăturile să se așeze pe o singură adresă.",
     "overridden": "Anulat de redirecționarea întregului domeniu",
     "wwwUnresolved": "www încă nu se rezolvă către acest server; redirecționarea acolo ar scoate site-ul din funcțiune.",
+    "certMissingTarget": "Certificatul nu include acest nume de gazdă, așa că redirecționarea nu este încă activă. Va începe să funcționeze singură de îndată ce certificatul îl acoperă.",
     "mode": {
       "off": "Ambele (fără redirecționare)",
       "to_www": "Redirecționează către www",

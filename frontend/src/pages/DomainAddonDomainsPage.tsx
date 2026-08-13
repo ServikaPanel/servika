@@ -27,6 +27,13 @@ type WWWRedirect = {
   // The backend refuses to_www when www does not point here, so the reason is
   // shown before the attempt rather than as a rejection afterwards.
   www_resolves_to_apex: boolean
+  // The stored mode is not the mode in force. It is vetted against the
+  // certificate only when it is stored, and SSL installation is asynchronous, so
+  // a redirect set during domain creation was checked before any certificate
+  // existed. Every later render drops it again when the certificate that arrived
+  // does not name the target, which the screen used to report as active.
+  applied: boolean
+  reason: string
 }
 
 export default function DomainAddonDomainsPage() {
@@ -210,6 +217,7 @@ export default function DomainAddonDomainsPage() {
             ))}
           </div>
           {!www.www_resolves_to_apex && <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">{t('www.wwwUnresolved')}</p>}
+          {www.reason === 'redirect_cert_missing_target' && <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">{t('www.certMissingTarget')}</p>}
         </div>
       )}
 

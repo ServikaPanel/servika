@@ -48,6 +48,7 @@
     "hint": "Scegli su quale nome host risponde il sito. L’altro restituisce un 301 verso di esso, così motori di ricerca e collegamenti convergono su un unico indirizzo.",
     "overridden": "Sovrascritto dal reindirizzamento dell’intero dominio",
     "wwwUnresolved": "www non punta ancora a questo server; reindirizzare lì renderebbe il sito irraggiungibile.",
+    "certMissingTarget": "Il certificato non include questo nome host, quindi il reindirizzamento non è ancora attivo. Entrerà in funzione da solo quando il certificato lo coprirà.",
     "mode": {
       "off": "Entrambi (nessun reindirizzamento)",
       "to_www": "Reindirizza a www",
