@@ -666,13 +666,11 @@ func randSlug() string {
 	return hex.EncodeToString(b) // Eight hexadecimal characters.
 }
 
+// randomPassword returns a generated WordPress password.
+//
+// It defers to credentials.RandomPassword rather than drawing its own: this was
+// a byte-for-byte copy of that function, so the modulo bias in it had to be
+// found and fixed twice, and a second generator is what let the two drift.
 func randomPassword() string {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
-	b := make([]byte, 18)
-	_, _ = rand.Read(b)
-	out := make([]byte, 18)
-	for i, c := range b {
-		out[i] = alphabet[int(c)%len(alphabet)]
-	}
-	return string(out)
+	return credentials.RandomPassword(18)
 }

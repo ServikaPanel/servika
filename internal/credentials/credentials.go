@@ -16,18 +16,47 @@ import (
 	"servika/internal/secret"
 )
 
-// RandomPassword returns a URL-safe alphanumeric password, using 20 characters by default.
+// PasswordAlphabet is the character set every generated password is drawn from.
+// It omits the pairs a reader confuses when a password is read aloud or copied
+// off a screen: I, O, l, o, 0 and 1.
+const PasswordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+
+// RandomPassword returns a URL-safe alphanumeric password, using 20 characters
+// by default.
+//
+// The byte is drawn by REJECTION SAMPLING rather than reduced with a modulo.
+// 256 is not a multiple of the 56-character alphabet (256 % 56 = 32), so
+// `byte % 56` gives the first 32 characters five chances out of 256 and the
+// remaining 24 only four, a measured 1.2500 bias. Bytes at or above the largest
+// exact multiple are drawn again instead.
+//
+// crypto/rand.Read is documented never to return an error and to always fill
+// its buffer, crashing the program irrecoverably if the operating system fails
+// it, so there is no partially filled buffer to guard against here.
 func RandomPassword(length int) string {
 	if length <= 0 {
 		length = 20
 	}
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
-	b := make([]byte, length)
-	_, _ = rand.Read(b)
-	for i := range b {
-		b[i] = alphabet[int(b[i])%len(alphabet)]
+	n := len(PasswordAlphabet)
+	// 224 for a 56-character alphabet. Kept as an int: an alphabet that divides
+	// 256 exactly gives 256 here, which as a byte would wrap to 0 and reject
+	// every draw for good.
+	limit := 256 - (256 % n)
+	out := make([]byte, 0, length)
+	buf := make([]byte, length)
+	for len(out) < length {
+		_, _ = rand.Read(buf)
+		for _, c := range buf {
+			if int(c) >= limit {
+				continue // Would land in the short tail and skew the result.
+			}
+			out = append(out, PasswordAlphabet[int(c)%n])
+			if len(out) == length {
+				break
+			}
+		}
 	}
-	return string(b)
+	return string(out)
 }
 
 // ValidPassword reports whether a password is safe for line-oriented system commands.
