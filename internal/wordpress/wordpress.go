@@ -105,13 +105,104 @@ func runWP(systemUser string, args ...string) ([]byte, error) {
 // rewriting core files must not be killed halfway because the operator closed the
 // tab, which would leave the site on a mixture of two versions.
 func runWPTimeout(timeout time.Duration, systemUser string, args ...string) ([]byte, error) {
+	return runWPInput(timeout, systemUser, "", args...)
+}
+
+// runWPInput is runWPTimeout with data on the process's standard input. It is
+// how a secret reaches wp-cli: an argument named on the command line is visible
+// to every other account on the host, because /proc/<pid>/cmdline is mode 444
+// while /proc/<pid>/environ is 400. During an install that window is seconds
+// long and it carries the site's database password and the new administrator
+// password, so a neighbouring c_* tenant only has to be looking.
+func runWPInput(timeout time.Duration, systemUser, stdin string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	full := append([]string{"-u", systemUser, "--", "env", "HOME=/home/" + systemUser,
 		"/usr/bin/php", "-d", "memory_limit=512M", wpBin()}, args...)
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 	cmd := exec.CommandContext(ctx, "runuser", full...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	return cmd.CombinedOutput()
+}
+
+// runWPSecret runs wp-cli with the single argument named by promptArg supplied
+// on stdin through wp-cli's own --prompt mechanism, so it never appears in argv.
+//
+// Two measured properties of the pinned wp-cli 2.12.0 shape this:
+//
+//   - --quiet is REQUIRED. Without it wp-cli echoes the whole command line it
+//     assembled, the prompted value included, which would simply move the secret
+//     from one output to another. It does not suppress real errors: a failing
+//     command still exits non-zero with its message on stderr.
+//   - --quiet is NOT SUFFICIENT. The prompt line itself still carries the value
+//     ("1/10 [--dbpass=<dbpass>]: <secret>") on stdout, and every caller here
+//     puts the tail of this output into an HTTP error body, so the secret is
+//     removed from what this function returns.
+//
+// The exit code proves nothing on its own: wp-cli SILENTLY IGNORES a --prompt
+// name it does not recognise, exiting 0 with an empty stderr and acting as if
+// the argument were absent. Every caller verifies the result afterwards.
+func runWPSecret(systemUser, promptArg, secret string, args ...string) ([]byte, error) {
+	args = append(args, "--quiet", "--prompt="+promptArg)
+	out, err := runWPInput(wpLocalTimeout, systemUser, secret+"\n", args...)
+	return redact(out, secret), err
+}
+
+// redact removes a secret from output that is about to be shown to someone.
+func redact(out []byte, secret string) []byte {
+	if secret == "" {
+		return out
+	}
+	return bytes.ReplaceAll(out, []byte(secret), []byte("[redacted]"))
+}
+
+// wpCheckPasswordPHP asks WordPress itself whether an account answers to a
+// password. The snippet is a constant and BOTH values arrive on stdin, so
+// neither the login nor the password is interpolated into PHP source or reaches
+// argv.
+// #nosec G101 -- PHP source that READS a password from stdin, not a credential; the name is what the rule matched on.
+const wpCheckPasswordPHP = `$login = trim(fgets(STDIN));
+$pass = trim(fgets(STDIN));
+$user = get_user_by("login", $login);
+if (!$user) { echo "NOUSER"; exit; }
+echo wp_check_password($pass, $user->user_pass, $user->ID) ? "OK" : "MISMATCH";`
+
+// checkPasswordStdin builds the two-line payload wpCheckPasswordPHP reads with
+// fgets. A value carrying a line break would shift that protocol and make the
+// snippet compare a different pair than the caller asked about, so it is
+// refused rather than trimmed into something nobody typed.
+func checkPasswordStdin(login, password string) (string, bool) {
+	if strings.ContainsAny(login, "\r\n\x00") || strings.ContainsAny(password, "\r\n\x00") {
+		return "", false
+	}
+	return login + "\n" + password + "\n", true
+}
+
+// passwordWorks reports whether login answers to password in the installation
+// at target.
+func passwordWorks(systemUser, target, login, password string) bool {
+	stdin, ok := checkPasswordStdin(login, password)
+	if !ok {
+		return false
+	}
+	out, err := runWPInput(wpLocalTimeout, systemUser, stdin,
+		"eval", wpCheckPasswordPHP, "--path="+target)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "OK"
+}
+
+// configPasswordMatches reads DB_PASSWORD back out of the generated
+// wp-config.php. An ignored --prompt writes it EMPTY while still exiting 0.
+func configPasswordMatches(systemUser, target, want string) bool {
+	out, err := runWP(systemUser, "config", "get", "DB_PASSWORD", "--path="+target)
+	if err != nil {
+		return false
+	}
+	return string(bytes.TrimSpace(out)) == want
 }
 
 func (h *Handlers) scheme(ssl bool) string {
@@ -439,9 +530,16 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		fail("WordPress download", out)
 		return
 	}
-	if out, err := runWP(systemUser, "config", "create", "--dbname="+dbName, "--dbuser="+dbUser,
-		"--dbpass="+dbPass, "--dbhost=localhost", "--locale=en_US", "--path="+target, "--skip-check"); err != nil {
+	if out, err := runWPSecret(systemUser, "dbpass", dbPass, "config", "create",
+		"--dbname="+dbName, "--dbuser="+dbUser, "--dbhost=localhost",
+		"--locale=en_US", "--path="+target, "--skip-check"); err != nil {
 		fail("wp-config creation", out)
+		return
+	}
+	// A wp-config.php whose DB_PASSWORD went in empty is a site that cannot
+	// reach its own database, reported as a successful install.
+	if !configPasswordMatches(systemUser, target, dbPass) {
+		fail("wp-config creation", []byte("the database password was not stored in wp-config.php"))
 		return
 	}
 	url := h.scheme(ssl) + domainName
@@ -449,10 +547,19 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		url += "/" + req.SubDir
 	}
 	adminPassword := randomPassword()
-	if out, err := runWP(systemUser, "core", "install", "--url="+url, "--title="+req.SiteTitle,
-		"--admin_user="+req.AdminUser, "--admin_password="+adminPassword,
-		"--admin_email="+req.AdminEmail, "--skip-email", "--path="+target); err != nil {
+	if out, err := runWPSecret(systemUser, "admin_password", adminPassword,
+		"core", "install", "--url="+url, "--title="+req.SiteTitle,
+		"--admin_user="+req.AdminUser, "--admin_email="+req.AdminEmail,
+		"--skip-email", "--path="+target); err != nil {
 		fail("WordPress installation", out)
+		return
+	}
+	// Measured with an unrecognised --prompt name: wp-cli exits 0 with an empty
+	// stderr and the account is never created at all. Handing the caller a
+	// password for an account that does not answer to it, or does not exist,
+	// is worse than the exposure this replaced.
+	if !passwordWorks(systemUser, target, req.AdminUser, adminPassword) {
+		fail("WordPress installation", []byte("the administrator account was not created with the generated password"))
 		return
 	}
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.

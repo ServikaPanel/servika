@@ -274,16 +274,36 @@ func (h *Handlers) UserPassword(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "password must contain 8 to 100 characters")
 		return
 	}
-	_, err := runWP(systemUser, "user", "update", strconv.Itoa(req.UserID),
-		"--user_pass="+password, "--skip-email", "--path="+dir)
-	if err != nil {
+	// The login is read BEFORE the update because the verification below needs
+	// it, and because a user id that names nobody must not be reported as a
+	// completed password change.
+	b, err := runWP(systemUser, "user", "get", strconv.Itoa(req.UserID), "--field=user_login", "--path="+dir)
+	login := strings.TrimSpace(string(b))
+	if err != nil || login == "" {
+		httpx.WriteError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	// The password goes in on stdin: an argument is readable by every other
+	// account on the host through /proc/<pid>/cmdline, and this one may be a
+	// password the customer chose and uses elsewhere.
+	if _, err := runWPSecret(systemUser, "user_pass", password, "user", "update",
+		strconv.Itoa(req.UserID), "--skip-email", "--path="+dir); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
-	// Return the username for display in the UI.
-	login := ""
-	if b, e := runWP(systemUser, "user", "get", strconv.Itoa(req.UserID), "--field=user_login", "--path="+dir); e == nil {
-		login = strings.TrimSpace(string(b))
+	// Measured with an unrecognised --prompt name: wp-cli exits 0, changes
+	// nothing, and the OLD password keeps working. Reporting that as a completed
+	// change tells the customer something untrue about their own account.
+	//
+	// The message says "could not be confirmed" rather than "was not applied",
+	// because the check itself can fail on a site whose plugins break `wp eval`,
+	// and in that case the password may well have changed. Plugins are
+	// deliberately NOT skipped: `wp user update` hashed the password through the
+	// same stack, so a plugin that replaces the hasher must be loaded here too or
+	// the comparison would be against a hash nothing produced.
+	if !passwordWorks(systemUser, dir, login, password) {
+		httpx.WriteError(w, http.StatusInternalServerError, "the password change could not be confirmed")
+		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "password": password, "username": login})
 }
