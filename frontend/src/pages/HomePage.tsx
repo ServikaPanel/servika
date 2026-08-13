@@ -47,9 +47,12 @@ type VersionCheck = {
 }
 type UpdateStatus = { tool_available: boolean; running: boolean; status: string }
 type OptimizeStatus = { running: boolean; status: string }
-type BackupRow = { domain_id: number; domain_name: string; count: number; total_b: number; last_backup: string }
+// The field names are the server's, verbatim. They were total_b and
+// total_size_b here, which the server never sends, so the size on the card read
+// undefined and the card reported every byte as zero.
+type BackupRow = { domain_id: number; domain_name: string; count: number; total_bytes: number; last_backup: string }
 type BackupSummary = {
-  domains: BackupRow[]; total_size_b: number; total_backups: number
+  domains: BackupRow[]; total_size_bytes: number; total_backups: number
   destination_count: number; schedule: string
 }
 type WpInstall = {
@@ -447,7 +450,7 @@ export default function HomePage() {
           <>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">{backup.total_backups}</span>
-              <span className="text-sm text-slate-500 dark:text-slate-400">{t('backup.count', { count: backup.total_backups, size: fmtBytesGB(backup.total_size_b) })}</span>
+              <span className="text-sm text-slate-500 dark:text-slate-400">{t('backup.count', { count: backup.total_backups, size: fmtBytesGB(backup.total_size_bytes) })}</span>
             </div>
             <div className="mt-3 space-y-0">
               <KV label={t('backup.lastBackup')} value={lastBackup || '—'} />
