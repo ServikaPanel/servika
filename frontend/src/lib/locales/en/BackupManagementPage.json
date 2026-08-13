@@ -7,8 +7,6 @@
   "title": "Backup Manager",
   "subtitle": "View backups for all domains in one place. Daily automatic backups run, and S3/SFTP destinations are configured per domain.",
   "toast": {
-    "triggered": "Scheduled backups were triggered. Refresh in a few seconds to see the results.",
-    "triggerFailed": "Could not trigger backups",
     "jobStarted": "Backup job started for {{n}} domain(s)",
     "jobFailed": "Could not start the backup job"
   },
@@ -24,7 +22,6 @@
     "default": "Daily at 03:00",
     "suffix": ". 7-day retention",
     "triggering": "Triggering...",
-    "backupNow": "⏱ Back Up All Domains Now",
     "refresh": "↻ Refresh",
     "backupAll": "Back up all domains",
     "backupSelected": "Back up {{n}} selected"

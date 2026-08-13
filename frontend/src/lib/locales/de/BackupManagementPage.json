@@ -7,8 +7,6 @@
   "title": "Backup-Manager",
   "subtitle": "Sehen Sie Backups aller Domains an einem Ort. Tägliche automatische Backups laufen, und S3/SFTP-Ziele werden pro Domain konfiguriert.",
   "toast": {
-    "triggered": "Geplante Backups wurden ausgelöst. Aktualisieren Sie in einigen Sekunden, um die Ergebnisse zu sehen.",
-    "triggerFailed": "Backups konnten nicht ausgelöst werden",
     "jobStarted": "Sicherungsauftrag für {{n}} Domain(s) gestartet",
     "jobFailed": "Sicherungsauftrag konnte nicht gestartet werden"
   },
@@ -24,7 +22,6 @@
     "default": "Täglich um 03:00",
     "suffix": ". 7-Tage-Aufbewahrung",
     "triggering": "Wird ausgelöst...",
-    "backupNow": "⏱ Alle Domains jetzt sichern",
     "refresh": "↻ Aktualisieren",
     "backupAll": "Alle Domains sichern",
     "backupSelected": "{{n}} ausgewählte sichern"

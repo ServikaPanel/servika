@@ -7,8 +7,6 @@
   "title": "Yedek Yöneticisi",
   "subtitle": "Tüm alan adlarının yedeklerini tek bir yerde görün. Günlük otomatik yedekler çalışır ve S3/SFTP hedefleri alan adı başına yapılandırılır.",
   "toast": {
-    "triggered": "Zamanlanmış yedekler tetiklendi. Sonuçları görmek için birkaç saniye sonra yenileyin.",
-    "triggerFailed": "Yedekler tetiklenemedi",
     "jobStarted": "{{n}} domain için yedek işi başlatıldı",
     "jobFailed": "Yedek işi başlatılamadı"
   },
@@ -24,7 +22,6 @@
     "default": "Her gün saat 03:00",
     "suffix": ". 7 günlük saklama",
     "triggering": "Tetikleniyor...",
-    "backupNow": "⏱ Tüm Alan Adlarını Şimdi Yedekle",
     "refresh": "↻ Yenile",
     "backupAll": "Tüm domainleri yedekle",
     "backupSelected": "Seçili {{n}} domaini yedekle"

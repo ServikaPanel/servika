@@ -7,8 +7,6 @@
   "title": "Gestor de Cópias de Segurança",
   "subtitle": "Veja as cópias de segurança de todos os domínios num único local. As cópias automáticas diárias são executadas e os destinos S3/SFTP são configurados por domínio.",
   "toast": {
-    "triggered": "As cópias de segurança agendadas foram iniciadas. Atualize em alguns segundos para ver os resultados.",
-    "triggerFailed": "Não foi possível iniciar as cópias de segurança",
     "jobStarted": "Tarefa de cópia iniciada para {{n}} domínio(s)",
     "jobFailed": "Não foi possível iniciar a tarefa de cópia"
   },
@@ -24,7 +22,6 @@
     "default": "Diariamente às 03:00",
     "suffix": ". Retenção de 7 dias",
     "triggering": "A iniciar...",
-    "backupNow": "⏱ Fazer Cópia de Todos os Domínios Agora",
     "refresh": "↻ Atualizar",
     "backupAll": "Criar cópia de todos os domínios",
     "backupSelected": "Copiar {{n}} selecionados"

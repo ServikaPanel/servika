@@ -7,8 +7,6 @@
   "title": "备份管理器",
   "subtitle": "在一处查看所有域名的备份。每日自动备份运行，S3/SFTP 目标按域名配置。",
   "toast": {
-    "triggered": "已触发计划备份。请在几秒后刷新以查看结果。",
-    "triggerFailed": "无法触发备份",
     "jobStarted": "已为 {{n}} 个域名启动备份任务",
     "jobFailed": "无法启动备份任务"
   },
@@ -24,7 +22,6 @@
     "default": "每日 03:00",
     "suffix": "。保留 7 天",
     "triggering": "触发中...",
-    "backupNow": "⏱ 立即备份所有域名",
     "refresh": "↻ 刷新",
     "backupAll": "备份所有域名",
     "backupSelected": "备份选定的 {{n}} 项"

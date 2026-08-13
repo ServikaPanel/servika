@@ -7,8 +7,6 @@
   "title": "Gestionnaire de sauvegardes",
   "subtitle": "Consultez les sauvegardes de tous les domaines au même endroit. Des sauvegardes automatiques quotidiennes sont effectuées, et les destinations S3/SFTP sont configurées par domaine.",
   "toast": {
-    "triggered": "Les sauvegardes planifiées ont été déclenchées. Actualisez dans quelques secondes pour voir les résultats.",
-    "triggerFailed": "Impossible de déclencher les sauvegardes",
     "jobStarted": "Tâche de sauvegarde lancée pour {{n}} domaine(s)",
     "jobFailed": "Impossible de lancer la tâche de sauvegarde"
   },
@@ -24,7 +22,6 @@
     "default": "Chaque jour à 03:00",
     "suffix": ". Rétention de 7 jours",
     "triggering": "Déclenchement...",
-    "backupNow": "⏱ Sauvegarder tous les domaines maintenant",
     "refresh": "↻ Actualiser",
     "backupAll": "Sauvegarder tous les domaines",
     "backupSelected": "Sauvegarder {{n}} sélectionné(s)"

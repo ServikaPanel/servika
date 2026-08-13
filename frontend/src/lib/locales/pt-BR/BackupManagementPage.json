@@ -7,8 +7,6 @@
   "title": "Gerenciador de backups",
   "subtitle": "Visualize backups de todos os domínios em um só lugar. Backups automáticos diários são executados e destinos S3/SFTP são configurados por domínio.",
   "toast": {
-    "triggered": "Os backups agendados foram iniciados. Atualize a página em alguns segundos para ver os resultados.",
-    "triggerFailed": "Não foi possível iniciar os backups",
     "jobStarted": "Tarefa de backup iniciada para {{n}} domínio(s)",
     "jobFailed": "Não foi possível iniciar a tarefa de backup"
   },
@@ -24,7 +22,6 @@
     "default": "Diariamente às 03:00",
     "suffix": ". Retenção de 7 dias",
     "triggering": "Iniciando...",
-    "backupNow": "⏱ Fazer backup de todos os domínios agora",
     "refresh": "↻ Atualizar",
     "backupAll": "Fazer backup de todos os domínios",
     "backupSelected": "Fazer backup de {{n}} selecionados"

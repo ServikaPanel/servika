@@ -7,8 +7,6 @@
   "title": "Gestione Backup",
   "subtitle": "Visualizza i backup di tutti i domini in un unico posto. I backup automatici giornalieri vengono eseguiti e le destinazioni S3/SFTP sono configurate per dominio.",
   "toast": {
-    "triggered": "I backup pianificati sono stati avviati. Aggiorna tra qualche secondo per vedere i risultati.",
-    "triggerFailed": "Impossibile avviare i backup",
     "jobStarted": "Processo di backup avviato per {{n}} dominio/i",
     "jobFailed": "Impossibile avviare il processo di backup"
   },
@@ -24,7 +22,6 @@
     "default": "Giornaliero alle 03:00",
     "suffix": ". Conservazione 7 giorni",
     "triggering": "Avvio in corso...",
-    "backupNow": "⏱ Esegui Backup di Tutti i Domini Ora",
     "refresh": "↻ Aggiorna",
     "backupAll": "Esegui il backup di tutti i domini",
     "backupSelected": "Esegui il backup di {{n}} selezionati"

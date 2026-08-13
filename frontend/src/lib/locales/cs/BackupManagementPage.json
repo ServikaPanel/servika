@@ -7,8 +7,6 @@
   "title": "Správce záloh",
   "subtitle": "Prohlížejte zálohy všech domén na jednom místě. Denní automatické zálohy běží a cíle S3/SFTP se nastavují pro každou doménu.",
   "toast": {
-    "triggered": "Naplánované zálohy byly spuštěny. Za pár sekund obnovte stránku a zobrazte výsledky.",
-    "triggerFailed": "Zálohy nelze spustit",
     "jobStarted": "Úloha zálohování spuštěna pro {{n}} domén",
     "jobFailed": "Úlohu zálohování se nepodařilo spustit"
   },
@@ -24,7 +22,6 @@
     "default": "Denně v 03:00",
     "suffix": ". Uchovávání 7 dní",
     "triggering": "Spouštění...",
-    "backupNow": "⏱ Zálohovat všechny domény nyní",
     "refresh": "↻ Obnovit",
     "backupAll": "Zálohovat všechny domény",
     "backupSelected": "Zálohovat {{n}} vybraných"

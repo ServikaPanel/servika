@@ -7,8 +7,6 @@
   "title": "Manager backup",
   "subtitle": "Vizualizați copiile de rezervă pentru toate domeniile într-un singur loc. Backup-urile automate zilnice rulează, iar destinațiile S3/SFTP sunt configurate per domeniu.",
   "toast": {
-    "triggered": "Backup-urile programate au fost declanșate. Reîmprospătați în câteva secunde pentru a vedea rezultatele.",
-    "triggerFailed": "Nu s-au putut declanșa backup-urile",
     "jobStarted": "Sarcină de copiere pornită pentru {{n}} domeniu/domenii",
     "jobFailed": "Sarcina de copiere nu a putut fi pornită"
   },
@@ -24,7 +22,6 @@
     "default": "Zilnic la 03:00",
     "suffix": ". Retenție 7 zile",
     "triggering": "Se declanșează...",
-    "backupNow": "⏱ Faceți backup pentru toate domeniile acum",
     "refresh": "↻ Reîmprospătați",
     "backupAll": "Creează copii pentru toate domeniile",
     "backupSelected": "Copiază {{n}} selectate"

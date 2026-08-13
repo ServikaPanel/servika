@@ -81,14 +81,11 @@ export default function BackupManagementPage() {
     finally { setBackingUp(false) }
   }
 
-  async function backupNow() {
-    setError(null); setSuccess(null); setBackingUp(true)
-    try {
-      await api.post('/admin/backups/tick')
-      setSuccess(t('toast.triggered'))
-    } catch (e) { setError(apiError(e, t('toast.triggerFailed'))) }
-    finally { setBackingUp(false) }
-  }
+  // There is deliberately no button for POST /admin/backups/tick. That endpoint
+  // runs the nightly pass, which selects only domains whose own backup_hour is
+  // the current hour and whose last backup is over 23 hours old, so pressed at
+  // any other time it backed up nothing while the toast said it had. The button
+  // beside this one starts a real job over every domain in scope.
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
@@ -127,10 +124,6 @@ export default function BackupManagementPage() {
               : selected.length > 0
                 ? t('schedule.backupSelected', { n: selected.length })
                 : t('schedule.backupAll')}
-          </button>
-          <button onClick={backupNow} disabled={backingUp}
-            className="px-3.5 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-lg disabled:opacity-50">
-            {backingUp ? t('schedule.triggering') : t('schedule.backupNow')}
           </button>
           <button onClick={reload} disabled={loading} className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">{t('schedule.refresh')}</button>
         </div>
