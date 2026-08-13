@@ -144,6 +144,50 @@ func TestRemovingLogsRefusesAnythingThatIsNotATenant(t *testing.T) {
 	}
 }
 
+// systemd runs php-fpm from an httpd_exec_t binary and the targeted policy
+// transitions it to httpd_t, which is allowed `create open read setattr` on
+// httpd_log_t:file but on var_log_t:file only `append getattr ioctl lock`
+// (measured against the AlmaLinux 10 shipped policy). A fresh directory under
+// /var/log defaults to var_log_t, so without this type php-fpm cannot create its
+// error log, and it treats that as fatal: the tenant would stop serving PHP
+// rather than merely lose a log.
+func TestTheLogDirectoryCarriesTheOnlyTypePHPFPMCanWrite(t *testing.T) {
+	if fpmLogSELinuxType != "httpd_log_t" {
+		t.Fatalf("the log directory is labelled %q, which httpd_t cannot create a file under", fpmLogSELinuxType)
+	}
+}
+
+// The label is read back rather than assumed, so the reader has to be right in
+// both directions: a "?" from stat must not pass for a type.
+func TestAnUnreadableContextIsNotMistakenForAType(t *testing.T) {
+	if got := parseSELinuxType("system_u:object_r:httpd_log_t:s0\n"); got != "httpd_log_t" {
+		t.Fatalf("a real context read as %q", got)
+	}
+	for _, unreadable := range []string{"?", "", "\n", "unlabeled"} {
+		if got := parseSELinuxType(unreadable); got != "" {
+			t.Fatalf("%q read as the type %q", unreadable, got)
+		}
+	}
+}
+
+// The directory holds whatever a tenant's PHP printed as it died, which
+// routinely includes the application's own database credentials.
+func TestTheLogDirectoryIsClosedToEveryoneButRoot(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "servika-fpm")
+	t.Setenv("SERVIKA_FPM_LOG_DIR", dir)
+
+	if err := EnsureTenantFPMLogDir(); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o700 {
+		t.Fatalf("the log directory is mode %04o", mode)
+	}
+}
+
 // The unit is re-rendered against the interpreter it is ALREADY running, not
 // against whatever the tenant's PHP version says today: a version that moved on
 // since the unit was written would otherwise replace a working service with a

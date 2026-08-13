@@ -480,9 +480,10 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 	}
 	// 0700, unlike the config and pool directories: this one holds whatever the
 	// tenant's PHP printed when it died, which routinely includes the contents of
-	// the application's own configuration.
-	if err := os.MkdirAll(tenantLogDir(), 0700); err != nil {
-		return "", fmt.Errorf("create PHP-FPM log directory: %w", err)
+	// the application's own configuration. Refusing here rather than starting a
+	// master that cannot open its error log, which php-fpm treats as fatal.
+	if err := EnsureTenantFPMLogDir(); err != nil {
+		return "", err
 	}
 
 	if err := migrateTenantPoolLayout(systemUser); err != nil {

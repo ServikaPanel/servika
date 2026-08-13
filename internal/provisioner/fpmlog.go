@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -15,6 +16,10 @@ import (
 // moved. Nothing writes there any more; only teardown still names it, so a
 // tenant deleted after an upgrade does not leave its old log behind.
 const legacyTenantLogDir = "/var/log/php-fpm"
+
+// fpmLogSELinuxType is the only type the targeted policy lets php-fpm create a
+// file under; see EnsureTenantFPMLogDir.
+const fpmLogSELinuxType = "httpd_log_t"
 
 // fpmLogrotatePathVar is the panel's own rotation rule for those logs. It is a
 // var only so a test can point it somewhere writable.
@@ -96,6 +101,70 @@ func renderFPMLogrotate() string {
 `, tenantLogDir())
 }
 
+// EnsureTenantFPMLogDir creates the log directory and gives it the SELinux type
+// php-fpm is allowed to write, refusing rather than reporting success when it
+// cannot.
+//
+// The label is not a detail. systemd runs php-fpm from a binary labelled
+// httpd_exec_t and the targeted policy transitions it to httpd_t, which is
+// allowed `create open read setattr` on httpd_log_t:file but on var_log_t:file
+// only `append getattr ioctl lock` (measured against the AlmaLinux 10 shipped
+// policy). The distribution ships `/var/log/php-fpm(/.*)?` as httpd_log_t, which
+// is the only reason the previous location worked; a fresh directory under
+// /var/log defaults to var_log_t, where php-fpm cannot CREATE its error log at
+// all. It exits when it cannot open that file, so an unlabelled directory would
+// not lose a log, it would stop every tenant master on an Enforcing host.
+func EnsureTenantFPMLogDir() error {
+	dir := tenantLogDir()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("create the tenant PHP-FPM log directory: %w", err)
+	}
+	if !selinuxActive() {
+		return nil
+	}
+	spec := dir + "(/.*)?"
+	if _, err := exec.LookPath("semanage"); err == nil {
+		output, _ := tenantCommand("semanage", "fcontext", "-l").CombinedOutput()
+		if !strings.Contains(string(output), spec) {
+			_, _ = tenantCommand("semanage", "fcontext", "-a", "-t", fpmLogSELinuxType, spec).CombinedOutput()
+		}
+		_, _ = tenantCommand("restorecon", "-R", dir).CombinedOutput()
+	} else {
+		// Without semanage the rule cannot be persisted, so this holds only until
+		// the next full relabel. It still beats leaving the directory unusable.
+		_, _ = tenantCommand("chcon", "-R", "-t", fpmLogSELinuxType, dir).CombinedOutput()
+	}
+	// Read back what the directory actually carries. Every command above is best
+	// effort, and a wrong type here is the difference between a rotation bug and
+	// a tenant whose PHP stops serving.
+	if got := selinuxType(dir); got != fpmLogSELinuxType {
+		return fmt.Errorf("the tenant PHP-FPM log directory is labelled %q, not %q", got, fpmLogSELinuxType)
+	}
+	return nil
+}
+
+// selinuxType reads the type field out of a path's security context, or "" when
+// it cannot be read.
+func selinuxType(path string) string {
+	output, err := tenantCommand("stat", "-c", "%C", path).Output()
+	if err != nil {
+		return ""
+	}
+	return parseSELinuxType(string(output))
+}
+
+// parseSELinuxType takes the type out of `user:role:type:level`. stat prints a
+// bare "?" when it has no context to report, which must read as unknown rather
+// than as a type, or the guard above would pass on a directory that carries no
+// label at all.
+func parseSELinuxType(context string) string {
+	parts := strings.Split(strings.TrimSpace(context), ":")
+	if len(parts) < 3 {
+		return ""
+	}
+	return parts[2]
+}
+
 // HealTenantFPMLogs gives the tenant PHP-FPM logs a directory of their own and a
 // rotation rule that actually reaches the masters writing them.
 //
@@ -103,8 +172,11 @@ func renderFPMLogrotate() string {
 // the tenant's global php-fpm.conf and the writable path lives in its unit, so
 // neither the pool drift repair nor a reload can move them.
 func HealTenantFPMLogs() {
-	if err := os.MkdirAll(tenantLogDir(), 0700); err != nil {
-		log.Printf("tenant PHP-FPM log directory: %v", err)
+	if err := EnsureTenantFPMLogDir(); err != nil {
+		// Nothing is migrated. The old arrangement rotates a tenant's PHP errors
+		// away, which is the bug this repairs; moving them somewhere php-fpm
+		// cannot write would stop the tenant serving PHP at all.
+		log.Printf("tenant PHP-FPM logs left where they are: %v", err)
 		return
 	}
 	if err := writeIfChanged(fpmLogrotatePathVar, []byte(renderFPMLogrotate()), 0o644); err != nil {
