@@ -3,6 +3,7 @@ package provisioner
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ func InstallImportedSSL(domainName string, certPEM, keyPEM []byte) (string, stri
 	}
 	pair, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: certificate and private key do not match", ErrImportedSSLInvalid)
+		return "", "", time.Time{}, fmt.Errorf("%w: %s", ErrImportedSSLInvalid, keyPairProblem(certPEM, keyPEM))
 	}
 	if len(pair.Certificate) == 0 {
 		return "", "", time.Time{}, fmt.Errorf("%w: no certificate found", ErrImportedSSLInvalid)
@@ -64,6 +65,78 @@ func InstallImportedSSL(domainName string, certPEM, keyPEM []byte) (string, stri
 		return "", "", time.Time{}, err
 	}
 	return certPath, keyPath, leaf.NotAfter, nil
+}
+
+// keyPairProblem says WHY a certificate and a private key could not be loaded
+// together.
+//
+// crypto/tls reports several unrelated problems through one error value, so
+// every failure used to reach the customer as "certificate and private key do
+// not match". That is wrong for most of them, and it is wrong in the way that
+// costs the most time: someone whose key simply will not PARSE goes looking for
+// a mismatched pair that does not exist. Go 1.24 made that case reachable by
+// itself, because `ParsePKCS1PrivateKey` stopped recomputing the CRT values of
+// an RSA key and now rejects the key outright (`crypto/rsa: invalid CRT
+// exponent`), and the panel builds at a language version past that.
+//
+// Each condition is re-derived here rather than matched against the text of
+// Go's error, which is not part of its API and has changed before.
+func keyPairProblem(certPEM, keyPEM []byte) string {
+	if pemBlockOfType(certPEM, "CERTIFICATE") == nil {
+		return "no PEM certificate was found"
+	}
+	block := privateKeyPEMBlock(keyPEM)
+	if block == nil {
+		return "no PEM private key was found"
+	}
+	if !privateKeyParses(block.Bytes) {
+		return "the private key could not be parsed; it may be corrupt or in an unsupported format"
+	}
+	return "certificate and private key do not match"
+}
+
+// pemBlockOfType returns the first PEM block of the requested type.
+func pemBlockOfType(data []byte, want string) *pem.Block {
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			return nil
+		}
+		if block.Type == want {
+			return block
+		}
+	}
+}
+
+// privateKeyPEMBlock returns the first block that is not a certificate, which is
+// how crypto/tls itself picks the key out of a file that carries both.
+func privateKeyPEMBlock(data []byte) *pem.Block {
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			return nil
+		}
+		if block.Type != "CERTIFICATE" {
+			return block
+		}
+	}
+}
+
+// privateKeyParses reports whether DER holds a private key any of the three
+// encodings crypto/tls accepts can read, tried in the same order.
+func privateKeyParses(der []byte) bool {
+	if _, err := x509.ParsePKCS1PrivateKey(der); err == nil {
+		return true
+	}
+	if _, err := x509.ParsePKCS8PrivateKey(der); err == nil {
+		return true
+	}
+	if _, err := x509.ParseECPrivateKey(der); err == nil {
+		return true
+	}
+	return false
 }
 
 func hasServerAuth(usages []x509.ExtKeyUsage) bool {
