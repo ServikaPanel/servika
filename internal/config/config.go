@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -62,4 +63,46 @@ func envInt(k string, def int) int {
 		}
 	}
 	return def
+}
+
+// Pool bounds for the panel's own MariaDB connections.
+const (
+	DBMinOpenConns = 16 // The historical fixed value; no host loses capacity.
+	// The panel is ONE client of a MariaDB that also serves every tenant site.
+	// AlmaLinux 10 ships max_connections at 151 and servika-optimize raises it
+	// to 200, so a panel that could take 128 of them would starve the sites it
+	// exists to host.
+	DBMaxOpenConnsCap = 64
+	dbConnsPerCPU     = 4
+)
+
+// DBMaxOpenConns returns the ceiling for the panel's MariaDB pool, and whether
+// an operator override was out of range.
+//
+// A fixed 16 is too small on a busy host: httpx.ExtendDeadline lets one request
+// hold a connection for minutes on the import, export, transfer and download
+// endpoints, so a few concurrent transfers take the whole pool and every other
+// request waits behind them.
+//
+// An out-of-range SERVIKA_DB_MAX_CONNS is reported rather than obeyed: a pool
+// of one deadlocks the panel, and a pool larger than the server's own
+// max_connections fails at the point of use, in the middle of a request.
+func DBMaxOpenConns() (n int, override string) {
+	if v := strings.TrimSpace(os.Getenv("SERVIKA_DB_MAX_CONNS")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		switch {
+		case err != nil:
+			return defaultDBMaxOpenConns(), fmt.Sprintf("SERVIKA_DB_MAX_CONNS=%q is not a number", v)
+		case parsed < DBMinOpenConns || parsed > DBMaxOpenConnsCap:
+			return defaultDBMaxOpenConns(), fmt.Sprintf(
+				"SERVIKA_DB_MAX_CONNS=%d is outside %d-%d", parsed, DBMinOpenConns, DBMaxOpenConnsCap)
+		default:
+			return parsed, ""
+		}
+	}
+	return defaultDBMaxOpenConns(), ""
+}
+
+func defaultDBMaxOpenConns() int {
+	return min(max(runtime.NumCPU()*dbConnsPerCPU, DBMinOpenConns), DBMaxOpenConnsCap)
 }
