@@ -473,7 +473,7 @@ func TestTenantFPMUnitUsesServikaSliceAndHomeIsolation(t *testing.T) {
 		"Slice=servika-c_example_com.slice",
 		"ProtectHome=tmpfs",
 		"BindPaths=/home/c_example_com",
-		"ReadWritePaths=/home/c_example_com /var/log/php-fpm",
+		"ReadWritePaths=/home/c_example_com " + tenantLogDir(),
 	} {
 		if !strings.Contains(unit, directive) {
 			t.Errorf("tenant PHP-FPM unit does not contain %q", directive)

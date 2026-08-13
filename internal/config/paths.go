@@ -43,6 +43,14 @@ const (
 	// purpose: systemd's StandardOutput=append: follows a symlink, so a tenant
 	// who could write the directory could redirect a root-opened descriptor.
 	DefaultAppLogDir = "/var/log/servika-apps"
+	// DefaultTenantFPMLogDir holds one PHP-FPM error log per tenant. It is
+	// deliberately NOT under /var/log/php-fpm: the distribution's own logrotate
+	// rule globs `/var/log/php-fpm/*log` and signals only the SYSTEM master's
+	// pid file, so it rotated every tenant log away and left each tenant master
+	// writing to a deleted inode (measured on AlmaLinux 10). A second rule for
+	// the same paths is not an option either, because logrotate refuses a
+	// duplicate entry and skips the file altogether.
+	DefaultTenantFPMLogDir = "/var/log/servika-fpm"
 	// DefaultAppEnvDir holds one EnvironmentFile per application, each 0600
 	// root-owned: systemd parses the file in the manager process as root, so
 	// the service's own user never opens it and needs no access.
@@ -176,6 +184,9 @@ func RuntimeOpWrapper() string {
 }
 func NodeRoot() string  { return mustAbsPath("SERVIKA_NODE_ROOT", DefaultNodeRoot) }
 func AppLogDir() string { return mustAbsPath("SERVIKA_APP_LOG_DIR", DefaultAppLogDir) }
+func TenantFPMLogDir() string {
+	return mustAbsPath("SERVIKA_FPM_LOG_DIR", DefaultTenantFPMLogDir)
+}
 func AppEnvDir() string { return mustAbsPath("SERVIKA_APP_ENV_DIR", DefaultAppEnvDir) }
 func GeoIPDir() string  { return mustAbsPath("SERVIKA_GEOIP_DIR", DefaultGeoIPDir) }
 
@@ -286,6 +297,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_RUNTIMEOP_WRAPPER", DefaultRuntimeOpWrapper, false},
 		{"SERVIKA_NODE_ROOT", DefaultNodeRoot, false},
 		{"SERVIKA_APP_LOG_DIR", DefaultAppLogDir, false},
+		{"SERVIKA_FPM_LOG_DIR", DefaultTenantFPMLogDir, false},
 		{"SERVIKA_APP_ENV_DIR", DefaultAppEnvDir, false},
 		{"SERVIKA_MARIADB_SLOW_LOG", DefaultMariaDBSlowLog, false},
 		{"SERVIKA_MAIL_LOG", DefaultMailLog, false},

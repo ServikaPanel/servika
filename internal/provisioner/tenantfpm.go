@@ -18,7 +18,6 @@ import (
 const (
 	tenantUnitDir = "/etc/systemd/system"
 	tenantCfgRoot = "/etc/php-fpm-tenant"
-	tenantLogDir  = "/var/log/php-fpm"
 )
 
 func tenantUnitName(systemUser string) string {
@@ -383,11 +382,11 @@ func renderTenantPoolScoped(db *sql.DB, systemUser string, domainID, subdomainID
 func renderTenantGlobalConfig(systemUser string) string {
 	return fmt.Sprintf(`[global]
 pid = %s/php-fpm.pid
-error_log = %s/tenant-%s.log
+error_log = %s
 log_level = warning
 daemonize = no
 include=%s/*.conf
-`, tenantRunDir(systemUser), tenantLogDir, systemUser, tenantPoolDir(systemUser))
+`, tenantRunDir(systemUser), tenantLogPath(systemUser), tenantPoolDir(systemUser))
 }
 
 // migrateTenantPoolLayout moves an installation from the old single pool.conf to the
@@ -442,7 +441,7 @@ RestartSec=2
 %s
 [Install]
 WantedBy=multi-user.target
-`, systemUser, systemUser, fpmBinary, tenantCfgDir(systemUser), systemUser, systemUser, systemUser, tenantLogDir, mtaBindLines())
+`, systemUser, systemUser, fpmBinary, tenantCfgDir(systemUser), systemUser, systemUser, systemUser, tenantLogDir(), mtaBindLines())
 }
 
 func waitForSocket(path string, timeout time.Duration) bool {
@@ -479,8 +478,10 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("create tenant configuration directory: %w", err)
 	}
-	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-	if err := os.MkdirAll(tenantLogDir, 0755); err != nil {
+	// 0700, unlike the config and pool directories: this one holds whatever the
+	// tenant's PHP printed when it died, which routinely includes the contents of
+	// the application's own configuration.
+	if err := os.MkdirAll(tenantLogDir(), 0700); err != nil {
 		return "", fmt.Errorf("create PHP-FPM log directory: %w", err)
 	}
 

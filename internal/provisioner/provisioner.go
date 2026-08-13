@@ -221,6 +221,9 @@ func Init(db *sql.DB) {
 	ensureHTTPDHomeBooleans()
 	HealSSLCertPathsOnStartup()
 	HealSSLVhost443OnStartup()
+	// Before EnsureTenantFPMOnStartup: it starts the masters, and this decides
+	// which file each of them opens.
+	HealTenantFPMLogs()
 	EnsureTenantFPMOnStartup()
 	HealWAFOnStartup() // WAF: validate ModSecurity module status + refresh per-domain modsec confs for WAF-enabled domains
 }
@@ -1970,8 +1973,8 @@ func Deprovision(domainName, systemUser string) error {
 		// Orphan cleanup: userdel -r removes the home dir, but these live outside
 		// it, so they survived and accumulated after every domain deletion or
 		// import rollback.
-		_ = os.RemoveAll(filepath.Join(config.BackupRoot(), systemUser))        // manual + scheduled backups
-		_ = os.Remove(filepath.Join(tenantLogDir, "tenant-"+systemUser+".log")) // tenant PHP-FPM log
+		_ = os.RemoveAll(filepath.Join(config.BackupRoot(), systemUser)) // manual + scheduled backups
+		removeTenantLogs(systemUser)                                     // tenant PHP-FPM log, its rotated copies, and the pre-move path
 	}
 	// Sweep the shared PHP-FPM pool AFTER userdel, not before. Once the user is
 	// gone, writePoolValidated's user-existence guard refuses to resurrect the

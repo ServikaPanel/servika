@@ -200,6 +200,7 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_NODE_ROOT`             | `/usr/local/n/versions/node`                       | Root the `n` version manager keeps Node.js installs in. |
 | `SERVIKA_APP_LOG_DIR`           | `/var/log/servika-apps`                            | Root-owned directory holding one log per application.   |
 | `SERVIKA_APP_ENV_DIR`           | `/etc/servika/apps`                                | Directory of per-application 0600 `EnvironmentFile`s.   |
+| `SERVIKA_FPM_LOG_DIR`           | `/var/log/servika-fpm`                             | Root-owned 0700 directory holding one PHP-FPM error log per tenant, kept out of `/var/log/php-fpm` so the distribution's rotation rule cannot claim it. |
 | `SERVIKA_GEOIP_DIR`             | `/var/lib/servika/geoip`                           | Country database and the nginx include generated from it. |
 | `SERVIKA_QUARANTINE_DIR`        | `/var/lib/servika/quarantine`                      | Files the malware scanner took out of a tenant tree, kept outside every home so the account they came from cannot reach them. |
 | `SERVIKA_INSTALLATION_ID`       | `/etc/servika/installation-id`                     | Random installation ID storage path for version checks. |
