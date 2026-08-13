@@ -124,9 +124,15 @@ func tickOnce(db *sql.DB) {
 		} else {
 			succeeded++
 			totalBytes += size
-			if err := pruneOld(db, d.ID, d.SystemUser, d.Retention); err != nil {
-				log.Printf("backup retention %s: %v", d.DomainName, err)
-			}
+		}
+		// Retention runs whether or not the archive was written. Keeping it in
+		// the success branch stopped the cleanup on exactly the domain that
+		// could not be backed up, which is usually the one whose disk is full,
+		// so the archives piled up at the moment there was least room for them.
+		// Nothing new was written on the failure path, so this only trims the
+		// existing ones down to the count the domain asked for.
+		if err := pruneOld(db, d.ID, d.SystemUser, d.Retention); err != nil {
+			log.Printf("backup retention %s: %v", d.DomainName, err)
 		}
 		if _, err := db.Exec(
 			`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, size_b=? WHERE id=?`,

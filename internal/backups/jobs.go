@@ -262,8 +262,12 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 			} else {
 				succeeded++
 				totalBytes += size
-				pruneManualBackups(h.DB, d.ID, d.SystemUser)
 			}
+			// Trimmed whether or not the archive was written, for the same
+			// reason as the scheduler: the domain that cannot be backed up is
+			// usually the one with no room left, and that is the worst moment
+			// to stop reclaiming any.
+			pruneManualBackups(h.DB, d.ID, d.SystemUser)
 			if _, err := h.DB.Exec(
 				`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, size_b=? WHERE id=?`,
 				succeeded+failed, succeeded, failed, totalBytes, jobID); err != nil {
