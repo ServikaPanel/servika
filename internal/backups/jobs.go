@@ -276,11 +276,68 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(domains)})
 }
 
+// jobScopeFilter narrows a backup_jobs query to the jobs the caller may see. It
+// returns a bare boolean fragment, so the caller supplies its own WHERE or AND.
+//
+// backup_jobs carries no owner column and no domain link of its own: a backup job
+// reaches its domains only through backups.job_id, and a restore job's items live
+// in the detail JSON, which is not queryable. A reseller therefore sees a job when
+// it produced at least one archive of a domain they own, or when they started it.
+// A restore job somebody else started stays hidden, which is the right answer,
+// because its item list is not scoped either.
+//
+// An empty fragment means "no narrowing" and is returned ONLY for an admin. It is
+// never returned for an unauthenticated caller, who is refused outright: an
+// EXISTS that matches nothing would still leave the started_by branch, and
+// actorName answers "system" with no claims, which is the nightly job's own name.
+func jobScopeFilter(r *http.Request, alias string) (string, []any) {
+	c := middleware.ClaimsFrom(r)
+	if c == nil {
+		return " 1 = 0", nil
+	}
+	if c.Role == middleware.RoleAdmin {
+		return "", nil
+	}
+	cond, args := middleware.ScopeSQL(r, "d")
+	inner := `SELECT 1 FROM backups b JOIN domains d ON d.id=b.domain_id` + cond +
+		` AND b.job_id=` + alias + `.id`
+	args = append(args, c.Username)
+	return ` (EXISTS (` + inner + `) OR ` + alias + `.started_by=?)`, args
+}
+
+// redactJobForScope blanks the two job fields that name something outside the
+// caller's scope.
+//
+// Visibility and content are separate questions. A reseller may see the nightly
+// job because it backed up one of their domains, but active_domain names whichever
+// domain that run is on RIGHT NOW, which is usually somebody else's, and
+// started_by names another operator. "system" is kept: it is the scheduler, not a
+// person, and hiding it would make the nightly run look anonymous.
+func redactJobForScope(r *http.Request, j *Job) {
+	c := middleware.ClaimsFrom(r)
+	if c == nil {
+		j.ActiveDomain, j.StartedBy = "", ""
+		return
+	}
+	if c.Role == middleware.RoleAdmin || j.StartedBy == c.Username {
+		return
+	}
+	j.ActiveDomain = ""
+	if j.StartedBy != "system" {
+		j.StartedBy = ""
+	}
+}
+
 // ListJobs handles GET /admin/backups/jobs and returns recent jobs; the panel polls
 // this for progress.
 func (h *Handlers) ListJobs(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT `+jobColumns+` FROM backup_jobs ORDER BY id DESC LIMIT 60`)
+	filter, args := jobScopeFilter(r, "j")
+	q := `SELECT ` + jobColumns + ` FROM backup_jobs j`
+	if filter != "" {
+		q += ` WHERE` + filter
+	}
+	// #nosec G701 G202 -- filter is a constant fragment built from ScopeSQL with a literal alias; every value is bound via args.
+	rows, err := h.DB.QueryContext(r.Context(), q+` ORDER BY j.id DESC LIMIT 60`, args...)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not list backup jobs")
 		return
@@ -290,6 +347,7 @@ func (h *Handlers) ListJobs(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var j Job
 		if scanJob(rows, &j) == nil {
+			redactJobForScope(r, &j)
 			out = append(out, j)
 		}
 	}
@@ -318,8 +376,16 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(chi.URLParam(r, "jid"), 10, 64)
 	var j Job
 	var detail sql.NullString
-	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT `+jobColumns+`, detail FROM backup_jobs WHERE id=?`, jobID).
+	// The header is scoped exactly like the list. Without it the item list below
+	// was narrowed while the row above it still named another reseller's domain.
+	filter, args := jobScopeFilter(r, "j")
+	q := `SELECT ` + jobColumns + `, detail FROM backup_jobs j WHERE j.id=?`
+	headerArgs := append([]any{jobID}, args...)
+	if filter != "" {
+		q += ` AND` + filter
+	}
+	// #nosec G701 G202 -- filter is a constant fragment built from ScopeSQL with a literal alias; every value is bound via headerArgs.
+	err := h.DB.QueryRowContext(r.Context(), q, headerArgs...).
 		Scan(&j.ID, &j.Type, &j.Operation, &j.Status, &j.Total, &j.Completed, &j.Succeeded,
 			&j.Failed, &j.SizeBytes, &j.ActiveDomain, &j.RestoreMode, &j.StartedBy,
 			&j.StartedAt, &j.FinishedAt, &detail)
@@ -331,6 +397,7 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	redactJobForScope(r, &j)
 
 	resp := map[string]any{"job": j}
 	if j.Operation == "restore" {
@@ -344,17 +411,17 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Scope the item list so a reseller only sees its own domains' archives.
-	cond, args := middleware.ScopeSQL(r, "d")
-	q := `SELECT b.id, b.domain_id, d.domain_name, d.system_user, b.size_b, b.type
+	cond, itemArgs := middleware.ScopeSQL(r, "d")
+	itemQuery := `SELECT b.id, b.domain_id, d.domain_name, d.system_user, b.size_b, b.type
 	      FROM backups b JOIN domains d ON d.id=b.domain_id` + cond
 	if cond == "" {
-		q += ` WHERE b.job_id=?`
+		itemQuery += ` WHERE b.job_id=?`
 	} else {
-		q += ` AND b.job_id=?`
+		itemQuery += ` AND b.job_id=?`
 	}
-	args = append(args, jobID)
+	itemArgs = append(itemArgs, jobID)
 	// #nosec G701 G202 -- cond is a constant ScopeSQL fragment with a literal alias; every value is bound.
-	rows, err := h.DB.QueryContext(r.Context(), q+` ORDER BY d.domain_name`, args...)
+	rows, err := h.DB.QueryContext(r.Context(), itemQuery+` ORDER BY d.domain_name`, itemArgs...)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not list job items")
 		return
