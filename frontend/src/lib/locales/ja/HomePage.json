@@ -78,7 +78,9 @@
     "remoteTarget": "リモートターゲット",
     "remoteActive": "{{count}} 件有効",
     "remoteNone": "なし",
-    "schedule": "スケジュール"
+    "schedule": "スケジュール",
+    "scheduleOff": "無効",
+    "scheduleMixed": "ドメインごと"
   },
   "performance": {
     "subtitle": "サーバー設定を改善",

@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 Sauvegardes automatiques :",
-    "default": "Chaque jour à 03:00",
-    "suffix": ". Rétention de 7 jours",
+    "none": "Aucun domaine n'a de sauvegardes automatiques activées.",
+    "atHour": "Les sauvegardes automatiques s'exécutent chaque jour à {{hour}} pour {{n}} domaine(s).",
+    "mixedHours": "Les sauvegardes automatiques s'exécutent chaque jour à des heures propres à chaque domaine, pour {{n}} domaine(s).",
+    "keepOne": "Les {{n}} plus récentes sont conservées.",
+    "keepRange": "Entre {{min}} et {{max}} sont conservées, selon le domaine.",
     "triggering": "Déclenchement...",
     "refresh": "↻ Actualiser",
     "backupAll": "Sauvegarder tous les domaines",

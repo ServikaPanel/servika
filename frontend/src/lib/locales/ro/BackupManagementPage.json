@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 Backup-uri automate:",
-    "default": "Zilnic la 03:00",
-    "suffix": ". Retenție 7 zile",
+    "none": "Nicio copie de rezervă automată nu este activată pentru vreun domeniu.",
+    "atHour": "Copiile automate rulează zilnic la {{hour}} pentru {{n}} domeniu(ri).",
+    "mixedHours": "Copiile automate rulează zilnic la ore proprii fiecărui domeniu, pentru {{n}} domeniu(ri).",
+    "keepOne": "Sunt păstrate cele mai noi {{n}}.",
+    "keepRange": "Sunt păstrate între {{min}} și {{max}}, în funcție de domeniu.",
     "triggering": "Se declanșează...",
     "refresh": "↻ Reîmprospătați",
     "backupAll": "Creează copii pentru toate domeniile",

@@ -113,7 +113,9 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	cond, arg := middleware.ScopeSQL(r, "d")
 	// #nosec G701 G202 -- cond is a constant scope fragment from ScopeSQL with a literal alias; all user values are bound via arg placeholders.
 	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT d.id, d.domain_name, d.system_user FROM domains d`+cond+` ORDER BY d.domain_name`, arg...)
+		`SELECT d.id, d.domain_name, d.system_user,
+		        COALESCE(d.backup_freq,'none'), COALESCE(d.backup_hour,3), COALESCE(d.backup_retention,7)
+		 FROM domains d`+cond+` ORDER BY d.domain_name`, arg...)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not list backups")
 		return
@@ -122,12 +124,19 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	out := []SummaryRow{}
 	var totalBytes int64
 	var totalBackups int
+	// The banner used to be a fixed sentence saying every domain is backed up
+	// daily at 03:00 and kept for 7 days. Both halves were wrong: backup_hour is
+	// per domain, and backup_retention is a COUNT of archives, not a number of
+	// days. These carry the real settings so the screen can say what is true.
+	schedule := scheduleFacts{Hour: -1, RetentionMin: -1, RetentionMax: -1}
 	for rows.Next() {
 		var id int64
-		var domainName, systemUser string
-		if err := rows.Scan(&id, &domainName, &systemUser); err != nil {
+		var domainName, systemUser, frequency string
+		var hour, retention int
+		if err := rows.Scan(&id, &domainName, &systemUser, &frequency, &hour, &retention); err != nil {
 			continue
 		}
+		schedule.add(frequency, hour, retention)
 		s := SummaryRow{DomainID: id, DomainName: domainName}
 		var latestModification time.Time
 		if entries, e := os.ReadDir(filepath.Join(backupRoot(), systemUser)); e == nil {
@@ -161,8 +170,60 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 		"total_size_bytes":  totalBytes,
 		"total_backups":     totalBackups,
 		"destination_count": destinationCount,
-		"schedule":          "Daily at 03:00 (automatic)",
+		// The screen writes the sentence, because it renders twelve languages.
+		"automatic_domains": schedule.Domains,
+		"schedule_hour":     schedule.Hour, // -1 when the domains disagree
+		"retention_min":     schedule.retentionMin(),
+		"retention_max":     schedule.retentionMax(),
 	})
+}
+
+// scheduleFacts collects what the domains actually say about their automatic
+// backups, so the screen can report it instead of a fixed sentence.
+//
+// Only domains with automatic backups on count. A domain set to 'none' has no
+// hour and no retention in force, so folding it in would report a schedule
+// nobody is running.
+type scheduleFacts struct {
+	Domains      int
+	Hour         int // the shared hour, or -1 once two domains disagree
+	RetentionMin int
+	RetentionMax int
+}
+
+func (s *scheduleFacts) add(frequency string, hour, retention int) {
+	if frequency == "none" {
+		return
+	}
+	switch {
+	case s.Domains == 0:
+		s.Hour = hour
+	case s.Hour != hour:
+		s.Hour = -1
+	}
+	s.Domains++
+	if s.RetentionMin == -1 || retention < s.RetentionMin {
+		s.RetentionMin = retention
+	}
+	if retention > s.RetentionMax {
+		s.RetentionMax = retention
+	}
+}
+
+// retentionMin and retentionMax answer 0 while no domain has automatic backups,
+// so the screen never draws a range built from the -1 sentinel.
+func (s *scheduleFacts) retentionMin() int {
+	if s.Domains == 0 {
+		return 0
+	}
+	return s.RetentionMin
+}
+
+func (s *scheduleFacts) retentionMax() int {
+	if s.Domains == 0 {
+		return 0
+	}
+	return s.RetentionMax
 }
 
 // Create generates and stores a full domain backup.

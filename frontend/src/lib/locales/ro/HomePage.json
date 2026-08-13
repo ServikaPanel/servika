@@ -86,7 +86,9 @@
     "remoteTarget": "Țintă la distanță",
     "remoteActive": "{{count}} active",
     "remoteNone": "Niciuna",
-    "schedule": "Programare"
+    "schedule": "Programare",
+    "scheduleOff": "Dezactivat",
+    "scheduleMixed": "în funcție de domeniu"
   },
   "performance": {
     "subtitle": "Îmbunătățire setări server",

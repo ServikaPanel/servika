@@ -82,7 +82,9 @@
     "remoteTarget": "Remote-Ziel",
     "remoteActive": "{{count}} aktiv",
     "remoteNone": "Keine",
-    "schedule": "Zeitplan"
+    "schedule": "Zeitplan",
+    "scheduleOff": "Aus",
+    "scheduleMixed": "je Domain"
   },
   "performance": {
     "subtitle": "Server-Einstellungen verbessern",

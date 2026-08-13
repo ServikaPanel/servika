@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 Cópias automáticas:",
-    "default": "Diariamente às 03:00",
-    "suffix": ". Retenção de 7 dias",
+    "none": "Nenhum domínio tem cópias de segurança automáticas ativas.",
+    "atHour": "As cópias automáticas são feitas diariamente às {{hour}} em {{n}} domínio(s).",
+    "mixedHours": "As cópias automáticas são feitas diariamente a horas próprias de cada domínio, em {{n}} domínio(s).",
+    "keepOne": "São guardadas as {{n}} mais recentes.",
+    "keepRange": "São guardadas entre {{min}} e {{max}}, consoante o domínio.",
     "triggering": "A iniciar...",
     "refresh": "↻ Atualizar",
     "backupAll": "Criar cópia de todos os domínios",

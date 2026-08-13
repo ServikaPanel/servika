@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 Otomatik yedekler:",
-    "default": "Her gün saat 03:00",
-    "suffix": ". 7 günlük saklama",
+    "none": "Hiçbir alan adında otomatik yedekleme açık değil.",
+    "atHour": "Otomatik yedekleme {{n}} alan adında her gün {{hour}} saatinde çalışır.",
+    "mixedHours": "Otomatik yedekleme {{n}} alan adında her gün, alan adına göre değişen saatlerde çalışır.",
+    "keepOne": "En yeni {{n}} tanesi saklanır.",
+    "keepRange": "Alan adına göre {{min}} ile {{max}} arası saklanır.",
     "triggering": "Tetikleniyor...",
     "refresh": "↻ Yenile",
     "backupAll": "Tüm domainleri yedekle",

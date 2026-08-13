@@ -82,7 +82,9 @@
     "remoteTarget": "Destino remoto",
     "remoteActive": "{{count}} ativo(s)",
     "remoteNone": "Nenhum",
-    "schedule": "Agendamento"
+    "schedule": "Agendamento",
+    "scheduleOff": "Desativado",
+    "scheduleMixed": "por domínio"
   },
   "performance": {
     "subtitle": "Melhorar as definições do servidor",

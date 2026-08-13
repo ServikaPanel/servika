@@ -53,7 +53,11 @@ type OptimizeStatus = { running: boolean; status: string }
 type BackupRow = { domain_id: number; domain_name: string; count: number; total_bytes: number; last_backup: string }
 type BackupSummary = {
   domains: BackupRow[]; total_size_bytes: number; total_backups: number
-  destination_count: number; schedule: string
+  destination_count: number
+  // schedule_hour is -1 when the domains do not share one hour. It replaced a
+  // fixed "Daily at 03:00" string, which was wrong on any server where an
+  // operator had moved a domain's backup_hour.
+  automatic_domains: number; schedule_hour: number
 }
 type WpInstall = {
   domain_id: number; domain_name: string; dir: string; version: string
@@ -456,7 +460,13 @@ export default function HomePage() {
               <KV label={t('backup.lastBackup')} value={lastBackup || '—'} />
               <KV label={t('backup.sitesBackedUp')} value={`${backedUpDomains} / ${backup.domains.length}`} />
               <KV label={t('backup.remoteTarget')} value={backup.destination_count > 0 ? t('backup.remoteActive', { count: backup.destination_count }) : t('backup.remoteNone')} />
-              <KV label={t('backup.schedule')} value={backup.schedule} />
+              <KV label={t('backup.schedule')} value={
+                backup.automatic_domains === 0
+                  ? t('backup.scheduleOff')
+                  : backup.schedule_hour < 0
+                    ? t('backup.scheduleMixed')
+                    : String(backup.schedule_hour).padStart(2, '0') + ':00'
+              } />
             </div>
           </>
         )}

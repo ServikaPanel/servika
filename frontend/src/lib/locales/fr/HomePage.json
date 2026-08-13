@@ -82,7 +82,9 @@
     "remoteTarget": "Cible distante",
     "remoteActive": "{{count}} actif(s)",
     "remoteNone": "Aucune",
-    "schedule": "Planification"
+    "schedule": "Planification",
+    "scheduleOff": "Désactivé",
+    "scheduleMixed": "selon le domaine"
   },
   "performance": {
     "subtitle": "Améliorer les paramètres du serveur",

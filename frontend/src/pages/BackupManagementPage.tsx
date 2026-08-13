@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -16,7 +17,26 @@ import {
 } from '@/lib/table'
 
 type SummaryRow = { domain_id: number; domain_name: string; count: number; total_bytes: number; last_backup: string }
-type Summary = { domains: SummaryRow[]; total_size_bytes: number; total_backups: number; destination_count: number; schedule: string }
+// The schedule is reported as facts rather than a sentence, because the sentence
+// has to be written in twelve languages. schedule_hour is -1 when the domains do
+// not share one hour, and every retention value is a COUNT of archives, not days.
+type Summary = {
+  domains: SummaryRow[]; total_size_bytes: number; total_backups: number; destination_count: number
+  automatic_domains: number; schedule_hour: number; retention_min: number; retention_max: number
+}
+
+// scheduleLine renders the banner from those facts.
+function scheduleLine(t: TFunction, o: Summary | null): string {
+  if (!o || o.automatic_domains === 0) return t('schedule.none')
+  const n = o.automatic_domains
+  const when = o.schedule_hour < 0
+    ? t('schedule.mixedHours', { n })
+    : t('schedule.atHour', { n, hour: String(o.schedule_hour).padStart(2, '0') + ':00' })
+  const keep = o.retention_min === o.retention_max
+    ? t('schedule.keepOne', { n: o.retention_min })
+    : t('schedule.keepRange', { min: o.retention_min, max: o.retention_max })
+  return when + ' ' + keep
+}
 type Job = {
   id: number; type: string; operation: string; status: string
   total: number; completed: number; succeeded: number; failed: number
@@ -113,9 +133,7 @@ export default function BackupManagementPage() {
 
       {/* Schedule and action */}
       <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/60 sm:flex-row sm:items-center">
-        <span className="text-sm text-slate-600 dark:text-slate-300">
-          {t('schedule.prefix')} <strong>{o?.schedule || t('schedule.default')}</strong>{t('schedule.suffix')}
-        </span>
+        <span className="text-sm text-slate-600 dark:text-slate-300">{scheduleLine(t, o)}</span>
         <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:items-center">
           <button onClick={startBackupJob} disabled={backingUp}
             className="px-3.5 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg disabled:opacity-50">

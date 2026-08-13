@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 Automatické zálohy:",
-    "default": "Denně v 03:00",
-    "suffix": ". Uchovávání 7 dní",
+    "none": "Žádná doména nemá zapnuté automatické zálohy.",
+    "atHour": "Automatické zálohy běží denně v {{hour}} u {{n}} domén(y).",
+    "mixedHours": "Automatické zálohy běží denně v časech podle jednotlivých domén, u {{n}} domén(y).",
+    "keepOne": "Uchovává se {{n}} nejnovějších.",
+    "keepRange": "Podle domény se uchovává {{min}} až {{max}}.",
     "triggering": "Spouštění...",
     "refresh": "↻ Obnovit",
     "backupAll": "Zálohovat všechny domény",

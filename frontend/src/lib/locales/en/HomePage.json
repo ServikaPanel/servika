@@ -82,7 +82,9 @@
     "remoteTarget": "Remote target",
     "remoteActive": "{{count}} active",
     "remoteNone": "None",
-    "schedule": "Schedule"
+    "schedule": "Schedule",
+    "scheduleOff": "Off",
+    "scheduleMixed": "per domain"
   },
   "performance": {
     "subtitle": "Improve server settings",

@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 自动备份：",
-    "default": "每日 03:00",
-    "suffix": "。保留 7 天",
+    "none": "没有域名启用自动备份。",
+    "atHour": "{{n}} 个域名的自动备份每天在 {{hour}} 运行。",
+    "mixedHours": "{{n}} 个域名的自动备份每天按各自设定的时间运行。",
+    "keepOne": "保留最新的 {{n}} 个。",
+    "keepRange": "根据域名保留 {{min}} 到 {{max}} 个。",
     "triggering": "触发中...",
     "refresh": "↻ 刷新",
     "backupAll": "备份所有域名",

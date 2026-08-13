@@ -18,9 +18,11 @@
     "remoteSubtitle": "S3 / SFTP"
   },
   "schedule": {
-    "prefix": "🕒 Automatic backups:",
-    "default": "Daily at 03:00",
-    "suffix": ". 7-day retention",
+    "none": "No domain has automatic backups enabled.",
+    "atHour": "Automatic backups run daily at {{hour}} on {{n}} domain(s).",
+    "mixedHours": "Automatic backups run daily at per-domain times on {{n}} domain(s).",
+    "keepOne": "The newest {{n}} are kept.",
+    "keepRange": "Between {{min}} and {{max}} are kept, depending on the domain.",
     "triggering": "Triggering...",
     "refresh": "↻ Refresh",
     "backupAll": "Back up all domains",

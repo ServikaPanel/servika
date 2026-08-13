@@ -78,7 +78,9 @@
     "remoteTarget": "远程目标",
     "remoteActive": "{{count}} 个活动",
     "remoteNone": "无",
-    "schedule": "计划"
+    "schedule": "计划",
+    "scheduleOff": "已关闭",
+    "scheduleMixed": "按域名"
   },
   "performance": {
     "subtitle": "改进服务器设置",

@@ -86,7 +86,9 @@
     "remoteTarget": "Vzdálený cíl",
     "remoteActive": "{{count}} aktivní",
     "remoteNone": "Žádný",
-    "schedule": "Plán"
+    "schedule": "Plán",
+    "scheduleOff": "Vypnuto",
+    "scheduleMixed": "podle domény"
   },
   "performance": {
     "subtitle": "Vylepšit nastavení serveru",

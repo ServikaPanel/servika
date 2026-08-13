@@ -82,7 +82,9 @@
     "remoteTarget": "Uzak hedef",
     "remoteActive": "{{count}} etkin",
     "remoteNone": "Yok",
-    "schedule": "Zamanlama"
+    "schedule": "Zamanlama",
+    "scheduleOff": "Kapalı",
+    "scheduleMixed": "alan adına göre"
   },
   "performance": {
     "subtitle": "Sunucu ayarlarını iyileştir",
