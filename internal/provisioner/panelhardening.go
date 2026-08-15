@@ -55,7 +55,7 @@ func HealPanelProxyTrustOnStartup() {
 	}
 	wanted := `proxy_set_header X-Servika-Proxy "` + secret + `";`
 
-	content = injectProxyTrust(content, wanted, secret)
+	content = injectProxyTrust(content, wanted)
 
 	nginxChanged := content != string(original)
 	if nginxChanged {
@@ -101,7 +101,12 @@ func HealPanelProxyTrustOnStartup() {
 }
 
 // injectProxyTrust applies the four vhost edits and returns the new content.
-func injectProxyTrust(content, wanted, secret string) string {
+//
+// The secret is not a parameter: `wanted` is the whole `proxy_set_header` line
+// with the secret already in it, and rotation safety comes from dropping every
+// existing X-Servika-Proxy line rather than from comparing secrets. Passing the
+// bare secret as well invited a second, unchecked place for it to be written.
+func injectProxyTrust(content, wanted string) string {
 	// (1) X-Servika-Proxy injection (idempotent + secret-rotation safe).
 	if !strings.Contains(content, wanted) {
 		var out []string
