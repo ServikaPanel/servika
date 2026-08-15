@@ -22,7 +22,7 @@ var (
 // lookupHostRetrying returns the addresses of host, or nil when the resolver
 // still has no answer after the retries.
 func lookupHostRetrying(host string) []string {
-	for attempt := 0; attempt < resolveAttempts; attempt++ {
+	for attempt := range resolveAttempts {
 		if attempt > 0 {
 			time.Sleep(resolveRetryDelay)
 		}

@@ -35,7 +35,7 @@ func TestDovecotSNIHasABlockForEveryCoveredName(t *testing.T) {
 // certificate, which has no key in it.
 func TestPostfixSNITablePointsAtTheChainFile(t *testing.T) {
 	got := renderPostfixSNI(coveredExample)
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -59,7 +59,7 @@ func TestSNIRenderingIsEmptyWithoutCertificates(t *testing.T) {
 		"dovecot": renderDovecotSNI(nil),
 		"postfix": renderPostfixSNI(nil),
 	} {
-		for _, line := range strings.Split(got, "\n") {
+		for line := range strings.SplitSeq(got, "\n") {
 			if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "#") {
 				t.Errorf("%s rendering emitted %q with no certificates installed", name, line)
 			}

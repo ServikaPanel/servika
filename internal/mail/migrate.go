@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -305,12 +306,7 @@ func copyMailbox(ctx context.Context, db *sql.DB, jobID, mailboxID int64, remote
 }
 
 func hasAttr(attrs []imap.MailboxAttr, want imap.MailboxAttr) bool {
-	for _, attr := range attrs {
-		if attr == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(attrs, want)
 }
 
 // copyFolder selects one remote folder and writes every message it holds.
@@ -339,10 +335,7 @@ func copyFolder(ctx context.Context, db *sql.DB, client *imapclient.Client, layo
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		end := start + migrationBatch - 1
-		if end > selected.NumMessages {
-			end = selected.NumMessages
-		}
+		end := min(start+migrationBatch-1, selected.NumMessages)
 		copied, written, err := copyBatch(ctx, client, layout, curDir, jobID, start, end)
 		if err != nil {
 			return err

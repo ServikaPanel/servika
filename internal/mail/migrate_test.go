@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -37,12 +38,7 @@ type migrateRecorder struct {
 func (r *migrateRecorder) sawArgument(value string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, arg := range r.args {
-		if arg == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(r.args, value)
 }
 
 func (r *migrateRecorder) record(step string) {

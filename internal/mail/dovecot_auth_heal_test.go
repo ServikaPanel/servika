@@ -63,7 +63,7 @@ func TestDisableStockPAMCommentsTheActiveInclude(t *testing.T) {
 		t.Fatalf("read 10-auth.conf: %v", err)
 	}
 	body := string(patched)
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if strings.HasPrefix(line, "!include auth-system.conf.ext") {
 			t.Errorf("the PAM include is still active:\n%s", body)
 		}

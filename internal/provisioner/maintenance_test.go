@@ -233,16 +233,15 @@ func TestAnEmptyPageFallsBackToReadableText(t *testing.T) {
 func exceptionPattern(t *testing.T, fragment string) *regexp.Regexp {
 	t.Helper()
 	const prefix = `if ($remote_addr ~ "`
-	start := strings.Index(fragment, prefix)
-	if start < 0 {
+	_, rest, ok := strings.Cut(fragment, prefix)
+	if !ok {
 		t.Fatalf("no address condition in:\n%s", fragment)
 	}
-	rest := fragment[start+len(prefix):]
-	end := strings.Index(rest, `")`)
-	if end < 0 {
+	body, _, terminated := strings.Cut(rest, `")`)
+	if !terminated {
 		t.Fatalf("unterminated address condition in:\n%s", fragment)
 	}
-	pattern, err := regexp.Compile(rest[:end])
+	pattern, err := regexp.Compile(body)
 	if err != nil {
 		t.Fatalf("the rendered pattern does not compile: %v", err)
 	}

@@ -182,7 +182,7 @@ func normalizeDestinations(input []string) ([]string, string) {
 	var out []string
 	seen := make(map[string]bool, len(input))
 	for _, raw := range input {
-		for _, candidate := range strings.Split(raw, ",") {
+		for candidate := range strings.SplitSeq(raw, ",") {
 			address := strings.ToLower(strings.TrimSpace(candidate))
 			if address == "" {
 				continue

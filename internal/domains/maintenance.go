@@ -176,10 +176,7 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration := request.DurationMinutes
-	if duration < 0 {
-		duration = 0
-	}
+	duration := max(request.DurationMinutes, 0)
 	const maxDurationMinutes = 60 * 24 * 30 // a month; beyond that the mode is not a window
 	if duration > maxDurationMinutes {
 		duration = maxDurationMinutes

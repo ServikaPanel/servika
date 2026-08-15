@@ -20,6 +20,7 @@ package domains
 import (
 	"context"
 	"log"
+	"maps"
 	"net/http"
 	"strconv"
 	"sync"
@@ -107,9 +108,7 @@ func (j *sslJob) view() SSLProgressView {
 	steps := make([]SSLStep, len(j.steps))
 	copy(steps, j.steps)
 	result := make(map[string]any, len(j.result))
-	for key, value := range j.result {
-		result[key] = value
-	}
+	maps.Copy(result, j.result)
 	view := SSLProgressView{
 		State:  j.state,
 		Reason: j.reason,

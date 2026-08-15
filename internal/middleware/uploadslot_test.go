@@ -26,7 +26,7 @@ func TestAnAccountCannotExceedTheUploadCeiling(t *testing.T) {
 	resetUploadSlots(t)
 
 	var releases []func()
-	for i := 0; i < maxConcurrentUploads; i++ {
+	for i := range maxConcurrentUploads {
 		release, ok := acquireUploadSlot("user:1")
 		if !ok {
 			t.Fatalf("slot %d was refused below the ceiling", i+1)
@@ -60,7 +60,7 @@ func TestAnAccountCannotExceedTheUploadCeiling(t *testing.T) {
 // stop another from uploading.
 func TestOneAccountDoesNotBlockAnother(t *testing.T) {
 	resetUploadSlots(t)
-	for i := 0; i < maxConcurrentUploads; i++ {
+	for i := range maxConcurrentUploads {
 		if _, ok := acquireUploadSlot("user:1"); !ok {
 			t.Fatalf("slot %d was refused below the ceiling", i+1)
 		}
@@ -97,7 +97,7 @@ func TestReleasingTwiceFreesOnlyOneSlot(t *testing.T) {
 
 	// Only the remaining allowance is available, not a fresh full one.
 	admitted := 0
-	for i := 0; i < maxConcurrentUploads+1; i++ {
+	for range maxConcurrentUploads + 1 {
 		if _, ok := acquireUploadSlot("user:1"); ok {
 			admitted++
 		}
@@ -114,17 +114,15 @@ func TestConcurrentAcquireStaysWithinTheCeiling(t *testing.T) {
 	admitted := 0
 	var releases []func()
 
-	for i := 0; i < 50; i++ {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+	for range 50 {
+		wait.Go(func() {
 			if release, ok := acquireUploadSlot("user:1"); ok {
 				mu.Lock()
 				admitted++
 				releases = append(releases, release)
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wait.Wait()
 	if admitted != maxConcurrentUploads {
@@ -146,7 +144,7 @@ func TestOnlyStreamingUploadsSpendASlot(t *testing.T) {
 		"/api/v1/domains/1/files/list",
 		"/api/v1/domains/1",
 	} {
-		for i := 0; i < maxConcurrentUploads+2; i++ {
+		for range maxConcurrentUploads + 2 {
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
 			if recorder.Code == http.StatusTooManyRequests {
@@ -163,7 +161,7 @@ func TestOnlyStreamingUploadsSpendASlot(t *testing.T) {
 // not a generic failure it would read as permanent.
 func TestARefusedUploadAnswers429(t *testing.T) {
 	resetUploadSlots(t)
-	for i := 0; i < maxConcurrentUploads; i++ {
+	for i := range maxConcurrentUploads {
 		if _, ok := acquireUploadSlot("ip:192.0.2.1"); !ok {
 			t.Fatalf("slot %d was refused below the ceiling", i+1)
 		}

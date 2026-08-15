@@ -152,14 +152,14 @@ func TestPollingDuringAnInstallIsSafe(t *testing.T) {
 	wait.Add(2)
 	go func() {
 		defer wait.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			_ = job.step(sslStepCertificate, func() (string, bool, error) { return "", false, nil })
 			job.set("type", "letsencrypt")
 		}
 	}()
 	go func() {
 		defer wait.Done()
-		for i := 0; i < 200; i++ {
+		for range 200 {
 			_ = job.view()
 		}
 	}()

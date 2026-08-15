@@ -103,11 +103,10 @@ func TestSSHHostKeyOptionsCloseEveryFallback(t *testing.T) {
 func knownHostsPathFrom(t *testing.T, settings string) string {
 	t.Helper()
 	const marker = "UserKnownHostsFile="
-	start := strings.Index(settings, marker)
-	if start < 0 {
+	_, rest, ok := strings.Cut(settings, marker)
+	if !ok {
 		t.Fatalf("settings %q carry no known_hosts path", settings)
 	}
-	rest := settings[start+len(marker):]
 	end := strings.IndexAny(rest, " \"")
 	if end < 0 {
 		t.Fatalf("settings %q do not terminate the known_hosts path", settings)

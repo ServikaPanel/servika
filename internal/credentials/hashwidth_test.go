@@ -72,7 +72,7 @@ func columnWidth(t *testing.T, table, column string) int {
 		}
 		// A migration that only mentions the column in a comment must not count,
 		// so only statement lines are considered.
-		for _, line := range strings.Split(string(body), "\n") {
+		for line := range strings.SplitSeq(string(body), "\n") {
 			if strings.HasPrefix(strings.TrimSpace(line), "--") {
 				continue
 			}

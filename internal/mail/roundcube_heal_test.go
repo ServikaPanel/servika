@@ -130,7 +130,7 @@ func TestHealRoundcubeSMTPDoesNotJoinAnUnterminatedLastLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	for _, line := range strings.Split(string(repaired), "\n") {
+	for line := range strings.SplitSeq(string(repaired), "\n") {
 		if strings.Contains(line, "smtp_server") && strings.Contains(line, "Servika repair") {
 			t.Errorf("the last line was joined to the patch: %q", line)
 		}

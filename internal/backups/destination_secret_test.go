@@ -2,6 +2,7 @@ package backups
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -92,12 +93,7 @@ func TestCredentialSafeRejectsUndeliverablePasswords(t *testing.T) {
 }
 
 func containsEnv(env []string, entry string) bool {
-	for _, e := range env {
-		if e == entry {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(env, entry)
 }
 
 // The command must carry the package's allowlist and nothing else, so panel

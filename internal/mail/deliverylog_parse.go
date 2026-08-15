@@ -170,27 +170,24 @@ func bracketedValue(payload, key string) (string, bool) {
 		return "", false
 	}
 	rest := payload[idx+len(key)+1:]
-	end := strings.Index(rest, ">")
-	if end == -1 {
+	before, _, ok := strings.Cut(rest, ">")
+	if !ok {
 		return "", false
 	}
-	return rest[:end], true
+	return before, true
 }
 
 // splitStatus reads "status=sent (250 2.0.0 OK)" into its two halves.
 func splitStatus(payload string) (status, reason string, ok bool) {
-	idx := strings.Index(payload, "status=")
-	if idx == -1 {
+	_, rest, found := strings.Cut(payload, "status=")
+	if !found {
 		return "", "", false
 	}
-	rest := payload[idx+len("status="):]
-	space := strings.IndexByte(rest, ' ')
-	if space == -1 {
-		status = rest
-	} else {
-		status, reason = rest[:space], strings.TrimSpace(rest[space+1:])
-	}
-	status = strings.TrimSpace(status)
+	// Cut hands back the whole remainder as the first half when there is no
+	// space, which is the "status with no reason" case the caller expects.
+	value, trailer, _ := strings.Cut(rest, " ")
+	status = strings.TrimSpace(value)
+	reason = strings.TrimSpace(trailer)
 	if !knownStatuses[status] {
 		return "", "", false
 	}

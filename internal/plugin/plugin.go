@@ -242,7 +242,7 @@ func (h *Handlers) Routes(r chi.Router) {
 func dialPluginSocket(ctx context.Context, socket string) (net.Conn, error) {
 	var dialer net.Dialer
 	var lastErr error
-	for attempt := 0; attempt < pluginDialAttempts; attempt++ {
+	for attempt := range pluginDialAttempts {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():

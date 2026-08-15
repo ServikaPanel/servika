@@ -340,7 +340,7 @@ func sslFailSafe(domainName, systemUser, phpVersion, backend string, reason sslR
 func summarizeSSLReason(reason string) string {
 	const limit = 300
 	best := ""
-	for _, line := range strings.Split(reason, "\n") {
+	for line := range strings.SplitSeq(reason, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

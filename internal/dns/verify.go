@@ -295,7 +295,7 @@ func checkSPF(ctx context.Context, resolver *net.Resolver, domainName, ipv4 stri
 // Substring matching would find the "a" inside "ip4:..." and pass an SPF record
 // that authorizes nothing.
 func hasSPFMechanism(record, mechanism string) bool {
-	for _, term := range strings.Fields(record) {
+	for term := range strings.FieldsSeq(record) {
 		term = strings.TrimLeft(term, "+-~?")
 		if term == mechanism || strings.HasPrefix(term, mechanism+":") || strings.HasPrefix(term, mechanism+"/") {
 			return true
@@ -348,7 +348,7 @@ func checkDKIM(ctx context.Context, resolver *net.Resolver, db *sql.DB, domainID
 // publicKeyFromTXT extracts the p= value from a DKIM TXT record. Whitespace is
 // stripped because some DNS providers store the long key with spaces in it.
 func publicKeyFromTXT(txt string) string {
-	for _, part := range strings.Split(txt, ";") {
+	for part := range strings.SplitSeq(txt, ";") {
 		part = strings.TrimSpace(part)
 		if after, ok := strings.CutPrefix(part, "p="); ok {
 			return strings.NewReplacer(" ", "", "\t", "", "\n", "", "\r", "").Replace(after)

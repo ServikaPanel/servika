@@ -106,7 +106,7 @@ func healPostfixIPv6(ctx context.Context) {
 // and keeping the final value is what Postfix itself does.
 func hasPostfixSetting(content, key, value string) bool {
 	found := ""
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
 			continue
@@ -180,7 +180,7 @@ func healDovecotListen(ctx context.Context) {
 
 // hasActiveDovecotListen reports whether the file already sets listen.
 func hasActiveDovecotListen(content string) bool {
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
 			continue

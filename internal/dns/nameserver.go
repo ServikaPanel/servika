@@ -147,8 +147,8 @@ func inZoneLabel(nsHost, domainName string) (string, bool) {
 	if host == zone {
 		return "@", true
 	}
-	if strings.HasSuffix(host, "."+zone) {
-		return strings.TrimSuffix(host, "."+zone), true
+	if before, ok := strings.CutSuffix(host, "."+zone); ok {
+		return before, true
 	}
 	return "", false
 }
