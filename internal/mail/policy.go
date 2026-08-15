@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -110,6 +111,31 @@ func handlePolicyConnection(db *sql.DB, conn net.Conn) {
 		if key, value, ok := strings.Cut(line, "="); ok {
 			attrs[key] = value
 		}
+	}
+	reportUnansweredPolicyRequest(attrs, scanner.Err())
+}
+
+// reportUnansweredPolicyRequest names the two ways this connection can end
+// without having answered the request it received.
+//
+// Postfix is configured with `smtpd_policy_service_default_action=DUNNO`, so a
+// request that goes unanswered is not refused: the send limit simply does not
+// apply to that mail, and the next restriction runs as if this service had no
+// opinion. Discarding the error therefore turns a ceiling that has stopped
+// working into something with no trace anywhere, which is the one outcome a
+// rate limit must not have.
+//
+// A non-empty attribute map means the peer sent attributes and the connection
+// ended before the blank line that asks for a verdict. The read error is
+// reported separately because it also fires when nothing was pending, and
+// `os.ErrDeadlineExceeded` is excluded because the 15-second deadline above
+// closes every connection, healthy ones included.
+func reportUnansweredPolicyRequest(attrs map[string]string, err error) {
+	if len(attrs) > 0 {
+		log.Printf("mail policy: connection ended with %d attributes and no verdict; the send limit did not apply to that mail", len(attrs))
+	}
+	if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
+		log.Printf("mail policy read: %v", err)
 	}
 }
 
