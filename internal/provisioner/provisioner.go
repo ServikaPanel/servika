@@ -2092,6 +2092,24 @@ type IssueOutcome struct {
 	Skipped map[string]string
 }
 
+// skippedSANNames turns the probe's dropped-host map into the codes the screen
+// renders, leaving the apex out.
+//
+// The apex is never partial coverage. When it fails there is no certificate to
+// report a gap in, only a failure, and the caller reports it as the failure
+// reason instead. Listing it here as well would show the owner a certificate
+// that is missing one name when what they actually have is no certificate.
+func skippedSANNames(droppedHosts map[string]challengeReason, apex string) map[string]string {
+	skipped := map[string]string{}
+	for host, reason := range droppedHosts {
+		if host == apex {
+			continue
+		}
+		skipped[host] = string(reason)
+	}
+	return skipped
+}
+
 func EnableLetsEncrypt(domainName, systemUser, phpVersion, backend string) (certPath, keyPath string, outcome IssueOutcome, err error) {
 	if err := ValidateDomain(domainName); err != nil {
 		return "", "", IssueOutcome{}, err
@@ -2157,13 +2175,7 @@ func EnableLetsEncrypt(domainName, systemUser, phpVersion, backend string) (cert
 	// The customer has to be able to see which coverage they did not get. A name
 	// is dropped so one unreachable host cannot fail the whole order, and until
 	// now that only reached the panel log.
-	skipped := map[string]string{}
-	for host, reason := range droppedHosts {
-		if host == domainName {
-			continue // the apex is the failure itself, reported as the reason
-		}
-		skipped[host] = string(reason)
-	}
+	skipped := skippedSANNames(droppedHosts, domainName)
 	if reason, apexFailed := droppedHosts[domainName]; apexFailed {
 		// Ordering anyway would spend one of the five validation failures Let's
 		// Encrypt allows per hostname per hour and leave the same result.

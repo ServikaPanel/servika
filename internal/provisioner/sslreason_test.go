@@ -133,20 +133,33 @@ func TestSSLFailureCodesAreLookupKeys(t *testing.T) {
 // A dropped name is reported as a code the interface can translate, keyed by the
 // host it belongs to, and the apex is never in that map: when the apex fails
 // there is no certificate to report partial coverage for, only a failure.
+//
+// The apex is fed to the function here rather than left out of the fixture. A
+// map the test itself wrote can only be missing a key the test never typed, so
+// asserting on that proves nothing about what the panel does.
 func TestSkippedNamesAreCodesKeyedByHost(t *testing.T) {
-	outcome := IssueOutcome{
-		Real: true,
-		Skipped: map[string]string{
-			"autoconfig.example.com":   string(reasonUnreachable),
-			"autodiscover.example.com": string(reasonWrongContent),
-		},
+	const apex = "example.com"
+	dropped := map[string]challengeReason{
+		apex:                       reasonWrongStatus,
+		"www.example.com":          reasonWebrootUnwrite,
+		"autoconfig.example.com":   reasonUnreachable,
+		"autodiscover.example.com": reasonWrongContent,
 	}
-	for host, code := range outcome.Skipped {
-		if strings.ContainsAny(code, " :\n") {
+
+	skipped := skippedSANNames(dropped, apex)
+
+	if _, present := skipped[apex]; present {
+		t.Error("the apex appears in the skipped map instead of as the failure reason")
+	}
+	if len(skipped) != len(dropped)-1 {
+		t.Errorf("skipped holds %d names, want the %d that are not the apex", len(skipped), len(dropped)-1)
+	}
+	for host, code := range skipped {
+		if code == "" || strings.ContainsAny(code, " :\n") {
 			t.Errorf("%s carries %q, which is not usable as a translation key", host, code)
 		}
-	}
-	if _, present := outcome.Skipped["example.com"]; present {
-		t.Error("the apex appears in the skipped map instead of as the failure reason")
+		if code != string(dropped[host]) {
+			t.Errorf("%s carries %q, want the probe's own code %q", host, code, dropped[host])
+		}
 	}
 }
