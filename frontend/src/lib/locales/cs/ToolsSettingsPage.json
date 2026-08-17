@@ -40,6 +40,10 @@
       "title": "Služby",
       "description": "Stav a restart nginx / Apache / MariaDB / DNS / PHP-FPM."
     },
+    "appCatalog": {
+      "title": "Katalog aplikací",
+      "description": "Verze, adresy ke stažení a kontrolní součty, které instalátor nabízí."
+    },
     "appRuntimes": {
       "title": "Běhová prostředí aplikací",
       "description": "Interpretery Node.js a Python. Instalujte nebo odebírejte verze pro aplikace domén."

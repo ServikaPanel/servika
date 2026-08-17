@@ -17,6 +17,7 @@
     "packages": { "title": "Gestor de paquetes", "description": "Paquetes DNF, compiladores y tiempos de ejecución. Grupos de instalación listos." },
     "services": { "title": "Servicios", "description": "Estado y reinicio de Nginx / Apache / MariaDB / DNS / PHP-FPM." },
     "appRuntimes": { "title": "Runtimes de aplicación", "description": "Intérpretes Node.js y Python. Instale o quite versiones para las aplicaciones de dominio." },
+    "appCatalog": { "title": "Catálogo de aplicaciones", "description": "Versiones, direcciones de descarga y sumas de verificación que ofrece el instalador." },
     "servicePlans": { "title": "Planes de servicio", "description": "Paquetes de alojamiento con cuotas de disco, bases de datos y FTP." },
     "dnsTemplate": { "title": "Plantilla DNS", "description": "Registros DNS centrales aplicados a nuevos dominios (A/MX/SPF/DMARC/DKIM) con SOA." },
     "domains": { "title": "Dominios", "description": "Examine, busque y acceda rápidamente a todos los dominios." },

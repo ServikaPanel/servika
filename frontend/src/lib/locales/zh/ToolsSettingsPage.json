@@ -38,6 +38,10 @@
       "title": "服务",
       "description": "Nginx / Apache / MariaDB / DNS / PHP-FPM 状态和重启。"
     },
+    "appCatalog": {
+      "title": "应用目录",
+      "description": "一键安装提供的版本、下载地址与校验和。"
+    },
     "appRuntimes": {
       "title": "应用 runtime",
       "description": "Node.js 和 Python 解释器。为域名应用安装或移除版本。"

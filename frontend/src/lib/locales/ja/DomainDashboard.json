@@ -47,6 +47,7 @@
   "accessControl": { "label": "アクセス制御", "desc": "ホットリンク保護 · IP 許可/ブロック" },
   "imunify": { "label": "Imunify", "desc": "アンチウイルス" },
   "siteSecurity": { "label": "サイトセキュリティ", "desc": "依存関係の既知の脆弱性" },
+  "appInstaller": { "label": "アプリケーション", "desc": "ワンクリックのアプリ導入" },
   "ssh": {
     "label": "SSH アクセス",
     "enabled": "有効",

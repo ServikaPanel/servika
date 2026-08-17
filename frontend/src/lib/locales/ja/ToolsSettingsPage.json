@@ -38,6 +38,10 @@
       "title": "サービス",
       "description": "Nginx / Apache / MariaDB / DNS / PHP-FPM のステータスと再起動。"
     },
+    "appCatalog": {
+      "title": "アプリケーションカタログ",
+      "description": "ワンクリック導入で提供するバージョン、ダウンロード先、チェックサム。"
+    },
     "appRuntimes": {
       "title": "アプリケーションの runtime",
       "description": "Node.js と Python のインタープリター。ドメインのアプリケーション用にバージョンをインストールまたは削除します。"

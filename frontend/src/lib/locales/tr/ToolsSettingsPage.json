@@ -38,6 +38,10 @@
       "title": "Servisler",
       "description": "Nginx / Apache / MariaDB / DNS / PHP-FPM durumu ve yeniden başlatma."
     },
+    "appCatalog": {
+      "title": "Uygulama kataloğu",
+      "description": "Tek tıkla kurucunun sunduğu sürümler, indirme adresleri ve sağlama toplamları."
+    },
     "appRuntimes": {
       "title": "Uygulama Runtime'ları",
       "description": "Node.js ve Python yorumlayıcıları. Alan adı uygulamaları için sürüm kurun ya da kaldırın."

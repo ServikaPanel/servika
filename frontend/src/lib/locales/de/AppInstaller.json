@@ -1,0 +1,89 @@
+{
+  "title": "Anwendungen",
+  "subtitle": "Eine Anwendung aus dem Katalog in die Dateien dieser Website installieren.",
+  "breadcrumb": {
+    "home": "Start",
+    "domains": "Domains",
+    "tools": "Werkzeuge und Einstellungen",
+    "current": "Anwendungen"
+  },
+  "install": {
+    "title": "Anwendung installieren",
+    "application": "Anwendung",
+    "choose": "Eine auswählen",
+    "subdirectory": "Unterverzeichnis",
+    "subdirectoryPlaceholder": "shop",
+    "subdirectoryHint": "Leer lassen, um in das Dokumentenverzeichnis zu installieren. Nur ein Name: Kleinbuchstaben, Ziffern, Bindestrich und Unterstrich.",
+    "database": "Datenbankname",
+    "submit": "Installieren",
+    "starting": "Wird gestartet…",
+    "wizardNote": "Das Panel legt die Dateien ab und bereitet die Datenbank vor. Das Administratorkonto legt danach die Einrichtungsseite der Anwendung selbst an, sodass kein Passwort von Ihnen durch das Panel läuft."
+  },
+  "list": {
+    "application": "Anwendung",
+    "location": "Adresse",
+    "database": "Datenbankname",
+    "state": "Status",
+    "installed": "Gestartet",
+    "actions": "Aktionen",
+    "forget": "Aus Liste entfernen",
+    "loading": "Wird geladen…",
+    "empty": "Hier wurde noch nichts installiert."
+  },
+  "state": {
+    "installing": "Wird installiert",
+    "installed": "Installiert",
+    "failed": "Fehlgeschlagen"
+  },
+  "forget": {
+    "title": "Aus der Liste entfernen",
+    "message": "{{name}} wird aus dieser Liste entfernt. Dateien und Datenbank bleiben unverändert.",
+    "confirm": "Aus Liste entfernen"
+  },
+  "forgetNote": "Das Entfernen löscht nur den Eintrag. Dateien löschen Sie im Dateimanager, die Datenbank im Datenbankbereich.",
+  "reasons": {
+    "app_not_in_catalog": "Diese Anwendung steht nicht im Katalog.",
+    "app_disabled": "Diese Anwendung ist im Katalog abgeschaltet.",
+    "app_checksum_missing": "Dieser Katalogeintrag hat keine Prüfsumme, deshalb installiert das Panel ihn nicht.",
+    "app_checksum_mismatch": "Das heruntergeladene Archiv stimmte nicht mit der hinterlegten Prüfsumme überein, es wurde nichts installiert.",
+    "app_subdirectory_invalid": "Das Unterverzeichnis muss ein Name sein: Kleinbuchstaben, Ziffern, Bindestrich und Unterstrich.",
+    "app_target_not_empty": "An dieser Stelle liegen bereits Dateien, oder eine Installation dorthin läuft schon.",
+    "app_database_exists": "Eine Datenbank mit diesem Namen existiert bereits.",
+    "app_download_failed": "Das Archiv konnte nicht heruntergeladen werden.",
+    "app_extract_failed": "Das Archiv konnte nicht entpackt werden."
+  },
+  "catalog": {
+    "title": "Anwendungskatalog",
+    "subtitle": "Was der Ein-Klick-Installer anbietet und welche Prüfsumme jeder Eintrag erfüllen muss.",
+    "editTitle": "Eintrag hinzufügen oder bearbeiten",
+    "code": "Code",
+    "name": "Name",
+    "version": "Version",
+    "url": "Download-Adresse",
+    "sha256": "SHA-256",
+    "archiveName": "Archivdateiname",
+    "strip": "Hüllverzeichnisse",
+    "needsDatabase": "Braucht eine Datenbank",
+    "enabled": "Angeboten",
+    "save": "Eintrag speichern",
+    "saving": "Wird gespeichert…",
+    "saved": "{{code}} wurde gespeichert.",
+    "edit": "Bearbeiten",
+    "remove": "Entfernen",
+    "removeTitle": "Aus dem Katalog entfernen",
+    "removeMessage": "{{name}} wird nicht mehr angeboten. Bereits daraus installierte Websites sind nicht betroffen.",
+    "removeConfirm": "Entfernen",
+    "noPin": "Keine Prüfsumme",
+    "yes": "Ja",
+    "no": "Nein",
+    "pinNote": "Ein Eintrag ohne Prüfsumme lässt sich speichern, sodass eine Adresse vor ihrem Hashwert erfasst werden kann; installiert wird er erst, wenn der Hashwert eingetragen ist.",
+    "stripNote": "Hüllverzeichnisse ist die Anzahl der Ebenen, in die ein Archiv seinen Inhalt einpackt. Die meisten Anbieter nutzen eine, benannt nach der Version; Joomlas Vollpaket und PrestaShops äußeres Archiv nutzen keine.",
+    "invalidField": "Der Wert für {{field}} wurde nicht angenommen."
+  },
+  "errors": {
+    "catalog": "Der Katalog konnte nicht geladen werden",
+    "install": "Die Installation konnte nicht gestartet werden",
+    "forget": "Der Eintrag konnte nicht entfernt werden",
+    "save": "Der Eintrag konnte nicht gespeichert werden"
+  }
+}

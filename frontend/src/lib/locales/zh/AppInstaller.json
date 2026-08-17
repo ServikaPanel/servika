@@ -1,0 +1,89 @@
+{
+  "title": "应用程序",
+  "subtitle": "将目录中的应用安装到此站点的文件中。",
+  "breadcrumb": {
+    "home": "首页",
+    "domains": "域名",
+    "tools": "工具与设置",
+    "current": "应用程序"
+  },
+  "install": {
+    "title": "安装应用",
+    "application": "应用",
+    "choose": "请选择",
+    "subdirectory": "子目录",
+    "subdirectoryPlaceholder": "shop",
+    "subdirectoryHint": "留空表示安装到网站根目录。只能是一个名称：小写字母、数字、连字符和下划线。",
+    "database": "数据库名",
+    "submit": "安装",
+    "starting": "启动中…",
+    "wizardNote": "面板负责放置文件并准备数据库。管理员账户由应用自身的安装页面创建，因此您的密码不会经过面板。"
+  },
+  "list": {
+    "application": "应用",
+    "location": "地址",
+    "database": "数据库名",
+    "state": "状态",
+    "installed": "开始时间",
+    "actions": "操作",
+    "forget": "从列表移除",
+    "loading": "加载中…",
+    "empty": "这里尚未安装任何内容。"
+  },
+  "state": {
+    "installing": "安装中",
+    "installed": "已安装",
+    "failed": "失败"
+  },
+  "forget": {
+    "title": "从列表移除",
+    "message": "{{name}} 将从此列表移除。其文件和数据库保持原样。",
+    "confirm": "从列表移除"
+  },
+  "forgetNote": "移除条目只删除记录。请用文件管理器删除文件，用数据库页面删除数据库。",
+  "reasons": {
+    "app_not_in_catalog": "目录中没有该应用。",
+    "app_disabled": "该应用在目录中已关闭。",
+    "app_checksum_missing": "该目录条目没有校验和，面板不会安装它。",
+    "app_checksum_mismatch": "下载的压缩包与记录的校验和不一致，未安装任何内容。",
+    "app_subdirectory_invalid": "子目录必须是一个名称：小写字母、数字、连字符和下划线。",
+    "app_target_not_empty": "该位置已有文件，或已有安装正在进行。",
+    "app_database_exists": "同名数据库已存在。",
+    "app_download_failed": "无法下载压缩包。",
+    "app_extract_failed": "无法解压压缩包。"
+  },
+  "catalog": {
+    "title": "应用目录",
+    "subtitle": "一键安装提供的条目，以及每个条目必须匹配的校验和。",
+    "editTitle": "添加或编辑条目",
+    "code": "代码",
+    "name": "名称",
+    "version": "版本",
+    "url": "下载地址",
+    "sha256": "SHA-256",
+    "archiveName": "压缩包文件名",
+    "strip": "包裹目录层数",
+    "needsDatabase": "需要数据库",
+    "enabled": "是否提供",
+    "save": "保存条目",
+    "saving": "保存中…",
+    "saved": "{{code}} 已保存。",
+    "edit": "编辑",
+    "remove": "移除",
+    "removeTitle": "从目录移除",
+    "removeMessage": "{{name}} 将不再提供。已由它安装的站点不受影响。",
+    "removeConfirm": "移除",
+    "noPin": "无校验和",
+    "yes": "是",
+    "no": "否",
+    "pinNote": "没有校验和的条目也能保存，便于先记录地址再补摘要；但在填入摘要之前不会执行安装。",
+    "stripNote": "包裹目录层数指压缩包用多少层目录包住内容。多数厂商用一层并以版本命名；Joomla 完整包和 PrestaShop 的外层压缩包不用。",
+    "invalidField": "{{field}} 的值未被接受。"
+  },
+  "errors": {
+    "catalog": "无法加载目录",
+    "install": "无法开始安装",
+    "forget": "无法移除条目",
+    "save": "无法保存条目"
+  }
+}

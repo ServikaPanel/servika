@@ -1,0 +1,89 @@
+{
+  "title": "Uygulamalar",
+  "subtitle": "Katalogdaki bir uygulamayı bu sitenin dosyalarına kurun.",
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "domains": "Alan Adları",
+    "tools": "Araçlar ve Ayarlar",
+    "current": "Uygulamalar"
+  },
+  "install": {
+    "title": "Uygulama kur",
+    "application": "Uygulama",
+    "choose": "Birini seçin",
+    "subdirectory": "Alt dizin",
+    "subdirectoryPlaceholder": "magaza",
+    "subdirectoryHint": "Belge köküne kurmak için boş bırakın. Tek ad; küçük harf, rakam, tire ve alt çizgi.",
+    "database": "Veritabanı adı",
+    "submit": "Kur",
+    "starting": "Başlatılıyor…",
+    "wizardNote": "Panel dosyaları yerleştirir ve veritabanını hazırlar. Yönetici hesabını uygulamanın kendi kurulum sayfası oluşturur; böylece hiçbir parolanız panelden geçmez."
+  },
+  "list": {
+    "application": "Uygulama",
+    "location": "Adres",
+    "database": "Veritabanı adı",
+    "state": "Durum",
+    "installed": "Başlangıç",
+    "actions": "İşlemler",
+    "forget": "Listeden kaldır",
+    "loading": "Yükleniyor…",
+    "empty": "Buraya henüz bir şey kurulmadı."
+  },
+  "state": {
+    "installing": "Kuruluyor",
+    "installed": "Kuruldu",
+    "failed": "Başarısız"
+  },
+  "forget": {
+    "title": "Listeden kaldır",
+    "message": "{{name}} bu listeden kaldırılacak. Dosyaları ve veritabanı olduğu gibi kalır.",
+    "confirm": "Listeden kaldır"
+  },
+  "forgetNote": "Kaydı kaldırmak yalnız kaydı siler. Dosyaları silmek için dosya yöneticisini, veritabanını silmek için veritabanı ekranını kullanın.",
+  "reasons": {
+    "app_not_in_catalog": "Bu uygulama katalogda yok.",
+    "app_disabled": "Bu uygulama katalogda kapalı.",
+    "app_checksum_missing": "Bu katalog kaydında sağlama toplamı yok, panel onu kurmaz.",
+    "app_checksum_mismatch": "İndirilen arşiv kayıtlı sağlama toplamıyla eşleşmedi, hiçbir şey kurulmadı.",
+    "app_subdirectory_invalid": "Alt dizin tek ad olmalı: küçük harf, rakam, tire ve alt çizgi.",
+    "app_target_not_empty": "Bu konumda zaten dosya var veya buraya bir kurulum sürüyor.",
+    "app_database_exists": "Bu adda bir veritabanı zaten var.",
+    "app_download_failed": "Arşiv indirilemedi.",
+    "app_extract_failed": "Arşiv açılamadı."
+  },
+  "catalog": {
+    "title": "Uygulama kataloğu",
+    "subtitle": "Tek tıkla kurucunun sunduğu kayıtlar ve her birinin tutması gereken sağlama toplamı.",
+    "editTitle": "Kayıt ekle veya düzenle",
+    "code": "Kod",
+    "name": "Ad",
+    "version": "Sürüm",
+    "url": "İndirme adresi",
+    "sha256": "SHA-256",
+    "archiveName": "Arşiv dosya adı",
+    "strip": "Sarmalayıcı dizin",
+    "needsDatabase": "Veritabanı gerekir",
+    "enabled": "Sunuluyor",
+    "save": "Kaydı kaydet",
+    "saving": "Kaydediliyor…",
+    "saved": "{{code}} kaydedildi.",
+    "edit": "Düzenle",
+    "remove": "Kaldır",
+    "removeTitle": "Katalogdan kaldır",
+    "removeMessage": "{{name}} artık sunulmayacak. Ondan kurulmuş siteler etkilenmez.",
+    "removeConfirm": "Kaldır",
+    "noPin": "Sağlama yok",
+    "yes": "Evet",
+    "no": "Hayır",
+    "pinNote": "Sağlama toplamı olmayan kayıt kaydedilebilir, böylece adres özetten önce girilebilir; ama özet doldurulana kadar kurulum yapılmaz.",
+    "stripNote": "Sarmalayıcı dizin, arşivin içeriğini kaç katman içine sardığıdır. Çoğu üretici sürüm adıyla tek katman kullanır; Joomla'nın tam paketi ve PrestaShop'un dış arşivi hiç kullanmaz.",
+    "invalidField": "{{field}} değeri kabul edilmedi."
+  },
+  "errors": {
+    "catalog": "Katalog yüklenemedi",
+    "install": "Kurulum başlatılamadı",
+    "forget": "Kayıt kaldırılamadı",
+    "save": "Kayıt kaydedilemedi"
+  }
+}

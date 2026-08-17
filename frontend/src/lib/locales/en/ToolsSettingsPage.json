@@ -39,6 +39,10 @@
       "title": "Services",
       "description": "Nginx / Apache / MariaDB / DNS / PHP-FPM status and restart."
     },
+    "appCatalog": {
+      "title": "Application catalog",
+      "description": "Versions, download addresses and checksums the one-click installer offers."
+    },
     "appRuntimes": {
       "title": "Application Runtimes",
       "description": "Node.js and Python interpreters. Install or remove versions for domain applications."

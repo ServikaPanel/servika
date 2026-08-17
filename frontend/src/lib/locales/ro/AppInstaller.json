@@ -1,0 +1,89 @@
+{
+  "title": "Aplicații",
+  "subtitle": "Instalați o aplicație din catalog în fișierele acestui site.",
+  "breadcrumb": {
+    "home": "Acasă",
+    "domains": "Domenii",
+    "tools": "Instrumente și setări",
+    "current": "Aplicații"
+  },
+  "install": {
+    "title": "Instalează o aplicație",
+    "application": "Aplicație",
+    "choose": "Alegeți una",
+    "subdirectory": "Subdirector",
+    "subdirectoryPlaceholder": "magazin",
+    "subdirectoryHint": "Lăsați gol pentru a instala în rădăcina site-ului. Un singur nume: litere mici, cifre, cratimă și liniuță de subliniere.",
+    "database": "Numele bazei de date",
+    "submit": "Instalează",
+    "starting": "Se pornește…",
+    "wizardNote": "Panoul așază fișierele și pregătește baza de date. Contul de administrator îl creează apoi pagina de instalare a aplicației, deci nicio parolă a dumneavoastră nu trece prin panou."
+  },
+  "list": {
+    "application": "Aplicație",
+    "location": "Adresă",
+    "database": "Numele bazei de date",
+    "state": "Stare",
+    "installed": "Pornită",
+    "actions": "Acțiuni",
+    "forget": "Scoate din listă",
+    "loading": "Se încarcă…",
+    "empty": "Aici nu s-a instalat încă nimic."
+  },
+  "state": {
+    "installing": "Se instalează",
+    "installed": "Instalată",
+    "failed": "Eșuată"
+  },
+  "forget": {
+    "title": "Scoate din listă",
+    "message": "{{name}} va fi scos din această listă. Fișierele și baza sa de date rămân neatinse.",
+    "confirm": "Scoate din listă"
+  },
+  "forgetNote": "Scoaterea unei intrări șterge doar înregistrarea. Folosiți managerul de fișiere pentru fișiere și ecranul bazelor de date pentru bază.",
+  "reasons": {
+    "app_not_in_catalog": "Acea aplicație nu este în catalog.",
+    "app_disabled": "Acea aplicație este dezactivată în catalog.",
+    "app_checksum_missing": "Acea intrare din catalog nu are sumă de control, deci panoul nu o instalează.",
+    "app_checksum_mismatch": "Arhiva descărcată nu a corespuns sumei de control înregistrate, nu s-a instalat nimic.",
+    "app_subdirectory_invalid": "Subdirectorul trebuie să fie un singur nume: litere mici, cifre, cratimă și liniuță de subliniere.",
+    "app_target_not_empty": "Acel loc conține deja fișiere sau o instalare este deja în curs acolo.",
+    "app_database_exists": "Există deja o bază de date cu acel nume.",
+    "app_download_failed": "Arhiva nu a putut fi descărcată.",
+    "app_extract_failed": "Arhiva nu a putut fi dezarhivată."
+  },
+  "catalog": {
+    "title": "Catalog de aplicații",
+    "subtitle": "Ce oferă instalatorul și ce sumă de control trebuie să respecte fiecare intrare.",
+    "editTitle": "Adaugă sau modifică o intrare",
+    "code": "Cod",
+    "name": "Nume",
+    "version": "Versiune",
+    "url": "Adresă de descărcare",
+    "sha256": "SHA-256",
+    "archiveName": "Numele fișierului arhivă",
+    "strip": "Directoare învelitoare",
+    "needsDatabase": "Necesită bază de date",
+    "enabled": "Oferită",
+    "save": "Salvează intrarea",
+    "saving": "Se salvează…",
+    "saved": "{{code}} a fost salvată.",
+    "edit": "Modifică",
+    "remove": "Elimină",
+    "removeTitle": "Elimină din catalog",
+    "removeMessage": "{{name}} nu va mai fi oferită. Site-urile deja instalate din ea nu sunt afectate.",
+    "removeConfirm": "Elimină",
+    "noPin": "Fără sumă",
+    "yes": "Da",
+    "no": "Nu",
+    "pinNote": "O intrare fără sumă de control poate fi salvată, ca adresa să fie notată înaintea amprentei; nu se va instala însă până nu este completată amprenta.",
+    "stripNote": "Directoarele învelitoare sunt nivelurile în care arhiva își împachetează conținutul. Majoritatea folosesc unul, numit după versiune; pachetul complet Joomla și arhiva exterioară PrestaShop niciunul.",
+    "invalidField": "Valoarea {{field}} nu a fost acceptată."
+  },
+  "errors": {
+    "catalog": "Catalogul nu a putut fi încărcat",
+    "install": "Instalarea nu a putut fi pornită",
+    "forget": "Intrarea nu a putut fi eliminată",
+    "save": "Intrarea nu a putut fi salvată"
+  }
+}

@@ -39,6 +39,10 @@
       "title": "Servizi",
       "description": "Stato e riavvio di Nginx / Apache / MariaDB / DNS / PHP-FPM."
     },
+    "appCatalog": {
+      "title": "Catalogo applicazioni",
+      "description": "Versioni, indirizzi di download e checksum offerti dall'installatore."
+    },
     "appRuntimes": {
       "title": "Runtime delle applicazioni",
       "description": "Interpreti Node.js e Python. Installa o rimuovi versioni per le applicazioni dei domini."

@@ -40,6 +40,10 @@
       "title": "Servicii",
       "description": "Stare și repornire Nginx / Apache / MariaDB / DNS / PHP-FPM."
     },
+    "appCatalog": {
+      "title": "Catalog de aplicații",
+      "description": "Versiunile, adresele de descărcare și sumele de control pe care le oferă instalatorul."
+    },
     "appRuntimes": {
       "title": "Runtime-uri de aplicație",
       "description": "Interpretoare Node.js și Python. Instalați sau eliminați versiuni pentru aplicațiile domeniilor."

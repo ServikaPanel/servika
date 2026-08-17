@@ -1,0 +1,89 @@
+{
+  "title": "Aplicaciones",
+  "subtitle": "Instale una aplicación del catálogo en los archivos de este sitio.",
+  "breadcrumb": {
+    "home": "Inicio",
+    "domains": "Dominios",
+    "tools": "Herramientas y ajustes",
+    "current": "Aplicaciones"
+  },
+  "install": {
+    "title": "Instalar una aplicación",
+    "application": "Aplicación",
+    "choose": "Elija una",
+    "subdirectory": "Subdirectorio",
+    "subdirectoryPlaceholder": "tienda",
+    "subdirectoryHint": "Déjelo vacío para instalar en la raíz del sitio. Un solo nombre: minúsculas, dígitos, guion y guion bajo.",
+    "database": "Nombre de la base de datos",
+    "submit": "Instalar",
+    "starting": "Iniciando…",
+    "wizardNote": "El panel coloca los archivos y prepara la base de datos. La cuenta de administrador la crea después la página de instalación de la propia aplicación, así que ninguna contraseña suya pasa por el panel."
+  },
+  "list": {
+    "application": "Aplicación",
+    "location": "Dirección",
+    "database": "Nombre de la base de datos",
+    "state": "Estado",
+    "installed": "Iniciada",
+    "actions": "Acciones",
+    "forget": "Quitar de la lista",
+    "loading": "Cargando…",
+    "empty": "Aquí todavía no se ha instalado nada."
+  },
+  "state": {
+    "installing": "Instalando",
+    "installed": "Instalada",
+    "failed": "Fallida"
+  },
+  "forget": {
+    "title": "Quitar de la lista",
+    "message": "{{name}} se quitará de esta lista. Sus archivos y su base de datos quedan tal cual.",
+    "confirm": "Quitar de la lista"
+  },
+  "forgetNote": "Quitar una entrada elimina solo el registro. Use el gestor de archivos para los archivos y la pantalla de bases de datos para la base.",
+  "reasons": {
+    "app_not_in_catalog": "Esa aplicación no está en el catálogo.",
+    "app_disabled": "Esa aplicación está desactivada en el catálogo.",
+    "app_checksum_missing": "Esa entrada del catálogo no tiene suma de verificación, así que el panel no la instalará.",
+    "app_checksum_mismatch": "El archivo descargado no coincidió con la suma de verificación registrada, no se instaló nada.",
+    "app_subdirectory_invalid": "El subdirectorio debe ser un solo nombre: minúsculas, dígitos, guion y guion bajo.",
+    "app_target_not_empty": "Ese lugar ya contiene archivos, o ya hay una instalación en curso hacia él.",
+    "app_database_exists": "Ya existe una base de datos con ese nombre.",
+    "app_download_failed": "No se pudo descargar el archivo.",
+    "app_extract_failed": "No se pudo descomprimir el archivo."
+  },
+  "catalog": {
+    "title": "Catálogo de aplicaciones",
+    "subtitle": "Lo que ofrece el instalador y la suma de verificación que debe cumplir cada entrada.",
+    "editTitle": "Añadir o editar una entrada",
+    "code": "Código",
+    "name": "Nombre",
+    "version": "Versión",
+    "url": "Dirección de descarga",
+    "sha256": "SHA-256",
+    "archiveName": "Nombre del archivo comprimido",
+    "strip": "Directorios envolventes",
+    "needsDatabase": "Necesita base de datos",
+    "enabled": "Ofrecida",
+    "save": "Guardar entrada",
+    "saving": "Guardando…",
+    "saved": "{{code}} se ha guardado.",
+    "edit": "Editar",
+    "remove": "Quitar",
+    "removeTitle": "Quitar del catálogo",
+    "removeMessage": "{{name}} dejará de ofrecerse. Los sitios ya instalados desde ella no se ven afectados.",
+    "removeConfirm": "Quitar",
+    "noPin": "Sin suma",
+    "yes": "Sí",
+    "no": "No",
+    "pinNote": "Una entrada sin suma de verificación se puede guardar, para anotar una dirección antes que su resumen; no se instalará hasta que el resumen esté puesto.",
+    "stripNote": "Directorios envolventes son los niveles con que el archivo envuelve su contenido. La mayoría usa uno, con el nombre de la versión; el paquete completo de Joomla y el archivo exterior de PrestaShop no usan ninguno.",
+    "invalidField": "No se aceptó el valor de {{field}}."
+  },
+  "errors": {
+    "catalog": "No se pudo cargar el catálogo",
+    "install": "No se pudo iniciar la instalación",
+    "forget": "No se pudo quitar la entrada",
+    "save": "No se pudo guardar la entrada"
+  }
+}

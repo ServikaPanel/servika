@@ -39,6 +39,7 @@
     "dnsTemplate": { "title": "DNS-Vorlage", "subtitle": "Standard-DNS-Einträge" },
     "bannedDomains": { "title": "Gesperrte Domains", "subtitle": "Hostnamen, die kein Kunde hinzufügen darf" },
     "siteSecurity": { "title": "Website-Sicherheit", "subtitle": "Bekannte Schwachstellen in Abhängigkeiten" },
+    "appCatalog": { "title": "Anwendungskatalog", "subtitle": "Versionen, Download-Adressen und Prüfsummen, die der Ein-Klick-Installer anbietet." },
     "panelUpdate": { "title": "Panel-Aktualisierung", "subtitle": "Panel-Version und Aktualisierungen" }
   },
   "domain": {
@@ -75,6 +76,7 @@
     "passwordProtection": { "title": "Passwortschutz", "subtitle": "Verzeichnispasswort" },
     "imunify": { "title": "Imunify", "subtitle": "Malware-Scannen" },
     "siteSecurity": { "title": "Website-Sicherheit", "subtitle": "Bekannte Schwachstellen in Abhängigkeiten" },
+    "appInstaller": { "title": "Anwendungen", "subtitle": "Anwendungsinstallation mit einem Klick" },
     "stats": { "title": "Statistiken", "subtitle": "Domain-Nutzungsdaten" },
     "connection": { "title": "Verbindungsinfo", "subtitle": "FTP- und Datenbankdetails" }
   }

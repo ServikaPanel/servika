@@ -1,0 +1,89 @@
+{
+  "title": "Aplikace",
+  "subtitle": "Nainstalujte aplikaci z katalogu do souborů tohoto webu.",
+  "breadcrumb": {
+    "home": "Domů",
+    "domains": "Domény",
+    "tools": "Nástroje a nastavení",
+    "current": "Aplikace"
+  },
+  "install": {
+    "title": "Nainstalovat aplikaci",
+    "application": "Aplikace",
+    "choose": "Vyberte jednu",
+    "subdirectory": "Podadresář",
+    "subdirectoryPlaceholder": "obchod",
+    "subdirectoryHint": "Nechte prázdné pro instalaci do kořene webu. Jen jeden název: malá písmena, číslice, pomlčka a podtržítko.",
+    "database": "Název databáze",
+    "submit": "Nainstalovat",
+    "starting": "Spouští se…",
+    "wizardNote": "Panel umístí soubory a připraví databázi. Účet správce pak vytvoří instalační stránka samotné aplikace, takže panelem neprochází žádné vaše heslo."
+  },
+  "list": {
+    "application": "Aplikace",
+    "location": "Adresa",
+    "database": "Název databáze",
+    "state": "Stav",
+    "installed": "Zahájeno",
+    "actions": "Akce",
+    "forget": "Odebrat ze seznamu",
+    "loading": "Načítá se…",
+    "empty": "Zde zatím nebylo nic nainstalováno."
+  },
+  "state": {
+    "installing": "Instaluje se",
+    "installed": "Nainstalováno",
+    "failed": "Selhalo"
+  },
+  "forget": {
+    "title": "Odebrat ze seznamu",
+    "message": "{{name}} bude odebrán z tohoto seznamu. Jeho soubory a databáze zůstanou beze změny.",
+    "confirm": "Odebrat ze seznamu"
+  },
+  "forgetNote": "Odebrání záznamu smaže jen záznam. Soubory smažete ve správci souborů, databázi na obrazovce databází.",
+  "reasons": {
+    "app_not_in_catalog": "Tato aplikace není v katalogu.",
+    "app_disabled": "Tato aplikace je v katalogu vypnutá.",
+    "app_checksum_missing": "Tento záznam katalogu nemá kontrolní součet, panel jej proto nenainstaluje.",
+    "app_checksum_mismatch": "Stažený archiv neodpovídal zapsanému kontrolnímu součtu, nic nebylo nainstalováno.",
+    "app_subdirectory_invalid": "Podadresář musí být jeden název: malá písmena, číslice, pomlčka a podtržítko.",
+    "app_target_not_empty": "Na tomto místě už jsou soubory, nebo tam už instalace probíhá.",
+    "app_database_exists": "Databáze s tímto názvem už existuje.",
+    "app_download_failed": "Archiv se nepodařilo stáhnout.",
+    "app_extract_failed": "Archiv se nepodařilo rozbalit."
+  },
+  "catalog": {
+    "title": "Katalog aplikací",
+    "subtitle": "Co instalátor nabízí a jaký kontrolní součet musí každý záznam splnit.",
+    "editTitle": "Přidat nebo upravit záznam",
+    "code": "Kód",
+    "name": "Název",
+    "version": "Verze",
+    "url": "Adresa ke stažení",
+    "sha256": "SHA-256",
+    "archiveName": "Název souboru archivu",
+    "strip": "Obalové adresáře",
+    "needsDatabase": "Vyžaduje databázi",
+    "enabled": "Nabízeno",
+    "save": "Uložit záznam",
+    "saving": "Ukládá se…",
+    "saved": "{{code}} byl uložen.",
+    "edit": "Upravit",
+    "remove": "Odebrat",
+    "removeTitle": "Odebrat z katalogu",
+    "removeMessage": "{{name}} už nebude nabízen. Weby z něj již nainstalované to neovlivní.",
+    "removeConfirm": "Odebrat",
+    "noPin": "Bez součtu",
+    "yes": "Ano",
+    "no": "Ne",
+    "pinNote": "Záznam bez kontrolního součtu lze uložit, aby šlo adresu zapsat dřív než otisk; nainstaluje se však až po doplnění otisku.",
+    "stripNote": "Obalové adresáře je počet úrovní, do kterých archiv balí svůj obsah. Většina výrobců používá jednu, pojmenovanou podle verze; plný balík Joomly a vnější archiv PrestaShopu žádnou.",
+    "invalidField": "Hodnota {{field}} nebyla přijata."
+  },
+  "errors": {
+    "catalog": "Katalog se nepodařilo načíst",
+    "install": "Instalaci se nepodařilo spustit",
+    "forget": "Záznam se nepodařilo odebrat",
+    "save": "Záznam se nepodařilo uložit"
+  }
+}

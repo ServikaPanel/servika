@@ -39,6 +39,7 @@
     "dnsTemplate": { "title": "DNS Template", "subtitle": "Default DNS records" },
     "bannedDomains": { "title": "Banned Domains", "subtitle": "Hostnames no customer may add" },
     "siteSecurity": { "title": "Site Security", "subtitle": "Known vulnerabilities in site dependencies" },
+    "appCatalog": { "title": "Application catalog", "subtitle": "Versions, download addresses and checksums the one-click installer offers." },
     "panelUpdate": { "title": "Panel Update", "subtitle": "Panel version and updates" }
   },
   "domain": {
@@ -75,6 +76,7 @@
     "passwordProtection": { "title": "Password Protection", "subtitle": "Directory password" },
     "imunify": { "title": "Imunify", "subtitle": "Malware scanning" },
     "siteSecurity": { "title": "Site Security", "subtitle": "Known vulnerabilities in site dependencies" },
+    "appInstaller": { "title": "Applications", "subtitle": "One-click application installer" },
     "stats": { "title": "Statistics", "subtitle": "Domain usage data" },
     "connection": { "title": "Connection Info", "subtitle": "FTP and database details" }
   }

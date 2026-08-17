@@ -1,0 +1,89 @@
+{
+  "title": "Applicazioni",
+  "subtitle": "Installa un'applicazione del catalogo nei file di questo sito.",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Domini",
+    "tools": "Strumenti e impostazioni",
+    "current": "Applicazioni"
+  },
+  "install": {
+    "title": "Installa un'applicazione",
+    "application": "Applicazione",
+    "choose": "Scegline una",
+    "subdirectory": "Sottocartella",
+    "subdirectoryPlaceholder": "negozio",
+    "subdirectoryHint": "Lascia vuoto per installare nella radice del sito. Un solo nome: minuscole, cifre, trattino e trattino basso.",
+    "database": "Nome del database",
+    "submit": "Installa",
+    "starting": "Avvio…",
+    "wizardNote": "Il pannello colloca i file e prepara il database. L'account amministratore lo crea poi la pagina di installazione dell'applicazione, quindi nessuna tua password passa dal pannello."
+  },
+  "list": {
+    "application": "Applicazione",
+    "location": "Indirizzo",
+    "database": "Nome del database",
+    "state": "Stato",
+    "installed": "Avviata",
+    "actions": "Azioni",
+    "forget": "Togli dall'elenco",
+    "loading": "Caricamento…",
+    "empty": "Qui non è ancora stato installato nulla."
+  },
+  "state": {
+    "installing": "Installazione",
+    "installed": "Installata",
+    "failed": "Fallita"
+  },
+  "forget": {
+    "title": "Togli dall'elenco",
+    "message": "{{name}} sarà tolto da questo elenco. I suoi file e il suo database restano invariati.",
+    "confirm": "Togli dall'elenco"
+  },
+  "forgetNote": "Togliere una voce rimuove solo la registrazione. Usa il gestore file per i file e la schermata dei database per il database.",
+  "reasons": {
+    "app_not_in_catalog": "Quell'applicazione non è a catalogo.",
+    "app_disabled": "Quell'applicazione è disattivata a catalogo.",
+    "app_checksum_missing": "Quella voce di catalogo non ha checksum, quindi il pannello non la installa.",
+    "app_checksum_mismatch": "L'archivio scaricato non corrispondeva al checksum registrato, non è stato installato nulla.",
+    "app_subdirectory_invalid": "La sottocartella deve essere un solo nome: minuscole, cifre, trattino e trattino basso.",
+    "app_target_not_empty": "In quella posizione ci sono già file, oppure un'installazione è già in corso.",
+    "app_database_exists": "Esiste già un database con quel nome.",
+    "app_download_failed": "Non è stato possibile scaricare l'archivio.",
+    "app_extract_failed": "Non è stato possibile estrarre l'archivio."
+  },
+  "catalog": {
+    "title": "Catalogo applicazioni",
+    "subtitle": "Cosa offre l'installatore e quale checksum deve rispettare ogni voce.",
+    "editTitle": "Aggiungi o modifica una voce",
+    "code": "Codice",
+    "name": "Nome",
+    "version": "Versione",
+    "url": "Indirizzo di download",
+    "sha256": "SHA-256",
+    "archiveName": "Nome del file di archivio",
+    "strip": "Cartelle contenitore",
+    "needsDatabase": "Richiede un database",
+    "enabled": "Offerta",
+    "save": "Salva la voce",
+    "saving": "Salvataggio…",
+    "saved": "{{code}} è stata salvata.",
+    "edit": "Modifica",
+    "remove": "Rimuovi",
+    "removeTitle": "Rimuovi dal catalogo",
+    "removeMessage": "{{name}} non sarà più offerta. I siti già installati da essa non sono interessati.",
+    "removeConfirm": "Rimuovi",
+    "noPin": "Nessun checksum",
+    "yes": "Sì",
+    "no": "No",
+    "pinNote": "Una voce senza checksum si può salvare, così un indirizzo si annota prima della sua impronta; non verrà però installata finché l'impronta non è inserita.",
+    "stripNote": "Le cartelle contenitore sono i livelli con cui l'archivio avvolge il suo contenuto. Quasi tutti i produttori ne usano uno, col nome della versione; il pacchetto completo di Joomla e l'archivio esterno di PrestaShop non ne usano.",
+    "invalidField": "Il valore di {{field}} non è stato accettato."
+  },
+  "errors": {
+    "catalog": "Non è stato possibile caricare il catalogo",
+    "install": "Non è stato possibile avviare l'installazione",
+    "forget": "Non è stato possibile rimuovere la voce",
+    "save": "Non è stato possibile salvare la voce"
+  }
+}

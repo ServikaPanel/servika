@@ -1,0 +1,89 @@
+{
+  "title": "Applications",
+  "subtitle": "Install a catalogued application into this site's files.",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Domains",
+    "tools": "Tools & Settings",
+    "current": "Applications"
+  },
+  "install": {
+    "title": "Install an application",
+    "application": "Application",
+    "choose": "Choose one",
+    "subdirectory": "Subdirectory",
+    "subdirectoryPlaceholder": "shop",
+    "subdirectoryHint": "Leave empty to install into the document root. One name only, lowercase letters, digits, hyphen and underscore.",
+    "database": "Database name",
+    "submit": "Install",
+    "starting": "Starting…",
+    "wizardNote": "The panel places the files and prepares the database. The application's own setup page then creates the administrator account, so no password of yours passes through the panel."
+  },
+  "list": {
+    "application": "Application",
+    "location": "Address",
+    "database": "Database name",
+    "state": "State",
+    "installed": "Started",
+    "actions": "Actions",
+    "forget": "Remove from list",
+    "loading": "Loading…",
+    "empty": "Nothing has been installed here yet."
+  },
+  "state": {
+    "installing": "Installing",
+    "installed": "Installed",
+    "failed": "Failed"
+  },
+  "forget": {
+    "title": "Remove from the list",
+    "message": "{{name}} will be removed from this list. Its files and its database are left exactly as they are.",
+    "confirm": "Remove from list"
+  },
+  "forgetNote": "Removing an entry removes the record only. Use the file manager to delete the files and the database screen to drop the database.",
+  "reasons": {
+    "app_not_in_catalog": "That application is not in the catalog.",
+    "app_disabled": "That application is switched off in the catalog.",
+    "app_checksum_missing": "That catalog entry has no checksum, so the panel will not install it.",
+    "app_checksum_mismatch": "The downloaded archive did not match the recorded checksum, so nothing was installed.",
+    "app_subdirectory_invalid": "The subdirectory must be one name: lowercase letters, digits, hyphen and underscore.",
+    "app_target_not_empty": "That location already holds files, or an installation into it is already running.",
+    "app_database_exists": "A database with that name already exists.",
+    "app_download_failed": "The archive could not be downloaded.",
+    "app_extract_failed": "The archive could not be unpacked."
+  },
+  "catalog": {
+    "title": "Application catalog",
+    "subtitle": "What the one-click installer offers, and the checksum each entry must match.",
+    "editTitle": "Add or edit an entry",
+    "code": "Code",
+    "name": "Name",
+    "version": "Version",
+    "url": "Download address",
+    "sha256": "SHA-256",
+    "archiveName": "Archive file name",
+    "strip": "Wrapper directories",
+    "needsDatabase": "Needs a database",
+    "enabled": "Offered",
+    "save": "Save entry",
+    "saving": "Saving…",
+    "saved": "{{code}} was saved.",
+    "edit": "Edit",
+    "remove": "Remove",
+    "removeTitle": "Remove from the catalog",
+    "removeMessage": "{{name}} will no longer be offered. Sites already installed from it are not affected.",
+    "removeConfirm": "Remove",
+    "noPin": "No checksum",
+    "yes": "Yes",
+    "no": "No",
+    "pinNote": "An entry with no checksum can be saved, so an address can be recorded before its digest, but it will not install until the digest is filled in.",
+    "stripNote": "Wrapper directories is how many levels the archive wraps its contents in. Most vendors use one, named after the release; Joomla's full package and PrestaShop's outer archive use none.",
+    "invalidField": "The {{field}} value was not accepted."
+  },
+  "errors": {
+    "catalog": "The catalog could not be loaded",
+    "install": "The installation could not be started",
+    "forget": "The entry could not be removed",
+    "save": "The entry could not be saved"
+  }
+}

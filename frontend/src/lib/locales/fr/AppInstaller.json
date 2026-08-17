@@ -1,0 +1,89 @@
+{
+  "title": "Applications",
+  "subtitle": "Installer une application du catalogue dans les fichiers de ce site.",
+  "breadcrumb": {
+    "home": "Accueil",
+    "domains": "Domaines",
+    "tools": "Outils et paramètres",
+    "current": "Applications"
+  },
+  "install": {
+    "title": "Installer une application",
+    "application": "Application",
+    "choose": "En choisir une",
+    "subdirectory": "Sous-répertoire",
+    "subdirectoryPlaceholder": "boutique",
+    "subdirectoryHint": "Laisser vide pour installer à la racine du site. Un seul nom : minuscules, chiffres, tiret et souligné.",
+    "database": "Nom de la base",
+    "submit": "Installer",
+    "starting": "Démarrage…",
+    "wizardNote": "Le panneau dépose les fichiers et prépare la base. La page d'installation de l'application crée ensuite le compte administrateur, donc aucun de vos mots de passe ne transite par le panneau."
+  },
+  "list": {
+    "application": "Application",
+    "location": "Adresse",
+    "database": "Nom de la base",
+    "state": "État",
+    "installed": "Démarré",
+    "actions": "Actions",
+    "forget": "Retirer de la liste",
+    "loading": "Chargement…",
+    "empty": "Rien n'a encore été installé ici."
+  },
+  "state": {
+    "installing": "Installation",
+    "installed": "Installé",
+    "failed": "Échoué"
+  },
+  "forget": {
+    "title": "Retirer de la liste",
+    "message": "{{name}} sera retiré de cette liste. Ses fichiers et sa base restent tels quels.",
+    "confirm": "Retirer de la liste"
+  },
+  "forgetNote": "Retirer une entrée ne supprime que l'enregistrement. Utilisez le gestionnaire de fichiers pour les fichiers et l'écran des bases pour la base.",
+  "reasons": {
+    "app_not_in_catalog": "Cette application n'est pas au catalogue.",
+    "app_disabled": "Cette application est désactivée au catalogue.",
+    "app_checksum_missing": "Cette entrée n'a pas de somme de contrôle, le panneau ne l'installera pas.",
+    "app_checksum_mismatch": "L'archive téléchargée ne correspondait pas à la somme de contrôle enregistrée, rien n'a été installé.",
+    "app_subdirectory_invalid": "Le sous-répertoire doit être un seul nom : minuscules, chiffres, tiret et souligné.",
+    "app_target_not_empty": "Cet emplacement contient déjà des fichiers, ou une installation y est déjà en cours.",
+    "app_database_exists": "Une base porte déjà ce nom.",
+    "app_download_failed": "L'archive n'a pas pu être téléchargée.",
+    "app_extract_failed": "L'archive n'a pas pu être décompressée."
+  },
+  "catalog": {
+    "title": "Catalogue d'applications",
+    "subtitle": "Ce que propose l'installateur et la somme de contrôle que chaque entrée doit vérifier.",
+    "editTitle": "Ajouter ou modifier une entrée",
+    "code": "Code",
+    "name": "Nom",
+    "version": "Version",
+    "url": "Adresse de téléchargement",
+    "sha256": "SHA-256",
+    "archiveName": "Nom du fichier d'archive",
+    "strip": "Répertoires enveloppants",
+    "needsDatabase": "Nécessite une base",
+    "enabled": "Proposée",
+    "save": "Enregistrer l'entrée",
+    "saving": "Enregistrement…",
+    "saved": "{{code}} a été enregistré.",
+    "edit": "Modifier",
+    "remove": "Retirer",
+    "removeTitle": "Retirer du catalogue",
+    "removeMessage": "{{name}} ne sera plus proposé. Les sites déjà installés depuis cette entrée ne sont pas touchés.",
+    "removeConfirm": "Retirer",
+    "noPin": "Aucune somme",
+    "yes": "Oui",
+    "no": "Non",
+    "pinNote": "Une entrée sans somme de contrôle peut être enregistrée, afin de noter une adresse avant son empreinte ; elle ne s'installera pas tant que l'empreinte n'est pas saisie.",
+    "stripNote": "Les répertoires enveloppants indiquent combien de niveaux l'archive ajoute autour de son contenu. La plupart des éditeurs en mettent un, nommé d'après la version ; le paquet complet de Joomla et l'archive externe de PrestaShop n'en mettent aucun.",
+    "invalidField": "La valeur de {{field}} n'a pas été acceptée."
+  },
+  "errors": {
+    "catalog": "Le catalogue n'a pas pu être chargé",
+    "install": "L'installation n'a pas pu être lancée",
+    "forget": "L'entrée n'a pas pu être retirée",
+    "save": "L'entrée n'a pas pu être enregistrée"
+  }
+}

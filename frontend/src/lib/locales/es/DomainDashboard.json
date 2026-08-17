@@ -47,6 +47,7 @@
   "accessControl": { "label": "Control de acceso", "desc": "Protección anti-hotlink · permitir/bloquear IP" },
   "imunify": { "label": "Imunify", "desc": "Antivirus" },
   "siteSecurity": { "label": "Seguridad del sitio", "desc": "Vulnerabilidades conocidas en las dependencias" },
+  "appInstaller": { "label": "Aplicaciones", "desc": "Instalador de aplicaciones con un clic" },
   "ssh": {
     "label": "Acceso SSH",
     "enabled": "Activado",

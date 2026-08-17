@@ -61,6 +61,8 @@ const GROUPS: Group[] = [
         key: 'nginx apache mariadb dns php-fpm restart' },
       { id: 'appRuntimes', href: '/tools/app-runtimes', icon: ICONS.chip,
         key: 'node nodejs python runtime interpreter n venv' },
+      { id: 'appCatalog', href: '/tools/app-catalog', icon: ICONS.cube, badge: 'serverWide',
+        key: 'installer joomla drupal grav matomo nextcloud prestashop mediawiki checksum' },
       { id: 'servicePlans', href: '/service-plans', icon: ICONS.clipboard,
         key: 'package plan quota disk ftp database' },
     ],

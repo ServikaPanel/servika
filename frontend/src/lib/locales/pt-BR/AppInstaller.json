@@ -1,0 +1,89 @@
+{
+  "title": "Aplicativos",
+  "subtitle": "Instale um aplicativo do catálogo nos arquivos deste site.",
+  "breadcrumb": {
+    "home": "Início",
+    "domains": "Domínios",
+    "tools": "Ferramentas e configurações",
+    "current": "Aplicativos"
+  },
+  "install": {
+    "title": "Instalar um aplicativo",
+    "application": "Aplicativo",
+    "choose": "Escolha uma",
+    "subdirectory": "Subdiretório",
+    "subdirectoryPlaceholder": "loja",
+    "subdirectoryHint": "Deixe vazio para instalar na raiz do site. Um só nome: minúsculas, dígitos, hífen e sublinhado.",
+    "database": "Nome do banco de dados",
+    "submit": "Instalar",
+    "starting": "Iniciando…",
+    "wizardNote": "O painel coloca os arquivos e prepara o banco de dados. A página de instalação do próprio aplicativo cria depois a conta de administrador, então nenhuma senha sua passa pelo painel."
+  },
+  "list": {
+    "application": "Aplicativo",
+    "location": "Endereço",
+    "database": "Nome do banco de dados",
+    "state": "Estado",
+    "installed": "Iniciada",
+    "actions": "Ações",
+    "forget": "Remover da lista",
+    "loading": "Carregando…",
+    "empty": "Ainda não foi instalado nada aqui."
+  },
+  "state": {
+    "installing": "Instalando",
+    "installed": "Instalado",
+    "failed": "Falhou"
+  },
+  "forget": {
+    "title": "Remover da lista",
+    "message": "{{name}} será removido desta lista. Seus arquivos e seu banco de dados ficam como estão.",
+    "confirm": "Remover da lista"
+  },
+  "forgetNote": "Remover um registro apaga apenas o registro. Use o gerenciador de arquivos para os arquivos e a tela de bancos de dados para o banco.",
+  "reasons": {
+    "app_not_in_catalog": "Esse aplicativo não está no catálogo.",
+    "app_disabled": "Esse aplicativo está desativado no catálogo.",
+    "app_checksum_missing": "Esse registro do catálogo não tem soma de verificação, então o painel não o instala.",
+    "app_checksum_mismatch": "O arquivo baixado não correspondeu à soma de verificação registrada, nada foi instalado.",
+    "app_subdirectory_invalid": "O subdiretório tem de ser um só nome: minúsculas, dígitos, hífen e sublinhado.",
+    "app_target_not_empty": "Esse local já tem arquivos, ou já existe uma instalação em andamento para lá.",
+    "app_database_exists": "Já existe um banco de dados com esse nome.",
+    "app_download_failed": "Não foi possível baixar o arquivo.",
+    "app_extract_failed": "Não foi possível extrair o arquivo."
+  },
+  "catalog": {
+    "title": "Catálogo de aplicativos",
+    "subtitle": "O que o instalador oferece e a soma de verificação que cada registo tem de cumprir.",
+    "editTitle": "Adicionar ou editar um registo",
+    "code": "Código",
+    "name": "Nome",
+    "version": "Versão",
+    "url": "Endereço de download",
+    "sha256": "SHA-256",
+    "archiveName": "Nome do ficheiro de arquivo",
+    "strip": "Diretórios envolventes",
+    "needsDatabase": "Precisa de banco de dados",
+    "enabled": "Oferecida",
+    "save": "Salvar registro",
+    "saving": "Salvando…",
+    "saved": "{{code}} foi salvo.",
+    "edit": "Editar",
+    "remove": "Remover",
+    "removeTitle": "Remover do catálogo",
+    "removeMessage": "{{name}} deixará de ser oferecido. Os sites já instalados a partir dele não são afetados.",
+    "removeConfirm": "Remover",
+    "noPin": "Sem soma",
+    "yes": "Sim",
+    "no": "Não",
+    "pinNote": "Um registro sem soma de verificação pode ser salvo, para anotar um endereço antes do resumo; mas não será instalado enquanto o resumo não for preenchido.",
+    "stripNote": "Diretórios envolventes é o número de níveis com que o arquivo envolve o seu conteúdo. A maioria usa um, com o nome da versão; o pacote completo do Joomla e o arquivo exterior do PrestaShop não usam nenhum.",
+    "invalidField": "O valor de {{field}} não foi aceito."
+  },
+  "errors": {
+    "catalog": "Não foi possível carregar o catálogo",
+    "install": "Não foi possível iniciar a instalação",
+    "forget": "Não foi possível remover o registro",
+    "save": "Não foi possível salvar o registro"
+  }
+}

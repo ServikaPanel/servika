@@ -1,0 +1,89 @@
+{
+  "title": "Aplicações",
+  "subtitle": "Instale uma aplicação do catálogo nos ficheiros deste site.",
+  "breadcrumb": {
+    "home": "Início",
+    "domains": "Domínios",
+    "tools": "Ferramentas e definições",
+    "current": "Aplicações"
+  },
+  "install": {
+    "title": "Instalar uma aplicação",
+    "application": "Aplicação",
+    "choose": "Escolha uma",
+    "subdirectory": "Subdiretório",
+    "subdirectoryPlaceholder": "loja",
+    "subdirectoryHint": "Deixe vazio para instalar na raiz do site. Um só nome: minúsculas, dígitos, hífen e sublinhado.",
+    "database": "Nome da base de dados",
+    "submit": "Instalar",
+    "starting": "A iniciar…",
+    "wizardNote": "O painel coloca os ficheiros e prepara a base de dados. A página de instalação da própria aplicação cria depois a conta de administrador, por isso nenhuma palavra-passe sua passa pelo painel."
+  },
+  "list": {
+    "application": "Aplicação",
+    "location": "Endereço",
+    "database": "Nome da base de dados",
+    "state": "Estado",
+    "installed": "Iniciada",
+    "actions": "Ações",
+    "forget": "Retirar da lista",
+    "loading": "A carregar…",
+    "empty": "Ainda não foi instalado nada aqui."
+  },
+  "state": {
+    "installing": "A instalar",
+    "installed": "Instalada",
+    "failed": "Falhou"
+  },
+  "forget": {
+    "title": "Retirar da lista",
+    "message": "{{name}} será retirado desta lista. Os seus ficheiros e a sua base de dados ficam como estão.",
+    "confirm": "Retirar da lista"
+  },
+  "forgetNote": "Retirar um registo remove apenas o registo. Use o gestor de ficheiros para os ficheiros e o ecrã de bases de dados para a base.",
+  "reasons": {
+    "app_not_in_catalog": "Essa aplicação não está no catálogo.",
+    "app_disabled": "Essa aplicação está desligada no catálogo.",
+    "app_checksum_missing": "Esse registo do catálogo não tem soma de verificação, por isso o painel não o instala.",
+    "app_checksum_mismatch": "O arquivo transferido não correspondeu à soma de verificação registada, não foi instalado nada.",
+    "app_subdirectory_invalid": "O subdiretório tem de ser um só nome: minúsculas, dígitos, hífen e sublinhado.",
+    "app_target_not_empty": "Esse local já tem ficheiros, ou já está a decorrer uma instalação para lá.",
+    "app_database_exists": "Já existe uma base de dados com esse nome.",
+    "app_download_failed": "Não foi possível transferir o arquivo.",
+    "app_extract_failed": "Não foi possível extrair o arquivo."
+  },
+  "catalog": {
+    "title": "Catálogo de aplicações",
+    "subtitle": "O que o instalador oferece e a soma de verificação que cada registo tem de cumprir.",
+    "editTitle": "Adicionar ou editar um registo",
+    "code": "Código",
+    "name": "Nome",
+    "version": "Versão",
+    "url": "Endereço de transferência",
+    "sha256": "SHA-256",
+    "archiveName": "Nome do ficheiro de arquivo",
+    "strip": "Diretórios envolventes",
+    "needsDatabase": "Precisa de base de dados",
+    "enabled": "Oferecida",
+    "save": "Guardar registo",
+    "saving": "A guardar…",
+    "saved": "{{code}} foi guardado.",
+    "edit": "Editar",
+    "remove": "Remover",
+    "removeTitle": "Remover do catálogo",
+    "removeMessage": "{{name}} deixará de ser oferecido. Os sites já instalados a partir dele não são afetados.",
+    "removeConfirm": "Remover",
+    "noPin": "Sem soma",
+    "yes": "Sim",
+    "no": "Não",
+    "pinNote": "Um registo sem soma de verificação pode ser guardado, para registar um endereço antes do resumo; mas não será instalado enquanto o resumo não for preenchido.",
+    "stripNote": "Diretórios envolventes é o número de níveis com que o arquivo envolve o seu conteúdo. A maioria usa um, com o nome da versão; o pacote completo do Joomla e o arquivo exterior do PrestaShop não usam nenhum.",
+    "invalidField": "O valor de {{field}} não foi aceite."
+  },
+  "errors": {
+    "catalog": "Não foi possível carregar o catálogo",
+    "install": "Não foi possível iniciar a instalação",
+    "forget": "Não foi possível remover o registo",
+    "save": "Não foi possível guardar o registo"
+  }
+}

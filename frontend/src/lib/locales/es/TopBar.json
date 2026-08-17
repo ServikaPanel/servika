@@ -39,6 +39,7 @@
     "dnsTemplate": { "title": "Plantilla DNS", "subtitle": "Registros DNS predeterminados" },
     "bannedDomains": { "title": "Dominios prohibidos", "subtitle": "Nombres de host que ningún cliente puede añadir" },
     "siteSecurity": { "title": "Seguridad del sitio", "subtitle": "Vulnerabilidades conocidas en las dependencias" },
+    "appCatalog": { "title": "Catálogo de aplicaciones", "subtitle": "Versiones, direcciones de descarga y sumas de verificación que ofrece el instalador." },
     "panelUpdate": { "title": "Actualización del panel", "subtitle": "Versión y actualizaciones del panel" }
   },
   "domain": {
@@ -75,6 +76,7 @@
     "passwordProtection": { "title": "Protección con contraseña", "subtitle": "Contraseña de directorio" },
     "imunify": { "title": "Imunify", "subtitle": "Análisis de malware" },
     "siteSecurity": { "title": "Seguridad del sitio", "subtitle": "Vulnerabilidades conocidas en las dependencias" },
+    "appInstaller": { "title": "Aplicaciones", "subtitle": "Instalador de aplicaciones con un clic" },
     "stats": { "title": "Estadísticas", "subtitle": "Datos de uso del dominio" },
     "connection": { "title": "Información de conexión", "subtitle": "Detalles FTP y base de datos" }
   }

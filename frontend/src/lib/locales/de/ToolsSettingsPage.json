@@ -39,6 +39,10 @@
       "title": "Dienste",
       "description": "Status und Neustart von Nginx / Apache / MariaDB / DNS / PHP-FPM."
     },
+    "appCatalog": {
+      "title": "Anwendungskatalog",
+      "description": "Versionen, Download-Adressen und Prüfsummen, die der Ein-Klick-Installer anbietet."
+    },
     "appRuntimes": {
       "title": "Anwendungslaufzeitumgebungen",
       "description": "Node.js- und Python-Interpreter. Versionen für Domain-Anwendungen installieren oder entfernen."
