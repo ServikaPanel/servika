@@ -67,6 +67,7 @@ import (
 	"servika/internal/secret"
 	"servika/internal/sitecopy"
 	"servika/internal/siteimport"
+	"servika/internal/sitesecurity"
 	"servika/internal/slowquery"
 	"servika/internal/sshaccess"
 	"servika/internal/stats"
@@ -161,6 +162,10 @@ func main() {
 	// The scan lock lives in memory, so a restart frees it while the row stays
 	// 'running' for good and the screen shows a scan that never ends.
 	antivirus.HealRunningScans(d)
+	// The same reason, for the same kind of lock: the site security sweep holds
+	// its lock in memory, so a panel killed mid-scan would refuse every later
+	// scan, scheduled or manual, for good.
+	sitesecurity.HealRunningScans(d)
 	middleware.Init(d)
 	if err := dns.SeedTemplateIfEmpty(context.Background(), d); err != nil {
 		log.Printf("DNS template seed warn: %v", err)
@@ -249,6 +254,11 @@ func main() {
 	// reports to postmaster@. This reads them out of that mailbox without
 	// writing to it; the mailbox belongs to the customer.
 	mailreport.StartCollector(d)
+	// Known vulnerabilities in what a tenant's site actually runs: its plugins,
+	// its npm dependencies, its Composer dependencies. dnf updateinfo covers the
+	// server's own packages and antivirus covers malware; this is the gap
+	// between them, and it is where most real compromises come from.
+	sitesecurity.StartCollector(d)
 	// Every step of an MTA-STS publication after the customer presses the button
 	// waits on the world: a DNS record to propagate, then a certificate to be
 	// reissued with the policy host in it. Neither has a completion signal, so
@@ -328,6 +338,7 @@ func main() {
 	mtastsH := &mtasts.Handlers{DB: d, IPv4: ipv4}
 	transfersH := &transfers.Handlers{DB: d, Domains: domainsH, Mail: mailH, Cron: cronH}
 	domainBlockH := &domainblock.Handlers{DB: d}
+	siteSecurityH := sitesecurity.NewHandlers(d)
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -900,6 +911,14 @@ func main() {
 				r.With(middleware.AdminOnly).Get("/admin/banned-domains", domainBlockH.List)
 				r.With(middleware.AdminOnly).Post("/admin/banned-domains", domainBlockH.Add)
 				r.With(middleware.AdminOnly).Post("/admin/banned-domains/remove", domainBlockH.Remove)
+				// Known vulnerabilities in tenant sites. The list is ResellerOrAbove
+				// and narrowed by ScopeSQL, so a reseller sees only their own
+				// customers' findings. Starting a sweep is AdminOnly: it runs wp-cli
+				// against every site on the server whatever scope the caller has.
+				r.With(middleware.ResellerOrAbove).Get("/admin/site-security", siteSecurityH.List)
+				r.With(middleware.ResellerOrAbove).Get("/admin/site-security/status", siteSecurityH.Status)
+				r.With(middleware.AdminOnly).Post("/admin/site-security/scan", siteSecurityH.Scan)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/site-security", siteSecurityH.DomainList)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/backup-destination", backupsH.GetDestination)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/backup-destination", backupsH.PutDestination)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/backup-destination", backupsH.DeleteDestination)

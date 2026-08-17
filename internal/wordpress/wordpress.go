@@ -289,23 +289,9 @@ func (h *Handlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&id, &systemUser, &domainName, &cert); err != nil {
 			continue
 		}
-		if !strings.HasPrefix(systemUser, "c_") {
-			continue
-		}
 		root := "/home/" + systemUser + "/public_html"
-		directories := []string{root}
-		if entries, err := os.ReadDir(root); err == nil {
-			for _, e := range entries {
-				if e.IsDir() {
-					directories = append(directories, filepath.Join(root, e.Name()))
-				}
-			}
-		}
-		for _, dir := range directories {
-			if _, err := os.Stat(filepath.Join(dir, "wp-config.php")); err != nil {
-				continue
-			}
-			candidates = append(candidates, wpCandidate{id, systemUser, domainName, cert != "", dir, root})
+		for _, install := range Discover(systemUser) {
+			candidates = append(candidates, wpCandidate{id, systemUser, domainName, cert != "", install.Dir, root})
 		}
 	}
 	_ = rows.Err()
