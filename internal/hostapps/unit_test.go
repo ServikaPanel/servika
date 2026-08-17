@@ -14,10 +14,10 @@ func section(t *testing.T, body, name string) string {
 		t.Fatalf("the unit has no [%s] section:\n%s", name, body)
 	}
 	rest := body[start+len(name)+2:]
-	if end := strings.Index(rest, "\n["); end >= 0 {
-		return rest[:end]
-	}
-	return rest
+	// Cut returns the whole string when the separator is absent, which is the
+	// last section of the unit.
+	head, _, _ := strings.Cut(rest, "\n[")
+	return head
 }
 
 func renderedUnit(t *testing.T) string {
