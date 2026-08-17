@@ -67,6 +67,12 @@ const (
 	// account that planted the file, it is charged to their disk quota, and it
 	// joins their backups. Root-owned 0700, one directory per system user.
 	DefaultQuarantineDir = "/var/lib/servika/quarantine"
+	// DefaultTuningBackupDir holds the copy of a configuration file taken before
+	// the tuning screen edits it. The copy is what a revert restores, so it must
+	// outlive the panel process and must NOT sit beside the file it copies:
+	// /etc/nginx/conf.d and /etc/my.cnf.d are both read wholesale by their
+	// daemon, and a backup left there is loaded as configuration.
+	DefaultTuningBackupDir = "/var/lib/servika/tuning-backups"
 	// DefaultMariaDBSlowLog is the panel's OWN slow query log, deliberately not
 	// MariaDB's default mariadb-slow.log name: an operator who already turned the
 	// slow log on keeps their file and their logrotate rule, and the panel never
@@ -200,6 +206,13 @@ func QuarantineDir() string {
 	return mustAbsPath("SERVIKA_QUARANTINE_DIR", DefaultQuarantineDir)
 }
 
+// TuningBackupDir is where the tuning screen keeps the copy of a configuration
+// file it is about to edit. Deliberately outside every directory a daemon reads
+// as configuration.
+func TuningBackupDir() string {
+	return mustAbsPath("SERVIKA_TUNING_BACKUP_DIR", DefaultTuningBackupDir)
+}
+
 // MariaDBSlowLog is where the panel asks MariaDB to write slow queries, and the
 // only file internal/slowquery reads.
 func MariaDBSlowLog() string {
@@ -292,6 +305,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_ACME_BIN", DefaultACMEBin, false},
 		{"SERVIKA_BACKUP_ROOT", DefaultBackupRoot, false},
 		{"SERVIKA_QUARANTINE_DIR", DefaultQuarantineDir, false},
+		{"SERVIKA_TUNING_BACKUP_DIR", DefaultTuningBackupDir, false},
 		{"SERVIKA_LARAVEL_LOG_DIR", DefaultLaravelLogDir, false},
 		{"SERVIKA_PLUGIN_ROOT", DefaultPluginRoot, false},
 		{"SERVIKA_LOG_DIR", DefaultLogDir, false},

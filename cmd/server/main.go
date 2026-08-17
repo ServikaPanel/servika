@@ -50,6 +50,7 @@ import (
 	"servika/internal/monitor"
 	"servika/internal/mtasts"
 	"servika/internal/nginxset"
+	"servika/internal/optimize"
 	"servika/internal/overview"
 	"servika/internal/packages"
 	"servika/internal/panelsettings"
@@ -345,6 +346,7 @@ func main() {
 	domainBlockH := &domainblock.Handlers{DB: d}
 	siteSecurityH := sitesecurity.NewHandlers(d)
 	appInstallH := &appinstall.Handlers{DB: d}
+	optimizeH := &optimize.Handlers{DB: d}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -526,6 +528,14 @@ func main() {
 			r.With(middleware.ResellerOrAbove).Get("/system/optimize", system.OptimizeStatus)
 			r.With(middleware.AdminOnly).Post("/system/optimize/start", system.OptimizeStart)
 			r.With(middleware.AdminOnly).Get("/system/optimize/log", system.OptimizeLog)
+			// The parameter-by-parameter surface sits BESIDE the whole-pass run
+			// above rather than replacing it. The run applies everything and
+			// tells the operator what it did; these let them agree to one line
+			// at a time and put one line back.
+			r.With(middleware.AdminOnly).Get("/system/optimize/proposals", optimizeH.Proposals)
+			r.With(middleware.AdminOnly).Post("/system/optimize/apply", optimizeH.ApplyChosen)
+			r.With(middleware.AdminOnly).Get("/system/optimize/history", optimizeH.ListHistory)
+			r.With(middleware.AdminOnly).Post("/system/optimize/history/{id}/revert", optimizeH.RevertChange)
 			r.With(middleware.AdminOnly).Get("/system/ssh-security", system.SSHSecurity)
 			r.With(middleware.AdminOnly).Get("/system/cve", system.CveStatus)
 			r.With(middleware.AdminOnly).Post("/system/cve/update", system.CveUpdate)
