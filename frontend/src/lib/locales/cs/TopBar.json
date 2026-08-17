@@ -30,6 +30,7 @@
     "optimize": { "title": "Optimalizace serveru", "subtitle": "Ladění serveru" },
     "serverIPs": { "title": "Adresy serveru", "subtitle": "Další adresy IPv4" },
     "panelPort": { "title": "Port panelu", "subtitle": "Vlastní porty panelu" },
+    "hostApps": { "title": "Serverové aplikace", "subtitle": "Gitea, Grafana a další serverový software" },
     "statistics": { "title": "Statistiky", "subtitle": "Statistiky využití" },
     "firewall": { "title": "Firewall", "subtitle": "Pravidla firewallu" },
     "monitoring": { "title": "Monitorování", "subtitle": "Živé metriky a protokoly serveru" },

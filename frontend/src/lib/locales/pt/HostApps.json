@@ -1,0 +1,82 @@
+{
+  "title": "Aplicações do servidor",
+  "description": "Software que pertence a este servidor e não a um cliente. Cada uma corre com uma conta própria numa porta reservada pelo painel e permanece fechada na firewall até a abrir.",
+  "breadcrumb": {
+    "home": "Início",
+    "toolsAndSettings": "Ferramentas e definições",
+    "hostApps": "Aplicações do servidor"
+  },
+  "installed": {
+    "title": "Instaladas",
+    "none": "Ainda não há nenhuma aplicação de servidor instalada.",
+    "application": "Aplicação",
+    "state": "Estado",
+    "port": "Porta",
+    "reachable": "Do exterior",
+    "actions": "Ações",
+    "firewallNote": "As portas {{min}} a {{max}} estão reservadas a estas aplicações e são descartadas na firewall. É a abertura aqui que torna uma aplicação acessível a partir do exterior."
+  },
+  "catalog": {
+    "title": "Disponíveis",
+    "description": "Este servidor usa {{architecture}}.",
+    "manualPort": "Esta aplicação lê a porta do seu próprio ficheiro de configuração; escreva lá a porta reservada.",
+    "alreadyInstalled": "Instalada",
+    "unavailable": "Não disponível neste servidor."
+  },
+  "state": {
+    "installing": "A instalar",
+    "installed": "Instalada",
+    "failed": "Falhou",
+    "removing": "A remover"
+  },
+  "install": {
+    "action": "Instalar",
+    "confirmTitle": "Instalar {{name}}?",
+    "confirmBody": "{{name}} {{version}} será transferido, verificado com a soma de verificação registada e iniciado com uma conta própria. A porta permanece fechada na firewall até a abrir.",
+    "failedTitle": "A aplicação não foi instalada"
+  },
+  "remove": {
+    "action": "Remover",
+    "confirmTitle": "Remover {{name}}?",
+    "confirmBody": "A conta, os ficheiros e a unit são eliminados. A pasta de dados é arquivada antes, mais nada é mantido.",
+    "failedTitle": "A aplicação não foi removida"
+  },
+  "action": {
+    "start": "Iniciar",
+    "stop": "Parar",
+    "restart": "Reiniciar",
+    "failedTitle": "A aplicação não respondeu"
+  },
+  "firewall": {
+    "isOpen": "Aberta",
+    "isClosed": "Fechada",
+    "open": "Abrir a porta",
+    "confirmTitle": "Abrir esta porta?",
+    "confirmBody": "A porta {{port}} passa a estar acessível a partir da Internet para {{name}}. Um endereço bloqueado por país ou por banimento continua a ser recusado.",
+    "failedTitle": "A regra da firewall não foi alterada"
+  },
+  "error": {
+    "load": "Não foi possível ler as aplicações do servidor.",
+    "install": "Não foi possível instalar a aplicação.",
+    "remove": "Não foi possível remover a aplicação.",
+    "action": "A aplicação não respondeu a esse pedido.",
+    "firewall": "Não foi possível alterar a regra da firewall."
+  },
+  "reason": {
+    "host_app_unknown": "Este servidor não oferece essa aplicação.",
+    "host_app_disabled": "Essa aplicação não é oferecida neste servidor.",
+    "host_app_no_build_for_architecture": "O projeto não publica uma versão para o processador deste servidor.",
+    "host_app_no_checksum": "Não há soma de verificação registada para esta transferência, por isso não pode ser verificada.",
+    "host_app_checksum_mismatch": "A transferência não correspondeu à soma de verificação registada e foi descartada.",
+    "host_app_already_installed": "Essa aplicação já está registada neste servidor.",
+    "host_app_no_free_port": "Todas as portas do intervalo reservado estão em uso.",
+    "host_app_bad_start_command": "Os argumentos de arranque do catálogo não podem ser usados.",
+    "host_app_invalid_catalog_entry": "A entrada do catálogo não é utilizável.",
+    "host_app_not_found": "Essa aplicação não está instalada.",
+    "host_app_busy": "Já está a decorrer outra operação.",
+    "host_app_download_failed": "A transferência falhou.",
+    "host_app_unpack_failed": "Não foi possível extrair o arquivo.",
+    "host_app_binary_missing": "O arquivo não contém o programa onde o catálogo indica.",
+    "host_app_port_taken": "Essa porta já está em uso."
+  }
+}

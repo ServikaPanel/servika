@@ -1,0 +1,82 @@
+{
+  "title": "Serveranwendungen",
+  "description": "Software, die zu diesem Server gehört und nicht zu einem Kunden. Jede läuft unter einem eigenen Konto auf einem Port, den das Panel reserviert, und bleibt in der Firewall geschlossen, bis Sie sie öffnen.",
+  "breadcrumb": {
+    "home": "Startseite",
+    "toolsAndSettings": "Werkzeuge und Einstellungen",
+    "hostApps": "Serveranwendungen"
+  },
+  "installed": {
+    "title": "Installiert",
+    "none": "Es ist noch keine Serveranwendung installiert.",
+    "application": "Anwendung",
+    "state": "Status",
+    "port": "Port",
+    "reachable": "Von außen",
+    "actions": "Aktionen",
+    "firewallNote": "Die Ports {{min}} bis {{max}} sind für diese Anwendungen reserviert und werden in der Firewall verworfen. Erst das Öffnen hier macht eine Anwendung von außen erreichbar."
+  },
+  "catalog": {
+    "title": "Verfügbar",
+    "description": "Dieser Server läuft auf {{architecture}}.",
+    "manualPort": "Diese Anwendung liest ihren Port aus der eigenen Konfigurationsdatei; tragen Sie den reservierten Port dort selbst ein.",
+    "alreadyInstalled": "Installiert",
+    "unavailable": "Auf diesem Server nicht verfügbar."
+  },
+  "state": {
+    "installing": "Wird installiert",
+    "installed": "Installiert",
+    "failed": "Fehlgeschlagen",
+    "removing": "Wird entfernt"
+  },
+  "install": {
+    "action": "Installieren",
+    "confirmTitle": "{{name}} installieren?",
+    "confirmBody": "{{name}} {{version}} wird heruntergeladen, gegen die hinterlegte Prüfsumme geprüft und unter einem eigenen Konto gestartet. Der Port bleibt in der Firewall geschlossen, bis Sie ihn öffnen.",
+    "failedTitle": "Die Anwendung wurde nicht installiert"
+  },
+  "remove": {
+    "action": "Entfernen",
+    "confirmTitle": "{{name}} entfernen?",
+    "confirmBody": "Konto, Dateien und Unit werden gelöscht. Das Datenverzeichnis wird vorher archiviert, sonst bleibt nichts erhalten.",
+    "failedTitle": "Die Anwendung wurde nicht entfernt"
+  },
+  "action": {
+    "start": "Starten",
+    "stop": "Stoppen",
+    "restart": "Neu starten",
+    "failedTitle": "Die Anwendung hat nicht reagiert"
+  },
+  "firewall": {
+    "isOpen": "Offen",
+    "isClosed": "Geschlossen",
+    "open": "Port öffnen",
+    "confirmTitle": "Diesen Port öffnen?",
+    "confirmBody": "Port {{port}} wird für {{name}} aus dem Internet erreichbar. Eine per Land oder Sperre blockierte Adresse wird weiterhin abgewiesen.",
+    "failedTitle": "Die Firewall-Regel wurde nicht geändert"
+  },
+  "error": {
+    "load": "Die Serveranwendungen konnten nicht gelesen werden.",
+    "install": "Die Anwendung konnte nicht installiert werden.",
+    "remove": "Die Anwendung konnte nicht entfernt werden.",
+    "action": "Die Anwendung hat darauf nicht reagiert.",
+    "firewall": "Die Firewall-Regel konnte nicht geändert werden."
+  },
+  "reason": {
+    "host_app_unknown": "Dieser Server bietet diese Anwendung nicht an.",
+    "host_app_disabled": "Diese Anwendung wird auf diesem Server nicht angeboten.",
+    "host_app_no_build_for_architecture": "Das Projekt veröffentlicht keinen Build für den Prozessor dieses Servers.",
+    "host_app_no_checksum": "Für diesen Download ist keine Prüfsumme hinterlegt, er kann nicht verifiziert werden.",
+    "host_app_checksum_mismatch": "Der Download stimmte nicht mit der hinterlegten Prüfsumme überein und wurde verworfen.",
+    "host_app_already_installed": "Diese Anwendung ist auf diesem Server bereits erfasst.",
+    "host_app_no_free_port": "Alle Ports im reservierten Bereich sind belegt.",
+    "host_app_bad_start_command": "Die Startargumente aus dem Katalog sind nicht verwendbar.",
+    "host_app_invalid_catalog_entry": "Der Katalogeintrag ist nicht verwendbar.",
+    "host_app_not_found": "Diese Anwendung ist nicht installiert.",
+    "host_app_busy": "Es läuft bereits ein anderer Vorgang.",
+    "host_app_download_failed": "Der Download ist fehlgeschlagen.",
+    "host_app_unpack_failed": "Das Archiv konnte nicht entpackt werden.",
+    "host_app_binary_missing": "Das Archiv enthält das Programm nicht an der Stelle, die der Katalog nennt.",
+    "host_app_port_taken": "Dieser Port ist bereits belegt."
+  }
+}

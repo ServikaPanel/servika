@@ -60,6 +60,7 @@ const NAV: NavGroup[] = [
     { to: '/tools/optimize',   labelKey: 'optimize',      icon: ICONS.optimize },
     { to: '/tools/server-ips', labelKey: 'serverIPs',     icon: ICONS.monitoring },
     { to: '/tools/panel-port', labelKey: 'panelPort',     icon: ICONS.tools },
+    { to: '/tools/host-apps',  labelKey: 'hostApps',      icon: ICONS.extensions },
     { to: '/statistics',       labelKey: 'statistics',      icon: ICONS.stats },
     { to: '/extensions',          labelKey: 'extensions',         icon: ICONS.extensions },
     { to: '/wordpress',           labelKey: 'wordpress',          icon: ICONS.wp },

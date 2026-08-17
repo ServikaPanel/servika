@@ -30,6 +30,7 @@
     "optimize": { "title": "Otimização do Servidor", "subtitle": "Ajuste do servidor" },
     "serverIPs": { "title": "Endereços do servidor", "subtitle": "Endereços IPv4 adicionais" },
     "panelPort": { "title": "Porta do painel", "subtitle": "As portas do painel" },
+    "hostApps": { "title": "Aplicações do servidor", "subtitle": "Gitea, Grafana e outro software de servidor" },
     "statistics": { "title": "Estatísticas", "subtitle": "Estatísticas de uso" },
     "firewall": { "title": "Firewall", "subtitle": "Regras de firewall" },
     "monitoring": { "title": "Monitorização", "subtitle": "Métricas e registos em tempo real" },

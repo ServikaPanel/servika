@@ -26,6 +26,7 @@
     "optimize": "服务器优化",
     "serverIPs": "服务器地址",
     "panelPort": "面板端口",
+    "hostApps": "服务器应用",
     "statistics": "统计",
     "extensions": "扩展",
     "wordpress": "WordPress",

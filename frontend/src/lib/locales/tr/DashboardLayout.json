@@ -26,6 +26,7 @@
     "optimize": "Sunucu Optimize",
     "serverIPs": "Sunucu Adresleri",
     "panelPort": "Panel Portu",
+    "hostApps": "Sunucu Uygulamaları",
     "statistics": "İstatistikler",
     "extensions": "Uzantılar",
     "wordpress": "WordPress",

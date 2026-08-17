@@ -1,0 +1,82 @@
+{
+  "title": "Aplicații de server",
+  "description": "Programe care aparțin acestui server, nu unui client. Fiecare rulează sub un cont propriu, pe un port rezervat de panou, și rămâne închisă în firewall până când o deschideți.",
+  "breadcrumb": {
+    "home": "Acasă",
+    "toolsAndSettings": "Instrumente și setări",
+    "hostApps": "Aplicații de server"
+  },
+  "installed": {
+    "title": "Instalate",
+    "none": "Nu este instalată încă nicio aplicație de server.",
+    "application": "Aplicație",
+    "state": "Stare",
+    "port": "Port",
+    "reachable": "Din exterior",
+    "actions": "Acțiuni",
+    "firewallNote": "Porturile {{min}} până la {{max}} sunt rezervate acestor aplicații și sunt aruncate în firewall. Deschiderea de aici este ceea ce face o aplicație accesibilă din exterior."
+  },
+  "catalog": {
+    "title": "Disponibile",
+    "description": "Acest server rulează pe {{architecture}}.",
+    "manualPort": "Această aplicație își citește portul din propriul fișier de configurare; scrieți acolo portul rezervat.",
+    "alreadyInstalled": "Instalată",
+    "unavailable": "Nu este disponibilă pe acest server."
+  },
+  "state": {
+    "installing": "Se instalează",
+    "installed": "Instalată",
+    "failed": "A eșuat",
+    "removing": "Se elimină"
+  },
+  "install": {
+    "action": "Instalează",
+    "confirmTitle": "Instalați {{name}}?",
+    "confirmBody": "{{name}} {{version}} va fi descărcat, verificat cu suma de control înregistrată și pornit sub un cont propriu. Portul rămâne închis în firewall până când îl deschideți.",
+    "failedTitle": "Aplicația nu a fost instalată"
+  },
+  "remove": {
+    "action": "Elimină",
+    "confirmTitle": "Eliminați {{name}}?",
+    "confirmBody": "Contul, fișierele și unitatea sunt șterse. Directorul de date este arhivat înainte, nimic altceva nu se păstrează.",
+    "failedTitle": "Aplicația nu a fost eliminată"
+  },
+  "action": {
+    "start": "Pornește",
+    "stop": "Oprește",
+    "restart": "Repornește",
+    "failedTitle": "Aplicația nu a răspuns"
+  },
+  "firewall": {
+    "isOpen": "Deschis",
+    "isClosed": "Închis",
+    "open": "Deschide portul",
+    "confirmTitle": "Deschideți acest port?",
+    "confirmBody": "Portul {{port}} devine accesibil din internet pentru {{name}}. O adresă blocată prin țară sau prin interdicție rămâne refuzată.",
+    "failedTitle": "Regula de firewall nu a fost schimbată"
+  },
+  "error": {
+    "load": "Aplicațiile de server nu au putut fi citite.",
+    "install": "Aplicația nu a putut fi instalată.",
+    "remove": "Aplicația nu a putut fi eliminată.",
+    "action": "Aplicația nu a răspuns la această cerere.",
+    "firewall": "Regula de firewall nu a putut fi schimbată."
+  },
+  "reason": {
+    "host_app_unknown": "Acest server nu oferă acea aplicație.",
+    "host_app_disabled": "Acea aplicație nu este oferită pe acest server.",
+    "host_app_no_build_for_architecture": "Proiectul nu publică o versiune pentru procesorul acestui server.",
+    "host_app_no_checksum": "Nu există o sumă de control înregistrată pentru această descărcare, deci nu poate fi verificată.",
+    "host_app_checksum_mismatch": "Descărcarea nu a corespuns sumei de control înregistrate și a fost eliminată.",
+    "host_app_already_installed": "Acea aplicație este deja înregistrată pe acest server.",
+    "host_app_no_free_port": "Toate porturile din intervalul rezervat sunt ocupate.",
+    "host_app_bad_start_command": "Argumentele de pornire din catalog nu pot fi folosite.",
+    "host_app_invalid_catalog_entry": "Intrarea din catalog nu este utilizabilă.",
+    "host_app_not_found": "Acea aplicație nu este instalată.",
+    "host_app_busy": "Rulează deja o altă operațiune.",
+    "host_app_download_failed": "Descărcarea a eșuat.",
+    "host_app_unpack_failed": "Arhiva nu a putut fi dezarhivată.",
+    "host_app_binary_missing": "Arhiva nu conține programul acolo unde indică catalogul.",
+    "host_app_port_taken": "Acel port este deja folosit."
+  }
+}

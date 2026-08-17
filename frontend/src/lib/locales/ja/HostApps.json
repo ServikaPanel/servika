@@ -1,0 +1,82 @@
+{
+  "title": "サーバーアプリケーション",
+  "description": "顧客ではなくこのサーバーに属するソフトウェアです。それぞれ専用のアカウントで、パネルが予約したポート上で動作し、開くまでファイアウォールで閉じたままです。",
+  "breadcrumb": {
+    "home": "ホーム",
+    "toolsAndSettings": "ツールと設定",
+    "hostApps": "サーバーアプリケーション"
+  },
+  "installed": {
+    "title": "インストール済み",
+    "none": "サーバーアプリケーションはまだインストールされていません。",
+    "application": "アプリケーション",
+    "state": "状態",
+    "port": "ポート",
+    "reachable": "外部から",
+    "actions": "操作",
+    "firewallNote": "ポート {{min}} から {{max}} はこれらのアプリケーション用に予約され、ファイアウォールで破棄されます。ここで開くことが、外部からアクセスできるようにする唯一の方法です。"
+  },
+  "catalog": {
+    "title": "利用可能",
+    "description": "このサーバーは {{architecture}} で動作しています。",
+    "manualPort": "このアプリケーションはポートを自身の設定ファイルから読み取ります。予約されたポートをそちらに記入してください。",
+    "alreadyInstalled": "インストール済み",
+    "unavailable": "このサーバーでは利用できません。"
+  },
+  "state": {
+    "installing": "インストール中",
+    "installed": "インストール済み",
+    "failed": "失敗",
+    "removing": "削除中"
+  },
+  "install": {
+    "action": "インストール",
+    "confirmTitle": "{{name}} をインストールしますか？",
+    "confirmBody": "{{name}} {{version}} をダウンロードし、記録されたチェックサムで検証し、専用アカウントで起動します。ポートは開くまでファイアウォールで閉じたままです。",
+    "failedTitle": "アプリケーションはインストールされませんでした"
+  },
+  "remove": {
+    "action": "削除",
+    "confirmTitle": "{{name}} を削除しますか？",
+    "confirmBody": "アカウント、ファイル、unit が削除されます。データディレクトリは先にアーカイブされますが、それ以外は保持されません。",
+    "failedTitle": "アプリケーションは削除されませんでした"
+  },
+  "action": {
+    "start": "開始",
+    "stop": "停止",
+    "restart": "再起動",
+    "failedTitle": "アプリケーションが応答しませんでした"
+  },
+  "firewall": {
+    "isOpen": "開放",
+    "isClosed": "閉鎖",
+    "open": "ポートを開く",
+    "confirmTitle": "このポートを開きますか？",
+    "confirmBody": "ポート {{port}} が {{name}} 向けにインターネットから到達可能になります。国別ルールや禁止でブロックしたアドレスは引き続き拒否されます。",
+    "failedTitle": "ファイアウォール規則は変更されませんでした"
+  },
+  "error": {
+    "load": "サーバーアプリケーションを読み取れませんでした。",
+    "install": "アプリケーションをインストールできませんでした。",
+    "remove": "アプリケーションを削除できませんでした。",
+    "action": "アプリケーションはその要求に応答しませんでした。",
+    "firewall": "ファイアウォール規則を変更できませんでした。"
+  },
+  "reason": {
+    "host_app_unknown": "このサーバーはそのアプリケーションを提供していません。",
+    "host_app_disabled": "そのアプリケーションはこのサーバーでは提供されていません。",
+    "host_app_no_build_for_architecture": "プロジェクトはこのサーバーのプロセッサ向けのビルドを公開していません。",
+    "host_app_no_checksum": "このダウンロードにはチェックサムが記録されておらず、検証できません。",
+    "host_app_checksum_mismatch": "ダウンロードが記録されたチェックサムと一致しなかったため破棄されました。",
+    "host_app_already_installed": "そのアプリケーションはこのサーバーに既に登録されています。",
+    "host_app_no_free_port": "予約範囲のポートはすべて使用中です。",
+    "host_app_bad_start_command": "カタログの起動引数は使用できません。",
+    "host_app_invalid_catalog_entry": "カタログの項目は使用できません。",
+    "host_app_not_found": "そのアプリケーションはインストールされていません。",
+    "host_app_busy": "別の操作が既に実行中です。",
+    "host_app_download_failed": "ダウンロードに失敗しました。",
+    "host_app_unpack_failed": "アーカイブを展開できませんでした。",
+    "host_app_binary_missing": "アーカイブにはカタログが示す場所にプログラムが含まれていません。",
+    "host_app_port_taken": "そのポートは既に使用中です。"
+  }
+}

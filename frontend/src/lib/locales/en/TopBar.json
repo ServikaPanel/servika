@@ -30,6 +30,7 @@
     "optimize": { "title": "Server Optimize", "subtitle": "Server tuning" },
     "serverIPs": { "title": "Server Addresses", "subtitle": "Additional IPv4 addresses" },
     "panelPort": { "title": "Panel Port", "subtitle": "The panel’s own ports" },
+    "hostApps": { "title": "Server Applications", "subtitle": "Gitea, Grafana and other server software" },
     "statistics": { "title": "Statistics", "subtitle": "Usage statistics" },
     "firewall": { "title": "Firewall", "subtitle": "Firewall rules" },
     "monitoring": { "title": "Monitoring", "subtitle": "Live server metrics and logs" },

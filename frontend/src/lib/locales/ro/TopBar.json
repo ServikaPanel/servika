@@ -30,6 +30,7 @@
     "optimize": { "title": "Optimizare server", "subtitle": "Reglare server" },
     "serverIPs": { "title": "Adresele serverului", "subtitle": "Adrese IPv4 suplimentare" },
     "panelPort": { "title": "Portul panoului", "subtitle": "Porturile panoului" },
+    "hostApps": { "title": "Aplicații de server", "subtitle": "Gitea, Grafana și alte programe de server" },
     "statistics": { "title": "Statistici", "subtitle": "Statistici de utilizare" },
     "firewall": { "title": "Firewall", "subtitle": "Reguli firewall" },
     "monitoring": { "title": "Monitorizare", "subtitle": "Metrici și jurnale de server live" },

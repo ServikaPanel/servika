@@ -1,0 +1,82 @@
+{
+  "title": "服务器应用",
+  "description": "属于本服务器而非某个客户的软件。每个应用以自己的账户运行在面板保留的端口上，在您开放之前始终被防火墙关闭。",
+  "breadcrumb": {
+    "home": "首页",
+    "toolsAndSettings": "工具与设置",
+    "hostApps": "服务器应用"
+  },
+  "installed": {
+    "title": "已安装",
+    "none": "尚未安装任何服务器应用。",
+    "application": "应用",
+    "state": "状态",
+    "port": "端口",
+    "reachable": "来自外部",
+    "actions": "操作",
+    "firewallNote": "端口 {{min}} 至 {{max}} 保留给这些应用，并在防火墙中被丢弃。只有在此开放，应用才能从服务器外部访问。"
+  },
+  "catalog": {
+    "title": "可安装",
+    "description": "本服务器运行于 {{architecture}}。",
+    "manualPort": "该应用从自己的配置文件读取端口，请自行把保留端口写入其中。",
+    "alreadyInstalled": "已安装",
+    "unavailable": "本服务器上不可用。"
+  },
+  "state": {
+    "installing": "安装中",
+    "installed": "已安装",
+    "failed": "失败",
+    "removing": "移除中"
+  },
+  "install": {
+    "action": "安装",
+    "confirmTitle": "安装 {{name}}？",
+    "confirmBody": "将下载 {{name}} {{version}}，与记录的校验和比对后以独立账户启动。在您开放之前，其端口在防火墙中保持关闭。",
+    "failedTitle": "应用未安装"
+  },
+  "remove": {
+    "action": "移除",
+    "confirmTitle": "移除 {{name}}？",
+    "confirmBody": "账户、文件和 unit 都会被删除。数据目录会先归档，其余内容不予保留。",
+    "failedTitle": "应用未被移除"
+  },
+  "action": {
+    "start": "启动",
+    "stop": "停止",
+    "restart": "重启",
+    "failedTitle": "应用没有响应"
+  },
+  "firewall": {
+    "isOpen": "开放",
+    "isClosed": "关闭",
+    "open": "开放端口",
+    "confirmTitle": "开放此端口？",
+    "confirmBody": "端口 {{port}} 将对 {{name}} 从互联网可达。按国家或封禁屏蔽的地址仍会被拒绝。",
+    "failedTitle": "防火墙规则未更改"
+  },
+  "error": {
+    "load": "无法读取服务器应用。",
+    "install": "无法安装该应用。",
+    "remove": "无法移除该应用。",
+    "action": "应用未响应该请求。",
+    "firewall": "无法更改防火墙规则。"
+  },
+  "reason": {
+    "host_app_unknown": "本服务器不提供该应用。",
+    "host_app_disabled": "该应用未在本服务器上提供。",
+    "host_app_no_build_for_architecture": "该项目未发布适用于本服务器处理器的构建。",
+    "host_app_no_checksum": "此下载没有记录校验和，因此无法验证。",
+    "host_app_checksum_mismatch": "下载内容与记录的校验和不符，已被丢弃。",
+    "host_app_already_installed": "该应用已在本服务器上登记。",
+    "host_app_no_free_port": "保留范围内的端口已全部占用。",
+    "host_app_bad_start_command": "目录中的启动参数无法使用。",
+    "host_app_invalid_catalog_entry": "目录条目不可用。",
+    "host_app_not_found": "该应用未安装。",
+    "host_app_busy": "已有另一项操作在运行。",
+    "host_app_download_failed": "下载失败。",
+    "host_app_unpack_failed": "无法解压该归档。",
+    "host_app_binary_missing": "归档中没有目录所指位置的程序。",
+    "host_app_port_taken": "该端口已被占用。"
+  }
+}

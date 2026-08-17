@@ -1,0 +1,82 @@
+{
+  "title": "Server Applications",
+  "description": "Software that belongs to this server rather than to a customer. Each one runs as its own account on a port the panel reserves, and stays closed at the firewall until you open it.",
+  "breadcrumb": {
+    "home": "Home",
+    "toolsAndSettings": "Tools and Settings",
+    "hostApps": "Server Applications"
+  },
+  "installed": {
+    "title": "Installed",
+    "none": "No server application is installed yet.",
+    "application": "Application",
+    "state": "State",
+    "port": "Port",
+    "reachable": "From outside",
+    "actions": "Actions",
+    "firewallNote": "Ports {{min}} to {{max}} are reserved for these applications and dropped at the firewall. Opening one here is what makes it reachable from outside the server."
+  },
+  "catalog": {
+    "title": "Available",
+    "description": "This server runs {{architecture}}.",
+    "manualPort": "This application reads its port from its own configuration file, so set the reserved port there yourself.",
+    "alreadyInstalled": "Installed",
+    "unavailable": "Not available on this server."
+  },
+  "state": {
+    "installing": "Installing",
+    "installed": "Installed",
+    "failed": "Failed",
+    "removing": "Removing"
+  },
+  "install": {
+    "action": "Install",
+    "confirmTitle": "Install {{name}}?",
+    "confirmBody": "{{name}} {{version}} will be downloaded, checked against its recorded checksum and started under its own account. Its port stays closed at the firewall until you open it.",
+    "failedTitle": "The application was not installed"
+  },
+  "remove": {
+    "action": "Remove",
+    "confirmTitle": "Remove {{name}}?",
+    "confirmBody": "The account, the files and the unit are deleted. The data directory is archived first, but nothing else is kept.",
+    "failedTitle": "The application was not removed"
+  },
+  "action": {
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "failedTitle": "The application did not respond"
+  },
+  "firewall": {
+    "isOpen": "Open",
+    "isClosed": "Closed",
+    "open": "Open the port",
+    "confirmTitle": "Open this port?",
+    "confirmBody": "Port {{port}} becomes reachable from the internet for {{name}}. An address you have blocked by country or by ban is still refused.",
+    "failedTitle": "The firewall rule was not changed"
+  },
+  "error": {
+    "load": "The server applications could not be read.",
+    "install": "The application could not be installed.",
+    "remove": "The application could not be removed.",
+    "action": "The application did not respond to that.",
+    "firewall": "The firewall rule could not be changed."
+  },
+  "reason": {
+    "host_app_unknown": "This server does not offer that application.",
+    "host_app_disabled": "That application is not offered on this server.",
+    "host_app_no_build_for_architecture": "The project publishes no build for this server's processor.",
+    "host_app_no_checksum": "There is no recorded checksum for this download, so it cannot be verified.",
+    "host_app_checksum_mismatch": "The download did not match its recorded checksum and was discarded.",
+    "host_app_already_installed": "That application is already recorded on this server.",
+    "host_app_no_free_port": "Every port in the reserved range is in use.",
+    "host_app_bad_start_command": "The catalog's start arguments cannot be used.",
+    "host_app_invalid_catalog_entry": "The catalog entry is not usable.",
+    "host_app_not_found": "That application is not installed.",
+    "host_app_busy": "Another operation is already running.",
+    "host_app_download_failed": "The download failed.",
+    "host_app_unpack_failed": "The archive could not be unpacked.",
+    "host_app_binary_missing": "The archive does not contain the program where the catalog says it does.",
+    "host_app_port_taken": "That port is already in use."
+  }
+}

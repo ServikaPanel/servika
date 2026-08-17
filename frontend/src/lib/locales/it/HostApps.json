@@ -1,0 +1,82 @@
+{
+  "title": "Applicazioni server",
+  "description": "Software che appartiene a questo server e non a un cliente. Ognuna gira con un account proprio su una porta riservata dal pannello e resta chiusa nel firewall finché non la apri.",
+  "breadcrumb": {
+    "home": "Home",
+    "toolsAndSettings": "Strumenti e impostazioni",
+    "hostApps": "Applicazioni server"
+  },
+  "installed": {
+    "title": "Installate",
+    "none": "Non è ancora installata nessuna applicazione server.",
+    "application": "Applicazione",
+    "state": "Stato",
+    "port": "Porta",
+    "reachable": "Dall'esterno",
+    "actions": "Azioni",
+    "firewallNote": "Le porte da {{min}} a {{max}} sono riservate a queste applicazioni e scartate nel firewall. È l'apertura qui che rende un'applicazione raggiungibile dall'esterno."
+  },
+  "catalog": {
+    "title": "Disponibili",
+    "description": "Questo server usa {{architecture}}.",
+    "manualPort": "Questa applicazione legge la porta dal proprio file di configurazione; scrivi lì tu stesso la porta riservata.",
+    "alreadyInstalled": "Installata",
+    "unavailable": "Non disponibile su questo server."
+  },
+  "state": {
+    "installing": "Installazione",
+    "installed": "Installata",
+    "failed": "Non riuscita",
+    "removing": "Rimozione"
+  },
+  "install": {
+    "action": "Installa",
+    "confirmTitle": "Installare {{name}}?",
+    "confirmBody": "{{name}} {{version}} verrà scaricato, verificato con il checksum registrato e avviato con un account proprio. La porta resta chiusa nel firewall finché non la apri.",
+    "failedTitle": "L'applicazione non è stata installata"
+  },
+  "remove": {
+    "action": "Rimuovi",
+    "confirmTitle": "Rimuovere {{name}}?",
+    "confirmBody": "Account, file e unit vengono eliminati. La cartella dati viene archiviata prima, nient'altro viene conservato.",
+    "failedTitle": "L'applicazione non è stata rimossa"
+  },
+  "action": {
+    "start": "Avvia",
+    "stop": "Ferma",
+    "restart": "Riavvia",
+    "failedTitle": "L'applicazione non ha risposto"
+  },
+  "firewall": {
+    "isOpen": "Aperta",
+    "isClosed": "Chiusa",
+    "open": "Apri la porta",
+    "confirmTitle": "Aprire questa porta?",
+    "confirmBody": "La porta {{port}} diventa raggiungibile da Internet per {{name}}. Un indirizzo bloccato per paese o per ban resta comunque rifiutato.",
+    "failedTitle": "La regola del firewall non è stata cambiata"
+  },
+  "error": {
+    "load": "Non è stato possibile leggere le applicazioni server.",
+    "install": "Non è stato possibile installare l'applicazione.",
+    "remove": "Non è stato possibile rimuovere l'applicazione.",
+    "action": "L'applicazione non ha risposto alla richiesta.",
+    "firewall": "Non è stato possibile cambiare la regola del firewall."
+  },
+  "reason": {
+    "host_app_unknown": "Questo server non offre quell'applicazione.",
+    "host_app_disabled": "Quell'applicazione non è offerta su questo server.",
+    "host_app_no_build_for_architecture": "Il progetto non pubblica una build per il processore di questo server.",
+    "host_app_no_checksum": "Per questo download non è registrato alcun checksum, quindi non può essere verificato.",
+    "host_app_checksum_mismatch": "Il download non corrispondeva al checksum registrato ed è stato scartato.",
+    "host_app_already_installed": "Quell'applicazione è già registrata su questo server.",
+    "host_app_no_free_port": "Tutte le porte dell'intervallo riservato sono in uso.",
+    "host_app_bad_start_command": "Gli argomenti di avvio del catalogo non sono utilizzabili.",
+    "host_app_invalid_catalog_entry": "La voce di catalogo non è utilizzabile.",
+    "host_app_not_found": "Quell'applicazione non è installata.",
+    "host_app_busy": "È già in corso un'altra operazione.",
+    "host_app_download_failed": "Il download non è riuscito.",
+    "host_app_unpack_failed": "Non è stato possibile estrarre l'archivio.",
+    "host_app_binary_missing": "L'archivio non contiene il programma dove indica il catalogo.",
+    "host_app_port_taken": "Quella porta è già in uso."
+  }
+}

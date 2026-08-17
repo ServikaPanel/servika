@@ -1,0 +1,82 @@
+{
+  "title": "Applications serveur",
+  "description": "Logiciels appartenant à ce serveur plutôt qu'à un client. Chacun s'exécute sous son propre compte sur un port réservé par le panneau et reste fermé au pare-feu jusqu'à ce que vous l'ouvriez.",
+  "breadcrumb": {
+    "home": "Accueil",
+    "toolsAndSettings": "Outils et paramètres",
+    "hostApps": "Applications serveur"
+  },
+  "installed": {
+    "title": "Installées",
+    "none": "Aucune application serveur n'est encore installée.",
+    "application": "Application",
+    "state": "État",
+    "port": "Port",
+    "reachable": "Depuis l'extérieur",
+    "actions": "Actions",
+    "firewallNote": "Les ports {{min}} à {{max}} sont réservés à ces applications et rejetés par le pare-feu. C'est l'ouverture ici qui rend une application accessible depuis l'extérieur."
+  },
+  "catalog": {
+    "title": "Disponibles",
+    "description": "Ce serveur fonctionne en {{architecture}}.",
+    "manualPort": "Cette application lit son port dans son propre fichier de configuration ; inscrivez-y vous-même le port réservé.",
+    "alreadyInstalled": "Installée",
+    "unavailable": "Non disponible sur ce serveur."
+  },
+  "state": {
+    "installing": "Installation",
+    "installed": "Installée",
+    "failed": "Échec",
+    "removing": "Suppression"
+  },
+  "install": {
+    "action": "Installer",
+    "confirmTitle": "Installer {{name}} ?",
+    "confirmBody": "{{name}} {{version}} sera téléchargé, vérifié avec sa somme de contrôle enregistrée et démarré sous son propre compte. Son port reste fermé au pare-feu jusqu'à ce que vous l'ouvriez.",
+    "failedTitle": "L'application n'a pas été installée"
+  },
+  "remove": {
+    "action": "Supprimer",
+    "confirmTitle": "Supprimer {{name}} ?",
+    "confirmBody": "Le compte, les fichiers et l'unité sont supprimés. Le répertoire de données est archivé au préalable, rien d'autre n'est conservé.",
+    "failedTitle": "L'application n'a pas été supprimée"
+  },
+  "action": {
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "restart": "Redémarrer",
+    "failedTitle": "L'application n'a pas répondu"
+  },
+  "firewall": {
+    "isOpen": "Ouvert",
+    "isClosed": "Fermé",
+    "open": "Ouvrir le port",
+    "confirmTitle": "Ouvrir ce port ?",
+    "confirmBody": "Le port {{port}} devient accessible depuis Internet pour {{name}}. Une adresse bloquée par pays ou par bannissement reste refusée.",
+    "failedTitle": "La règle de pare-feu n'a pas été modifiée"
+  },
+  "error": {
+    "load": "Les applications serveur n'ont pas pu être lues.",
+    "install": "L'application n'a pas pu être installée.",
+    "remove": "L'application n'a pas pu être supprimée.",
+    "action": "L'application n'a pas répondu à cette demande.",
+    "firewall": "La règle de pare-feu n'a pas pu être modifiée."
+  },
+  "reason": {
+    "host_app_unknown": "Ce serveur ne propose pas cette application.",
+    "host_app_disabled": "Cette application n'est pas proposée sur ce serveur.",
+    "host_app_no_build_for_architecture": "Le projet ne publie aucune version pour le processeur de ce serveur.",
+    "host_app_no_checksum": "Aucune somme de contrôle n'est enregistrée pour ce téléchargement, il ne peut pas être vérifié.",
+    "host_app_checksum_mismatch": "Le téléchargement ne correspondait pas à sa somme de contrôle enregistrée et a été écarté.",
+    "host_app_already_installed": "Cette application est déjà enregistrée sur ce serveur.",
+    "host_app_no_free_port": "Tous les ports de la plage réservée sont utilisés.",
+    "host_app_bad_start_command": "Les arguments de démarrage du catalogue sont inutilisables.",
+    "host_app_invalid_catalog_entry": "L'entrée du catalogue est inutilisable.",
+    "host_app_not_found": "Cette application n'est pas installée.",
+    "host_app_busy": "Une autre opération est déjà en cours.",
+    "host_app_download_failed": "Le téléchargement a échoué.",
+    "host_app_unpack_failed": "L'archive n'a pas pu être extraite.",
+    "host_app_binary_missing": "L'archive ne contient pas le programme à l'emplacement indiqué par le catalogue.",
+    "host_app_port_taken": "Ce port est déjà utilisé."
+  }
+}

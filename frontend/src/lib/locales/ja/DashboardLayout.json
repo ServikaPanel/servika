@@ -26,6 +26,7 @@
     "optimize": "サーバー最適化",
     "serverIPs": "サーバーアドレス",
     "panelPort": "パネルのポート",
+    "hostApps": "サーバーアプリケーション",
     "statistics": "統計",
     "extensions": "拡張機能",
     "wordpress": "WordPress",

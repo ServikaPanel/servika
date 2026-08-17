@@ -1,0 +1,82 @@
+{
+  "title": "Aplicaciones del servidor",
+  "description": "Software que pertenece a este servidor y no a un cliente. Cada una se ejecuta con su propia cuenta en un puerto que el panel reserva y permanece cerrada en el firewall hasta que la abra.",
+  "breadcrumb": {
+    "home": "Inicio",
+    "toolsAndSettings": "Herramientas y ajustes",
+    "hostApps": "Aplicaciones del servidor"
+  },
+  "installed": {
+    "title": "Instaladas",
+    "none": "Todavía no hay ninguna aplicación de servidor instalada.",
+    "application": "Aplicación",
+    "state": "Estado",
+    "port": "Puerto",
+    "reachable": "Desde fuera",
+    "actions": "Acciones",
+    "firewallNote": "Los puertos {{min}} a {{max}} están reservados para estas aplicaciones y se descartan en el firewall. Abrir uno aquí es lo que hace que una aplicación sea accesible desde fuera."
+  },
+  "catalog": {
+    "title": "Disponibles",
+    "description": "Este servidor usa {{architecture}}.",
+    "manualPort": "Esta aplicación lee su puerto de su propio archivo de configuración; escriba allí el puerto reservado.",
+    "alreadyInstalled": "Instalada",
+    "unavailable": "No disponible en este servidor."
+  },
+  "state": {
+    "installing": "Instalando",
+    "installed": "Instalada",
+    "failed": "Falló",
+    "removing": "Eliminando"
+  },
+  "install": {
+    "action": "Instalar",
+    "confirmTitle": "¿Instalar {{name}}?",
+    "confirmBody": "{{name}} {{version}} se descargará, se comprobará con su suma de verificación registrada y se iniciará con su propia cuenta. Su puerto permanece cerrado en el firewall hasta que lo abra.",
+    "failedTitle": "La aplicación no se instaló"
+  },
+  "remove": {
+    "action": "Eliminar",
+    "confirmTitle": "¿Eliminar {{name}}?",
+    "confirmBody": "Se eliminan la cuenta, los archivos y la unit. El directorio de datos se archiva antes, no se conserva nada más.",
+    "failedTitle": "La aplicación no se eliminó"
+  },
+  "action": {
+    "start": "Iniciar",
+    "stop": "Detener",
+    "restart": "Reiniciar",
+    "failedTitle": "La aplicación no respondió"
+  },
+  "firewall": {
+    "isOpen": "Abierto",
+    "isClosed": "Cerrado",
+    "open": "Abrir el puerto",
+    "confirmTitle": "¿Abrir este puerto?",
+    "confirmBody": "El puerto {{port}} pasa a ser accesible desde Internet para {{name}}. Una dirección bloqueada por país o por veto sigue rechazada.",
+    "failedTitle": "La regla del firewall no se cambió"
+  },
+  "error": {
+    "load": "No se pudieron leer las aplicaciones del servidor.",
+    "install": "No se pudo instalar la aplicación.",
+    "remove": "No se pudo eliminar la aplicación.",
+    "action": "La aplicación no respondió a esa petición.",
+    "firewall": "No se pudo cambiar la regla del firewall."
+  },
+  "reason": {
+    "host_app_unknown": "Este servidor no ofrece esa aplicación.",
+    "host_app_disabled": "Esa aplicación no se ofrece en este servidor.",
+    "host_app_no_build_for_architecture": "El proyecto no publica una compilación para el procesador de este servidor.",
+    "host_app_no_checksum": "No hay suma de verificación registrada para esta descarga, así que no se puede verificar.",
+    "host_app_checksum_mismatch": "La descarga no coincidió con su suma de verificación registrada y se descartó.",
+    "host_app_already_installed": "Esa aplicación ya está registrada en este servidor.",
+    "host_app_no_free_port": "Todos los puertos del rango reservado están en uso.",
+    "host_app_bad_start_command": "Los argumentos de arranque del catálogo no se pueden usar.",
+    "host_app_invalid_catalog_entry": "La entrada del catálogo no es utilizable.",
+    "host_app_not_found": "Esa aplicación no está instalada.",
+    "host_app_busy": "Ya se está ejecutando otra operación.",
+    "host_app_download_failed": "La descarga falló.",
+    "host_app_unpack_failed": "No se pudo extraer el archivo.",
+    "host_app_binary_missing": "El archivo no contiene el programa donde el catálogo dice.",
+    "host_app_port_taken": "Ese puerto ya está en uso."
+  }
+}

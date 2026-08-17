@@ -30,6 +30,7 @@
     "optimize": { "title": "Optimiser le serveur", "subtitle": "Réglage du serveur" },
     "serverIPs": { "title": "Adresses du serveur", "subtitle": "Adresses IPv4 supplémentaires" },
     "panelPort": { "title": "Port du panneau", "subtitle": "Les ports du panneau" },
+    "hostApps": { "title": "Applications serveur", "subtitle": "Gitea, Grafana et autres logiciels serveur" },
     "statistics": { "title": "Statistiques", "subtitle": "Statistiques d'utilisation" },
     "firewall": { "title": "Pare-feu", "subtitle": "Règles de pare-feu" },
     "monitoring": { "title": "Surveillance", "subtitle": "Métriques serveur en direct et journaux" },

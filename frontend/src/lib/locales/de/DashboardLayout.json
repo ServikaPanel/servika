@@ -26,6 +26,7 @@
     "optimize": "Server optimieren",
     "serverIPs": "Serveradressen",
     "panelPort": "Panel-Port",
+    "hostApps": "Serveranwendungen",
     "statistics": "Statistiken",
     "extensions": "Erweiterungen",
     "wordpress": "WordPress",

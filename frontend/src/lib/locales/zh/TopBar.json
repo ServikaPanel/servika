@@ -30,6 +30,7 @@
     "optimize": { "title": "服务器优化", "subtitle": "服务器调优" },
     "serverIPs": { "title": "服务器地址", "subtitle": "额外的 IPv4 地址" },
     "panelPort": { "title": "面板端口", "subtitle": "面板自身的端口" },
+    "hostApps": { "title": "服务器应用", "subtitle": "Gitea、Grafana 等服务器软件" },
     "statistics": { "title": "统计", "subtitle": "使用统计" },
     "firewall": { "title": "防火墙", "subtitle": "防火墙规则" },
     "monitoring": { "title": "监控", "subtitle": "实时服务器指标和日志" },

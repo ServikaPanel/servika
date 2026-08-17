@@ -26,6 +26,7 @@
     "optimize": "Optimalizace serveru",
     "serverIPs": "Adresy serveru",
     "panelPort": "Port panelu",
+    "hostApps": "Serverové aplikace",
     "statistics": "Statistiky",
     "extensions": "Rozšíření",
     "wordpress": "WordPress",

@@ -1,0 +1,82 @@
+{
+  "title": "Serverové aplikace",
+  "description": "Software, který patří tomuto serveru, nikoli zákazníkovi. Každá běží pod vlastním účtem na portu, který panel rezervuje, a zůstává ve firewallu zavřená, dokud ji neotevřete.",
+  "breadcrumb": {
+    "home": "Domů",
+    "toolsAndSettings": "Nástroje a nastavení",
+    "hostApps": "Serverové aplikace"
+  },
+  "installed": {
+    "title": "Nainstalované",
+    "none": "Zatím není nainstalována žádná serverová aplikace.",
+    "application": "Aplikace",
+    "state": "Stav",
+    "port": "Port",
+    "reachable": "Zvenčí",
+    "actions": "Akce",
+    "firewallNote": "Porty {{min}} až {{max}} jsou vyhrazeny těmto aplikacím a firewall je zahazuje. Teprve otevření zde zpřístupní aplikaci zvenčí."
+  },
+  "catalog": {
+    "title": "Dostupné",
+    "description": "Tento server běží na {{architecture}}.",
+    "manualPort": "Tato aplikace čte port z vlastního konfiguračního souboru; rezervovaný port tam zapište sami.",
+    "alreadyInstalled": "Nainstalováno",
+    "unavailable": "Na tomto serveru není dostupná."
+  },
+  "state": {
+    "installing": "Instaluje se",
+    "installed": "Nainstalováno",
+    "failed": "Selhalo",
+    "removing": "Odebírá se"
+  },
+  "install": {
+    "action": "Nainstalovat",
+    "confirmTitle": "Nainstalovat {{name}}?",
+    "confirmBody": "{{name}} {{version}} se stáhne, ověří proti zaznamenanému kontrolnímu součtu a spustí pod vlastním účtem. Port zůstane ve firewallu zavřený, dokud jej neotevřete.",
+    "failedTitle": "Aplikace nebyla nainstalována"
+  },
+  "remove": {
+    "action": "Odebrat",
+    "confirmTitle": "Odebrat {{name}}?",
+    "confirmBody": "Účet, soubory a unit se smažou. Datový adresář se předtím zazálohuje, nic dalšího se nezachová.",
+    "failedTitle": "Aplikace nebyla odebrána"
+  },
+  "action": {
+    "start": "Spustit",
+    "stop": "Zastavit",
+    "restart": "Restartovat",
+    "failedTitle": "Aplikace neodpověděla"
+  },
+  "firewall": {
+    "isOpen": "Otevřeno",
+    "isClosed": "Zavřeno",
+    "open": "Otevřít port",
+    "confirmTitle": "Otevřít tento port?",
+    "confirmBody": "Port {{port}} bude pro {{name}} dostupný z internetu. Adresa blokovaná podle země nebo zákazem zůstává odmítnuta.",
+    "failedTitle": "Pravidlo firewallu nebylo změněno"
+  },
+  "error": {
+    "load": "Serverové aplikace nebylo možné načíst.",
+    "install": "Aplikaci nebylo možné nainstalovat.",
+    "remove": "Aplikaci nebylo možné odebrat.",
+    "action": "Aplikace na tento požadavek neodpověděla.",
+    "firewall": "Pravidlo firewallu nebylo možné změnit."
+  },
+  "reason": {
+    "host_app_unknown": "Tento server takovou aplikaci nenabízí.",
+    "host_app_disabled": "Tato aplikace není na tomto serveru nabízena.",
+    "host_app_no_build_for_architecture": "Projekt nevydává sestavení pro procesor tohoto serveru.",
+    "host_app_no_checksum": "Pro toto stažení není zaznamenán kontrolní součet, nelze je ověřit.",
+    "host_app_checksum_mismatch": "Stažený soubor neodpovídal zaznamenanému kontrolnímu součtu a byl zahozen.",
+    "host_app_already_installed": "Tato aplikace je na tomto serveru už zaznamenána.",
+    "host_app_no_free_port": "Všechny porty vyhrazeného rozsahu jsou obsazené.",
+    "host_app_bad_start_command": "Spouštěcí argumenty z katalogu nelze použít.",
+    "host_app_invalid_catalog_entry": "Záznam v katalogu není použitelný.",
+    "host_app_not_found": "Tato aplikace není nainstalována.",
+    "host_app_busy": "Už probíhá jiná operace.",
+    "host_app_download_failed": "Stahování selhalo.",
+    "host_app_unpack_failed": "Archiv nebylo možné rozbalit.",
+    "host_app_binary_missing": "Archiv neobsahuje program tam, kde uvádí katalog.",
+    "host_app_port_taken": "Tento port je už obsazený."
+  }
+}

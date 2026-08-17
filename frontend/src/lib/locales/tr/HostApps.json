@@ -1,0 +1,82 @@
+{
+  "title": "Sunucu Uygulamaları",
+  "description": "Bir müşteriye değil, bu sunucuya ait yazılımlar. Her biri kendi hesabıyla ve panelin ayırdığı bir portta çalışır. Siz açana kadar firewall'da kapalı kalır.",
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "toolsAndSettings": "Araçlar ve Ayarlar",
+    "hostApps": "Sunucu Uygulamaları"
+  },
+  "installed": {
+    "title": "Kurulu",
+    "none": "Henüz kurulu sunucu uygulaması yok.",
+    "application": "Uygulama",
+    "state": "Durum",
+    "port": "Port",
+    "reachable": "Dışarıdan",
+    "actions": "İşlemler",
+    "firewallNote": "{{min}} ile {{max}} arası portlar bu uygulamalara ayrılmıştır ve firewall'da düşürülür. Buradan bir portu açmak, onu sunucu dışından erişilebilir yapan şeydir."
+  },
+  "catalog": {
+    "title": "Kurulabilir",
+    "description": "Bu sunucu {{architecture}} mimarisinde çalışıyor.",
+    "manualPort": "Bu uygulama portunu kendi yapılandırma dosyasından okur; ayrılan portu oraya kendiniz yazın.",
+    "alreadyInstalled": "Kurulu",
+    "unavailable": "Bu sunucuda kullanılamıyor."
+  },
+  "state": {
+    "installing": "Kuruluyor",
+    "installed": "Kurulu",
+    "failed": "Başarısız",
+    "removing": "Kaldırılıyor"
+  },
+  "install": {
+    "action": "Kur",
+    "confirmTitle": "{{name}} kurulsun mu?",
+    "confirmBody": "{{name}} {{version}} indirilecek, kayıtlı sağlama toplamıyla doğrulanacak ve kendi hesabı altında başlatılacak. Siz açana kadar portu firewall'da kapalı kalır.",
+    "failedTitle": "Uygulama kurulmadı"
+  },
+  "remove": {
+    "action": "Kaldır",
+    "confirmTitle": "{{name}} kaldırılsın mı?",
+    "confirmBody": "Hesap, dosyalar ve unit silinir. Veri dizini önce arşivlenir, başka hiçbir şey saklanmaz.",
+    "failedTitle": "Uygulama kaldırılmadı"
+  },
+  "action": {
+    "start": "Başlat",
+    "stop": "Durdur",
+    "restart": "Yeniden başlat",
+    "failedTitle": "Uygulama yanıt vermedi"
+  },
+  "firewall": {
+    "isOpen": "Açık",
+    "isClosed": "Kapalı",
+    "open": "Portu aç",
+    "confirmTitle": "Bu port açılsın mı?",
+    "confirmBody": "{{port}} portu {{name}} için internetten erişilebilir olur. Ülke kuralıyla veya yasakla engellediğiniz bir adres yine reddedilir.",
+    "failedTitle": "Firewall kuralı değiştirilmedi"
+  },
+  "error": {
+    "load": "Sunucu uygulamaları okunamadı.",
+    "install": "Uygulama kurulamadı.",
+    "remove": "Uygulama kaldırılamadı.",
+    "action": "Uygulama bu isteğe yanıt vermedi.",
+    "firewall": "Firewall kuralı değiştirilemedi."
+  },
+  "reason": {
+    "host_app_unknown": "Bu sunucu böyle bir uygulama sunmuyor.",
+    "host_app_disabled": "Bu uygulama bu sunucuda sunulmuyor.",
+    "host_app_no_build_for_architecture": "Proje bu sunucunun işlemcisi için derleme yayımlamıyor.",
+    "host_app_no_checksum": "Bu indirme için kayıtlı sağlama toplamı yok, doğrulanamaz.",
+    "host_app_checksum_mismatch": "İndirme kayıtlı sağlama toplamıyla eşleşmedi ve silindi.",
+    "host_app_already_installed": "Bu uygulama bu sunucuda zaten kayıtlı.",
+    "host_app_no_free_port": "Ayrılmış aralıktaki bütün portlar kullanımda.",
+    "host_app_bad_start_command": "Katalogdaki başlatma argümanları kullanılamaz.",
+    "host_app_invalid_catalog_entry": "Katalog kaydı kullanılabilir değil.",
+    "host_app_not_found": "Bu uygulama kurulu değil.",
+    "host_app_busy": "Zaten başka bir işlem çalışıyor.",
+    "host_app_download_failed": "İndirme başarısız oldu.",
+    "host_app_unpack_failed": "Arşiv açılamadı.",
+    "host_app_binary_missing": "Arşiv, programı kataloğun söylediği yerde içermiyor.",
+    "host_app_port_taken": "Bu port zaten kullanımda."
+  }
+}

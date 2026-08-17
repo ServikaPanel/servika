@@ -26,6 +26,7 @@
     "optimize": "Optimizare server",
     "serverIPs": "Adresele serverului",
     "panelPort": "Portul panoului",
+    "hostApps": "Aplicații de server",
     "statistics": "Statistici",
     "extensions": "Extensii",
     "wordpress": "WordPress",
