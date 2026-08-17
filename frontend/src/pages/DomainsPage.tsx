@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
+import { useDomainRefusal } from '@/lib/domainRefusal'
 import { useCopyOrOffer } from '@/lib/useCopyOrOffer'
 import { useAuth } from '@/store/auth'
 import { sslState } from '@/lib/ssl'
@@ -76,6 +77,7 @@ function fmtKB(kb: number) {
 export default function DomainsPage() {
   const { t } = useTranslation('DomainsPage')
   const copyOrOffer = useCopyOrOffer()
+  const domainRefusal = useDomainRefusal()
   const [items, setItems] = useState<Domain[]>([])
   const [subdomains, setSubdomains] = useState<Subdomain[]>([])
   const [loading, setLoading] = useState(true)
@@ -276,7 +278,7 @@ export default function DomainsPage() {
       // produced on the server could not be translated. Anything that is not one
       // of these codes is passed through as the server wrote it.
       const key = CREATE_REFUSAL_KEYS[apiError(error, '')]
-      setError(key ? t(key) : apiError(error, t('errors.createFailed')))
+      setError(key ? t(key) : domainRefusal(error, t('errors.createFailed')))
     } finally {
       setCreating(false)
     }

@@ -30,5 +30,7 @@
   "notice": "Notice",
   "areYouSure": "Are you sure?",
   "enterValue": "Enter a value",
-  "copyManually": "Automatic copying failed. Copy the text below manually."
+  "copyManually": "Automatic copying failed. Copy the text below manually.",
+  "domainBlocked": "This domain name may not be added to this server.",
+  "domainBlockListUnreadable": "The banned domain list could not be read, so the domain was not created. Try again."
 }

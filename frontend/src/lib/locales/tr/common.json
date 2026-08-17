@@ -30,5 +30,7 @@
   "notice": "Bildirim",
   "areYouSure": "Emin misiniz?",
   "enterValue": "Bir değer girin",
-  "copyManually": "Otomatik kopyalama başarısız oldu. Aşağıdaki metni elle kopyalayın."
+  "copyManually": "Otomatik kopyalama başarısız oldu. Aşağıdaki metni elle kopyalayın.",
+  "domainBlocked": "Bu alan adı bu sunucuya eklenemez.",
+  "domainBlockListUnreadable": "Yasaklı alan adı listesi okunamadı, bu yüzden alan adı oluşturulmadı. Tekrar deneyin."
 }

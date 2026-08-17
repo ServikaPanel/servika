@@ -55,6 +55,10 @@
       "title": "Domains",
       "description": "Browse, search, and quickly access all domains."
     },
+    "bannedDomains": {
+      "title": "Banned Domains",
+      "description": "Hostnames no customer may add to this server. Used against phishing."
+    },
     "firewall": {
       "title": "Firewall",
       "description": "IP/port blocking, allowlist, port closure. Critical ports are protected."

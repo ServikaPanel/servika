@@ -30,5 +30,7 @@
   "notice": "Upozornění",
   "areYouSure": "Jste si jisti?",
   "enterValue": "Zadejte hodnotu",
-  "copyManually": "Automatické kopírování selhalo. Zkopírujte text níže ručně."
+  "copyManually": "Automatické kopírování selhalo. Zkopírujte text níže ručně.",
+  "domainBlocked": "Tento název domény nelze na tento server přidat.",
+  "domainBlockListUnreadable": "Seznam zakázaných domén se nepodařilo načíst, doména proto nebyla vytvořena. Zkuste to znovu."
 }

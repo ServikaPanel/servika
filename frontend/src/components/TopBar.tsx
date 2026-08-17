@@ -53,6 +53,7 @@ const PAGES: ReadonlyArray<{ tkey: string; path: string; keywords: string; roles
   { tkey: 'phpModules', path: '/system/php-modules', keywords: 'extension pecl', roles: ['admin'] },
   { tkey: 'packages', path: '/tools/packages', keywords: 'dnf rpm', roles: ['admin'] },
   { tkey: 'dnsTemplate', path: '/tools/dns-template', keywords: 'template zone', roles: ['admin'] },
+  { tkey: 'bannedDomains', path: '/tools/banned-domains', keywords: 'phishing blacklist blocked hostname', roles: ['admin'] },
   { tkey: 'panelUpdate', path: '/tools/update', keywords: 'upgrade release', roles: ['admin'] },
 ]
 

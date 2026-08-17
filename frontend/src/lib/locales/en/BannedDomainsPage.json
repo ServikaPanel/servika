@@ -1,0 +1,51 @@
+{
+  "title": "Banned Domains",
+  "subtitle": "Hostnames that no customer may add to this server.",
+  "breadcrumb": {
+    "home": "Home",
+    "tools": "Tools & Settings",
+    "current": "Banned Domains"
+  },
+  "add": {
+    "title": "Add to the list",
+    "domainsLabel": "Domain names",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "One per line, or separated by commas. A name that is not a valid hostname is reported back and not stored.",
+    "descriptionLabel": "Note",
+    "descriptionPlaceholder": "Why this name is refused",
+    "matchSubdomains": "Also refuse subdomains",
+    "matchSubdomainsHint": "Left on, a ban on example.com also refuses login.example.com. A phishing name is usually one label down.",
+    "submit": "Add",
+    "saving": "Saving…"
+  },
+  "result": {
+    "applied": "Added",
+    "skipped": "Already listed",
+    "rejected": "Not a valid hostname"
+  },
+  "list": {
+    "filterPlaceholder": "Filter",
+    "count": "Shown",
+    "domain": "Domain",
+    "scope": "Scope",
+    "scopeWithSubdomains": "With subdomains",
+    "scopeExact": "Exact name only",
+    "description": "Note",
+    "createdBy": "Added by",
+    "createdAt": "Added",
+    "actions": "Actions",
+    "remove": "Remove",
+    "loading": "Loading…",
+    "empty": "The list is empty."
+  },
+  "remove": {
+    "title": "Remove from the list",
+    "message": "{{domain}} will be accepted again. Domains that already exist are not affected either way.",
+    "confirm": "Remove"
+  },
+  "errors": {
+    "loadFailed": "The list could not be loaded",
+    "saveFailed": "The list could not be written"
+  },
+  "footnote": "The list is checked when a domain, addon domain or subdomain is created, and during a site migration. Adding a name here does not take an existing site down and does not stop its certificate from renewing; removing a domain is a separate action."
+}

@@ -1,0 +1,51 @@
+{
+  "title": "Domaines interdits",
+  "subtitle": "Noms d'hôte qu'aucun client ne peut ajouter à ce serveur.",
+  "breadcrumb": {
+    "home": "Accueil",
+    "tools": "Outils et paramètres",
+    "current": "Domaines interdits"
+  },
+  "add": {
+    "title": "Ajouter à la liste",
+    "domainsLabel": "Noms de domaine",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Un par ligne, ou séparés par des virgules. Un nom qui n'est pas un nom d'hôte valide est signalé et n'est pas enregistré.",
+    "descriptionLabel": "Note",
+    "descriptionPlaceholder": "Pourquoi ce nom est refusé",
+    "matchSubdomains": "Refuser aussi les sous-domaines",
+    "matchSubdomainsHint": "Si cette option reste activée, une interdiction sur example.com refuse aussi login.example.com. Un nom de phishing se cache généralement un niveau plus bas.",
+    "submit": "Ajouter",
+    "saving": "Enregistrement…"
+  },
+  "result": {
+    "applied": "Ajoutés",
+    "skipped": "Déjà dans la liste",
+    "rejected": "Nom d'hôte invalide"
+  },
+  "list": {
+    "filterPlaceholder": "Filtrer",
+    "count": "Affichés",
+    "domain": "Domaine",
+    "scope": "Portée",
+    "scopeWithSubdomains": "Avec les sous-domaines",
+    "scopeExact": "Nom exact uniquement",
+    "description": "Note",
+    "createdBy": "Ajouté par",
+    "createdAt": "Ajouté",
+    "actions": "Actions",
+    "remove": "Retirer",
+    "loading": "Chargement…",
+    "empty": "La liste est vide."
+  },
+  "remove": {
+    "title": "Retirer de la liste",
+    "message": "{{domain}} sera de nouveau accepté. Les domaines existants ne sont concernés dans aucun des deux cas.",
+    "confirm": "Retirer"
+  },
+  "errors": {
+    "loadFailed": "La liste n'a pas pu être chargée",
+    "saveFailed": "La liste n'a pas pu être écrite"
+  },
+  "footnote": "La liste est vérifiée lors de la création d'un domaine, d'un domaine addon ou d'un sous-domaine, ainsi que pendant une migration de site. Ajouter un nom ici ne coupe pas un site existant et n'interrompt pas le renouvellement de son certificat ; supprimer un domaine est une action distincte."
+}

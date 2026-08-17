@@ -54,6 +54,10 @@
       "title": "Alan Adları",
       "description": "Tüm alan adlarını görüntüleyin, arayın ve hızlıca erişin."
     },
+    "bannedDomains": {
+      "title": "Yasaklı Alan Adları",
+      "description": "Hiçbir müşterinin bu sunucuya ekleyemeyeceği hostname'ler. Phishing'e karşı kullanılır."
+    },
     "firewall": {
       "title": "Güvenlik Duvarı",
       "description": "IP/port engelleme, izin listesi, port kapatma. Kritik portlar korunur."

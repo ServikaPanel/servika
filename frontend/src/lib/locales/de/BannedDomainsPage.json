@@ -1,0 +1,51 @@
+{
+  "title": "Gesperrte Domains",
+  "subtitle": "Hostnamen, die kein Kunde auf diesem Server hinzufügen darf.",
+  "breadcrumb": {
+    "home": "Start",
+    "tools": "Werkzeuge und Einstellungen",
+    "current": "Gesperrte Domains"
+  },
+  "add": {
+    "title": "Zur Liste hinzufügen",
+    "domainsLabel": "Domainnamen",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Einer pro Zeile oder durch Kommas getrennt. Ein Name, der kein gültiger Hostname ist, wird zurückgemeldet und nicht gespeichert.",
+    "descriptionLabel": "Notiz",
+    "descriptionPlaceholder": "Warum dieser Name abgelehnt wird",
+    "matchSubdomains": "Subdomains ebenfalls ablehnen",
+    "matchSubdomainsHint": "Bleibt dies aktiv, lehnt eine Sperre von example.com auch login.example.com ab. Ein Phishing-Name steht meist eine Ebene tiefer.",
+    "submit": "Hinzufügen",
+    "saving": "Wird gespeichert…"
+  },
+  "result": {
+    "applied": "Hinzugefügt",
+    "skipped": "Bereits gelistet",
+    "rejected": "Kein gültiger Hostname"
+  },
+  "list": {
+    "filterPlaceholder": "Filtern",
+    "count": "Angezeigt",
+    "domain": "Domain",
+    "scope": "Geltungsbereich",
+    "scopeWithSubdomains": "Mit Subdomains",
+    "scopeExact": "Nur exakter Name",
+    "description": "Notiz",
+    "createdBy": "Hinzugefügt von",
+    "createdAt": "Hinzugefügt",
+    "actions": "Aktionen",
+    "remove": "Entfernen",
+    "loading": "Wird geladen…",
+    "empty": "Die Liste ist leer."
+  },
+  "remove": {
+    "title": "Aus der Liste entfernen",
+    "message": "{{domain}} wird wieder akzeptiert. Bereits bestehende Domains sind so oder so nicht betroffen.",
+    "confirm": "Entfernen"
+  },
+  "errors": {
+    "loadFailed": "Die Liste konnte nicht geladen werden",
+    "saveFailed": "Die Liste konnte nicht geschrieben werden"
+  },
+  "footnote": "Die Liste wird beim Anlegen einer Domain, einer Addon-Domain oder einer Subdomain sowie bei einer Site-Migration geprüft. Ein Name hier nimmt keine bestehende Website vom Netz und stoppt keine Zertifikatserneuerung; das Entfernen einer Domain ist eine eigene Aktion."
+}

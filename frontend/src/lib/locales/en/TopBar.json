@@ -37,6 +37,7 @@
     "phpModules": { "title": "PHP Modules", "subtitle": "PHP extension management" },
     "packages": { "title": "Package Manager", "subtitle": "System packages" },
     "dnsTemplate": { "title": "DNS Template", "subtitle": "Default DNS records" },
+    "bannedDomains": { "title": "Banned Domains", "subtitle": "Hostnames no customer may add" },
     "panelUpdate": { "title": "Panel Update", "subtitle": "Panel version and updates" }
   },
   "domain": {

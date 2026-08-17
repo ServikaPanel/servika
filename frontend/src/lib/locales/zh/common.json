@@ -30,5 +30,7 @@
   "notice": "提示",
   "areYouSure": "确定吗？",
   "enterValue": "请输入值",
-  "copyManually": "自动复制失败。请手动复制下方文本。"
+  "copyManually": "自动复制失败。请手动复制下方文本。",
+  "domainBlocked": "该域名不允许添加到此服务器。",
+  "domainBlockListUnreadable": "无法读取禁止域名列表，因此未创建该域名。请重试。"
 }

@@ -1,0 +1,51 @@
+{
+  "title": "禁止ドメイン",
+  "subtitle": "顧客がこのサーバーに追加できないホスト名です。",
+  "breadcrumb": {
+    "home": "ホーム",
+    "tools": "ツールと設定",
+    "current": "禁止ドメイン"
+  },
+  "add": {
+    "title": "リストに追加",
+    "domainsLabel": "ドメイン名",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "1 行に 1 件、またはカンマ区切りで入力します。有効なホスト名でない場合は結果に表示され、保存されません。",
+    "descriptionLabel": "メモ",
+    "descriptionPlaceholder": "この名前を拒否する理由",
+    "matchSubdomains": "サブドメインも拒否する",
+    "matchSubdomainsHint": "有効のままにすると、example.com の禁止は login.example.com も拒否します。フィッシング名は通常 1 階層下に置かれます。",
+    "submit": "追加",
+    "saving": "保存中…"
+  },
+  "result": {
+    "applied": "追加",
+    "skipped": "登録済み",
+    "rejected": "有効なホスト名ではありません"
+  },
+  "list": {
+    "filterPlaceholder": "絞り込み",
+    "count": "表示中",
+    "domain": "ドメイン",
+    "scope": "適用範囲",
+    "scopeWithSubdomains": "サブドメインを含む",
+    "scopeExact": "完全一致のみ",
+    "description": "メモ",
+    "createdBy": "追加者",
+    "createdAt": "追加日",
+    "actions": "操作",
+    "remove": "削除",
+    "loading": "読み込み中…",
+    "empty": "リストは空です。"
+  },
+  "remove": {
+    "title": "リストから削除",
+    "message": "{{domain}} は再び受け付けられます。すでに存在するドメインは、どちらの場合も影響を受けません。",
+    "confirm": "削除"
+  },
+  "errors": {
+    "loadFailed": "リストを読み込めませんでした",
+    "saveFailed": "リストを書き込めませんでした"
+  },
+  "footnote": "このリストは、ドメイン・アドオンドメイン・サブドメインの作成時とサイト移行時に確認されます。ここに名前を追加しても既存のサイトは停止せず、証明書の更新も止まりません。ドメインの削除は別の操作です。"
+}

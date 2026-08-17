@@ -30,5 +30,7 @@
   "notice": "Hinweis",
   "areYouSure": "Sind Sie sicher?",
   "enterValue": "Wert eingeben",
-  "copyManually": "Automatisches Kopieren fehlgeschlagen. Kopieren Sie den Text unten manuell."
+  "copyManually": "Automatisches Kopieren fehlgeschlagen. Kopieren Sie den Text unten manuell.",
+  "domainBlocked": "Dieser Domainname darf auf diesem Server nicht hinzugefügt werden.",
+  "domainBlockListUnreadable": "Die Liste der gesperrten Domains konnte nicht gelesen werden, daher wurde die Domain nicht angelegt. Bitte erneut versuchen."
 }

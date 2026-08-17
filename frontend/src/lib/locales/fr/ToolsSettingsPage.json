@@ -20,6 +20,7 @@
     "servicePlans": { "title": "Forfaits de service", "description": "Forfaits d'hébergement avec quotas de disque, base de données et FTP." },
     "dnsTemplate": { "title": "Modèle DNS", "description": "Enregistrements DNS centraux appliqués aux nouveaux domaines (A/MX/SPF/DMARC/DKIM) avec SOA." },
     "domains": { "title": "Domaines", "description": "Parcourir, rechercher et accéder rapidement à tous les domaines." },
+    "bannedDomains": { "title": "Domaines interdits", "description": "Noms d'hôte qu'aucun client ne peut ajouter à ce serveur. Contre le phishing." },
     "firewall": { "title": "Pare-feu", "description": "Blocage IP/port, liste d'autorisation, fermeture de ports. Les ports critiques sont protégés." },
     "backupManager": { "title": "Gestionnaire de sauvegardes", "description": "Afficher les tailles de sauvegarde de tous les domaines, sauvegarde en un clic, destinations S3/SFTP." },
     "monitoring": { "title": "Surveillance et journaux", "description": "Graphiques CPU/RAM/disque et journaux serveur depuis journald (panneau/nginx/SSH…)." }

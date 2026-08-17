@@ -56,6 +56,10 @@
       "title": "Domény",
       "description": "Procházejte, vyhledávejte a rychle přistupujte ke všem doménám."
     },
+    "bannedDomains": {
+      "title": "Zakázané domény",
+      "description": "Hostname, které žádný zákazník nesmí na tento server přidat. Proti phishingu."
+    },
     "firewall": {
       "title": "Firewall",
       "description": "Blokování IP/portů, seznam povolených, zavření portů. Kritické porty jsou chráněny."

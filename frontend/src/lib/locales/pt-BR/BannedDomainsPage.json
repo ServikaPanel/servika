@@ -1,0 +1,51 @@
+{
+  "title": "Domínios bloqueados",
+  "subtitle": "Hostnames que nenhum cliente pode adicionar a este servidor.",
+  "breadcrumb": {
+    "home": "Início",
+    "tools": "Ferramentas e configurações",
+    "current": "Domínios bloqueados"
+  },
+  "add": {
+    "title": "Adicionar à lista",
+    "domainsLabel": "Nomes de domínio",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Um por linha ou separados por vírgulas. Um nome que não seja um hostname válido é informado e não é salvo.",
+    "descriptionLabel": "Nota",
+    "descriptionPlaceholder": "Por que este nome é recusado",
+    "matchSubdomains": "Recusar também os subdomínios",
+    "matchSubdomainsHint": "Se ficar ativo, um bloqueio de example.com também recusa login.example.com. Um nome de phishing costuma se esconder um nível abaixo.",
+    "submit": "Adicionar",
+    "saving": "Salvando…"
+  },
+  "result": {
+    "applied": "Adicionados",
+    "skipped": "Já na lista",
+    "rejected": "Hostname inválido"
+  },
+  "list": {
+    "filterPlaceholder": "Filtrar",
+    "count": "Exibidos",
+    "domain": "Domínio",
+    "scope": "Escopo",
+    "scopeWithSubdomains": "Com subdomínios",
+    "scopeExact": "Somente o nome exato",
+    "description": "Nota",
+    "createdBy": "Adicionado por",
+    "createdAt": "Adicionado",
+    "actions": "Ações",
+    "remove": "Remover",
+    "loading": "Carregando…",
+    "empty": "A lista está vazia."
+  },
+  "remove": {
+    "title": "Remover da lista",
+    "message": "{{domain}} volta a ser aceito. Os domínios que já existem não são afetados em nenhum dos casos.",
+    "confirm": "Remover"
+  },
+  "errors": {
+    "loadFailed": "Não foi possível carregar a lista",
+    "saveFailed": "Não foi possível gravar a lista"
+  },
+  "footnote": "A lista é verificada ao criar um domínio, um domínio addon ou um subdomínio e durante uma migração de site. Adicionar um nome aqui não derruba um site existente nem impede a renovação do certificado dele; remover um domínio é uma ação separada."
+}

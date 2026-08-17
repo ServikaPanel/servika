@@ -20,6 +20,7 @@
     "servicePlans": { "title": "Planes de servicio", "description": "Paquetes de alojamiento con cuotas de disco, bases de datos y FTP." },
     "dnsTemplate": { "title": "Plantilla DNS", "description": "Registros DNS centrales aplicados a nuevos dominios (A/MX/SPF/DMARC/DKIM) con SOA." },
     "domains": { "title": "Dominios", "description": "Examine, busque y acceda rápidamente a todos los dominios." },
+    "bannedDomains": { "title": "Dominios prohibidos", "description": "Nombres de host que ningún cliente puede añadir a este servidor. Contra el phishing." },
     "firewall": { "title": "Cortafuegos", "description": "Bloqueo de IP/puerto, lista de permitidos, cierre de puertos. Los puertos críticos están protegidos." },
     "backupManager": { "title": "Gestor de copias de seguridad", "description": "Vea tamaños de copias de todos los dominios, copia con un clic, destinos S3/SFTP." },
     "monitoring": { "title": "Monitorización y registros", "description": "Gráficos de CPU/RAM/disco y registros del servidor desde journald (panel/nginx/SSH…)." }

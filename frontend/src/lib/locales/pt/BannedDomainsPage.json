@@ -1,0 +1,51 @@
+{
+  "title": "Domínios proibidos",
+  "subtitle": "Hostnames que nenhum cliente pode adicionar a este servidor.",
+  "breadcrumb": {
+    "home": "Início",
+    "tools": "Ferramentas e definições",
+    "current": "Domínios proibidos"
+  },
+  "add": {
+    "title": "Adicionar à lista",
+    "domainsLabel": "Nomes de domínio",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Um por linha ou separados por vírgulas. Um nome que não seja um hostname válido é comunicado e não é guardado.",
+    "descriptionLabel": "Nota",
+    "descriptionPlaceholder": "Porque é que este nome é recusado",
+    "matchSubdomains": "Recusar também os subdomínios",
+    "matchSubdomainsHint": "Se ficar ativo, uma proibição de example.com também recusa login.example.com. Um nome de phishing esconde-se normalmente um nível abaixo.",
+    "submit": "Adicionar",
+    "saving": "A guardar…"
+  },
+  "result": {
+    "applied": "Adicionados",
+    "skipped": "Já na lista",
+    "rejected": "Hostname inválido"
+  },
+  "list": {
+    "filterPlaceholder": "Filtrar",
+    "count": "Mostrados",
+    "domain": "Domínio",
+    "scope": "Âmbito",
+    "scopeWithSubdomains": "Com subdomínios",
+    "scopeExact": "Apenas o nome exato",
+    "description": "Nota",
+    "createdBy": "Adicionado por",
+    "createdAt": "Adicionado",
+    "actions": "Ações",
+    "remove": "Remover",
+    "loading": "A carregar…",
+    "empty": "A lista está vazia."
+  },
+  "remove": {
+    "title": "Remover da lista",
+    "message": "{{domain}} volta a ser aceite. Os domínios que já existem não são afetados em qualquer dos casos.",
+    "confirm": "Remover"
+  },
+  "errors": {
+    "loadFailed": "Não foi possível carregar a lista",
+    "saveFailed": "Não foi possível escrever a lista"
+  },
+  "footnote": "A lista é verificada ao criar um domínio, um domínio addon ou um subdomínio e durante uma migração de site. Adicionar aqui um nome não desliga um site existente nem impede a renovação do seu certificado; remover um domínio é uma ação separada."
+}

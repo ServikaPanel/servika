@@ -37,6 +37,7 @@
     "phpModules": { "title": "PHP モジュール", "subtitle": "PHP 拡張機能の管理" },
     "packages": { "title": "パッケージマネージャー", "subtitle": "システムパッケージ" },
     "dnsTemplate": { "title": "DNS テンプレート", "subtitle": "デフォルトの DNS レコード" },
+    "bannedDomains": { "title": "禁止ドメイン", "subtitle": "顧客が追加できないホスト名" },
     "panelUpdate": { "title": "パネル更新", "subtitle": "パネルのバージョンと更新" }
   },
   "domain": {

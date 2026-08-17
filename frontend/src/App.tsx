@@ -51,6 +51,7 @@ const ToolsSettingsPage = lazy(() => import('@/pages/ToolsSettingsPage'))
 const PanelUpdatePage = lazy(() => import('@/pages/PanelUpdatePage'))
 const ServerOptimizePage = lazy(() => import('@/pages/ServerOptimizePage'))
 const DNSTemplatePage = lazy(() => import('@/pages/DNSTemplatePage'))
+const BannedDomainsPage = lazy(() => import('@/pages/BannedDomainsPage'))
 const WordPressPage = lazy(() => import('@/pages/WordPressPage'))
 const FirewallPage = lazy(() => import('@/pages/FirewallPage'))
 const BackupManagementPage = lazy(() => import('@/pages/BackupManagementPage'))
@@ -161,6 +162,7 @@ export default function App() {
         <Route path="tools/app-runtimes"           element={<RuntimeVersionsPage />} />
         <Route path="tools/services"               element={<ServicesPage />} />
         <Route path="tools/dns-template"           element={<DNSTemplatePage />} />
+        <Route path="tools/banned-domains"           element={<BannedDomainsPage />} />
         <Route path="subscriptions/:id/:slug" element={<ToolPage />} />
         <Route path="service-plans"      element={<ServicePlansPage />} />
 

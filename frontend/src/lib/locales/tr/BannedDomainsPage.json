@@ -1,0 +1,51 @@
+{
+  "title": "Yasaklı Alan Adları",
+  "subtitle": "Hiçbir müşterinin bu sunucuya ekleyemeyeceği hostname'ler.",
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "tools": "Araçlar ve Ayarlar",
+    "current": "Yasaklı Alan Adları"
+  },
+  "add": {
+    "title": "Listeye ekle",
+    "domainsLabel": "Alan adları",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Her satıra bir tane veya virgülle ayrılmış. Geçerli bir hostname olmayan ad geri bildirilir ve kaydedilmez.",
+    "descriptionLabel": "Not",
+    "descriptionPlaceholder": "Bu ad neden reddediliyor",
+    "matchSubdomains": "Alt alan adlarını da reddet",
+    "matchSubdomainsHint": "Açık bırakıldığında example.com yasağı login.example.com adresini de reddeder. Phishing adı genelde bir seviye altındadır.",
+    "submit": "Ekle",
+    "saving": "Kaydediliyor…"
+  },
+  "result": {
+    "applied": "Eklendi",
+    "skipped": "Zaten listede",
+    "rejected": "Geçerli bir hostname değil"
+  },
+  "list": {
+    "filterPlaceholder": "Süz",
+    "count": "Gösterilen",
+    "domain": "Alan adı",
+    "scope": "Kapsam",
+    "scopeWithSubdomains": "Alt alan adlarıyla",
+    "scopeExact": "Yalnız tam ad",
+    "description": "Not",
+    "createdBy": "Ekleyen",
+    "createdAt": "Eklendi",
+    "actions": "İşlemler",
+    "remove": "Kaldır",
+    "loading": "Yükleniyor…",
+    "empty": "Liste boş."
+  },
+  "remove": {
+    "title": "Listeden kaldır",
+    "message": "{{domain}} tekrar kabul edilecek. Zaten var olan alan adları her iki durumda da etkilenmez.",
+    "confirm": "Kaldır"
+  },
+  "errors": {
+    "loadFailed": "Liste yüklenemedi",
+    "saveFailed": "Liste yazılamadı"
+  },
+  "footnote": "Liste; alan adı, addon alan adı veya alt alan adı oluşturulurken ve site taşımada kontrol edilir. Buraya bir ad eklemek var olan bir siteyi kapatmaz ve sertifika yenilemesini durdurmaz; alan adını silmek ayrı bir işlemdir."
+}

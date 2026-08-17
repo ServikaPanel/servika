@@ -1,0 +1,51 @@
+{
+  "title": "禁止域名",
+  "subtitle": "客户不可添加到此服务器的主机名。",
+  "breadcrumb": {
+    "home": "首页",
+    "tools": "工具与设置",
+    "current": "禁止域名"
+  },
+  "add": {
+    "title": "添加到列表",
+    "domainsLabel": "域名",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "每行一个，或用逗号分隔。不是有效主机名的条目会被回报，且不会保存。",
+    "descriptionLabel": "备注",
+    "descriptionPlaceholder": "拒绝该名称的原因",
+    "matchSubdomains": "同时拒绝子域名",
+    "matchSubdomainsHint": "保持开启时，对 example.com 的禁止也会拒绝 login.example.com。钓鱼名称通常藏在下一级。",
+    "submit": "添加",
+    "saving": "保存中…"
+  },
+  "result": {
+    "applied": "已添加",
+    "skipped": "已在列表中",
+    "rejected": "不是有效主机名"
+  },
+  "list": {
+    "filterPlaceholder": "筛选",
+    "count": "显示",
+    "domain": "域名",
+    "scope": "范围",
+    "scopeWithSubdomains": "包含子域名",
+    "scopeExact": "仅完全匹配",
+    "description": "备注",
+    "createdBy": "添加者",
+    "createdAt": "添加时间",
+    "actions": "操作",
+    "remove": "移除",
+    "loading": "加载中…",
+    "empty": "列表为空。"
+  },
+  "remove": {
+    "title": "从列表移除",
+    "message": "{{domain}} 将重新被接受。已存在的域名在两种情况下都不受影响。",
+    "confirm": "移除"
+  },
+  "errors": {
+    "loadFailed": "无法加载列表",
+    "saveFailed": "无法写入列表"
+  },
+  "footnote": "创建域名、附加域名或子域名时，以及站点迁移过程中都会检查该列表。在此添加名称不会让现有站点下线，也不会中断其证书续期；删除域名是另一项操作。"
+}

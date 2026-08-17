@@ -1,0 +1,51 @@
+{
+  "title": "Zakázané domény",
+  "subtitle": "Hostname, které žádný zákazník nesmí na tento server přidat.",
+  "breadcrumb": {
+    "home": "Domů",
+    "tools": "Nástroje a nastavení",
+    "current": "Zakázané domény"
+  },
+  "add": {
+    "title": "Přidat do seznamu",
+    "domainsLabel": "Názvy domén",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Jeden na řádek nebo oddělené čárkami. Název, který není platný hostname, se vypíše zpět a neuloží se.",
+    "descriptionLabel": "Poznámka",
+    "descriptionPlaceholder": "Proč je tento název odmítnut",
+    "matchSubdomains": "Odmítat i subdomény",
+    "matchSubdomainsHint": "Pokud zůstane zapnuto, zákaz example.com odmítne i login.example.com. Phishingový název se obvykle skrývá o úroveň níž.",
+    "submit": "Přidat",
+    "saving": "Ukládá se…"
+  },
+  "result": {
+    "applied": "Přidáno",
+    "skipped": "Již v seznamu",
+    "rejected": "Neplatný hostname"
+  },
+  "list": {
+    "filterPlaceholder": "Filtrovat",
+    "count": "Zobrazeno",
+    "domain": "Doména",
+    "scope": "Rozsah",
+    "scopeWithSubdomains": "Včetně subdomén",
+    "scopeExact": "Pouze přesný název",
+    "description": "Poznámka",
+    "createdBy": "Přidal",
+    "createdAt": "Přidáno",
+    "actions": "Akce",
+    "remove": "Odebrat",
+    "loading": "Načítá se…",
+    "empty": "Seznam je prázdný."
+  },
+  "remove": {
+    "title": "Odebrat ze seznamu",
+    "message": "{{domain}} bude opět přijímán. Domény, které již existují, to tak jako tak neovlivní.",
+    "confirm": "Odebrat"
+  },
+  "errors": {
+    "loadFailed": "Seznam se nepodařilo načíst",
+    "saveFailed": "Seznam se nepodařilo zapsat"
+  },
+  "footnote": "Seznam se kontroluje při vytvoření domény, addon domény nebo subdomény a při migraci webu. Přidání názvu sem neshodí existující web ani nezastaví obnovu jeho certifikátu; odstranění domény je samostatná akce."
+}

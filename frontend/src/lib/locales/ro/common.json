@@ -30,5 +30,7 @@
   "notice": "Notificare",
   "areYouSure": "Sigur doriți?",
   "enterValue": "Introduceți o valoare",
-  "copyManually": "Copierea automată a eșuat. Copiați manual textul de mai jos."
+  "copyManually": "Copierea automată a eșuat. Copiați manual textul de mai jos.",
+  "domainBlocked": "Acest nume de domeniu nu poate fi adăugat pe acest server.",
+  "domainBlockListUnreadable": "Lista domeniilor interzise nu a putut fi citită, așa că domeniul nu a fost creat. Încercați din nou."
 }

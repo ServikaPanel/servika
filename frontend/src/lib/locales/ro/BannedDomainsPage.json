@@ -1,0 +1,51 @@
+{
+  "title": "Domenii interzise",
+  "subtitle": "Hostname-uri pe care niciun client nu le poate adăuga pe acest server.",
+  "breadcrumb": {
+    "home": "Acasă",
+    "tools": "Instrumente și setări",
+    "current": "Domenii interzise"
+  },
+  "add": {
+    "title": "Adaugă în listă",
+    "domainsLabel": "Nume de domeniu",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Unul pe linie sau separate prin virgule. Un nume care nu este un hostname valid este raportat înapoi și nu este salvat.",
+    "descriptionLabel": "Notă",
+    "descriptionPlaceholder": "De ce este refuzat acest nume",
+    "matchSubdomains": "Refuză și subdomeniile",
+    "matchSubdomainsHint": "Dacă rămâne activ, o interdicție pe example.com refuză și login.example.com. Un nume de phishing se ascunde de obicei cu un nivel mai jos.",
+    "submit": "Adaugă",
+    "saving": "Se salvează…"
+  },
+  "result": {
+    "applied": "Adăugate",
+    "skipped": "Deja în listă",
+    "rejected": "Hostname invalid"
+  },
+  "list": {
+    "filterPlaceholder": "Filtrează",
+    "count": "Afișate",
+    "domain": "Domeniu",
+    "scope": "Domeniu de aplicare",
+    "scopeWithSubdomains": "Cu subdomenii",
+    "scopeExact": "Doar numele exact",
+    "description": "Notă",
+    "createdBy": "Adăugat de",
+    "createdAt": "Adăugat",
+    "actions": "Acțiuni",
+    "remove": "Elimină",
+    "loading": "Se încarcă…",
+    "empty": "Lista este goală."
+  },
+  "remove": {
+    "title": "Elimină din listă",
+    "message": "{{domain}} va fi acceptat din nou. Domeniile care există deja nu sunt afectate în niciun caz.",
+    "confirm": "Elimină"
+  },
+  "errors": {
+    "loadFailed": "Lista nu a putut fi încărcată",
+    "saveFailed": "Lista nu a putut fi scrisă"
+  },
+  "footnote": "Lista este verificată la crearea unui domeniu, a unui domeniu addon sau a unui subdomeniu și în timpul unei migrări de site. Adăugarea unui nume aici nu oprește un site existent și nu oprește reînnoirea certificatului său; ștergerea unui domeniu este o acțiune separată."
+}

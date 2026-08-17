@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
+import { useDomainRefusal } from '@/lib/domainRefusal'
 import { useDialog } from '@/lib/dialog'
 import { sslState } from '@/lib/ssl'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -14,6 +15,7 @@ type Sub = {
 
 export default function DomainSubdomainsPage() {
   const { t } = useTranslation('DomainSubdomainsPage')
+  const domainRefusal = useDomainRefusal()
   const { confirm } = useDialog()
   const { id } = useParams()
   const [subdomains, setSubdomains] = useState<Sub[]>([])
@@ -47,7 +49,7 @@ export default function DomainSubdomainsPage() {
       setSuccess(t('toast.created', { fqdn: data.fqdn }))
       setSubdomainName('')
       load()
-    } catch (error) { setError(apiError(error, t('toast.createFailed'))) }
+    } catch (error) { setError(domainRefusal(error, t('toast.createFailed'))) }
     finally { setSaving(false) }
   }
 

@@ -37,6 +37,7 @@
     "phpModules": { "title": "Module PHP", "subtitle": "Gestionare extensii PHP" },
     "packages": { "title": "Manager de pachete", "subtitle": "Pachete de sistem" },
     "dnsTemplate": { "title": "Șablon DNS", "subtitle": "Înregistrări DNS implicite" },
+    "bannedDomains": { "title": "Domenii interzise", "subtitle": "Hostname-uri pe care niciun client nu le poate adăuga" },
     "panelUpdate": { "title": "Actualizare panou", "subtitle": "Versiune panou și actualizări" }
   },
   "domain": {

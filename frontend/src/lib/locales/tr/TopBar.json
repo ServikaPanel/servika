@@ -37,6 +37,7 @@
     "phpModules": { "title": "PHP Modülleri", "subtitle": "PHP uzantı yönetimi" },
     "packages": { "title": "Paket Yöneticisi", "subtitle": "Sistem paketleri" },
     "dnsTemplate": { "title": "DNS Şablonu", "subtitle": "Varsayılan DNS kayıtları" },
+    "bannedDomains": { "title": "Yasaklı Alan Adları", "subtitle": "Hiçbir müşterinin ekleyemeyeceği hostname'ler" },
     "panelUpdate": { "title": "Panel Güncelleme", "subtitle": "Panel sürümü ve güncellemeler" }
   },
   "domain": {

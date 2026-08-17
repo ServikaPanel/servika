@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
+import { useDomainRefusal } from '@/lib/domainRefusal'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 
@@ -38,6 +39,7 @@ type WWWRedirect = {
 
 export default function DomainAddonDomainsPage() {
   const { t } = useTranslation('DomainAddonDomainsPage')
+  const domainRefusal = useDomainRefusal()
   const { confirm } = useDialog()
   const { id } = useParams()
   const [addons, setAddons] = useState<AddonDomain[]>([])
@@ -88,7 +90,7 @@ export default function DomainAddonDomainsPage() {
       setDomainName('')
       setParked(false)
       load()
-    } catch (error) { setError(apiError(error, t('toast.createFailed'))) }
+    } catch (error) { setError(domainRefusal(error, t('toast.createFailed'))) }
     finally { setSaving(false) }
   }
 

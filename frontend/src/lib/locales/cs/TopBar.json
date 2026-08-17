@@ -37,6 +37,7 @@
     "phpModules": { "title": "Moduly PHP", "subtitle": "Správa rozšíření PHP" },
     "packages": { "title": "Správce balíčků", "subtitle": "Systémové balíčky" },
     "dnsTemplate": { "title": "Šablona DNS", "subtitle": "Výchozí záznamy DNS" },
+    "bannedDomains": { "title": "Zakázané domény", "subtitle": "Hostname, které žádný zákazník nesmí přidat" },
     "panelUpdate": { "title": "Aktualizace panelu", "subtitle": "Verze a aktualizace panelu" }
   },
   "domain": {

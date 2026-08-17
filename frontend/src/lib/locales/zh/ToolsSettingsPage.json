@@ -54,6 +54,10 @@
       "title": "域名",
       "description": "浏览、搜索并快速访问所有域名。"
     },
+    "bannedDomains": {
+      "title": "禁止域名",
+      "description": "客户不可添加到此服务器的主机名。用于防范钓鱼。"
+    },
     "firewall": {
       "title": "防火墙",
       "description": "IP/端口阻止、允许列表、端口关闭。关键端口受保护。"

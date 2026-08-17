@@ -37,6 +37,7 @@
     "phpModules": { "title": "PHP 模块", "subtitle": "PHP 扩展管理" },
     "packages": { "title": "软件包管理器", "subtitle": "系统软件包" },
     "dnsTemplate": { "title": "DNS 模板", "subtitle": "默认 DNS 记录" },
+    "bannedDomains": { "title": "禁止域名", "subtitle": "客户不可添加的主机名" },
     "panelUpdate": { "title": "面板更新", "subtitle": "面板版本和更新" }
   },
   "domain": {

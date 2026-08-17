@@ -1,0 +1,51 @@
+{
+  "title": "Dominios prohibidos",
+  "subtitle": "Nombres de host que ningún cliente puede añadir a este servidor.",
+  "breadcrumb": {
+    "home": "Inicio",
+    "tools": "Herramientas y ajustes",
+    "current": "Dominios prohibidos"
+  },
+  "add": {
+    "title": "Añadir a la lista",
+    "domainsLabel": "Nombres de dominio",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Uno por línea o separados por comas. Un nombre que no sea un nombre de host válido se informa y no se guarda.",
+    "descriptionLabel": "Nota",
+    "descriptionPlaceholder": "Por qué se rechaza este nombre",
+    "matchSubdomains": "Rechazar también los subdominios",
+    "matchSubdomainsHint": "Si se deja activo, una prohibición de example.com también rechaza login.example.com. Un nombre de phishing suele esconderse un nivel más abajo.",
+    "submit": "Añadir",
+    "saving": "Guardando…"
+  },
+  "result": {
+    "applied": "Añadidos",
+    "skipped": "Ya en la lista",
+    "rejected": "Nombre de host no válido"
+  },
+  "list": {
+    "filterPlaceholder": "Filtrar",
+    "count": "Mostrados",
+    "domain": "Dominio",
+    "scope": "Alcance",
+    "scopeWithSubdomains": "Con subdominios",
+    "scopeExact": "Solo el nombre exacto",
+    "description": "Nota",
+    "createdBy": "Añadido por",
+    "createdAt": "Añadido",
+    "actions": "Acciones",
+    "remove": "Quitar",
+    "loading": "Cargando…",
+    "empty": "La lista está vacía."
+  },
+  "remove": {
+    "title": "Quitar de la lista",
+    "message": "{{domain}} volverá a aceptarse. Los dominios que ya existen no se ven afectados en ningún caso.",
+    "confirm": "Quitar"
+  },
+  "errors": {
+    "loadFailed": "No se pudo cargar la lista",
+    "saveFailed": "No se pudo escribir la lista"
+  },
+  "footnote": "La lista se comprueba al crear un dominio, un dominio addon o un subdominio, y durante una migración de sitio. Añadir aquí un nombre no tumba un sitio existente ni detiene la renovación de su certificado; eliminar un dominio es una acción aparte."
+}

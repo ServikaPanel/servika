@@ -1,0 +1,51 @@
+{
+  "title": "Domini vietati",
+  "subtitle": "Hostname che nessun cliente può aggiungere a questo server.",
+  "breadcrumb": {
+    "home": "Home",
+    "tools": "Strumenti e impostazioni",
+    "current": "Domini vietati"
+  },
+  "add": {
+    "title": "Aggiungi all'elenco",
+    "domainsLabel": "Nomi di dominio",
+    "domainsPlaceholder": "example-bank.com\nlogin.example-bank.com",
+    "domainsHint": "Uno per riga o separati da virgole. Un nome che non è un hostname valido viene segnalato e non viene salvato.",
+    "descriptionLabel": "Nota",
+    "descriptionPlaceholder": "Perché questo nome viene rifiutato",
+    "matchSubdomains": "Rifiuta anche i sottodomini",
+    "matchSubdomainsHint": "Se resta attivo, un divieto su example.com rifiuta anche login.example.com. Un nome di phishing si nasconde di solito un livello più in basso.",
+    "submit": "Aggiungi",
+    "saving": "Salvataggio…"
+  },
+  "result": {
+    "applied": "Aggiunti",
+    "skipped": "Già in elenco",
+    "rejected": "Hostname non valido"
+  },
+  "list": {
+    "filterPlaceholder": "Filtra",
+    "count": "Mostrati",
+    "domain": "Dominio",
+    "scope": "Ambito",
+    "scopeWithSubdomains": "Con i sottodomini",
+    "scopeExact": "Solo nome esatto",
+    "description": "Nota",
+    "createdBy": "Aggiunto da",
+    "createdAt": "Aggiunto",
+    "actions": "Azioni",
+    "remove": "Rimuovi",
+    "loading": "Caricamento…",
+    "empty": "L'elenco è vuoto."
+  },
+  "remove": {
+    "title": "Rimuovi dall'elenco",
+    "message": "{{domain}} sarà di nuovo accettato. I domini già esistenti non sono comunque interessati.",
+    "confirm": "Rimuovi"
+  },
+  "errors": {
+    "loadFailed": "Non è stato possibile caricare l'elenco",
+    "saveFailed": "Non è stato possibile scrivere l'elenco"
+  },
+  "footnote": "L'elenco viene controllato quando si crea un dominio, un dominio addon o un sottodominio e durante una migrazione di sito. Aggiungere qui un nome non mette offline un sito esistente e non ferma il rinnovo del suo certificato; rimuovere un dominio è un'azione separata."
+}

@@ -30,5 +30,7 @@
   "notice": "Avis",
   "areYouSure": "Êtes-vous sûr ?",
   "enterValue": "Saisir une valeur",
-  "copyManually": "La copie automatique a échoué. Copiez le texte ci-dessous manuellement."
+  "copyManually": "La copie automatique a échoué. Copiez le texte ci-dessous manuellement.",
+  "domainBlocked": "Ce nom de domaine ne peut pas être ajouté à ce serveur.",
+  "domainBlockListUnreadable": "La liste des domaines interdits n'a pas pu être lue, le domaine n'a donc pas été créé. Réessayez."
 }

@@ -37,6 +37,7 @@
     "phpModules": { "title": "PHP-Module", "subtitle": "PHP-Erweiterungsverwaltung" },
     "packages": { "title": "Paketmanager", "subtitle": "Systempakete" },
     "dnsTemplate": { "title": "DNS-Vorlage", "subtitle": "Standard-DNS-Einträge" },
+    "bannedDomains": { "title": "Gesperrte Domains", "subtitle": "Hostnamen, die kein Kunde hinzufügen darf" },
     "panelUpdate": { "title": "Panel-Aktualisierung", "subtitle": "Panel-Version und Aktualisierungen" }
   },
   "domain": {

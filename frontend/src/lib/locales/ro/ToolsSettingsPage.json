@@ -56,6 +56,10 @@
       "title": "Domenii",
       "description": "Răsfoiți, căutați și accesați rapid toate domeniile."
     },
+    "bannedDomains": {
+      "title": "Domenii interzise",
+      "description": "Hostname-uri pe care niciun client nu le poate adăuga pe acest server. Împotriva phishingului."
+    },
     "firewall": {
       "title": "Firewall",
       "description": "Blocare IP/port, listă de permitere, închidere port. Porturile critice sunt protejate."

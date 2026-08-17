@@ -55,6 +55,10 @@
       "title": "Domini",
       "description": "Sfoglia, cerca e accedi rapidamente a tutti i domini."
     },
+    "bannedDomains": {
+      "title": "Domini vietati",
+      "description": "Hostname che nessun cliente può aggiungere a questo server. Contro il phishing."
+    },
     "firewall": {
       "title": "Firewall",
       "description": "Blocco IP/porte, allowlist, chiusura porte. Le porte critiche sono protette."
