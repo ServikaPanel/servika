@@ -1,0 +1,24 @@
+-- 0095 - how long a signed-in session may sit untouched.
+--
+-- The JWT lifetime is an ABSOLUTE limit: it ends the session that many seconds
+-- after it was issued whether or not anybody was using it. Idle timeout is the
+-- other question, how long since the last request, and the two are not
+-- interchangeable: a lifetime short enough to protect an unattended screen
+-- signs out somebody who is working, and one long enough to work under leaves
+-- that screen open all day.
+--
+-- The default is 0, which is OFF, deliberately against the upstream this was
+-- taken from. An installation that has been running for a year has a session
+-- behaviour its operators rely on, and a panel update must not change it
+-- silently. Turning it on is one field on the settings screen.
+--
+-- last_activity_ts is a Unix second count rather than a DATETIME because it is
+-- compared in Go. The driver writes a Go time.Time as UTC while NOW() answers
+-- in the session timezone, so a mixed comparison is wrong by the offset between
+-- them; an integer has no timezone to disagree about.
+--
+-- 0 in last_activity_ts means "never stamped": a session that predates this
+-- column, or the first request after it was added. That is stamped rather than
+-- expired, so switching the feature on does not sign everybody out at once.
+ALTER TABLE users ADD COLUMN last_activity_ts BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE panel_settings ADD COLUMN session_idle_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 0;

@@ -486,6 +486,10 @@ func main() {
 			r.With(middleware.AdminOnly).Post("/system/panel-domain", panelSettingsH.Save)
 			r.With(middleware.AdminOnly).Delete("/system/panel-domain", panelSettingsH.Delete)
 			r.With(middleware.AdminOnly).Put("/system/panel-language", panelSettingsH.SaveLanguage)
+			// Server-wide idle timeout. Admin only: it decides when every other
+			// operator's session ends, which is not a per-user preference.
+			r.With(middleware.AdminOnly).Get("/system/session-idle", panelSettingsH.SessionIdleGet)
+			r.With(middleware.AdminOnly).Put("/system/session-idle", panelSettingsH.SessionIdleSave)
 			// The country database is a server-wide integration, so its credentials
 			// and download live with the other system settings rather than on a
 			// domain. The license key is never returned by any of these.

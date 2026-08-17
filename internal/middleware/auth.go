@@ -8,6 +8,7 @@ import (
 
 	"servika/internal/auth"
 	"servika/internal/httpx"
+	"servika/internal/sessionidle"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -105,6 +106,21 @@ func RequireAuth(secret []byte) func(http.Handler) http.Handler {
 			}
 			if !ok {
 				httpx.WriteError(w, http.StatusUnauthorized, "session has been revoked")
+				return
+			}
+			// The idle timeout runs AFTER the revocation check, because the two
+			// answer different questions and only the first is a security
+			// boundary. It also FAILS OPEN, which is the opposite of every
+			// other check here and is deliberate: an idle limit is a policy, so
+			// a database outage that signed every operator out at once would
+			// remove the people who fix it while protecting nothing that
+			// token_version, which fails closed, does not already protect. The
+			// failure is logged rather than swallowed.
+			switch expired, err := sessionidle.Enforce(r.Context(), scopeDB, c.UserID); {
+			case err != nil:
+				sessionidle.Complain(err)
+			case expired:
+				httpx.WriteError(w, http.StatusUnauthorized, "session expired after inactivity")
 				return
 			}
 			ctx := auth.WithClaims(r.Context(), c)
