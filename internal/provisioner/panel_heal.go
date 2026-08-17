@@ -67,13 +67,24 @@ func replaceIndentedBlock(content, openLine, replacement string) (string, int) {
 	return strings.Join(out, "\n"), replaced
 }
 
-const panelLoginRateLimitHTTPBlock = `# SERVIKA-LOGIN-RATELIMIT v1
+// panelLoginZoneLine is the http-context half of the rate limit. It is a line
+// rather than a block, so it is replaced by line and not through
+// replaceIndentedBlock.
+const panelLoginZoneLine = "limit_req_zone $binary_remote_addr zone=servika_login:10m rate=20r/m;"
+
+const panelLoginRateLimitHTTPBlock = panelLoginRateLimitSentinel + `
 # Login endpoint defense at the nginx layer. The application also enforces
 # a per-IP failed-login lockout in middleware.LoginRateLimit.
-limit_req_zone $binary_remote_addr zone=servika_login:10m rate=20r/m;
+` + panelLoginZoneLine + `
 `
 
-const panelLoginRateLimitLocations = `    location = /api/v1/auth/login {
+// panelLoginPaths are the endpoints served under the shared rate limit. Both
+// take a password, so both are worth the same protection.
+var panelLoginPaths = []string{"/api/v1/auth/login", "/api/v1/customer/login"}
+
+// panelLoginLocation renders one rate-limited login location.
+func panelLoginLocation(path string) string {
+	return `    location = ` + path + ` {
         limit_req zone=servika_login burst=8 nodelay;
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -82,19 +93,66 @@ const panelLoginRateLimitLocations = `    location = /api/v1/auth/login {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 3600s;
-    }
+    }`
+}
 
-    location = /api/v1/customer/login {
-        limit_req zone=servika_login burst=8 nodelay;
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 3600s;
-    }
-`
+// ensureLoginRateLimitZone brings the http-context zone up to date, adding the
+// whole block when the panel predates it and replacing just the zone line when
+// it does not. Replacing the line is what lets a changed rate reach an
+// installation that already carries the sentinel.
+func ensureLoginRateLimitZone(content string) string {
+	if !strings.Contains(content, panelLoginRateLimitSentinel) {
+		return panelLoginRateLimitHTTPBlock + "\n" + content
+	}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "limit_req_zone") && strings.Contains(trimmed, "zone=servika_login") {
+			lines[i] = panelLoginZoneLine
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// applyLoginRateLimit returns the vhost with the current rate limit in place,
+// and whether it could be applied at all.
+//
+// It replaces what is already there rather than skipping past it. The heal used
+// to return as soon as it saw the sentinel, which answers "has this run before"
+// instead of "is this current", so a changed rate or a new endpoint never
+// reached an installation that had already been repaired once.
+//
+// The zone is handled first because it goes at the top of the file, so the
+// anchor index taken afterwards is taken against the content that will actually
+// be written.
+func applyLoginRateLimit(content string) (string, bool) {
+	updated := ensureLoginRateLimitZone(content)
+
+	var missing []string
+	for _, path := range panelLoginPaths {
+		next, replaced := replaceIndentedBlock(updated, "location = "+path+" {", panelLoginLocation(path))
+		if replaced == 0 {
+			missing = append(missing, path)
+			continue
+		}
+		updated = next
+	}
+	if len(missing) == 0 {
+		return updated, true
+	}
+
+	const apiAnchor = "    location /api/ {"
+	at := strings.Index(updated, apiAnchor)
+	if at < 0 {
+		return content, false
+	}
+	var insert strings.Builder
+	for _, path := range missing {
+		insert.WriteString(panelLoginLocation(path))
+		insert.WriteString("\n\n")
+	}
+	return updated[:at] + insert.String() + updated[at:], true
+}
 
 func healPanelLoginRateLimitOnStartup() {
 	original, err := os.ReadFile(panelVhostPath)
@@ -102,16 +160,14 @@ func healPanelLoginRateLimitOnStartup() {
 		return
 	}
 	content := string(original)
-	if strings.Contains(content, panelLoginRateLimitSentinel) {
-		return
-	}
-	apiAnchor := "    location /api/ {"
-	apiIndex := strings.Index(content, apiAnchor)
-	if apiIndex < 0 {
+	updated, ok := applyLoginRateLimit(content)
+	if !ok {
 		log.Printf("panel login rate limit repair: canonical API location was not found")
 		return
 	}
-	updated := panelLoginRateLimitHTTPBlock + "\n" + content[:apiIndex] + panelLoginRateLimitLocations + "\n" + content[apiIndex:]
+	if updated == content {
+		return
+	}
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
 		log.Printf("panel login rate limit repair: could not write vhost: %v", err)
