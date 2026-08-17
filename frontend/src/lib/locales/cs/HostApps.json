@@ -1,6 +1,17 @@
 {
   "title": "Serverové aplikace",
   "description": "Software, který patří tomuto serveru, nikoli zákazníkovi. Každá běží pod vlastním účtem na portu, který panel rezervuje, a zůstává ve firewallu zavřená, dokud ji neotevřete.",
+  "feature": {
+    "title": "Tato funkce",
+    "isOn": "Serverové aplikace jsou zapnuté.",
+    "isOff": "Serverové aplikace jsou vypnuté, takže zde nelze nic nainstalovat, spustit ani otevřít.",
+    "turnOn": "Zapnout",
+    "turnOff": "Vypnout",
+    "offNote": "Zapnutí samo o sobě nic nenainstaluje. Nic se nestáhne a žádný port se neotevře, dokud o to nepožádáte.",
+    "confirmOffTitle": "Vypnout serverové aplikace?",
+    "confirmOffBody": "Nic z toho, co je nainstalováno, se nezastaví, neodebere ani nezpřístupní. Unity běží dál a firewall si ponechá, co jste otevřeli. Jen panel přestane funkci nabízet.",
+    "failedTitle": "Přepínač nebyl změněn"
+  },
   "breadcrumb": {
     "home": "Domů",
     "toolsAndSettings": "Nástroje a nastavení",
@@ -60,7 +71,8 @@
     "install": "Aplikaci nebylo možné nainstalovat.",
     "remove": "Aplikaci nebylo možné odebrat.",
     "action": "Aplikace na tento požadavek neodpověděla.",
-    "firewall": "Pravidlo firewallu nebylo možné změnit."
+    "firewall": "Pravidlo firewallu nebylo možné změnit.",
+    "feature": "Přepínač nebylo možné změnit."
   },
   "reason": {
     "host_app_unknown": "Tento server takovou aplikaci nenabízí.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "Stahování selhalo.",
     "host_app_unpack_failed": "Archiv nebylo možné rozbalit.",
     "host_app_binary_missing": "Archiv neobsahuje program tam, kde uvádí katalog.",
-    "host_app_port_taken": "Tento port je už obsazený."
+    "host_app_port_taken": "Tento port je už obsazený.",
+    "host_apps_switched_off": "Serverové aplikace jsou na tomto serveru vypnuté."
   }
 }

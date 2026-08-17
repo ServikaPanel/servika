@@ -11,6 +11,41 @@ func complain(format string, args ...any) {
 	log.Printf("hostapps: "+format, args...)
 }
 
+// FeatureEnabled reads the server-wide switch.
+//
+// It fails CLOSED: an unreadable setting refuses the feature rather than
+// offering it. That is the opposite of internal/sessionidle, and the difference
+// is what the answer causes. There a failure ends somebody's session for a
+// policy that is not a security boundary; here it declines to download a
+// program, create an account and open a port, which is recoverable by asking
+// again once the database is back.
+func FeatureEnabled(ctx context.Context, db *sql.DB) (bool, error) {
+	var enabled int
+	err := db.QueryRowContext(ctx,
+		`SELECT COALESCE(host_apps_enabled,0) FROM panel_settings WHERE id=1`).Scan(&enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return enabled == 1, nil
+}
+
+// SetFeatureEnabled writes the switch.
+//
+// Turning it off changes NOTHING on the host: the units keep running, the
+// firewall keeps whatever was opened and the rows stay. Tearing the
+// applications down instead would make a checkbox delete a Gitea installation
+// and every repository in it, and dropping the firewall rules while the
+// processes keep listening would silently PUBLISH every application on a server
+// whose operator had just asked for the feature to be off.
+func SetFeatureEnabled(ctx context.Context, db *sql.DB, enabled bool) error {
+	_, err := db.ExecContext(ctx,
+		`UPDATE panel_settings SET host_apps_enabled=? WHERE id=1`, enabled)
+	return err
+}
+
 // App is one installed application.
 type App struct {
 	ID         int64  `json:"id"`

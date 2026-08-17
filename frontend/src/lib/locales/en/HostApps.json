@@ -1,6 +1,17 @@
 {
   "title": "Server Applications",
   "description": "Software that belongs to this server rather than to a customer. Each one runs as its own account on a port the panel reserves, and stays closed at the firewall until you open it.",
+  "feature": {
+    "title": "This feature",
+    "isOn": "Server applications are switched on.",
+    "isOff": "Server applications are switched off, so nothing can be installed, started or opened here.",
+    "turnOn": "Switch on",
+    "turnOff": "Switch off",
+    "offNote": "Switching this on does not install anything by itself. Nothing is downloaded and no port is opened until you ask for it.",
+    "confirmOffTitle": "Switch server applications off?",
+    "confirmOffBody": "Nothing already installed is stopped, removed or exposed. The units keep running and the firewall keeps whatever you opened. Only the panel stops offering the feature.",
+    "failedTitle": "The switch was not changed"
+  },
   "breadcrumb": {
     "home": "Home",
     "toolsAndSettings": "Tools and Settings",
@@ -60,7 +71,8 @@
     "install": "The application could not be installed.",
     "remove": "The application could not be removed.",
     "action": "The application did not respond to that.",
-    "firewall": "The firewall rule could not be changed."
+    "firewall": "The firewall rule could not be changed.",
+    "feature": "The switch could not be changed."
   },
   "reason": {
     "host_app_unknown": "This server does not offer that application.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "The download failed.",
     "host_app_unpack_failed": "The archive could not be unpacked.",
     "host_app_binary_missing": "The archive does not contain the program where the catalog says it does.",
-    "host_app_port_taken": "That port is already in use."
+    "host_app_port_taken": "That port is already in use.",
+    "host_apps_switched_off": "Server applications are switched off on this server."
   }
 }

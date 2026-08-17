@@ -1,6 +1,17 @@
 {
   "title": "Sunucu Uygulamaları",
   "description": "Bir müşteriye değil, bu sunucuya ait yazılımlar. Her biri kendi hesabıyla ve panelin ayırdığı bir portta çalışır. Siz açana kadar firewall'da kapalı kalır.",
+  "feature": {
+    "title": "Bu özellik",
+    "isOn": "Sunucu uygulamaları açık.",
+    "isOff": "Sunucu uygulamaları kapalı; burada hiçbir şey kurulamaz, başlatılamaz veya açılamaz.",
+    "turnOn": "Aç",
+    "turnOff": "Kapat",
+    "offNote": "Bunu açmak kendiliğinden hiçbir şey kurmaz. Siz istemeden hiçbir şey indirilmez ve hiçbir port açılmaz.",
+    "confirmOffTitle": "Sunucu uygulamaları kapatılsın mı?",
+    "confirmOffBody": "Kurulu hiçbir şey durdurulmaz, kaldırılmaz veya dışarı açılmaz. Unit'ler çalışmaya devam eder ve firewall açtığınız neyse onu korur. Yalnızca panel özelliği sunmayı bırakır.",
+    "failedTitle": "Anahtar değiştirilmedi"
+  },
   "breadcrumb": {
     "home": "Ana Sayfa",
     "toolsAndSettings": "Araçlar ve Ayarlar",
@@ -60,7 +71,8 @@
     "install": "Uygulama kurulamadı.",
     "remove": "Uygulama kaldırılamadı.",
     "action": "Uygulama bu isteğe yanıt vermedi.",
-    "firewall": "Firewall kuralı değiştirilemedi."
+    "firewall": "Firewall kuralı değiştirilemedi.",
+    "feature": "Anahtar değiştirilemedi."
   },
   "reason": {
     "host_app_unknown": "Bu sunucu böyle bir uygulama sunmuyor.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "İndirme başarısız oldu.",
     "host_app_unpack_failed": "Arşiv açılamadı.",
     "host_app_binary_missing": "Arşiv, programı kataloğun söylediği yerde içermiyor.",
-    "host_app_port_taken": "Bu port zaten kullanımda."
+    "host_app_port_taken": "Bu port zaten kullanımda.",
+    "host_apps_switched_off": "Bu sunucuda sunucu uygulamaları kapalı."
   }
 }

@@ -1,6 +1,17 @@
 {
   "title": "Aplicații de server",
   "description": "Programe care aparțin acestui server, nu unui client. Fiecare rulează sub un cont propriu, pe un port rezervat de panou, și rămâne închisă în firewall până când o deschideți.",
+  "feature": {
+    "title": "Această funcție",
+    "isOn": "Aplicațiile de server sunt activate.",
+    "isOff": "Aplicațiile de server sunt dezactivate, deci aici nu se poate instala, porni sau deschide nimic.",
+    "turnOn": "Activează",
+    "turnOff": "Dezactivează",
+    "offNote": "Activarea nu instalează nimic de la sine. Nu se descarcă nimic și nu se deschide niciun port până când nu cereți.",
+    "confirmOffTitle": "Dezactivați aplicațiile de server?",
+    "confirmOffBody": "Nimic din ce este deja instalat nu este oprit, eliminat sau expus. Unitățile continuă să ruleze, iar firewallul păstrează ce ați deschis. Doar panoul încetează să ofere funcția.",
+    "failedTitle": "Comutatorul nu a fost schimbat"
+  },
   "breadcrumb": {
     "home": "Acasă",
     "toolsAndSettings": "Instrumente și setări",
@@ -60,7 +71,8 @@
     "install": "Aplicația nu a putut fi instalată.",
     "remove": "Aplicația nu a putut fi eliminată.",
     "action": "Aplicația nu a răspuns la această cerere.",
-    "firewall": "Regula de firewall nu a putut fi schimbată."
+    "firewall": "Regula de firewall nu a putut fi schimbată.",
+    "feature": "Comutatorul nu a putut fi schimbat."
   },
   "reason": {
     "host_app_unknown": "Acest server nu oferă acea aplicație.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "Descărcarea a eșuat.",
     "host_app_unpack_failed": "Arhiva nu a putut fi dezarhivată.",
     "host_app_binary_missing": "Arhiva nu conține programul acolo unde indică catalogul.",
-    "host_app_port_taken": "Acel port este deja folosit."
+    "host_app_port_taken": "Acel port este deja folosit.",
+    "host_apps_switched_off": "Aplicațiile de server sunt dezactivate pe acest server."
   }
 }

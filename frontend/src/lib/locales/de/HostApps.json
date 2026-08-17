@@ -1,6 +1,17 @@
 {
   "title": "Serveranwendungen",
   "description": "Software, die zu diesem Server gehört und nicht zu einem Kunden. Jede läuft unter einem eigenen Konto auf einem Port, den das Panel reserviert, und bleibt in der Firewall geschlossen, bis Sie sie öffnen.",
+  "feature": {
+    "title": "Diese Funktion",
+    "isOn": "Serveranwendungen sind eingeschaltet.",
+    "isOff": "Serveranwendungen sind ausgeschaltet, daher kann hier nichts installiert, gestartet oder geöffnet werden.",
+    "turnOn": "Einschalten",
+    "turnOff": "Ausschalten",
+    "offNote": "Das Einschalten installiert von sich aus nichts. Es wird nichts heruntergeladen und kein Port geöffnet, bis Sie es verlangen.",
+    "confirmOffTitle": "Serveranwendungen ausschalten?",
+    "confirmOffBody": "Nichts bereits Installiertes wird gestoppt, entfernt oder freigegeben. Die Units laufen weiter und die Firewall behält, was Sie geöffnet haben. Nur das Panel bietet die Funktion nicht mehr an.",
+    "failedTitle": "Der Schalter wurde nicht geändert"
+  },
   "breadcrumb": {
     "home": "Startseite",
     "toolsAndSettings": "Werkzeuge und Einstellungen",
@@ -60,7 +71,8 @@
     "install": "Die Anwendung konnte nicht installiert werden.",
     "remove": "Die Anwendung konnte nicht entfernt werden.",
     "action": "Die Anwendung hat darauf nicht reagiert.",
-    "firewall": "Die Firewall-Regel konnte nicht geändert werden."
+    "firewall": "Die Firewall-Regel konnte nicht geändert werden.",
+    "feature": "Der Schalter konnte nicht geändert werden."
   },
   "reason": {
     "host_app_unknown": "Dieser Server bietet diese Anwendung nicht an.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "Der Download ist fehlgeschlagen.",
     "host_app_unpack_failed": "Das Archiv konnte nicht entpackt werden.",
     "host_app_binary_missing": "Das Archiv enthält das Programm nicht an der Stelle, die der Katalog nennt.",
-    "host_app_port_taken": "Dieser Port ist bereits belegt."
+    "host_app_port_taken": "Dieser Port ist bereits belegt.",
+    "host_apps_switched_off": "Serveranwendungen sind auf diesem Server ausgeschaltet."
   }
 }

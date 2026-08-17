@@ -1,6 +1,17 @@
 {
   "title": "Applicazioni server",
   "description": "Software che appartiene a questo server e non a un cliente. Ognuna gira con un account proprio su una porta riservata dal pannello e resta chiusa nel firewall finché non la apri.",
+  "feature": {
+    "title": "Questa funzione",
+    "isOn": "Le applicazioni server sono attive.",
+    "isOff": "Le applicazioni server sono disattivate: qui non si può installare, avviare o aprire nulla.",
+    "turnOn": "Attiva",
+    "turnOff": "Disattiva",
+    "offNote": "Attivarla non installa nulla da sola. Niente viene scaricato e nessuna porta viene aperta finché non lo chiedi.",
+    "confirmOffTitle": "Disattivare le applicazioni server?",
+    "confirmOffBody": "Nulla di già installato viene fermato, rimosso o esposto. Le unit continuano a girare e il firewall conserva quello che hai aperto. Solo il pannello smette di offrire la funzione.",
+    "failedTitle": "L'interruttore non è stato cambiato"
+  },
   "breadcrumb": {
     "home": "Home",
     "toolsAndSettings": "Strumenti e impostazioni",
@@ -60,7 +71,8 @@
     "install": "Non è stato possibile installare l'applicazione.",
     "remove": "Non è stato possibile rimuovere l'applicazione.",
     "action": "L'applicazione non ha risposto alla richiesta.",
-    "firewall": "Non è stato possibile cambiare la regola del firewall."
+    "firewall": "Non è stato possibile cambiare la regola del firewall.",
+    "feature": "Non è stato possibile cambiare l'interruttore."
   },
   "reason": {
     "host_app_unknown": "Questo server non offre quell'applicazione.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "Il download non è riuscito.",
     "host_app_unpack_failed": "Non è stato possibile estrarre l'archivio.",
     "host_app_binary_missing": "L'archivio non contiene il programma dove indica il catalogo.",
-    "host_app_port_taken": "Quella porta è già in uso."
+    "host_app_port_taken": "Quella porta è già in uso.",
+    "host_apps_switched_off": "Le applicazioni server sono disattivate su questo server."
   }
 }

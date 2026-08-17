@@ -1,6 +1,17 @@
 {
   "title": "服务器应用",
   "description": "属于本服务器而非某个客户的软件。每个应用以自己的账户运行在面板保留的端口上，在您开放之前始终被防火墙关闭。",
+  "feature": {
+    "title": "此功能",
+    "isOn": "服务器应用已启用。",
+    "isOff": "服务器应用已停用，因此这里无法安装、启动或开放任何内容。",
+    "turnOn": "启用",
+    "turnOff": "停用",
+    "offNote": "启用本身不会安装任何东西。在您提出要求之前，不会下载任何内容，也不会开放任何端口。",
+    "confirmOffTitle": "停用服务器应用？",
+    "confirmOffBody": "已安装的内容不会被停止、移除或公开。unit 继续运行，防火墙保留您开放的设置。只是面板不再提供该功能。",
+    "failedTitle": "开关未更改"
+  },
   "breadcrumb": {
     "home": "首页",
     "toolsAndSettings": "工具与设置",
@@ -60,7 +71,8 @@
     "install": "无法安装该应用。",
     "remove": "无法移除该应用。",
     "action": "应用未响应该请求。",
-    "firewall": "无法更改防火墙规则。"
+    "firewall": "无法更改防火墙规则。",
+    "feature": "无法更改该开关。"
   },
   "reason": {
     "host_app_unknown": "本服务器不提供该应用。",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "下载失败。",
     "host_app_unpack_failed": "无法解压该归档。",
     "host_app_binary_missing": "归档中没有目录所指位置的程序。",
-    "host_app_port_taken": "该端口已被占用。"
+    "host_app_port_taken": "该端口已被占用。",
+    "host_apps_switched_off": "本服务器上的服务器应用已停用。"
   }
 }

@@ -35,6 +35,7 @@ type Installed = {
 }
 
 type Overview = {
+  enabled: boolean
   catalog: Offered[]
   installed: Installed[]
   architecture: string
@@ -180,6 +181,31 @@ export default function HostAppsPage() {
     }
   }
 
+  const setEnabled = async (enabled: boolean) => {
+    if (!enabled) {
+      const confirmed = await dialog.confirm({
+        title: t('feature.confirmOffTitle'),
+        message: t('feature.confirmOffBody'),
+        confirmLabel: t('feature.turnOff'),
+      })
+      if (!confirmed) return
+    }
+    setBusy('feature')
+    try {
+      await api.put('/system/host-apps/enabled', { enabled })
+      await load()
+    } catch (err) {
+      await dialog.notify({
+        title: t('feature.failedTitle'),
+        message: reasonText(err, 'error.feature'),
+        tone: 'error',
+      })
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const enabled = data?.enabled ?? false
   const installedCodes = new Set((data?.installed ?? []).map((app) => app.code))
 
   return (
@@ -200,6 +226,26 @@ export default function HostAppsPage() {
           {loadError}
         </p>
       )}
+
+      <section className="mb-6 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('feature.title')}</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          {enabled ? t('feature.isOn') : t('feature.isOff')}
+        </p>
+        <button
+          type="button"
+          onClick={() => void setEnabled(!enabled)}
+          disabled={busy === 'feature' || data === null}
+          className={`mt-3 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+            enabled ? 'bg-slate-600' : 'bg-sky-600'
+          }`}
+        >
+          {enabled ? t('feature.turnOff') : t('feature.turnOn')}
+        </button>
+        {enabled === false && (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('feature.offNote')}</p>
+        )}
+      </section>
 
       <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('installed.title')}</h2>
@@ -240,7 +286,7 @@ export default function HostAppsPage() {
                     <button
                       type="button"
                       onClick={() => void toggleFirewall(app)}
-                      disabled={busy === app.code || app.port === 0}
+                      disabled={!enabled || busy === app.code || app.port === 0}
                       className={`rounded-lg px-2 py-1 text-xs font-medium disabled:opacity-50 ${
                         app.firewall_open
                           ? 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100'
@@ -252,13 +298,13 @@ export default function HostAppsPage() {
                   </td>
                   <td className="py-2 align-top text-xs">
                     <div className="flex flex-wrap gap-1">
-                      <button type="button" onClick={() => void act(app, 'start')} disabled={busy === app.code}
+                      <button type="button" onClick={() => void act(app, 'start')} disabled={!enabled || busy === app.code}
                         className="rounded-lg bg-emerald-600 px-2 py-1 text-white disabled:opacity-50">{t('action.start')}</button>
-                      <button type="button" onClick={() => void act(app, 'restart')} disabled={busy === app.code}
+                      <button type="button" onClick={() => void act(app, 'restart')} disabled={!enabled || busy === app.code}
                         className="rounded-lg bg-sky-600 px-2 py-1 text-white disabled:opacity-50">{t('action.restart')}</button>
-                      <button type="button" onClick={() => void act(app, 'stop')} disabled={busy === app.code}
+                      <button type="button" onClick={() => void act(app, 'stop')} disabled={!enabled || busy === app.code}
                         className="rounded-lg bg-slate-600 px-2 py-1 text-white disabled:opacity-50">{t('action.stop')}</button>
-                      <button type="button" onClick={() => void remove(app)} disabled={busy === app.code}
+                      <button type="button" onClick={() => void remove(app)} disabled={!enabled || busy === app.code}
                         className="rounded-lg bg-rose-600 px-2 py-1 text-white disabled:opacity-50">{t('remove.action')}</button>
                     </div>
                   </td>
@@ -289,7 +335,7 @@ export default function HostAppsPage() {
                 <button
                   type="button"
                   onClick={() => void install(item)}
-                  disabled={busy === item.code || installedCodes.has(item.code)}
+                  disabled={!enabled || busy === item.code || installedCodes.has(item.code)}
                   className="mt-2 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {installedCodes.has(item.code) ? t('catalog.alreadyInstalled') : t('install.action')}

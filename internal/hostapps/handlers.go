@@ -41,6 +41,26 @@ func (h *Handlers) fail(w http.ResponseWriter, err error, fallback string) {
 	httpx.WriteError(w, http.StatusInternalServerError, fallback)
 }
 
+// requireEnabled refuses every operation that changes the host while the
+// server-wide switch is off.
+//
+// It runs on the WRITE path rather than only where the screen draws the button,
+// because a switch enforced in the browser is not a switch.
+func (h *Handlers) requireEnabled(w http.ResponseWriter, r *http.Request) bool {
+	enabled, err := FeatureEnabled(r.Context(), h.DB)
+	if err != nil {
+		complain("read the feature switch: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return false
+	}
+	if !enabled {
+		writeRefusal(w, http.StatusConflict, ReasonFeatureOff,
+			"server applications are switched off on this server")
+		return false
+	}
+	return true
+}
+
 // offered is one catalog row as the screen sees it.
 type offered struct {
 	Entry
@@ -55,6 +75,12 @@ type offered struct {
 // arm64 Linux build at all, and a row that simply vanished on an arm64 server
 // would read as a panel that forgot it.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
+	enabled, err := FeatureEnabled(r.Context(), h.DB)
+	if err != nil {
+		complain("read the feature switch: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return
+	}
 	catalog, err := Catalog(r.Context(), h.DB)
 	if err != nil {
 		complain("catalog: %v", err)
@@ -82,6 +108,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"enabled":      enabled,
 		"catalog":      rows,
 		"installed":    installed,
 		"architecture": runtime.GOARCH,
@@ -101,6 +128,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !h.requireEnabled(w, r) {
 		return
 	}
 	entry, err := CatalogEntry(r.Context(), h.DB, body.Code)
@@ -150,6 +180,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 
 // Remove — DELETE /system/host-apps/{id} (AdminOnly).
 func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
+	if !h.requireEnabled(w, r) {
+		return
+	}
 	app, ok := h.load(w, r)
 	if !ok {
 		return
@@ -175,6 +208,9 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 
 // Action — POST /system/host-apps/{id}/action (AdminOnly).
 func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
+	if !h.requireEnabled(w, r) {
+		return
+	}
 	app, ok := h.load(w, r)
 	if !ok {
 		return
@@ -212,6 +248,9 @@ func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
 
 // Firewall — PUT /system/host-apps/{id}/firewall (AdminOnly).
 func (h *Handlers) Firewall(w http.ResponseWriter, r *http.Request) {
+	if !h.requireEnabled(w, r) {
+		return
+	}
 	app, ok := h.load(w, r)
 	if !ok {
 		return
@@ -228,6 +267,27 @@ func (h *Handlers) Firewall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"port": app.Port, "firewall_open": body.Open})
+}
+
+// SetEnabled — PUT /system/host-apps/enabled (AdminOnly).
+//
+// The switch lives on this screen rather than in the general settings page, so
+// the one place that explains what the feature does is also the place it is
+// turned on.
+func (h *Handlers) SetEnabled(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := SetFeatureEnabled(r.Context(), h.DB, body.Enabled); err != nil {
+		complain("write the feature switch: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database write failed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
 }
 
 // Logs — GET /system/host-apps/{id}/logs (AdminOnly).

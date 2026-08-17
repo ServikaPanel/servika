@@ -573,6 +573,7 @@ func main() {
 			r.With(middleware.AdminOnly).Get("/system/host-apps", hostAppH.List)
 			r.With(middleware.AdminOnly).Post("/system/host-apps", hostAppH.Install)
 			r.With(middleware.AdminOnly).Get("/system/host-apps/jobs", hostAppH.Jobs)
+			r.With(middleware.AdminOnly).Put("/system/host-apps/enabled", hostAppH.SetEnabled)
 			r.With(middleware.AdminOnly).Delete("/system/host-apps/{id}", hostAppH.Remove)
 			r.With(middleware.AdminOnly).Post("/system/host-apps/{id}/action", hostAppH.Action)
 			r.With(middleware.AdminOnly).Put("/system/host-apps/{id}/firewall", hostAppH.Firewall)

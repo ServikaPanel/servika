@@ -1,6 +1,17 @@
 {
   "title": "Aplicações do servidor",
   "description": "Software que pertence a este servidor e não a um cliente. Cada uma corre com uma conta própria numa porta reservada pelo painel e permanece fechada na firewall até a abrir.",
+  "feature": {
+    "title": "Esta funcionalidade",
+    "isOn": "As aplicações do servidor estão ativadas.",
+    "isOff": "As aplicações do servidor estão desativadas, por isso aqui não se pode instalar, iniciar nem abrir nada.",
+    "turnOn": "Ativar",
+    "turnOff": "Desativar",
+    "offNote": "Ativar não instala nada por si só. Nada é transferido e nenhuma porta é aberta enquanto não o pedir.",
+    "confirmOffTitle": "Desativar as aplicações do servidor?",
+    "confirmOffBody": "Nada do que já está instalado é parado, removido nem exposto. As units continuam a correr e a firewall mantém o que abriu. Apenas o painel deixa de oferecer a funcionalidade.",
+    "failedTitle": "O interruptor não foi alterado"
+  },
   "breadcrumb": {
     "home": "Início",
     "toolsAndSettings": "Ferramentas e definições",
@@ -60,7 +71,8 @@
     "install": "Não foi possível instalar a aplicação.",
     "remove": "Não foi possível remover a aplicação.",
     "action": "A aplicação não respondeu a esse pedido.",
-    "firewall": "Não foi possível alterar a regra da firewall."
+    "firewall": "Não foi possível alterar a regra da firewall.",
+    "feature": "Não foi possível alterar o interruptor."
   },
   "reason": {
     "host_app_unknown": "Este servidor não oferece essa aplicação.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "A transferência falhou.",
     "host_app_unpack_failed": "Não foi possível extrair o arquivo.",
     "host_app_binary_missing": "O arquivo não contém o programa onde o catálogo indica.",
-    "host_app_port_taken": "Essa porta já está em uso."
+    "host_app_port_taken": "Essa porta já está em uso.",
+    "host_apps_switched_off": "As aplicações do servidor estão desativadas neste servidor."
   }
 }

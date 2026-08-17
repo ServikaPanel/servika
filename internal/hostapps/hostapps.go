@@ -58,6 +58,7 @@ const (
 	ReasonUnpack        = "host_app_unpack_failed"
 	ReasonBinaryMissing = "host_app_binary_missing"
 	ReasonPortTaken     = "host_app_port_taken"
+	ReasonFeatureOff    = "host_apps_switched_off"
 )
 
 // Refusal carries a reason code beside the message.

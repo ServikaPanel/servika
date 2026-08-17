@@ -1,6 +1,17 @@
 {
   "title": "Applications serveur",
   "description": "Logiciels appartenant à ce serveur plutôt qu'à un client. Chacun s'exécute sous son propre compte sur un port réservé par le panneau et reste fermé au pare-feu jusqu'à ce que vous l'ouvriez.",
+  "feature": {
+    "title": "Cette fonctionnalité",
+    "isOn": "Les applications serveur sont activées.",
+    "isOff": "Les applications serveur sont désactivées : rien ne peut être installé, démarré ni ouvert ici.",
+    "turnOn": "Activer",
+    "turnOff": "Désactiver",
+    "offNote": "L'activation n'installe rien par elle-même. Rien n'est téléchargé et aucun port n'est ouvert tant que vous ne le demandez pas.",
+    "confirmOffTitle": "Désactiver les applications serveur ?",
+    "confirmOffBody": "Rien de ce qui est déjà installé n'est arrêté, supprimé ni exposé. Les units continuent de tourner et le pare-feu conserve ce que vous avez ouvert. Seul le panneau cesse de proposer la fonctionnalité.",
+    "failedTitle": "L'interrupteur n'a pas été modifié"
+  },
   "breadcrumb": {
     "home": "Accueil",
     "toolsAndSettings": "Outils et paramètres",
@@ -60,7 +71,8 @@
     "install": "L'application n'a pas pu être installée.",
     "remove": "L'application n'a pas pu être supprimée.",
     "action": "L'application n'a pas répondu à cette demande.",
-    "firewall": "La règle de pare-feu n'a pas pu être modifiée."
+    "firewall": "La règle de pare-feu n'a pas pu être modifiée.",
+    "feature": "L'interrupteur n'a pas pu être modifié."
   },
   "reason": {
     "host_app_unknown": "Ce serveur ne propose pas cette application.",
@@ -77,6 +89,7 @@
     "host_app_download_failed": "Le téléchargement a échoué.",
     "host_app_unpack_failed": "L'archive n'a pas pu être extraite.",
     "host_app_binary_missing": "L'archive ne contient pas le programme à l'emplacement indiqué par le catalogue.",
-    "host_app_port_taken": "Ce port est déjà utilisé."
+    "host_app_port_taken": "Ce port est déjà utilisé.",
+    "host_apps_switched_off": "Les applications serveur sont désactivées sur ce serveur."
   }
 }
