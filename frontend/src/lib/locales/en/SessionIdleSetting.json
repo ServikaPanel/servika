@@ -1,0 +1,19 @@
+{
+  "title": "Session idle timeout",
+  "description": "Ends a signed-in session after this long with no request. This is not the token lifetime, which ends a session a fixed time after sign-in whether or not it was in use; both apply.",
+  "label": "Minutes",
+  "hint": "0 turns it off. The largest value is {{max}} minutes.",
+  "on": "On",
+  "off": "Off",
+  "apply": "Apply",
+  "applying": "Applying…",
+  "messages": {
+    "saved": "Sessions now end after {{minutes}} minutes with no request.",
+    "disabled": "The idle timeout is off. Only the token lifetime ends a session."
+  },
+  "errors": {
+    "load": "The setting could not be read",
+    "save": "The setting could not be saved",
+    "outOfRange": "Enter a value between 0 and {{max}} minutes."
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "title": "Časový limit nečinnosti relace",
+  "description": "Ukončí přihlášenou relaci po této době bez požadavku. Není to platnost tokenu, která relaci ukončí pevnou dobu po přihlášení, ať se používá nebo ne; platí obojí.",
+  "label": "Minuty",
+  "hint": "0 jej vypne. Největší hodnota je {{max}} minut.",
+  "on": "Zapnuto",
+  "off": "Vypnuto",
+  "apply": "Použít",
+  "applying": "Používá se…",
+  "messages": {
+    "saved": "Relace nyní končí po {{minutes}} minutách bez požadavku.",
+    "disabled": "Limit nečinnosti je vypnutý. Relaci ukončí jen platnost tokenu."
+  },
+  "errors": {
+    "load": "Nastavení se nepodařilo načíst",
+    "save": "Nastavení se nepodařilo uložit",
+    "outOfRange": "Zadejte hodnotu mezi 0 a {{max}} minutami."
+  }
+}

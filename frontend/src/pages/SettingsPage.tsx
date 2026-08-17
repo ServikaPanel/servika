@@ -5,6 +5,7 @@ import PanelDomain from '@/components/PanelDomain'
 import HostnameSetting from '@/components/HostnameSetting'
 import NameserverSetting from '@/components/NameserverSetting'
 import ServerRebootButton from '@/components/ServerRebootButton'
+import SessionIdleSetting from '@/components/SessionIdleSetting'
 import Breadcrumb from '@/components/Breadcrumb'
 import { useAuth } from '@/store/auth'
 import { setTheme as applyThemePreference, type Theme } from '@/lib/theme'
@@ -149,6 +150,7 @@ export default function SettingsPage() {
             where the admin menu's Settings entry goes and which a reseller
             never sees. */}
         <NameserverSetting audience="reseller" />
+        <SessionIdleSetting />
         <ServerRebootButton />
 
         {/* 1. Account information */}

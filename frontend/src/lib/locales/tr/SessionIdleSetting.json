@@ -1,0 +1,19 @@
+{
+  "title": "Oturum boşta zaman aşımı",
+  "description": "Bu süre boyunca istek gelmezse açık oturumu sonlandırır. Bu, token yaşam süresi değildir; o, oturumu kullanılıyor olsun ya da olmasın girişten sabit bir süre sonra sonlandırır. İkisi birlikte çalışır.",
+  "label": "Dakika",
+  "hint": "0 kapatır. En büyük değer {{max}} dakikadır.",
+  "on": "Açık",
+  "off": "Kapalı",
+  "apply": "Uygula",
+  "applying": "Uygulanıyor…",
+  "messages": {
+    "saved": "Oturumlar artık {{minutes}} dakika istek gelmezse sonlanıyor.",
+    "disabled": "Boşta zaman aşımı kapalı. Oturumu yalnız token yaşam süresi sonlandırır."
+  },
+  "errors": {
+    "load": "Ayar okunamadı",
+    "save": "Ayar kaydedilemedi",
+    "outOfRange": "0 ile {{max}} dakika arasında bir değer girin."
+  }
+}

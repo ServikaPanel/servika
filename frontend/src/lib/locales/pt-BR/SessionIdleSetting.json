@@ -1,0 +1,19 @@
+{
+  "title": "Tempo limite de inatividade da sessão",
+  "description": "Encerra uma sessão aberta após este tempo sem requisições. Não é a validade do token, que encerra uma sessão um tempo fixo após o login, em uso ou não; as duas valem.",
+  "label": "Minutos",
+  "hint": "0 desativa. O valor máximo é {{max}} minutos.",
+  "on": "Ativo",
+  "off": "Inativo",
+  "apply": "Aplicar",
+  "applying": "Aplicando…",
+  "messages": {
+    "saved": "As sessões passam a encerrar após {{minutes}} minutos sem requisições.",
+    "disabled": "O tempo limite de inatividade está desativado. Só a validade do token encerra uma sessão."
+  },
+  "errors": {
+    "load": "Não foi possível ler a configuração",
+    "save": "Não foi possível salvar a configuração",
+    "outOfRange": "Informe um valor entre 0 e {{max}} minutos."
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "title": "Timp de inactivitate a sesiunii",
+  "description": "Încheie o sesiune autentificată după acest timp fără cereri. Nu este durata tokenului, care încheie o sesiune la un timp fix după autentificare, folosită sau nu; se aplică ambele.",
+  "label": "Minute",
+  "hint": "0 îl dezactivează. Valoarea maximă este {{max}} minute.",
+  "on": "Activ",
+  "off": "Inactiv",
+  "apply": "Aplică",
+  "applying": "Se aplică…",
+  "messages": {
+    "saved": "Sesiunile se încheie acum după {{minutes}} minute fără cereri.",
+    "disabled": "Timpul de inactivitate este dezactivat. Doar durata tokenului încheie o sesiune."
+  },
+  "errors": {
+    "load": "Setarea nu a putut fi citită",
+    "save": "Setarea nu a putut fi salvată",
+    "outOfRange": "Introduceți o valoare între 0 și {{max}} minute."
+  }
+}

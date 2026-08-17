@@ -1,0 +1,19 @@
+{
+  "title": "Sitzungs-Leerlaufzeit",
+  "description": "Beendet eine angemeldete Sitzung nach dieser Zeit ohne Anfrage. Das ist nicht die Token-Lebensdauer, die eine Sitzung eine feste Zeit nach der Anmeldung beendet, ob genutzt oder nicht; beide gelten.",
+  "label": "Minuten",
+  "hint": "0 schaltet es aus. Der größte Wert sind {{max}} Minuten.",
+  "on": "Ein",
+  "off": "Aus",
+  "apply": "Übernehmen",
+  "applying": "Wird übernommen…",
+  "messages": {
+    "saved": "Sitzungen enden jetzt nach {{minutes}} Minuten ohne Anfrage.",
+    "disabled": "Die Leerlaufzeit ist aus. Nur die Token-Lebensdauer beendet eine Sitzung."
+  },
+  "errors": {
+    "load": "Die Einstellung konnte nicht gelesen werden",
+    "save": "Die Einstellung konnte nicht gespeichert werden",
+    "outOfRange": "Geben Sie einen Wert zwischen 0 und {{max}} Minuten ein."
+  }
+}

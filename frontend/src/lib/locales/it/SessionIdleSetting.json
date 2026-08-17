@@ -1,0 +1,19 @@
+{
+  "title": "Timeout di inattività della sessione",
+  "description": "Termina una sessione aperta dopo questo tempo senza richieste. Non è la durata del token, che termina una sessione a un tempo fisso dall'accesso, usata o no; valgono entrambe.",
+  "label": "Minuti",
+  "hint": "0 lo disattiva. Il valore massimo è {{max}} minuti.",
+  "on": "Attivo",
+  "off": "Disattivo",
+  "apply": "Applica",
+  "applying": "Applicazione…",
+  "messages": {
+    "saved": "Le sessioni ora terminano dopo {{minutes}} minuti senza richieste.",
+    "disabled": "Il timeout di inattività è disattivo. Solo la durata del token termina una sessione."
+  },
+  "errors": {
+    "load": "Non è stato possibile leggere l'impostazione",
+    "save": "Non è stato possibile salvare l'impostazione",
+    "outOfRange": "Inserisci un valore tra 0 e {{max}} minuti."
+  }
+}

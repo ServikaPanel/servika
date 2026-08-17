@@ -1,0 +1,19 @@
+{
+  "title": "Délai d'inactivité de session",
+  "description": "Termine une session ouverte après cette durée sans requête. Ce n'est pas la durée de vie du jeton, qui termine une session un temps fixe après la connexion, utilisée ou non ; les deux s'appliquent.",
+  "label": "Minutes",
+  "hint": "0 le désactive. La valeur maximale est de {{max}} minutes.",
+  "on": "Activé",
+  "off": "Désactivé",
+  "apply": "Appliquer",
+  "applying": "Application…",
+  "messages": {
+    "saved": "Les sessions se terminent maintenant après {{minutes}} minutes sans requête.",
+    "disabled": "Le délai d'inactivité est désactivé. Seule la durée de vie du jeton termine une session."
+  },
+  "errors": {
+    "load": "Le paramètre n'a pas pu être lu",
+    "save": "Le paramètre n'a pas pu être enregistré",
+    "outOfRange": "Saisissez une valeur entre 0 et {{max}} minutes."
+  }
+}

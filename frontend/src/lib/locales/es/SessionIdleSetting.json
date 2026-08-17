@@ -1,0 +1,19 @@
+{
+  "title": "Tiempo de inactividad de la sesión",
+  "description": "Termina una sesión iniciada tras este tiempo sin peticiones. No es la vigencia del token, que termina una sesión un tiempo fijo después del inicio, se use o no; se aplican ambas.",
+  "label": "Minutos",
+  "hint": "0 lo desactiva. El valor máximo es {{max}} minutos.",
+  "on": "Activo",
+  "off": "Inactivo",
+  "apply": "Aplicar",
+  "applying": "Aplicando…",
+  "messages": {
+    "saved": "Las sesiones terminan ahora tras {{minutes}} minutos sin peticiones.",
+    "disabled": "El tiempo de inactividad está desactivado. Solo la vigencia del token termina una sesión."
+  },
+  "errors": {
+    "load": "No se pudo leer el ajuste",
+    "save": "No se pudo guardar el ajuste",
+    "outOfRange": "Introduzca un valor entre 0 y {{max}} minutos."
+  }
+}
