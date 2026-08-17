@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "Tools und Einstellungen", "subtitle": "Panel-Tools" },
     "optimize": { "title": "Server optimieren", "subtitle": "Server-Abstimmung" },
     "serverIPs": { "title": "Serveradressen", "subtitle": "Zusätzliche IPv4-Adressen" },
+    "panelPort": { "title": "Panel-Port", "subtitle": "Die eigenen Ports des Panels" },
     "statistics": { "title": "Statistiken", "subtitle": "Nutzungsstatistiken" },
     "firewall": { "title": "Firewall", "subtitle": "Firewall-Regeln" },
     "monitoring": { "title": "Überwachung", "subtitle": "Live-Servermetriken und Logs" },

@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "Araçlar ve Ayarlar", "subtitle": "Panel araçları" },
     "optimize": { "title": "Sunucu Optimize", "subtitle": "Sunucu ayarlama" },
     "serverIPs": { "title": "Sunucu Adresleri", "subtitle": "Ek IPv4 adresleri" },
+    "panelPort": { "title": "Panel Portu", "subtitle": "Panelin kendi portları" },
     "statistics": { "title": "İstatistikler", "subtitle": "Kullanım istatistikleri" },
     "firewall": { "title": "Güvenlik Duvarı", "subtitle": "Güvenlik duvarı kuralları" },
     "monitoring": { "title": "İzleme", "subtitle": "Canlı sunucu metrikleri ve günlükler" },

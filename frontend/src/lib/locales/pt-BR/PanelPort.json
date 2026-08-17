@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Início", "toolsAndSettings": "Ferramentas e configurações", "panelPort": "Porta do painel" },
+  "title": "Porta do painel",
+  "description": "As portas em que este painel responde. Ambas são lidas dos arquivos que as contêm, por isso o que vê aqui é aquilo em que o servidor está mesmo a correr.",
+  "current": "Agora",
+  "kind": { "backend": "porta interna", "external": "porta do painel" },
+  "external": {
+    "title": "Porta do painel",
+    "description": "A porta a que o seu navegador se liga. Alterá-la recarrega o nginx e é verificada imediatamente; se nada responder na nova porta, a anterior é reposta antes de avisarem você."
+  },
+  "backend": {
+    "title": "Porta interna",
+    "description": "A porta a que o nginx entrega os pedidos internamente. Raramente vale a pena alterá-la, só se outro serviço deste servidor já precisar desse número.",
+    "restartNote": "Esta alteração reinicia o painel, que fica inacessível durante alguns segundos. Se não voltar na nova porta, tudo é reposto automaticamente e o resultado aparece aqui."
+  },
+  "change": {
+    "button": "Alterar",
+    "confirmTitle": "Alterar a porta?",
+    "confirmExternal": "O painel passa a responder na porta {{port}} e o endereço que está usando deixa de funcionar. Abra o novo antes de fechar este aba.",
+    "confirmBackend": "O painel reinicia para mudar a porta interna para {{port}} e fica inacessível durante alguns segundos. Se não voltar, a porta anterior é reposta automaticamente.",
+    "confirmAction": "Alterar a porta",
+    "startedTitle": "Reiniciando",
+    "startedBody": "O painel está reiniciando. Este tela mostrará o resultado assim que voltar; não precisa de fazer nada.",
+    "failedTitle": "Não alterada"
+  },
+  "outcome": {
+    "running": "Está em curso uma alteração de porta.",
+    "succeeded": "A alteração de porta terminou e foi verificada.",
+    "rolled_back": "A alteração de porta falhou e a porta anterior foi reposta.",
+    "rollback_failed": "A alteração de porta falhou e a porta anterior não voltou. É preciso chegar a este servidor por outra via.",
+    "detail": "{{kind}}: de {{from}} para {{to}}"
+  },
+  "history": {
+    "title": "Alterações anteriores",
+    "none": "Ainda não foi alterada nenhuma porta.",
+    "what": "O quê", "from": "De", "to": "Para", "result": "Resultado", "when": "Quando",
+    "succeeded": "verificada", "rolledBack": "reposta", "failed": "falhou"
+  },
+  "error": {
+    "load": "Não foi possível ler as portas do painel.",
+    "change": "Não foi possível alterar a porta."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Isso não é um número de porta.",
+    "panel_port_reserved": "Outro serviço deste servidor responde nessa porta.",
+    "panel_port_in_app_range": "As portas 30000 a 30999 estão fechadas na firewall para as aplicações dos clientes, por isso o painel seria inacessível aí.",
+    "panel_port_unchanged": "O painel já está nessa porta.",
+    "panel_port_in_use": "Já há algo escutando nessa porta.",
+    "panel_port_unknown_kind": "Este tela não pode mudar essa porta.",
+    "panel_port_directive_not_found": "A definição não foi encontrada onde lhe compete, por isso nada foi escrito.",
+    "panel_port_change_in_progress": "Já está a decorrer uma alteração de porta. Aguarde até terminar.",
+    "panel_port_verification_failed": "Nada respondeu na nova porta, por isso a alteração foi desfeita.",
+    "panel_port_rolled_back": "Nada respondeu na nova porta, por isso a anterior foi reposta.",
+    "panel_port_rollback_failed": "A alteração falhou e a porta anterior não voltou. É preciso chegar a este servidor por outra via.",
+    "panel_port_host_unreadable": "Os arquivos que contêm as portas não puderam ser lidos, por isso nada foi alterado."
+  }
+}

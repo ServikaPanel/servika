@@ -1,0 +1,70 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "toolsAndSettings": "Tools & Settings",
+    "panelPort": "Panel Port"
+  },
+  "title": "Panel Port",
+  "description": "The ports this panel answers on. Both are read from the files that hold them, so what you see here is what the server is actually running.",
+  "current": "Now",
+  "kind": {
+    "backend": "backend port",
+    "external": "panel port"
+  },
+  "external": {
+    "title": "Panel port",
+    "description": "The port your browser connects to. Changing it reloads nginx and is checked straight away; if nothing answers on the new port, the old one is put back before you are told."
+  },
+  "backend": {
+    "title": "Backend port",
+    "description": "The port nginx passes requests to internally. It is rarely worth changing, and only useful when another service on this server already wants the number.",
+    "restartNote": "Changing this restarts the panel, so it is unreachable for a few seconds. If it does not come back on the new port, everything is put back automatically and the result appears here."
+  },
+  "change": {
+    "button": "Change",
+    "confirmTitle": "Change the port?",
+    "confirmExternal": "The panel will answer on port {{port}} from now on, and the address you are using right now will stop working. Open the new one before closing this tab.",
+    "confirmBackend": "The panel restarts to move its backend to port {{port}} and is unreachable for a few seconds. If it does not come back, the old port is restored automatically.",
+    "confirmAction": "Change the port",
+    "startedTitle": "Restarting",
+    "startedBody": "The panel is restarting. This screen will show the result as soon as it is back; you do not need to do anything.",
+    "failedTitle": "Not changed"
+  },
+  "outcome": {
+    "running": "A port change is in progress.",
+    "succeeded": "The port change finished and was verified.",
+    "rolled_back": "The port change failed, and the previous port was put back.",
+    "rollback_failed": "The port change failed and the previous port did not come back. This server has to be reached another way.",
+    "detail": "{{kind}}: {{from}} to {{to}}"
+  },
+  "history": {
+    "title": "Earlier changes",
+    "none": "No port has been changed yet.",
+    "what": "What",
+    "from": "From",
+    "to": "To",
+    "result": "Result",
+    "when": "When",
+    "succeeded": "verified",
+    "rolledBack": "put back",
+    "failed": "failed"
+  },
+  "error": {
+    "load": "The panel's ports could not be read.",
+    "change": "The port could not be changed."
+  },
+  "reason": {
+    "panel_port_out_of_range": "That is not a port number.",
+    "panel_port_reserved": "Another service on this server answers on that port.",
+    "panel_port_in_app_range": "Ports 30000 to 30999 are closed at the firewall for tenant applications, so the panel would be unreachable there.",
+    "panel_port_unchanged": "The panel is already on that port.",
+    "panel_port_in_use": "Something is already listening on that port.",
+    "panel_port_unknown_kind": "That is not a port this screen can move.",
+    "panel_port_directive_not_found": "The setting could not be found where it belongs, so nothing was written.",
+    "panel_port_change_in_progress": "A port change is already running. Wait for it to finish.",
+    "panel_port_verification_failed": "Nothing answered on the new port, so the change was undone.",
+    "panel_port_rolled_back": "Nothing answered on the new port, so the previous one was put back.",
+    "panel_port_rollback_failed": "The change failed and the previous port did not come back. This server has to be reached another way.",
+    "panel_port_host_unreadable": "The files that hold the ports could not be read, so nothing was changed."
+  }
+}

@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "ツールと設定", "subtitle": "パネルツール" },
     "optimize": { "title": "サーバー最適化", "subtitle": "サーバーチューニング" },
     "serverIPs": { "title": "サーバーアドレス", "subtitle": "追加の IPv4 アドレス" },
+    "panelPort": { "title": "パネルのポート", "subtitle": "パネル自身のポート" },
     "statistics": { "title": "統計", "subtitle": "使用統計" },
     "firewall": { "title": "ファイアウォール", "subtitle": "ファイアウォールルール" },
     "monitoring": { "title": "モニタリング", "subtitle": "リアルタイムのサーバーメトリックとログ" },

@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Accueil", "toolsAndSettings": "Outils et paramètres", "panelPort": "Port du panneau" },
+  "title": "Port du panneau",
+  "description": "Les ports sur lesquels ce panneau répond. Les deux sont lus dans les fichiers qui les contiennent, ce que vous voyez ici est donc ce sur quoi le serveur tourne réellement.",
+  "current": "Actuel",
+  "kind": { "backend": "port interne", "external": "port du panneau" },
+  "external": {
+    "title": "Port du panneau",
+    "description": "Le port auquel votre navigateur se connecte. Le changer recharge nginx et la vérification est immédiate ; si rien ne répond sur le nouveau port, l'ancien est rétabli avant qu'on vous le dise."
+  },
+  "backend": {
+    "title": "Port interne",
+    "description": "Le port auquel nginx transmet les requêtes en interne. Le changer est rarement utile, sauf si un autre service de ce serveur a déjà besoin de ce numéro.",
+    "restartNote": "Ce changement redémarre le panneau, qui reste injoignable quelques secondes. S'il ne revient pas sur le nouveau port, tout est rétabli automatiquement et le résultat apparaît ici."
+  },
+  "change": {
+    "button": "Changer",
+    "confirmTitle": "Changer le port ?",
+    "confirmExternal": "Le panneau répondra désormais sur le port {{port}}, et l'adresse que vous utilisez maintenant cessera de fonctionner. Ouvrez la nouvelle avant de fermer cet onglet.",
+    "confirmBackend": "Le panneau redémarre pour déplacer son port interne vers {{port}} et reste injoignable quelques secondes. S'il ne revient pas, l'ancien port est rétabli automatiquement.",
+    "confirmAction": "Changer le port",
+    "startedTitle": "Redémarrage",
+    "startedBody": "Le panneau redémarre. Cet écran affichera le résultat dès son retour ; vous n'avez rien à faire.",
+    "failedTitle": "Non changé"
+  },
+  "outcome": {
+    "running": "Un changement de port est en cours.",
+    "succeeded": "Le changement de port est terminé et vérifié.",
+    "rolled_back": "Le changement de port a échoué, le port précédent a été rétabli.",
+    "rollback_failed": "Le changement de port a échoué et le port précédent n'est pas revenu. Ce serveur doit être atteint autrement.",
+    "detail": "{{kind}} : {{from}} vers {{to}}"
+  },
+  "history": {
+    "title": "Changements précédents",
+    "none": "Aucun port n'a encore été changé.",
+    "what": "Quoi", "from": "Avant", "to": "Après", "result": "Résultat", "when": "Quand",
+    "succeeded": "vérifié", "rolledBack": "rétabli", "failed": "échec"
+  },
+  "error": {
+    "load": "Les ports du panneau n'ont pas pu être lus.",
+    "change": "Le port n'a pas pu être changé."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Ce n'est pas un numéro de port.",
+    "panel_port_reserved": "Un autre service de ce serveur répond sur ce port.",
+    "panel_port_in_app_range": "Les ports 30000 à 30999 sont fermés au pare-feu pour les applications des clients, le panneau y serait injoignable.",
+    "panel_port_unchanged": "Le panneau est déjà sur ce port.",
+    "panel_port_in_use": "Quelque chose écoute déjà sur ce port.",
+    "panel_port_unknown_kind": "Cet écran ne peut pas déplacer ce port.",
+    "panel_port_directive_not_found": "Le réglage est introuvable là où il devrait être, rien n'a donc été écrit.",
+    "panel_port_change_in_progress": "Un changement de port est déjà en cours. Attendez qu'il se termine.",
+    "panel_port_verification_failed": "Rien n'a répondu sur le nouveau port, le changement a été annulé.",
+    "panel_port_rolled_back": "Rien n'a répondu sur le nouveau port, le précédent a été rétabli.",
+    "panel_port_rollback_failed": "Le changement a échoué et le port précédent n'est pas revenu. Ce serveur doit être atteint autrement.",
+    "panel_port_host_unreadable": "Les fichiers contenant les ports n'ont pas pu être lus, rien n'a donc été changé."
+  }
+}

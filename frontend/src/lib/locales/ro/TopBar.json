@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "Instrumente și setări", "subtitle": "Instrumente panou" },
     "optimize": { "title": "Optimizare server", "subtitle": "Reglare server" },
     "serverIPs": { "title": "Adresele serverului", "subtitle": "Adrese IPv4 suplimentare" },
+    "panelPort": { "title": "Portul panoului", "subtitle": "Porturile panoului" },
     "statistics": { "title": "Statistici", "subtitle": "Statistici de utilizare" },
     "firewall": { "title": "Firewall", "subtitle": "Reguli firewall" },
     "monitoring": { "title": "Monitorizare", "subtitle": "Metrici și jurnale de server live" },

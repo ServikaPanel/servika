@@ -25,6 +25,7 @@
     "toolsSettings": "Araçlar ve Ayarlar",
     "optimize": "Sunucu Optimize",
     "serverIPs": "Sunucu Adresleri",
+    "panelPort": "Panel Portu",
     "statistics": "İstatistikler",
     "extensions": "Uzantılar",
     "wordpress": "WordPress",

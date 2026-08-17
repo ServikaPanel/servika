@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Start", "toolsAndSettings": "Werkzeuge & Einstellungen", "panelPort": "Panel-Port" },
+  "title": "Panel-Port",
+  "description": "Die Ports, unter denen dieses Panel antwortet. Beide werden aus den Dateien gelesen, die sie enthalten, also ist hier zu sehen, worauf der Server wirklich läuft.",
+  "current": "Jetzt",
+  "kind": { "backend": "Backend-Port", "external": "Panel-Port" },
+  "external": {
+    "title": "Panel-Port",
+    "description": "Der Port, mit dem Ihr Browser sich verbindet. Eine Änderung lädt nginx neu und wird sofort geprüft; antwortet auf dem neuen Port nichts, wird der alte wiederhergestellt, bevor Sie es erfahren."
+  },
+  "backend": {
+    "title": "Backend-Port",
+    "description": "Der Port, an den nginx Anfragen intern weiterreicht. Eine Änderung lohnt sich selten und nur, wenn ein anderer Dienst auf diesem Server diese Nummer bereits braucht.",
+    "restartNote": "Diese Änderung startet das Panel neu, es ist also für einige Sekunden nicht erreichbar. Kommt es auf dem neuen Port nicht zurück, wird alles automatisch wiederhergestellt und das Ergebnis erscheint hier."
+  },
+  "change": {
+    "button": "Ändern",
+    "confirmTitle": "Den Port ändern?",
+    "confirmExternal": "Das Panel antwortet ab jetzt auf Port {{port}}, und die Adresse, die Sie gerade benutzen, hört auf zu funktionieren. Öffnen Sie die neue, bevor Sie diesen Tab schließen.",
+    "confirmBackend": "Das Panel startet neu, um sein Backend auf Port {{port}} zu verlegen, und ist für einige Sekunden nicht erreichbar. Kommt es nicht zurück, wird der alte Port automatisch wiederhergestellt.",
+    "confirmAction": "Port ändern",
+    "startedTitle": "Neustart",
+    "startedBody": "Das Panel startet neu. Dieser Bildschirm zeigt das Ergebnis, sobald es zurück ist; Sie müssen nichts tun.",
+    "failedTitle": "Nicht geändert"
+  },
+  "outcome": {
+    "running": "Eine Portänderung läuft.",
+    "succeeded": "Die Portänderung ist abgeschlossen und wurde bestätigt.",
+    "rolled_back": "Die Portänderung ist fehlgeschlagen, der vorherige Port wurde wiederhergestellt.",
+    "rollback_failed": "Die Portänderung ist fehlgeschlagen und der vorherige Port kam nicht zurück. Dieser Server muss auf anderem Weg erreicht werden.",
+    "detail": "{{kind}}: {{from}} auf {{to}}"
+  },
+  "history": {
+    "title": "Frühere Änderungen",
+    "none": "Es wurde noch kein Port geändert.",
+    "what": "Was", "from": "Von", "to": "Nach", "result": "Ergebnis", "when": "Wann",
+    "succeeded": "bestätigt", "rolledBack": "zurückgesetzt", "failed": "fehlgeschlagen"
+  },
+  "error": {
+    "load": "Die Ports des Panels konnten nicht gelesen werden.",
+    "change": "Der Port konnte nicht geändert werden."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Das ist keine Portnummer.",
+    "panel_port_reserved": "Ein anderer Dienst auf diesem Server antwortet auf diesem Port.",
+    "panel_port_in_app_range": "Die Ports 30000 bis 30999 sind in der Firewall für Mandantenanwendungen geschlossen, das Panel wäre dort nicht erreichbar.",
+    "panel_port_unchanged": "Das Panel läuft bereits auf diesem Port.",
+    "panel_port_in_use": "Auf diesem Port lauscht bereits etwas.",
+    "panel_port_unknown_kind": "Diesen Port kann dieser Bildschirm nicht verlegen.",
+    "panel_port_directive_not_found": "Die Einstellung war nicht dort zu finden, wo sie hingehört, daher wurde nichts geschrieben.",
+    "panel_port_change_in_progress": "Es läuft bereits eine Portänderung. Warten Sie, bis sie fertig ist.",
+    "panel_port_verification_failed": "Auf dem neuen Port hat nichts geantwortet, die Änderung wurde zurückgenommen.",
+    "panel_port_rolled_back": "Auf dem neuen Port hat nichts geantwortet, der vorherige wurde wiederhergestellt.",
+    "panel_port_rollback_failed": "Die Änderung ist fehlgeschlagen und der vorherige Port kam nicht zurück. Dieser Server muss auf anderem Weg erreicht werden.",
+    "panel_port_host_unreadable": "Die Dateien mit den Ports konnten nicht gelesen werden, daher wurde nichts geändert."
+  }
+}

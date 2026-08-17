@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Acasă", "toolsAndSettings": "Instrumente și setări", "panelPort": "Portul panoului" },
+  "title": "Portul panoului",
+  "description": "Porturile pe care răspunde acest panou. Amândouă sunt citite din fișierele care le conțin, deci ceea ce vedeți aici este ceea ce rulează serverul cu adevărat.",
+  "current": "Acum",
+  "kind": { "backend": "port intern", "external": "portul panoului" },
+  "external": {
+    "title": "Portul panoului",
+    "description": "Portul la care se conectează browserul dumneavoastră. Schimbarea lui reîncarcă nginx și se verifică imediat; dacă nimic nu răspunde pe portul nou, cel vechi este pus la loc înainte să vi se spună."
+  },
+  "backend": {
+    "title": "Port intern",
+    "description": "Portul către care nginx trimite cererile intern. Rareori merită schimbat, doar dacă alt serviciu de pe acest server are deja nevoie de acel număr.",
+    "restartNote": "Această schimbare repornește panoul, care rămâne inaccesibil câteva secunde. Dacă nu revine pe portul nou, totul este pus la loc automat și rezultatul apare aici."
+  },
+  "change": {
+    "button": "Schimbă",
+    "confirmTitle": "Schimbați portul?",
+    "confirmExternal": "Panoul va răspunde de acum pe portul {{port}}, iar adresa pe care o folosiți acum va înceta să funcționeze. Deschideți-o pe cea nouă înainte să închideți fila.",
+    "confirmBackend": "Panoul repornește ca să mute portul intern pe {{port}} și rămâne inaccesibil câteva secunde. Dacă nu revine, portul anterior este pus la loc automat.",
+    "confirmAction": "Schimbă portul",
+    "startedTitle": "Repornire",
+    "startedBody": "Panoul repornește. Acest ecran va arăta rezultatul de îndată ce revine; nu trebuie să faceți nimic.",
+    "failedTitle": "Neschimbat"
+  },
+  "outcome": {
+    "running": "Este în curs o schimbare de port.",
+    "succeeded": "Schimbarea portului s-a încheiat și a fost verificată.",
+    "rolled_back": "Schimbarea portului a eșuat, iar portul anterior a fost pus la loc.",
+    "rollback_failed": "Schimbarea portului a eșuat și portul anterior nu a revenit. La acest server trebuie ajuns pe altă cale.",
+    "detail": "{{kind}}: de la {{from}} la {{to}}"
+  },
+  "history": {
+    "title": "Schimbări anterioare",
+    "none": "Niciun port nu a fost schimbat încă.",
+    "what": "Ce", "from": "De la", "to": "La", "result": "Rezultat", "when": "Când",
+    "succeeded": "verificat", "rolledBack": "pus la loc", "failed": "eșuat"
+  },
+  "error": {
+    "load": "Porturile panoului nu au putut fi citite.",
+    "change": "Portul nu a putut fi schimbat."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Acesta nu este un număr de port.",
+    "panel_port_reserved": "Alt serviciu de pe acest server răspunde pe acel port.",
+    "panel_port_in_app_range": "Porturile 30000-30999 sunt închise în firewall pentru aplicațiile clienților, deci panoul ar fi inaccesibil acolo.",
+    "panel_port_unchanged": "Panoul este deja pe acel port.",
+    "panel_port_in_use": "Ceva ascultă deja pe acel port.",
+    "panel_port_unknown_kind": "Acest ecran nu poate muta acel port.",
+    "panel_port_directive_not_found": "Setarea nu a fost găsită acolo unde îi este locul, deci nu s-a scris nimic.",
+    "panel_port_change_in_progress": "O schimbare de port este deja în curs. Așteptați să se termine.",
+    "panel_port_verification_failed": "Nimic nu a răspuns pe portul nou, deci schimbarea a fost anulată.",
+    "panel_port_rolled_back": "Nimic nu a răspuns pe portul nou, deci cel anterior a fost pus la loc.",
+    "panel_port_rollback_failed": "Schimbarea a eșuat și portul anterior nu a revenit. La acest server trebuie ajuns pe altă cale.",
+    "panel_port_host_unreadable": "Fișierele care conțin porturile nu au putut fi citite, deci nu s-a schimbat nimic."
+  }
+}

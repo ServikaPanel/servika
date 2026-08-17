@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "Nástroje a nastavení", "subtitle": "Nástroje panelu" },
     "optimize": { "title": "Optimalizace serveru", "subtitle": "Ladění serveru" },
     "serverIPs": { "title": "Adresy serveru", "subtitle": "Další adresy IPv4" },
+    "panelPort": { "title": "Port panelu", "subtitle": "Vlastní porty panelu" },
     "statistics": { "title": "Statistiky", "subtitle": "Statistiky využití" },
     "firewall": { "title": "Firewall", "subtitle": "Pravidla firewallu" },
     "monitoring": { "title": "Monitorování", "subtitle": "Živé metriky a protokoly serveru" },

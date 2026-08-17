@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "Herramientas y configuración", "subtitle": "Herramientas del panel" },
     "optimize": { "title": "Optimizar servidor", "subtitle": "Ajuste del servidor" },
     "serverIPs": { "title": "Direcciones del servidor", "subtitle": "Direcciones IPv4 adicionales" },
+    "panelPort": { "title": "Puerto del panel", "subtitle": "Los puertos del panel" },
     "statistics": { "title": "Estadísticas", "subtitle": "Estadísticas de uso" },
     "firewall": { "title": "Cortafuegos", "subtitle": "Reglas del cortafuegos" },
     "monitoring": { "title": "Monitorización", "subtitle": "Métricas y registros en vivo del servidor" },

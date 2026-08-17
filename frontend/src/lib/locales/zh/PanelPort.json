@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "首页", "toolsAndSettings": "工具与设置", "panelPort": "面板端口" },
+  "title": "面板端口",
+  "description": "本面板响应的端口。两者都从保存它们的文件中读取，因此此处显示的就是服务器实际运行的值。",
+  "current": "当前",
+  "kind": { "backend": "后端端口", "external": "面板端口" },
+  "external": {
+    "title": "面板端口",
+    "description": "浏览器连接的端口。更改会重新加载 nginx 并立即检查；如果新端口上没有任何响应，会在告知您之前恢复原端口。"
+  },
+  "backend": {
+    "title": "后端端口",
+    "description": "nginx 在内部转发请求的端口。很少值得更改，只有在本服务器上的其他服务已经需要该端口号时才有意义。",
+    "restartNote": "此更改会重启面板，因此会有几秒钟无法访问。如果面板未在新端口上恢复，一切会自动还原，结果显示在此处。"
+  },
+  "change": {
+    "button": "更改",
+    "confirmTitle": "要更改端口吗?",
+    "confirmExternal": "面板此后将在端口 {{port}} 上响应，您当前使用的地址将停止工作。关闭此标签页前请先打开新地址。",
+    "confirmBackend": "面板将重启以把后端移到端口 {{port}}，并有几秒钟无法访问。如果没有恢复，原端口会自动还原。",
+    "confirmAction": "更改端口",
+    "startedTitle": "正在重启",
+    "startedBody": "面板正在重启。恢复后本页面会显示结果，您无需操作。",
+    "failedTitle": "未更改"
+  },
+  "outcome": {
+    "running": "端口更改正在进行中。",
+    "succeeded": "端口更改已完成并通过验证。",
+    "rolled_back": "端口更改失败，已恢复原端口。",
+    "rollback_failed": "端口更改失败，原端口也没有恢复。需要通过其他方式访问本服务器。",
+    "detail": "{{kind}}: 从 {{from}} 到 {{to}}"
+  },
+  "history": {
+    "title": "此前的更改",
+    "none": "尚未更改过任何端口。",
+    "what": "对象", "from": "原值", "to": "新值", "result": "结果", "when": "时间",
+    "succeeded": "已验证", "rolledBack": "已还原", "failed": "失败"
+  },
+  "error": {
+    "load": "无法读取面板端口。",
+    "change": "无法更改端口。"
+  },
+  "reason": {
+    "panel_port_out_of_range": "这不是一个端口号。",
+    "panel_port_reserved": "本服务器上的其他服务在该端口上响应。",
+    "panel_port_in_app_range": "端口 30000 至 30999 已在防火墙中为租户应用关闭，面板在那里将无法访问。",
+    "panel_port_unchanged": "面板已经在该端口上。",
+    "panel_port_in_use": "该端口上已有程序在监听。",
+    "panel_port_unknown_kind": "本页面无法移动该端口。",
+    "panel_port_directive_not_found": "未在应有的位置找到该设置，因此没有写入任何内容。",
+    "panel_port_change_in_progress": "已有端口更改在进行中，请等待其完成。",
+    "panel_port_verification_failed": "新端口上没有任何响应，更改已撤销。",
+    "panel_port_rolled_back": "新端口上没有任何响应，已恢复原端口。",
+    "panel_port_rollback_failed": "更改失败，原端口也没有恢复。需要通过其他方式访问本服务器。",
+    "panel_port_host_unreadable": "无法读取保存端口的文件，因此未做任何更改。"
+  }
+}

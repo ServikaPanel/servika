@@ -25,6 +25,7 @@
     "toolsSettings": "Nástroje a nastavení",
     "optimize": "Optimalizace serveru",
     "serverIPs": "Adresy serveru",
+    "panelPort": "Port panelu",
     "statistics": "Statistiky",
     "extensions": "Rozšíření",
     "wordpress": "WordPress",

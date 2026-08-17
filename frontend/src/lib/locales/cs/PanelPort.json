@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Domů", "toolsAndSettings": "Nástroje a nastavení", "panelPort": "Port panelu" },
+  "title": "Port panelu",
+  "description": "Porty, na kterých tento panel odpovídá. Oba se čtou ze souborů, které je obsahují, takže to, co zde vidíte, je to, na čem server skutečně běží.",
+  "current": "Nyní",
+  "kind": { "backend": "vnitřní port", "external": "port panelu" },
+  "external": {
+    "title": "Port panelu",
+    "description": "Port, ke kterému se připojuje váš prohlížeč. Změna znovu načte nginx a ověří se okamžitě; pokud na novém portu nic neodpoví, předchozí se obnoví dřív, než se to dozvíte."
+  },
+  "backend": {
+    "title": "Vnitřní port",
+    "description": "Port, na který nginx interně předává požadavky. Měnit ho se vyplatí jen zřídka, a to jen když jiná služba na tomto serveru to číslo už potřebuje.",
+    "restartNote": "Tato změna restartuje panel, takže je několik sekund nedostupný. Pokud se na novém portu nevrátí, vše se automaticky obnoví a výsledek se objeví zde."
+  },
+  "change": {
+    "button": "Změnit",
+    "confirmTitle": "Změnit port?",
+    "confirmExternal": "Panel bude od teď odpovídat na portu {{port}} a adresa, kterou právě používáte, přestane fungovat. Otevřete novou, než tuto kartu zavřete.",
+    "confirmBackend": "Panel se restartuje, aby přesunul vnitřní port na {{port}}, a je několik sekund nedostupný. Pokud se nevrátí, předchozí port se automaticky obnoví.",
+    "confirmAction": "Změnit port",
+    "startedTitle": "Restartuje se",
+    "startedBody": "Panel se restartuje. Tato obrazovka ukáže výsledek, jakmile bude zpět; nemusíte nic dělat.",
+    "failedTitle": "Nezměněno"
+  },
+  "outcome": {
+    "running": "Probíhá změna portu.",
+    "succeeded": "Změna portu skončila a byla ověřena.",
+    "rolled_back": "Změna portu selhala a předchozí port byl obnoven.",
+    "rollback_failed": "Změna portu selhala a předchozí port se nevrátil. K tomuto serveru je nutné se dostat jinou cestou.",
+    "detail": "{{kind}}: z {{from}} na {{to}}"
+  },
+  "history": {
+    "title": "Dřívější změny",
+    "none": "Zatím nebyl změněn žádný port.",
+    "what": "Co", "from": "Z", "to": "Na", "result": "Výsledek", "when": "Kdy",
+    "succeeded": "ověřeno", "rolledBack": "obnoveno", "failed": "selhalo"
+  },
+  "error": {
+    "load": "Porty panelu se nepodařilo načíst.",
+    "change": "Port se nepodařilo změnit."
+  },
+  "reason": {
+    "panel_port_out_of_range": "To není číslo portu.",
+    "panel_port_reserved": "Na tomto portu odpovídá jiná služba tohoto serveru.",
+    "panel_port_in_app_range": "Porty 30000 až 30999 jsou ve firewallu zavřené pro aplikace nájemců, panel by tam byl nedostupný.",
+    "panel_port_unchanged": "Panel už na tomto portu je.",
+    "panel_port_in_use": "Na tomto portu už něco naslouchá.",
+    "panel_port_unknown_kind": "Tento port tato obrazovka přesunout nemůže.",
+    "panel_port_directive_not_found": "Nastavení se nenašlo tam, kam patří, takže se nic nezapsalo.",
+    "panel_port_change_in_progress": "Změna portu už probíhá. Počkejte, až skončí.",
+    "panel_port_verification_failed": "Na novém portu nic neodpovědělo, změna byla vrácena.",
+    "panel_port_rolled_back": "Na novém portu nic neodpovědělo, předchozí byl obnoven.",
+    "panel_port_rollback_failed": "Změna selhala a předchozí port se nevrátil. K tomuto serveru je nutné se dostat jinou cestou.",
+    "panel_port_host_unreadable": "Soubory s porty se nepodařilo načíst, takže se nic nezměnilo."
+  }
+}

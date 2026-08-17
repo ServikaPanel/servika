@@ -29,6 +29,7 @@
     "toolsSettings": { "title": "Ferramentas e configurações", "subtitle": "Ferramentas do painel" },
     "optimize": { "title": "Otimização do servidor", "subtitle": "Ajuste do servidor" },
     "serverIPs": { "title": "Endereços do servidor", "subtitle": "Endereços IPv4 adicionais" },
+    "panelPort": { "title": "Porta do painel", "subtitle": "As portas do painel" },
     "statistics": { "title": "Estatísticas", "subtitle": "Estatísticas de uso" },
     "firewall": { "title": "Firewall", "subtitle": "Regras de firewall" },
     "monitoring": { "title": "Monitoramento", "subtitle": "Métricas ao vivo e registros" },

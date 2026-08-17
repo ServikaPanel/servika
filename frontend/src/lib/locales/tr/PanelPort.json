@@ -1,0 +1,70 @@
+{
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "toolsAndSettings": "Araçlar ve Ayarlar",
+    "panelPort": "Panel Portu"
+  },
+  "title": "Panel Portu",
+  "description": "Bu panelin cevap verdiği portlar. İkisi de onları tutan dosyalardan okunur, bu yüzden burada gördüğünüz şey sunucunun gerçekten çalıştığı değerdir.",
+  "current": "Şimdi",
+  "kind": {
+    "backend": "arka uç portu",
+    "external": "panel portu"
+  },
+  "external": {
+    "title": "Panel portu",
+    "description": "Tarayıcınızın bağlandığı port. Değiştirmek nginx'i yeniden yükler ve hemen kontrol edilir; yeni portta hiçbir şey cevap vermezse, size söylenmeden önce eski port geri konur."
+  },
+  "backend": {
+    "title": "Arka uç portu",
+    "description": "nginx'in istekleri dahili olarak ilettiği port. Değiştirmeye nadiren değer, yalnız bu sunucudaki başka bir servis o numarayı istiyorsa işe yarar.",
+    "restartNote": "Bunu değiştirmek paneli yeniden başlatır, yani birkaç saniye erişilemez olur. Yeni portta geri gelmezse her şey otomatik olarak geri konur ve sonuç burada görünür."
+  },
+  "change": {
+    "button": "Değiştir",
+    "confirmTitle": "Port değiştirilsin mi?",
+    "confirmExternal": "Panel bundan sonra {{port}} portunda cevap verecek ve şu anda kullandığınız adres çalışmayı bırakacak. Bu sekmeyi kapatmadan önce yenisini açın.",
+    "confirmBackend": "Panel, arka ucunu {{port}} portuna taşımak için yeniden başlar ve birkaç saniye erişilemez olur. Geri gelmezse eski port otomatik olarak geri yüklenir.",
+    "confirmAction": "Portu değiştir",
+    "startedTitle": "Yeniden başlıyor",
+    "startedBody": "Panel yeniden başlıyor. Geri gelir gelmez bu ekran sonucu gösterecek; bir şey yapmanız gerekmiyor.",
+    "failedTitle": "Değiştirilmedi"
+  },
+  "outcome": {
+    "running": "Bir port değişikliği sürüyor.",
+    "succeeded": "Port değişikliği tamamlandı ve doğrulandı.",
+    "rolled_back": "Port değişikliği başarısız oldu, önceki port geri konuldu.",
+    "rollback_failed": "Port değişikliği başarısız oldu ve önceki port geri gelmedi. Bu sunucuya başka bir yoldan ulaşılması gerekiyor.",
+    "detail": "{{kind}}: {{from}} → {{to}}"
+  },
+  "history": {
+    "title": "Önceki değişiklikler",
+    "none": "Henüz hiçbir port değiştirilmedi.",
+    "what": "Ne",
+    "from": "Önceki",
+    "to": "Sonraki",
+    "result": "Sonuç",
+    "when": "Ne zaman",
+    "succeeded": "doğrulandı",
+    "rolledBack": "geri konuldu",
+    "failed": "başarısız"
+  },
+  "error": {
+    "load": "Panelin portları okunamadı.",
+    "change": "Port değiştirilemedi."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Bu bir port numarası değil.",
+    "panel_port_reserved": "Bu sunucudaki başka bir servis o portta cevap veriyor.",
+    "panel_port_in_app_range": "30000 ile 30999 arası portlar kiracı uygulamaları için güvenlik duvarında kapalıdır, bu yüzden panel orada erişilemez olurdu.",
+    "panel_port_unchanged": "Panel zaten o portta.",
+    "panel_port_in_use": "O portta zaten bir şey dinliyor.",
+    "panel_port_unknown_kind": "Bu, bu ekranın taşıyabileceği bir port değil.",
+    "panel_port_directive_not_found": "Ayar ait olduğu yerde bulunamadı, bu yüzden hiçbir şey yazılmadı.",
+    "panel_port_change_in_progress": "Zaten bir port değişikliği çalışıyor. Bitmesini bekleyin.",
+    "panel_port_verification_failed": "Yeni portta hiçbir şey cevap vermedi, değişiklik geri alındı.",
+    "panel_port_rolled_back": "Yeni portta hiçbir şey cevap vermedi, önceki port geri konuldu.",
+    "panel_port_rollback_failed": "Değişiklik başarısız oldu ve önceki port geri gelmedi. Bu sunucuya başka bir yoldan ulaşılması gerekiyor.",
+    "panel_port_host_unreadable": "Portları tutan dosyalar okunamadı, bu yüzden hiçbir şey değiştirilmedi."
+  }
+}

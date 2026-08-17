@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Inicio", "toolsAndSettings": "Herramientas y ajustes", "panelPort": "Puerto del panel" },
+  "title": "Puerto del panel",
+  "description": "Los puertos en los que responde este panel. Ambos se leen de los archivos que los contienen, así que lo que ve aquí es aquello sobre lo que el servidor está funcionando de verdad.",
+  "current": "Ahora",
+  "kind": { "backend": "puerto interno", "external": "puerto del panel" },
+  "external": {
+    "title": "Puerto del panel",
+    "description": "El puerto al que se conecta su navegador. Cambiarlo recarga nginx y se comprueba de inmediato; si nada responde en el nuevo puerto, se restaura el anterior antes de decírselo."
+  },
+  "backend": {
+    "title": "Puerto interno",
+    "description": "El puerto al que nginx pasa las peticiones internamente. Rara vez merece la pena cambiarlo, solo si otro servicio de este servidor ya necesita ese número.",
+    "restartNote": "Este cambio reinicia el panel, que queda inaccesible unos segundos. Si no vuelve en el nuevo puerto, todo se restaura automáticamente y el resultado aparece aquí."
+  },
+  "change": {
+    "button": "Cambiar",
+    "confirmTitle": "¿Cambiar el puerto?",
+    "confirmExternal": "El panel responderá a partir de ahora en el puerto {{port}}, y la dirección que está usando dejará de funcionar. Abra la nueva antes de cerrar esta pestaña.",
+    "confirmBackend": "El panel se reinicia para mover su puerto interno a {{port}} y queda inaccesible unos segundos. Si no vuelve, el puerto anterior se restaura automáticamente.",
+    "confirmAction": "Cambiar el puerto",
+    "startedTitle": "Reiniciando",
+    "startedBody": "El panel se está reiniciando. Esta pantalla mostrará el resultado en cuanto vuelva; no tiene que hacer nada.",
+    "failedTitle": "No cambiado"
+  },
+  "outcome": {
+    "running": "Hay un cambio de puerto en curso.",
+    "succeeded": "El cambio de puerto terminó y se verificó.",
+    "rolled_back": "El cambio de puerto falló y se restauró el puerto anterior.",
+    "rollback_failed": "El cambio de puerto falló y el puerto anterior no volvió. Hay que llegar a este servidor por otra vía.",
+    "detail": "{{kind}}: de {{from}} a {{to}}"
+  },
+  "history": {
+    "title": "Cambios anteriores",
+    "none": "Todavía no se ha cambiado ningún puerto.",
+    "what": "Qué", "from": "Antes", "to": "Después", "result": "Resultado", "when": "Cuándo",
+    "succeeded": "verificado", "rolledBack": "restaurado", "failed": "fallido"
+  },
+  "error": {
+    "load": "No se pudieron leer los puertos del panel.",
+    "change": "No se pudo cambiar el puerto."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Eso no es un número de puerto.",
+    "panel_port_reserved": "Otro servicio de este servidor responde en ese puerto.",
+    "panel_port_in_app_range": "Los puertos 30000 a 30999 están cerrados en el cortafuegos para las aplicaciones de los clientes, así que el panel sería inaccesible ahí.",
+    "panel_port_unchanged": "El panel ya está en ese puerto.",
+    "panel_port_in_use": "Algo ya está escuchando en ese puerto.",
+    "panel_port_unknown_kind": "Esta pantalla no puede mover ese puerto.",
+    "panel_port_directive_not_found": "El ajuste no estaba donde le corresponde, así que no se escribió nada.",
+    "panel_port_change_in_progress": "Ya hay un cambio de puerto en marcha. Espere a que termine.",
+    "panel_port_verification_failed": "Nada respondió en el nuevo puerto, así que se deshizo el cambio.",
+    "panel_port_rolled_back": "Nada respondió en el nuevo puerto, así que se restauró el anterior.",
+    "panel_port_rollback_failed": "El cambio falló y el puerto anterior no volvió. Hay que llegar a este servidor por otra vía.",
+    "panel_port_host_unreadable": "No se pudieron leer los archivos que contienen los puertos, así que no se cambió nada."
+  }
+}

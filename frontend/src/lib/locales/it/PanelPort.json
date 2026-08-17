@@ -1,0 +1,57 @@
+{
+  "breadcrumb": { "home": "Home", "toolsAndSettings": "Strumenti e impostazioni", "panelPort": "Porta del pannello" },
+  "title": "Porta del pannello",
+  "description": "Le porte su cui questo pannello risponde. Entrambe sono lette dai file che le contengono, quindi ciò che vedete qui è quello su cui il server sta davvero girando.",
+  "current": "Ora",
+  "kind": { "backend": "porta interna", "external": "porta del pannello" },
+  "external": {
+    "title": "Porta del pannello",
+    "description": "La porta a cui si collega il vostro browser. Cambiarla ricarica nginx e la verifica è immediata; se sulla nuova porta non risponde nulla, la precedente viene ripristinata prima che ve lo si dica."
+  },
+  "backend": {
+    "title": "Porta interna",
+    "description": "La porta a cui nginx passa le richieste internamente. Cambiarla serve raramente, solo se un altro servizio su questo server ha già bisogno di quel numero.",
+    "restartNote": "Questa modifica riavvia il pannello, che resta irraggiungibile per qualche secondo. Se non torna sulla nuova porta, tutto viene ripristinato automaticamente e il risultato compare qui."
+  },
+  "change": {
+    "button": "Cambia",
+    "confirmTitle": "Cambiare la porta?",
+    "confirmExternal": "Il pannello risponderà d'ora in poi sulla porta {{port}} e l'indirizzo che state usando ora smetterà di funzionare. Aprite il nuovo prima di chiudere questa scheda.",
+    "confirmBackend": "Il pannello si riavvia per spostare la porta interna su {{port}} e resta irraggiungibile per qualche secondo. Se non torna, la porta precedente viene ripristinata automaticamente.",
+    "confirmAction": "Cambia la porta",
+    "startedTitle": "Riavvio",
+    "startedBody": "Il pannello si sta riavviando. Questa schermata mostrerà il risultato appena sarà tornato; non dovete fare nulla.",
+    "failedTitle": "Non cambiata"
+  },
+  "outcome": {
+    "running": "È in corso una modifica della porta.",
+    "succeeded": "La modifica della porta è terminata ed è stata verificata.",
+    "rolled_back": "La modifica della porta non è riuscita, la porta precedente è stata ripristinata.",
+    "rollback_failed": "La modifica della porta non è riuscita e la porta precedente non è tornata. Questo server va raggiunto in un altro modo.",
+    "detail": "{{kind}}: da {{from}} a {{to}}"
+  },
+  "history": {
+    "title": "Modifiche precedenti",
+    "none": "Non è stata ancora cambiata nessuna porta.",
+    "what": "Cosa", "from": "Da", "to": "A", "result": "Esito", "when": "Quando",
+    "succeeded": "verificata", "rolledBack": "ripristinata", "failed": "fallita"
+  },
+  "error": {
+    "load": "Non è stato possibile leggere le porte del pannello.",
+    "change": "Non è stato possibile cambiare la porta."
+  },
+  "reason": {
+    "panel_port_out_of_range": "Questo non è un numero di porta.",
+    "panel_port_reserved": "Un altro servizio su questo server risponde su quella porta.",
+    "panel_port_in_app_range": "Le porte da 30000 a 30999 sono chiuse nel firewall per le applicazioni dei clienti, quindi il pannello lì sarebbe irraggiungibile.",
+    "panel_port_unchanged": "Il pannello è già su quella porta.",
+    "panel_port_in_use": "Su quella porta è già in ascolto qualcosa.",
+    "panel_port_unknown_kind": "Questa schermata non può spostare quella porta.",
+    "panel_port_directive_not_found": "L'impostazione non è stata trovata dove le compete, quindi non è stato scritto nulla.",
+    "panel_port_change_in_progress": "È già in corso una modifica della porta. Attendete che finisca.",
+    "panel_port_verification_failed": "Sulla nuova porta non ha risposto nulla, la modifica è stata annullata.",
+    "panel_port_rolled_back": "Sulla nuova porta non ha risposto nulla, è stata ripristinata la precedente.",
+    "panel_port_rollback_failed": "La modifica non è riuscita e la porta precedente non è tornata. Questo server va raggiunto in un altro modo.",
+    "panel_port_host_unreadable": "I file che contengono le porte non sono stati letti, quindi non è stato cambiato nulla."
+  }
+}

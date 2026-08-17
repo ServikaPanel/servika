@@ -25,6 +25,7 @@
     "toolsSettings": "Strumenti e impostazioni",
     "optimize": "Ottimizzazione server",
     "serverIPs": "Indirizzi del server",
+    "panelPort": "Porta del pannello",
     "statistics": "Statistiche",
     "extensions": "Estensioni",
     "wordpress": "WordPress",
