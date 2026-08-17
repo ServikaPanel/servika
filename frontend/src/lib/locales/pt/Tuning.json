@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parâmetro a parâmetro",
+    "description": "Cada linha é uma definição que seria alterada, com o valor atual do servidor ao lado. Nada é escrito antes da sua aprovação e cada alteração pode ser anulada isoladamente.",
+    "measured": "Medido neste servidor (RAM / CPU)",
+    "none": "Nada a propor. Todas as definições que este ecrã conhece já são pelo menos tão boas como o valor calculado para este servidor.",
+    "unreadable": "Algumas leituras falharam, esta lista pode estar incompleta:"
+  },
+  "table": {
+    "parameter": "Definição",
+    "current": "Agora",
+    "proposed": "Proposto",
+    "effect": "Custo",
+    "why": "Porquê",
+    "notSet": "não definido",
+    "appliedTogether": "aplicado com o seu grupo"
+  },
+  "effect": {
+    "none": "produz efeito de imediato",
+    "reload": "recarrega o serviço",
+    "restart": "reinicia o serviço"
+  },
+  "apply": {
+    "button": "Aplicar selecionados",
+    "confirmTitle": "Aplicar estas definições?",
+    "confirmBody": "Os ficheiros são copiados primeiro, por isso cada alteração aqui pode ser anulada.",
+    "confirmRestart": "Uma destas reinicia um serviço, o que corta as ligações que ele está a servir. Os ficheiros são copiados primeiro, por isso cada alteração aqui pode ser anulada.",
+    "confirmAction": "Aplicar",
+    "doneTitle": "Aplicado",
+    "doneBody": "As definições foram escritas e estão ativas.",
+    "failedTitle": "Não aplicado"
+  },
+  "revert": {
+    "confirmTitle": "Anular esta alteração?",
+    "confirmBody": "Isto restaura a cópia de {{file}} feita antes de {{param}} ser alterado. Tudo o resto escrito nesse ficheiro ao mesmo tempo é restaurado com ela.",
+    "confirmAction": "Anular",
+    "failedTitle": "Não anulado"
+  },
+  "history": {
+    "title": "O que este ecrã alterou",
+    "description": "Uma alteração anulada fica aqui em vez de ser removida, para distinguir uma definição experimentada e revertida de uma que nunca foi tocada.",
+    "none": "Este ecrã ainda não alterou nada.",
+    "from": "Antes",
+    "to": "Depois",
+    "when": "Quando",
+    "action": "",
+    "revert": "Anular",
+    "reverted": "anulado",
+    "backupGone": "cópia inexistente"
+  },
+  "error": {
+    "load": "Não foi possível ler as definições do servidor.",
+    "apply": "A alteração foi recusada."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Não foi selecionado nada.",
+    "optimize_unknown_parameter": "Essa definição já não é proposta. A lista foi atualizada.",
+    "optimize_host_not_measured": "Não foi possível ler a memória nem o número de CPU deste servidor, por isso nada pode ser calculado a partir deles.",
+    "optimize_directive_not_defined": "Essa definição não está definida no ficheiro a que pertence. Escrevê-la noutro sítio produziria uma configuração que o serviço recusa, por isso nada foi escrito.",
+    "optimize_configuration_refused": "O serviço recusou a nova configuração e o ficheiro anterior foi restaurado.",
+    "optimize_value_not_applied": "O servidor indicou sucesso mas continua a correr com o valor anterior, por isso a alteração não foi registada.",
+    "optimize_backup_not_found": "A cópia que seria restaurada já não está no disco.",
+    "optimize_already_reverted": "Esta alteração já foi anulada."
+  }
+}

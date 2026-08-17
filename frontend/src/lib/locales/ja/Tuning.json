@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "パラメーター単位",
+    "description": "各行は変更される設定を 1 つ表し、隣にサーバーの現在値が並びます。承認するまで何も書き込まれず、変更は 1 つずつ元に戻せます。",
+    "measured": "このサーバーで測定した値 (RAM / CPU)",
+    "none": "提案する項目はありません。この画面が扱うすべての設定は、このサーバー向けに計算される値と同等以上です。",
+    "unreadable": "一部の値を読み取れませんでした。この一覧は不完全な可能性があります:"
+  },
+  "table": {
+    "parameter": "設定",
+    "current": "現在",
+    "proposed": "提案値",
+    "effect": "影響",
+    "why": "理由",
+    "notSet": "未設定",
+    "appliedTogether": "グループ単位で適用"
+  },
+  "effect": {
+    "none": "即座に反映される",
+    "reload": "サービスを再読み込みする",
+    "restart": "サービスを再起動する"
+  },
+  "apply": {
+    "button": "選択した項目を適用",
+    "confirmTitle": "これらの設定を適用しますか?",
+    "confirmBody": "ファイルは先にコピーされるため、ここでの変更はすべて元に戻せます。",
+    "confirmRestart": "このうち 1 つはサービスを再起動するため、処理中の接続が切断されます。ファイルは先にコピーされるため、ここでの変更はすべて元に戻せます。",
+    "confirmAction": "適用",
+    "doneTitle": "適用しました",
+    "doneBody": "設定を書き込み、有効になりました。",
+    "failedTitle": "適用されませんでした"
+  },
+  "revert": {
+    "confirmTitle": "この変更を元に戻しますか?",
+    "confirmBody": "{{param}} を変更する前に取得した {{file}} のコピーを復元します。同時にそのファイルへ書き込まれた他の内容も一緒に戻ります。",
+    "confirmAction": "元に戻す",
+    "failedTitle": "元に戻せませんでした"
+  },
+  "history": {
+    "title": "この画面が変更した内容",
+    "description": "元に戻した変更は削除せずここに残します。試して元に戻した設定と、一度も触れていない設定を区別するためです。",
+    "none": "この画面はまだ何も変更していません。",
+    "from": "変更前",
+    "to": "変更後",
+    "when": "日時",
+    "action": "",
+    "revert": "元に戻す",
+    "reverted": "元に戻し済み",
+    "backupGone": "コピーがありません"
+  },
+  "error": {
+    "load": "サーバー設定を読み取れませんでした。",
+    "apply": "変更は拒否されました。"
+  },
+  "reason": {
+    "optimize_nothing_chosen": "何も選択されていません。",
+    "optimize_unknown_parameter": "その設定はもう提案されていません。一覧を更新しました。",
+    "optimize_host_not_measured": "このサーバーのメモリーと CPU 数を読み取れなかったため、そこから値を計算できません。",
+    "optimize_directive_not_defined": "その設定は本来のファイルに定義されていません。別の場所に書くとサービスが拒否する構成になるため、何も書き込みませんでした。",
+    "optimize_configuration_refused": "サービスが新しい構成を拒否したため、以前のファイルを復元しました。",
+    "optimize_value_not_applied": "サーバーは成功を返しましたが、依然として以前の値で動作しているため、変更は記録されませんでした。",
+    "optimize_backup_not_found": "復元するコピーがディスク上にありません。",
+    "optimize_already_reverted": "この変更はすでに元に戻されています。"
+  }
+}

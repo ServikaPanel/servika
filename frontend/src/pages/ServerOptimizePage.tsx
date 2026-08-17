@@ -1,12 +1,15 @@
 import { useTranslation } from 'react-i18next'
 import Breadcrumb from '@/components/Breadcrumb'
 import ServerOptimizeCard from '@/components/ServerOptimizeCard'
+import TuningProposals from '@/components/TuningProposals'
 
 /*
  * Server Optimize — dedicated page (also linked from the sidebar).
  * The job runs via systemd-run transient unit in the background; survives
  * tab/browser close, status is read from the server (resume-on-reopen).
- * Future: per-service optimization (MariaDB / Nginx / PHP-FPM / Redis …) will be added here.
+ * Below it, the parameter-by-parameter surface: one proposal at a time, with
+ * what the host has now beside what would be written, and a history that can
+ * put any single change back.
  */
 export default function ServerOptimizePage() {
   const { t } = useTranslation('ServerOptimizePage')
@@ -27,6 +30,10 @@ export default function ServerOptimizePage() {
 
       <div className="max-w-3xl">
         <ServerOptimizeCard />
+      </div>
+
+      <div className="mt-6 max-w-5xl">
+        <TuningProposals />
       </div>
     </div>
   )

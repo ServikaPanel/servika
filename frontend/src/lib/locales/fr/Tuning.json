@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Paramètre par paramètre",
+    "description": "Chaque ligne est un réglage qui serait modifié, avec la valeur actuelle du serveur à côté. Rien n'est écrit avant votre approbation, et chaque modification peut être annulée séparément.",
+    "measured": "Mesuré sur ce serveur (RAM / CPU)",
+    "none": "Rien à proposer. Chaque réglage connu de cet écran est déjà au moins aussi bon que la valeur calculée pour ce serveur.",
+    "unreadable": "Certaines lectures ont échoué, cette liste est peut-être incomplète :"
+  },
+  "table": {
+    "parameter": "Réglage",
+    "current": "Actuel",
+    "proposed": "Proposé",
+    "effect": "Coût",
+    "why": "Pourquoi",
+    "notSet": "non défini",
+    "appliedTogether": "appliqué avec son groupe"
+  },
+  "effect": {
+    "none": "prend effet immédiatement",
+    "reload": "recharge le service",
+    "restart": "redémarre le service"
+  },
+  "apply": {
+    "button": "Appliquer la sélection",
+    "confirmTitle": "Appliquer ces réglages ?",
+    "confirmBody": "Les fichiers sont copiés au préalable, chaque modification peut donc être annulée.",
+    "confirmRestart": "L'un d'eux redémarre un service, ce qui coupe les connexions qu'il sert. Les fichiers sont copiés au préalable, chaque modification peut donc être annulée.",
+    "confirmAction": "Appliquer",
+    "doneTitle": "Appliqué",
+    "doneBody": "Les réglages ont été écrits et sont actifs.",
+    "failedTitle": "Non appliqué"
+  },
+  "revert": {
+    "confirmTitle": "Annuler cette modification ?",
+    "confirmBody": "Cela restaure la copie de {{file}} prise avant la modification de {{param}}. Tout ce qui a été écrit dans ce fichier au même moment est restauré avec.",
+    "confirmAction": "Annuler",
+    "failedTitle": "Non annulé"
+  },
+  "history": {
+    "title": "Ce que cet écran a modifié",
+    "description": "Une modification annulée est conservée ici plutôt que supprimée, pour distinguer un réglage essayé puis annulé d'un réglage jamais touché.",
+    "none": "Cet écran n'a encore rien modifié.",
+    "from": "Avant",
+    "to": "Après",
+    "when": "Quand",
+    "action": "",
+    "revert": "Annuler",
+    "reverted": "annulé",
+    "backupGone": "copie absente"
+  },
+  "error": {
+    "load": "Les réglages du serveur n'ont pas pu être lus.",
+    "apply": "La modification a été refusée."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Rien n'a été sélectionné.",
+    "optimize_unknown_parameter": "Ce réglage n'est plus proposé. La liste a été actualisée.",
+    "optimize_host_not_measured": "La mémoire et le nombre de CPU de ce serveur n'ont pas pu être lus, rien ne peut donc en être calculé.",
+    "optimize_directive_not_defined": "Ce réglage n'est pas défini dans le fichier auquel il appartient. L'écrire ailleurs produirait une configuration que le service refuse, rien n'a donc été écrit.",
+    "optimize_configuration_refused": "Le service a refusé la nouvelle configuration, le fichier précédent a été restauré.",
+    "optimize_value_not_applied": "Le serveur a signalé une réussite mais fonctionne toujours avec l'ancienne valeur, la modification n'a donc pas été enregistrée.",
+    "optimize_backup_not_found": "La copie à restaurer n'est plus sur le disque.",
+    "optimize_already_reverted": "Cette modification a déjà été annulée."
+  }
+}

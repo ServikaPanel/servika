@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "逐项参数",
+    "description": "每一行是一项将被修改的设置，旁边是服务器的当前值。在您批准之前不会写入任何内容，每项修改都可以单独撤销。",
+    "measured": "在本服务器上测得 (RAM / CPU)",
+    "none": "没有可提议的项目。本页面涉及的每项设置都已不低于为本服务器计算出的值。",
+    "unreadable": "部分读取失败，此列表可能不完整:"
+  },
+  "table": {
+    "parameter": "设置",
+    "current": "当前",
+    "proposed": "建议值",
+    "effect": "代价",
+    "why": "原因",
+    "notSet": "未设置",
+    "appliedTogether": "与同组一起应用"
+  },
+  "effect": {
+    "none": "立即生效",
+    "reload": "重新加载服务",
+    "restart": "重启服务"
+  },
+  "apply": {
+    "button": "应用所选",
+    "confirmTitle": "应用这些设置吗?",
+    "confirmBody": "文件会先被复制，因此这里的每项修改都可以撤销。",
+    "confirmRestart": "其中一项会重启服务，正在处理的连接将被中断。文件会先被复制，因此这里的每项修改都可以撤销。",
+    "confirmAction": "应用",
+    "doneTitle": "已应用",
+    "doneBody": "设置已写入并生效。",
+    "failedTitle": "未应用"
+  },
+  "revert": {
+    "confirmTitle": "撤销此修改吗?",
+    "confirmBody": "这将恢复修改 {{param}} 之前所取的 {{file}} 副本。同时写入该文件的其他内容也会一并恢复。",
+    "confirmAction": "撤销",
+    "failedTitle": "未撤销"
+  },
+  "history": {
+    "title": "本页面所做的修改",
+    "description": "已撤销的修改保留在此而不是删除，以便区分试过又撤销的设置和从未改动过的设置。",
+    "none": "本页面尚未修改任何内容。",
+    "from": "修改前",
+    "to": "修改后",
+    "when": "时间",
+    "action": "",
+    "revert": "撤销",
+    "reverted": "已撤销",
+    "backupGone": "副本已不存在"
+  },
+  "error": {
+    "load": "无法读取服务器设置。",
+    "apply": "修改被拒绝。"
+  },
+  "reason": {
+    "optimize_nothing_chosen": "未选择任何项目。",
+    "optimize_unknown_parameter": "该设置已不再被提议，列表已刷新。",
+    "optimize_host_not_measured": "无法读取本服务器的内存和 CPU 数量，因此无法据此计算任何值。",
+    "optimize_directive_not_defined": "该设置未在其所属文件中定义。写到别处会产生服务拒绝的配置，因此没有写入任何内容。",
+    "optimize_configuration_refused": "服务拒绝了新配置，已恢复此前的文件。",
+    "optimize_value_not_applied": "服务器报告成功，但仍在使用旧值，因此该修改未被记录。",
+    "optimize_backup_not_found": "要恢复的副本已不在磁盘上。",
+    "optimize_already_reverted": "该修改已经撤销过了。"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parámetro a parámetro",
+    "description": "Cada fila es un ajuste que se cambiaría, con el valor actual del servidor al lado. No se escribe nada hasta que usted lo apruebe, y cada cambio se puede deshacer por separado.",
+    "measured": "Medido en este servidor (RAM / CPU)",
+    "none": "Nada que proponer. Todos los ajustes que conoce esta pantalla ya son al menos tan buenos como el valor calculado para este servidor.",
+    "unreadable": "Algunas lecturas fallaron, esta lista puede estar incompleta:"
+  },
+  "table": {
+    "parameter": "Ajuste",
+    "current": "Ahora",
+    "proposed": "Propuesto",
+    "effect": "Coste",
+    "why": "Por qué",
+    "notSet": "sin definir",
+    "appliedTogether": "se aplica con su grupo"
+  },
+  "effect": {
+    "none": "surte efecto de inmediato",
+    "reload": "recarga el servicio",
+    "restart": "reinicia el servicio"
+  },
+  "apply": {
+    "button": "Aplicar lo elegido",
+    "confirmTitle": "¿Aplicar estos ajustes?",
+    "confirmBody": "Los archivos se copian primero, así que cada cambio aquí se puede deshacer.",
+    "confirmRestart": "Uno de estos reinicia un servicio, lo que corta las conexiones que atiende. Los archivos se copian primero, así que cada cambio aquí se puede deshacer.",
+    "confirmAction": "Aplicar",
+    "doneTitle": "Aplicado",
+    "doneBody": "Los ajustes se escribieron y están activos.",
+    "failedTitle": "No aplicado"
+  },
+  "revert": {
+    "confirmTitle": "¿Deshacer este cambio?",
+    "confirmBody": "Esto restaura la copia de {{file}} tomada antes de cambiar {{param}}. Todo lo demás escrito en ese archivo al mismo tiempo se restaura con ella.",
+    "confirmAction": "Deshacer",
+    "failedTitle": "No deshecho"
+  },
+  "history": {
+    "title": "Lo que ha cambiado esta pantalla",
+    "description": "Un cambio deshecho se conserva aquí en lugar de borrarse, para distinguir un ajuste probado y revertido de uno que nunca se tocó.",
+    "none": "Esta pantalla aún no ha cambiado nada.",
+    "from": "Antes",
+    "to": "Después",
+    "when": "Cuándo",
+    "action": "",
+    "revert": "Deshacer",
+    "reverted": "deshecho",
+    "backupGone": "no hay copia"
+  },
+  "error": {
+    "load": "No se pudieron leer los ajustes del servidor.",
+    "apply": "El cambio fue rechazado."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "No se eligió nada.",
+    "optimize_unknown_parameter": "Ese ajuste ya no se propone. La lista se ha actualizado.",
+    "optimize_host_not_measured": "No se pudieron leer la memoria ni el número de CPU de este servidor, así que no se puede calcular nada a partir de ellos.",
+    "optimize_directive_not_defined": "Ese ajuste no está definido en el archivo al que pertenece. Escribirlo en otro sitio produciría una configuración que el servicio rechaza, así que no se escribió nada.",
+    "optimize_configuration_refused": "El servicio rechazó la nueva configuración y se restauró el archivo anterior.",
+    "optimize_value_not_applied": "El servidor informó de éxito pero sigue funcionando con el valor anterior, así que el cambio no se registró.",
+    "optimize_backup_not_found": "La copia que se restauraría ya no está en el disco.",
+    "optimize_already_reverted": "Este cambio ya se deshizo."
+  }
+}

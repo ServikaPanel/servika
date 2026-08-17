@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parameter für Parameter",
+    "description": "Jede Zeile ist eine Einstellung, die geändert würde, daneben der aktuelle Wert des Servers. Nichts wird geschrieben, bevor Sie es freigeben, und jede Änderung lässt sich einzeln zurücknehmen.",
+    "measured": "Auf diesem Server gemessen (RAM / CPU)",
+    "none": "Nichts vorzuschlagen. Jede Einstellung, die dieser Bildschirm kennt, ist bereits mindestens so gut wie der für diesen Server berechnete Wert.",
+    "unreadable": "Einige Messwerte konnten nicht gelesen werden, diese Liste ist möglicherweise unvollständig:"
+  },
+  "table": {
+    "parameter": "Einstellung",
+    "current": "Jetzt",
+    "proposed": "Vorgeschlagen",
+    "effect": "Kosten",
+    "why": "Warum",
+    "notSet": "nicht gesetzt",
+    "appliedTogether": "wird mit seiner Gruppe angewendet"
+  },
+  "effect": {
+    "none": "wirkt sofort",
+    "reload": "lädt den Dienst neu",
+    "restart": "startet den Dienst neu"
+  },
+  "apply": {
+    "button": "Ausgewählte anwenden",
+    "confirmTitle": "Diese Einstellungen anwenden?",
+    "confirmBody": "Die Dateien werden zuerst kopiert, daher lässt sich jede Änderung hier zurücknehmen.",
+    "confirmRestart": "Eine davon startet einen Dienst neu, wodurch dessen laufende Verbindungen abbrechen. Die Dateien werden zuerst kopiert, daher lässt sich jede Änderung hier zurücknehmen.",
+    "confirmAction": "Anwenden",
+    "doneTitle": "Angewendet",
+    "doneBody": "Die Einstellungen wurden geschrieben und sind aktiv.",
+    "failedTitle": "Nicht angewendet"
+  },
+  "revert": {
+    "confirmTitle": "Diese Änderung zurücknehmen?",
+    "confirmBody": "Damit wird die Kopie von {{file}} wiederhergestellt, die vor der Änderung von {{param}} angelegt wurde. Alles andere, was gleichzeitig in diese Datei geschrieben wurde, wird mit zurückgesetzt.",
+    "confirmAction": "Zurücknehmen",
+    "failedTitle": "Nicht zurückgenommen"
+  },
+  "history": {
+    "title": "Was dieser Bildschirm geändert hat",
+    "description": "Eine zurückgenommene Änderung wird hier behalten statt gelöscht, damit Sie eine ausprobierte und rückgängig gemachte Einstellung von einer nie berührten unterscheiden können.",
+    "none": "Dieser Bildschirm hat noch nichts geändert.",
+    "from": "Vorher",
+    "to": "Nachher",
+    "when": "Wann",
+    "action": "",
+    "revert": "Zurücknehmen",
+    "reverted": "zurückgenommen",
+    "backupGone": "Kopie fehlt"
+  },
+  "error": {
+    "load": "Die Servereinstellungen konnten nicht gelesen werden.",
+    "apply": "Die Änderung wurde abgelehnt."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Es wurde nichts ausgewählt.",
+    "optimize_unknown_parameter": "Diese Einstellung wird nicht mehr vorgeschlagen. Die Liste wurde aktualisiert.",
+    "optimize_host_not_measured": "Arbeitsspeicher und CPU-Anzahl dieses Servers konnten nicht gelesen werden, daher lässt sich daraus nichts berechnen.",
+    "optimize_directive_not_defined": "Diese Einstellung ist in der zugehörigen Datei nicht definiert. Sie anderswo zu schreiben ergäbe eine Konfiguration, die der Dienst ablehnt, daher wurde nichts geschrieben.",
+    "optimize_configuration_refused": "Der Dienst hat die neue Konfiguration abgelehnt, die vorherige Datei wurde wiederhergestellt.",
+    "optimize_value_not_applied": "Der Server meldete Erfolg, läuft aber weiterhin mit dem alten Wert, daher wurde die Änderung nicht erfasst.",
+    "optimize_backup_not_found": "Die wiederherzustellende Kopie liegt nicht mehr auf der Festplatte.",
+    "optimize_already_reverted": "Diese Änderung wurde bereits zurückgenommen."
+  }
+}

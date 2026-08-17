@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parâmetro por parâmetro",
+    "description": "Cada linha é uma configuração que seria alterada, com o valor atual do servidor ao lado. Nada é gravado antes da sua aprovação e cada alteração pode ser desfeita separadamente.",
+    "measured": "Medido neste servidor (RAM / CPU)",
+    "none": "Nada a propor. Todas as configurações que esta tela conhece já são pelo menos tão boas quanto o valor calculado para este servidor.",
+    "unreadable": "Algumas leituras falharam, esta lista pode estar incompleta:"
+  },
+  "table": {
+    "parameter": "Configuração",
+    "current": "Agora",
+    "proposed": "Proposto",
+    "effect": "Custo",
+    "why": "Por quê",
+    "notSet": "não definido",
+    "appliedTogether": "aplicado com seu grupo"
+  },
+  "effect": {
+    "none": "tem efeito imediato",
+    "reload": "recarrega o serviço",
+    "restart": "reinicia o serviço"
+  },
+  "apply": {
+    "button": "Aplicar selecionados",
+    "confirmTitle": "Aplicar estas configurações?",
+    "confirmBody": "Os arquivos são copiados antes, então cada alteração aqui pode ser desfeita.",
+    "confirmRestart": "Uma delas reinicia um serviço, o que derruba as conexões que ele está atendendo. Os arquivos são copiados antes, então cada alteração aqui pode ser desfeita.",
+    "confirmAction": "Aplicar",
+    "doneTitle": "Aplicado",
+    "doneBody": "As configurações foram gravadas e estão ativas.",
+    "failedTitle": "Não aplicado"
+  },
+  "revert": {
+    "confirmTitle": "Desfazer esta alteração?",
+    "confirmBody": "Isto restaura a cópia de {{file}} feita antes de {{param}} ser alterado. Tudo o mais gravado nesse arquivo ao mesmo tempo é restaurado junto.",
+    "confirmAction": "Desfazer",
+    "failedTitle": "Não desfeito"
+  },
+  "history": {
+    "title": "O que esta tela alterou",
+    "description": "Uma alteração desfeita fica aqui em vez de ser removida, para distinguir uma configuração testada e revertida de uma que nunca foi tocada.",
+    "none": "Esta tela ainda não alterou nada.",
+    "from": "Antes",
+    "to": "Depois",
+    "when": "Quando",
+    "action": "",
+    "revert": "Desfazer",
+    "reverted": "desfeito",
+    "backupGone": "cópia inexistente"
+  },
+  "error": {
+    "load": "Não foi possível ler as configurações do servidor.",
+    "apply": "A alteração foi recusada."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Nada foi selecionado.",
+    "optimize_unknown_parameter": "Essa configuração não é mais proposta. A lista foi atualizada.",
+    "optimize_host_not_measured": "Não foi possível ler a memória e o número de CPUs deste servidor, então nada pode ser calculado a partir deles.",
+    "optimize_directive_not_defined": "Essa configuração não está definida no arquivo a que pertence. Gravá-la em outro lugar produziria uma configuração que o serviço recusa, então nada foi gravado.",
+    "optimize_configuration_refused": "O serviço recusou a nova configuração e o arquivo anterior foi restaurado.",
+    "optimize_value_not_applied": "O servidor informou sucesso mas continua rodando com o valor antigo, então a alteração não foi registrada.",
+    "optimize_backup_not_found": "A cópia que seria restaurada não está mais no disco.",
+    "optimize_already_reverted": "Esta alteração já foi desfeita."
+  }
+}

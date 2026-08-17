@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parametr po parametru",
+    "description": "Každý řádek je jedno nastavení, které by se změnilo, vedle něj je současná hodnota serveru. Nic se nezapíše, dokud to neschválíte, a každou změnu lze vrátit samostatně.",
+    "measured": "Naměřeno na tomto serveru (RAM / CPU)",
+    "none": "Není co navrhnout. Každé nastavení, které tato obrazovka zná, je již alespoň tak dobré jako hodnota vypočtená pro tento server.",
+    "unreadable": "Některá čtení selhala, tento seznam může být neúplný:"
+  },
+  "table": {
+    "parameter": "Nastavení",
+    "current": "Nyní",
+    "proposed": "Navrženo",
+    "effect": "Cena",
+    "why": "Proč",
+    "notSet": "nenastaveno",
+    "appliedTogether": "použije se se svou skupinou"
+  },
+  "effect": {
+    "none": "projeví se okamžitě",
+    "reload": "znovu načte službu",
+    "restart": "restartuje službu"
+  },
+  "apply": {
+    "button": "Použít vybrané",
+    "confirmTitle": "Použít tato nastavení?",
+    "confirmBody": "Soubory se nejprve zkopírují, takže každou změnu zde lze vrátit.",
+    "confirmRestart": "Jedna z nich restartuje službu, což přeruší spojení, která obsluhuje. Soubory se nejprve zkopírují, takže každou změnu zde lze vrátit.",
+    "confirmAction": "Použít",
+    "doneTitle": "Použito",
+    "doneBody": "Nastavení byla zapsána a jsou aktivní.",
+    "failedTitle": "Nepoužito"
+  },
+  "revert": {
+    "confirmTitle": "Vrátit tuto změnu?",
+    "confirmBody": "Tím se obnoví kopie souboru {{file}} pořízená před změnou {{param}}. Vše ostatní zapsané do toho souboru ve stejnou chvíli se vrátí s ní.",
+    "confirmAction": "Vrátit",
+    "failedTitle": "Nevráceno"
+  },
+  "history": {
+    "title": "Co tato obrazovka změnila",
+    "description": "Vrácená změna se zde ponechává místo smazání, abyste rozeznali nastavení, které bylo vyzkoušeno a vráceno, od takového, kterého se nikdo nedotkl.",
+    "none": "Tato obrazovka zatím nic nezměnila.",
+    "from": "Předtím",
+    "to": "Potom",
+    "when": "Kdy",
+    "action": "",
+    "revert": "Vrátit",
+    "reverted": "vráceno",
+    "backupGone": "kopie chybí"
+  },
+  "error": {
+    "load": "Nastavení serveru se nepodařilo načíst.",
+    "apply": "Změna byla odmítnuta."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Nebylo nic vybráno.",
+    "optimize_unknown_parameter": "Toto nastavení se již nenavrhuje. Seznam byl obnoven.",
+    "optimize_host_not_measured": "Paměť ani počet CPU tohoto serveru se nepodařilo načíst, takže z nich nelze nic vypočítat.",
+    "optimize_directive_not_defined": "Toto nastavení není definováno v souboru, kam patří. Zapsat je jinam by vytvořilo konfiguraci, kterou služba odmítá, takže se nic nezapsalo.",
+    "optimize_configuration_refused": "Služba odmítla novou konfiguraci, předchozí soubor byl obnoven.",
+    "optimize_value_not_applied": "Server ohlásil úspěch, ale stále běží na staré hodnotě, takže změna nebyla zaznamenána.",
+    "optimize_backup_not_found": "Kopie, která by se obnovila, už na disku není.",
+    "optimize_already_reverted": "Tato změna už byla vrácena."
+  }
+}

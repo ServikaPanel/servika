@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parameter by parameter",
+    "description": "Each row is one setting this would change, with what the server has now beside it. Nothing is written until you approve it, and every change can be put back on its own.",
+    "measured": "Measured on this server (RAM / CPU)",
+    "none": "Nothing to propose. Every setting this screen knows about is already at least as good as what would be computed for this server.",
+    "unreadable": "Some readings failed, so this list may be incomplete:"
+  },
+  "table": {
+    "parameter": "Setting",
+    "current": "Now",
+    "proposed": "Proposed",
+    "effect": "Cost",
+    "why": "Why",
+    "notSet": "not set",
+    "appliedTogether": "applied with its group"
+  },
+  "effect": {
+    "none": "takes effect at once",
+    "reload": "reloads the service",
+    "restart": "restarts the service"
+  },
+  "apply": {
+    "button": "Apply chosen",
+    "confirmTitle": "Apply these settings?",
+    "confirmBody": "The files are copied first, so every change here can be put back.",
+    "confirmRestart": "One of these restarts a service, which drops the connections it is serving. The files are copied first, so every change here can be put back.",
+    "confirmAction": "Apply",
+    "doneTitle": "Applied",
+    "doneBody": "The settings were written and are live.",
+    "failedTitle": "Not applied"
+  },
+  "revert": {
+    "confirmTitle": "Put this change back?",
+    "confirmBody": "This restores the copy of {{file}} taken before {{param}} was changed. Anything else written to that file at the same time is put back with it.",
+    "confirmAction": "Put back",
+    "failedTitle": "Not put back"
+  },
+  "history": {
+    "title": "What this screen changed",
+    "description": "A change that was put back is kept here rather than removed, so you can tell a setting that was tried and undone from one that was never touched.",
+    "none": "This screen has not changed anything yet.",
+    "from": "Was",
+    "to": "Became",
+    "when": "When",
+    "action": "",
+    "revert": "Put back",
+    "reverted": "put back",
+    "backupGone": "the copy is gone"
+  },
+  "error": {
+    "load": "The server settings could not be read.",
+    "apply": "The change was refused."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Nothing was chosen.",
+    "optimize_unknown_parameter": "That setting is no longer being proposed. The list has been refreshed.",
+    "optimize_host_not_measured": "This server's memory and CPU count could not be read, so nothing can be computed from them.",
+    "optimize_directive_not_defined": "That setting is not defined in the file it belongs to. Writing it elsewhere would produce a configuration the service refuses, so nothing was written.",
+    "optimize_configuration_refused": "The service refused the new configuration, so the previous file was put back.",
+    "optimize_value_not_applied": "The server reported success but is still running on the old value, so the change was not recorded.",
+    "optimize_backup_not_found": "The copy this would restore is no longer on disk.",
+    "optimize_already_reverted": "This change was already put back."
+  }
+}

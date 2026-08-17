@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parametro per parametro",
+    "description": "Ogni riga è un'impostazione che verrebbe modificata, accanto al valore attuale del server. Nulla viene scritto prima della vostra approvazione e ogni modifica può essere annullata singolarmente.",
+    "measured": "Misurato su questo server (RAM / CPU)",
+    "none": "Nulla da proporre. Ogni impostazione nota a questa schermata è già almeno pari al valore calcolato per questo server.",
+    "unreadable": "Alcune letture non sono riuscite, questo elenco potrebbe essere incompleto:"
+  },
+  "table": {
+    "parameter": "Impostazione",
+    "current": "Ora",
+    "proposed": "Proposto",
+    "effect": "Costo",
+    "why": "Perché",
+    "notSet": "non impostato",
+    "appliedTogether": "applicato con il suo gruppo"
+  },
+  "effect": {
+    "none": "ha effetto subito",
+    "reload": "ricarica il servizio",
+    "restart": "riavvia il servizio"
+  },
+  "apply": {
+    "button": "Applica selezionati",
+    "confirmTitle": "Applicare queste impostazioni?",
+    "confirmBody": "I file vengono copiati prima, quindi ogni modifica qui può essere annullata.",
+    "confirmRestart": "Una di queste riavvia un servizio, interrompendo le connessioni che sta servendo. I file vengono copiati prima, quindi ogni modifica qui può essere annullata.",
+    "confirmAction": "Applica",
+    "doneTitle": "Applicato",
+    "doneBody": "Le impostazioni sono state scritte e sono attive.",
+    "failedTitle": "Non applicato"
+  },
+  "revert": {
+    "confirmTitle": "Annullare questa modifica?",
+    "confirmBody": "Ripristina la copia di {{file}} presa prima della modifica di {{param}}. Tutto il resto scritto in quel file nello stesso momento viene ripristinato con essa.",
+    "confirmAction": "Annulla",
+    "failedTitle": "Non annullato"
+  },
+  "history": {
+    "title": "Cosa ha modificato questa schermata",
+    "description": "Una modifica annullata resta qui invece di essere rimossa, così potete distinguere un'impostazione provata e annullata da una mai toccata.",
+    "none": "Questa schermata non ha ancora modificato nulla.",
+    "from": "Prima",
+    "to": "Dopo",
+    "when": "Quando",
+    "action": "",
+    "revert": "Annulla",
+    "reverted": "annullato",
+    "backupGone": "copia assente"
+  },
+  "error": {
+    "load": "Non è stato possibile leggere le impostazioni del server.",
+    "apply": "La modifica è stata rifiutata."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Non è stato selezionato nulla.",
+    "optimize_unknown_parameter": "Questa impostazione non viene più proposta. L'elenco è stato aggiornato.",
+    "optimize_host_not_measured": "Non è stato possibile leggere memoria e numero di CPU di questo server, quindi non si può calcolare nulla a partire da essi.",
+    "optimize_directive_not_defined": "Questa impostazione non è definita nel file a cui appartiene. Scriverla altrove produrrebbe una configurazione che il servizio rifiuta, quindi non è stato scritto nulla.",
+    "optimize_configuration_refused": "Il servizio ha rifiutato la nuova configurazione, il file precedente è stato ripristinato.",
+    "optimize_value_not_applied": "Il server ha segnalato successo ma sta ancora usando il valore precedente, quindi la modifica non è stata registrata.",
+    "optimize_backup_not_found": "La copia da ripristinare non è più sul disco.",
+    "optimize_already_reverted": "Questa modifica è già stata annullata."
+  }
+}

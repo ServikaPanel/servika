@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parametre parametre",
+    "description": "Her satır değiştirilecek tek bir ayardır, yanında sunucunun şu anki değeri vardır. Siz onaylamadan hiçbir şey yazılmaz ve her değişiklik tek başına geri alınabilir.",
+    "measured": "Bu sunucuda ölçülen (RAM / CPU)",
+    "none": "Önerilecek bir şey yok. Bu ekranın bildiği her ayar, bu sunucu için hesaplanacak değerden zaten en az o kadar iyi.",
+    "unreadable": "Bazı okumalar başarısız oldu, bu liste eksik olabilir:"
+  },
+  "table": {
+    "parameter": "Ayar",
+    "current": "Şimdi",
+    "proposed": "Önerilen",
+    "effect": "Maliyet",
+    "why": "Neden",
+    "notSet": "ayarlı değil",
+    "appliedTogether": "kümesiyle birlikte uygulanır"
+  },
+  "effect": {
+    "none": "hemen etkili olur",
+    "reload": "servisi yeniden yükler",
+    "restart": "servisi yeniden başlatır"
+  },
+  "apply": {
+    "button": "Seçilenleri uygula",
+    "confirmTitle": "Bu ayarlar uygulansın mı?",
+    "confirmBody": "Dosyalar önce kopyalanır, bu yüzden buradaki her değişiklik geri alınabilir.",
+    "confirmRestart": "Bunlardan biri bir servisi yeniden başlatır ve o servisin hizmet verdiği bağlantılar düşer. Dosyalar önce kopyalanır, bu yüzden buradaki her değişiklik geri alınabilir.",
+    "confirmAction": "Uygula",
+    "doneTitle": "Uygulandı",
+    "doneBody": "Ayarlar yazıldı ve etkin.",
+    "failedTitle": "Uygulanmadı"
+  },
+  "revert": {
+    "confirmTitle": "Bu değişiklik geri alınsın mı?",
+    "confirmBody": "Bu işlem, {{param}} değiştirilmeden önce alınan {{file}} kopyasını geri yükler. Aynı anda o dosyaya yazılan her şey de onunla birlikte geri gelir.",
+    "confirmAction": "Geri al",
+    "failedTitle": "Geri alınmadı"
+  },
+  "history": {
+    "title": "Bu ekranın değiştirdikleri",
+    "description": "Geri alınan bir değişiklik silinmez, burada tutulur. Böylece denenip geri alınan bir ayarı, hiç dokunulmamış olandan ayırt edebilirsiniz.",
+    "none": "Bu ekran henüz hiçbir şey değiştirmedi.",
+    "from": "Önceki",
+    "to": "Sonraki",
+    "when": "Ne zaman",
+    "action": "",
+    "revert": "Geri al",
+    "reverted": "geri alındı",
+    "backupGone": "kopya yok"
+  },
+  "error": {
+    "load": "Sunucu ayarları okunamadı.",
+    "apply": "Değişiklik reddedildi."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Hiçbir şey seçilmedi.",
+    "optimize_unknown_parameter": "Bu ayar artık önerilmiyor. Liste yenilendi.",
+    "optimize_host_not_measured": "Bu sunucunun bellek ve CPU sayısı okunamadı, bu yüzden onlardan hiçbir değer hesaplanamaz.",
+    "optimize_directive_not_defined": "Bu ayar ait olduğu dosyada tanımlı değil. Başka bir yere yazmak servisin reddedeceği bir konfigürasyon üretirdi, bu yüzden hiçbir şey yazılmadı.",
+    "optimize_configuration_refused": "Servis yeni konfigürasyonu reddetti, önceki dosya geri yüklendi.",
+    "optimize_value_not_applied": "Sunucu başarı bildirdi ama hâlâ eski değerle çalışıyor, bu yüzden değişiklik kaydedilmedi.",
+    "optimize_backup_not_found": "Geri yüklenecek kopya artık diskte yok.",
+    "optimize_already_reverted": "Bu değişiklik zaten geri alınmış."
+  }
+}

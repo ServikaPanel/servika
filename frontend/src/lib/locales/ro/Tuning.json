@@ -1,0 +1,65 @@
+{
+  "proposals": {
+    "title": "Parametru cu parametru",
+    "description": "Fiecare rând este o setare care ar fi modificată, alături de valoarea actuală a serverului. Nimic nu se scrie până nu aprobați, iar fiecare modificare poate fi anulată separat.",
+    "measured": "Măsurat pe acest server (RAM / CPU)",
+    "none": "Nimic de propus. Fiecare setare cunoscută de acest ecran este deja cel puțin la fel de bună ca valoarea calculată pentru acest server.",
+    "unreadable": "Unele citiri au eșuat, această listă poate fi incompletă:"
+  },
+  "table": {
+    "parameter": "Setare",
+    "current": "Acum",
+    "proposed": "Propus",
+    "effect": "Cost",
+    "why": "De ce",
+    "notSet": "nesetat",
+    "appliedTogether": "se aplică împreună cu grupul său"
+  },
+  "effect": {
+    "none": "are efect imediat",
+    "reload": "reîncarcă serviciul",
+    "restart": "repornește serviciul"
+  },
+  "apply": {
+    "button": "Aplică selecția",
+    "confirmTitle": "Aplicați aceste setări?",
+    "confirmBody": "Fișierele sunt copiate mai întâi, deci fiecare modificare de aici poate fi anulată.",
+    "confirmRestart": "Una dintre ele repornește un serviciu, ceea ce întrerupe conexiunile pe care le deservește. Fișierele sunt copiate mai întâi, deci fiecare modificare de aici poate fi anulată.",
+    "confirmAction": "Aplică",
+    "doneTitle": "Aplicat",
+    "doneBody": "Setările au fost scrise și sunt active.",
+    "failedTitle": "Neaplicat"
+  },
+  "revert": {
+    "confirmTitle": "Anulați această modificare?",
+    "confirmBody": "Aceasta restaurează copia fișierului {{file}} făcută înainte de modificarea {{param}}. Tot ce a fost scris în acel fișier în același moment se restaurează odată cu ea.",
+    "confirmAction": "Anulează",
+    "failedTitle": "Neanulat"
+  },
+  "history": {
+    "title": "Ce a modificat acest ecran",
+    "description": "O modificare anulată rămâne aici în loc să fie ștearsă, ca să distingeți o setare încercată și anulată de una neatinsă niciodată.",
+    "none": "Acest ecran nu a modificat încă nimic.",
+    "from": "Înainte",
+    "to": "După",
+    "when": "Când",
+    "action": "",
+    "revert": "Anulează",
+    "reverted": "anulat",
+    "backupGone": "copia lipsește"
+  },
+  "error": {
+    "load": "Setările serverului nu au putut fi citite.",
+    "apply": "Modificarea a fost refuzată."
+  },
+  "reason": {
+    "optimize_nothing_chosen": "Nu a fost selectat nimic.",
+    "optimize_unknown_parameter": "Acea setare nu mai este propusă. Lista a fost reîmprospătată.",
+    "optimize_host_not_measured": "Memoria și numărul de procesoare ale acestui server nu au putut fi citite, deci nu se poate calcula nimic din ele.",
+    "optimize_directive_not_defined": "Acea setare nu este definită în fișierul căruia îi aparține. Scrierea ei în altă parte ar produce o configurație pe care serviciul o refuză, deci nu s-a scris nimic.",
+    "optimize_configuration_refused": "Serviciul a refuzat noua configurație, iar fișierul anterior a fost restaurat.",
+    "optimize_value_not_applied": "Serverul a raportat succes, dar rulează încă pe valoarea veche, deci modificarea nu a fost înregistrată.",
+    "optimize_backup_not_found": "Copia care ar fi restaurată nu mai este pe disc.",
+    "optimize_already_reverted": "Această modificare a fost deja anulată."
+  }
+}
