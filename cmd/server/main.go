@@ -67,6 +67,7 @@ import (
 	"servika/internal/resource"
 	"servika/internal/resourcelimit"
 	"servika/internal/secret"
+	"servika/internal/serverip"
 	"servika/internal/sitecopy"
 	"servika/internal/siteimport"
 	"servika/internal/sitesecurity"
@@ -347,6 +348,7 @@ func main() {
 	siteSecurityH := sitesecurity.NewHandlers(d)
 	appInstallH := &appinstall.Handlers{DB: d}
 	optimizeH := &optimize.Handlers{DB: d}
+	serverIPH := &serverip.Handlers{DB: d}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -536,6 +538,12 @@ func main() {
 			r.With(middleware.AdminOnly).Post("/system/optimize/apply", optimizeH.ApplyChosen)
 			r.With(middleware.AdminOnly).Get("/system/optimize/history", optimizeH.ListHistory)
 			r.With(middleware.AdminOnly).Post("/system/optimize/history/{id}/revert", optimizeH.RevertChange)
+			// Additional server addresses. Admin only, and the list comes off
+			// the HOST rather than the panel's table, so an address configured
+			// outside the panel is shown and is not removable here.
+			r.With(middleware.AdminOnly).Get("/system/ips", serverIPH.List)
+			r.With(middleware.AdminOnly).Post("/system/ips", serverIPH.Add)
+			r.With(middleware.AdminOnly).Delete("/system/ips/{id}", serverIPH.Remove)
 			r.With(middleware.AdminOnly).Get("/system/ssh-security", system.SSHSecurity)
 			r.With(middleware.AdminOnly).Get("/system/cve", system.CveStatus)
 			r.With(middleware.AdminOnly).Post("/system/cve/update", system.CveUpdate)

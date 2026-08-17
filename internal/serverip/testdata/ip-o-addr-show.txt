@@ -1,0 +1,10 @@
+1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+1: lo    inet6 ::1/128 scope host proto kernel_lo \       valid_lft forever preferred_lft forever
+2: eth0    inet 192.168.215.4/24 brd 192.168.215.255 scope global eth0\       valid_lft forever preferred_lft forever
+2: eth0    inet 192.0.2.10/24 scope global eth0\       valid_lft forever preferred_lft forever
+3: servika0    inet 192.0.2.10/24 scope global servika0\       valid_lft forever preferred_lft forever
+3: servika0    inet 192.0.2.11/32 scope global operator-alias\       valid_lft forever preferred_lft forever
+3: servika0    inet 198.51.100.7/32 scope global panel-0003\       valid_lft forever preferred_lft forever
+3: servika0    inet 198.51.100.8/32 scope global panel-0004\       valid_lft forever preferred_lft forever
+3: servika0    inet6 2001:db8::10/64 scope global \       valid_lft forever preferred_lft forever
+3: servika0    inet6 fe80::6c4f:9bff:fec6:d99/64 scope link proto kernel_ll \       valid_lft forever preferred_lft forever
