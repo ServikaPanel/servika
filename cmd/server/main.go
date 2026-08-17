@@ -18,6 +18,7 @@ import (
 	"servika/internal/accounts"
 	"servika/internal/addondomains"
 	"servika/internal/antivirus"
+	"servika/internal/appinstall"
 	"servika/internal/appruntime"
 	"servika/internal/apps"
 	"servika/internal/auth"
@@ -166,6 +167,10 @@ func main() {
 	// its lock in memory, so a panel killed mid-scan would refuse every later
 	// scan, scheduled or manual, for good.
 	sitesecurity.HealRunningScans(d)
+	// And again for the same reason: an installation runs in a goroutine, so a
+	// panel killed mid-install leaves a row nothing will ever finish and a
+	// spinner on the screen for good.
+	appinstall.HealRunningInstalls(d)
 	middleware.Init(d)
 	if err := dns.SeedTemplateIfEmpty(context.Background(), d); err != nil {
 		log.Printf("DNS template seed warn: %v", err)
@@ -339,6 +344,7 @@ func main() {
 	transfersH := &transfers.Handlers{DB: d, Domains: domainsH, Mail: mailH, Cron: cronH}
 	domainBlockH := &domainblock.Handlers{DB: d}
 	siteSecurityH := sitesecurity.NewHandlers(d)
+	appInstallH := &appinstall.Handlers{DB: d}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -919,6 +925,17 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Get("/admin/site-security/status", siteSecurityH.Status)
 				r.With(middleware.AdminOnly).Post("/admin/site-security/scan", siteSecurityH.Scan)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/site-security", siteSecurityH.DomainList)
+				// One-click application installation. The catalog a customer sees is
+				// filtered to entries the panel can actually verify; editing it is
+				// AdminOnly, because a catalog row names where the panel fetches
+				// executable code from and what digest it must have.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/app-installer", appInstallH.CatalogForDomain)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/app-installer/installs", appInstallH.Installs)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/app-installer/installs", appInstallH.Create)
+				r.With(middleware.CustomerScope).Delete("/domains/{id}/app-installer/installs/{aid}", appInstallH.Forget)
+				r.With(middleware.AdminOnly).Get("/admin/app-catalog", appInstallH.AdminCatalog)
+				r.With(middleware.AdminOnly).Put("/admin/app-catalog", appInstallH.AdminSave)
+				r.With(middleware.AdminOnly).Delete("/admin/app-catalog/{code}", appInstallH.AdminDelete)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/backup-destination", backupsH.GetDestination)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/backup-destination", backupsH.PutDestination)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/backup-destination", backupsH.DeleteDestination)
