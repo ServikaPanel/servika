@@ -72,13 +72,17 @@ const (
 	// slow log on keeps their file and their logrotate rule, and the panel never
 	// reads or truncates it. The file records every tenant's SQL, so the heal that
 	// enables it also closes the directory to everyone but root and mysql.
-	DefaultMariaDBSlowLog     = "/var/log/mariadb/servika-slow.log"
-	DefaultMailLog            = "/var/log/maillog"
-	DefaultInstallationID     = "/etc/servika/installation-id"
-	DefaultVersionCache       = "/opt/servika/version-cache.json"
-	DefaultPMAToken           = "/etc/servika/pma-internal.token" // #nosec G101 -- filesystem path, not a credential
-	DefaultPMASignonDir       = "/opt/servika/pma-signon"
-	DefaultPHPMyAdminRoot     = "/opt/phpmyadmin"
+	DefaultMariaDBSlowLog = "/var/log/mariadb/servika-slow.log"
+	DefaultMailLog        = "/var/log/maillog"
+	DefaultInstallationID = "/etc/servika/installation-id"
+	DefaultVersionCache   = "/opt/servika/version-cache.json"
+	DefaultPMAToken       = "/etc/servika/pma-internal.token" // #nosec G101 -- filesystem path, not a credential
+	DefaultPMASignonDir   = "/opt/servika/pma-signon"
+	DefaultPHPMyAdminRoot = "/opt/phpmyadmin"
+	// The writable half of the phpMyAdmin installation: its session files and
+	// its temporary directory, which is why it lives outside the read-only
+	// installation root above.
+	DefaultPHPMyAdminVarLib   = "/var/lib/phpmyadmin"
 	DefaultRoundcubeConfig    = "/opt/roundcube/config/config.inc.php"
 	DefaultRoundcubePlugins   = "/opt/roundcube/plugins"
 	DefaultPHPMyAdminConfig   = "/opt/phpmyadmin/config.inc.php"
@@ -211,6 +215,12 @@ func InstallationIDPath() string {
 func VersionCachePath() string { return mustAbsPath("SERVIKA_VERSION_CACHE", DefaultVersionCache) }
 func PMATokenPath() string     { return mustAbsPath("SERVIKA_PMA_TOKEN", DefaultPMAToken) }
 func PMASignonDir() string     { return mustAbsPath("SERVIKA_PMA_SIGNON_DIR", DefaultPMASignonDir) }
+func PHPMyAdminRoot() string {
+	return mustAbsPath("SERVIKA_PHPMYADMIN_ROOT", DefaultPHPMyAdminRoot)
+}
+func PHPMyAdminVarLib() string {
+	return mustAbsPath("SERVIKA_PHPMYADMIN_VAR_LIB", DefaultPHPMyAdminVarLib)
+}
 func PHPMyAdminConfig() string {
 	return mustAbsPath("SERVIKA_PHPMYADMIN_CONFIG", DefaultPHPMyAdminConfig)
 }
@@ -307,6 +317,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_PMA_TOKEN", DefaultPMAToken, false},
 		{"SERVIKA_PMA_SIGNON_DIR", DefaultPMASignonDir, false},
 		{"SERVIKA_PHPMYADMIN_ROOT", DefaultPHPMyAdminRoot, false},
+		{"SERVIKA_PHPMYADMIN_VAR_LIB", DefaultPHPMyAdminVarLib, false},
 		{"SERVIKA_PHPMYADMIN_CONFIG", DefaultPHPMyAdminConfig, false},
 		{"SERVIKA_CERT_ROOT", DefaultCertRoot, false},
 		{"SERVIKA_NGINX_CACHE_DIR", DefaultNginxCacheDir, false},

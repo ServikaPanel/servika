@@ -392,8 +392,13 @@ fi
 if [ -f "$A/phpmyadmin/config.inc.php" ]; then
   BLOWFISH=$(openssl rand -hex 16)           # Generate a fresh production secret.
   PMACTRL=$(openssl rand -hex 16)            # Generate a fresh control-user password.
-  sed -e "s/BLOWFISH_SECRET_PLACEHOLDER/$BLOWFISH/g" -e "s/PMA_CONTROL_PASS_PLACEHOLDER/$PMACTRL/g" \
-    "$A/phpmyadmin/config.inc.php" > /opt/phpmyadmin/config.inc.php
+  # The umask is applied at creation so the file is never world-readable, not
+  # even for the moment between the redirection and a later chmod. It carries
+  # the blowfish secret, which encrypts the MySQL credentials phpMyAdmin puts in
+  # the visitor's cookie, and the control-user password for an account holding
+  # ALL PRIVILEGES on the phpmyadmin schema. Every c_* tenant has a shell here.
+  ( umask 027; sed -e "s/BLOWFISH_SECRET_PLACEHOLDER/$BLOWFISH/g" -e "s/PMA_CONTROL_PASS_PLACEHOLDER/$PMACTRL/g" \
+    "$A/phpmyadmin/config.inc.php" > /opt/phpmyadmin/config.inc.php )
   # Create the control user, phpMyAdmin database, and pmadb tables for advanced features.
   mysql -u root <<SQL 2>/dev/null
 CREATE DATABASE IF NOT EXISTS phpmyadmin;
@@ -413,7 +418,18 @@ chmod 0640 /etc/servika/pma-internal.token
 cp "$A/php-fpm/phpmyadmin.conf" /etc/php-fpm.d/phpmyadmin.conf
 [ -f "$A/php-fpm/roundcube.conf" ] && cp "$A/php-fpm/roundcube.conf" /etc/php-fpm.d/roundcube.conf
 mkdir -p /var/lib/phpmyadmin/{tmp,sessions} /var/lib/roundcube/{temp,sessions}
-chown -R nginx:nginx /opt/phpmyadmin /var/lib/phpmyadmin 2>/dev/null
+# The phpMyAdmin pool runs as apache (assets/php-fpm/phpmyadmin.conf), so the
+# tree belongs to apache and not to nginx. Owning it as nginx made phpMyAdmin
+# work only because the files were world-readable, which handed config.inc.php
+# to every account on the host. These modes match assets/ops/servika-repair and
+# the startup heal in internal/provisioner/pma_heal.go; all three must agree.
+chown -R root:apache /opt/phpmyadmin 2>/dev/null
+chown root:apache /opt/phpmyadmin/config.inc.php 2>/dev/null
+chmod 0640 /opt/phpmyadmin/config.inc.php || warn "could not restrict config.inc.php; it holds the phpMyAdmin secrets"
+chown -R apache:apache /var/lib/phpmyadmin 2>/dev/null
+chmod 0755 /var/lib/phpmyadmin /var/lib/phpmyadmin/tmp
+# A session file holds the credentials of whoever is signed in.
+chmod 0700 /var/lib/phpmyadmin/sessions || warn "could not restrict the phpMyAdmin session directory"
 chown -R apache:apache /var/lib/roundcube 2>/dev/null
 restorecon -R /opt/phpmyadmin /var/lib/phpmyadmin /var/lib/roundcube >/dev/null 2>&1
 setsebool -P httpd_can_network_connect_db 1 >/dev/null 2>&1

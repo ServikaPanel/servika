@@ -208,6 +208,7 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_PMA_TOKEN`             | `/etc/servika/pma-internal.token`                  | Internal phpMyAdmin signon token path.                  |
 | `SERVIKA_PMA_SIGNON_DIR`        | `/opt/servika/pma-signon`                          | phpMyAdmin signon bridge directory.                     |
 | `SERVIKA_PHPMYADMIN_ROOT`       | `/opt/phpmyadmin`                                  | phpMyAdmin installation root.                           |
+| `SERVIKA_PHPMYADMIN_VAR_LIB`    | `/var/lib/phpmyadmin`                              | phpMyAdmin session and temporary directory, owned by the PHP-FPM pool user. |
 | `SERVIKA_PHPMYADMIN_CONFIG`     | `/opt/phpmyadmin/config.inc.php`                   | phpMyAdmin config file path.                            |
 | `SERVIKA_CERT_ROOT`             | `/etc/pki/servika`                                 | Domain certificate storage root.                        |
 | `SERVIKA_NGINX_CACHE_DIR`       | `/var/cache/nginx/servikacache`                    | nginx FastCGI cache data directory.                     |

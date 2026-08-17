@@ -3,6 +3,7 @@ package provisioner
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"os"
 	"os/user"
@@ -121,6 +122,125 @@ func ensurePMAStartup() {
 	ensurePMAToken()
 	ensurePMAPoolSocket()
 	ensurePMAConfigHost()
+	// Last, because ensurePMAConfigHost rewrites config.inc.php. os.WriteFile
+	// leaves an existing file's mode alone, so the order is not load-bearing
+	// today, but a writer added later would be covered without anyone noticing
+	// it had to be.
+	ensurePMAOwnership()
+}
+
+// pmaPoolUser reads the account the phpMyAdmin PHP-FPM pool runs as.
+//
+// It is read rather than assumed because the value decides who may read the
+// panel's phpMyAdmin secrets. Guessing wrong in one direction leaves them
+// world-readable and in the other stops phpMyAdmin from reading its own
+// configuration, which is a full outage rather than a degraded feature.
+// `apache` is the pool shipped in assets/php-fpm/phpmyadmin.conf and the
+// fallback when the file cannot be read.
+func pmaPoolUser() string {
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	body, err := os.ReadFile(pmaPoolPath)
+	if err != nil {
+		return "apache"
+	}
+	return pmaPoolUserFrom(string(body))
+}
+
+// pmaPoolUserFrom takes the `user` directive out of a php-fpm pool body.
+func pmaPoolUserFrom(body string) string {
+	for line := range strings.SplitSeq(body, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(name) != "user" {
+			continue
+		}
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return "apache"
+}
+
+// ensurePMAOwnership gives the phpMyAdmin secrets to the account that has to
+// read them, and to nobody else.
+//
+// config.inc.php carries `blowfish_secret`, which encrypts the MySQL
+// credentials phpMyAdmin stores in the visitor's cookie, and `controlpass` for
+// the `pma` account that holds ALL PRIVILEGES on the phpmyadmin schema. The
+// installer left the tree owned by nginx while the pool runs as apache, so the
+// file only worked by being world-readable, and every c_* tenant on the host
+// could read both secrets over SSH, cron or PHP.
+//
+// The session directory is 0700 rather than 0755 for the same reason: a
+// phpMyAdmin session file holds the credentials of whoever is signed in.
+//
+// This runs on every startup because the repair belongs where an existing
+// installation reaches it. assets/ops/servika-repair already applied these
+// modes, so an operator who ran it was covered and one who never did was not.
+// pmaLookupAccount and pmaChown are seams: a test cannot create the `apache`
+// account and cannot chown to it, so it supplies both and asserts the modes,
+// which are the half that decides who can read the secrets.
+var (
+	pmaLookupAccount = lookupUserAndGroup
+	pmaChown         = os.Chown
+)
+
+func ensurePMAOwnership() {
+	poolUser := pmaPoolUser()
+	uid, gid, err := pmaLookupAccount(poolUser)
+	if err != nil {
+		log.Printf("phpMyAdmin repair: %v, ownership left alone", err)
+		return
+	}
+
+	varLib := config.PHPMyAdminVarLib()
+	// root keeps the configuration and the pool reads it through the group. The
+	// pool WRITES the other three, so it owns those outright.
+	for _, target := range []struct {
+		path string
+		uid  int
+		mode os.FileMode
+	}{
+		{pmaConfigPath(), 0, 0640},
+		{varLib, uid, 0755},
+		{filepath.Join(varLib, "tmp"), uid, 0755},
+		{filepath.Join(varLib, "sessions"), uid, 0700},
+	} {
+		if _, err := os.Stat(target.path); err != nil {
+			continue
+		}
+		// The order is load-bearing and so is the refusal to continue past a
+		// failed chown. Tightening the mode while the file still belongs to the
+		// wrong account does not protect the secret, it locks phpMyAdmin out of
+		// its own configuration, which is an outage rather than a weaker
+		// permission. Leaving the old mode is the lesser of the two.
+		if err := pmaChown(target.path, target.uid, gid); err != nil {
+			log.Printf("phpMyAdmin repair: could not set ownership of %s: %v; permissions left as they were", target.path, err)
+			continue
+		}
+		// #nosec G302 -- root-owned system file or directory its daemon must read; 0640 on config.inc.php is what keeps the blowfish secret and the control-user password off every other account.
+		if err := os.Chmod(target.path, target.mode); err != nil {
+			log.Printf("phpMyAdmin repair: could not set permissions of %s: %v", target.path, err)
+		}
+	}
+}
+
+// lookupUserAndGroup resolves an account name to its numeric ids.
+func lookupUserAndGroup(name string) (uid, gid int, err error) {
+	account, err := user.Lookup(name)
+	if err != nil {
+		return 0, 0, fmt.Errorf("the %q account is unavailable: %w", name, err)
+	}
+	if uid, err = strconv.Atoi(account.Uid); err != nil {
+		return 0, 0, fmt.Errorf("the %q account has a non-numeric uid: %w", name, err)
+	}
+	if gid, err = strconv.Atoi(account.Gid); err != nil {
+		return 0, 0, fmt.Errorf("the %q account has a non-numeric gid: %w", name, err)
+	}
+	return uid, gid, nil
 }
 
 func ensurePMASignon() {
