@@ -32,7 +32,7 @@ func TestTheCountryDropSitsBetweenLoopbackAndTheWhitelist(t *testing.T) {
 		[]string{"\t\ttcp dport 3306 drop"},
 		[]string{"\t\ttcp dport 21 drop"},
 		[]string{"\t\tip saddr 9.9.9.9 drop"},
-		remoteAccess{},
+		remoteAccess{}, hostAppAccess{},
 	))
 	lines := strings.Split(ruleset, "\n")
 
@@ -66,7 +66,7 @@ func TestTheCountryDropSitsBetweenLoopbackAndTheWhitelist(t *testing.T) {
 // The established-connection accept must stay first, or applying a country
 // block would cut the operator's own SSH session.
 func TestEstablishedConnectionsStillComeFirst(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}, hostAppAccess{}))
 	lines := strings.Split(ruleset, "\n")
 	established := lineIndex(lines, "ct state established,related accept")
 	geoV4 := lineIndex(lines, "@"+geoSetV4)
@@ -81,7 +81,7 @@ func TestEstablishedConnectionsStillComeFirst(t *testing.T) {
 // The table body references the sets unconditionally, so the include has to be
 // there whatever is blocked.
 func TestTheTableIncludesTheCountrySets(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{}, hostAppAccess{}))
 	if !strings.Contains(ruleset, `include "`+geoIncludeFile+`"`) {
 		t.Fatalf("the element file is not included:\n%s", ruleset)
 	}
@@ -195,6 +195,10 @@ func TestTheComposedDocumentParses(t *testing.T) {
 				"\t\tip saddr 198.51.100.0/24 tcp dport 3306 accept",
 				"\t\tip6 saddr 2001:db8::5 tcp dport 3306 accept",
 			},
+		},
+		hostAppAccess{
+			enabled: true,
+			accepts: []string{"\t\ttcp dport 31000 accept"},
 		},
 	)
 	// The include cannot be followed from a test (the path is root-owned), so

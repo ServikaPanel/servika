@@ -15,7 +15,7 @@ func at(ruleset, fragment string) int {
 // 3306 reachable by the whole internet unless this one line exists. It is
 // emitted whenever the switch is on, allowlist or not.
 func TestTheDatabasePortIsDroppedEvenWithAnEmptyAllowlist(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{enabled: true}))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{enabled: true}, hostAppAccess{}))
 	if !strings.Contains(ruleset, "tcp dport 3306 drop") {
 		t.Errorf("the open port has no drop:\n%s", ruleset)
 	}
@@ -27,7 +27,7 @@ func TestTheDatabasePortIsDroppedEvenWithAnEmptyAllowlist(t *testing.T) {
 func TestNothingIsEmittedWhileTheSwitchIsOff(t *testing.T) {
 	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{
 		accepts: []string{"\t\tip saddr 203.0.113.7 tcp dport 3306 accept"},
-	}))
+	}, hostAppAccess{}))
 	if strings.Contains(ruleset, "3306") {
 		t.Errorf("a rule was emitted while the feature was off:\n%s", ruleset)
 	}
@@ -44,6 +44,7 @@ func TestACountryOrBanStillWinsOverTheDatabaseAllowlist(t *testing.T) {
 			enabled: true,
 			accepts: []string{"\t\tip saddr 203.0.113.7 tcp dport 3306 accept"},
 		},
+		hostAppAccess{},
 	))
 
 	geo := at(ruleset, "ip saddr @"+geoSetV4+" drop")
@@ -69,7 +70,7 @@ func TestTheAllowlistComesBeforeTheDropItDependsOn(t *testing.T) {
 			"\t\tip saddr 203.0.113.7 tcp dport 3306 accept",
 			"\t\tip6 saddr 2001:db8::5 tcp dport 3306 accept",
 		},
-	}))
+	}, hostAppAccess{}))
 	drop := at(ruleset, "tcp dport 3306 drop")
 	for _, accept := range []string{"ip saddr 203.0.113.7", "ip6 saddr 2001:db8::5"} {
 		line := at(ruleset, accept)
@@ -85,7 +86,7 @@ func TestTheAllowlistComesBeforeTheDropItDependsOn(t *testing.T) {
 // The loopback accept stays above everything, so the panel and every site keep
 // reaching MariaDB over 127.0.0.1 whatever the allowlist says.
 func TestLoopbackStillReachesTheDatabase(t *testing.T) {
-	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{enabled: true}))
+	ruleset := string(buildRuleset(nil, nil, nil, nil, remoteAccess{enabled: true}, hostAppAccess{}))
 	loopback := at(ruleset, `iif "lo" accept`)
 	drop := at(ruleset, "tcp dport 3306 drop")
 	if loopback < 0 || drop < 0 || loopback > drop {

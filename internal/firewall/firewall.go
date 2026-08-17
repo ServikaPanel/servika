@@ -40,6 +40,13 @@ const (
 	// application package; internal/apps.PortMin/PortMax must match.
 	appPortMin = 30000
 	appPortMax = 30999
+	// The range internal/hostapps allocates SERVER application ports from,
+	// repeated here on the same terms; internal/hostapps.PortMin/PortMax must
+	// match. It is a separate range from the tenant one above because the two get
+	// opposite treatment: every tenant port is dropped with no way to open it,
+	// while a server application's port is dropped until the operator opens it.
+	hostAppPortMin = 31000
+	hostAppPortMax = 31999
 )
 
 // Protected ports cannot be closed without disrupting the server, panel, or hosted sites.
@@ -380,7 +387,12 @@ func (h *Handlers) rebuild() error {
 		return err
 	}
 
-	ruleset := buildRuleset(allowlisted, restricted, closed, banned, remote)
+	hostApps, err := h.hostAppAccess()
+	if err != nil {
+		return err
+	}
+
+	ruleset := buildRuleset(allowlisted, restricted, closed, banned, remote, hostApps)
 
 	// 1. Validate so an invalid ruleset is never applied.
 	if out, err := nftCheck(ruleset); err != nil {
@@ -464,7 +476,63 @@ type remoteAccess struct {
 	accepts []string
 }
 
-func buildRuleset(allowlisted, restricted, closed, banned []string, remote remoteAccess) []byte {
+// hostAppAccess is the server-level application port policy, derived state owned
+// by internal/hostapps for the same reason remoteAccess is owned by
+// internal/dbremote: an operator deleting the rule from the firewall screen
+// would silently make an application unreachable, and the next rebuild would put
+// it back.
+type hostAppAccess struct {
+	// enabled mirrors "at least one application is installed". The range drop
+	// comes with the LISTENERS: on a server with none, emitting it would cut off
+	// an operator running their own service on a port in this range.
+	enabled bool
+	// accepts are the rendered `tcp dport <port> accept` lines, one per port the
+	// operator explicitly opened.
+	accepts []string
+}
+
+// hostAppAccess reads the server application port policy.
+//
+// A read error aborts the whole rebuild rather than producing a ruleset with the
+// range dropped and no accepts, which would take every installed application off
+// the network without saying so.
+func (h *Handlers) hostAppAccess() (hostAppAccess, error) {
+	var installed int
+	if err := h.DB.QueryRow(`SELECT COUNT(*) FROM host_apps`).Scan(&installed); err != nil {
+		return hostAppAccess{}, fmt.Errorf("server applications: %w", err)
+	}
+	if installed == 0 {
+		return hostAppAccess{}, nil
+	}
+
+	rows, err := h.DB.Query(
+		`SELECT port FROM host_app_ports WHERE firewall_open=1 ORDER BY port`)
+	if err != nil {
+		return hostAppAccess{}, fmt.Errorf("server application ports: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	access := hostAppAccess{enabled: true}
+	for rows.Next() {
+		var port int
+		if err := rows.Scan(&port); err != nil {
+			return hostAppAccess{}, err
+		}
+		// A stored port outside the range is dropped rather than rendered: the
+		// accept would sit above a drop that does not cover it, so it would open a
+		// port belonging to something else entirely.
+		if port < hostAppPortMin || port > hostAppPortMax {
+			log.Printf("firewall: ignoring out-of-range server application port %d", port)
+			continue
+		}
+		access.accepts = append(access.accepts, "\t\ttcp dport "+strconv.Itoa(port)+" accept")
+	}
+	if err := rows.Err(); err != nil {
+		return hostAppAccess{}, err
+	}
+	return access, nil
+}
+
+func buildRuleset(allowlisted, restricted, closed, banned []string, remote remoteAccess, hostApps hostAppAccess) []byte {
 	var b bytes.Buffer
 	// Replace atomically and idempotently by ensuring, deleting, and rebuilding the table.
 	fmt.Fprintf(&b, "table inet %s {}\n", tableName)
@@ -517,6 +585,22 @@ func buildRuleset(allowlisted, restricted, closed, banned []string, remote remot
 			fmt.Fprintf(&b, "%s\n", r)
 		}
 		b.WriteString("\t\ttcp dport 3306 drop\n")
+	}
+	// Server-level applications, on the same terms and for the same reasons.
+	// These are BELOW the country drops and the bans, so opening an application's
+	// port cannot let back in an address the operator already refused.
+	//
+	// The shape is a RANGE drop with per-port accepts above it, not one drop per
+	// closed port: a port nobody has assigned yet is then closed for the same
+	// reason an assigned one the operator has not opened is, and the two cannot
+	// drift apart. It differs from the tenant range immediately above, which has
+	// no accepts at all, because a tenant application is reached only through
+	// nginx while a host application is meant to be reached directly.
+	if hostApps.enabled {
+		for _, r := range hostApps.accepts {
+			fmt.Fprintf(&b, "%s\n", r)
+		}
+		fmt.Fprintf(&b, "\t\ttcp dport %d-%d drop\n", hostAppPortMin, hostAppPortMax)
 	}
 	b.WriteString("\t}\n}\n")
 	return b.Bytes()
