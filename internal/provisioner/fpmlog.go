@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -119,26 +118,10 @@ func EnsureTenantFPMLogDir() error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create the tenant PHP-FPM log directory: %w", err)
 	}
-	if !selinuxActive() {
-		return nil
-	}
-	spec := dir + "(/.*)?"
-	if _, err := exec.LookPath("semanage"); err == nil {
-		output, _ := tenantCommand("semanage", "fcontext", "-l").CombinedOutput()
-		if !strings.Contains(string(output), spec) {
-			_, _ = tenantCommand("semanage", "fcontext", "-a", "-t", fpmLogSELinuxType, spec).CombinedOutput()
-		}
-		_, _ = tenantCommand("restorecon", "-R", dir).CombinedOutput()
-	} else {
-		// Without semanage the rule cannot be persisted, so this holds only until
-		// the next full relabel. It still beats leaving the directory unusable.
-		_, _ = tenantCommand("chcon", "-R", "-t", fpmLogSELinuxType, dir).CombinedOutput()
-	}
-	// Read back what the directory actually carries. Every command above is best
-	// effort, and a wrong type here is the difference between a rotation bug and
-	// a tenant whose PHP stops serving.
-	if got := selinuxType(dir); got != fpmLogSELinuxType {
-		return fmt.Errorf("the tenant PHP-FPM log directory is labelled %q, not %q", got, fpmLogSELinuxType)
+	// A wrong type here is the difference between a rotation bug and a tenant
+	// whose PHP stops serving, so the label is read back rather than assumed.
+	if err := ensureSELinuxType(dir, fpmLogSELinuxType); err != nil {
+		return fmt.Errorf("the tenant PHP-FPM log directory: %w", err)
 	}
 	return nil
 }

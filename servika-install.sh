@@ -431,6 +431,16 @@ chmod 0755 /var/lib/phpmyadmin /var/lib/phpmyadmin/tmp
 # A session file holds the credentials of whoever is signed in.
 chmod 0700 /var/lib/phpmyadmin/sessions || warn "could not restrict the phpMyAdmin session directory"
 chown -R apache:apache /var/lib/roundcube 2>/dev/null
+# restorecon only applies rules that already exist, and the policy does not know
+# these paths, so without a persistent fcontext rule they keep the default their
+# parent gives them and the next full relabel puts it back. On an Enforcing host
+# that is phpMyAdmin answering 403. The panel repeats this on every startup
+# (internal/provisioner/pma_heal.go) and servika-repair applies the same types.
+if command -v semanage >/dev/null 2>&1; then
+  semanage fcontext -a -t httpd_sys_content_t '/opt/phpmyadmin(/.*)?' >/dev/null 2>&1
+  semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/phpmyadmin(/.*)?' >/dev/null 2>&1
+  semanage fcontext -a -t httpd_sys_rw_content_t '/var/lib/roundcube(/.*)?' >/dev/null 2>&1
+fi
 restorecon -R /opt/phpmyadmin /var/lib/phpmyadmin /var/lib/roundcube >/dev/null 2>&1
 setsebool -P httpd_can_network_connect_db 1 >/dev/null 2>&1
 ok "phpMyAdmin and Roundcube pools + phpMyAdmin configuration + permissions"

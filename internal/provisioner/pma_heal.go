@@ -127,6 +127,41 @@ func ensurePMAStartup() {
 	// today, but a writer added later would be covered without anyone noticing
 	// it had to be.
 	ensurePMAOwnership()
+	ensurePMASELinux()
+}
+
+// phpMyAdmin's two trees carry different types because one is served and the
+// other is written: the installation is content the web server reads, and the
+// session and temporary directory is content it also writes. These are the
+// types assets/ops/servika-repair already applies.
+const (
+	pmaRootSELinuxType   = "httpd_sys_content_t"
+	pmaVarLibSELinuxType = "httpd_sys_rw_content_t"
+)
+
+// ensurePMASELinux labels the phpMyAdmin trees with a persistent rule.
+//
+// The installer ran a bare `restorecon`, which only applies rules that already
+// exist. Neither path is known to the distribution's policy, so they inherit
+// the default for their parent and the next full relabel puts that default back
+// however the permissions read. On an Enforcing host that is phpMyAdmin
+// answering 403, which is why the label is read back and a wrong one is
+// reported rather than assumed to have worked.
+func ensurePMASELinux() {
+	for _, target := range []struct {
+		path     string
+		typeName string
+	}{
+		{config.PHPMyAdminRoot(), pmaRootSELinuxType},
+		{config.PHPMyAdminVarLib(), pmaVarLibSELinuxType},
+	} {
+		if _, err := os.Stat(target.path); err != nil {
+			continue // phpMyAdmin is not installed on this host
+		}
+		if err := ensureSELinuxType(target.path, target.typeName); err != nil {
+			log.Printf("phpMyAdmin repair: %v; phpMyAdmin may be refused on an Enforcing host", err)
+		}
+	}
 }
 
 // pmaPoolUser reads the account the phpMyAdmin PHP-FPM pool runs as.
