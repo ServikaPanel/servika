@@ -12,259 +12,73 @@
   "copied": "Kopyalandı",
   "themeToggle": "Tema: {{theme}}, değiştirmek için tıkla",
   "pages": {
-    "home": {
-      "title": "Anasayfa",
-      "subtitle": "Panel genel bakış"
-    },
-    "domains": {
-      "title": "Domainler",
-      "subtitle": "Domainler ve abonelikler"
-    },
-    "servicePlans": {
-      "title": "Hizmet Planları",
-      "subtitle": "Paket ve kota planları"
-    },
-    "customers": {
-      "title": "Müşteriler",
-      "subtitle": "Müşteri ve iletişim kayıtları"
-    },
-    "users": {
-      "title": "Kullanıcılar",
-      "subtitle": "Panel hesapları"
-    },
-    "dns": {
-      "title": "DNS Yönetimi",
-      "subtitle": "Sunucu geneli DNS kayıtları"
-    },
-    "ssl": {
-      "title": "SSL Sertifikaları",
-      "subtitle": "TLS ve sertifika yönetimi"
-    },
-    "mail": {
-      "title": "E-posta Hesapları",
-      "subtitle": "Posta kutuları ve e-posta"
-    },
-    "databases": {
-      "title": "Veritabanları",
-      "subtitle": "MySQL veritabanları"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "WordPress siteleri"
-    },
-    "serverStatus": {
-      "title": "Sunucu Durumu",
-      "subtitle": "Kaynak ve servis özeti"
-    },
-    "profile": {
-      "title": "Profil ve Tercihler",
-      "subtitle": "Hesap ve güvenlik ayarları"
-    },
-    "accountTransfer": {
-      "title": "Hesap Aktarımı",
-      "subtitle": "Hesap ve site göçü"
-    },
-    "siteMigration": {
-      "title": "Site Taşıma",
-      "subtitle": "cPanel, Plesk veya DirectAdmin taşıma"
-    },
-    "toolsSettings": {
-      "title": "Araçlar ve Ayarlar",
-      "subtitle": "Panel araçları"
-    },
-    "optimize": {
-      "title": "Sunucu Optimize",
-      "subtitle": "Sunucu ayarlama"
-    },
-    "serverIPs": {
-      "title": "Sunucu Adresleri",
-      "subtitle": "Ek IPv4 adresleri"
-    },
-    "statistics": {
-      "title": "İstatistikler",
-      "subtitle": "Kullanım istatistikleri"
-    },
-    "firewall": {
-      "title": "Güvenlik Duvarı",
-      "subtitle": "Güvenlik duvarı kuralları"
-    },
-    "monitoring": {
-      "title": "İzleme",
-      "subtitle": "Canlı sunucu metrikleri ve günlükler"
-    },
-    "auditLog": {
-      "title": "Güvenlik Günlüğü",
-      "subtitle": "Güvenlik olayları"
-    },
-    "services": {
-      "title": "Servisler",
-      "subtitle": "Sistem servisleri"
-    },
-    "phpVersions": {
-      "title": "PHP Sürümleri",
-      "subtitle": "PHP sürüm yönetimi"
-    },
-    "phpModules": {
-      "title": "PHP Modülleri",
-      "subtitle": "PHP uzantı yönetimi"
-    },
-    "packages": {
-      "title": "Paket Yöneticisi",
-      "subtitle": "Sistem paketleri"
-    },
-    "dnsTemplate": {
-      "title": "DNS Şablonu",
-      "subtitle": "Varsayılan DNS kayıtları"
-    },
-    "bannedDomains": {
-      "title": "Yasaklı Alan Adları",
-      "subtitle": "Hiçbir müşterinin ekleyemeyeceği hostname'ler"
-    },
-    "siteSecurity": {
-      "title": "Site Güvenliği",
-      "subtitle": "Site bağımlılıklarındaki bilinen açıklar"
-    },
-    "appCatalog": {
-      "title": "Uygulama kataloğu",
-      "subtitle": "Tek tıkla kurucunun sunduğu sürümler, indirme adresleri ve sağlama toplamları."
-    },
-    "panelUpdate": {
-      "title": "Panel Güncelleme",
-      "subtitle": "Panel sürümü ve güncellemeler"
-    }
+    "home": { "title": "Anasayfa", "subtitle": "Panel genel bakış" },
+    "domains": { "title": "Domainler", "subtitle": "Domainler ve abonelikler" },
+    "servicePlans": { "title": "Hizmet Planları", "subtitle": "Paket ve kota planları" },
+    "customers": { "title": "Müşteriler", "subtitle": "Müşteri ve iletişim kayıtları" },
+    "users": { "title": "Kullanıcılar", "subtitle": "Panel hesapları" },
+    "dns": { "title": "DNS Yönetimi", "subtitle": "Sunucu geneli DNS kayıtları" },
+    "ssl": { "title": "SSL Sertifikaları", "subtitle": "TLS ve sertifika yönetimi" },
+    "mail": { "title": "E-posta Hesapları", "subtitle": "Posta kutuları ve e-posta" },
+    "databases": { "title": "Veritabanları", "subtitle": "MySQL veritabanları" },
+    "wordpress": { "title": "WordPress", "subtitle": "WordPress siteleri" },
+    "serverStatus": { "title": "Sunucu Durumu", "subtitle": "Kaynak ve servis özeti" },
+    "profile": { "title": "Profil ve Tercihler", "subtitle": "Hesap ve güvenlik ayarları" },
+    "accountTransfer": { "title": "Hesap Aktarımı", "subtitle": "Hesap ve site göçü" },
+    "siteMigration": { "title": "Site Taşıma", "subtitle": "cPanel, Plesk veya DirectAdmin taşıma" },
+    "toolsSettings": { "title": "Araçlar ve Ayarlar", "subtitle": "Panel araçları" },
+    "optimize": { "title": "Sunucu Optimize", "subtitle": "Sunucu ayarlama" },
+    "serverIPs": { "title": "Sunucu Adresleri", "subtitle": "Ek IPv4 adresleri" },
+    "statistics": { "title": "İstatistikler", "subtitle": "Kullanım istatistikleri" },
+    "firewall": { "title": "Güvenlik Duvarı", "subtitle": "Güvenlik duvarı kuralları" },
+    "monitoring": { "title": "İzleme", "subtitle": "Canlı sunucu metrikleri ve günlükler" },
+    "auditLog": { "title": "Güvenlik Günlüğü", "subtitle": "Güvenlik olayları" },
+    "services": { "title": "Servisler", "subtitle": "Sistem servisleri" },
+    "phpVersions": { "title": "PHP Sürümleri", "subtitle": "PHP sürüm yönetimi" },
+    "phpModules": { "title": "PHP Modülleri", "subtitle": "PHP uzantı yönetimi" },
+    "packages": { "title": "Paket Yöneticisi", "subtitle": "Sistem paketleri" },
+    "dnsTemplate": { "title": "DNS Şablonu", "subtitle": "Varsayılan DNS kayıtları" },
+    "bannedDomains": { "title": "Yasaklı Alan Adları", "subtitle": "Hiçbir müşterinin ekleyemeyeceği hostname'ler" },
+    "siteSecurity": { "title": "Site Güvenliği", "subtitle": "Site bağımlılıklarındaki bilinen açıklar" },
+    "appCatalog": { "title": "Uygulama kataloğu", "subtitle": "Tek tıkla kurucunun sunduğu sürümler, indirme adresleri ve sağlama toplamları." },
+    "panelUpdate": { "title": "Panel Güncelleme", "subtitle": "Panel sürümü ve güncellemeler" }
   },
   "domain": {
-    "overview": {
-      "title": "Genel Bakış",
-      "subtitle": "Domain genel bakış"
-    },
-    "files": {
-      "title": "Dosya Yöneticisi",
-      "subtitle": "Dosyalar ve dizinler"
-    },
-    "webServer": {
-      "title": "Apache & nginx",
-      "subtitle": "Web sunucu ayarları"
-    },
-    "php": {
-      "title": "PHP Ayarları",
-      "subtitle": "PHP ve FPM yapılandırması"
-    },
-    "composer": {
-      "title": "Composer",
-      "subtitle": "PHP paket yönetimi"
-    },
-    "performance": {
-      "title": "Performans",
-      "subtitle": "Site performans ayarları"
-    },
-    "redis": {
-      "title": "Redis Önbellek",
-      "subtitle": "Önbellek yönetimi"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "WordPress araçları"
-    },
-    "dns": {
-      "title": "DNS Ayarları",
-      "subtitle": "Domain DNS kayıtları"
-    },
-    "subdomains": {
-      "title": "Alt Domainler",
-      "subtitle": "Alt domainler"
-    },
-    "addonDomains": {
-      "title": "Ek Domainler",
-      "subtitle": "Takma ad domainleri"
-    },
-    "ssl": {
-      "title": "SSL/TLS",
-      "subtitle": "HTTPS sertifikası"
-    },
-    "databases": {
-      "title": "Veritabanları",
-      "subtitle": "MySQL veritabanları"
-    },
-    "ftp": {
-      "title": "FTP Hesapları",
-      "subtitle": "FTP erişimi"
-    },
-    "mail": {
-      "title": "E-posta",
-      "subtitle": "Posta kutuları"
-    },
-    "mailReports": {
-      "title": "Teslim Edilebilirlik",
-      "subtitle": "DMARC ve MTA-STS"
-    },
-    "backups": {
-      "title": "Yedekler",
-      "subtitle": "Domain yedekleri"
-    },
-    "copy": {
-      "title": "Siteyi Kopyala",
-      "subtitle": "Site klonlama"
-    },
-    "git": {
-      "title": "Git Deploy",
-      "subtitle": "Git dağıtımı"
-    },
-    "laravel": {
-      "title": "Laravel Araçları",
-      "subtitle": "Laravel araçları"
-    },
-    "cron": {
-      "title": "Zamanlanmış Görevler",
-      "subtitle": "Cron işleri"
-    },
-    "apps": {
-      "title": "Uygulamalar",
-      "subtitle": "Node.js ve Python süreçleri"
-    },
-    "ssh": {
-      "title": "SSH Erişimi",
-      "subtitle": "Terminal erişimi"
-    },
-    "logs": {
-      "title": "Günlükler",
-      "subtitle": "Erişim ve hata günlükleri"
-    },
-    "waf": {
-      "title": "WAF",
-      "subtitle": "Web uygulaması güvenlik duvarı"
-    },
-    "accessControl": {
-      "title": "Erişim Kontrolü",
-      "subtitle": "IP erişim kuralları"
-    },
+    "overview": { "title": "Genel Bakış", "subtitle": "Domain genel bakış" },
+    "files": { "title": "Dosya Yöneticisi", "subtitle": "Dosyalar ve dizinler" },
+    "webServer": { "title": "Apache & nginx", "subtitle": "Web sunucu ayarları" },
+    "php": { "title": "PHP Ayarları", "subtitle": "PHP ve FPM yapılandırması" },
+    "composer": { "title": "Composer", "subtitle": "PHP paket yönetimi" },
+    "performance": { "title": "Performans", "subtitle": "Site performans ayarları" },
+    "redis": { "title": "Redis Önbellek", "subtitle": "Önbellek yönetimi" },
+    "wordpress": { "title": "WordPress", "subtitle": "WordPress araçları" },
+    "dns": { "title": "DNS Ayarları", "subtitle": "Domain DNS kayıtları" },
+    "subdomains": { "title": "Alt Domainler", "subtitle": "Alt domainler" },
+    "addonDomains": { "title": "Ek Domainler", "subtitle": "Takma ad domainleri" },
+    "ssl": { "title": "SSL/TLS", "subtitle": "HTTPS sertifikası" },
+    "databases": { "title": "Veritabanları", "subtitle": "MySQL veritabanları" },
+    "ftp": { "title": "FTP Hesapları", "subtitle": "FTP erişimi" },
+    "mail": { "title": "E-posta", "subtitle": "Posta kutuları" },
+    "mailReports": { "title": "Teslim Edilebilirlik", "subtitle": "DMARC ve MTA-STS" },
+    "backups": { "title": "Yedekler", "subtitle": "Domain yedekleri" },
+    "copy": { "title": "Siteyi Kopyala", "subtitle": "Site klonlama" },
+    "git": { "title": "Git Deploy", "subtitle": "Git dağıtımı" },
+    "laravel": { "title": "Laravel Araçları", "subtitle": "Laravel araçları" },
+    "cron": { "title": "Zamanlanmış Görevler", "subtitle": "Cron işleri" },
+    "apps": { "title": "Uygulamalar", "subtitle": "Node.js ve Python süreçleri" },
+    "ssh": { "title": "SSH Erişimi", "subtitle": "Terminal erişimi" },
+    "logs": { "title": "Günlükler", "subtitle": "Erişim ve hata günlükleri" },
+    "waf": { "title": "WAF", "subtitle": "Web uygulaması güvenlik duvarı" },
+    "accessControl": { "title": "Erişim Kontrolü", "subtitle": "IP erişim kuralları" },
     "maintenance": {
       "title": "Bakım Modu",
       "subtitle": "Siteyi geçici olarak kapatın"
     },
-    "passwordProtection": {
-      "title": "Parola Koruması",
-      "subtitle": "Dizin parolası"
-    },
-    "imunify": {
-      "title": "Imunify",
-      "subtitle": "Zararlı yazılım tarama"
-    },
-    "siteSecurity": {
-      "title": "Site Güvenliği",
-      "subtitle": "Site bağımlılıklarındaki bilinen açıklar"
-    },
-    "appInstaller": {
-      "title": "Uygulamalar",
-      "subtitle": "Tek tıkla uygulama kurucu"
-    },
-    "stats": {
-      "title": "İstatistikler",
-      "subtitle": "Domain kullanım verileri"
-    },
-    "connection": {
-      "title": "Bağlantı Bilgisi",
-      "subtitle": "FTP ve veritabanı detayları"
-    }
+    "passwordProtection": { "title": "Parola Koruması", "subtitle": "Dizin parolası" },
+    "imunify": { "title": "Imunify", "subtitle": "Zararlı yazılım tarama" },
+    "siteSecurity": { "title": "Site Güvenliği", "subtitle": "Site bağımlılıklarındaki bilinen açıklar" },
+    "appInstaller": { "title": "Uygulamalar", "subtitle": "Tek tıkla uygulama kurucu" },
+    "stats": { "title": "İstatistikler", "subtitle": "Domain kullanım verileri" },
+    "connection": { "title": "Bağlantı Bilgisi", "subtitle": "FTP ve veritabanı detayları" }
   }
 }

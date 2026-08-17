@@ -12,259 +12,73 @@
   "copied": "Copiado",
   "themeToggle": "Tema: {{theme}}, clique para alterar",
   "pages": {
-    "home": {
-      "title": "Início",
-      "subtitle": "Visão geral do painel"
-    },
-    "domains": {
-      "title": "Domínios",
-      "subtitle": "Domínios e subscrições"
-    },
-    "servicePlans": {
-      "title": "Planos de Serviço",
-      "subtitle": "Planos de pacotes e quotas"
-    },
-    "customers": {
-      "title": "Clientes",
-      "subtitle": "Registos de clientes e contactos"
-    },
-    "users": {
-      "title": "Utilizadores",
-      "subtitle": "Contas do painel"
-    },
-    "dns": {
-      "title": "Gestão DNS",
-      "subtitle": "Registos DNS de todo o servidor"
-    },
-    "ssl": {
-      "title": "Certificados SSL",
-      "subtitle": "Gestão de TLS e certificados"
-    },
-    "mail": {
-      "title": "Contas de E-mail",
-      "subtitle": "Caixas de correio e e-mail"
-    },
-    "databases": {
-      "title": "Bases de Dados",
-      "subtitle": "Bases de dados MySQL"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "Sites WordPress"
-    },
-    "serverStatus": {
-      "title": "Estado do Servidor",
-      "subtitle": "Resumo de recursos e serviços"
-    },
-    "profile": {
-      "title": "Perfil e Preferências",
-      "subtitle": "Definições de conta e segurança"
-    },
-    "accountTransfer": {
-      "title": "Transferência de Conta",
-      "subtitle": "Migração de contas e sites"
-    },
-    "siteMigration": {
-      "title": "Migração de sites",
-      "subtitle": "Migração a partir de cPanel, Plesk ou DirectAdmin"
-    },
-    "toolsSettings": {
-      "title": "Ferramentas e Definições",
-      "subtitle": "Ferramentas do painel"
-    },
-    "optimize": {
-      "title": "Otimização do Servidor",
-      "subtitle": "Ajuste do servidor"
-    },
-    "serverIPs": {
-      "title": "Endereços do servidor",
-      "subtitle": "Endereços IPv4 adicionais"
-    },
-    "statistics": {
-      "title": "Estatísticas",
-      "subtitle": "Estatísticas de uso"
-    },
-    "firewall": {
-      "title": "Firewall",
-      "subtitle": "Regras de firewall"
-    },
-    "monitoring": {
-      "title": "Monitorização",
-      "subtitle": "Métricas e registos em tempo real"
-    },
-    "auditLog": {
-      "title": "Registo de Segurança",
-      "subtitle": "Eventos de segurança"
-    },
-    "services": {
-      "title": "Serviços",
-      "subtitle": "Serviços do sistema"
-    },
-    "phpVersions": {
-      "title": "Versões PHP",
-      "subtitle": "Gestão de versões PHP"
-    },
-    "phpModules": {
-      "title": "Módulos PHP",
-      "subtitle": "Gestão de extensões PHP"
-    },
-    "packages": {
-      "title": "Gestor de Pacotes",
-      "subtitle": "Pacotes do sistema"
-    },
-    "dnsTemplate": {
-      "title": "Modelo DNS",
-      "subtitle": "Registos DNS predefinidos"
-    },
-    "bannedDomains": {
-      "title": "Domínios proibidos",
-      "subtitle": "Hostnames que nenhum cliente pode adicionar"
-    },
-    "siteSecurity": {
-      "title": "Segurança do site",
-      "subtitle": "Vulnerabilidades conhecidas nas dependências"
-    },
-    "appCatalog": {
-      "title": "Catálogo de aplicações",
-      "subtitle": "Versões, endereços de transferência e somas de verificação que o instalador oferece."
-    },
-    "panelUpdate": {
-      "title": "Atualização do Painel",
-      "subtitle": "Versão e atualizações do painel"
-    }
+    "home": { "title": "Início", "subtitle": "Visão geral do painel" },
+    "domains": { "title": "Domínios", "subtitle": "Domínios e subscrições" },
+    "servicePlans": { "title": "Planos de Serviço", "subtitle": "Planos de pacotes e quotas" },
+    "customers": { "title": "Clientes", "subtitle": "Registos de clientes e contactos" },
+    "users": { "title": "Utilizadores", "subtitle": "Contas do painel" },
+    "dns": { "title": "Gestão DNS", "subtitle": "Registos DNS de todo o servidor" },
+    "ssl": { "title": "Certificados SSL", "subtitle": "Gestão de TLS e certificados" },
+    "mail": { "title": "Contas de E-mail", "subtitle": "Caixas de correio e e-mail" },
+    "databases": { "title": "Bases de Dados", "subtitle": "Bases de dados MySQL" },
+    "wordpress": { "title": "WordPress", "subtitle": "Sites WordPress" },
+    "serverStatus": { "title": "Estado do Servidor", "subtitle": "Resumo de recursos e serviços" },
+    "profile": { "title": "Perfil e Preferências", "subtitle": "Definições de conta e segurança" },
+    "accountTransfer": { "title": "Transferência de Conta", "subtitle": "Migração de contas e sites" },
+    "siteMigration": { "title": "Migração de sites", "subtitle": "Migração a partir de cPanel, Plesk ou DirectAdmin" },
+    "toolsSettings": { "title": "Ferramentas e Definições", "subtitle": "Ferramentas do painel" },
+    "optimize": { "title": "Otimização do Servidor", "subtitle": "Ajuste do servidor" },
+    "serverIPs": { "title": "Endereços do servidor", "subtitle": "Endereços IPv4 adicionais" },
+    "statistics": { "title": "Estatísticas", "subtitle": "Estatísticas de uso" },
+    "firewall": { "title": "Firewall", "subtitle": "Regras de firewall" },
+    "monitoring": { "title": "Monitorização", "subtitle": "Métricas e registos em tempo real" },
+    "auditLog": { "title": "Registo de Segurança", "subtitle": "Eventos de segurança" },
+    "services": { "title": "Serviços", "subtitle": "Serviços do sistema" },
+    "phpVersions": { "title": "Versões PHP", "subtitle": "Gestão de versões PHP" },
+    "phpModules": { "title": "Módulos PHP", "subtitle": "Gestão de extensões PHP" },
+    "packages": { "title": "Gestor de Pacotes", "subtitle": "Pacotes do sistema" },
+    "dnsTemplate": { "title": "Modelo DNS", "subtitle": "Registos DNS predefinidos" },
+    "bannedDomains": { "title": "Domínios proibidos", "subtitle": "Hostnames que nenhum cliente pode adicionar" },
+    "siteSecurity": { "title": "Segurança do site", "subtitle": "Vulnerabilidades conhecidas nas dependências" },
+    "appCatalog": { "title": "Catálogo de aplicações", "subtitle": "Versões, endereços de transferência e somas de verificação que o instalador oferece." },
+    "panelUpdate": { "title": "Atualização do Painel", "subtitle": "Versão e atualizações do painel" }
   },
   "domain": {
-    "overview": {
-      "title": "Visão Geral",
-      "subtitle": "Visão geral do domínio"
-    },
-    "files": {
-      "title": "Gestor de Ficheiros",
-      "subtitle": "Ficheiros e diretórios"
-    },
-    "webServer": {
-      "title": "Apache e nginx",
-      "subtitle": "Definições do servidor web"
-    },
-    "php": {
-      "title": "Definições PHP",
-      "subtitle": "Configuração PHP e FPM"
-    },
-    "composer": {
-      "title": "Composer",
-      "subtitle": "Gestão de pacotes PHP"
-    },
-    "performance": {
-      "title": "Desempenho",
-      "subtitle": "Definições de desempenho do site"
-    },
-    "redis": {
-      "title": "Cache Redis",
-      "subtitle": "Gestão de cache"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "Ferramentas WordPress"
-    },
-    "dns": {
-      "title": "Definições DNS",
-      "subtitle": "Registos DNS do domínio"
-    },
-    "subdomains": {
-      "title": "Subdomínios",
-      "subtitle": "Subdomínios"
-    },
-    "addonDomains": {
-      "title": "Domínios Adicionais",
-      "subtitle": "Domínios alias"
-    },
-    "ssl": {
-      "title": "SSL/TLS",
-      "subtitle": "Certificado HTTPS"
-    },
-    "databases": {
-      "title": "Bases de Dados",
-      "subtitle": "Bases de dados MySQL"
-    },
-    "ftp": {
-      "title": "Contas FTP",
-      "subtitle": "Acesso FTP"
-    },
-    "mail": {
-      "title": "E-mail",
-      "subtitle": "Caixas de correio"
-    },
-    "mailReports": {
-      "title": "Entregabilidade",
-      "subtitle": "DMARC e MTA-STS"
-    },
-    "backups": {
-      "title": "Cópias de Segurança",
-      "subtitle": "Cópias do domínio"
-    },
-    "copy": {
-      "title": "Copiar Site",
-      "subtitle": "Clonagem do site"
-    },
-    "git": {
-      "title": "Deploy Git",
-      "subtitle": "Deploy Git"
-    },
-    "laravel": {
-      "title": "Toolkit Laravel",
-      "subtitle": "Ferramentas Laravel"
-    },
-    "cron": {
-      "title": "Tarefas Agendadas",
-      "subtitle": "Tarefas cron"
-    },
-    "apps": {
-      "title": "Aplicações",
-      "subtitle": "Processos Node.js e Python"
-    },
-    "ssh": {
-      "title": "Acesso SSH",
-      "subtitle": "Acesso ao terminal"
-    },
-    "logs": {
-      "title": "Registos",
-      "subtitle": "Registos de acesso e erros"
-    },
-    "waf": {
-      "title": "WAF",
-      "subtitle": "Firewall de aplicações web"
-    },
-    "accessControl": {
-      "title": "Controlo de Acesso",
-      "subtitle": "Regras de acesso por IP"
-    },
+    "overview": { "title": "Visão Geral", "subtitle": "Visão geral do domínio" },
+    "files": { "title": "Gestor de Ficheiros", "subtitle": "Ficheiros e diretórios" },
+    "webServer": { "title": "Apache e nginx", "subtitle": "Definições do servidor web" },
+    "php": { "title": "Definições PHP", "subtitle": "Configuração PHP e FPM" },
+    "composer": { "title": "Composer", "subtitle": "Gestão de pacotes PHP" },
+    "performance": { "title": "Desempenho", "subtitle": "Definições de desempenho do site" },
+    "redis": { "title": "Cache Redis", "subtitle": "Gestão de cache" },
+    "wordpress": { "title": "WordPress", "subtitle": "Ferramentas WordPress" },
+    "dns": { "title": "Definições DNS", "subtitle": "Registos DNS do domínio" },
+    "subdomains": { "title": "Subdomínios", "subtitle": "Subdomínios" },
+    "addonDomains": { "title": "Domínios Adicionais", "subtitle": "Domínios alias" },
+    "ssl": { "title": "SSL/TLS", "subtitle": "Certificado HTTPS" },
+    "databases": { "title": "Bases de Dados", "subtitle": "Bases de dados MySQL" },
+    "ftp": { "title": "Contas FTP", "subtitle": "Acesso FTP" },
+    "mail": { "title": "E-mail", "subtitle": "Caixas de correio" },
+    "mailReports": { "title": "Entregabilidade", "subtitle": "DMARC e MTA-STS" },
+    "backups": { "title": "Cópias de Segurança", "subtitle": "Cópias do domínio" },
+    "copy": { "title": "Copiar Site", "subtitle": "Clonagem do site" },
+    "git": { "title": "Deploy Git", "subtitle": "Deploy Git" },
+    "laravel": { "title": "Toolkit Laravel", "subtitle": "Ferramentas Laravel" },
+    "cron": { "title": "Tarefas Agendadas", "subtitle": "Tarefas cron" },
+    "apps": { "title": "Aplicações", "subtitle": "Processos Node.js e Python" },
+    "ssh": { "title": "Acesso SSH", "subtitle": "Acesso ao terminal" },
+    "logs": { "title": "Registos", "subtitle": "Registos de acesso e erros" },
+    "waf": { "title": "WAF", "subtitle": "Firewall de aplicações web" },
+    "accessControl": { "title": "Controlo de Acesso", "subtitle": "Regras de acesso por IP" },
     "maintenance": {
       "title": "Modo de manutenção",
       "subtitle": "Fechar o site temporariamente"
     },
-    "passwordProtection": {
-      "title": "Proteção por Palavra-passe",
-      "subtitle": "Palavra-passe de diretório"
-    },
-    "imunify": {
-      "title": "Imunify",
-      "subtitle": "Análise de malware"
-    },
-    "siteSecurity": {
-      "title": "Segurança do site",
-      "subtitle": "Vulnerabilidades conhecidas nas dependências"
-    },
-    "appInstaller": {
-      "title": "Aplicações",
-      "subtitle": "Instalador de aplicações com um clique"
-    },
-    "stats": {
-      "title": "Estatísticas",
-      "subtitle": "Dados de uso do domínio"
-    },
-    "connection": {
-      "title": "Informações de Ligação",
-      "subtitle": "Detalhes FTP e base de dados"
-    }
+    "passwordProtection": { "title": "Proteção por Palavra-passe", "subtitle": "Palavra-passe de diretório" },
+    "imunify": { "title": "Imunify", "subtitle": "Análise de malware" },
+    "siteSecurity": { "title": "Segurança do site", "subtitle": "Vulnerabilidades conhecidas nas dependências" },
+    "appInstaller": { "title": "Aplicações", "subtitle": "Instalador de aplicações com um clique" },
+    "stats": { "title": "Estatísticas", "subtitle": "Dados de uso do domínio" },
+    "connection": { "title": "Informações de Ligação", "subtitle": "Detalhes FTP e base de dados" }
   }
 }

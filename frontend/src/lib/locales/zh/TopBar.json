@@ -12,259 +12,73 @@
   "copied": "已复制",
   "themeToggle": "主题：{{theme}}，点击更改",
   "pages": {
-    "home": {
-      "title": "首页",
-      "subtitle": "面板概览"
-    },
-    "domains": {
-      "title": "域名",
-      "subtitle": "域名和订阅"
-    },
-    "servicePlans": {
-      "title": "服务套餐",
-      "subtitle": "套餐和配额方案"
-    },
-    "customers": {
-      "title": "客户",
-      "subtitle": "客户和联系人记录"
-    },
-    "users": {
-      "title": "用户",
-      "subtitle": "面板账户"
-    },
-    "dns": {
-      "title": "DNS 管理",
-      "subtitle": "全服务器 DNS 记录"
-    },
-    "ssl": {
-      "title": "SSL 证书",
-      "subtitle": "TLS 和证书管理"
-    },
-    "mail": {
-      "title": "电子邮件账户",
-      "subtitle": "邮箱和邮件"
-    },
-    "databases": {
-      "title": "数据库",
-      "subtitle": "MySQL 数据库"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "WordPress 站点"
-    },
-    "serverStatus": {
-      "title": "服务器状态",
-      "subtitle": "资源和服务摘要"
-    },
-    "profile": {
-      "title": "资料与偏好",
-      "subtitle": "账户和安全设置"
-    },
-    "accountTransfer": {
-      "title": "账户迁移",
-      "subtitle": "账户和站点迁移"
-    },
-    "siteMigration": {
-      "title": "站点迁移",
-      "subtitle": "从 cPanel、Plesk 或 DirectAdmin 迁移"
-    },
-    "toolsSettings": {
-      "title": "工具与设置",
-      "subtitle": "面板工具"
-    },
-    "optimize": {
-      "title": "服务器优化",
-      "subtitle": "服务器调优"
-    },
-    "serverIPs": {
-      "title": "服务器地址",
-      "subtitle": "额外的 IPv4 地址"
-    },
-    "statistics": {
-      "title": "统计",
-      "subtitle": "使用统计"
-    },
-    "firewall": {
-      "title": "防火墙",
-      "subtitle": "防火墙规则"
-    },
-    "monitoring": {
-      "title": "监控",
-      "subtitle": "实时服务器指标和日志"
-    },
-    "auditLog": {
-      "title": "安全日志",
-      "subtitle": "安全事件"
-    },
-    "services": {
-      "title": "服务",
-      "subtitle": "系统服务"
-    },
-    "phpVersions": {
-      "title": "PHP 版本",
-      "subtitle": "PHP 版本管理"
-    },
-    "phpModules": {
-      "title": "PHP 模块",
-      "subtitle": "PHP 扩展管理"
-    },
-    "packages": {
-      "title": "软件包管理器",
-      "subtitle": "系统软件包"
-    },
-    "dnsTemplate": {
-      "title": "DNS 模板",
-      "subtitle": "默认 DNS 记录"
-    },
-    "bannedDomains": {
-      "title": "禁止域名",
-      "subtitle": "客户不可添加的主机名"
-    },
-    "siteSecurity": {
-      "title": "站点安全",
-      "subtitle": "依赖项中的已知漏洞"
-    },
-    "appCatalog": {
-      "title": "应用目录",
-      "subtitle": "一键安装提供的版本、下载地址与校验和。"
-    },
-    "panelUpdate": {
-      "title": "面板更新",
-      "subtitle": "面板版本和更新"
-    }
+    "home": { "title": "首页", "subtitle": "面板概览" },
+    "domains": { "title": "域名", "subtitle": "域名和订阅" },
+    "servicePlans": { "title": "服务套餐", "subtitle": "套餐和配额方案" },
+    "customers": { "title": "客户", "subtitle": "客户和联系人记录" },
+    "users": { "title": "用户", "subtitle": "面板账户" },
+    "dns": { "title": "DNS 管理", "subtitle": "全服务器 DNS 记录" },
+    "ssl": { "title": "SSL 证书", "subtitle": "TLS 和证书管理" },
+    "mail": { "title": "电子邮件账户", "subtitle": "邮箱和邮件" },
+    "databases": { "title": "数据库", "subtitle": "MySQL 数据库" },
+    "wordpress": { "title": "WordPress", "subtitle": "WordPress 站点" },
+    "serverStatus": { "title": "服务器状态", "subtitle": "资源和服务摘要" },
+    "profile": { "title": "资料与偏好", "subtitle": "账户和安全设置" },
+    "accountTransfer": { "title": "账户迁移", "subtitle": "账户和站点迁移" },
+    "siteMigration": { "title": "站点迁移", "subtitle": "从 cPanel、Plesk 或 DirectAdmin 迁移" },
+    "toolsSettings": { "title": "工具与设置", "subtitle": "面板工具" },
+    "optimize": { "title": "服务器优化", "subtitle": "服务器调优" },
+    "serverIPs": { "title": "服务器地址", "subtitle": "额外的 IPv4 地址" },
+    "statistics": { "title": "统计", "subtitle": "使用统计" },
+    "firewall": { "title": "防火墙", "subtitle": "防火墙规则" },
+    "monitoring": { "title": "监控", "subtitle": "实时服务器指标和日志" },
+    "auditLog": { "title": "安全日志", "subtitle": "安全事件" },
+    "services": { "title": "服务", "subtitle": "系统服务" },
+    "phpVersions": { "title": "PHP 版本", "subtitle": "PHP 版本管理" },
+    "phpModules": { "title": "PHP 模块", "subtitle": "PHP 扩展管理" },
+    "packages": { "title": "软件包管理器", "subtitle": "系统软件包" },
+    "dnsTemplate": { "title": "DNS 模板", "subtitle": "默认 DNS 记录" },
+    "bannedDomains": { "title": "禁止域名", "subtitle": "客户不可添加的主机名" },
+    "siteSecurity": { "title": "站点安全", "subtitle": "依赖项中的已知漏洞" },
+    "appCatalog": { "title": "应用目录", "subtitle": "一键安装提供的版本、下载地址与校验和。" },
+    "panelUpdate": { "title": "面板更新", "subtitle": "面板版本和更新" }
   },
   "domain": {
-    "overview": {
-      "title": "概览",
-      "subtitle": "域名概览"
-    },
-    "files": {
-      "title": "文件管理器",
-      "subtitle": "文件和目录"
-    },
-    "webServer": {
-      "title": "Apache 与 nginx",
-      "subtitle": "Web 服务器设置"
-    },
-    "php": {
-      "title": "PHP 设置",
-      "subtitle": "PHP 和 FPM 配置"
-    },
-    "composer": {
-      "title": "Composer",
-      "subtitle": "PHP 包管理"
-    },
-    "performance": {
-      "title": "性能",
-      "subtitle": "站点性能设置"
-    },
-    "redis": {
-      "title": "Redis 缓存",
-      "subtitle": "缓存管理"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "WordPress 工具"
-    },
-    "dns": {
-      "title": "DNS 设置",
-      "subtitle": "域名 DNS 记录"
-    },
-    "subdomains": {
-      "title": "子域名",
-      "subtitle": "子域名"
-    },
-    "addonDomains": {
-      "title": "附加域名",
-      "subtitle": "别名域名"
-    },
-    "ssl": {
-      "title": "SSL/TLS",
-      "subtitle": "HTTPS 证书"
-    },
-    "databases": {
-      "title": "数据库",
-      "subtitle": "MySQL 数据库"
-    },
-    "ftp": {
-      "title": "FTP 账户",
-      "subtitle": "FTP 访问"
-    },
-    "mail": {
-      "title": "电子邮件",
-      "subtitle": "邮箱"
-    },
-    "mailReports": {
-      "title": "送达率",
-      "subtitle": "DMARC 和 MTA-STS"
-    },
-    "backups": {
-      "title": "备份",
-      "subtitle": "域名备份"
-    },
-    "copy": {
-      "title": "复制站点",
-      "subtitle": "站点克隆"
-    },
-    "git": {
-      "title": "Git 部署",
-      "subtitle": "Git 部署"
-    },
-    "laravel": {
-      "title": "Laravel 工具包",
-      "subtitle": "Laravel 工具"
-    },
-    "cron": {
-      "title": "计划任务",
-      "subtitle": "cron 任务"
-    },
-    "apps": {
-      "title": "应用",
-      "subtitle": "Node.js 和 Python 进程"
-    },
-    "ssh": {
-      "title": "SSH 访问",
-      "subtitle": "终端访问"
-    },
-    "logs": {
-      "title": "日志",
-      "subtitle": "访问和错误日志"
-    },
-    "waf": {
-      "title": "WAF",
-      "subtitle": "Web 应用防火墙"
-    },
-    "accessControl": {
-      "title": "访问控制",
-      "subtitle": "IP 访问规则"
-    },
+    "overview": { "title": "概览", "subtitle": "域名概览" },
+    "files": { "title": "文件管理器", "subtitle": "文件和目录" },
+    "webServer": { "title": "Apache 与 nginx", "subtitle": "Web 服务器设置" },
+    "php": { "title": "PHP 设置", "subtitle": "PHP 和 FPM 配置" },
+    "composer": { "title": "Composer", "subtitle": "PHP 包管理" },
+    "performance": { "title": "性能", "subtitle": "站点性能设置" },
+    "redis": { "title": "Redis 缓存", "subtitle": "缓存管理" },
+    "wordpress": { "title": "WordPress", "subtitle": "WordPress 工具" },
+    "dns": { "title": "DNS 设置", "subtitle": "域名 DNS 记录" },
+    "subdomains": { "title": "子域名", "subtitle": "子域名" },
+    "addonDomains": { "title": "附加域名", "subtitle": "别名域名" },
+    "ssl": { "title": "SSL/TLS", "subtitle": "HTTPS 证书" },
+    "databases": { "title": "数据库", "subtitle": "MySQL 数据库" },
+    "ftp": { "title": "FTP 账户", "subtitle": "FTP 访问" },
+    "mail": { "title": "电子邮件", "subtitle": "邮箱" },
+    "mailReports": { "title": "送达率", "subtitle": "DMARC 和 MTA-STS" },
+    "backups": { "title": "备份", "subtitle": "域名备份" },
+    "copy": { "title": "复制站点", "subtitle": "站点克隆" },
+    "git": { "title": "Git 部署", "subtitle": "Git 部署" },
+    "laravel": { "title": "Laravel 工具包", "subtitle": "Laravel 工具" },
+    "cron": { "title": "计划任务", "subtitle": "cron 任务" },
+    "apps": { "title": "应用", "subtitle": "Node.js 和 Python 进程" },
+    "ssh": { "title": "SSH 访问", "subtitle": "终端访问" },
+    "logs": { "title": "日志", "subtitle": "访问和错误日志" },
+    "waf": { "title": "WAF", "subtitle": "Web 应用防火墙" },
+    "accessControl": { "title": "访问控制", "subtitle": "IP 访问规则" },
     "maintenance": {
       "title": "维护模式",
       "subtitle": "临时关闭站点"
     },
-    "passwordProtection": {
-      "title": "密码保护",
-      "subtitle": "目录密码"
-    },
-    "imunify": {
-      "title": "Imunify",
-      "subtitle": "恶意软件扫描"
-    },
-    "siteSecurity": {
-      "title": "站点安全",
-      "subtitle": "依赖项中的已知漏洞"
-    },
-    "appInstaller": {
-      "title": "应用程序",
-      "subtitle": "一键安装应用"
-    },
-    "stats": {
-      "title": "统计",
-      "subtitle": "域名使用数据"
-    },
-    "connection": {
-      "title": "连接信息",
-      "subtitle": "FTP 和数据库详情"
-    }
+    "passwordProtection": { "title": "密码保护", "subtitle": "目录密码" },
+    "imunify": { "title": "Imunify", "subtitle": "恶意软件扫描" },
+    "siteSecurity": { "title": "站点安全", "subtitle": "依赖项中的已知漏洞" },
+    "appInstaller": { "title": "应用程序", "subtitle": "一键安装应用" },
+    "stats": { "title": "统计", "subtitle": "域名使用数据" },
+    "connection": { "title": "连接信息", "subtitle": "FTP 和数据库详情" }
   }
 }

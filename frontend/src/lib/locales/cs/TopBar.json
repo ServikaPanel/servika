@@ -12,259 +12,73 @@
   "copied": "Zkopírováno",
   "themeToggle": "Motiv: {{theme}}, klikněte pro změnu",
   "pages": {
-    "home": {
-      "title": "Domů",
-      "subtitle": "Přehled panelu"
-    },
-    "domains": {
-      "title": "Domény",
-      "subtitle": "Domény a předplatná"
-    },
-    "servicePlans": {
-      "title": "Tarify služeb",
-      "subtitle": "Balíčky a kvótové tarify"
-    },
-    "customers": {
-      "title": "Zákazníci",
-      "subtitle": "Záznamy zákazníků a kontaktů"
-    },
-    "users": {
-      "title": "Uživatelé",
-      "subtitle": "Účty panelu"
-    },
-    "dns": {
-      "title": "Správa DNS",
-      "subtitle": "Záznamy DNS pro celý server"
-    },
-    "ssl": {
-      "title": "Certifikáty SSL",
-      "subtitle": "Správa TLS a certifikátů"
-    },
-    "mail": {
-      "title": "E-mailové účty",
-      "subtitle": "Schránky a pošta"
-    },
-    "databases": {
-      "title": "Databáze",
-      "subtitle": "Databáze MySQL"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "Weby WordPress"
-    },
-    "serverStatus": {
-      "title": "Stav serveru",
-      "subtitle": "Souhrn zdrojů a služeb"
-    },
-    "profile": {
-      "title": "Profil a předvolby",
-      "subtitle": "Nastavení účtu a zabezpečení"
-    },
-    "accountTransfer": {
-      "title": "Přenos účtu",
-      "subtitle": "Migrace účtu a webu"
-    },
-    "siteMigration": {
-      "title": "Migrace webů",
-      "subtitle": "Migrace z cPanelu, Plesku nebo DirectAdminu"
-    },
-    "toolsSettings": {
-      "title": "Nástroje a nastavení",
-      "subtitle": "Nástroje panelu"
-    },
-    "optimize": {
-      "title": "Optimalizace serveru",
-      "subtitle": "Ladění serveru"
-    },
-    "serverIPs": {
-      "title": "Adresy serveru",
-      "subtitle": "Další adresy IPv4"
-    },
-    "statistics": {
-      "title": "Statistiky",
-      "subtitle": "Statistiky využití"
-    },
-    "firewall": {
-      "title": "Firewall",
-      "subtitle": "Pravidla firewallu"
-    },
-    "monitoring": {
-      "title": "Monitorování",
-      "subtitle": "Živé metriky a protokoly serveru"
-    },
-    "auditLog": {
-      "title": "Bezpečnostní protokol",
-      "subtitle": "Bezpečnostní události"
-    },
-    "services": {
-      "title": "Služby",
-      "subtitle": "Systémové služby"
-    },
-    "phpVersions": {
-      "title": "Verze PHP",
-      "subtitle": "Správa verzí PHP"
-    },
-    "phpModules": {
-      "title": "Moduly PHP",
-      "subtitle": "Správa rozšíření PHP"
-    },
-    "packages": {
-      "title": "Správce balíčků",
-      "subtitle": "Systémové balíčky"
-    },
-    "dnsTemplate": {
-      "title": "Šablona DNS",
-      "subtitle": "Výchozí záznamy DNS"
-    },
-    "bannedDomains": {
-      "title": "Zakázané domény",
-      "subtitle": "Hostname, které žádný zákazník nesmí přidat"
-    },
-    "siteSecurity": {
-      "title": "Zabezpečení webu",
-      "subtitle": "Známé zranitelnosti v závislostech"
-    },
-    "appCatalog": {
-      "title": "Katalog aplikací",
-      "subtitle": "Verze, adresy ke stažení a kontrolní součty, které instalátor nabízí."
-    },
-    "panelUpdate": {
-      "title": "Aktualizace panelu",
-      "subtitle": "Verze a aktualizace panelu"
-    }
+    "home": { "title": "Domů", "subtitle": "Přehled panelu" },
+    "domains": { "title": "Domény", "subtitle": "Domény a předplatná" },
+    "servicePlans": { "title": "Tarify služeb", "subtitle": "Balíčky a kvótové tarify" },
+    "customers": { "title": "Zákazníci", "subtitle": "Záznamy zákazníků a kontaktů" },
+    "users": { "title": "Uživatelé", "subtitle": "Účty panelu" },
+    "dns": { "title": "Správa DNS", "subtitle": "Záznamy DNS pro celý server" },
+    "ssl": { "title": "Certifikáty SSL", "subtitle": "Správa TLS a certifikátů" },
+    "mail": { "title": "E-mailové účty", "subtitle": "Schránky a pošta" },
+    "databases": { "title": "Databáze", "subtitle": "Databáze MySQL" },
+    "wordpress": { "title": "WordPress", "subtitle": "Weby WordPress" },
+    "serverStatus": { "title": "Stav serveru", "subtitle": "Souhrn zdrojů a služeb" },
+    "profile": { "title": "Profil a předvolby", "subtitle": "Nastavení účtu a zabezpečení" },
+    "accountTransfer": { "title": "Přenos účtu", "subtitle": "Migrace účtu a webu" },
+    "siteMigration": { "title": "Migrace webů", "subtitle": "Migrace z cPanelu, Plesku nebo DirectAdminu" },
+    "toolsSettings": { "title": "Nástroje a nastavení", "subtitle": "Nástroje panelu" },
+    "optimize": { "title": "Optimalizace serveru", "subtitle": "Ladění serveru" },
+    "serverIPs": { "title": "Adresy serveru", "subtitle": "Další adresy IPv4" },
+    "statistics": { "title": "Statistiky", "subtitle": "Statistiky využití" },
+    "firewall": { "title": "Firewall", "subtitle": "Pravidla firewallu" },
+    "monitoring": { "title": "Monitorování", "subtitle": "Živé metriky a protokoly serveru" },
+    "auditLog": { "title": "Bezpečnostní protokol", "subtitle": "Bezpečnostní události" },
+    "services": { "title": "Služby", "subtitle": "Systémové služby" },
+    "phpVersions": { "title": "Verze PHP", "subtitle": "Správa verzí PHP" },
+    "phpModules": { "title": "Moduly PHP", "subtitle": "Správa rozšíření PHP" },
+    "packages": { "title": "Správce balíčků", "subtitle": "Systémové balíčky" },
+    "dnsTemplate": { "title": "Šablona DNS", "subtitle": "Výchozí záznamy DNS" },
+    "bannedDomains": { "title": "Zakázané domény", "subtitle": "Hostname, které žádný zákazník nesmí přidat" },
+    "siteSecurity": { "title": "Zabezpečení webu", "subtitle": "Známé zranitelnosti v závislostech" },
+    "appCatalog": { "title": "Katalog aplikací", "subtitle": "Verze, adresy ke stažení a kontrolní součty, které instalátor nabízí." },
+    "panelUpdate": { "title": "Aktualizace panelu", "subtitle": "Verze a aktualizace panelu" }
   },
   "domain": {
-    "overview": {
-      "title": "Přehled",
-      "subtitle": "Přehled domény"
-    },
-    "files": {
-      "title": "Správce souborů",
-      "subtitle": "Soubory a adresáře"
-    },
-    "webServer": {
-      "title": "Apache a nginx",
-      "subtitle": "Nastavení webového serveru"
-    },
-    "php": {
-      "title": "Nastavení PHP",
-      "subtitle": "Konfigurace PHP a FPM"
-    },
-    "composer": {
-      "title": "Composer",
-      "subtitle": "Správa balíčků PHP"
-    },
-    "performance": {
-      "title": "Výkon",
-      "subtitle": "Nastavení výkonu webu"
-    },
-    "redis": {
-      "title": "Cache Redis",
-      "subtitle": "Správa cache"
-    },
-    "wordpress": {
-      "title": "WordPress",
-      "subtitle": "Nástroje WordPress"
-    },
-    "dns": {
-      "title": "Nastavení DNS",
-      "subtitle": "Záznamy DNS domény"
-    },
-    "subdomains": {
-      "title": "Subdomény",
-      "subtitle": "Subdomény"
-    },
-    "addonDomains": {
-      "title": "Doplňkové domény",
-      "subtitle": "Aliasové domény"
-    },
-    "ssl": {
-      "title": "SSL/TLS",
-      "subtitle": "Certifikát HTTPS"
-    },
-    "databases": {
-      "title": "Databáze",
-      "subtitle": "Databáze MySQL"
-    },
-    "ftp": {
-      "title": "Účty FTP",
-      "subtitle": "Přístup FTP"
-    },
-    "mail": {
-      "title": "E-mail",
-      "subtitle": "Schránky"
-    },
-    "mailReports": {
-      "title": "Doručitelnost",
-      "subtitle": "DMARC a MTA-STS"
-    },
-    "backups": {
-      "title": "Zálohy",
-      "subtitle": "Zálohy domény"
-    },
-    "copy": {
-      "title": "Kopírovat web",
-      "subtitle": "Klonování webu"
-    },
-    "git": {
-      "title": "Nasazení Git",
-      "subtitle": "Nasazení Git"
-    },
-    "laravel": {
-      "title": "Sada nástrojů Laravel",
-      "subtitle": "Nástroje Laravel"
-    },
-    "cron": {
-      "title": "Naplánované úlohy",
-      "subtitle": "Úlohy cron"
-    },
-    "apps": {
-      "title": "Aplikace",
-      "subtitle": "Procesy Node.js a Python"
-    },
-    "ssh": {
-      "title": "Přístup SSH",
-      "subtitle": "Přístup k terminálu"
-    },
-    "logs": {
-      "title": "Protokoly",
-      "subtitle": "Přístupové a chybové protokoly"
-    },
-    "waf": {
-      "title": "WAF",
-      "subtitle": "Firewall webových aplikací"
-    },
-    "accessControl": {
-      "title": "Řízení přístupu",
-      "subtitle": "Pravidla přístupu IP"
-    },
+    "overview": { "title": "Přehled", "subtitle": "Přehled domény" },
+    "files": { "title": "Správce souborů", "subtitle": "Soubory a adresáře" },
+    "webServer": { "title": "Apache a nginx", "subtitle": "Nastavení webového serveru" },
+    "php": { "title": "Nastavení PHP", "subtitle": "Konfigurace PHP a FPM" },
+    "composer": { "title": "Composer", "subtitle": "Správa balíčků PHP" },
+    "performance": { "title": "Výkon", "subtitle": "Nastavení výkonu webu" },
+    "redis": { "title": "Cache Redis", "subtitle": "Správa cache" },
+    "wordpress": { "title": "WordPress", "subtitle": "Nástroje WordPress" },
+    "dns": { "title": "Nastavení DNS", "subtitle": "Záznamy DNS domény" },
+    "subdomains": { "title": "Subdomény", "subtitle": "Subdomény" },
+    "addonDomains": { "title": "Doplňkové domény", "subtitle": "Aliasové domény" },
+    "ssl": { "title": "SSL/TLS", "subtitle": "Certifikát HTTPS" },
+    "databases": { "title": "Databáze", "subtitle": "Databáze MySQL" },
+    "ftp": { "title": "Účty FTP", "subtitle": "Přístup FTP" },
+    "mail": { "title": "E-mail", "subtitle": "Schránky" },
+    "mailReports": { "title": "Doručitelnost", "subtitle": "DMARC a MTA-STS" },
+    "backups": { "title": "Zálohy", "subtitle": "Zálohy domény" },
+    "copy": { "title": "Kopírovat web", "subtitle": "Klonování webu" },
+    "git": { "title": "Nasazení Git", "subtitle": "Nasazení Git" },
+    "laravel": { "title": "Sada nástrojů Laravel", "subtitle": "Nástroje Laravel" },
+    "cron": { "title": "Naplánované úlohy", "subtitle": "Úlohy cron" },
+    "apps": { "title": "Aplikace", "subtitle": "Procesy Node.js a Python" },
+    "ssh": { "title": "Přístup SSH", "subtitle": "Přístup k terminálu" },
+    "logs": { "title": "Protokoly", "subtitle": "Přístupové a chybové protokoly" },
+    "waf": { "title": "WAF", "subtitle": "Firewall webových aplikací" },
+    "accessControl": { "title": "Řízení přístupu", "subtitle": "Pravidla přístupu IP" },
     "maintenance": {
       "title": "Režim údržby",
       "subtitle": "Dočasně zavřít web"
     },
-    "passwordProtection": {
-      "title": "Ochrana heslem",
-      "subtitle": "Heslo adresáře"
-    },
-    "imunify": {
-      "title": "Imunify",
-      "subtitle": "Kontrola malwaru"
-    },
-    "siteSecurity": {
-      "title": "Zabezpečení webu",
-      "subtitle": "Známé zranitelnosti v závislostech"
-    },
-    "appInstaller": {
-      "title": "Aplikace",
-      "subtitle": "Instalace aplikací jedním kliknutím"
-    },
-    "stats": {
-      "title": "Statistiky",
-      "subtitle": "Data o využití domény"
-    },
-    "connection": {
-      "title": "Informace o připojení",
-      "subtitle": "Údaje FTP a databáze"
-    }
+    "passwordProtection": { "title": "Ochrana heslem", "subtitle": "Heslo adresáře" },
+    "imunify": { "title": "Imunify", "subtitle": "Kontrola malwaru" },
+    "siteSecurity": { "title": "Zabezpečení webu", "subtitle": "Známé zranitelnosti v závislostech" },
+    "appInstaller": { "title": "Aplikace", "subtitle": "Instalace aplikací jedním kliknutím" },
+    "stats": { "title": "Statistiky", "subtitle": "Data o využití domény" },
+    "connection": { "title": "Informace o připojení", "subtitle": "Údaje FTP a databáze" }
   }
 }
