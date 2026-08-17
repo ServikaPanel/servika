@@ -12,6 +12,23 @@ const (
 	panelLoginRateLimitSentinel = "# SERVIKA-LOGIN-RATELIMIT v1"
 )
 
+// panelStrictCSP is the policy the panel's own SPA is served under.
+//
+// It exists once because it was written three times and one copy had already
+// drifted: the block healPanelVhostHeadersOnStartup inserts on a fresh install
+// was missing object-src 'none', so until the next panel restart the retrofit
+// pass had not yet put it back. assets/nginx/_panel.conf cannot import this, so
+// TestTheTemplateAndTheHealServeTheSamePolicy holds the template to it instead.
+//
+// The relaxed variants in the template belong to phpMyAdmin and Roundcube,
+// which need 'unsafe-inline' and 'unsafe-eval'. They have no Go copy and so no
+// way to drift.
+const panelStrictCSP = "default-src 'self'; script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+	"img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; " +
+	"connect-src 'self'; frame-src https: http:; frame-ancestors 'self'; " +
+	"object-src 'none'; base-uri 'self'; form-action 'self'"
+
 var panelIndexLocationPattern = regexp.MustCompile(`(?m)    location / \{\s*\n\s*try_files \$uri \$uri/ /index\.html;\s*\n\s*\}`)
 
 const panelLoginRateLimitHTTPBlock = `# SERVIKA-LOGIN-RATELIMIT v1
@@ -100,7 +117,7 @@ func healPanelIndexNoCacheOnStartup() {
         add_header X-Frame-Options "SAMEORIGIN" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src https: http:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" always;
+        add_header Content-Security-Policy "` + panelStrictCSP + `" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     }`
 	updated := panelIndexLocationPattern.ReplaceAllStringFunc(content, func(string) string { return replacement })

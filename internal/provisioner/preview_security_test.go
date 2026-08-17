@@ -47,7 +47,12 @@ func TestPanelCSPForbidsPluginObjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the panel vhost: %v", err)
 	}
-	policies := strings.Count(string(body), "add_header Content-Security-Policy")
+	// The header name is matched with the space and quote that follow it.
+	// Counting the bare prefix also counts Content-Security-Policy-Report-Only,
+	// which is a different header with a different meaning: demanding the same
+	// directives of it, or rewriting it, turns a policy that only reports into
+	// one that enforces.
+	policies := strings.Count(string(body), `add_header Content-Security-Policy "`)
 	forbidden := strings.Count(string(body), "object-src 'none'")
 	if policies == 0 {
 		t.Fatal("the panel vhost declares no Content-Security-Policy")

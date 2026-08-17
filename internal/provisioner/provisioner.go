@@ -2920,7 +2920,7 @@ func healPanelVhostHeadersOnStartup() {
 		"    add_header X-Frame-Options \"SAMEORIGIN\" always;\n" +
 		"    add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;\n" +
 		"    add_header Permissions-Policy \"geolocation=(), microphone=(), camera=(), interest-cohort=()\" always;\n" +
-		"    add_header Content-Security-Policy \"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src https: http:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'\" always;\n" +
+		"    add_header Content-Security-Policy \"" + panelStrictCSP + "\" always;\n" +
 		"    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n"
 	insertAt := anchorIndex + len(anchor)
 	updated := content[:insertAt] + headers + content[insertAt:]
