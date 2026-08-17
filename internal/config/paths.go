@@ -73,6 +73,26 @@ const (
 	// /etc/nginx/conf.d and /etc/my.cnf.d are both read wholesale by their
 	// daemon, and a backup left there is loaded as configuration.
 	DefaultTuningBackupDir = "/var/lib/servika/tuning-backups"
+	// DefaultHostAppRoot holds one directory per server-level application, each
+	// owned by that application's own svk_ account. It is NOT under /home:
+	// everything there belongs to a tenant, and a directory in that tree would be
+	// swept by the disk-usage scan, the quota enforcement and the backup schedule,
+	// none of which this application has.
+	DefaultHostAppRoot = "/opt/servika-apps"
+	// DefaultHostAppLogDir holds one log per server-level application, root-owned
+	// for the same reason as DefaultAppLogDir: systemd's StandardOutput=append:
+	// follows a symlink, so a directory the service's own account could write
+	// would let it redirect a root-opened descriptor.
+	DefaultHostAppLogDir = "/var/log/servika-hostapps"
+	// DefaultHostAppEnvDir holds one EnvironmentFile per server-level
+	// application, each 0600 root-owned. `systemctl show` hands every
+	// Environment= value to any local account, and these carry admin tokens.
+	DefaultHostAppEnvDir = "/etc/servika/host-apps"
+	// DefaultHostAppBackupDir holds the archive taken of an application's data
+	// directory before it is removed. Removal is the one operation here that
+	// cannot be undone, and the data belongs to the operator rather than to the
+	// panel, so it is kept outside the tree that removal deletes.
+	DefaultHostAppBackupDir = "/var/lib/servika/host-app-backups"
 	// DefaultMariaDBSlowLog is the panel's OWN slow query log, deliberately not
 	// MariaDB's default mariadb-slow.log name: an operator who already turned the
 	// slow log on keeps their file and their logrotate rule, and the panel never
@@ -213,6 +233,26 @@ func TuningBackupDir() string {
 	return mustAbsPath("SERVIKA_TUNING_BACKUP_DIR", DefaultTuningBackupDir)
 }
 
+// HostAppRoot is where a server-level application's files live, one directory
+// per application, outside every tenant home.
+func HostAppRoot() string { return mustAbsPath("SERVIKA_HOST_APP_ROOT", DefaultHostAppRoot) }
+
+// HostAppLogDir is where a server-level application's output is appended.
+func HostAppLogDir() string {
+	return mustAbsPath("SERVIKA_HOST_APP_LOG_DIR", DefaultHostAppLogDir)
+}
+
+// HostAppEnvDir is where a server-level application's EnvironmentFile lives.
+func HostAppEnvDir() string {
+	return mustAbsPath("SERVIKA_HOST_APP_ENV_DIR", DefaultHostAppEnvDir)
+}
+
+// HostAppBackupDir is where the archive of a removed application's data
+// directory is kept.
+func HostAppBackupDir() string {
+	return mustAbsPath("SERVIKA_HOST_APP_BACKUP_DIR", DefaultHostAppBackupDir)
+}
+
 // MariaDBSlowLog is where the panel asks MariaDB to write slow queries, and the
 // only file internal/slowquery reads.
 func MariaDBSlowLog() string {
@@ -306,6 +346,10 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_BACKUP_ROOT", DefaultBackupRoot, false},
 		{"SERVIKA_QUARANTINE_DIR", DefaultQuarantineDir, false},
 		{"SERVIKA_TUNING_BACKUP_DIR", DefaultTuningBackupDir, false},
+		{"SERVIKA_HOST_APP_ROOT", DefaultHostAppRoot, false},
+		{"SERVIKA_HOST_APP_LOG_DIR", DefaultHostAppLogDir, false},
+		{"SERVIKA_HOST_APP_ENV_DIR", DefaultHostAppEnvDir, false},
+		{"SERVIKA_HOST_APP_BACKUP_DIR", DefaultHostAppBackupDir, false},
 		{"SERVIKA_LARAVEL_LOG_DIR", DefaultLaravelLogDir, false},
 		{"SERVIKA_PLUGIN_ROOT", DefaultPluginRoot, false},
 		{"SERVIKA_LOG_DIR", DefaultLogDir, false},

@@ -204,6 +204,10 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_GEOIP_DIR`             | `/var/lib/servika/geoip`                           | Country database and the nginx include generated from it. |
 | `SERVIKA_QUARANTINE_DIR`        | `/var/lib/servika/quarantine`                      | Files the malware scanner took out of a tenant tree, kept outside every home so the account they came from cannot reach them. |
 | `SERVIKA_TUNING_BACKUP_DIR`     | `/var/lib/servika/tuning-backups`                  | Copies of the configuration files the tuning screen edits, taken before each change and restored by a revert. Kept outside every directory a daemon reads as configuration. |
+| `SERVIKA_HOST_APP_ROOT`         | `/opt/servika-apps`                                | One directory per server-level application, outside `/home` so no tenant sweep, quota or backup schedule claims it. |
+| `SERVIKA_HOST_APP_LOG_DIR`      | `/var/log/servika-hostapps`                        | Root-owned directory holding one log per server-level application. |
+| `SERVIKA_HOST_APP_ENV_DIR`      | `/etc/servika/host-apps`                           | Directory of per-application 0600 `EnvironmentFile`s for server-level applications. |
+| `SERVIKA_HOST_APP_BACKUP_DIR`   | `/var/lib/servika/host-app-backups`                | Archives of an application's data directory, taken before removal and kept outside the tree removal deletes. |
 | `SERVIKA_INSTALLATION_ID`       | `/etc/servika/installation-id`                     | Random installation ID storage path for version checks. |
 | `SERVIKA_VERSION_CACHE`         | `/opt/servika/version-cache.json`                  | Cached version manifest path.                           |
 | `SERVIKA_PMA_TOKEN`             | `/etc/servika/pma-internal.token`                  | Internal phpMyAdmin signon token path.                  |

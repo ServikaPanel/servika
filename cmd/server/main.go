@@ -40,6 +40,7 @@ import (
 	"servika/internal/geoip"
 	"servika/internal/git"
 	githubpkg "servika/internal/github"
+	"servika/internal/hostapps"
 	"servika/internal/httpx"
 	"servika/internal/laravel"
 	"servika/internal/logs"
@@ -351,6 +352,20 @@ func main() {
 	optimizeH := &optimize.Handlers{DB: d}
 	serverIPH := &serverip.Handlers{DB: d}
 	panelPortH := &panelport.Handlers{DB: d}
+	hostAppH := &hostapps.Handlers{DB: d}
+	// An install runs in this process, so a job still marked running after a
+	// restart is one whose process is gone. Left alone it would show an install
+	// that never finishes and refuse a second attempt for good.
+	hostapps.HealRunningJobs(d)
+	// The firewall is what makes a server application reachable, so every change
+	// to its port policy has to re-render the ruleset. The hook is wired here
+	// because internal/firewall reads the port table directly and a call in the
+	// other direction would close an import cycle.
+	hostapps.SetReapply(func() {
+		if err := firewall.Reapply(d); err != nil {
+			log.Printf("host application firewall reapply warn: %v", err)
+		}
+	})
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -552,6 +567,16 @@ func main() {
 			r.With(middleware.AdminOnly).Get("/system/panel-port", panelPortH.Status)
 			r.With(middleware.AdminOnly).Post("/system/panel-port", panelPortH.Change)
 			r.With(middleware.AdminOnly).Get("/system/panel-port/history", panelPortH.History)
+			// Server-level applications. Every route is AdminOnly and there is no
+			// scoped variant: these belong to no customer, so there is no
+			// ownership chain to narrow them by.
+			r.With(middleware.AdminOnly).Get("/system/host-apps", hostAppH.List)
+			r.With(middleware.AdminOnly).Post("/system/host-apps", hostAppH.Install)
+			r.With(middleware.AdminOnly).Get("/system/host-apps/jobs", hostAppH.Jobs)
+			r.With(middleware.AdminOnly).Delete("/system/host-apps/{id}", hostAppH.Remove)
+			r.With(middleware.AdminOnly).Post("/system/host-apps/{id}/action", hostAppH.Action)
+			r.With(middleware.AdminOnly).Put("/system/host-apps/{id}/firewall", hostAppH.Firewall)
+			r.With(middleware.AdminOnly).Get("/system/host-apps/{id}/logs", hostAppH.Logs)
 			r.With(middleware.AdminOnly).Get("/system/ssh-security", system.SSHSecurity)
 			r.With(middleware.AdminOnly).Get("/system/cve", system.CveStatus)
 			r.With(middleware.AdminOnly).Post("/system/cve/update", system.CveUpdate)
