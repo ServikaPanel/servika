@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "toolsAndSettings": "Tools & Settings",
+    "serverIPs": "Server Addresses"
+  },
+  "title": "Server Addresses",
+  "description": "Every address this server currently answers on. The panel can add and remove its own; an address configured outside the panel is shown here and left alone.",
+  "add": {
+    "title": "Add an address",
+    "description": "The address is put on the interface straight away and recorded so it comes back after a reboot.",
+    "ip": "Address",
+    "prefix": "Prefix length",
+    "interface": "Interface",
+    "interfaceAuto": "choose automatically",
+    "note": "Note",
+    "button": "Add address",
+    "ipv4Only": "IPv4 only. The kernel discards the marker that tells a panel-added IPv6 address apart from the provider's own, so this screen cannot safely take one back.",
+    "failedTitle": "Not added"
+  },
+  "list": {
+    "title": "Addresses on this server",
+    "description": "Read from the server itself, not from the panel's own records.",
+    "loading": "Reading the server's addresses…",
+    "none": "This server has no routable addresses.",
+    "address": "Address",
+    "interface": "Interface",
+    "origin": "Added by",
+    "note": "Note",
+    "action": "",
+    "originPanel": "this panel",
+    "originHost": "the server",
+    "remove": "Remove",
+    "notRemovable": "cannot be removed here",
+    "notRecorded": "not added by this panel"
+  },
+  "remove": {
+    "confirmTitle": "Remove this address?",
+    "confirmBody": "{{ip}} is taken off {{interface}} straight away and will not come back after a reboot. Anything reaching this server on it stops working.",
+    "confirmAction": "Remove",
+    "failedTitle": "Not removed"
+  },
+  "error": {
+    "load": "The server's addresses could not be read.",
+    "add": "The address could not be added.",
+    "remove": "The address could not be removed."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Only IPv4 addresses can be managed here.",
+    "server_ip_reserved": "That address is not one a server can be reached on.",
+    "server_ip_bad_prefix": "That prefix length is not valid for IPv4.",
+    "server_ip_unknown_interface": "This server has no interface by that name.",
+    "server_ip_already_on_host": "That address is already configured on this server.",
+    "server_ip_not_added_by_panel": "This address was not added by the panel, so the panel will not take it away.",
+    "server_ip_in_use_by_panel": "The panel is listening on this address.",
+    "server_ip_host_unreadable": "The server would not answer, so nothing was changed.",
+    "server_ip_not_found": "There is no record of that address.",
+    "server_ip_no_label_available": "Every address marker is in use."
+  }
+}

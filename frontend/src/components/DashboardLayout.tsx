@@ -58,6 +58,7 @@ const NAV: NavGroup[] = [
   { titleKey: 'serverManagement', items: [
     { to: '/tools-settings',     labelKey: 'toolsSettings', icon: ICONS.tools },
     { to: '/tools/optimize',   labelKey: 'optimize',      icon: ICONS.optimize },
+    { to: '/tools/server-ips', labelKey: 'serverIPs',     icon: ICONS.monitoring },
     { to: '/statistics',       labelKey: 'statistics',      icon: ICONS.stats },
     { to: '/extensions',          labelKey: 'extensions',         icon: ICONS.extensions },
     { to: '/wordpress',           labelKey: 'wordpress',          icon: ICONS.wp },

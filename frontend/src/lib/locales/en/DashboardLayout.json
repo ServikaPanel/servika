@@ -24,6 +24,7 @@
     "databases": "Databases",
     "toolsSettings": "Tools and Settings",
     "optimize": "Server Optimize",
+    "serverIPs": "Server Addresses",
     "statistics": "Statistics",
     "extensions": "Extensions",
     "wordpress": "WordPress",

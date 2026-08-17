@@ -44,6 +44,7 @@ const PAGES: ReadonlyArray<{ tkey: string; path: string; keywords: string; roles
   { tkey: 'siteMigration', path: '/site-migration', keywords: 'migration plesk cpanel directadmin ssh', roles: ['admin'] },
   { tkey: 'toolsSettings', path: '/tools-settings', keywords: 'settings', roles: ['admin'] },
   { tkey: 'optimize', path: '/tools/optimize', keywords: 'performance tune', roles: ['admin'] },
+  { tkey: 'serverIPs', path: '/tools/server-ips', keywords: 'ip address network interface', roles: ['admin'] },
   { tkey: 'statistics', path: '/statistics', keywords: 'graph traffic', roles: ['admin'] },
   { tkey: 'firewall', path: '/firewall', keywords: 'port ip block', roles: ['admin'] },
   { tkey: 'monitoring', path: '/monitoring', keywords: 'monitor log cpu ram', roles: ['admin'] },

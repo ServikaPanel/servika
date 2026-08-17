@@ -50,6 +50,7 @@ const RuntimeVersionsPage = lazy(() => import('@/pages/RuntimeVersionsPage'))
 const ToolsSettingsPage = lazy(() => import('@/pages/ToolsSettingsPage'))
 const PanelUpdatePage = lazy(() => import('@/pages/PanelUpdatePage'))
 const ServerOptimizePage = lazy(() => import('@/pages/ServerOptimizePage'))
+const ServerIPsPage = lazy(() => import('@/pages/ServerIPsPage'))
 const DNSTemplatePage = lazy(() => import('@/pages/DNSTemplatePage'))
 const BannedDomainsPage = lazy(() => import('@/pages/BannedDomainsPage'))
 const WebsiteSecurityPage = lazy(() => import('@/pages/WebsiteSecurityPage'))
@@ -177,6 +178,7 @@ export default function App() {
         <Route path="tools-settings" element={<ToolsSettingsPage />} />
         <Route path="tools/update" element={<PanelUpdatePage />} />
         <Route path="tools/optimize" element={<ServerOptimizePage />} />
+        <Route path="tools/server-ips" element={<ServerIPsPage />} />
         <Route path="statistics" element={<StatisticsPage />} />
         <Route path="extensions" element={<ComingSoonPage title="Extensions" icon="🧩" description="Third-party extension management for the panel" features={["Browse the marketplace", "One-click install and removal", "Version updates", "API integration", "Developer SDK"]} />} />
         <Route path="wordpress" element={<WordPressPage />} />

@@ -24,6 +24,7 @@
     "databases": "数据库",
     "toolsSettings": "工具与设置",
     "optimize": "服务器优化",
+    "serverIPs": "服务器地址",
     "statistics": "统计",
     "extensions": "扩展",
     "wordpress": "WordPress",

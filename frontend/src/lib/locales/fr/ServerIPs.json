@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "toolsAndSettings": "Outils et paramètres",
+    "serverIPs": "Adresses du serveur"
+  },
+  "title": "Adresses du serveur",
+  "description": "Toutes les adresses sur lesquelles ce serveur répond actuellement. Le panneau ne peut ajouter et retirer que les siennes ; une adresse configurée en dehors du panneau est affichée ici et laissée intacte.",
+  "add": {
+    "title": "Ajouter une adresse",
+    "description": "L'adresse est posée sur l'interface immédiatement et enregistrée pour revenir après un redémarrage.",
+    "ip": "Adresse",
+    "prefix": "Longueur du préfixe",
+    "interface": "Interface",
+    "interfaceAuto": "choisir automatiquement",
+    "note": "Note",
+    "button": "Ajouter l'adresse",
+    "ipv4Only": "IPv4 uniquement. Le noyau supprime le marqueur qui distingue une adresse IPv6 ajoutée par le panneau de celle du fournisseur, cet écran ne peut donc pas la retirer en toute sécurité.",
+    "failedTitle": "Non ajoutée"
+  },
+  "list": {
+    "title": "Adresses de ce serveur",
+    "description": "Lues directement sur le serveur, pas dans les enregistrements du panneau.",
+    "loading": "Lecture des adresses du serveur…",
+    "none": "Ce serveur n'a aucune adresse routable.",
+    "address": "Adresse",
+    "interface": "Interface",
+    "origin": "Ajoutée par",
+    "note": "Note",
+    "action": "",
+    "originPanel": "ce panneau",
+    "originHost": "le serveur",
+    "remove": "Retirer",
+    "notRemovable": "ne peut pas être retirée ici",
+    "notRecorded": "non ajoutée par ce panneau"
+  },
+  "remove": {
+    "confirmTitle": "Retirer cette adresse ?",
+    "confirmBody": "{{ip}} est retirée de {{interface}} immédiatement et ne reviendra pas après un redémarrage. Tout ce qui atteint ce serveur par cette adresse cesse de fonctionner.",
+    "confirmAction": "Retirer",
+    "failedTitle": "Non retirée"
+  },
+  "error": {
+    "load": "Les adresses du serveur n'ont pas pu être lues.",
+    "add": "L'adresse n'a pas pu être ajoutée.",
+    "remove": "L'adresse n'a pas pu être retirée."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Seules les adresses IPv4 peuvent être gérées ici.",
+    "server_ip_reserved": "Un serveur n'est pas joignable sur cette adresse.",
+    "server_ip_bad_prefix": "Cette longueur de préfixe n'est pas valide en IPv4.",
+    "server_ip_unknown_interface": "Ce serveur n'a aucune interface portant ce nom.",
+    "server_ip_already_on_host": "Cette adresse est déjà configurée sur ce serveur.",
+    "server_ip_not_added_by_panel": "Cette adresse n'a pas été ajoutée par le panneau, celui-ci ne la retirera donc pas.",
+    "server_ip_in_use_by_panel": "Le panneau écoute sur cette adresse.",
+    "server_ip_host_unreadable": "Le serveur n'a pas répondu, rien n'a donc été modifié.",
+    "server_ip_not_found": "Il n'existe aucun enregistrement pour cette adresse.",
+    "server_ip_no_label_available": "Tous les marqueurs d'adresse sont utilisés."
+  }
+}

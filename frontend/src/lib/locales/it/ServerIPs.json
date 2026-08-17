@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "toolsAndSettings": "Strumenti e impostazioni",
+    "serverIPs": "Indirizzi del server"
+  },
+  "title": "Indirizzi del server",
+  "description": "Ogni indirizzo su cui questo server risponde attualmente. Il pannello può aggiungere e rimuovere solo i propri; un indirizzo configurato fuori dal pannello viene mostrato qui e lasciato intatto.",
+  "add": {
+    "title": "Aggiungi un indirizzo",
+    "description": "L'indirizzo viene messo subito sull'interfaccia e registrato per tornare dopo un riavvio.",
+    "ip": "Indirizzo",
+    "prefix": "Lunghezza del prefisso",
+    "interface": "Interfaccia",
+    "interfaceAuto": "scegli automaticamente",
+    "note": "Nota",
+    "button": "Aggiungi indirizzo",
+    "ipv4Only": "Solo IPv4. Il kernel scarta il contrassegno che distingue un indirizzo IPv6 aggiunto dal pannello da quello del provider, quindi questa schermata non può riprenderselo in sicurezza.",
+    "failedTitle": "Non aggiunto"
+  },
+  "list": {
+    "title": "Indirizzi su questo server",
+    "description": "Letti direttamente dal server, non dai registri del pannello.",
+    "loading": "Lettura degli indirizzi del server…",
+    "none": "Questo server non ha indirizzi instradabili.",
+    "address": "Indirizzo",
+    "interface": "Interfaccia",
+    "origin": "Aggiunto da",
+    "note": "Nota",
+    "action": "",
+    "originPanel": "questo pannello",
+    "originHost": "il server",
+    "remove": "Rimuovi",
+    "notRemovable": "non può essere rimosso qui",
+    "notRecorded": "non aggiunto da questo pannello"
+  },
+  "remove": {
+    "confirmTitle": "Rimuovere questo indirizzo?",
+    "confirmBody": "{{ip}} viene tolto da {{interface}} subito e non tornerà dopo un riavvio. Tutto ciò che raggiunge questo server tramite esso smette di funzionare.",
+    "confirmAction": "Rimuovi",
+    "failedTitle": "Non rimosso"
+  },
+  "error": {
+    "load": "Non è stato possibile leggere gli indirizzi del server.",
+    "add": "Non è stato possibile aggiungere l'indirizzo.",
+    "remove": "Non è stato possibile rimuovere l'indirizzo."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Qui si possono gestire solo indirizzi IPv4.",
+    "server_ip_reserved": "Un server non è raggiungibile a quell'indirizzo.",
+    "server_ip_bad_prefix": "Quella lunghezza di prefisso non è valida per IPv4.",
+    "server_ip_unknown_interface": "Questo server non ha un'interfaccia con quel nome.",
+    "server_ip_already_on_host": "Quell'indirizzo è già configurato su questo server.",
+    "server_ip_not_added_by_panel": "Questo indirizzo non è stato aggiunto dal pannello, quindi il pannello non lo toglierà.",
+    "server_ip_in_use_by_panel": "Il pannello è in ascolto su questo indirizzo.",
+    "server_ip_host_unreadable": "Il server non ha risposto, quindi non è stato modificato nulla.",
+    "server_ip_not_found": "Non esiste alcuna registrazione di quell'indirizzo.",
+    "server_ip_no_label_available": "Tutti i contrassegni di indirizzo sono in uso."
+  }
+}

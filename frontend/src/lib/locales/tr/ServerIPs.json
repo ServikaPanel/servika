@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "toolsAndSettings": "Araçlar ve Ayarlar",
+    "serverIPs": "Sunucu Adresleri"
+  },
+  "title": "Sunucu Adresleri",
+  "description": "Bu sunucunun şu anda cevap verdiği her adres. Panel yalnız kendi eklediklerini ekleyip kaldırabilir; panel dışında yapılandırılmış bir adres burada gösterilir ve ona dokunulmaz.",
+  "add": {
+    "title": "Adres ekle",
+    "description": "Adres arayüze hemen konur ve yeniden başlatmadan sonra geri gelmesi için kaydedilir.",
+    "ip": "Adres",
+    "prefix": "Önek uzunluğu",
+    "interface": "Arayüz",
+    "interfaceAuto": "otomatik seç",
+    "note": "Not",
+    "button": "Adresi ekle",
+    "ipv4Only": "Yalnız IPv4. Çekirdek, panelin eklediği bir IPv6 adresini sağlayıcının kendi adresinden ayıran işareti atıyor, bu yüzden bu ekran onu güvenle geri alamaz.",
+    "failedTitle": "Eklenmedi"
+  },
+  "list": {
+    "title": "Bu sunucudaki adresler",
+    "description": "Panelin kendi kayıtlarından değil, doğrudan sunucudan okundu.",
+    "loading": "Sunucunun adresleri okunuyor…",
+    "none": "Bu sunucuda yönlendirilebilir adres yok.",
+    "address": "Adres",
+    "interface": "Arayüz",
+    "origin": "Ekleyen",
+    "note": "Not",
+    "action": "",
+    "originPanel": "bu panel",
+    "originHost": "sunucu",
+    "remove": "Kaldır",
+    "notRemovable": "buradan kaldırılamaz",
+    "notRecorded": "bu panel tarafından eklenmemiş"
+  },
+  "remove": {
+    "confirmTitle": "Bu adres kaldırılsın mı?",
+    "confirmBody": "{{ip}} adresi {{interface}} arayüzünden hemen alınır ve yeniden başlatmadan sonra geri gelmez. Bu sunucuya o adres üzerinden ulaşan her şey çalışmayı bırakır.",
+    "confirmAction": "Kaldır",
+    "failedTitle": "Kaldırılmadı"
+  },
+  "error": {
+    "load": "Sunucunun adresleri okunamadı.",
+    "add": "Adres eklenemedi.",
+    "remove": "Adres kaldırılamadı."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Burada yalnız IPv4 adresleri yönetilebilir.",
+    "server_ip_reserved": "Bu adres, bir sunucuya ulaşılabilecek bir adres değil.",
+    "server_ip_bad_prefix": "Bu önek uzunluğu IPv4 için geçerli değil.",
+    "server_ip_unknown_interface": "Bu sunucuda bu adda bir arayüz yok.",
+    "server_ip_already_on_host": "Bu adres bu sunucuda zaten yapılandırılmış.",
+    "server_ip_not_added_by_panel": "Bu adresi panel eklemedi, bu yüzden panel onu kaldırmaz.",
+    "server_ip_in_use_by_panel": "Panel bu adres üzerinde dinliyor.",
+    "server_ip_host_unreadable": "Sunucu cevap vermedi, bu yüzden hiçbir şey değiştirilmedi.",
+    "server_ip_not_found": "Bu adrese ait bir kayıt yok.",
+    "server_ip_no_label_available": "Bütün adres işaretleri kullanımda."
+  }
+}

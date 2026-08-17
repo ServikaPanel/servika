@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Inicio",
+    "toolsAndSettings": "Herramientas y ajustes",
+    "serverIPs": "Direcciones del servidor"
+  },
+  "title": "Direcciones del servidor",
+  "description": "Todas las direcciones en las que este servidor responde ahora mismo. El panel solo puede añadir y quitar las suyas; una dirección configurada fuera del panel se muestra aquí y no se toca.",
+  "add": {
+    "title": "Añadir una dirección",
+    "description": "La dirección se pone en la interfaz de inmediato y se registra para que vuelva tras un reinicio.",
+    "ip": "Dirección",
+    "prefix": "Longitud del prefijo",
+    "interface": "Interfaz",
+    "interfaceAuto": "elegir automáticamente",
+    "note": "Nota",
+    "button": "Añadir dirección",
+    "ipv4Only": "Solo IPv4. El núcleo descarta la marca que distingue una dirección IPv6 añadida por el panel de la del proveedor, así que esta pantalla no puede retirarla con seguridad.",
+    "failedTitle": "No añadida"
+  },
+  "list": {
+    "title": "Direcciones de este servidor",
+    "description": "Leídas del propio servidor, no de los registros del panel.",
+    "loading": "Leyendo las direcciones del servidor…",
+    "none": "Este servidor no tiene direcciones enrutables.",
+    "address": "Dirección",
+    "interface": "Interfaz",
+    "origin": "Añadida por",
+    "note": "Nota",
+    "action": "",
+    "originPanel": "este panel",
+    "originHost": "el servidor",
+    "remove": "Quitar",
+    "notRemovable": "no se puede quitar aquí",
+    "notRecorded": "no la añadió este panel"
+  },
+  "remove": {
+    "confirmTitle": "¿Quitar esta dirección?",
+    "confirmBody": "{{ip}} se retira de {{interface}} de inmediato y no volverá tras un reinicio. Todo lo que llegue a este servidor por ella dejará de funcionar.",
+    "confirmAction": "Quitar",
+    "failedTitle": "No retirada"
+  },
+  "error": {
+    "load": "No se pudieron leer las direcciones del servidor.",
+    "add": "No se pudo añadir la dirección.",
+    "remove": "No se pudo quitar la dirección."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Aquí solo se pueden gestionar direcciones IPv4.",
+    "server_ip_reserved": "Un servidor no es accesible en esa dirección.",
+    "server_ip_bad_prefix": "Esa longitud de prefijo no es válida para IPv4.",
+    "server_ip_unknown_interface": "Este servidor no tiene ninguna interfaz con ese nombre.",
+    "server_ip_already_on_host": "Esa dirección ya está configurada en este servidor.",
+    "server_ip_not_added_by_panel": "El panel no añadió esta dirección, así que tampoco la va a quitar.",
+    "server_ip_in_use_by_panel": "El panel está escuchando en esta dirección.",
+    "server_ip_host_unreadable": "El servidor no respondió, así que no se cambió nada.",
+    "server_ip_not_found": "No hay ningún registro de esa dirección.",
+    "server_ip_no_label_available": "Todas las marcas de dirección están en uso."
+  }
+}

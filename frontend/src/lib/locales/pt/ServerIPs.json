@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Início",
+    "toolsAndSettings": "Ferramentas e definições",
+    "serverIPs": "Endereços do servidor"
+  },
+  "title": "Endereços do servidor",
+  "description": "Todos os endereços em que este servidor responde neste momento. O painel só pode adicionar e remover os seus; um endereço configurado fora do painel é mostrado aqui e não é tocado.",
+  "add": {
+    "title": "Adicionar um endereço",
+    "description": "O endereço é colocado na interface de imediato e registado para voltar depois de um reinício.",
+    "ip": "Endereço",
+    "prefix": "Comprimento do prefixo",
+    "interface": "Interface",
+    "interfaceAuto": "escolher automaticamente",
+    "note": "Nota",
+    "button": "Adicionar endereço",
+    "ipv4Only": "Apenas IPv4. O núcleo descarta a marca que distingue um endereço IPv6 adicionado pelo painel do endereço do fornecedor, por isso este ecrã não o pode retirar com segurança.",
+    "failedTitle": "Não adicionado"
+  },
+  "list": {
+    "title": "Endereços neste servidor",
+    "description": "Lidos do próprio servidor, não dos registos do painel.",
+    "loading": "A ler os endereços do servidor…",
+    "none": "Este servidor não tem endereços encamináveis.",
+    "address": "Endereço",
+    "interface": "Interface",
+    "origin": "Adicionado por",
+    "note": "Nota",
+    "action": "",
+    "originPanel": "este painel",
+    "originHost": "o servidor",
+    "remove": "Remover",
+    "notRemovable": "não pode ser removido aqui",
+    "notRecorded": "não foi adicionado por este painel"
+  },
+  "remove": {
+    "confirmTitle": "Remover este endereço?",
+    "confirmBody": "{{ip}} é retirado de {{interface}} de imediato e não volta depois de um reinício. Tudo o que chega a este servidor por ele deixa de funcionar.",
+    "confirmAction": "Remover",
+    "failedTitle": "Não removido"
+  },
+  "error": {
+    "load": "Não foi possível ler os endereços do servidor.",
+    "add": "Não foi possível adicionar o endereço.",
+    "remove": "Não foi possível remover o endereço."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Aqui só podem ser geridos endereços IPv4.",
+    "server_ip_reserved": "Um servidor não é alcançável nesse endereço.",
+    "server_ip_bad_prefix": "Esse comprimento de prefixo não é válido para IPv4.",
+    "server_ip_unknown_interface": "Este servidor não tem nenhuma interface com esse nome.",
+    "server_ip_already_on_host": "Esse endereço já está configurado neste servidor.",
+    "server_ip_not_added_by_panel": "Este endereço não foi adicionado pelo painel, por isso o painel não o vai retirar.",
+    "server_ip_in_use_by_panel": "O painel está à escuta neste endereço.",
+    "server_ip_host_unreadable": "O servidor não respondeu, por isso nada foi alterado.",
+    "server_ip_not_found": "Não existe qualquer registo desse endereço.",
+    "server_ip_no_label_available": "Todas as marcas de endereço estão em uso."
+  }
+}

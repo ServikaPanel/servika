@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "ホーム",
+    "toolsAndSettings": "ツールと設定",
+    "serverIPs": "サーバーアドレス"
+  },
+  "title": "サーバーアドレス",
+  "description": "このサーバーが現在応答しているすべてのアドレスです。パネルが追加と削除を行えるのは自身が追加したものだけで、パネル外で設定されたアドレスはここに表示され、変更されません。",
+  "add": {
+    "title": "アドレスを追加",
+    "description": "アドレスは直ちにインターフェイスへ設定され、再起動後も戻るよう記録されます。",
+    "ip": "アドレス",
+    "prefix": "プレフィックス長",
+    "interface": "インターフェイス",
+    "interfaceAuto": "自動で選択",
+    "note": "メモ",
+    "button": "アドレスを追加",
+    "ipv4Only": "IPv4 のみです。パネルが追加した IPv6 アドレスと事業者のアドレスを見分ける目印をカーネルが破棄するため、この画面から安全に取り消せません。",
+    "failedTitle": "追加できませんでした"
+  },
+  "list": {
+    "title": "このサーバーのアドレス",
+    "description": "パネルの記録ではなく、サーバー自身から読み取った内容です。",
+    "loading": "サーバーのアドレスを読み取っています…",
+    "none": "このサーバーにルーティング可能なアドレスはありません。",
+    "address": "アドレス",
+    "interface": "インターフェイス",
+    "origin": "追加元",
+    "note": "メモ",
+    "action": "",
+    "originPanel": "このパネル",
+    "originHost": "サーバー",
+    "remove": "削除",
+    "notRemovable": "ここでは削除できません",
+    "notRecorded": "このパネルが追加したものではありません"
+  },
+  "remove": {
+    "confirmTitle": "このアドレスを削除しますか?",
+    "confirmBody": "{{ip}} は直ちに {{interface}} から外され、再起動後も戻りません。このアドレス経由でサーバーに届いていた通信はすべて止まります。",
+    "confirmAction": "削除",
+    "failedTitle": "削除できませんでした"
+  },
+  "error": {
+    "load": "サーバーのアドレスを読み取れませんでした。",
+    "add": "アドレスを追加できませんでした。",
+    "remove": "アドレスを削除できませんでした。"
+  },
+  "reason": {
+    "server_ip_not_ipv4": "ここで管理できるのは IPv4 アドレスだけです。",
+    "server_ip_reserved": "そのアドレスではサーバーに到達できません。",
+    "server_ip_bad_prefix": "そのプレフィックス長は IPv4 では無効です。",
+    "server_ip_unknown_interface": "このサーバーにその名前のインターフェイスはありません。",
+    "server_ip_already_on_host": "そのアドレスはこのサーバーにすでに設定されています。",
+    "server_ip_not_added_by_panel": "このアドレスはパネルが追加したものではないため、パネルは取り除きません。",
+    "server_ip_in_use_by_panel": "パネルはこのアドレスで待ち受けています。",
+    "server_ip_host_unreadable": "サーバーが応答しなかったため、何も変更していません。",
+    "server_ip_not_found": "そのアドレスの記録がありません。",
+    "server_ip_no_label_available": "アドレスの目印がすべて使用中です。"
+  }
+}

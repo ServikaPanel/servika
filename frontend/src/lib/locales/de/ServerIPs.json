@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Start",
+    "toolsAndSettings": "Werkzeuge & Einstellungen",
+    "serverIPs": "Serveradressen"
+  },
+  "title": "Serveradressen",
+  "description": "Jede Adresse, unter der dieser Server derzeit antwortet. Das Panel kann nur seine eigenen hinzufügen und entfernen; eine außerhalb des Panels eingerichtete Adresse wird hier angezeigt und nicht angetastet.",
+  "add": {
+    "title": "Adresse hinzufügen",
+    "description": "Die Adresse wird sofort auf die Schnittstelle gelegt und festgehalten, damit sie nach einem Neustart wieder da ist.",
+    "ip": "Adresse",
+    "prefix": "Präfixlänge",
+    "interface": "Schnittstelle",
+    "interfaceAuto": "automatisch wählen",
+    "note": "Notiz",
+    "button": "Adresse hinzufügen",
+    "ipv4Only": "Nur IPv4. Der Kernel verwirft die Markierung, die eine vom Panel hinzugefügte IPv6-Adresse von der des Anbieters unterscheidet, daher kann dieser Bildschirm sie nicht sicher zurücknehmen.",
+    "failedTitle": "Nicht hinzugefügt"
+  },
+  "list": {
+    "title": "Adressen auf diesem Server",
+    "description": "Direkt vom Server gelesen, nicht aus den Aufzeichnungen des Panels.",
+    "loading": "Die Adressen des Servers werden gelesen…",
+    "none": "Dieser Server hat keine routbaren Adressen.",
+    "address": "Adresse",
+    "interface": "Schnittstelle",
+    "origin": "Hinzugefügt von",
+    "note": "Notiz",
+    "action": "",
+    "originPanel": "diesem Panel",
+    "originHost": "dem Server",
+    "remove": "Entfernen",
+    "notRemovable": "kann hier nicht entfernt werden",
+    "notRecorded": "nicht von diesem Panel hinzugefügt"
+  },
+  "remove": {
+    "confirmTitle": "Diese Adresse entfernen?",
+    "confirmBody": "{{ip}} wird sofort von {{interface}} genommen und kommt nach einem Neustart nicht zurück. Alles, was diesen Server darüber erreicht, hört auf zu funktionieren.",
+    "confirmAction": "Entfernen",
+    "failedTitle": "Nicht entfernt"
+  },
+  "error": {
+    "load": "Die Adressen des Servers konnten nicht gelesen werden.",
+    "add": "Die Adresse konnte nicht hinzugefügt werden.",
+    "remove": "Die Adresse konnte nicht entfernt werden."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Hier können nur IPv4-Adressen verwaltet werden.",
+    "server_ip_reserved": "Unter dieser Adresse ist ein Server nicht erreichbar.",
+    "server_ip_bad_prefix": "Diese Präfixlänge ist für IPv4 nicht gültig.",
+    "server_ip_unknown_interface": "Dieser Server hat keine Schnittstelle mit diesem Namen.",
+    "server_ip_already_on_host": "Diese Adresse ist auf diesem Server bereits eingerichtet.",
+    "server_ip_not_added_by_panel": "Diese Adresse wurde nicht vom Panel hinzugefügt, deshalb nimmt das Panel sie auch nicht weg.",
+    "server_ip_in_use_by_panel": "Das Panel lauscht auf dieser Adresse.",
+    "server_ip_host_unreadable": "Der Server hat nicht geantwortet, daher wurde nichts geändert.",
+    "server_ip_not_found": "Zu dieser Adresse gibt es keinen Eintrag.",
+    "server_ip_no_label_available": "Alle Adressmarkierungen sind belegt."
+  }
+}

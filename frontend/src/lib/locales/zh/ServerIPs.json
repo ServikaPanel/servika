@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "首页",
+    "toolsAndSettings": "工具与设置",
+    "serverIPs": "服务器地址"
+  },
+  "title": "服务器地址",
+  "description": "本服务器当前响应的所有地址。面板只能添加和移除自己添加的地址；在面板之外配置的地址会在此显示并保持不变。",
+  "add": {
+    "title": "添加地址",
+    "description": "地址会立即配置到接口上，并被记录下来以便重启后恢复。",
+    "ip": "地址",
+    "prefix": "前缀长度",
+    "interface": "接口",
+    "interfaceAuto": "自动选择",
+    "note": "备注",
+    "button": "添加地址",
+    "ipv4Only": "仅限 IPv4。内核会丢弃用于区分面板添加的 IPv6 地址与服务商地址的标记，因此本页面无法安全地将其收回。",
+    "failedTitle": "未添加"
+  },
+  "list": {
+    "title": "本服务器上的地址",
+    "description": "直接读自服务器本身，而不是面板的记录。",
+    "loading": "正在读取服务器地址…",
+    "none": "本服务器没有可路由的地址。",
+    "address": "地址",
+    "interface": "接口",
+    "origin": "添加者",
+    "note": "备注",
+    "action": "",
+    "originPanel": "本面板",
+    "originHost": "服务器",
+    "remove": "移除",
+    "notRemovable": "无法在此移除",
+    "notRecorded": "不是本面板添加的"
+  },
+  "remove": {
+    "confirmTitle": "移除此地址吗?",
+    "confirmBody": "{{ip}} 会立即从 {{interface}} 上移除，重启后也不会恢复。经由该地址访问本服务器的一切都将停止工作。",
+    "confirmAction": "移除",
+    "failedTitle": "未移除"
+  },
+  "error": {
+    "load": "无法读取服务器地址。",
+    "add": "无法添加该地址。",
+    "remove": "无法移除该地址。"
+  },
+  "reason": {
+    "server_ip_not_ipv4": "此处只能管理 IPv4 地址。",
+    "server_ip_reserved": "无法通过该地址访问服务器。",
+    "server_ip_bad_prefix": "该前缀长度对 IPv4 无效。",
+    "server_ip_unknown_interface": "本服务器没有该名称的接口。",
+    "server_ip_already_on_host": "该地址已在本服务器上配置。",
+    "server_ip_not_added_by_panel": "该地址不是面板添加的，因此面板不会将其移除。",
+    "server_ip_in_use_by_panel": "面板正在该地址上监听。",
+    "server_ip_host_unreadable": "服务器没有响应，因此未做任何更改。",
+    "server_ip_not_found": "没有该地址的记录。",
+    "server_ip_no_label_available": "所有地址标记都已被占用。"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Acasă",
+    "toolsAndSettings": "Instrumente și setări",
+    "serverIPs": "Adresele serverului"
+  },
+  "title": "Adresele serverului",
+  "description": "Toate adresele pe care acest server răspunde în acest moment. Panoul poate adăuga și elimina doar adresele proprii; o adresă configurată în afara panoului este afișată aici și lăsată neatinsă.",
+  "add": {
+    "title": "Adaugă o adresă",
+    "description": "Adresa este pusă pe interfață imediat și înregistrată ca să revină după o repornire.",
+    "ip": "Adresă",
+    "prefix": "Lungimea prefixului",
+    "interface": "Interfață",
+    "interfaceAuto": "alege automat",
+    "note": "Notă",
+    "button": "Adaugă adresa",
+    "ipv4Only": "Doar IPv4. Nucleul elimină marcajul care deosebește o adresă IPv6 adăugată de panou de cea a furnizorului, așa că acest ecran nu o poate retrage în siguranță.",
+    "failedTitle": "Neadăugată"
+  },
+  "list": {
+    "title": "Adresele de pe acest server",
+    "description": "Citite direct de pe server, nu din evidențele panoului.",
+    "loading": "Se citesc adresele serverului…",
+    "none": "Acest server nu are adrese rutabile.",
+    "address": "Adresă",
+    "interface": "Interfață",
+    "origin": "Adăugată de",
+    "note": "Notă",
+    "action": "",
+    "originPanel": "acest panou",
+    "originHost": "server",
+    "remove": "Elimină",
+    "notRemovable": "nu poate fi eliminată aici",
+    "notRecorded": "nu a fost adăugată de acest panou"
+  },
+  "remove": {
+    "confirmTitle": "Eliminați această adresă?",
+    "confirmBody": "{{ip}} este scoasă de pe {{interface}} imediat și nu revine după o repornire. Tot ce ajunge la acest server prin ea încetează să funcționeze.",
+    "confirmAction": "Elimină",
+    "failedTitle": "Neeliminată"
+  },
+  "error": {
+    "load": "Adresele serverului nu au putut fi citite.",
+    "add": "Adresa nu a putut fi adăugată.",
+    "remove": "Adresa nu a putut fi eliminată."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Aici pot fi gestionate doar adrese IPv4.",
+    "server_ip_reserved": "Un server nu este accesibil la această adresă.",
+    "server_ip_bad_prefix": "Această lungime de prefix nu este validă pentru IPv4.",
+    "server_ip_unknown_interface": "Acest server nu are nicio interfață cu acest nume.",
+    "server_ip_already_on_host": "Această adresă este deja configurată pe acest server.",
+    "server_ip_not_added_by_panel": "Această adresă nu a fost adăugată de panou, deci panoul nu o va lua.",
+    "server_ip_in_use_by_panel": "Panoul ascultă pe această adresă.",
+    "server_ip_host_unreadable": "Serverul nu a răspuns, deci nu s-a schimbat nimic.",
+    "server_ip_not_found": "Nu există nicio înregistrare pentru această adresă.",
+    "server_ip_no_label_available": "Toate marcajele de adresă sunt folosite."
+  }
+}

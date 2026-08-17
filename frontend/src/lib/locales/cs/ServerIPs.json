@@ -1,0 +1,60 @@
+{
+  "breadcrumb": {
+    "home": "Domů",
+    "toolsAndSettings": "Nástroje a nastavení",
+    "serverIPs": "Adresy serveru"
+  },
+  "title": "Adresy serveru",
+  "description": "Všechny adresy, na kterých tento server právě odpovídá. Panel může přidávat a odebírat jen ty své; adresa nastavená mimo panel se zde zobrazí a zůstane nedotčená.",
+  "add": {
+    "title": "Přidat adresu",
+    "description": "Adresa se okamžitě přidá na rozhraní a zaznamená se, aby se vrátila po restartu.",
+    "ip": "Adresa",
+    "prefix": "Délka prefixu",
+    "interface": "Rozhraní",
+    "interfaceAuto": "vybrat automaticky",
+    "note": "Poznámka",
+    "button": "Přidat adresu",
+    "ipv4Only": "Pouze IPv4. Jádro zahazuje značku, která odliší adresu IPv6 přidanou panelem od adresy poskytovatele, takže tato obrazovka ji nemůže bezpečně odebrat.",
+    "failedTitle": "Nepřidáno"
+  },
+  "list": {
+    "title": "Adresy na tomto serveru",
+    "description": "Načteno přímo ze serveru, ne ze záznamů panelu.",
+    "loading": "Načítají se adresy serveru…",
+    "none": "Tento server nemá žádné směrovatelné adresy.",
+    "address": "Adresa",
+    "interface": "Rozhraní",
+    "origin": "Přidal",
+    "note": "Poznámka",
+    "action": "",
+    "originPanel": "tento panel",
+    "originHost": "server",
+    "remove": "Odebrat",
+    "notRemovable": "zde nelze odebrat",
+    "notRecorded": "nepřidal tento panel"
+  },
+  "remove": {
+    "confirmTitle": "Odebrat tuto adresu?",
+    "confirmBody": "{{ip}} se z rozhraní {{interface}} okamžitě odebere a po restartu se nevrátí. Vše, co přes ni na tento server přichází, přestane fungovat.",
+    "confirmAction": "Odebrat",
+    "failedTitle": "Neodebráno"
+  },
+  "error": {
+    "load": "Adresy serveru se nepodařilo načíst.",
+    "add": "Adresu se nepodařilo přidat.",
+    "remove": "Adresu se nepodařilo odebrat."
+  },
+  "reason": {
+    "server_ip_not_ipv4": "Zde lze spravovat pouze adresy IPv4.",
+    "server_ip_reserved": "Na této adrese není server dosažitelný.",
+    "server_ip_bad_prefix": "Tato délka prefixu není pro IPv4 platná.",
+    "server_ip_unknown_interface": "Tento server nemá rozhraní s tímto názvem.",
+    "server_ip_already_on_host": "Tato adresa už je na tomto serveru nastavená.",
+    "server_ip_not_added_by_panel": "Tuto adresu nepřidal panel, takže ji panel ani neodebere.",
+    "server_ip_in_use_by_panel": "Panel na této adrese naslouchá.",
+    "server_ip_host_unreadable": "Server neodpověděl, takže se nic nezměnilo.",
+    "server_ip_not_found": "O této adrese neexistuje žádný záznam.",
+    "server_ip_no_label_available": "Všechny značky adres jsou obsazené."
+  }
+}

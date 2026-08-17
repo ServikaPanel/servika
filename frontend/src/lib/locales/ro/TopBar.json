@@ -12,72 +12,259 @@
   "copied": "Copiat",
   "themeToggle": "Temă: {{theme}}, clic pentru a schimba",
   "pages": {
-    "home": { "title": "Acasă", "subtitle": "Prezentare generală panou" },
-    "domains": { "title": "Domenii", "subtitle": "Domenii și abonamente" },
-    "servicePlans": { "title": "Planuri de servicii", "subtitle": "Planuri de pachete și cote" },
-    "customers": { "title": "Clienți", "subtitle": "Înregistrări de clienți și contacte" },
-    "users": { "title": "Utilizatori", "subtitle": "Conturi de panou" },
-    "dns": { "title": "Gestionare DNS", "subtitle": "Înregistrări DNS la nivelul întregului server" },
-    "ssl": { "title": "Certificate SSL", "subtitle": "Gestionare TLS și certificate" },
-    "mail": { "title": "Conturi de email", "subtitle": "Cutii poștale și mail" },
-    "databases": { "title": "Baze de date", "subtitle": "Baze de date MySQL" },
-    "wordpress": { "title": "WordPress", "subtitle": "Site-uri WordPress" },
-    "serverStatus": { "title": "Stare server", "subtitle": "Rezumat resurse și servicii" },
-    "profile": { "title": "Profil și preferințe", "subtitle": "Setări cont și securitate" },
-    "accountTransfer": { "title": "Transfer cont", "subtitle": "Migrare cont și site" },
-    "siteMigration": { "title": "Migrare site-uri", "subtitle": "Migrare din cPanel, Plesk sau DirectAdmin" },
-    "toolsSettings": { "title": "Instrumente și setări", "subtitle": "Instrumente panou" },
-    "optimize": { "title": "Optimizare server", "subtitle": "Reglare server" },
-    "statistics": { "title": "Statistici", "subtitle": "Statistici de utilizare" },
-    "firewall": { "title": "Firewall", "subtitle": "Reguli firewall" },
-    "monitoring": { "title": "Monitorizare", "subtitle": "Metrici și jurnale de server live" },
-    "auditLog": { "title": "Jurnal de securitate", "subtitle": "Evenimente de securitate" },
-    "services": { "title": "Servicii", "subtitle": "Servicii de sistem" },
-    "phpVersions": { "title": "Versiuni PHP", "subtitle": "Gestionare versiuni PHP" },
-    "phpModules": { "title": "Module PHP", "subtitle": "Gestionare extensii PHP" },
-    "packages": { "title": "Manager de pachete", "subtitle": "Pachete de sistem" },
-    "dnsTemplate": { "title": "Șablon DNS", "subtitle": "Înregistrări DNS implicite" },
-    "bannedDomains": { "title": "Domenii interzise", "subtitle": "Hostname-uri pe care niciun client nu le poate adăuga" },
-    "siteSecurity": { "title": "Securitatea site-ului", "subtitle": "Vulnerabilități cunoscute în dependențe" },
-    "appCatalog": { "title": "Catalog de aplicații", "subtitle": "Versiunile, adresele de descărcare și sumele de control pe care le oferă instalatorul." },
-    "panelUpdate": { "title": "Actualizare panou", "subtitle": "Versiune panou și actualizări" }
+    "home": {
+      "title": "Acasă",
+      "subtitle": "Prezentare generală panou"
+    },
+    "domains": {
+      "title": "Domenii",
+      "subtitle": "Domenii și abonamente"
+    },
+    "servicePlans": {
+      "title": "Planuri de servicii",
+      "subtitle": "Planuri de pachete și cote"
+    },
+    "customers": {
+      "title": "Clienți",
+      "subtitle": "Înregistrări de clienți și contacte"
+    },
+    "users": {
+      "title": "Utilizatori",
+      "subtitle": "Conturi de panou"
+    },
+    "dns": {
+      "title": "Gestionare DNS",
+      "subtitle": "Înregistrări DNS la nivelul întregului server"
+    },
+    "ssl": {
+      "title": "Certificate SSL",
+      "subtitle": "Gestionare TLS și certificate"
+    },
+    "mail": {
+      "title": "Conturi de email",
+      "subtitle": "Cutii poștale și mail"
+    },
+    "databases": {
+      "title": "Baze de date",
+      "subtitle": "Baze de date MySQL"
+    },
+    "wordpress": {
+      "title": "WordPress",
+      "subtitle": "Site-uri WordPress"
+    },
+    "serverStatus": {
+      "title": "Stare server",
+      "subtitle": "Rezumat resurse și servicii"
+    },
+    "profile": {
+      "title": "Profil și preferințe",
+      "subtitle": "Setări cont și securitate"
+    },
+    "accountTransfer": {
+      "title": "Transfer cont",
+      "subtitle": "Migrare cont și site"
+    },
+    "siteMigration": {
+      "title": "Migrare site-uri",
+      "subtitle": "Migrare din cPanel, Plesk sau DirectAdmin"
+    },
+    "toolsSettings": {
+      "title": "Instrumente și setări",
+      "subtitle": "Instrumente panou"
+    },
+    "optimize": {
+      "title": "Optimizare server",
+      "subtitle": "Reglare server"
+    },
+    "serverIPs": {
+      "title": "Adresele serverului",
+      "subtitle": "Adrese IPv4 suplimentare"
+    },
+    "statistics": {
+      "title": "Statistici",
+      "subtitle": "Statistici de utilizare"
+    },
+    "firewall": {
+      "title": "Firewall",
+      "subtitle": "Reguli firewall"
+    },
+    "monitoring": {
+      "title": "Monitorizare",
+      "subtitle": "Metrici și jurnale de server live"
+    },
+    "auditLog": {
+      "title": "Jurnal de securitate",
+      "subtitle": "Evenimente de securitate"
+    },
+    "services": {
+      "title": "Servicii",
+      "subtitle": "Servicii de sistem"
+    },
+    "phpVersions": {
+      "title": "Versiuni PHP",
+      "subtitle": "Gestionare versiuni PHP"
+    },
+    "phpModules": {
+      "title": "Module PHP",
+      "subtitle": "Gestionare extensii PHP"
+    },
+    "packages": {
+      "title": "Manager de pachete",
+      "subtitle": "Pachete de sistem"
+    },
+    "dnsTemplate": {
+      "title": "Șablon DNS",
+      "subtitle": "Înregistrări DNS implicite"
+    },
+    "bannedDomains": {
+      "title": "Domenii interzise",
+      "subtitle": "Hostname-uri pe care niciun client nu le poate adăuga"
+    },
+    "siteSecurity": {
+      "title": "Securitatea site-ului",
+      "subtitle": "Vulnerabilități cunoscute în dependențe"
+    },
+    "appCatalog": {
+      "title": "Catalog de aplicații",
+      "subtitle": "Versiunile, adresele de descărcare și sumele de control pe care le oferă instalatorul."
+    },
+    "panelUpdate": {
+      "title": "Actualizare panou",
+      "subtitle": "Versiune panou și actualizări"
+    }
   },
   "domain": {
-    "overview": { "title": "Prezentare generală", "subtitle": "Prezentare generală domeniu" },
-    "files": { "title": "Manager de fișiere", "subtitle": "Fișiere și directoare" },
-    "webServer": { "title": "Apache și nginx", "subtitle": "Setări server web" },
-    "php": { "title": "Setări PHP", "subtitle": "Configurare PHP și FPM" },
-    "composer": { "title": "Composer", "subtitle": "Gestionare pachete PHP" },
-    "performance": { "title": "Performanță", "subtitle": "Setări de performanță ale site-ului" },
-    "redis": { "title": "Cache Redis", "subtitle": "Gestionare cache" },
-    "wordpress": { "title": "WordPress", "subtitle": "Instrumente WordPress" },
-    "dns": { "title": "Setări DNS", "subtitle": "Înregistrări DNS domeniu" },
-    "subdomains": { "title": "Subdomenii", "subtitle": "Subdomenii" },
-    "addonDomains": { "title": "Domenii suplimentare", "subtitle": "Domenii alias" },
-    "ssl": { "title": "SSL/TLS", "subtitle": "Certificat HTTPS" },
-    "databases": { "title": "Baze de date", "subtitle": "Baze de date MySQL" },
-    "ftp": { "title": "Conturi FTP", "subtitle": "Acces FTP" },
-    "mail": { "title": "Email", "subtitle": "Cutii poștale" },
-    "mailReports": { "title": "Livrabilitate", "subtitle": "DMARC și MTA-STS" },
-    "backups": { "title": "Copii de rezervă", "subtitle": "Copii de rezervă domeniu" },
-    "copy": { "title": "Copiere site", "subtitle": "Clonare site" },
-    "git": { "title": "Git Deploy", "subtitle": "Git deploy" },
-    "laravel": { "title": "Set de instrumente Laravel", "subtitle": "Instrumente Laravel" },
-    "cron": { "title": "Sarcini programate", "subtitle": "Sarcini cron" },
-    "apps": { "title": "Aplicații", "subtitle": "Procese Node.js și Python" },
-    "ssh": { "title": "Acces SSH", "subtitle": "Acces terminal" },
-    "logs": { "title": "Jurnale", "subtitle": "Jurnale de acces și de erori" },
-    "waf": { "title": "WAF", "subtitle": "Web application firewall" },
-    "accessControl": { "title": "Control acces", "subtitle": "Reguli de acces IP" },
+    "overview": {
+      "title": "Prezentare generală",
+      "subtitle": "Prezentare generală domeniu"
+    },
+    "files": {
+      "title": "Manager de fișiere",
+      "subtitle": "Fișiere și directoare"
+    },
+    "webServer": {
+      "title": "Apache și nginx",
+      "subtitle": "Setări server web"
+    },
+    "php": {
+      "title": "Setări PHP",
+      "subtitle": "Configurare PHP și FPM"
+    },
+    "composer": {
+      "title": "Composer",
+      "subtitle": "Gestionare pachete PHP"
+    },
+    "performance": {
+      "title": "Performanță",
+      "subtitle": "Setări de performanță ale site-ului"
+    },
+    "redis": {
+      "title": "Cache Redis",
+      "subtitle": "Gestionare cache"
+    },
+    "wordpress": {
+      "title": "WordPress",
+      "subtitle": "Instrumente WordPress"
+    },
+    "dns": {
+      "title": "Setări DNS",
+      "subtitle": "Înregistrări DNS domeniu"
+    },
+    "subdomains": {
+      "title": "Subdomenii",
+      "subtitle": "Subdomenii"
+    },
+    "addonDomains": {
+      "title": "Domenii suplimentare",
+      "subtitle": "Domenii alias"
+    },
+    "ssl": {
+      "title": "SSL/TLS",
+      "subtitle": "Certificat HTTPS"
+    },
+    "databases": {
+      "title": "Baze de date",
+      "subtitle": "Baze de date MySQL"
+    },
+    "ftp": {
+      "title": "Conturi FTP",
+      "subtitle": "Acces FTP"
+    },
+    "mail": {
+      "title": "Email",
+      "subtitle": "Cutii poștale"
+    },
+    "mailReports": {
+      "title": "Livrabilitate",
+      "subtitle": "DMARC și MTA-STS"
+    },
+    "backups": {
+      "title": "Copii de rezervă",
+      "subtitle": "Copii de rezervă domeniu"
+    },
+    "copy": {
+      "title": "Copiere site",
+      "subtitle": "Clonare site"
+    },
+    "git": {
+      "title": "Git Deploy",
+      "subtitle": "Git deploy"
+    },
+    "laravel": {
+      "title": "Set de instrumente Laravel",
+      "subtitle": "Instrumente Laravel"
+    },
+    "cron": {
+      "title": "Sarcini programate",
+      "subtitle": "Sarcini cron"
+    },
+    "apps": {
+      "title": "Aplicații",
+      "subtitle": "Procese Node.js și Python"
+    },
+    "ssh": {
+      "title": "Acces SSH",
+      "subtitle": "Acces terminal"
+    },
+    "logs": {
+      "title": "Jurnale",
+      "subtitle": "Jurnale de acces și de erori"
+    },
+    "waf": {
+      "title": "WAF",
+      "subtitle": "Web application firewall"
+    },
+    "accessControl": {
+      "title": "Control acces",
+      "subtitle": "Reguli de acces IP"
+    },
     "maintenance": {
       "title": "Mod mentenanță",
       "subtitle": "Închideți temporar site-ul"
     },
-    "passwordProtection": { "title": "Protecție cu parolă", "subtitle": "Parolă director" },
-    "imunify": { "title": "Imunify", "subtitle": "Scanare malware" },
-    "siteSecurity": { "title": "Securitatea site-ului", "subtitle": "Vulnerabilități cunoscute în dependențe" },
-    "appInstaller": { "title": "Aplicații", "subtitle": "Instalare de aplicații cu un clic" },
-    "stats": { "title": "Statistici", "subtitle": "Date de utilizare domeniu" },
-    "connection": { "title": "Informații de conexiune", "subtitle": "Detalii FTP și bază de date" }
+    "passwordProtection": {
+      "title": "Protecție cu parolă",
+      "subtitle": "Parolă director"
+    },
+    "imunify": {
+      "title": "Imunify",
+      "subtitle": "Scanare malware"
+    },
+    "siteSecurity": {
+      "title": "Securitatea site-ului",
+      "subtitle": "Vulnerabilități cunoscute în dependențe"
+    },
+    "appInstaller": {
+      "title": "Aplicații",
+      "subtitle": "Instalare de aplicații cu un clic"
+    },
+    "stats": {
+      "title": "Statistici",
+      "subtitle": "Date de utilizare domeniu"
+    },
+    "connection": {
+      "title": "Informații de conexiune",
+      "subtitle": "Detalii FTP și bază de date"
+    }
   }
 }
