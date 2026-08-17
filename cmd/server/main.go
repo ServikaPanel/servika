@@ -53,6 +53,7 @@ import (
 	"servika/internal/optimize"
 	"servika/internal/overview"
 	"servika/internal/packages"
+	"servika/internal/panelport"
 	"servika/internal/panelsettings"
 	"servika/internal/passwordprotect"
 	"servika/internal/performance"
@@ -349,6 +350,7 @@ func main() {
 	appInstallH := &appinstall.Handlers{DB: d}
 	optimizeH := &optimize.Handlers{DB: d}
 	serverIPH := &serverip.Handlers{DB: d}
+	panelPortH := &panelport.Handlers{DB: d}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -544,6 +546,12 @@ func main() {
 			r.With(middleware.AdminOnly).Get("/system/ips", serverIPH.List)
 			r.With(middleware.AdminOnly).Post("/system/ips", serverIPH.Add)
 			r.With(middleware.AdminOnly).Delete("/system/ips/{id}", serverIPH.Remove)
+			// The panel's own ports. Admin only, and a backend change is
+			// answered 202: it restarts this process, so the verdict arrives
+			// through the outcome file rather than through the response.
+			r.With(middleware.AdminOnly).Get("/system/panel-port", panelPortH.Status)
+			r.With(middleware.AdminOnly).Post("/system/panel-port", panelPortH.Change)
+			r.With(middleware.AdminOnly).Get("/system/panel-port/history", panelPortH.History)
 			r.With(middleware.AdminOnly).Get("/system/ssh-security", system.SSHSecurity)
 			r.With(middleware.AdminOnly).Get("/system/cve", system.CveStatus)
 			r.With(middleware.AdminOnly).Post("/system/cve/update", system.CveUpdate)
@@ -1070,6 +1078,24 @@ func main() {
 	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
 	laravel.HealOnStartup(d)                   // realign queue worker units, and remove the ones whose row is gone
 	laravel.HealLogRotation()                  // rotate the worker and application logs, which grew without bound
+	// The firewall's protected set has to follow the panel's own ports. Left
+	// hardcoded it would go on guarding the numbers the panel used to be on and
+	// leave the ones it is on now closeable from the firewall screen, which
+	// locks the operator out weeks after the move with nothing connecting the
+	// two events. The two packages do not import each other; the reader is
+	// wired here, and a failed reading keeps the installed defaults.
+	firewall.SetPanelPorts(func() []int {
+		ports, err := panelport.Current()
+		if err != nil {
+			return []int{8080, 8443}
+		}
+		return []int{ports.Backend, ports.External}
+	})
+	// A detached port change ends with this process being replaced, so the
+	// panel that started it is not the panel that learns how it went. Its
+	// verdict is folded into the history table here.
+	panelport.FoldOutcome(d)
+
 	firewall.TakeOverFirewalld()
 	if err := firewall.Reapply(d); err != nil {
 		log.Printf("firewall reapply warn: %v", err)

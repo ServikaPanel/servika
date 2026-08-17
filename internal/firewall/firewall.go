@@ -47,11 +47,28 @@ const (
 // that an administrator who moves it keeps the guard on the port in use and can
 // close 22, which is exactly what the panel's own warning asks them to do.
 var protectedPorts = map[int]bool{
-	80:   true, // Customer sites over HTTP.
-	443:  true, // Customer sites over HTTPS.
-	8080: true, // Panel API.
-	8443: true, // Panel UI.
-	53:   true, // DNS through named.
+	80:  true, // Customer sites over HTTP.
+	443: true, // Customer sites over HTTPS.
+	53:  true, // DNS through named.
+}
+
+// panelPorts is a package variable for the same reason sshPorts is: the panel's
+// own ports can MOVE, and a hardcoded pair would go on guarding the numbers the
+// panel used to be on while leaving the ones it is on now closeable from the
+// firewall screen. That is the exact shape of lockout this guard exists to
+// prevent, and it would arrive silently, weeks after the port was moved.
+//
+// It falls back to the installed defaults, so a failed reading keeps the old
+// guard rather than dropping it.
+var panelPorts = func() []int { return []int{8080, 8443} }
+
+// SetPanelPorts wires the live panel ports in. cmd/server/main.go calls it with
+// internal/panelport's reader; the two packages do not import each other,
+// because the port reader has no business knowing about firewall rules.
+func SetPanelPorts(read func() []int) {
+	if read != nil {
+		panelPorts = read
+	}
 }
 
 // sshPorts is a package variable so tests can stand in for the host probe.
@@ -62,19 +79,29 @@ var sshPorts = system.SSHPorts
 // isProtectedPort reports whether closing this port would cut off the server, the
 // panel, hosted sites, or the administrator's own SSH session.
 func isProtectedPort(port int) bool {
-	return protectedPorts[port] || slices.Contains(sshPorts(), port)
+	return protectedPorts[port] ||
+		slices.Contains(sshPorts(), port) ||
+		slices.Contains(panelPorts(), port)
 }
 
 // protectedPortList is what the firewall screen greys out.
 func protectedPortList() []int {
-	ports := make([]int, 0, len(protectedPorts)+1)
-	for port := range protectedPorts {
-		ports = append(ports, port)
-	}
-	for _, port := range sshPorts() {
-		if !protectedPorts[port] {
+	seen := map[int]bool{}
+	ports := make([]int, 0, len(protectedPorts)+4)
+	add := func(port int) {
+		if port > 0 && !seen[port] {
+			seen[port] = true
 			ports = append(ports, port)
 		}
+	}
+	for port := range protectedPorts {
+		add(port)
+	}
+	for _, port := range sshPorts() {
+		add(port)
+	}
+	for _, port := range panelPorts() {
+		add(port)
 	}
 	slices.Sort(ports)
 	return ports

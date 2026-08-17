@@ -111,3 +111,62 @@ func TestProtectedPortCoversEverySSHPort(t *testing.T) {
 		t.Errorf("protectedPortList() = %v", got)
 	}
 }
+
+// stubPanelPorts stands in for the live reader.
+func stubPanelPorts(t *testing.T, ports []int) {
+	t.Helper()
+	previous := panelPorts
+	panelPorts = func() []int { return ports }
+	t.Cleanup(func() { panelPorts = previous })
+}
+
+// The panel's own ports can MOVE. A hardcoded pair goes on guarding the numbers
+// the panel used to be on and leaves the ones it is on now closeable from this
+// very screen, which locks the operator out weeks after the change with nothing
+// to connect the two events.
+func TestProtectionFollowsThePanelWhenItsPortsMove(t *testing.T) {
+	stubSSHPorts(t, []int{22})
+	stubPanelPorts(t, []int{9090, 9443})
+
+	for _, port := range []int{9090, 9443} {
+		if !isProtectedPort(port) {
+			t.Errorf("the panel is on port %d but closing it is allowed", port)
+		}
+	}
+	// The old numbers are no longer the panel's, so they are no longer guarded:
+	// leaving them protected would grey out ports the operator can now use.
+	for _, port := range []int{8080, 8443} {
+		if isProtectedPort(port) {
+			t.Errorf("port %d is protected although the panel has moved off it", port)
+		}
+	}
+	if got := protectedPortList(); !slices.Equal(got, []int{22, 53, 80, 443, 9090, 9443}) {
+		t.Errorf("protectedPortList() = %v", got)
+	}
+}
+
+// A reading that failed must keep the old guard rather than drop it: an empty
+// list would leave every panel port closeable.
+func TestAFailedPanelPortReadingKeepsTheDefaultGuard(t *testing.T) {
+	stubSSHPorts(t, []int{22})
+	SetPanelPorts(nil) // a caller that has nothing to give must not clear it
+	for _, port := range []int{8080, 8443} {
+		if !isProtectedPort(port) {
+			t.Errorf("port %d lost its protection when no reader was supplied", port)
+		}
+	}
+}
+
+// The list never repeats a port, however many sources name it.
+func TestTheProtectedListHasNoDuplicates(t *testing.T) {
+	stubSSHPorts(t, []int{443})
+	stubPanelPorts(t, []int{443, 8443})
+	got := protectedPortList()
+	seen := map[int]bool{}
+	for _, port := range got {
+		if seen[port] {
+			t.Errorf("port %d appears twice in %v", port, got)
+		}
+		seen[port] = true
+	}
+}
