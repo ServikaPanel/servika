@@ -46,6 +46,7 @@
   },
   "accessControl": { "label": "Řízení přístupu", "desc": "Ochrana proti hotlinkingu · povolení/blokování IP" },
   "imunify": { "label": "Imunify", "desc": "Antivirus" },
+  "siteSecurity": { "label": "Zabezpečení webu", "desc": "Známé zranitelnosti v závislostech" },
   "ssh": {
     "label": "Přístup SSH",
     "enabled": "Povoleno",

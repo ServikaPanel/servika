@@ -1,0 +1,63 @@
+{
+  "title": "Sécurité du site",
+  "subtitle": "Vulnérabilités connues dans ce que les sites de ce serveur exécutent réellement.",
+  "domainSubtitle": "Vulnérabilités connues dans ce que ce site exécute réellement.",
+  "breadcrumb": {
+    "home": "Accueil",
+    "domains": "Domaines",
+    "current": "Sécurité du site"
+  },
+  "status": {
+    "title": "Dernière analyse",
+    "unknown": "Aucune analyse n'a encore été lancée.",
+    "state": {
+      "idle": "Jamais lancée",
+      "running": "En cours",
+      "finished": "Terminée",
+      "failed": "Échouée"
+    },
+    "finishedAt": "Terminée",
+    "scanNow": "Analyser maintenant",
+    "starting": "Démarrage…",
+    "running": "Analyse en cours…",
+    "domains": "Domaines",
+    "packages": "Paquets",
+    "findings": "Résultats",
+    "unparsed": "Non évalués",
+    "unparsedNote": "Certaines versions n'ont pas pu être comparées aux plages des avis ; ces paquets n'ont été ni écartés ni signalés. Ce n'est pas un blanc-seing pour eux.",
+    "failedNote": "La dernière analyse ne s'est pas terminée. Ce qu'elle avait déjà trouvé est conservé, mais le passage est incomplet."
+  },
+  "table": {
+    "severity": "Gravité",
+    "domain": "Domaine",
+    "package": "Paquet",
+    "installed": "Installée",
+    "fixedIn": "Corrigé dans",
+    "advisory": "Avis",
+    "firstSeen": "Vu pour la première fois",
+    "noFix": "Aucun correctif publié",
+    "loading": "Chargement…",
+    "empty": "Aucune vulnérabilité connue n'a été trouvée."
+  },
+  "severity": {
+    "critical": "Critique",
+    "high": "Élevée",
+    "medium": "Moyenne",
+    "low": "Faible",
+    "unknown": "Non évaluée"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filtrer par domaine, paquet ou CVE",
+  "shown": "Affichés",
+  "advisoryNote": "Ces résultats sont indicatifs. La correspondance de version avec une source publique n'est pas exacte, vérifiez donc un avis avant d'agir. Rien ici ne suspend un compte ni ne modifie un fichier.",
+  "scheduleNote": "Le serveur analyse toutes les six heures. Un administrateur peut aussi lancer une analyse.",
+  "errors": {
+    "load": "Les résultats n'ont pas pu être chargés",
+    "scan": "L'analyse n'a pas pu être lancée",
+    "alreadyRunning": "Une analyse est déjà en cours."
+  }
+}

@@ -55,6 +55,10 @@
       "title": "Domains",
       "description": "Browse, search, and quickly access all domains."
     },
+    "siteSecurity": {
+      "title": "Site Security",
+      "description": "Known CVEs in a tenant's WordPress plugins, npm and Composer dependencies."
+    },
     "bannedDomains": {
       "title": "Banned Domains",
       "description": "Hostnames no customer may add to this server. Used against phishing."

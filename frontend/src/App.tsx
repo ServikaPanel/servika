@@ -52,6 +52,8 @@ const PanelUpdatePage = lazy(() => import('@/pages/PanelUpdatePage'))
 const ServerOptimizePage = lazy(() => import('@/pages/ServerOptimizePage'))
 const DNSTemplatePage = lazy(() => import('@/pages/DNSTemplatePage'))
 const BannedDomainsPage = lazy(() => import('@/pages/BannedDomainsPage'))
+const WebsiteSecurityPage = lazy(() => import('@/pages/WebsiteSecurityPage'))
+const DomainSiteSecurityPage = lazy(() => import('@/pages/DomainSiteSecurityPage'))
 const WordPressPage = lazy(() => import('@/pages/WordPressPage'))
 const FirewallPage = lazy(() => import('@/pages/FirewallPage'))
 const BackupManagementPage = lazy(() => import('@/pages/BackupManagementPage'))
@@ -125,6 +127,7 @@ export default function App() {
         <Route path="subscriptions/:id/composer"      element={<DomainComposerPage />} />
         <Route path="subscriptions/:id/password-protection"  element={<DomainPasswordProtectPage />} />
         <Route path="subscriptions/:id/imunify"       element={<DomainAntivirusPage />} />
+        <Route path="subscriptions/:id/site-security" element={<DomainSiteSecurityPage />} />
         <Route path="subscriptions/:id/copy"       element={<DomainCopyPage />} />
         <Route path="subscriptions/:id/import"     element={<DomainImportPage />} />
         <Route path="subscriptions/:id/wordpress"     element={<DomainWordPressPage />} />
@@ -163,6 +166,7 @@ export default function App() {
         <Route path="tools/services"               element={<ServicesPage />} />
         <Route path="tools/dns-template"           element={<DNSTemplatePage />} />
         <Route path="tools/banned-domains"           element={<BannedDomainsPage />} />
+        <Route path="site-security"                  element={<WebsiteSecurityPage />} />
         <Route path="subscriptions/:id/:slug" element={<ToolPage />} />
         <Route path="service-plans"      element={<ServicePlansPage />} />
 

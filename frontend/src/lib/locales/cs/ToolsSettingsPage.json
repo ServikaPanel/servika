@@ -56,6 +56,10 @@
       "title": "Domény",
       "description": "Procházejte, vyhledávejte a rychle přistupujte ke všem doménám."
     },
+    "siteSecurity": {
+      "title": "Zabezpečení webu",
+      "description": "Známé CVE v pluginech WordPressu a v závislostech npm a Composeru zákazníka."
+    },
     "bannedDomains": {
       "title": "Zakázané domény",
       "description": "Hostname, které žádný zákazník nesmí na tento server přidat. Proti phishingu."

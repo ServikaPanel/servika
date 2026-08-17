@@ -46,6 +46,7 @@
   },
   "accessControl": { "label": "访问控制", "desc": "防盗链 · IP 允许/阻止" },
   "imunify": { "label": "Imunify", "desc": "杀毒" },
+  "siteSecurity": { "label": "站点安全", "desc": "依赖项中的已知漏洞" },
   "ssh": {
     "label": "SSH 访问",
     "enabled": "已启用",

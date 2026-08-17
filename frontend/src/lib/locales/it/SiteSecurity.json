@@ -1,0 +1,63 @@
+{
+  "title": "Sicurezza del sito",
+  "subtitle": "Vulnerabilità note in ciò che i siti su questo server eseguono davvero.",
+  "domainSubtitle": "Vulnerabilità note in ciò che questo sito esegue davvero.",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Domini",
+    "current": "Sicurezza del sito"
+  },
+  "status": {
+    "title": "Ultima scansione",
+    "unknown": "Non è ancora stata eseguita alcuna scansione.",
+    "state": {
+      "idle": "Mai eseguita",
+      "running": "In corso",
+      "finished": "Completata",
+      "failed": "Fallita"
+    },
+    "finishedAt": "Completata",
+    "scanNow": "Scansiona ora",
+    "starting": "Avvio…",
+    "running": "Scansione in corso…",
+    "domains": "Domini",
+    "packages": "Pacchetti",
+    "findings": "Rilevazioni",
+    "unparsed": "Non valutati",
+    "unparsedNote": "Alcune versioni non sono state confrontabili con gli intervalli degli avvisi; quei pacchetti non sono stati né scagionati né segnalati. Per loro non è un esito pulito.",
+    "failedNote": "L'ultima scansione non si è conclusa. Quanto già trovato viene mantenuto, ma il passaggio è incompleto."
+  },
+  "table": {
+    "severity": "Gravità",
+    "domain": "Dominio",
+    "package": "Pacchetto",
+    "installed": "Installata",
+    "fixedIn": "Corretto in",
+    "advisory": "Avviso",
+    "firstSeen": "Primo rilevamento",
+    "noFix": "Nessuna correzione pubblicata",
+    "loading": "Caricamento…",
+    "empty": "Non è stata trovata alcuna vulnerabilità nota."
+  },
+  "severity": {
+    "critical": "Critica",
+    "high": "Alta",
+    "medium": "Media",
+    "low": "Bassa",
+    "unknown": "Non valutata"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filtra per dominio, pacchetto o CVE",
+  "shown": "Mostrate",
+  "advisoryNote": "Queste rilevazioni sono indicative. La corrispondenza di versione con una fonte pubblica non è esatta, quindi verifica l'avviso prima di agire. Nulla qui sospende un account o modifica un file.",
+  "scheduleNote": "Il server esegue una scansione ogni sei ore. Un amministratore può anche avviarne una.",
+  "errors": {
+    "load": "Non è stato possibile caricare le rilevazioni",
+    "scan": "Non è stato possibile avviare la scansione",
+    "alreadyRunning": "Una scansione è già in corso."
+  }
+}

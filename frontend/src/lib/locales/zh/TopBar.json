@@ -38,6 +38,7 @@
     "packages": { "title": "软件包管理器", "subtitle": "系统软件包" },
     "dnsTemplate": { "title": "DNS 模板", "subtitle": "默认 DNS 记录" },
     "bannedDomains": { "title": "禁止域名", "subtitle": "客户不可添加的主机名" },
+    "siteSecurity": { "title": "站点安全", "subtitle": "依赖项中的已知漏洞" },
     "panelUpdate": { "title": "面板更新", "subtitle": "面板版本和更新" }
   },
   "domain": {
@@ -73,6 +74,7 @@
     },
     "passwordProtection": { "title": "密码保护", "subtitle": "目录密码" },
     "imunify": { "title": "Imunify", "subtitle": "恶意软件扫描" },
+    "siteSecurity": { "title": "站点安全", "subtitle": "依赖项中的已知漏洞" },
     "stats": { "title": "统计", "subtitle": "域名使用数据" },
     "connection": { "title": "连接信息", "subtitle": "FTP 和数据库详情" }
   }

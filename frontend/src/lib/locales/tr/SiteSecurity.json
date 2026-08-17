@@ -1,0 +1,63 @@
+{
+  "title": "Site Güvenliği",
+  "subtitle": "Bu sunucudaki sitelerin gerçekten çalıştırdığı bileşenlerdeki bilinen açıklar.",
+  "domainSubtitle": "Bu sitenin gerçekten çalıştırdığı bileşenlerdeki bilinen açıklar.",
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "domains": "Alan Adları",
+    "current": "Site Güvenliği"
+  },
+  "status": {
+    "title": "Son tarama",
+    "unknown": "Henüz tarama yapılmadı.",
+    "state": {
+      "idle": "Hiç çalışmadı",
+      "running": "Çalışıyor",
+      "finished": "Bitti",
+      "failed": "Başarısız"
+    },
+    "finishedAt": "Bitiş",
+    "scanNow": "Şimdi tara",
+    "starting": "Başlatılıyor…",
+    "running": "Tarama sürüyor…",
+    "domains": "Alan adı",
+    "packages": "Paket",
+    "findings": "Bulgu",
+    "unparsed": "Değerlendirilemedi",
+    "unparsedNote": "Bazı sürümler açık aralıklarıyla karşılaştırılamadı; bu paketler ne temiz sayıldı ne de raporlandı. Bu, onlar için temiz bir sonuç değildir.",
+    "failedNote": "Son tarama tamamlanmadı. O ana kadar bulduğu saklandı ama tarama eksiktir."
+  },
+  "table": {
+    "severity": "Önem",
+    "domain": "Alan adı",
+    "package": "Paket",
+    "installed": "Kurulu",
+    "fixedIn": "Düzeltildiği sürüm",
+    "advisory": "Kayıt",
+    "firstSeen": "İlk görülme",
+    "noFix": "Düzeltme yayınlanmadı",
+    "loading": "Yükleniyor…",
+    "empty": "Bilinen açık bulunamadı."
+  },
+  "severity": {
+    "critical": "Kritik",
+    "high": "Yüksek",
+    "medium": "Orta",
+    "low": "Düşük",
+    "unknown": "Derecelenmemiş"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Alan adı, paket veya CVE ile süz",
+  "shown": "Gösterilen",
+  "advisoryNote": "Bu bulgular bilgilendirmedir. Açık kaynaklı bir beslemeye göre sürüm eşleştirme kesin değildir; işlem yapmadan önce kaydı doğrulayın. Buradaki hiçbir şey hesabı askıya almaz veya dosya değiştirmez.",
+  "scheduleNote": "Sunucu altı saatte bir tarar. Yönetici ayrıca elle tarama başlatabilir.",
+  "errors": {
+    "load": "Bulgular yüklenemedi",
+    "scan": "Tarama başlatılamadı",
+    "alreadyRunning": "Zaten bir tarama sürüyor."
+  }
+}

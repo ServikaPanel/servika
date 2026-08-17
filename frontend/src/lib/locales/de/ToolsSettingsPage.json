@@ -55,6 +55,10 @@
       "title": "Domains",
       "description": "Alle Domains durchsuchen, suchen und schnell darauf zugreifen."
     },
+    "siteSecurity": {
+      "title": "Website-Sicherheit",
+      "description": "Bekannte CVEs in WordPress-Plugins, npm- und Composer-Abhängigkeiten eines Kunden."
+    },
     "bannedDomains": {
       "title": "Gesperrte Domains",
       "description": "Hostnamen, die kein Kunde auf diesem Server hinzufügen darf. Gegen Phishing."

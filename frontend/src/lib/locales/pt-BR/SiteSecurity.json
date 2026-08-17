@@ -1,0 +1,63 @@
+{
+  "title": "Segurança do site",
+  "subtitle": "Vulnerabilidades conhecidas naquilo que os sites deste servidor realmente executam.",
+  "domainSubtitle": "Vulnerabilidades conhecidas naquilo que este site realmente executa.",
+  "breadcrumb": {
+    "home": "Início",
+    "domains": "Domínios",
+    "current": "Segurança do site"
+  },
+  "status": {
+    "title": "Última varredura",
+    "unknown": "Nenhuma varredura foi executada ainda.",
+    "state": {
+      "idle": "Nunca executada",
+      "running": "Em execução",
+      "finished": "Concluída",
+      "failed": "Falhou"
+    },
+    "finishedAt": "Concluída",
+    "scanNow": "Verificar agora",
+    "starting": "Iniciando…",
+    "running": "Varredura em andamento…",
+    "domains": "Domínios",
+    "packages": "Pacotes",
+    "findings": "Ocorrências",
+    "unparsed": "Não avaliados",
+    "unparsedNote": "Algumas versões não puderam ser comparadas com os intervalos dos avisos; esses pacotes não foram nem liberados nem reportados. Para eles, isso não é um resultado limpo.",
+    "failedNote": "A última varredura não terminou. O que já havia encontrado é mantido, mas a passagem está incompleta."
+  },
+  "table": {
+    "severity": "Gravidade",
+    "domain": "Domínio",
+    "package": "Pacote",
+    "installed": "Instalada",
+    "fixedIn": "Corrigido em",
+    "advisory": "Aviso",
+    "firstSeen": "Primeira detecção",
+    "noFix": "Sem correção publicada",
+    "loading": "Carregando…",
+    "empty": "Nenhuma vulnerabilidade conhecida foi encontrada."
+  },
+  "severity": {
+    "critical": "Crítica",
+    "high": "Alta",
+    "medium": "Média",
+    "low": "Baixa",
+    "unknown": "Sem classificação"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filtrar por domínio, pacote ou CVE",
+  "shown": "Exibidas",
+  "advisoryNote": "Estas ocorrências são informativas. A correspondência de versões com uma fonte pública não é exata, então confirme o aviso antes de agir. Nada aqui suspende uma conta nem altera um arquivo.",
+  "scheduleNote": "O servidor verifica a cada seis horas. Um administrador também pode iniciar uma varredura.",
+  "errors": {
+    "load": "Não foi possível carregar as ocorrências",
+    "scan": "Não foi possível iniciar a varredura",
+    "alreadyRunning": "Já existe uma varredura em andamento."
+  }
+}

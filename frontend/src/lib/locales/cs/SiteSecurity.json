@@ -1,0 +1,63 @@
+{
+  "title": "Zabezpečení webu",
+  "subtitle": "Známé zranitelnosti v tom, co weby na tomto serveru skutečně spouštějí.",
+  "domainSubtitle": "Známé zranitelnosti v tom, co tento web skutečně spouští.",
+  "breadcrumb": {
+    "home": "Domů",
+    "domains": "Domény",
+    "current": "Zabezpečení webu"
+  },
+  "status": {
+    "title": "Poslední kontrola",
+    "unknown": "Zatím neproběhla žádná kontrola.",
+    "state": {
+      "idle": "Nikdy neproběhla",
+      "running": "Probíhá",
+      "finished": "Dokončena",
+      "failed": "Selhala"
+    },
+    "finishedAt": "Dokončena",
+    "scanNow": "Zkontrolovat nyní",
+    "starting": "Spouští se…",
+    "running": "Kontrola probíhá…",
+    "domains": "Domény",
+    "packages": "Balíčky",
+    "findings": "Nálezy",
+    "unparsed": "Neposouzeno",
+    "unparsedNote": "Některé verze nešlo porovnat s rozsahy v upozorněních; tyto balíčky nebyly ani vyloučeny, ani nahlášeny. Pro ně to není čistý výsledek.",
+    "failedNote": "Poslední kontrola neskončila. Co už našla, zůstává, ale průchod je neúplný."
+  },
+  "table": {
+    "severity": "Závažnost",
+    "domain": "Doména",
+    "package": "Balíček",
+    "installed": "Nainstalováno",
+    "fixedIn": "Opraveno ve verzi",
+    "advisory": "Upozornění",
+    "firstSeen": "Poprvé zjištěno",
+    "noFix": "Oprava nebyla vydána",
+    "loading": "Načítá se…",
+    "empty": "Nebyly nalezeny žádné známé zranitelnosti."
+  },
+  "severity": {
+    "critical": "Kritická",
+    "high": "Vysoká",
+    "medium": "Střední",
+    "low": "Nízká",
+    "unknown": "Bez hodnocení"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filtrovat podle domény, balíčku nebo CVE",
+  "shown": "Zobrazeno",
+  "advisoryNote": "Tyto nálezy jsou informativní. Porovnání verzí s veřejným zdrojem není přesné, proto si upozornění před zásahem ověřte. Nic zde nepozastaví účet ani nezmění soubor.",
+  "scheduleNote": "Server kontroluje každých šest hodin. Administrátor může kontrolu spustit i ručně.",
+  "errors": {
+    "load": "Nálezy se nepodařilo načíst",
+    "scan": "Kontrolu se nepodařilo spustit",
+    "alreadyRunning": "Kontrola už probíhá."
+  }
+}

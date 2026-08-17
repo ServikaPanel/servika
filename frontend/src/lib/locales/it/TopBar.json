@@ -38,6 +38,7 @@
     "packages": { "title": "Gestione Pacchetti", "subtitle": "Pacchetti di sistema" },
     "dnsTemplate": { "title": "Modello DNS", "subtitle": "Record DNS predefiniti" },
     "bannedDomains": { "title": "Domini vietati", "subtitle": "Hostname che nessun cliente può aggiungere" },
+    "siteSecurity": { "title": "Sicurezza del sito", "subtitle": "Vulnerabilità note nelle dipendenze" },
     "panelUpdate": { "title": "Aggiornamento Pannello", "subtitle": "Versione e aggiornamenti pannello" }
   },
   "domain": {
@@ -73,6 +74,7 @@
     },
     "passwordProtection": { "title": "Protezione Password", "subtitle": "Password directory" },
     "imunify": { "title": "Imunify", "subtitle": "Scansione malware" },
+    "siteSecurity": { "title": "Sicurezza del sito", "subtitle": "Vulnerabilità note nelle dipendenze" },
     "stats": { "title": "Statistiche", "subtitle": "Dati utilizzo dominio" },
     "connection": { "title": "Info Connessione", "subtitle": "Dettagli FTP e database" }
   }

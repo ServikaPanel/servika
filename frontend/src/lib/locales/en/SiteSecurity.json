@@ -1,0 +1,63 @@
+{
+  "title": "Site Security",
+  "subtitle": "Known vulnerabilities in what the sites on this server actually run.",
+  "domainSubtitle": "Known vulnerabilities in what this site actually runs.",
+  "breadcrumb": {
+    "home": "Home",
+    "domains": "Domains",
+    "current": "Site Security"
+  },
+  "status": {
+    "title": "Last scan",
+    "unknown": "No scan has run yet.",
+    "state": {
+      "idle": "Never run",
+      "running": "Running",
+      "finished": "Finished",
+      "failed": "Failed"
+    },
+    "finishedAt": "Finished",
+    "scanNow": "Scan now",
+    "starting": "Starting…",
+    "running": "Scan running…",
+    "domains": "Domains",
+    "packages": "Packages",
+    "findings": "Findings",
+    "unparsed": "Not judged",
+    "unparsedNote": "Some versions could not be compared against the advisory ranges, so those packages were neither cleared nor reported. This is not a clean bill of health for them.",
+    "failedNote": "The last scan did not finish. What it had already found is kept, but the sweep is incomplete."
+  },
+  "table": {
+    "severity": "Severity",
+    "domain": "Domain",
+    "package": "Package",
+    "installed": "Installed",
+    "fixedIn": "Fixed in",
+    "advisory": "Advisory",
+    "firstSeen": "First seen",
+    "noFix": "No fix published",
+    "loading": "Loading…",
+    "empty": "No known vulnerabilities were found."
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "unknown": "Unrated"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filter by domain, package or CVE",
+  "shown": "Shown",
+  "advisoryNote": "These findings are advisory. Version matching against a public feed is not exact, so check an advisory before acting on it. Nothing here suspends an account or changes a file.",
+  "scheduleNote": "The server scans every six hours. An administrator can also start a scan.",
+  "errors": {
+    "load": "The findings could not be loaded",
+    "scan": "The scan could not be started",
+    "alreadyRunning": "A scan is already running."
+  }
+}

@@ -38,6 +38,7 @@
     "packages": { "title": "パッケージマネージャー", "subtitle": "システムパッケージ" },
     "dnsTemplate": { "title": "DNS テンプレート", "subtitle": "デフォルトの DNS レコード" },
     "bannedDomains": { "title": "禁止ドメイン", "subtitle": "顧客が追加できないホスト名" },
+    "siteSecurity": { "title": "サイトセキュリティ", "subtitle": "依存関係の既知の脆弱性" },
     "panelUpdate": { "title": "パネル更新", "subtitle": "パネルのバージョンと更新" }
   },
   "domain": {
@@ -73,6 +74,7 @@
     },
     "passwordProtection": { "title": "パスワード保護", "subtitle": "ディレクトリのパスワード" },
     "imunify": { "title": "Imunify", "subtitle": "マルウェアスキャン" },
+    "siteSecurity": { "title": "サイトセキュリティ", "subtitle": "依存関係の既知の脆弱性" },
     "stats": { "title": "統計", "subtitle": "ドメイン使用データ" },
     "connection": { "title": "接続情報", "subtitle": "FTP とデータベースの詳細" }
   }

@@ -1,0 +1,63 @@
+{
+  "title": "站点安全",
+  "subtitle": "本服务器上各站点实际运行组件中的已知漏洞。",
+  "domainSubtitle": "本站点实际运行组件中的已知漏洞。",
+  "breadcrumb": {
+    "home": "首页",
+    "domains": "域名",
+    "current": "站点安全"
+  },
+  "status": {
+    "title": "上次扫描",
+    "unknown": "尚未执行过扫描。",
+    "state": {
+      "idle": "从未执行",
+      "running": "进行中",
+      "finished": "已完成",
+      "failed": "失败"
+    },
+    "finishedAt": "完成于",
+    "scanNow": "立即扫描",
+    "starting": "启动中…",
+    "running": "扫描进行中…",
+    "domains": "域名",
+    "packages": "软件包",
+    "findings": "发现",
+    "unparsed": "无法判定",
+    "unparsedNote": "部分版本无法与公告的影响范围比较，这些软件包既未被排除也未被报告。这并不代表它们是安全的。",
+    "failedNote": "上次扫描未完成。已发现的内容会保留，但本次扫描并不完整。"
+  },
+  "table": {
+    "severity": "严重程度",
+    "domain": "域名",
+    "package": "软件包",
+    "installed": "已安装",
+    "fixedIn": "修复版本",
+    "advisory": "公告",
+    "firstSeen": "首次发现",
+    "noFix": "尚无修复",
+    "loading": "加载中…",
+    "empty": "未发现已知漏洞。"
+  },
+  "severity": {
+    "critical": "严重",
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+    "unknown": "未评级"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "按域名、软件包或 CVE 筛选",
+  "shown": "显示",
+  "advisoryNote": "这些结果仅供参考。与公开数据源的版本比对并不精确，处理前请先核对公告。此处的任何内容都不会暂停账户或修改文件。",
+  "scheduleNote": "服务器每六小时扫描一次。管理员也可以手动发起扫描。",
+  "errors": {
+    "load": "无法加载结果",
+    "scan": "无法启动扫描",
+    "alreadyRunning": "已有扫描在进行中。"
+  }
+}

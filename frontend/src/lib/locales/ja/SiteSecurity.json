@@ -1,0 +1,63 @@
+{
+  "title": "サイトセキュリティ",
+  "subtitle": "このサーバーのサイトが実際に動かしているものにある既知の脆弱性です。",
+  "domainSubtitle": "このサイトが実際に動かしているものにある既知の脆弱性です。",
+  "breadcrumb": {
+    "home": "ホーム",
+    "domains": "ドメイン",
+    "current": "サイトセキュリティ"
+  },
+  "status": {
+    "title": "前回のスキャン",
+    "unknown": "まだスキャンは実行されていません。",
+    "state": {
+      "idle": "未実行",
+      "running": "実行中",
+      "finished": "完了",
+      "failed": "失敗"
+    },
+    "finishedAt": "完了",
+    "scanNow": "今すぐスキャン",
+    "starting": "開始中…",
+    "running": "スキャン中…",
+    "domains": "ドメイン",
+    "packages": "パッケージ",
+    "findings": "検出",
+    "unparsed": "判定不可",
+    "unparsedNote": "一部のバージョンは脆弱性の対象範囲と比較できず、それらのパッケージは安全とも危険とも判定されていません。安全である証明ではありません。",
+    "failedNote": "前回のスキャンは完了しませんでした。すでに見つかった内容は保持されますが、走査は不完全です。"
+  },
+  "table": {
+    "severity": "深刻度",
+    "domain": "ドメイン",
+    "package": "パッケージ",
+    "installed": "導入版",
+    "fixedIn": "修正版",
+    "advisory": "アドバイザリ",
+    "firstSeen": "初回検出",
+    "noFix": "修正未公開",
+    "loading": "読み込み中…",
+    "empty": "既知の脆弱性は見つかりませんでした。"
+  },
+  "severity": {
+    "critical": "重大",
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+    "unknown": "未評価"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "ドメイン、パッケージ、CVE で絞り込み",
+  "shown": "表示中",
+  "advisoryNote": "この検出結果は参考情報です。公開フィードとのバージョン照合は厳密ではないため、対応の前にアドバイザリを確認してください。ここでの操作がアカウントを停止したりファイルを変更したりすることはありません。",
+  "scheduleNote": "サーバーは 6 時間ごとにスキャンします。管理者は手動でスキャンを開始することもできます。",
+  "errors": {
+    "load": "検出結果を読み込めませんでした",
+    "scan": "スキャンを開始できませんでした",
+    "alreadyRunning": "すでにスキャンが実行中です。"
+  }
+}

@@ -55,6 +55,10 @@
       "title": "Domini",
       "description": "Sfoglia, cerca e accedi rapidamente a tutti i domini."
     },
+    "siteSecurity": {
+      "title": "Sicurezza del sito",
+      "description": "CVE note nei plugin WordPress e nelle dipendenze npm e Composer di un cliente."
+    },
     "bannedDomains": {
       "title": "Domini vietati",
       "description": "Hostname che nessun cliente può aggiungere a questo server. Contro il phishing."

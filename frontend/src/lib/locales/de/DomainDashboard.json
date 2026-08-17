@@ -46,6 +46,7 @@
   },
   "accessControl": { "label": "Zugriffssteuerung", "desc": "Hotlink-Schutz · IP zulassen/blockieren" },
   "imunify": { "label": "Imunify", "desc": "Antivirus" },
+  "siteSecurity": { "label": "Website-Sicherheit", "desc": "Bekannte Schwachstellen in Abhängigkeiten" },
   "ssh": {
     "label": "SSH-Zugriff",
     "enabled": "Aktiviert",

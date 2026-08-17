@@ -54,6 +54,10 @@
       "title": "ドメイン",
       "description": "すべてのドメインを閲覧、検索し、すばやくアクセスします。"
     },
+    "siteSecurity": {
+      "title": "サイトセキュリティ",
+      "description": "顧客の WordPress プラグイン、npm および Composer 依存関係にある既知の CVE。"
+    },
     "bannedDomains": {
       "title": "禁止ドメイン",
       "description": "顧客がこのサーバーに追加できないホスト名。フィッシング対策に使います。"

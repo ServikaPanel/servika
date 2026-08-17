@@ -1,0 +1,63 @@
+{
+  "title": "Seguridad del sitio",
+  "subtitle": "Vulnerabilidades conocidas en lo que los sitios de este servidor ejecutan realmente.",
+  "domainSubtitle": "Vulnerabilidades conocidas en lo que este sitio ejecuta realmente.",
+  "breadcrumb": {
+    "home": "Inicio",
+    "domains": "Dominios",
+    "current": "Seguridad del sitio"
+  },
+  "status": {
+    "title": "Último análisis",
+    "unknown": "Todavía no se ha ejecutado ningún análisis.",
+    "state": {
+      "idle": "Nunca ejecutado",
+      "running": "En curso",
+      "finished": "Finalizado",
+      "failed": "Fallido"
+    },
+    "finishedAt": "Finalizado",
+    "scanNow": "Analizar ahora",
+    "starting": "Iniciando…",
+    "running": "Análisis en curso…",
+    "domains": "Dominios",
+    "packages": "Paquetes",
+    "findings": "Hallazgos",
+    "unparsed": "Sin evaluar",
+    "unparsedNote": "Algunas versiones no se pudieron comparar con los rangos de los avisos; esos paquetes no quedaron descartados ni notificados. Para ellos esto no es un resultado limpio.",
+    "failedNote": "El último análisis no terminó. Lo que ya había encontrado se conserva, pero la pasada está incompleta."
+  },
+  "table": {
+    "severity": "Gravedad",
+    "domain": "Dominio",
+    "package": "Paquete",
+    "installed": "Instalada",
+    "fixedIn": "Corregido en",
+    "advisory": "Aviso",
+    "firstSeen": "Primera detección",
+    "noFix": "Sin corrección publicada",
+    "loading": "Cargando…",
+    "empty": "No se han encontrado vulnerabilidades conocidas."
+  },
+  "severity": {
+    "critical": "Crítica",
+    "high": "Alta",
+    "medium": "Media",
+    "low": "Baja",
+    "unknown": "Sin clasificar"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filtrar por dominio, paquete o CVE",
+  "shown": "Mostrados",
+  "advisoryNote": "Estos hallazgos son informativos. La correspondencia de versiones con una fuente pública no es exacta, así que compruebe el aviso antes de actuar. Nada de esto suspende una cuenta ni modifica un archivo.",
+  "scheduleNote": "El servidor analiza cada seis horas. Un administrador también puede iniciar un análisis.",
+  "errors": {
+    "load": "No se pudieron cargar los hallazgos",
+    "scan": "No se pudo iniciar el análisis",
+    "alreadyRunning": "Ya hay un análisis en curso."
+  }
+}

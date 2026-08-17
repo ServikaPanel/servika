@@ -1,0 +1,63 @@
+{
+  "title": "Website-Sicherheit",
+  "subtitle": "Bekannte Schwachstellen in dem, was die Websites auf diesem Server tatsächlich ausführen.",
+  "domainSubtitle": "Bekannte Schwachstellen in dem, was diese Website tatsächlich ausführt.",
+  "breadcrumb": {
+    "home": "Start",
+    "domains": "Domains",
+    "current": "Website-Sicherheit"
+  },
+  "status": {
+    "title": "Letzter Scan",
+    "unknown": "Es wurde noch kein Scan ausgeführt.",
+    "state": {
+      "idle": "Nie ausgeführt",
+      "running": "Läuft",
+      "finished": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "finishedAt": "Beendet",
+    "scanNow": "Jetzt scannen",
+    "starting": "Wird gestartet…",
+    "running": "Scan läuft…",
+    "domains": "Domains",
+    "packages": "Pakete",
+    "findings": "Funde",
+    "unparsed": "Nicht bewertet",
+    "unparsedNote": "Einige Versionen ließen sich nicht mit den Bereichen der Sicherheitshinweise vergleichen; diese Pakete wurden weder freigegeben noch gemeldet. Das ist kein Unbedenklichkeitsnachweis für sie.",
+    "failedNote": "Der letzte Scan wurde nicht abgeschlossen. Das bereits Gefundene bleibt erhalten, der Durchlauf ist aber unvollständig."
+  },
+  "table": {
+    "severity": "Schweregrad",
+    "domain": "Domain",
+    "package": "Paket",
+    "installed": "Installiert",
+    "fixedIn": "Behoben in",
+    "advisory": "Hinweis",
+    "firstSeen": "Erstmals gesehen",
+    "noFix": "Keine Korrektur veröffentlicht",
+    "loading": "Wird geladen…",
+    "empty": "Es wurden keine bekannten Schwachstellen gefunden."
+  },
+  "severity": {
+    "critical": "Kritisch",
+    "high": "Hoch",
+    "medium": "Mittel",
+    "low": "Niedrig",
+    "unknown": "Ohne Bewertung"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Nach Domain, Paket oder CVE filtern",
+  "shown": "Angezeigt",
+  "advisoryNote": "Diese Funde sind Hinweise. Der Versionsabgleich mit einer öffentlichen Quelle ist nicht exakt, prüfen Sie einen Hinweis also vor dem Handeln. Nichts hier sperrt ein Konto oder ändert eine Datei.",
+  "scheduleNote": "Der Server scannt alle sechs Stunden. Ein Administrator kann zusätzlich einen Scan starten.",
+  "errors": {
+    "load": "Die Funde konnten nicht geladen werden",
+    "scan": "Der Scan konnte nicht gestartet werden",
+    "alreadyRunning": "Es läuft bereits ein Scan."
+  }
+}

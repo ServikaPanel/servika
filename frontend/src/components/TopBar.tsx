@@ -54,6 +54,7 @@ const PAGES: ReadonlyArray<{ tkey: string; path: string; keywords: string; roles
   { tkey: 'packages', path: '/tools/packages', keywords: 'dnf rpm', roles: ['admin'] },
   { tkey: 'dnsTemplate', path: '/tools/dns-template', keywords: 'template zone', roles: ['admin'] },
   { tkey: 'bannedDomains', path: '/tools/banned-domains', keywords: 'phishing blacklist blocked hostname', roles: ['admin'] },
+  { tkey: 'siteSecurity', path: '/site-security', keywords: 'cve vulnerability plugin dependency npm composer', roles: ['admin', 'reseller'] },
   { tkey: 'panelUpdate', path: '/tools/update', keywords: 'upgrade release', roles: ['admin'] },
 ]
 
@@ -90,6 +91,7 @@ const DOMAIN_PAGES: ReadonlyArray<readonly [string, string]> = [
   ['/maintenance', 'maintenance'],
   ['/password-protection', 'passwordProtection'],
   ['/imunify', 'imunify'],
+  ['/site-security', 'siteSecurity'],
   ['/stats', 'stats'],
   ['/connection', 'connection'],
 ]

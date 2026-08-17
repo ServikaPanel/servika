@@ -1,0 +1,63 @@
+{
+  "title": "Securitatea site-ului",
+  "subtitle": "Vulnerabilități cunoscute în ceea ce rulează efectiv site-urile de pe acest server.",
+  "domainSubtitle": "Vulnerabilități cunoscute în ceea ce rulează efectiv acest site.",
+  "breadcrumb": {
+    "home": "Acasă",
+    "domains": "Domenii",
+    "current": "Securitatea site-ului"
+  },
+  "status": {
+    "title": "Ultima scanare",
+    "unknown": "Nu a fost rulată încă nicio scanare.",
+    "state": {
+      "idle": "Niciodată rulată",
+      "running": "În curs",
+      "finished": "Finalizată",
+      "failed": "Eșuată"
+    },
+    "finishedAt": "Finalizată",
+    "scanNow": "Scanează acum",
+    "starting": "Se pornește…",
+    "running": "Scanare în curs…",
+    "domains": "Domenii",
+    "packages": "Pachete",
+    "findings": "Rezultate",
+    "unparsed": "Neevaluate",
+    "unparsedNote": "Unele versiuni nu au putut fi comparate cu intervalele din avertizări; acele pachete nu au fost nici scoase din discuție, nici raportate. Pentru ele acesta nu este un rezultat curat.",
+    "failedNote": "Ultima scanare nu s-a încheiat. Ce găsise deja se păstrează, dar trecerea este incompletă."
+  },
+  "table": {
+    "severity": "Gravitate",
+    "domain": "Domeniu",
+    "package": "Pachet",
+    "installed": "Instalată",
+    "fixedIn": "Reparat în",
+    "advisory": "Avertizare",
+    "firstSeen": "Prima apariție",
+    "noFix": "Nicio remediere publicată",
+    "loading": "Se încarcă…",
+    "empty": "Nu au fost găsite vulnerabilități cunoscute."
+  },
+  "severity": {
+    "critical": "Critică",
+    "high": "Ridicată",
+    "medium": "Medie",
+    "low": "Scăzută",
+    "unknown": "Neevaluată"
+  },
+  "appType": {
+    "wordpress": "WordPress",
+    "nodejs": "Node.js",
+    "php-composer": "Composer"
+  },
+  "filterPlaceholder": "Filtrează după domeniu, pachet sau CVE",
+  "shown": "Afișate",
+  "advisoryNote": "Aceste rezultate sunt informative. Potrivirea versiunilor cu o sursă publică nu este exactă, așa că verificați avertizarea înainte de a acționa. Nimic de aici nu suspendă un cont și nu modifică un fișier.",
+  "scheduleNote": "Serverul scanează la fiecare șase ore. Un administrator poate porni și el o scanare.",
+  "errors": {
+    "load": "Rezultatele nu au putut fi încărcate",
+    "scan": "Scanarea nu a putut fi pornită",
+    "alreadyRunning": "O scanare este deja în curs."
+  }
+}

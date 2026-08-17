@@ -38,6 +38,7 @@
     "packages": { "title": "Manager de pachete", "subtitle": "Pachete de sistem" },
     "dnsTemplate": { "title": "Șablon DNS", "subtitle": "Înregistrări DNS implicite" },
     "bannedDomains": { "title": "Domenii interzise", "subtitle": "Hostname-uri pe care niciun client nu le poate adăuga" },
+    "siteSecurity": { "title": "Securitatea site-ului", "subtitle": "Vulnerabilități cunoscute în dependențe" },
     "panelUpdate": { "title": "Actualizare panou", "subtitle": "Versiune panou și actualizări" }
   },
   "domain": {
@@ -73,6 +74,7 @@
     },
     "passwordProtection": { "title": "Protecție cu parolă", "subtitle": "Parolă director" },
     "imunify": { "title": "Imunify", "subtitle": "Scanare malware" },
+    "siteSecurity": { "title": "Securitatea site-ului", "subtitle": "Vulnerabilități cunoscute în dependențe" },
     "stats": { "title": "Statistici", "subtitle": "Date de utilizare domeniu" },
     "connection": { "title": "Informații de conexiune", "subtitle": "Detalii FTP și bază de date" }
   }

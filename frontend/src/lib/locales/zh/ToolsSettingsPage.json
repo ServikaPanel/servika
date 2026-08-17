@@ -54,6 +54,10 @@
       "title": "域名",
       "description": "浏览、搜索并快速访问所有域名。"
     },
+    "siteSecurity": {
+      "title": "站点安全",
+      "description": "客户的 WordPress 插件、npm 与 Composer 依赖中的已知 CVE。"
+    },
     "bannedDomains": {
       "title": "禁止域名",
       "description": "客户不可添加到此服务器的主机名。用于防范钓鱼。"

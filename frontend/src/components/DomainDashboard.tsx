@@ -116,6 +116,7 @@ export default function DomainDashboard({ domain }: { domain: Domain }) {
           onClick={navigateTo('maintenance')}
         />
         <ToolCard label={t('imunify.label')}                  description={t('imunify.desc')}        icon={ICONS.imunify}    color="emerald" onClick={navigateTo('imunify')} />
+        <ToolCard label={t('siteSecurity.label')}              description={t('siteSecurity.desc')}   icon={ICONS.imunify}    color="amber"   onClick={navigateTo('site-security')} />
         <ToolCard
           label={t('ssh.label')}
           description={domain.ssh_access ? t('ssh.enabled') : t('ssh.disabled')}

@@ -83,6 +83,8 @@ const GROUPS: Group[] = [
         key: 'nftables ip port block allowlist' },
       { id: 'bannedDomains', href: '/tools/banned-domains', icon: ICONS.globe, badge: 'serverWide',
         key: 'phishing blacklist blocked hostname refuse' },
+      { id: 'siteSecurity', href: '/site-security', icon: ICONS.shield, badge: 'serverWide',
+        key: 'cve vulnerability plugin dependency npm composer wordpress' },
       { id: 'backupManager', href: '/backup-management', icon: ICONS.server,
         key: 'backup s3 sftp size' },
       { id: 'monitoring', href: '/monitoring', icon: ICONS.chart,
