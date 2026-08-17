@@ -18,6 +18,7 @@ import (
 	"servika/internal/apps"
 	"servika/internal/credentials"
 	"servika/internal/dns"
+	"servika/internal/domainblock"
 	"servika/internal/httpx"
 	"servika/internal/laravel"
 	"servika/internal/mail"
@@ -416,6 +417,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := provisioner.ValidateDomain(req.DomainName); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
+		return
+	}
+	// The archive import path reaches domain creation through this handler, so
+	// the ban covers it here rather than in internal/transfers.
+	if domainblock.RefuseIfBlocked(w, r, h.DB, req.DomainName) {
 		return
 	}
 

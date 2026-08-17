@@ -17,6 +17,7 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/dns"
+	"servika/internal/domainblock"
 	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/provisioner"
@@ -142,6 +143,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	req.DomainName = strings.ToLower(strings.TrimSpace(req.DomainName))
 	if err := provisioner.ValidateDomain(req.DomainName); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
+		return
+	}
+	if domainblock.RefuseIfBlocked(w, r, h.DB, req.DomainName) {
 		return
 	}
 	if req.DomainName == parent.DomainName {

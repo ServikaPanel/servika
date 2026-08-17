@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"servika/internal/dns"
+	"servika/internal/domainblock"
 	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/provisioner"
@@ -175,6 +176,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	fqdn := subdomainName + "." + domainName
 	if err := provisioner.ValidateDomain(fqdn); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
+		return
+	}
+	if domainblock.RefuseIfBlocked(w, r, h.DB, fqdn) {
 		return
 	}
 	// Reject conflicts with existing domains or subdomains.

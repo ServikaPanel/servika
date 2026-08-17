@@ -20,6 +20,7 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/dns"
+	"servika/internal/domainblock"
 	"servika/internal/phpversion"
 	"servika/internal/provisioner"
 	"servika/internal/resourcelimit"
@@ -56,6 +57,15 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	domainName := strings.ToLower(strings.TrimSpace(account.DomainName))
 	if !reRemoteDomain.MatchString(domainName) || !strings.Contains(domainName, ".") {
 		return nil, fmt.Errorf("invalid domain name")
+	}
+	// The live migration is the one creation path with no HTTP response of its
+	// own, so it asks the same question directly. A read failure refuses here
+	// too: the migration needs this database in the next statement anyway.
+	switch blocked, _, err := domainblock.Blocked(ctx, h.DB, domainName); {
+	case err != nil:
+		return nil, fmt.Errorf("banned domain list: %w", err)
+	case blocked:
+		return nil, fmt.Errorf("'%s' may not be added to this server", domainName)
 	}
 
 	// --- 1. Target check ---------------------------------------------------

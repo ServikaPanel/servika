@@ -32,6 +32,7 @@ import (
 	"servika/internal/db"
 	"servika/internal/dbremote"
 	"servika/internal/dns"
+	"servika/internal/domainblock"
 	"servika/internal/domains"
 	"servika/internal/files"
 	"servika/internal/firewall"
@@ -326,6 +327,7 @@ func main() {
 	mailReportH := &mailreport.Handlers{DB: d}
 	mtastsH := &mtasts.Handlers{DB: d, IPv4: ipv4}
 	transfersH := &transfers.Handlers{DB: d, Domains: domainsH, Mail: mailH, Cron: cronH}
+	domainBlockH := &domainblock.Handlers{DB: d}
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -888,6 +890,12 @@ func main() {
 				r.With(middleware.AdminOnly).Get("/admin/migrations/{id}", transfersH.MigrationDetail)
 				r.With(middleware.AdminOnly).Get("/admin/migrations/{id}/log", transfersH.MigrationLog)
 				r.With(middleware.AdminOnly).Post("/admin/migrations/{id}/cancel", transfersH.MigrationCancel)
+				// Hostnames no tenant may add. Admin only: the list decides what
+				// this server is willing to answer for, which is not a customer's
+				// call.
+				r.With(middleware.AdminOnly).Get("/admin/banned-domains", domainBlockH.List)
+				r.With(middleware.AdminOnly).Post("/admin/banned-domains", domainBlockH.Add)
+				r.With(middleware.AdminOnly).Post("/admin/banned-domains/remove", domainBlockH.Remove)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/backup-destination", backupsH.GetDestination)
 				r.With(middleware.CustomerScope).Put("/domains/{id}/backup-destination", backupsH.PutDestination)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/backup-destination", backupsH.DeleteDestination)
