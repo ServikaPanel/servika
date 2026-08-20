@@ -72,6 +72,33 @@ download(){
   curl -fsSL --retry 3 --connect-timeout 15 -o "$2" "$1" ||
     curl -4fsSL --retry 3 --connect-timeout 15 -o "$2" "$1"
 }
+# run_ops_tool <name> <label> <note> [args...]: run one of the installed ops
+# tools and say WHICH of three different things went wrong.
+#
+# These calls used to be `command -v X && X && ok || warn "X skipped"`, which put
+# three separate events in one message: the tool is not in the package at all
+# (a packaging fault), the tool is on disk but cannot be resolved from PATH (an
+# environment fault, which is what sudo's secure_path used to cause), and the
+# tool ran and returned an error (a functional fault). Each needs a different
+# thing from an operator, and "skipped" told them none of it.
+#
+# All three stay warnings. The verification gate at the end of this script is
+# what stops an installation now, and warn-and-continue is the decision already
+# taken for the unresolvable case. <note> is the consequence of the step not
+# happening, appended to whichever warning fires; pass "" when there is none.
+run_ops_tool(){
+  local name="$1" label="$2" note="$3"; shift 3
+  [ -z "$note" ] || note=" ($note)"
+  if [ ! -x "/usr/local/bin/$name" ]; then
+    warn "$name is not in the package, so $label was skipped${note}"
+  elif ! command -v "$name" >/dev/null 2>&1; then
+    warn "$name is installed but does not resolve on PATH, so $label was skipped${note}"
+  elif "$name" "$@" >/dev/null 2>&1; then
+    ok "$label"
+  else
+    warn "$name ran and returned an error, so $label is incomplete${note}; run it by hand: $name"
+  fi
+}
 
 [ "$(id -u)" = 0 ] || die "root is required"
 [ -d "$A" ] || die "assets/ was not found ($A)"
@@ -657,11 +684,11 @@ restorecon -R /opt/servika/bin /opt/servika/frontend-dist >/dev/null 2>&1
 
 # ============ 11) Valkey + optimization ============
 step "11) Valkey (Redis) + performance tuning"
-command -v servika-redis-setup >/dev/null 2>&1 && servika-redis-setup >/dev/null 2>&1 && ok "servika-redis-setup" || warn "redis-setup skipped"
+run_ops_tool servika-redis-setup "servika-redis-setup" ""
 # WAF (ModSecurity + OWASP CRS) infrastructure — idempotent, per-domain opt-in (module loading is harmless).
 # On first install the connector compilation may take several minutes; failure does not stop the installation.
-command -v servika-waf-setup >/dev/null 2>&1 && servika-waf-setup >/dev/null 2>&1 && ok "servika-waf-setup (ModSecurity+CRS)" || warn "waf-setup skipped (panel WAF runs gracefully without the module)"
-command -v servika-optimize >/dev/null 2>&1 && servika-optimize >/dev/null 2>&1 && ok "servika-optimize" || warn "optimization skipped"
+run_ops_tool servika-waf-setup "servika-waf-setup (ModSecurity+CRS)" "the panel WAF runs gracefully without the module"
+run_ops_tool servika-optimize "servika-optimize" ""
 
 # ============ 12) START PANEL; MIGRATIONS RUN AT STARTUP ============
 step "12) Starting panel"
@@ -687,9 +714,9 @@ if systemctl is-active --quiet servika; then ok "servika ACTIVE"; else journalct
 # ---- Run the Pure-FTPd setup after migrations create the ftp_accounts table ----
 # Running this in step 11 would make GRANT SELECT fail because the table does not exist yet.
 sleep 2
-command -v servika-ftp-setup >/dev/null 2>&1 && servika-ftp-setup >/dev/null 2>&1 && ok "servika-ftp-setup (Pure-FTPd, MySQL backend)" || warn "ftp-setup skipped"
+run_ops_tool servika-ftp-setup "servika-ftp-setup (Pure-FTPd, MySQL backend)" ""
 # Mail setup needs the mail tables created by startup migrations.
-command -v servika-mail-setup >/dev/null 2>&1 && servika-mail-setup >/dev/null 2>&1 && ok "servika-mail-setup (Postfix, Dovecot, OpenDKIM, Roundcube)" || warn "mail-setup skipped"
+run_ops_tool servika-mail-setup "servika-mail-setup (Postfix, Dovecot, OpenDKIM, Roundcube)" ""
 
 # ============ 13) ADMINISTRATOR ACCESS ============
 # Panel administrator login authenticates the server's root account through PAM and shadow.
@@ -714,7 +741,7 @@ ok "Login: user 'root' + this server's root password"
 
 # ============ 14) PERMISSION REPAIR ============
 step "14) Permission/SELinux repair"
-command -v servika-repair >/dev/null 2>&1 && servika-repair --quiet >/dev/null 2>&1 && ok "servika-repair" || warn "repair skipped"
+run_ops_tool servika-repair "servika-repair" "" --quiet
 
 # ============ 15) VERIFICATION ============
 step "15) Verification"
