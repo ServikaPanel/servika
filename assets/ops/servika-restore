@@ -388,7 +388,12 @@ fi
 # e) ops-tools + src/scripts + migrations. Migrations are ADDED (existing preserved).
 # ───────────────────────────────────────────────────────────────────────────
 if [ -f "$A/migrations.tar.gz" ]; then
-  mkdir -p "$MIGR"; tar xzf "$A/migrations.tar.gz" -C "$MIGR"
+  # Under `set -e` a failed tar aborts here with NO red line, so `die` never runs
+  # and the restored binary is left beside an incomplete migration set. The panel
+  # then starts against a schema it does not match.
+  mkdir -p "$MIGR" || die "the migrations directory could not be created"
+  tar xzf "$A/migrations.tar.gz" -C "$MIGR" \
+    || die "the migrations archive could not be extracted; the previous binary is at $BIN.bak"
   ok "migrations synced ($(ls "$MIGR"/*.sql 2>/dev/null | wc -l) sql, existing preserved)"
 elif [ -d "$A/migrations" ]; then
   mkdir -p "$MIGR"; cp -n "$A"/migrations/*.sql "$MIGR/" 2>/dev/null || true

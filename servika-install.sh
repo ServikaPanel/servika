@@ -474,8 +474,14 @@ INSTALLED_BIN_SHA=$(sha256sum /opt/servika/bin/servika-server 2>/dev/null | awk 
 [ "$INSTALLED_BIN_SHA" = "$PACKAGE_BIN_SHA" ] \
   || die "the panel binary reached the disk INCOMPLETE (checksum mismatch)"
 [ -f "$A/$ARCH/servika-seed-admin" ] && install -m 0755 "$A/$ARCH/servika-seed-admin" /opt/servika/bin/servika-seed-admin
-tar xzf "$A/frontend-dist.tar.gz" -C /opt/servika/frontend-dist && ok "frontend-dist"
-tar xzf "$A/migrations.tar.gz" -C /opt/servika/src/migrations && ok "migrations ($(ls /opt/servika/src/migrations/*.sql 2>/dev/null | wc -l) SQL)"
+# `&& ok` is not a check: this script runs without `set -e`, so a failed tar only
+# skipped the green line and the installation carried on with no frontend or no
+# migrations. The first is a white screen, the second a panel that starts against
+# a schema it does not match.
+tar xzf "$A/frontend-dist.tar.gz" -C /opt/servika/frontend-dist || die "the frontend archive could not be extracted"
+ok "frontend-dist"
+tar xzf "$A/migrations.tar.gz" -C /opt/servika/src/migrations || die "the migrations archive could not be extracted"
+ok "migrations ($(ls /opt/servika/src/migrations/*.sql 2>/dev/null | wc -l) SQL)"
 if [ -d "$A/mail" ]; then
   rm -rf /opt/servika/src/mail-templates/*
   cp -a "$A/mail/." /opt/servika/src/mail-templates/

@@ -430,7 +430,14 @@ if [ -f "$A/migrations.tar.gz" ]; then
   # release added; otherwise the restored old binary would re-run new migrations
   # against the restored (older) schema.
   [ -d "$MIGR" ] && cp -a "$MIGR" "$ROLLBACK_DIR/migrations" 2>/dev/null || true
-  mkdir -p "$MIGR"; tar xzf "$A/migrations.tar.gz" -C "$MIGR"
+  # The one unguarded critical command in this script. Under `set -e` a failed
+  # tar aborts here with NO red line, so `die` never runs, the health check and
+  # the rollback block below never run either, and the new binary and frontend
+  # are left on disk beside an incomplete migration set. The panel then starts
+  # against a schema it does not match, at the next restart or reboot.
+  mkdir -p "$MIGR" || die "the migrations directory could not be created"
+  tar xzf "$A/migrations.tar.gz" -C "$MIGR" \
+    || die "the migrations archive could not be extracted; the previous binary is at $BIN.bak"
   ok "migrations synchronized ($(ls "$MIGR"/*.sql 2>/dev/null | wc -l) SQL files)"
 fi
 
