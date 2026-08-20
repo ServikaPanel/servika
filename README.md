@@ -74,6 +74,7 @@ servika-jail <user>         # Create a per-user chroot SSH jail with sshd Match 
 servika-repair              # Repair permissions, SELinux contexts, and ownership idempotently
 servika-restore             # Restore core panel files from the canonical release with integrity verification
 servika-waf-setup           # Install or repair ModSecurity v3 + OWASP CRS with nginx -t gating
+servika-verify              # Measure whether the installation actually works; exits 1 on a critical failure
 ```
 
 ## Updating from SSH

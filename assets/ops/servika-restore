@@ -448,6 +448,16 @@ if [ "$HEALTHY" = 1 ]; then
   fi
   systemctl reload nginx >/dev/null 2>&1 || true
   ok "panel ACTIVE + /healthz OK"
+  # An active service and a healthy /healthz say the process started, not that
+  # the server works. This measures production behaviour instead, and only
+  # WARNS: the repair is already applied and the rollback above is a separate
+  # mechanism, so a non-zero exit here would undo nothing.
+  if command -v servika-verify >/dev/null 2>&1; then
+    echo
+    servika-verify --brief || warn "the repair was applied but verification found a CRITICAL problem (above); details: servika-verify"
+  elif [ -x /usr/local/bin/servika-verify ]; then
+    warn "servika-verify is installed but not resolvable on PATH, so the repair was not verified"
+  fi
   echo -e "${c_g}══ Repair complete — core restored to canonical (env/DB/sites/backups preserved) ══${c_0}"
 else
   warn "post-repair start failed — rolling back to previous binary + pre-repair DB"

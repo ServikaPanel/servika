@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+# servika-verify proves that an installation or an update actually works.
+#
+#   servika-verify           # full report
+#   servika-verify --brief   # summary plus failures only (installer and updater)
+#   servika-verify --json    # machine readable
+#
+# WHY IT EXISTS
+#
+# The installer's verification step used to be decorative. It printed the state
+# of the server and then printed the success banner whatever it had found, so a
+# run could report a missing tool, a stopped service and a catch-all answering
+# 500 for every Host, and still finish with "installation complete". Nothing an
+# operator saw there could stop anything.
+#
+# This tool replaces that step and is a GATE: when a critical check fails it
+# exits 1 and the caller does not print the banner.
+#
+# DESIGN RULES
+#
+# 1. Measure the PRODUCTION path, not the installation step. "the chmod ran" and
+#    "nginx can actually read it" are different claims; measure the second.
+# 2. A check that could not be MEASURED has FAILED. Empty output is not "clean",
+#    so there is no `|| echo 0` anywhere here: a curl that cannot connect reports
+#    NO-CONNECTION rather than an empty string, which would compare equal to 0
+#    in a numeric test and pass the check by accident.
+# 3. 401 and 404 are not the same answer. 401 means the route is registered and
+#    asking for identity, which is correct. 404 means the route is not there at
+#    all, which means the binary or the router is broken. A check that treats
+#    "not 200" as "protected" is lying.
+# 4. No pipe into `grep -q`: grep closes the pipe at the first match, the command
+#    above it takes SIGPIPE, and pipefail then reports the whole pipeline failed.
+# 5. Every check must have a path on which it can fail. One that cannot fail is
+#    not measuring anything.
+# 6. A fallback that GUESSES makes a wrong measurement look like a right one.
+#    Nothing here guesses a port; the panel's own binary reports them.
+#
+# CRITICAL means the panel does not work. WARNING means a feature is missing.
+set -uo pipefail
+
+# sudo builds PATH from scratch out of secure_path, which on AlmaLinux 10 is
+# /sbin:/bin:/usr/sbin:/usr/bin and excludes /usr/local/bin, where this tool and
+# its siblings live. Resolvability from PATH is one of the things measured below,
+# so this has to run first or the tool would report its own environment.
+case ":$PATH:" in
+  *:/usr/local/bin:*) : ;;
+  *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
+esac
+
+BRIEF=0; JSON=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --brief) BRIEF=1 ;;
+    --json)  JSON=1; BRIEF=1 ;;
+    -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+c_g=$'\033[32m'; c_y=$'\033[33m'; c_r=$'\033[31m'; c_b=$'\033[1m'; c_0=$'\033[0m'
+[ -t 1 ] || { c_g=; c_y=; c_r=; c_b=; c_0=; }
+
+PASSED=0; CRITICAL=0; WARNINGS=0
+FAILURES=()
+
+pass() { PASSED=$((PASSED+1)); [ $BRIEF -eq 1 ] || printf "  ${c_g}OK${c_0}   %-32s %s\n" "$1" "${2:-}"; }
+crit() { CRITICAL=$((CRITICAL+1)); FAILURES+=("CRITICAL|$1|${2:-}")
+         [ $JSON -eq 1 ] || printf "  ${c_r}FAIL${c_0} %-32s %s\n" "$1" "${2:-}"; }
+warn() { WARNINGS=$((WARNINGS+1)); FAILURES+=("WARNING|$1|${2:-}")
+         [ $JSON -eq 1 ] || printf "  ${c_y}WARN${c_0} %-32s %s\n" "$1" "${2:-}"; }
+section() { [ $BRIEF -eq 1 ] || printf "\n${c_b}== %s ==${c_0}\n" "$*"; }
+
+# http_code answers with the status, or NO-CONNECTION when it could not connect.
+# It must never answer with an empty string: "$code" -eq 200 style comparisons
+# treat empty as 0, and a check that cannot reach the server would pass.
+http_code() { # $1=url  $2=host header (optional)
+  local code
+  if [ -n "${2:-}" ]; then
+    code=$(curl -sk -o /dev/null -w '%{http_code}' -H "Host: $2" --max-time 10 "$1" 2>/dev/null)
+  else
+    code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null)
+  fi
+  if [ -n "$code" ] && [ "$code" != "000" ]; then echo "$code"; else echo "NO-CONNECTION"; fi
+}
+
+svc() { systemctl is-active "$1" 2>/dev/null || echo "unknown"; }
+
+# ── The panel's own ports ─────────────────────────────────────────────────────
+# Read from the binary, which reads them from the files that hold them and
+# refuses rather than guessing. Nothing here falls back to a number: the panel
+# can move both of its ports, and a check that connected to the old one would
+# report a healthy server as broken, or a stopped one as fine.
+section "Panel ports"
+SERVIKA_BIN_PATH="${SERVIKA_BIN:-/opt/servika/bin/servika-server}"
+PORT_BACKEND=""; PORT_EXTERNAL=""; PORT_HEALTH=""
+if [ ! -x "$SERVIKA_BIN_PATH" ]; then
+  crit "panel binary" "$SERVIKA_BIN_PATH is missing or not executable"
+else
+  if ! PORTS_OUT=$("$SERVIKA_BIN_PATH" -print-ports 2>&1); then
+    crit "panel ports" "could not be read: $PORTS_OUT"
+  else
+    while IFS='=' read -r key value; do
+      case "$key" in
+        backend)    PORT_BACKEND="$value" ;;
+        external)   PORT_EXTERNAL="$value" ;;
+        health_url) PORT_HEALTH="$value" ;;
+      esac
+    done <<< "$PORTS_OUT"
+    if [ -n "$PORT_BACKEND" ] && [ -n "$PORT_EXTERNAL" ]; then
+      pass "panel ports" "backend $PORT_BACKEND, external $PORT_EXTERNAL"
+    else
+      crit "panel ports" "the binary answered but named no ports"
+    fi
+  fi
+fi
+
+# ── Services ─────────────────────────────────────────────────────────────────
+section "Services"
+# Without these four there is no panel and no site.
+for s in servika nginx mariadb php-fpm; do
+  state=$(svc "$s")
+  if [ "$state" = "active" ]; then pass "$s" "active"
+  else crit "$s" "$state (the panel cannot work without it)"; fi
+done
+# The panel opens without these; a feature does not.
+for s in valkey named crond postfix dovecot opendkim pure-ftpd httpd; do
+  state=$(svc "$s")
+  if [ "$state" = "active" ]; then pass "$s" "active"; else warn "$s" "$state"; fi
+done
+
+# ── Panel HTTP surface ───────────────────────────────────────────────────────
+section "Panel HTTP surface"
+if [ -z "$PORT_EXTERNAL" ] || [ -z "$PORT_BACKEND" ]; then
+  # A check that could not be measured has failed. Connecting to a guessed port
+  # and reporting the answer would be worse than saying so.
+  crit "panel page" "NOT MEASURED (the ports are unknown)"
+  crit "/healthz" "NOT MEASURED (the ports are unknown)"
+  crit "API authentication" "NOT MEASURED (the ports are unknown)"
+else
+  code=$(http_code "https://127.0.0.1:${PORT_EXTERNAL}/")
+  if [ "$code" = "200" ]; then pass "panel page" "HTTP 200 on :$PORT_EXTERNAL"
+  else crit "panel page" "HTTP $code on :$PORT_EXTERNAL (200 expected)"; fi
+
+  code=$(http_code "${PORT_HEALTH:-http://127.0.0.1:${PORT_BACKEND}/healthz}")
+  if [ "$code" = "200" ]; then pass "/healthz" "HTTP 200 on :$PORT_BACKEND"
+  else crit "/healthz" "HTTP $code on :$PORT_BACKEND (200 expected)"; fi
+
+  # 401 says the route exists and is protected. 404 says the route was never
+  # registered, which means the binary or the frontend is not the one this
+  # release ships. Treating anything that is not 200 as "protected" would report
+  # a broken router as a working guard.
+  code=$(http_code "https://127.0.0.1:${PORT_EXTERNAL}/api/v1/domains")
+  case "$code" in
+    401) pass "API authentication" "HTTP 401 (route registered, guard working)" ;;
+    404) crit "API authentication" "HTTP 404 (the route is not registered at all)" ;;
+    200) crit "API authentication" "HTTP 200 (the API answered without a session)" ;;
+    *)   crit "API authentication" "HTTP $code (401 expected)" ;;
+  esac
+fi
+
+# ── Catch-all vhosts ─────────────────────────────────────────────────────────
+section "Catch-all vhosts"
+# Both catch-alls declare `try_files $uri /index.html`, so a missing document
+# root page turns every request with an unmatched Host into an internal
+# redirection cycle and a 500. nginx -t passes in that state, so this is the only
+# thing that can find it.
+code=$(http_code "http://127.0.0.1/" "unmatched-host.invalid")
+case "$code" in
+  5*)            crit "port 80 catch-all" "HTTP $code (unmatched hosts get an error)" ;;
+  NO-CONNECTION) crit "port 80 catch-all" "could not connect" ;;
+  *)             pass "port 80 catch-all" "HTTP $code" ;;
+esac
+code=$(http_code "https://127.0.0.1/" "unmatched-host.invalid")
+case "$code" in
+  5*|NO-CONNECTION) warn "port 443 catch-all" "HTTP $code" ;;
+  *)                pass "port 443 catch-all" "HTTP $code" ;;
+esac
+
+# ── nginx ────────────────────────────────────────────────────────────────────
+section "nginx"
+if ! command -v nginx >/dev/null 2>&1; then
+  # Not the same finding as an invalid configuration, and saying so matters:
+  # one is a file to fix, the other is a package that was never installed.
+  crit "nginx -t" "nginx is not installed, so this was NOT MEASURED"
+elif nginx -t >/dev/null 2>&1; then
+  pass "nginx -t" "valid"
+else
+  crit "nginx -t" "the configuration is INVALID, the next reload will fail"
+fi
+
+# Measure the production path: a permission bit says nothing if a parent
+# directory is 0700 root:root, and fastcgi_cache then fails silently because
+# nginx itself stays up.
+CACHE_DIR="${SERVIKA_NGINX_CACHE_DIR:-/var/cache/nginx/servikacache}"
+if [ ! -d "$CACHE_DIR" ]; then
+  warn "nginx cache directory" "$CACHE_DIR does not exist"
+elif ! command -v runuser >/dev/null 2>&1; then
+  warn "nginx cache access" "runuser is missing, so this was NOT MEASURED"
+elif runuser -u nginx -- test -r "$CACHE_DIR" 2>/dev/null; then
+  pass "nginx cache access" "nginx can read it"
+else
+  warn "nginx cache access" "nginx CANNOT read it, fastcgi_cache is dead (servika-repair)"
+fi
+
+# ── Database ─────────────────────────────────────────────────────────────────
+section "Database"
+if mysql -N -e 'SELECT 1' >/dev/null 2>&1; then
+  pass "MariaDB connection" "SELECT 1 answered"
+  MIGRATIONS=$(mysql -N -e 'SELECT COUNT(*) FROM panel.schema_migrations;' 2>/dev/null)
+  TABLES=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='panel';" 2>/dev/null)
+  # An empty answer is "could not measure", not "zero". Telling them apart is the
+  # difference between reporting a broken query and reporting an empty schema.
+  if [ -z "$MIGRATIONS" ]; then
+    crit "applied migrations" "NOT MEASURED (schema_migrations could not be read)"
+  elif [ "$MIGRATIONS" -gt 0 ] 2>/dev/null; then
+    pass "applied migrations" "$MIGRATIONS applied"
+  else
+    crit "applied migrations" "0 applied, the schema was never installed"
+  fi
+  if [ -z "$TABLES" ]; then
+    crit "panel tables" "NOT MEASURED"
+  elif [ "$TABLES" -gt 10 ] 2>/dev/null; then
+    pass "panel tables" "$TABLES tables"
+  else
+    crit "panel tables" "$TABLES tables, the schema is incomplete"
+  fi
+else
+  crit "MariaDB connection" "could not connect, the panel cannot work"
+fi
+
+# ── Tools ────────────────────────────────────────────────────────────────────
+section "Tools"
+# Being on disk is not enough. sudo drops /usr/local/bin from PATH, and every
+# step that reaches these tools by bare name then skips itself silently.
+for t in servika-repair servika-update servika-restore servika-optimize \
+         servika-redis-setup servika-ftp-setup servika-mail-setup servika-db-backup; do
+  if [ ! -x "/usr/local/bin/$t" ]; then
+    warn "$t" "not present in the package"
+  elif command -v "$t" >/dev/null 2>&1; then
+    pass "$t" "resolves on PATH"
+  else
+    warn "$t" "installed but not resolvable on PATH"
+  fi
+done
+
+# wp-cli is checked by RUNNING it. A truncated or corrupt phar is a file too.
+if [ -f /usr/local/bin/wp ]; then
+  WPV=$(wp --version --allow-root 2>/dev/null | head -1)
+  if [ -n "$WPV" ]; then pass "wp-cli" "$WPV"
+  else warn "wp-cli" "the file exists but does NOT run (corrupt phar)"; fi
+else
+  warn "wp-cli" "missing, the WordPress features will not work"
+fi
+COMPOSERV=$(composer --version 2>/dev/null | head -1)
+if [ -n "$COMPOSERV" ]; then pass "composer" "$COMPOSERV"; else warn "composer" "missing"; fi
+
+# ── PHP ──────────────────────────────────────────────────────────────────────
+section "PHP"
+# The module names are not the package names: opcache reports as "Zend OPcache"
+# and pdo as "PDO", so the output is lowercased and a leading "Zend " dropped
+# before each name is matched as a WHOLE line. Read once into a variable, never
+# through a grep per module, because pipefail plus an early-exiting grep reports
+# a working php as a failure.
+PHP_LOADED=$(php -m 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/^zend //')
+if [ -z "$PHP_LOADED" ]; then
+  warn "PHP modules" "php -m produced nothing, so this was NOT MEASURED"
+else
+  PHP_MISSING=""
+  for m in mysqlnd mbstring bcmath intl gd soap opcache pdo xml zip; do
+    [[ $'\n'"$PHP_LOADED"$'\n' == *$'\n'"$m"$'\n'* ]] || PHP_MISSING="$PHP_MISSING $m"
+  done
+  if [ -z "$PHP_MISSING" ]; then pass "PHP modules" "all present"
+  else warn "PHP modules" "missing:$PHP_MISSING"; fi
+fi
+
+# ── Tenant isolation ─────────────────────────────────────────────────────────
+section "Tenant isolation"
+# Servika reaches a tenant document root through an ACL or the nginx group with
+# setgid, not through an SELinux file context rule, so the thing worth measuring
+# is whether nginx can actually read one. With no tenant yet there is nothing to
+# measure, which is reported as such rather than as a pass.
+TENANT_DOC=""
+for d in /home/c_*/public_html; do
+  [ -d "$d" ] && { TENANT_DOC="$d"; break; }
+done
+if [ -z "$TENANT_DOC" ]; then
+  [ $BRIEF -eq 1 ] || printf "  ${c_y}--${c_0}   %-32s %s\n" "tenant document root" "no tenant yet, nothing to measure"
+elif ! command -v runuser >/dev/null 2>&1; then
+  warn "tenant document root" "runuser is missing, so this was NOT MEASURED"
+elif runuser -u nginx -- test -r "$TENANT_DOC" 2>/dev/null; then
+  pass "tenant document root" "nginx can read $TENANT_DOC"
+else
+  warn "tenant document root" "nginx CANNOT read $TENANT_DOC (servika-repair)"
+fi
+
+# ── Security and maintenance ─────────────────────────────────────────────────
+section "Security and maintenance"
+AV_SIGNATURES=$(ls /var/lib/clamav/*.c[vl]d 2>/dev/null | wc -l)
+if [ "$AV_SIGNATURES" -gt 0 ] 2>/dev/null; then
+  pass "ClamAV signatures" "$AV_SIGNATURES present"
+else
+  warn "ClamAV signatures" "none, so a scan has nothing to match against"
+fi
+
+if [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "xfs" ]; then
+  QUOTA_OPTIONS=$(findmnt -no OPTIONS / 2>/dev/null)
+  case ",$QUOTA_OPTIONS," in
+    *,usrquota,*|*,uquota,*|*,quota,*) pass "disk quota" "active" ;;
+    *) warn "disk quota" "written into GRUB but NOT active, one reboot is needed" ;;
+  esac
+fi
+
+# ── Verdict ──────────────────────────────────────────────────────────────────
+if [ $JSON -eq 1 ]; then
+  printf '{"passed":%d,"critical":%d,"warnings":%d,"failures":[' "$PASSED" "$CRITICAL" "$WARNINGS"
+  first=1
+  for f in ${FAILURES[@]+"${FAILURES[@]}"}; do
+    [ $first -eq 0 ] && printf ','
+    first=0
+    level=${f%%|*}; rest=${f#*|}; check=${rest%%|*}; detail=${rest#*|}
+    printf '{"level":"%s","check":"%s","detail":"%s"}' "$level" "$check" "$detail"
+  done
+  printf ']}\n'
+  [ $CRITICAL -gt 0 ] && exit 1
+  exit 0
+fi
+
+echo
+if [ $CRITICAL -gt 0 ]; then
+  echo -e "${c_r}${c_b}VERIFICATION FAILED${c_0}  passed: $PASSED   ${c_r}critical: $CRITICAL${c_0}   warnings: $WARNINGS"
+  echo -e "  Fix the ${c_r}FAIL${c_0} lines above and measure again:  ${c_b}servika-verify${c_0}"
+  exit 1
+fi
+if [ $WARNINGS -gt 0 ]; then
+  echo -e "${c_g}${c_b}Critical checks passed${c_0}  passed: $PASSED   warnings: ${c_y}$WARNINGS${c_0}"
+  echo -e "  A warning does not stop the server, it means a feature is missing (see above)."
+  exit 0
+fi
+echo -e "${c_g}${c_b}All checks passed${c_0}  $PASSED checks"
+exit 0

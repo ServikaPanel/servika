@@ -384,7 +384,7 @@ for t in "$A"/ops/*; do
   case "$nm" in servika-*) OPS_INSTALLED="$OPS_INSTALLED $nm" ;; esac
 done
 cp "$A/ops/"* /opt/servika/src/scripts/ 2>/dev/null
-ok "operations tools (/usr/local/bin: update, db-backup, optimize, redis-setup, ftp-setup, mail-setup, repair, jail, wp-redis)"
+ok "operations tools (/usr/local/bin: update, db-backup, optimize, redis-setup, ftp-setup, mail-setup, repair, restore, verify, jail, wp-redis)"
 
 # Every later step reaches these tools by bare name through `command -v`, so a
 # tool that is on disk but unresolvable there is skipped and the installation
@@ -667,8 +667,20 @@ command -v servika-optimize >/dev/null 2>&1 && servika-optimize >/dev/null 2>&1 
 step "12) Starting panel"
 systemctl enable --now servika >/dev/null 2>&1; sleep 3
 systemctl enable --now nginx >/dev/null 2>&1; systemctl restart nginx >/dev/null 2>&1
+
+# The panel's external port is READ from the files that hold it, never assumed.
+# It is 8443 on a fresh host, but an operator can move it from the panel, and
+# this script is idempotent and meant to be re-run: assuming 8443 would open a
+# port nothing is on in the firewall, probe that same dead port in the
+# verification below, and finally print it as the address to log in at.
+PANEL_PORT=8443
+PORTS_REPORT=$(/opt/servika/bin/servika-server -print-ports 2>/dev/null)
+while IFS='=' read -r _key _value; do
+  [ "$_key" = "external" ] && [ -n "$_value" ] && PANEL_PORT="$_value"
+done <<< "$PORTS_REPORT"
+
 if systemctl is-active --quiet firewalld 2>/dev/null; then
-  firewall-cmd --add-port={80,443,8443}/tcp --permanent >/dev/null 2>&1 && firewall-cmd --reload >/dev/null 2>&1 && ok "firewalld: port 80/tcp + 443/tcp + 8443/tcp opened"
+  firewall-cmd --add-port={80,443,"$PANEL_PORT"}/tcp --permanent >/dev/null 2>&1 && firewall-cmd --reload >/dev/null 2>&1 && ok "firewalld: port 80/tcp + 443/tcp + ${PANEL_PORT}/tcp opened"
 fi
 if systemctl is-active --quiet servika; then ok "servika ACTIVE"; else journalctl -u servika --no-pager -n 20; die "panel did not start"; fi
 
@@ -707,16 +719,47 @@ command -v servika-repair >/dev/null 2>&1 && servika-repair --quiet >/dev/null 2
 # ============ 15) VERIFICATION ============
 step "15) Verification"
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-CODE=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/ 2>/dev/null)
-API=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:8443/api/v1/domains 2>/dev/null)
+CODE=$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:${PANEL_PORT}/" 2>/dev/null)
+API=$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:${PANEL_PORT}/api/v1/domains" 2>/dev/null)
 echo -e "  services: $(systemctl is-active mariadb nginx valkey php-fpm named pure-ftpd postfix dovecot opendkim servika crond | tr '\n' ' ')"
-echo -e "  panel :8443 → HTTP $CODE   ·   API (auth) → HTTP $API   ·   DNS :53 → $(systemctl is-active named)   ·   FTP :21 → $(systemctl is-active pure-ftpd)   ·   mail SMTP/IMAP → $(systemctl is-active postfix)/$(systemctl is-active dovecot)"
+echo -e "  panel :${PANEL_PORT} → HTTP $CODE   ·   API (auth) → HTTP $API   ·   DNS :53 → $(systemctl is-active named)   ·   FTP :21 → $(systemctl is-active pure-ftpd)   ·   mail SMTP/IMAP → $(systemctl is-active postfix)/$(systemctl is-active dovecot)"
 echo -e "  utilities: SSL/acme.sh $([ -x /root/.acme.sh/acme.sh ] && echo ✓ || echo ✗)   ·   firewall/nft $(command -v nft >/dev/null && echo ✓ || echo ✗)   ·   unzip/zip $(command -v unzip >/dev/null && command -v zip >/dev/null && echo ✓ || echo ✗)   ·   composer $(command -v composer >/dev/null && echo ✓ || echo ✗)   ·   apache/httpd $(systemctl is-active httpd)"
 echo -e "  isolation: plan-driven cgroup limits + per-tenant PHP-FPM ready   ·   bubblewrap $(command -v bwrap >/dev/null && echo ✓ || echo ✗)"
+
+# ---- The gate ----
+# Everything above is INFORMATION. It used to be the whole of this step, which
+# meant the installation could print a missing tool, a stopped service and a
+# catch-all answering 500 for every Host, and then print "installation complete"
+# directly underneath. Nothing an operator saw here could stop anything.
+#
+# servika-verify measures production behaviour (HTTP status codes, commands
+# actually run, files opened as the user that has to open them) and exits 1 when
+# something critical is wrong. In that case the success banner is NOT printed.
+echo
+VERIFY_STATUS=0
+if command -v servika-verify >/dev/null 2>&1; then
+  servika-verify || VERIFY_STATUS=$?
+else
+  # Passing silently here would be the same as having no gate at all.
+  warn "servika-verify was not found, so the installation could NOT be verified"
+  VERIFY_STATUS=1
+fi
+if [ "$VERIFY_STATUS" -ne 0 ]; then
+  echo
+  echo -e "${c_r}═══════════════════════════════════════════════${c_0}"
+  echo -e "${c_r} ✗ Installation NOT complete: a critical check failed${c_0}"
+  echo -e "   Fix the failures above, then:"
+  echo -e "     ${c_b}servika-verify${c_0}   (measure again)"
+  echo -e "     ${c_b}servika-repair${c_0}   (repair the known problems)"
+  echo -e "   Re-running this installer is safe; it is idempotent."
+  echo -e "${c_r}═══════════════════════════════════════════════${c_0}"
+  exit 1
+fi
+
 echo
 echo -e "${c_g}═══════════════════════════════════════════════${c_0}"
 echo -e "${c_g} ✓ Servika installation complete${c_0}"
-echo -e "   Panel:  ${c_b}https://${IP:-SERVER_IP}:8443${c_0}"
+echo -e "   Panel:  ${c_b}https://${IP:-SERVER_IP}:${PANEL_PORT}${c_0}"
 echo -e "   User: ${c_b}root${c_0}   Password: ${c_b}this server's root password${c_0}"
 echo -e "   (panel administrator login authenticates the server's root account through PAM)"
 if [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "xfs" ] && ! findmnt -no OPTIONS / 2>/dev/null | grep -qwE 'usrquota|uquota|quota'; then

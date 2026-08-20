@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -124,7 +125,42 @@ func pinTempDir() {
 	log.Printf("temporary file directory: %s", dir)
 }
 
+// printPortsIfAsked answers "-print-ports" and reports whether it did.
+//
+// servika-verify needs both of the panel's ports and must not guess either. The
+// upstream this was taken from wrote that lookup twice and got it wrong twice:
+// first a hardcoded port that produced three false alarms on a server whose port
+// had been moved, then a pattern that missed the "listen 127.0.0.1:9443 ssl"
+// form and a GUESSING fallback that mistook an unrelated port for the panel's.
+// internal/panelport already reads both ports out of the files that hold them,
+// knows every listen form the panel writes, and REFUSES rather than guessing, so
+// this hands that answer to the shell instead of growing a second parser.
+//
+// It runs before config.Load, which requires the JWT and secret keys: reporting
+// a port is not a reason to need them, and servika-verify has to work on an
+// installation that is broken enough to be worth verifying.
+func printPortsIfAsked() bool {
+	if len(os.Args) < 2 || (os.Args[1] != "-print-ports" && os.Args[1] != "--print-ports") {
+		return false
+	}
+	ports, err := panelport.Current()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "the panel's ports could not be read: %v\n", err)
+		os.Exit(1)
+	}
+	// Plain KEY=VALUE lines so a shell reads them field by field. Never a form
+	// that invites eval: this output is parsed by a tool running as root.
+	fmt.Printf("backend_host=%s\n", ports.BackendHost)
+	fmt.Printf("backend=%d\n", ports.Backend)
+	fmt.Printf("external=%d\n", ports.External)
+	fmt.Printf("health_url=%s\n", panelport.HealthURL(ports.BackendHost, ports.Backend))
+	return true
+}
+
 func main() {
+	if printPortsIfAsked() {
+		return
+	}
 	pinTempDir()
 
 	cfg, err := config.Load()

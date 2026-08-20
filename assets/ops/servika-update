@@ -586,6 +586,20 @@ if [ "$HEALTHY" = 1 ]; then
   NEWVER=$(version); [ -n "$NEWVER" ] || NEWVER="?"
   ok "panel active and health check passed"
   ok "resource limits applied from plans + existing sites are being safely migrated to per-tenant PHP-FPM isolation (self-check + auto-rollback, in the background)"
+  # An active service and a healthy /healthz say the process started, not that
+  # the server works: the same two answers were true on a host whose catch-all
+  # returned 500 for every Host and whose wp-cli was a corrupt file. This
+  # measures production behaviour instead.
+  #
+  # It only WARNS. The update is already applied and the rollback is a separate
+  # mechanism above, so exiting non-zero here would undo nothing and only make
+  # the outcome harder to read.
+  if command -v servika-verify >/dev/null 2>&1; then
+    echo
+    servika-verify --brief || warn "the update was applied but verification found a CRITICAL problem (above); details: servika-verify"
+  elif [ -x /usr/local/bin/servika-verify ]; then
+    warn "servika-verify is installed but not resolvable on PATH, so the update was not verified"
+  fi
   echo -e "${c_g}══ Update complete ($CURVER to $NEWVER); environment, database, and sites preserved ══${c_0}"
 else
   warn "the new release failed its health check; restoring the previous release"
