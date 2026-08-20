@@ -658,12 +658,20 @@ if [ "$HEALTHY" = 1 ]; then
   # returned 500 for every Host and whose wp-cli was a corrupt file. This
   # measures production behaviour instead.
   #
-  # It only WARNS. The update is already applied and the rollback is a separate
-  # mechanism above, so exiting non-zero here would undo nothing and only make
-  # the outcome harder to read.
+  # It does not roll back. The update is already applied and the rollback is a
+  # separate mechanism above, so undoing anything here is not on the table, and
+  # the warning and the completion banner are printed exactly as before. What it
+  # does change is the EXIT STATUS: an operator reads the warning, but the
+  # pipeline, cron job or configuration-management run that invoked this reads
+  # only the status, and 0 told every one of them that a server this tool had
+  # just called CRITICAL was fine.
+  VERIFY_FAILED=0
   if command -v servika-verify >/dev/null 2>&1; then
     echo
-    servika-verify --brief || warn "the update was applied but verification found a CRITICAL problem (above); details: servika-verify"
+    if ! servika-verify --brief; then
+      VERIFY_FAILED=1
+      warn "the update was applied but verification found a CRITICAL problem (above); details: servika-verify"
+    fi
   elif [ -x /usr/local/bin/servika-verify ]; then
     warn "servika-verify is installed but not resolvable on PATH, so the update was not verified"
   fi
@@ -693,4 +701,9 @@ else
   else
     die "rollback failed to start Servika; inspect journalctl -u servika -n 40 (database dump: $PRE_UPDATE_DUMP)"
   fi
+fi
+
+# The banner above is unchanged; only the status an automated caller reads is.
+if [ "${VERIFY_FAILED:-0}" -eq 1 ]; then
+  exit 1
 fi

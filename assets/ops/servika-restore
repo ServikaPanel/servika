@@ -505,12 +505,19 @@ if [ "$HEALTHY" = 1 ]; then
   systemctl reload nginx >/dev/null 2>&1 || true
   ok "panel ACTIVE + /healthz OK"
   # An active service and a healthy /healthz say the process started, not that
-  # the server works. This measures production behaviour instead, and only
-  # WARNS: the repair is already applied and the rollback above is a separate
-  # mechanism, so a non-zero exit here would undo nothing.
+  # the server works. This measures production behaviour instead. It does not
+  # roll back: the repair is already applied and the rollback above is a
+  # separate mechanism, so the warning and the completion banner are printed
+  # exactly as before. What it changes is the EXIT STATUS, because the caller
+  # that reads only the status was told 0 for a server this tool had just
+  # called CRITICAL.
+  VERIFY_FAILED=0
   if command -v servika-verify >/dev/null 2>&1; then
     echo
-    servika-verify --brief || warn "the repair was applied but verification found a CRITICAL problem (above); details: servika-verify"
+    if ! servika-verify --brief; then
+      VERIFY_FAILED=1
+      warn "the repair was applied but verification found a CRITICAL problem (above); details: servika-verify"
+    fi
   elif [ -x /usr/local/bin/servika-verify ]; then
     warn "servika-verify is installed but not resolvable on PATH, so the repair was not verified"
   fi
@@ -531,4 +538,9 @@ else
   else
     die "CRITICAL: panel did not start even after rollback — journalctl -u $SVC -n 40 (DB backup: $PREDUMP)"
   fi
+fi
+
+# The banner above is unchanged; only the status an automated caller reads is.
+if [ "${VERIFY_FAILED:-0}" -eq 1 ]; then
+  exit 1
 fi
