@@ -10,6 +10,16 @@
 #   frontend-dist.tar.gz  migrations.tar.gz  nginx/*  php-fpm/*  phpmyadmin/*  systemd/*  ops/*  mail/*
 set -uo pipefail
 
+# sudo builds PATH from scratch out of secure_path, which on AlmaLinux 10 is
+# /sbin:/bin:/usr/sbin:/usr/bin and excludes /usr/local/bin. This script installs
+# the ops tools and wp-cli there and then looks them up with `command -v`, so
+# without this every one of those guards reports an installed tool as absent and
+# the step is skipped while the installation still finishes green.
+case ":$PATH:" in
+  *:/usr/local/bin:*) : ;;
+  *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
+esac
+
 # Detect host architecture for binary selection.
 MACHINE=$(uname -m)
 case "$MACHINE" in
@@ -325,12 +335,29 @@ if [ -d "$A/mail" ]; then
   ok "mail templates (postfix, dovecot, opendkim, roundcube)"
 fi
 # Operations tools and phpMyAdmin signon
+OPS_INSTALLED=""
 for t in "$A"/ops/*; do
   bn=$(basename "$t"); nm="${bn%.sh}"
-  install -m 0755 "$t" "/usr/local/bin/$nm" 2>/dev/null
+  install -m 0755 "$t" "/usr/local/bin/$nm" 2>/dev/null || continue
+  case "$nm" in servika-*) OPS_INSTALLED="$OPS_INSTALLED $nm" ;; esac
 done
 cp "$A/ops/"* /opt/servika/src/scripts/ 2>/dev/null
 ok "operations tools (/usr/local/bin: update, db-backup, optimize, redis-setup, ftp-setup, mail-setup, repair, jail, wp-redis)"
+
+# Every later step reaches these tools by bare name through `command -v`, so a
+# tool that is on disk but unresolvable there is skipped and the installation
+# still finishes green. The PATH block at the top of this script is the fix;
+# this names whatever it did not cover instead of leaving a missing step to be
+# found months later.
+OPS_UNRESOLVED=""
+for nm in $OPS_INSTALLED; do
+  command -v "$nm" >/dev/null 2>&1 || OPS_UNRESOLVED="$OPS_UNRESOLVED $nm"
+done
+if [ -z "$OPS_UNRESOLVED" ]; then
+  ok "operations tools resolve on PATH"
+else
+  warn "installed but not resolvable on PATH, the steps that use them will be skipped:$OPS_UNRESOLVED"
+fi
 
 # ============ 7) PANEL SSL (self-signed) ============
 step "7) Panel SSL (:8443 self-signed)"

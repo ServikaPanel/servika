@@ -11,6 +11,16 @@
 # If the new release fails its health check, the previous binary and database are restored.
 set -euo pipefail
 
+# sudo builds PATH from scratch out of secure_path, which on AlmaLinux 10 is
+# /sbin:/bin:/usr/sbin:/usr/bin and excludes /usr/local/bin, where this tool and
+# its siblings live. Without this the `command -v servika-*` guards below report
+# an installed tool as absent and skip the step while the run still reports
+# success.
+case ":$PATH:" in
+  *:/usr/local/bin:*) : ;;
+  *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
+esac
+
 ENV_FILE=/etc/servika/env
 
 load_servika_env() {
@@ -455,6 +465,10 @@ fi
 # main nginx is never broken. When the module is not loaded, panel WAF skips gracefully.
 if command -v servika-waf-setup >/dev/null 2>&1; then
   servika-waf-setup >/dev/null 2>&1 && ok "WAF infrastructure synchronized (ModSecurity+CRS)" || warn "waf-setup skipped (WAF runs gracefully without the module)"
+elif [ -x /usr/local/bin/servika-waf-setup ]; then
+  # On disk but unresolvable: without this branch the whole step vanishes from
+  # the output and the update reports success having skipped it.
+  warn "servika-waf-setup is installed but not resolvable on PATH, WAF was not synchronized"
 fi
 
 command -v bwrap >/dev/null 2>&1 || dnf install -y bubblewrap >/dev/null 2>&1 || true
@@ -520,6 +534,8 @@ done
 if [ "$HEALTHY" = 1 ]; then
   if command -v servika-mail-setup >/dev/null 2>&1; then
     servika-mail-setup >/dev/null 2>&1 && ok "mail infrastructure synchronized (Postfix+Dovecot+OpenDKIM+Roundcube)" || warn "mail-setup skipped"
+  elif [ -x /usr/local/bin/servika-mail-setup ]; then
+    warn "servika-mail-setup is installed but not resolvable on PATH, mail was not synchronized"
   fi
   systemctl reload nginx >/dev/null 2>&1 || true
   rm -rf "$ROLLBACK_DIR" 2>/dev/null || true

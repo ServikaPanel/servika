@@ -9,6 +9,17 @@
 # Any remaining arguments (such as --admin-password) are forwarded to the installer.
 set -euo pipefail
 
+# sudo builds PATH from scratch out of secure_path, which on AlmaLinux 10 is
+# /sbin:/bin:/usr/sbin:/usr/bin and excludes /usr/local/bin. The ops tools and
+# wp-cli install there, so without this every `command -v servika-*` guard
+# reports an installed tool as absent and the step is skipped silently. This
+# script execs servika-install.sh, which inherits the environment, so the fix
+# has to start here.
+case ":$PATH:" in
+  *:/usr/local/bin:*) : ;;
+  *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
+esac
+
 REPO="ServikaPanel/servika"
 
 c_b="\033[1;34m"; c_g="\033[32m"; c_r="\033[31m"; c_0="\033[0m"

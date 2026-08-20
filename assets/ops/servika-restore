@@ -27,6 +27,15 @@
 # first; on an unhealthy start the previous binary + pre-repair DB are rolled back.
 set -euo pipefail
 
+# sudo builds PATH from scratch out of secure_path, which on AlmaLinux 10 is
+# /sbin:/bin:/usr/sbin:/usr/bin and excludes /usr/local/bin, where this tool and
+# its siblings live. Without this a lookup of one of them reports an installed
+# tool as absent.
+case ":$PATH:" in
+  *:/usr/local/bin:*) : ;;
+  *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
+esac
+
 ENV_FILE=/etc/servika/env
 
 load_servika_env() {
