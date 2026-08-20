@@ -149,6 +149,40 @@ for v in $PHP_VERS; do
   pkgs=""; for e in $PHP_EXT; do pkgs="$pkgs php$v-php-$e"; done
   dnf install -y $pkgs php$v-php-pecl-redis6 >/dev/null 2>&1 && ok "php$v (+redis)" || warn "some php$v packages were skipped"
 done
+
+# Seven versions times thirteen packages are installed by one dnf call each,
+# whose only failure signal is a generic "some packages were skipped" that does
+# not say which. A missing intl or gd then surfaces months later on a customer
+# site. Verify what the interpreter actually loaded.
+#
+# The list is written out rather than derived from PHP_EXT, because four of
+# those names are not what `php -m` prints: opcache reports as "Zend OPcache",
+# pdo as "PDO", and fpm and cli are SAPIs that never appear in the module list
+# at all. Lowercasing the output and dropping a leading "Zend " lets every
+# remaining name be matched as a WHOLE line; a substring test would quietly
+# accept a neighbouring module whose name merely contains the one being sought.
+PHP_MODS="mysqlnd mbstring bcmath intl gd soap opcache pdo xml zip pgsql ldap redis"
+for v in $PHP_VERS; do
+  if ! command -v "php$v" >/dev/null 2>&1; then
+    warn "php$v: the cli binary does not resolve, extensions were not verified"
+    continue
+  fi
+  # One `php -m` per version, read into a variable. A `php -m | grep -q` per
+  # module would fork thirteen times per version and, because this script runs
+  # with pipefail, would also report failure every time grep exited early and
+  # left php to die on SIGPIPE.
+  php_loaded=$("php$v" -m 2>/dev/null | tr 'A-Z' 'a-z' | sed 's/^zend //')
+  php_missing=""
+  for m in $PHP_MODS; do
+    [[ $'\n'"$php_loaded"$'\n' == *$'\n'"$m"$'\n'* ]] || php_missing="$php_missing $m"
+  done
+  systemctl cat "php$v-php-fpm.service" >/dev/null 2>&1 || php_missing="$php_missing fpm"
+  if [ -z "$php_missing" ]; then
+    ok "php$v extensions verified"
+  else
+    warn "php$v is missing:$php_missing"
+  fi
+done
 # wp-cli is pinned to a fixed release and verified against its published sha256
 # before it is made executable, so a compromised CDN cannot place arbitrary PHP
 # on a root-run path. Bump WP_CLI_VER + WP_CLI_SHA256 together to upgrade.
