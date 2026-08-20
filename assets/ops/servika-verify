@@ -90,6 +90,15 @@ http_code() { # $1=url  $2=host header (optional)
   if [ -n "$code" ] && [ "$code" != "000" ]; then echo "$code"; else echo "NO-CONNECTION"; fi
 }
 
+# http_body answers with the response body, or NO-CONNECTION when it could not
+# connect. It never answers with an empty string, for the same reason http_code
+# never does; the one route it is used on always writes a body.
+http_body() {
+  local body
+  body=$(curl -sk --max-time 10 "$1" 2>/dev/null)
+  if [ -n "$body" ]; then printf '%s' "$body"; else echo "NO-CONNECTION"; fi
+}
+
 # svc answers with ONE line. `systemctl is-active X || echo unknown` answers with
 # two: systemctl PRINTS "inactive" on stdout and ALSO exits non-zero, so the ||
 # branch runs as well and the variable becomes "inactive\nunknown". printf then
@@ -219,9 +228,29 @@ else
   if [ "$code" = "200" ]; then pass "panel page" "HTTP 200 on :$PORT_EXTERNAL"
   else crit "panel page" "HTTP $code on :$PORT_EXTERNAL (200 expected)"; fi
 
-  code=$(http_code "${PORT_HEALTH:-http://127.0.0.1:${PORT_BACKEND}/healthz}")
-  if [ "$code" = "200" ]; then pass "/healthz" "HTTP 200 on :$PORT_BACKEND"
-  else crit "/healthz" "HTTP $code on :$PORT_BACKEND (200 expected)"; fi
+  # A status code alone says only that SOMETHING answered on that port. The
+  # panel can be down while an unrelated service holds the port and answers 200
+  # to everything, which is the state this check exists to catch, so the body is
+  # read and required to be the panel's own readiness answer. That answer also
+  # carries the running version, which is the cheapest proof that the process
+  # serving the port is the release just installed.
+  HEALTH_URL="${PORT_HEALTH:-http://127.0.0.1:${PORT_BACKEND}/healthz}"
+  code=$(http_code "$HEALTH_URL")
+  if [ "$code" != "200" ]; then
+    crit "/healthz" "HTTP $code on :$PORT_BACKEND (200 expected)"
+  else
+    HEALTH_BODY=$(http_body "$HEALTH_URL")
+    # Spaces are removed rather than matched, so the check holds whether the
+    # encoder writes compact or spaced JSON.
+    HEALTH_NORM=${HEALTH_BODY// /}
+    HEALTH_VER=$(printf '%s' "$HEALTH_BODY" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+    case "$HEALTH_NORM" in
+      *'"status":"up"'*)
+        pass "/healthz" "HTTP 200 on :$PORT_BACKEND, the panel answered (version ${HEALTH_VER:-unreported})" ;;
+      *)
+        crit "/healthz" "HTTP 200 on :$PORT_BACKEND but the body is NOT the panel's, so another service holds that port" ;;
+    esac
+  fi
 
   # 401 says the route exists and is protected. 404 says the route was never
   # registered, which means the binary or the frontend is not the one this
@@ -274,10 +303,13 @@ if [ ! -d "$CACHE_DIR" ]; then
   warn "nginx cache directory" "$CACHE_DIR does not exist"
 elif ! command -v runuser >/dev/null 2>&1; then
   warn "nginx cache access" "runuser is missing, so this was NOT MEASURED"
-elif runuser -u nginx -- test -r "$CACHE_DIR" 2>/dev/null; then
-  pass "nginx cache access" "nginx can read it"
+elif runuser -u nginx -- sh -c 'f="$1/.servika-verify.$$"; : > "$f" 2>/dev/null || exit 1; rm -f "$f"' _ "$CACHE_DIR" 2>/dev/null; then
+  pass "nginx cache access" "nginx can write into it"
 else
-  warn "nginx cache access" "nginx CANNOT read it, fastcgi_cache is dead (servika-repair)"
+  # A read test passes on a directory nginx can enter but not write, and
+  # fastcgi_cache is a WRITE path: every response it is meant to store is
+  # silently dropped. Measure what the production path does.
+  warn "nginx cache access" "nginx CANNOT write into it, fastcgi_cache is dead (servika-repair)"
 fi
 
 # schema_from_migrations reads the migration files and prints what they say the
@@ -532,6 +564,17 @@ for t in servika-repair servika-update servika-restore servika-optimize \
          servika-redis-setup servika-ftp-setup servika-mail-setup servika-db-backup; do
   if [ ! -x "/usr/local/bin/$t" ]; then
     warn "$t" "not present in the package"
+  elif [ ! -s "/usr/local/bin/$t" ]; then
+    # An interrupted copy leaves an executable file of zero bytes. The kernel
+    # runs it, the shell reads no commands, and it exits 0, so every caller that
+    # only looks at the exit status reports the step as done.
+    warn "$t" "installed but EMPTY, so it exits 0 without doing anything"
+  elif [ "$(head -c 2 "/usr/local/bin/$t" 2>/dev/null)" != "#!" ]; then
+    # Every tool here ships with one, so its absence means the file is not the
+    # shipped script. A SHELL still runs such a file by falling back to sh
+    # (measured), which is why this cannot be found by calling it; execve
+    # refuses it outright with ENOEXEC, so systemd, cron and Go cannot.
+    warn "$t" "installed but has no interpreter line, so it is not the shipped script (execve: ENOEXEC)"
   elif command -v "$t" >/dev/null 2>&1; then
     pass "$t" "resolves on PATH"
   else
@@ -592,8 +635,18 @@ fi
 # ── Security and maintenance ─────────────────────────────────────────────────
 section "Security and maintenance"
 AV_SIGNATURES=$(ls /var/lib/clamav/*.c[vl]d 2>/dev/null | wc -l)
+# Present is not the same as current. main.cvd ships with the package and stays
+# untouched for months, so counting files reports a server whose freshclam has
+# not run since installation as fully protected. daily.cld is rewritten several
+# times a day while freshclam works, so "nothing here changed in a week" is the
+# measurable form of "the updater stopped".
+AV_FRESH=$(find /var/lib/clamav -maxdepth 1 \( -name '*.cvd' -o -name '*.cld' \) -mtime -7 2>/dev/null | wc -l | tr -d ' ')
 if [ "$AV_SIGNATURES" -gt 0 ] 2>/dev/null; then
-  pass "ClamAV signatures" "$AV_SIGNATURES present"
+  if [ "${AV_FRESH:-0}" -gt 0 ] 2>/dev/null; then
+    pass "ClamAV signatures" "$AV_SIGNATURES present, $AV_FRESH updated within 7 days"
+  else
+    warn "ClamAV signatures" "$AV_SIGNATURES present but NONE updated within 7 days, so freshclam has stopped"
+  fi
 else
   warn "ClamAV signatures" "none, so a scan has nothing to match against"
 fi
