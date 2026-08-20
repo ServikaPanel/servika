@@ -84,7 +84,17 @@ http_code() { # $1=url  $2=host header (optional)
   if [ -n "$code" ] && [ "$code" != "000" ]; then echo "$code"; else echo "NO-CONNECTION"; fi
 }
 
-svc() { systemctl is-active "$1" 2>/dev/null || echo "unknown"; }
+# svc answers with ONE line. `systemctl is-active X || echo unknown` answers with
+# two: systemctl PRINTS "inactive" on stdout and ALSO exits non-zero, so the ||
+# branch runs as well and the variable becomes "inactive\nunknown". printf then
+# writes the second line bare, with no check name beside it. Measured against
+# real systemd: an unknown unit gave exactly that pair.
+svc() {
+  local state
+  state=$(systemctl is-active "$1" 2>/dev/null)
+  state=${state%%$'\n'*}
+  if [ -n "$state" ]; then echo "$state"; else echo "unknown"; fi
+}
 
 # ── The panel's own ports ─────────────────────────────────────────────────────
 # Read from the binary, which reads them from the files that hold them and
