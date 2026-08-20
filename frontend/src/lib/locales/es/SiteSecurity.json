@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Qué se inspeccionó",
+    "note": "Una fila por cada instalación que revisó el último análisis. Una instalación sin hallazgos es la buena noticia que esta lista existe para mostrar: la lista de hallazgos de arriba no puede decir por sí sola si se comprobó algo.",
+    "application": "Aplicación",
+    "version": "Versión",
+    "packages": "Paquetes",
+    "findings": "Hallazgos",
+    "lastScanned": "Último análisis",
+    "clean": "Limpia",
+    "empty": "Todavía no se ha inspeccionado ninguna instalación.",
+    "unscanned": "Nunca inspeccionado",
+    "unscannedNote": "Estos dominios no tienen ninguna instalación inspeccionada. Es lo esperable en un sitio estático sin WordPress, npm ni Composer, y es una advertencia para todo lo demás."
+  },
   "filterPlaceholder": "Filtrar por dominio, paquete o CVE",
   "shown": "Mostrados",
   "advisoryNote": "Estos hallazgos son informativos. La correspondencia de versiones con una fuente pública no es exacta, así que compruebe el aviso antes de actuar. Nada de esto suspende una cuenta ni modifica un archivo.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "No se pudieron cargar los hallazgos",
     "scan": "No se pudo iniciar el análisis",
-    "alreadyRunning": "Ya hay un análisis en curso."
+    "alreadyRunning": "Ya hay un análisis en curso.",
+    "inventory": "No se pudo cargar el inventario"
   }
 }

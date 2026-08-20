@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Breadcrumb from '@/components/Breadcrumb'
 import SecurityFindingsTable, { type SecurityFinding } from '@/components/SecurityFindingsTable'
+import SecurityInventoryTable, { type SecurityApp } from '@/components/SecurityInventoryTable'
 import { api, apiError } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 
@@ -16,12 +17,19 @@ type ScanStatus = {
   last_error: string
 }
 
+type Inventory = {
+  total: number
+  items: SecurityApp[]
+  unscanned_domains: string[]
+}
+
 /** Renders known vulnerabilities across every site this account can see. */
 export default function WebsiteSecurityPage() {
   const { t } = useTranslation('SiteSecurity')
   const role = useAuth(state => state.username?.role)
   const [findings, setFindings] = useState<SecurityFinding[]>([])
   const [status, setStatus] = useState<ScanStatus | null>(null)
+  const [inventory, setInventory] = useState<Inventory | null>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +48,9 @@ export default function WebsiteSecurityPage() {
     api.get<ScanStatus>('/admin/site-security/status')
       .then(response => setStatus(response.data))
       .catch(() => setStatus(null))
+    api.get<Inventory>('/admin/site-security/apps')
+      .then(response => setInventory(response.data))
+      .catch(cause => setError(apiError(cause, t('errors.inventory'))))
   }, [t])
 
   useEffect(() => { load() }, [load])
@@ -156,6 +167,31 @@ export default function WebsiteSecurityPage() {
       <SecurityFindingsTable findings={visible} loading={loading} showDomain />
 
       <p className="mt-4 text-xs text-slate-500 dark:text-slate-500">{t('advisoryNote')}</p>
+
+      {/* An empty findings list above says nothing on its own: it reads the same
+          whether every site is clean or nothing was ever looked at. This section
+          is what tells the two apart, so it is drawn even when the list is
+          empty, never only when something was found. */}
+      <div className="mt-8">
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('inventory.title')}</h2>
+          <span className="text-xs text-slate-500 dark:text-slate-500">{t('shown')}: {inventory?.total ?? 0}</span>
+        </div>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-500">{t('inventory.note')}</p>
+        <SecurityInventoryTable apps={inventory?.items || []} loading={loading} />
+
+        {inventory && inventory.unscanned_domains.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {t('inventory.unscanned')} ({inventory.unscanned_domains.length})
+            </h3>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t('inventory.unscannedNote')}</p>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-900 dark:text-amber-100">
+              {inventory.unscanned_domains.map(name => <li key={name} className="font-mono">{name}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

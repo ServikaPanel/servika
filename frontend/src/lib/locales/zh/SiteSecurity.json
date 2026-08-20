@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "已检查的内容",
+    "note": "上次扫描查看的每个安装对应一行。没有发现问题的安装正是此列表要呈现的好消息：仅凭上方的结果列表无法判断是否检查过任何内容。",
+    "application": "应用",
+    "version": "版本",
+    "packages": "软件包",
+    "findings": "结果",
+    "lastScanned": "上次扫描",
+    "clean": "正常",
+    "empty": "尚未检查任何安装。",
+    "unscanned": "从未检查",
+    "unscannedNote": "这些域名没有任何已检查的安装。对于不含 WordPress、npm 或 Composer 的静态站点，这是正常的；其他情况则是一个警告。"
+  },
   "filterPlaceholder": "按域名、软件包或 CVE 筛选",
   "shown": "显示",
   "advisoryNote": "这些结果仅供参考。与公开数据源的版本比对并不精确，处理前请先核对公告。此处的任何内容都不会暂停账户或修改文件。",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "无法加载结果",
     "scan": "无法启动扫描",
-    "alreadyRunning": "已有扫描在进行中。"
+    "alreadyRunning": "已有扫描在进行中。",
+    "inventory": "无法加载清单"
   }
 }

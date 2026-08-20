@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Neler incelendi",
+    "note": "Son taramanın baktığı her kurulum için bir satır. Bulgusu olmayan bir kurulum, bu listenin göstermek için var olduğu iyi haberdir: yukarıdaki bulgu listesi tek başına herhangi bir şeyin denetlenip denetlenmediğini söyleyemez.",
+    "application": "Uygulama",
+    "version": "Sürüm",
+    "packages": "Paket",
+    "findings": "Bulgu",
+    "lastScanned": "Son tarama",
+    "clean": "Temiz",
+    "empty": "Henüz hiçbir kurulum incelenmedi.",
+    "unscanned": "Hiç incelenmedi",
+    "unscannedNote": "Bu alan adlarında incelenmiş hiçbir kurulum yok. WordPress, npm veya Composer kurulumu olmayan statik bir site için bu beklenen durumdur; diğer her şey için bir uyarıdır."
+  },
   "filterPlaceholder": "Alan adı, paket veya CVE ile süz",
   "shown": "Gösterilen",
   "advisoryNote": "Bu bulgular bilgilendirmedir. Açık kaynaklı bir beslemeye göre sürüm eşleştirme kesin değildir; işlem yapmadan önce kaydı doğrulayın. Buradaki hiçbir şey hesabı askıya almaz veya dosya değiştirmez.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Bulgular yüklenemedi",
     "scan": "Tarama başlatılamadı",
-    "alreadyRunning": "Zaten bir tarama sürüyor."
+    "alreadyRunning": "Zaten bir tarama sürüyor.",
+    "inventory": "Envanter yüklenemedi"
   }
 }

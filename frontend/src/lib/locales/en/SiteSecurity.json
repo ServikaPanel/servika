@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "What was inspected",
+    "note": "One row per installation the last scan looked at. An installation with no findings is the good news this list exists to show: the findings list above cannot say on its own whether anything was checked at all.",
+    "application": "Application",
+    "version": "Version",
+    "packages": "Packages",
+    "findings": "Findings",
+    "lastScanned": "Last scan",
+    "clean": "Clean",
+    "empty": "No installation has been inspected yet.",
+    "unscanned": "Never inspected",
+    "unscannedNote": "These domains have no inspected installation at all. That is expected for a static site with no WordPress, npm or Composer installation, and it is a warning for anything else."
+  },
   "filterPlaceholder": "Filter by domain, package or CVE",
   "shown": "Shown",
   "advisoryNote": "These findings are advisory. Version matching against a public feed is not exact, so check an advisory before acting on it. Nothing here suspends an account or changes a file.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "The findings could not be loaded",
     "scan": "The scan could not be started",
-    "alreadyRunning": "A scan is already running."
+    "alreadyRunning": "A scan is already running.",
+    "inventory": "The inventory could not be loaded"
   }
 }

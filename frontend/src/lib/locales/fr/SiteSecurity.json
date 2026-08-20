@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Ce qui a été inspecté",
+    "note": "Une ligne par installation examinée lors du dernier scan. Une installation sans résultat est la bonne nouvelle que cette liste existe pour montrer : la liste des résultats ci-dessus ne peut pas dire à elle seule si quelque chose a été vérifié.",
+    "application": "Application",
+    "version": "Version",
+    "packages": "Paquets",
+    "findings": "Résultats",
+    "lastScanned": "Dernier scan",
+    "clean": "Sain",
+    "empty": "Aucune installation n'a encore été inspectée.",
+    "unscanned": "Jamais inspecté",
+    "unscannedNote": "Ces domaines n'ont aucune installation inspectée. C'est normal pour un site statique sans WordPress, npm ni Composer, et c'est un avertissement pour tout le reste."
+  },
   "filterPlaceholder": "Filtrer par domaine, paquet ou CVE",
   "shown": "Affichés",
   "advisoryNote": "Ces résultats sont indicatifs. La correspondance de version avec une source publique n'est pas exacte, vérifiez donc un avis avant d'agir. Rien ici ne suspend un compte ni ne modifie un fichier.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Les résultats n'ont pas pu être chargés",
     "scan": "L'analyse n'a pas pu être lancée",
-    "alreadyRunning": "Une analyse est déjà en cours."
+    "alreadyRunning": "Une analyse est déjà en cours.",
+    "inventory": "L'inventaire n'a pas pu être chargé"
   }
 }

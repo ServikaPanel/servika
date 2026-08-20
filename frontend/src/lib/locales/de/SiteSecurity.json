@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Was geprüft wurde",
+    "note": "Eine Zeile je Installation, die der letzte Scan betrachtet hat. Eine Installation ohne Funde ist die gute Nachricht, für die es diese Liste gibt: Die Fundliste oben kann für sich allein nicht sagen, ob überhaupt etwas geprüft wurde.",
+    "application": "Anwendung",
+    "version": "Version",
+    "packages": "Pakete",
+    "findings": "Funde",
+    "lastScanned": "Letzter Scan",
+    "clean": "Sauber",
+    "empty": "Es wurde noch keine Installation geprüft.",
+    "unscanned": "Nie geprüft",
+    "unscannedNote": "Für diese Domains gibt es überhaupt keine geprüfte Installation. Bei einer statischen Seite ohne WordPress, npm oder Composer ist das zu erwarten, bei allem anderen ist es eine Warnung."
+  },
   "filterPlaceholder": "Nach Domain, Paket oder CVE filtern",
   "shown": "Angezeigt",
   "advisoryNote": "Diese Funde sind Hinweise. Der Versionsabgleich mit einer öffentlichen Quelle ist nicht exakt, prüfen Sie einen Hinweis also vor dem Handeln. Nichts hier sperrt ein Konto oder ändert eine Datei.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Die Funde konnten nicht geladen werden",
     "scan": "Der Scan konnte nicht gestartet werden",
-    "alreadyRunning": "Es läuft bereits ein Scan."
+    "alreadyRunning": "Es läuft bereits ein Scan.",
+    "inventory": "Die Bestandsliste konnte nicht geladen werden"
   }
 }

@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Che cosa è stato ispezionato",
+    "note": "Una riga per ogni installazione esaminata dall'ultima scansione. Un'installazione senza rilevazioni è la buona notizia per cui questo elenco esiste: l'elenco delle rilevazioni qui sopra non può dire da solo se qualcosa sia stato controllato.",
+    "application": "Applicazione",
+    "version": "Versione",
+    "packages": "Pacchetti",
+    "findings": "Rilevazioni",
+    "lastScanned": "Ultima scansione",
+    "clean": "Pulita",
+    "empty": "Nessuna installazione è stata ancora ispezionata.",
+    "unscanned": "Mai ispezionato",
+    "unscannedNote": "Questi domini non hanno alcuna installazione ispezionata. È normale per un sito statico senza WordPress, npm o Composer, ed è un avviso per tutto il resto."
+  },
   "filterPlaceholder": "Filtra per dominio, pacchetto o CVE",
   "shown": "Mostrate",
   "advisoryNote": "Queste rilevazioni sono indicative. La corrispondenza di versione con una fonte pubblica non è esatta, quindi verifica l'avviso prima di agire. Nulla qui sospende un account o modifica un file.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Non è stato possibile caricare le rilevazioni",
     "scan": "Non è stato possibile avviare la scansione",
-    "alreadyRunning": "Una scansione è già in corso."
+    "alreadyRunning": "Una scansione è già in corso.",
+    "inventory": "Non è stato possibile caricare l'inventario"
   }
 }

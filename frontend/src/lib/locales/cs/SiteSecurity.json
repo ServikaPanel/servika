@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Co bylo prohlédnuto",
+    "note": "Jeden řádek za každou instalaci, kterou poslední kontrola prošla. Instalace bez nálezů je dobrá zpráva, kvůli které tento seznam existuje: seznam nálezů výše sám o sobě neřekne, zda se vůbec něco kontrolovalo.",
+    "application": "Aplikace",
+    "version": "Verze",
+    "packages": "Balíčky",
+    "findings": "Nálezy",
+    "lastScanned": "Poslední kontrola",
+    "clean": "Čistá",
+    "empty": "Zatím nebyla prohlédnuta žádná instalace.",
+    "unscanned": "Nikdy neprohlédnuto",
+    "unscannedNote": "Tyto domény nemají žádnou prohlédnutou instalaci. U statického webu bez WordPressu, npm nebo Composeru je to očekávané, u všeho ostatního je to varování."
+  },
   "filterPlaceholder": "Filtrovat podle domény, balíčku nebo CVE",
   "shown": "Zobrazeno",
   "advisoryNote": "Tyto nálezy jsou informativní. Porovnání verzí s veřejným zdrojem není přesné, proto si upozornění před zásahem ověřte. Nic zde nepozastaví účet ani nezmění soubor.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Nálezy se nepodařilo načíst",
     "scan": "Kontrolu se nepodařilo spustit",
-    "alreadyRunning": "Kontrola už probíhá."
+    "alreadyRunning": "Kontrola už probíhá.",
+    "inventory": "Inventář se nepodařilo načíst"
   }
 }

@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "O que foi inspecionado",
+    "note": "Uma linha por instalação que a última análise examinou. Uma instalação sem ocorrências é a boa notícia que esta lista existe para mostrar: a lista de ocorrências acima não consegue dizer sozinha se algo chegou a ser verificado.",
+    "application": "Aplicação",
+    "version": "Versão",
+    "packages": "Pacotes",
+    "findings": "Ocorrências",
+    "lastScanned": "Última análise",
+    "clean": "Limpa",
+    "empty": "Ainda não foi inspecionada nenhuma instalação.",
+    "unscanned": "Nunca inspecionado",
+    "unscannedNote": "Estes domínios não têm qualquer instalação inspecionada. Isso é esperado num site estático sem WordPress, npm ou Composer, e é um aviso para tudo o resto."
+  },
   "filterPlaceholder": "Filtrar por domínio, pacote ou CVE",
   "shown": "Mostradas",
   "advisoryNote": "Estas ocorrências são informativas. A correspondência de versões com uma fonte pública não é exata, por isso confirme o aviso antes de agir. Nada aqui suspende uma conta nem altera um ficheiro.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Não foi possível carregar as ocorrências",
     "scan": "Não foi possível iniciar a análise",
-    "alreadyRunning": "Já está uma análise em curso."
+    "alreadyRunning": "Já está uma análise em curso.",
+    "inventory": "Não foi possível carregar o inventário"
   }
 }

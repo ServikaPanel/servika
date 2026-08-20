@@ -51,6 +51,19 @@
     "nodejs": "Node.js",
     "php-composer": "Composer"
   },
+  "inventory": {
+    "title": "Ce a fost inspectat",
+    "note": "Un rând pentru fiecare instalare pe care a examinat-o ultima scanare. O instalare fără rezultate este vestea bună pentru care există această listă: lista de rezultate de mai sus nu poate spune singură dacă s-a verificat ceva.",
+    "application": "Aplicație",
+    "version": "Versiune",
+    "packages": "Pachete",
+    "findings": "Rezultate",
+    "lastScanned": "Ultima scanare",
+    "clean": "Curată",
+    "empty": "Nicio instalare nu a fost încă inspectată.",
+    "unscanned": "Niciodată inspectat",
+    "unscannedNote": "Aceste domenii nu au nicio instalare inspectată. Este de așteptat pentru un site static fără WordPress, npm sau Composer și este un avertisment pentru orice altceva."
+  },
   "filterPlaceholder": "Filtrează după domeniu, pachet sau CVE",
   "shown": "Afișate",
   "advisoryNote": "Aceste rezultate sunt informative. Potrivirea versiunilor cu o sursă publică nu este exactă, așa că verificați avertizarea înainte de a acționa. Nimic de aici nu suspendă un cont și nu modifică un fișier.",
@@ -58,6 +71,7 @@
   "errors": {
     "load": "Rezultatele nu au putut fi încărcate",
     "scan": "Scanarea nu a putut fi pornită",
-    "alreadyRunning": "O scanare este deja în curs."
+    "alreadyRunning": "O scanare este deja în curs.",
+    "inventory": "Inventarul nu a putut fi încărcat"
   }
 }
