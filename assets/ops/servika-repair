@@ -112,8 +112,18 @@ owned_by() { # path  user:group
 ensure_mode() { # path  mode
   local p=$1 m=$2; [ -e "$p" ] || return 0
   local cur; cur=$(stat -c '%a' "$p" 2>/dev/null) || return 0
-  # Normalize the leading zero.
-  if [ "$((8#$cur))" != "$((8#$m))" ]; then
+  # Compare only the bits the requested mode NAMES. `stat -c%a` answers 2750 for
+  # a setgid directory, and a three-digit chmod does not clear setgid on a
+  # directory: measured with GNU coreutils 8.32, `chmod 750`, `chmod 0750` and
+  # even `chmod u=rwx,g=rx,o=` all leave 2750, and only `00750`, `=750` or `g-s`
+  # clear it (on a FILE the same chmod does clear it). Comparing the raw number
+  # therefore reported "FIXED" on every single run while changing nothing, which
+  # is the one report a repair tool must never produce. A mode that names the
+  # high bits itself, such as the 2750 sec_domains wants on a shared document
+  # root, is still compared in full.
+  local want=$((8#$m)) have=$((8#$cur))
+  if [ "$want" -lt "$((8#1000))" ]; then have=$(( have & 8#777 )); fi
+  if [ "$have" != "$want" ]; then
     act "chmod $m  $p  (current: $cur)"
     [ $DRY -eq 0 ] && chmod "$m" "$p" 2>/dev/null || true
   else
