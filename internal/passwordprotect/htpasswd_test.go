@@ -2,6 +2,7 @@ package passwordprotect
 
 import (
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -77,5 +78,61 @@ func TestHtpasswdStoresThePasswordItReadsFromStdin(t *testing.T) {
 	// #nosec G204 -- test-owned temp path and literal credentials.
 	if out, err := exec.Command("htpasswd", "-vb", file, "alice", sentinelPassword).CombinedOutput(); err != nil {
 		t.Errorf("the append run truncated the file: %v: %s", err, out)
+	}
+}
+
+// A password file holds bcrypt hashes, so no account other than nginx may read
+// it. The file used to be left at 0644 inside a 0755 directory, which every
+// tenant on the host could read.
+func TestTheSecuredFileIsClosedToEveryOtherAccount(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "d1_private")
+	if err := os.WriteFile(file, []byte("alice:$2y$05$hash\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// The current account's own ids, because a non-root test cannot give a file
+	// away. What is being asserted is the mode the call leaves behind.
+	if err := secureHtpasswd(file, os.Getuid(), os.Getgid(), htpasswdFileMode); err != nil {
+		t.Fatalf("secureHtpasswd: %v", err)
+	}
+
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != htpasswdFileMode {
+		t.Errorf("mode is %04o, want %04o", got, htpasswdFileMode)
+	}
+	if info.Mode().Perm()&0o007 != 0 {
+		t.Errorf("mode %04o still grants something to other, so any tenant can read the hashes", info.Mode().Perm())
+	}
+	if htpasswdDirMode&0o007 != 0 {
+		t.Errorf("directory mode %04o still grants something to other", htpasswdDirMode)
+	}
+}
+
+// A chown that fails must leave the mode exactly as it was. Tightening it anyway
+// produces a file nginx cannot read, which takes the protected directory down
+// instead of merely leaving it readable.
+func TestAFailedChownLeavesTheModeAlone(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can give a file to any group, so the failure cannot be produced here")
+	}
+	file := filepath.Join(t.TempDir(), "d1_private")
+	if err := os.WriteFile(file, []byte("alice:$2y$05$hash\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Group 0 is one an unprivileged account cannot chown to.
+	if err := secureHtpasswd(file, os.Getuid(), 0, htpasswdFileMode); err == nil {
+		t.Fatal("the failed chown was reported as success")
+	}
+
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("the mode was changed to %04o after the chown failed; it must stay 0644", got)
 	}
 }

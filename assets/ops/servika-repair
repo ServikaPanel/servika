@@ -93,6 +93,14 @@ ensure_owner() { # path  user:group  [recursive]
     ok "ownership $o  $p"
   fi
 }
+# owned_by answers whether a path really carries the requested ownership.
+# ensure_owner swallows a failed chown, and a mode tightened over a failed chown
+# is worse than the loose mode it replaced: it locks the daemon out of a file it
+# has to read. In a dry run nothing was applied, so nothing is asserted.
+owned_by() { # path  user:group
+  [ $DRY -eq 1 ] && return 0
+  [ "$(stat -c '%U:%G' "$1" 2>/dev/null)" = "$2" ]
+}
 ensure_mode() { # path  mode
   local p=$1 m=$2; [ -e "$p" ] || return 0
   local cur; cur=$(stat -c '%a' "$p" 2>/dev/null) || return 0
@@ -225,13 +233,41 @@ sec_htpasswd() {
   head_ "nginx htpasswd (password-protected directories)"
   local D=/etc/nginx/htpasswd
   [ -d "$D" ] || { ok "htpasswd directory absent (no protection configured)"; return 0; }
-  ensure_mode "$D" 755
+  # These files hold the bcrypt hashes of every protected directory on the server.
+  # They were 0644 root:root inside a 0755 directory, so every c_* tenant could
+  # read them with a plain cat. nginx opens them as its own worker user, so
+  # root:nginx 0640 carries all the access it needs and nothing for other closes
+  # them to everyone else. internal/passwordprotect writes new ones the same way.
+  if ! getent passwd nginx >/dev/null 2>&1; then
+    warn "the nginx account is absent; htpasswd ownership and permissions were left as they are"
+    return 0
+  fi
+  ensure_owner "$D" "root:nginx"
+  if ! owned_by "$D" "root:nginx"; then
+    err "$D could not be given to root:nginx; its permissions were left as they are"
+    return 0
+  fi
+  ensure_mode "$D" 750
   local f
   for f in "$D"/*; do
     [ -f "$f" ] || continue
-    ensure_mode "$f" 644
+    ensure_owner "$f" "root:nginx"
+    if ! owned_by "$f" "root:nginx"; then
+      err "$f could not be given to root:nginx; its permissions were left as they are"
+      continue
+    fi
+    ensure_mode "$f" 640
   done
   ensure_context "$D" httpd_config_t -R   # The /etc/nginx file context allows nginx to read it.
+  # A chown and a chmod that both reported success can still leave a file nginx
+  # cannot open, and that is a protected directory answering 500 rather than a
+  # weaker permission, so the access is read back as nginx itself.
+  if [ $DRY -eq 0 ] && command -v runuser >/dev/null 2>&1; then
+    for f in "$D"/*; do
+      [ -f "$f" ] || continue
+      runuser -u nginx -- test -r "$f" 2>/dev/null || err "$f is STILL unreadable by nginx"
+    done
+  fi
 }
 
 sec_clamav() {
