@@ -182,8 +182,8 @@ step "2) Base packages"
 dnf install -y nginx httpd mariadb-server valkey certbot python3-certbot-nginx \
   clamav clamav-update httpd-tools mod_proxy_html tar openssl policycoreutils-python-utils \
   setools-console jq bind bind-utils nftables unzip zip cronie xfsprogs sudo \
-  acl libarchive bubblewrap rsync git curl nodejs npm lftp sshpass >/dev/null 2>&1 \
-  && ok "nginx, httpd, mariadb, valkey, certbot, clamav, bind, nftables, archives, ACL, bubblewrap, git, nodejs, npm, lftp, sshpass, utilities" || die "base package installation"
+  acl libarchive bubblewrap rsync git curl nodejs npm lftp sshpass iproute >/dev/null 2>&1 \
+  && ok "nginx, httpd, mariadb, valkey, certbot, clamav, bind, nftables, archives, ACL, bubblewrap, git, nodejs, npm, lftp, sshpass, iproute, utilities" || die "base package installation"
 command -v unar >/dev/null 2>&1 || dnf install -y unar >/dev/null 2>&1 || warn "unar could not be installed; RAR support will use bsdtar when available"
 
 # ============ 2b) Disk quota (XFS user quota - CloudLinux parity) ============
@@ -657,7 +657,9 @@ ok "php-fpm (base + 5 versions)"
 # ---- named authoritative DNS server for hosted domains ----
 NC=/etc/named.conf
 if [ -f "$NC" ]; then
-  cp -a "$NC" "$NC.servika-bak" 2>/dev/null || true
+  # Keep only the FIRST backup. Unconditional, a second installation copies the
+  # already-edited file over it and the original named.conf is gone for good.
+  [ -f "$NC.servika-bak" ] || cp -a "$NC" "$NC.servika-bak" 2>/dev/null || true
   # Listen on every interface so external clients can query authoritative zones.
   sed -i -E 's/listen-on port 53 \{[^}]*\}/listen-on port 53 { any; }/' "$NC"
   sed -i -E 's/listen-on-v6 port 53 \{[^}]*\}/listen-on-v6 port 53 { any; }/' "$NC"
@@ -676,7 +678,27 @@ chmod 640 /etc/named/servika-zones.conf 2>/dev/null || true
 # Zone files under /var/named require the SELinux named_zone_t context.
 restorecon -R /var/named /etc/named >/dev/null 2>&1 || true
 if named-checkconf >/dev/null 2>&1; then
-  systemctl enable --now named >/dev/null 2>&1 && ok "named (authoritative DNS, :53 open, recursion disabled)" || warn "named could not be started"
+  # `enable --now` does NOT restart a named that is already running, so the two
+  # edits above (listen-on any, recursion no) would not be in force while the
+  # message claimed both. Restart unconditionally, then MEASURE the two claims
+  # rather than announcing them: a named still on 127.0.0.1 resolves no hosted
+  # domain, and one still recursing is an open resolver.
+  systemctl enable named >/dev/null 2>&1
+  systemctl restart named >/dev/null 2>&1
+  sleep 1
+  if ! systemctl is-active --quiet named; then
+    warn "named could not be started"
+  elif ! command -v ss >/dev/null 2>&1; then
+    warn "named is ACTIVE but its claims were NOT MEASURED (ss is missing)"
+  else
+    named_udp53=$(ss -lnuH 2>/dev/null | grep -c ':53 ')
+    named_recursive=$(grep -cE '^[[:space:]]*recursion[[:space:]]+yes' "$NC" 2>/dev/null)
+    if [ "${named_udp53:-0}" -gt 0 ] && [ "${named_recursive:-0}" -eq 0 ]; then
+      ok "named (authoritative DNS, :53 open, recursion disabled)"
+    else
+      warn "named is ACTIVE but its claims were NOT CONFIRMED (:53 sockets=$named_udp53, recursion-yes lines=$named_recursive)"
+    fi
+  fi
 else
   warn "named-checkconf error, DNS must be checked manually"
 fi
@@ -763,9 +785,21 @@ systemctl enable --now crond >/dev/null 2>&1
 systemctl is-active --quiet crond && ok "crond ACTIVE (tenant cron jobs)" || warn "crond could not be started, tenant cron jobs may not run"
 
 # SELinux
-setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1 && ok "SELinux httpd_can_network_connect"
-setsebool -P httpd_enable_homedirs=on httpd_read_user_content=on >/dev/null 2>&1 \
-  && ok "SELinux HTTP access to tenant home content"
+# `&& ok` with no else is a silent skip: one missing line among forty green ones
+# is not something an operator notices.
+if setsebool -P httpd_can_network_connect 1 >/dev/null 2>&1; then
+  ok "SELinux httpd_can_network_connect"
+else
+  warn "SELinux httpd_can_network_connect could NOT be set; the panel may not reach external services"
+fi
+# Without these two booleans nginx cannot read a tenant document root at all, so
+# try_files decides the file is absent and EVERY site answers 404. That is not a
+# missing feature, it is the whole server down, so it ends the installation.
+if setsebool -P httpd_enable_homedirs=on httpd_read_user_content=on >/dev/null 2>&1; then
+  ok "SELinux HTTP access to tenant home content"
+else
+  die "the SELinux httpd home booleans could not be set; every site would answer 404"
+fi
 if command -v getenforce >/dev/null 2>&1 \
   && [ "$(getenforce)" != "Disabled" ] \
   && command -v semanage >/dev/null 2>&1; then
@@ -774,7 +808,14 @@ if command -v getenforce >/dev/null 2>&1 \
     *'/run/php-fpm-['*) ;;
     *) semanage fcontext -a -t httpd_var_run_t '/run/php-fpm-[^/]+(/.*)?' >/dev/null 2>&1 || true ;;
   esac
-  ok "SELinux fcontext for per-tenant PHP-FPM sockets"
+  # The `|| true` above made the line below unconditional, so it printed even
+  # when the rule was never added. Without that rule nginx cannot reach a tenant
+  # PHP-FPM socket and every tenant gets 500, so the rule is READ BACK.
+  fcontext_list=$(semanage fcontext -l 2>/dev/null || true)
+  case "$fcontext_list" in
+    *'/run/php-fpm-['*) ok "SELinux fcontext for per-tenant PHP-FPM sockets" ;;
+    *) die "the SELinux fcontext rule for per-tenant PHP-FPM sockets could not be added; every tenant would get 500" ;;
+  esac
 fi
 restorecon -R /opt/servika/bin /opt/servika/frontend-dist >/dev/null 2>&1
 
