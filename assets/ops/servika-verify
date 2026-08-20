@@ -96,6 +96,52 @@ svc() {
   if [ -n "$state" ]; then echo "$state"; else echo "unknown"; fi
 }
 
+# running_binary_state <unit> <installed path>: print a reason and answer 0 when
+# the running process IS the installed binary, 1 when it provably is not, and 2
+# when it could not be measured. `servika-install.sh` carries the same function
+# for the same reason; the two ops scripts share no library.
+#
+# "the service is up" and "the binary on disk is running" are different claims.
+# Measured against real systemd: after `install` replaced the binary,
+# `systemctl enable --now` left MainPID unchanged and `is-active` still answered
+# "active" while the OLD process kept serving.
+#
+# The comparison is by CONTENT, never by inode. `/proc/<pid>/exe` reports
+# procfs's own device number, so `stat -c '%d:%i'` on it can never equal the
+# installed file and a check built that way calls every server stale (measured:
+# 97:44078762 against 1048642:63995942 for one running program).
+#
+# `install` gives the replacement a NEW inode, so the old one stays open in the
+# running process and readlink reports it with a " (deleted)" suffix. That is the
+# cheap half; the checksum catches a replacement made some other way.
+running_binary_state() {
+  local unit="$1" installed="$2" pid link running_hash installed_hash
+  pid=$(systemctl show -p MainPID --value "$unit" 2>/dev/null)
+  pid=${pid%%$'\n'*}
+  if [ -z "$pid" ] || [ "$pid" = "0" ]; then
+    echo "the unit reports no main process (MainPID=${pid:-empty})"; return 2
+  fi
+  if [ ! -r "/proc/$pid/exe" ]; then
+    echo "/proc/$pid/exe could not be read"; return 2
+  fi
+  if [ ! -f "$installed" ]; then
+    echo "the installed binary is missing ($installed)"; return 1
+  fi
+  link=$(readlink "/proc/$pid/exe" 2>/dev/null)
+  case "$link" in
+    *" (deleted)") echo "the running process holds a DELETED file ($link)"; return 1 ;;
+  esac
+  running_hash=$(sha256sum "/proc/$pid/exe" 2>/dev/null | awk '{print $1}')
+  installed_hash=$(sha256sum "$installed" 2>/dev/null | awk '{print $1}')
+  if [ -z "$running_hash" ] || [ -z "$installed_hash" ]; then
+    echo "the checksums could not be taken"; return 2
+  fi
+  if [ "$running_hash" = "$installed_hash" ]; then
+    echo "running process = installed binary"; return 0
+  fi
+  echo "the running process is a DIFFERENT binary (${link:-unknown})"; return 1
+}
+
 # ── The panel's own ports ─────────────────────────────────────────────────────
 # Read from the binary, which reads them from the files that hold them and
 # refuses rather than guessing. Nothing here falls back to a number: the panel
@@ -124,6 +170,21 @@ else
     fi
   fi
 fi
+
+# ── The process behind the panel ─────────────────────────────────────────────
+# A panel that is up on a binary it no longer runs answers every check below
+# with the OLD code, so this comes before them. It happens whenever something
+# replaced the binary without restarting the service, which systemd reports as
+# "active" throughout. CRITICAL because the code serving this server is not the
+# code installed on it, and an unmeasurable answer is critical too, since this
+# is the tool whose whole contract is to measure.
+section "Running process"
+BINARY_REASON=$(running_binary_state servika "$SERVIKA_BIN_PATH")
+case $? in
+  0) pass "running binary" "$BINARY_REASON" ;;
+  1) crit "running binary" "$BINARY_REASON (systemctl restart servika)" ;;
+  *) crit "running binary" "NOT MEASURED: $BINARY_REASON" ;;
+esac
 
 # ── Services ─────────────────────────────────────────────────────────────────
 section "Services"
