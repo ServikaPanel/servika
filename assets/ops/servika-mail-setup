@@ -4,6 +4,12 @@
 # Roundcube authenticates through Dovecot IMAP and stores only webmail preferences in its own database.
 set -uo pipefail
 
+# Parse in the C locale. Under tr_TR.UTF-8 the ranges `a-z` and `A-Z` do NOT
+# contain `i` or `I`, so every character-range parse is cut at the first one
+# (measured: `grep -oE '[a-zA-Z0-9_]+'` answers `aud` for `audit_log`). The
+# brand name SERVIKA carries an I, so this reaches the environment loader too.
+export LC_ALL=C
+
 ENV_FILE=/etc/servika/env
 
 load_servika_env() {
@@ -13,7 +19,9 @@ load_servika_env() {
   [ $((8#$mode & 077)) -eq 0 ] || { echo "insecure environment file mode" >&2; exit 1; }
 
   while IFS= read -r line || [ -n "$line" ]; do
-    [[ "$line" =~ ^[[:space:]]*(SERVIKA_[A-Za-z0-9_]*)=(.*)$ ]] || continue
+    # POSIX classes, never `A-Za-z0-9`: a range is collation-ordered and under
+    # tr_TR.UTF-8 it excludes `i`, which silently skipped SERVIKA_LISTEN.
+    [[ "$line" =~ ^[[:space:]]*(SERVIKA_[[:alnum:]_]*)=(.*)$ ]] || continue
     key=${BASH_REMATCH[1]}
     value=${BASH_REMATCH[2]%$'\r'}
     if [[ "$value" == \"*\" && "$value" == *\" ]]; then value=${value:1:${#value}-2}; fi
@@ -196,7 +204,9 @@ fi
 
 echo "════ mailro database password ════"
 DBPASS=${SERVIKA_MAIL_DB_PASS:-}
-if [ -n "$DBPASS" ] && ! [[ "$DBPASS" =~ ^[A-Za-z0-9._%+=:@-]{16,128}$ ]]; then
+# POSIX classes, never `A-Za-z0-9`: under tr_TR.UTF-8 the range excludes `i`, so
+# any generated password carrying one was refused and mail setup stopped here.
+if [ -n "$DBPASS" ] && ! [[ "$DBPASS" =~ ^[[:alnum:]._%+=:@-]{16,128}$ ]]; then
   fail "SERVIKA_MAIL_DB_PASS contains unsupported characters or has an invalid length"
 fi
 if [ -z "$DBPASS" ]; then
@@ -379,7 +389,7 @@ fi
 
 if [ -f /opt/roundcube/index.php ]; then
   RCDBPASS=${SERVIKA_ROUNDCUBE_DB_PASS:-}
-  if [ -n "$RCDBPASS" ] && ! [[ "$RCDBPASS" =~ ^[A-Za-z0-9._%+=-]{16,128}$ ]]; then
+  if [ -n "$RCDBPASS" ] && ! [[ "$RCDBPASS" =~ ^[[:alnum:]._%+=-]{16,128}$ ]]; then
     fail "SERVIKA_ROUNDCUBE_DB_PASS contains unsupported characters or has an invalid length"
   fi
   if [ -z "$RCDBPASS" ]; then
@@ -394,7 +404,7 @@ if [ -f /opt/roundcube/index.php ]; then
   # authentication bypass for every mailbox on this server, so it lives only in
   # the environment file, which is 0600 and root-owned.
   MAILMASTER=${SERVIKA_MAIL_MASTER_PASS:-}
-  if [ -n "$MAILMASTER" ] && ! [[ "$MAILMASTER" =~ ^[A-Za-z0-9._%+=-]{16,128}$ ]]; then
+  if [ -n "$MAILMASTER" ] && ! [[ "$MAILMASTER" =~ ^[[:alnum:]._%+=-]{16,128}$ ]]; then
     fail "SERVIKA_MAIL_MASTER_PASS contains unsupported characters or has an invalid length"
   fi
   if [ -z "$MAILMASTER" ]; then
@@ -405,7 +415,7 @@ if [ -f /opt/roundcube/index.php ]; then
   fi
 
   RCDESKEY=${SERVIKA_ROUNDCUBE_DES_KEY:-}
-  if [ -n "$RCDESKEY" ] && ! [[ "$RCDESKEY" =~ ^[A-Za-z0-9._%+=:@-]{16,128}$ ]]; then
+  if [ -n "$RCDESKEY" ] && ! [[ "$RCDESKEY" =~ ^[[:alnum:]._%+=:@-]{16,128}$ ]]; then
     fail "SERVIKA_ROUNDCUBE_DES_KEY contains unsupported characters or has an invalid length"
   fi
   if [ -z "$RCDESKEY" ]; then

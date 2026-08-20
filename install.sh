@@ -20,6 +20,12 @@ case ":$PATH:" in
   *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
 esac
 
+# Parse in the C locale. Under tr_TR.UTF-8 the ranges `a-z` and `A-Z` do NOT
+# contain `i` or `I`, so every character-range parse is cut at the first one
+# (measured: `grep -oE '[a-zA-Z0-9_]+'` answers `aud` for `audit_log`). The
+# brand name SERVIKA carries an I, so this reaches the environment loader too.
+export LC_ALL=C
+
 REPO="ServikaPanel/servika"
 
 c_b="\033[1;34m"; c_g="\033[32m"; c_r="\033[31m"; c_0="\033[0m"

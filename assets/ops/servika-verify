@@ -47,6 +47,12 @@ case ":$PATH:" in
   *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
 esac
 
+# Parse in the C locale. Under tr_TR.UTF-8 the ranges `a-z` and `A-Z` do NOT
+# contain `i` or `I`, so every character-range parse is cut at the first one
+# (measured: `grep -oE '[a-zA-Z0-9_]+'` answers `aud` for `audit_log`). The
+# brand name SERVIKA carries an I, so this reaches the environment loader too.
+export LC_ALL=C
+
 BRIEF=0; JSON=0
 while [ $# -gt 0 ]; do
   case "$1" in

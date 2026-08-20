@@ -10,6 +10,12 @@
 #   WordPress with phpredis, selective flush, array credentials, and a copied drop-in
 set -uo pipefail
 
+# Parse in the C locale. Under tr_TR.UTF-8 the ranges `a-z` and `A-Z` do NOT
+# contain `i` or `I`, so every character-range parse is cut at the first one
+# (measured: `grep -oE '[a-zA-Z0-9_]+'` answers `aud` for `audit_log`). The
+# brand name SERVIKA carries an I, so this reaches the environment loader too.
+export LC_ALL=C
+
 ENV_FILE=/etc/servika/env
 
 load_servika_env() {
@@ -19,7 +25,9 @@ load_servika_env() {
   [ $((8#$mode & 077)) -eq 0 ] || { echo "insecure environment file mode" >&2; exit 1; }
 
   while IFS= read -r line || [ -n "$line" ]; do
-    [[ "$line" =~ ^[[:space:]]*(SERVIKA_[A-Za-z0-9_]*)=(.*)$ ]] || continue
+    # POSIX classes, never `A-Za-z0-9`: a range is collation-ordered and under
+    # tr_TR.UTF-8 it excludes `i`, which silently skipped SERVIKA_LISTEN.
+    [[ "$line" =~ ^[[:space:]]*(SERVIKA_[[:alnum:]_]*)=(.*)$ ]] || continue
     key=${BASH_REMATCH[1]}
     value=${BASH_REMATCH[2]%$'\r'}
     if [[ "$value" == \"*\" && "$value" == *\" ]]; then value=${value:1:${#value}-2}; fi
@@ -36,7 +44,9 @@ ACTION="${2:-on}"
 HOST=127.0.0.1; PORT=6379
 
 # --- Guards ---
-if ! [[ "$SYSTEM_USER" =~ ^[a-z0-9_]{1,32}$ ]]; then echo "invalid user name: $SYSTEM_USER"; exit 1; fi
+# POSIX classes, never `a-z0-9`: under tr_TR.UTF-8 the range excludes `i`, so
+# every tenant whose system user carries one was refused as invalid.
+if ! [[ "$SYSTEM_USER" =~ ^[[:lower:][:digit:]_]{1,32}$ ]]; then echo "invalid user name: $SYSTEM_USER"; exit 1; fi
 [ "$(id -u)" = 0 ] || { echo "root is required"; exit 1; }
 load_servika_env
 ADMIN=${SERVIKA_REDIS_ADMIN_PASS:-}
