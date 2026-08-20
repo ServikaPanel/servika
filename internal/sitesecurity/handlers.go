@@ -152,6 +152,111 @@ func (h *Handlers) DomainList(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// AppRow is one inspected installation as the screen sees it.
+type AppRow struct {
+	DomainID     int64  `json:"domain_id"`
+	DomainName   string `json:"domain_name"`
+	AppType      string `json:"app_type"`
+	Install      string `json:"install_path"`
+	AppVersion   string `json:"app_version"`
+	PackageCount int    `json:"package_count"`
+	FindingCount int    `json:"finding_count"`
+	LastScanned  string `json:"last_scanned"`
+}
+
+// AppsResponse is the inventory plus the domains that are missing from it.
+//
+// Unscanned is the half that carries the warning. Without it an empty findings
+// list means either "everything is clean" or "nothing was ever looked at", and
+// those are opposite answers drawn identically.
+type AppsResponse struct {
+	Total     int      `json:"total"`
+	Items     []AppRow `json:"items"`
+	Unscanned []string `json:"unscanned_domains"`
+}
+
+// Apps — GET /admin/site-security/apps (ResellerOrAbove).
+//
+// BOTH queries are narrowed by ScopeSQL. Narrowing only the inventory would
+// leave the unscanned list naming every domain on the server, so a reseller
+// would read their neighbours' domain names off a screen built to reassure them
+// about their own.
+func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
+	out := AppsResponse{Items: []AppRow{}, Unscanned: []string{}}
+
+	condition, args := middleware.ScopeSQL(r, "d")
+	// #nosec G701 G202 -- condition is a constant scope fragment from ScopeSQL with a literal alias and the limit is a strconv of a constant; every user value is bound through args.
+	rows, err := h.DB.QueryContext(r.Context(),
+		`SELECT a.domain_id, d.domain_name, a.app_type, a.install_path, a.app_version,
+		        a.package_count, a.finding_count,
+		        DATE_FORMAT(a.last_scanned,'%Y-%m-%d %H:%i')
+		   FROM security_apps a JOIN domains d ON d.id = a.domain_id`+
+			condition+` ORDER BY a.finding_count DESC, d.domain_name ASC, a.app_type ASC,
+		        a.install_path ASC LIMIT `+strconv.Itoa(maxRows), args...)
+	if err != nil {
+		log.Printf("site security apps: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var row AppRow
+		if err := rows.Scan(&row.DomainID, &row.DomainName, &row.AppType, &row.Install,
+			&row.AppVersion, &row.PackageCount, &row.FindingCount, &row.LastScanned); err != nil {
+			log.Printf("site security apps scan: %v", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+			return
+		}
+		out.Items = append(out.Items, row)
+	}
+	// rows.Err() decides between a complete list and one the server cut short.
+	// Without it a query that broke half way answers 200 with a short list, and
+	// "fewer installations than expected" is precisely the reading this screen
+	// must never invite.
+	if err := rows.Err(); err != nil {
+		log.Printf("site security apps rows: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
+	out.Total = len(out.Items)
+
+	// ScopeSQL returns a whole " WHERE ..." fragment, so its own conditions are
+	// appended to it rather than the other way round; with no fragment (an
+	// admin) this opens the WHERE itself.
+	where := " WHERE "
+	if condition != "" {
+		where = condition + " AND "
+	}
+	// #nosec G701 G202 -- where is either a literal or the constant ScopeSQL fragment with a literal alias; every user value is bound through args.
+	domainRows, err := h.DB.QueryContext(r.Context(),
+		`SELECT d.domain_name FROM domains d`+where+
+			`d.parent_domain_id IS NULL AND d.system_user LIKE 'c\\_%'
+			   AND NOT EXISTS (SELECT 1 FROM security_apps a WHERE a.domain_id = d.id)
+			 ORDER BY d.domain_name LIMIT `+strconv.Itoa(maxRows), args...)
+	if err != nil {
+		log.Printf("site security unscanned: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return
+	}
+	defer func() { _ = domainRows.Close() }()
+	for domainRows.Next() {
+		var name string
+		if err := domainRows.Scan(&name); err != nil {
+			log.Printf("site security unscanned scan: %v", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+			return
+		}
+		out.Unscanned = append(out.Unscanned, name)
+	}
+	if err := domainRows.Err(); err != nil {
+		log.Printf("site security unscanned rows: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
 // Status — GET /admin/site-security/status (ResellerOrAbove).
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	var status Status

@@ -134,8 +134,8 @@ func StartCollector(db *sql.DB) {
 // is a NUL byte, which cannot appear in any of the four values, so no two
 // different tuples can produce one key by running together.
 func findingKey(domainID int64, installPath, packageName, cveID string) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%d\x00%s\x00%s\x00%s",
-		domainID, installPath, packageName, cveID)))
+	sum := sha256.Sum256(fmt.Appendf(nil, "%d\x00%s\x00%s\x00%s",
+		domainID, installPath, packageName, cveID))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -298,6 +298,16 @@ func (c *Collector) scan(ctx context.Context) (tally, error) {
 	return counts, firstErr
 }
 
+// scanResult is what one source produced for one domain: what it counted, the
+// vulnerabilities it found, and the installations it looked at. The last is
+// returned even when the first two are empty, because "this was inspected and
+// is clean" is the answer the inventory exists to give.
+type scanResult struct {
+	counts   tally
+	findings []Finding
+	apps     []Inventory
+}
+
 // scanDomain inspects one domain and writes what it finds.
 //
 // A failure in one of the three sources does not stop the other two: a broken
@@ -313,6 +323,11 @@ func (c *Collector) scanDomain(ctx context.Context, item target) (tally, error) 
 	}
 
 	seen := map[string]bool{}
+	// perInstall counts DISTINCT findings per installation, off the same merge
+	// key the total uses, so an advisory reported by both feeds is counted once
+	// in the inventory row and once in the sweep total rather than twice in one
+	// and once in the other.
+	perInstall := map[string]int{}
 	record := func(findings []Finding) {
 		for _, finding := range findings {
 			key, err := c.upsert(ctx, item.id, finding)
@@ -323,21 +338,36 @@ func (c *Collector) scanDomain(ctx context.Context, item target) (tally, error) 
 			if !seen[key] {
 				seen[key] = true
 				counts.findings++
+				perInstall[installKey(finding.AppType, finding.InstallPath)]++
 			}
 		}
 	}
 
-	wpCounts, wpFindings, err := c.scanWordPress(ctx, item)
-	note(err)
-	counts.packages += wpCounts.packages
-	counts.unparsed += wpCounts.unparsed
-	record(wpFindings)
+	var apps []Inventory
 
-	lockCounts, lockFindings, err := c.scanLockfiles(ctx, item)
+	wp, err := c.scanWordPress(ctx, item)
 	note(err)
-	counts.packages += lockCounts.packages
-	counts.unparsed += lockCounts.unparsed
-	record(lockFindings)
+	counts.packages += wp.counts.packages
+	counts.unparsed += wp.counts.unparsed
+	apps = append(apps, wp.apps...)
+	record(wp.findings)
+
+	locks, err := c.scanLockfiles(ctx, item)
+	note(err)
+	counts.packages += locks.counts.packages
+	counts.unparsed += locks.counts.unparsed
+	apps = append(apps, locks.apps...)
+	record(locks.findings)
+
+	for i := range apps {
+		apps[i].Findings = perInstall[installKey(apps[i].AppType, apps[i].InstallPath)]
+	}
+	// The inventory is written LAST, so its finding counts are the ones this
+	// pass actually recorded, and the prune only runs when nothing above it
+	// failed. A write failure here is surfaced rather than logged and dropped:
+	// an inventory nobody could write is the state this feature exists to make
+	// visible, so it must not itself go missing quietly.
+	note(c.recordInventory(ctx, item.id, apps, firstErr == nil))
 
 	return counts, firstErr
 }
@@ -388,26 +418,32 @@ func truncate(value string, limit int) string {
 }
 
 // scanWordPress inspects every WordPress installation of one tenant.
-func (c *Collector) scanWordPress(ctx context.Context, item target) (tally, []Finding, error) {
-	var counts tally
-	var out []Finding
+func (c *Collector) scanWordPress(ctx context.Context, item target) (scanResult, error) {
+	var result scanResult
 	var firstErr error
 
 	for _, install := range wordpress.Discover(item.systemUser) {
 		if ctx.Err() != nil {
-			return counts, out, ctx.Err()
+			return result, ctx.Err()
 		}
+		// The installation is recorded whether or not its version can be read
+		// and whether or not anything is found in it: wp-config.php is there, so
+		// this is a WordPress site the sweep looked at.
+		entry := Inventory{AppType: AppWordPress, InstallPath: install.Rel}
+
 		if version, err := wordpress.CoreVersion(item.systemUser, install.Dir); err == nil && version != "" {
-			counts.packages++
+			entry.Version = version
+			entry.Packages++
+			result.counts.packages++
 			advisories, judged, err := c.WordPressAdvisories(ctx, "core", version, version)
 			if err != nil && firstErr == nil {
 				firstErr = err
 			}
 			if !judged {
-				counts.unparsed++
+				result.counts.unparsed++
 			}
 			for _, advisory := range advisories {
-				out = append(out, Finding{
+				result.findings = append(result.findings, Finding{
 					AppType: AppWordPress, InstallPath: install.Rel,
 					Package: "wordpress", Installed: version, Advisory: advisory,
 				})
@@ -424,9 +460,11 @@ func (c *Collector) scanWordPress(ctx context.Context, item target) (tally, []Fi
 			}
 			for _, component := range components {
 				if ctx.Err() != nil {
-					return counts, out, ctx.Err()
+					result.apps = append(result.apps, entry)
+					return result, ctx.Err()
 				}
-				counts.packages++
+				entry.Packages++
+				result.counts.packages++
 				advisories, judged, err := c.WordPressAdvisories(ctx, kind, component.Name, component.Version)
 				if err != nil {
 					if firstErr == nil {
@@ -435,10 +473,10 @@ func (c *Collector) scanWordPress(ctx context.Context, item target) (tally, []Fi
 					continue
 				}
 				if !judged {
-					counts.unparsed++
+					result.counts.unparsed++
 				}
 				for _, advisory := range advisories {
-					out = append(out, Finding{
+					result.findings = append(result.findings, Finding{
 						AppType:     AppWordPress,
 						InstallPath: install.Rel,
 						Package:     kind + ":" + component.Name,
@@ -448,8 +486,9 @@ func (c *Collector) scanWordPress(ctx context.Context, item target) (tally, []Fi
 				}
 			}
 		}
+		result.apps = append(result.apps, entry)
 	}
-	return counts, out, firstErr
+	return result, firstErr
 }
 
 // lockfileSources are the dependency lists this reads, relative to the tenant
@@ -471,15 +510,14 @@ var lockfileSources = []struct {
 // semantics (openat2 with RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS): a link planted
 // anywhere in the path cannot redirect this root-privileged read at a file
 // outside the home.
-func (c *Collector) scanLockfiles(ctx context.Context, item target) (tally, []Finding, error) {
-	var counts tally
-	var out []Finding
+func (c *Collector) scanLockfiles(ctx context.Context, item target) (scanResult, error) {
+	var result scanResult
 	var firstErr error
 
 	home := "/home/" + item.systemUser
 	directories := []string{"public_html"}
 	names, err := files.ListNamesBeneath(home, "public_html")
-	if err != nil && firstErr == nil {
+	if err != nil {
 		firstErr = err
 	}
 	for _, name := range names {
@@ -489,7 +527,7 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (tally, []Fi
 	for _, dir := range directories {
 		for _, source := range lockfileSources {
 			if ctx.Err() != nil {
-				return counts, out, ctx.Err()
+				return result, ctx.Err()
 			}
 			body, err := files.ReadFileBeneath(home, dir+"/"+source.file, maxLockfileBytes)
 			if err != nil {
@@ -500,13 +538,24 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (tally, []Fi
 			packages, err := source.parse(body)
 			if err != nil {
 				// A malformed lockfile drops that INSTALLATION, never the
-				// sweep. It is the tenant's file and they can break it.
+				// sweep. It is the tenant's file and they can break it. No
+				// inventory row is written either: the dependency list could
+				// not be read, so claiming the installation was inspected would
+				// be the false reassurance this record exists to prevent, and
+				// the error above stops the prune from removing what was known.
 				if firstErr == nil {
 					firstErr = fmt.Errorf("%s under %s: %w", source.file, item.name, err)
 				}
 				continue
 			}
-			counts.packages += len(packages)
+			result.counts.packages += len(packages)
+			rel := strings.TrimPrefix(dir, "public_html")
+			if rel == "" {
+				rel = "/"
+			}
+			result.apps = append(result.apps, Inventory{
+				AppType: source.appType, InstallPath: rel, Packages: len(packages),
+			})
 
 			affected, err := c.AffectedPackages(ctx, source.ecosystem, packages)
 			if err != nil {
@@ -514,10 +563,6 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (tally, []Fi
 					firstErr = err
 				}
 				continue
-			}
-			rel := strings.TrimPrefix(dir, "public_html")
-			if rel == "" {
-				rel = "/"
 			}
 			for _, pkg := range affected {
 				advisories, err := c.Advisories(ctx, source.ecosystem, pkg)
@@ -528,7 +573,7 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (tally, []Fi
 					continue
 				}
 				for _, advisory := range advisories {
-					out = append(out, Finding{
+					result.findings = append(result.findings, Finding{
 						AppType:     source.appType,
 						InstallPath: rel,
 						Package:     pkg.Name,
@@ -539,5 +584,5 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (tally, []Fi
 			}
 		}
 	}
-	return counts, out, firstErr
+	return result, firstErr
 }
