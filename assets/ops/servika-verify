@@ -280,6 +280,85 @@ else
   warn "nginx cache access" "nginx CANNOT read it, fastcgi_cache is dead (servika-repair)"
 fi
 
+# schema_from_migrations reads the migration files and prints what they say the
+# schema must hold: one `T<TAB>table` per surviving table and one `C<TAB>table.column`
+# per column an ALTER added. It is the only way to tell a migration that was
+# RECORDED as applied from one whose statements all landed.
+#
+# Four things were measured against the real files and each one silently loses
+# whole tables when it is got wrong:
+#
+#  * A statement is accumulated line by line and cut at `;` only AFTER the `--`
+#    comment on that line is removed. Splitting the raw text on `;` first loses
+#    every statement whose header comment contains one, which 0066 does.
+#  * The pending statement is FLUSHED at the end of each file. Five migration
+#    files (0018-0022) end with no trailing `;`, so a parser that drops the tail
+#    loses their entire CREATE TABLE.
+#  * The optional `IF NOT EXISTS` / `IF EXISTS` group is stepped OVER, never read
+#    as the name. Read positionally it yields a table called `if`, which is then
+#    reported missing on every healthy server.
+#  * `DROP TABLE`, `DROP COLUMN` and `CHANGE COLUMN` are replayed in order, so a
+#    name a later migration removed or renamed is not demanded of the server.
+#    0026 renames `domain_redis.sk` and 0093 drops four `queue_*` columns.
+#
+# tolower() is safe here only because this script runs under LC_ALL=C; under
+# tr_TR.UTF-8 it answers `sıte_ıd` for SITE_ID.
+schema_from_migrations() {
+  awk '
+  function strip(n) { gsub(/[(),]/, "", n); return n }
+  function droptable(n,   k) {
+    delete tab[n]
+    for (k in col) if (index(k, n ".") == 1) delete col[k]
+  }
+  function handle(s,   st, w, nw, i, j, t) {
+    gsub(/`/, " ", s)
+    gsub(/[ \t\r\n]+/, " ", s)
+    st = tolower(s)
+    nw = split(st, w, " ")
+    if (nw < 3) return
+    if (w[1] == "create" && w[2] == "table") {
+      j = 3
+      if (w[j] == "if" && w[j+1] == "not" && w[j+2] == "exists") j += 3
+      t = strip(w[j]); if (t != "") tab[t] = 1
+    } else if (w[1] == "drop" && w[2] == "table") {
+      j = 3
+      if (w[j] == "if" && w[j+1] == "exists") j += 2
+      for (; j <= nw; j++) { t = strip(w[j]); if (t != "") droptable(t) }
+    } else if (w[1] == "alter" && w[2] == "table") {
+      t = strip(w[3])
+      for (i = 4; i <= nw; i++) {
+        if (w[i] == "add" && w[i+1] == "column") {
+          j = i + 2
+          if (w[j] == "if" && w[j+1] == "not" && w[j+2] == "exists") j += 3
+          col[t "." strip(w[j])] = 1; i = j
+        } else if (w[i] == "drop" && w[i+1] == "column") {
+          j = i + 2
+          if (w[j] == "if" && w[j+1] == "exists") j += 2
+          delete col[t "." strip(w[j])]; i = j
+        } else if (w[i] == "change" && w[i+1] == "column") {
+          delete col[t "." strip(w[i+2])]
+          col[t "." strip(w[i+3])] = 1; i += 3
+        }
+      }
+    }
+  }
+  FNR == 1 { if (stmt != "") handle(stmt); stmt = "" }
+  {
+    line = $0
+    sub(/(^|[ \t])--([ \t].*)?$/, "", line)
+    stmt = stmt " " line
+    while ((p = index(stmt, ";")) > 0) {
+      handle(substr(stmt, 1, p - 1))
+      stmt = substr(stmt, p + 1)
+    }
+  }
+  END {
+    if (stmt != "") handle(stmt)
+    for (k in tab) print "T\t" k
+    for (k in col) print "C\t" k
+  }' "$@"
+}
+
 # ── Database ─────────────────────────────────────────────────────────────────
 section "Database"
 # Connect the way the PANEL connects, never as root. root over the unix socket
@@ -337,7 +416,10 @@ fi
 if [ -n "$DB_DEFAULTS" ] && mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SELECT 1' >/dev/null 2>&1; then
   pass "MariaDB connection" "the panel's own credentials answered ($DB_WHO)"
   MIGRATIONS=$(mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SELECT COUNT(*) FROM schema_migrations;' "$DB_NAME" 2>/dev/null)
-  TABLES=$(mysql --defaults-extra-file="$DB_DEFAULTS" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null)
+  # DATABASE() rather than the name interpolated into the statement: mysql is
+  # already connected to that schema, so there is nothing to quote and nothing
+  # a name out of the environment file could change about the query.
+  TABLES=$(mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE();' "$DB_NAME" 2>/dev/null)
   # The expected number is the number of files on disk. `> 0` passed a server
   # that had applied one migration out of a hundred, which is the half-migrated
   # state the updater's rollback path exists to prevent.
@@ -362,6 +444,81 @@ if [ -n "$DB_DEFAULTS" ] && mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SE
   else
     crit "panel tables" "$TABLES tables, the schema is incomplete"
   fi
+
+  # A row in schema_migrations says a file RAN. It does not say the file that
+  # ran is the file on disk now, and the panel refuses to start when they
+  # differ: the runner calls log.Fatalf on a checksum mismatch. A blank stored
+  # checksum is a legacy row the runner backfills, so it is not a mismatch.
+  if [ "${MIGR_EXPECTED:-0}" -gt 0 ] && command -v sha256sum >/dev/null 2>&1; then
+    MIGR_STATE=$(mktemp 2>/dev/null || true)
+    if [ -n "$MIGR_STATE" ] \
+       && mysql --defaults-extra-file="$DB_DEFAULTS" -N -B \
+            -e 'SELECT filename, checksum FROM schema_migrations;' "$DB_NAME" \
+            > "$MIGR_STATE" 2>/dev/null; then
+      MIGR_REPORT=$(sha256sum "$MIGR_DIR"/*.sql 2>/dev/null | awk -v state="$MIGR_STATE" '
+        BEGIN { while ((getline l < state) > 0) { split(l, f, "\t"); db[f[1]] = f[2] } }
+        { name = $2; sub(/.*\//, "", name); total++
+          if (!(name in db)) { nmiss++; if (nmiss <= 3) mn = (mn == "" ? name : mn " " name) }
+          else if (db[name] != "" && db[name] != $1) { nbad++; if (nbad <= 3) bn = (bn == "" ? name : bn " " name) } }
+        END { printf "%d %d %d %s|%s\n", total+0, nmiss+0, nbad+0, mn, bn }')
+      read -r M_TOTAL M_MISS M_BAD M_NAMES <<< "$MIGR_REPORT"
+      M_MISS_NAMES=${M_NAMES%%|*}; M_BAD_NAMES=${M_NAMES#*|}
+      if [ "${M_TOTAL:-0}" -eq 0 ]; then
+        crit "migration file identity" "NOT MEASURED (no file could be hashed)"
+      elif [ "${M_BAD:-0}" -gt 0 ]; then
+        crit "migration file identity" "$M_BAD file(s) CHANGED after being applied: $M_BAD_NAMES, so the panel REFUSES to start"
+      elif [ "${M_MISS:-0}" -gt 0 ]; then
+        crit "migration file identity" "$((M_TOTAL - M_MISS))/$M_TOTAL recorded, never applied: $M_MISS_NAMES"
+      else
+        pass "migration file identity" "$M_TOTAL/$M_TOTAL recorded, every checksum matches"
+      fi
+    else
+      crit "migration file identity" "NOT MEASURED (schema_migrations could not be read)"
+    fi
+    [ -n "$MIGR_STATE" ] && rm -f "$MIGR_STATE"
+  fi
+
+  # The table COUNT only proves the schema is not empty. Derive the shape the
+  # migration files describe and ask the server for it, so a migration recorded
+  # as applied whose statements did not all land is visible by name.
+  SCHEMA_WANT=$(mktemp 2>/dev/null || true)
+  SCHEMA_HAVE=$(mktemp 2>/dev/null || true)
+  if [ "${MIGR_EXPECTED:-0}" -gt 0 ] && [ -n "$SCHEMA_WANT" ] && [ -n "$SCHEMA_HAVE" ]; then
+    schema_from_migrations "$MIGR_DIR"/*.sql 2>/dev/null | sort -u > "$SCHEMA_WANT"
+    mysql --defaults-extra-file="$DB_DEFAULTS" -N -B -e "
+      SELECT 'T', LOWER(table_name) FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+      UNION ALL
+      SELECT 'C', CONCAT(LOWER(table_name), '.', LOWER(column_name))
+        FROM information_schema.columns WHERE table_schema = DATABASE();" \
+      "$DB_NAME" 2>/dev/null | sort -u > "$SCHEMA_HAVE"
+    # comm needs both sides sorted the same way, which LC_ALL=C above guarantees.
+    SCHEMA_REPORT=$(comm -23 "$SCHEMA_WANT" "$SCHEMA_HAVE" | awk -v want="$SCHEMA_WANT" '
+      { if ($1 == "T") { mt++; if (mt <= 3) tn = (tn == "" ? $2 : tn " " $2) }
+        else if ($1 == "C") { mc++; if (mc <= 3) cn = (cn == "" ? $2 : cn " " $2) } }
+      END {
+        while ((getline l < want) > 0) { if (l ~ /^T\t/) wt++; else if (l ~ /^C\t/) wc_++ }
+        printf "%d %d %d %d %s|%s\n", wt+0, wc_+0, mt+0, mc+0, tn, cn
+      }')
+    read -r S_WT S_WC S_MT S_MC S_NAMES <<< "$SCHEMA_REPORT"
+    S_TN=${S_NAMES%%|*}; S_CN=${S_NAMES#*|}
+    if [ "${S_WT:-0}" -eq 0 ]; then
+      crit "schema tables" "NOT MEASURED (the migration files describe no table)"
+    elif [ "${S_MT:-0}" -eq 0 ]; then
+      pass "schema tables" "$S_WT/$S_WT the migrations describe are present"
+    else
+      crit "schema tables" "$((S_WT - S_MT))/$S_WT present, MISSING: $S_TN"
+    fi
+    if [ "${S_WC:-0}" -gt 0 ]; then
+      if [ "${S_MC:-0}" -eq 0 ]; then
+        pass "schema columns" "$S_WC/$S_WC the migrations add are present"
+      else
+        crit "schema columns" "$((S_WC - S_MC))/$S_WC present, MISSING: $S_CN"
+      fi
+    fi
+  fi
+  [ -n "$SCHEMA_WANT" ] && rm -f "$SCHEMA_WANT"
+  [ -n "$SCHEMA_HAVE" ] && rm -f "$SCHEMA_HAVE"
 elif [ -n "$DB_DEFAULTS" ]; then
   crit "MariaDB connection" "the panel's own credentials were REFUSED ($DB_WHO), so the panel cannot start"
 fi
