@@ -92,9 +92,16 @@ download(){
 # what stops an installation now, and warn-and-continue is the decision already
 # taken for the unresolvable case. <note> is the consequence of the step not
 # happening, appended to whichever warning fires; pass "" when there is none.
-# running_binary_state <unit> <installed path>: print a reason and answer
-# 0 when the running process IS the installed binary, 1 when it provably is not,
-# and 2 when it could not be measured.
+# running_binary_state <unit> <installed path> [expected sha256]: print a reason
+# and answer 0 when the running process IS the expected binary, 1 when it
+# provably is not, and 2 when it could not be measured.
+#
+# The anchor is the checksum of the binary IN THE PACKAGE, passed as the third
+# argument. Comparing the running process against the INSTALLED FILE is the
+# wrong pair: when the install itself failed, both sides are the previous
+# release and they agree, so the check passes on exactly the installation it
+# exists to catch. With no third argument it falls back to the installed file,
+# which is right for servika-verify, where no package is present.
 #
 # "the service is up" and "the binary we just installed is running" are different
 # claims. Measured against real systemd: after `install` replaced the binary,
@@ -111,7 +118,7 @@ download(){
 # cheap half of the test; the checksum is what catches a replacement made some
 # other way.
 running_binary_state(){
-  local unit="$1" installed="$2" pid link running_hash installed_hash
+  local unit="$1" installed="$2" expected="${3:-}" pid link running_hash installed_hash
   pid=$(systemctl show -p MainPID --value "$unit" 2>/dev/null)
   pid=${pid%%$'\n'*}
   if [ -z "$pid" ] || [ "$pid" = "0" ]; then
@@ -127,13 +134,18 @@ running_binary_state(){
   case "$link" in
     *" (deleted)") echo "the running process holds a DELETED file ($link)"; return 1 ;;
   esac
+  local anchor=installed
   running_hash=$(sha256sum "/proc/$pid/exe" 2>/dev/null | awk '{print $1}')
-  installed_hash=$(sha256sum "$installed" 2>/dev/null | awk '{print $1}')
+  if [ -n "$expected" ]; then
+    installed_hash="$expected"; anchor=packaged
+  else
+    installed_hash=$(sha256sum "$installed" 2>/dev/null | awk '{print $1}')
+  fi
   if [ -z "$running_hash" ] || [ -z "$installed_hash" ]; then
     echo "the checksums could not be taken"; return 2
   fi
   if [ "$running_hash" = "$installed_hash" ]; then
-    echo "running process = installed binary"; return 0
+    echo "running process = $anchor binary"; return 0
   fi
   echo "the running process is a DIFFERENT binary (${link:-unknown})"; return 1
 }
@@ -448,7 +460,19 @@ ok "$ENVF (secrets and operator settings preserved; $ENV_EXTRA_COUNT additional 
 
 # ============ 6) ARTIFACT DEPLOYMENT ============
 step "6) Panel binary + frontend + migrations"
-install -m 0755 "$A/$ARCH/servika-server" /opt/servika/bin/servika-server
+# The checksum of the binary IN THE PACKAGE is kept as the anchor for step 12,
+# which otherwise compares the running process against the installed file: a pair
+# that agrees whenever the install ITSELF failed, because both sides are then the
+# previous release. The install is also checked here, and the file is read back,
+# because "the command ran" and "the bytes reached the disk" are different claims
+# on a full, read-only or SELinux-refused target.
+PACKAGE_BIN_SHA=$(sha256sum "$A/$ARCH/servika-server" 2>/dev/null | awk '{print $1}')
+[ -n "$PACKAGE_BIN_SHA" ] || die "the panel binary in the package could not be read"
+install -m 0755 "$A/$ARCH/servika-server" /opt/servika/bin/servika-server \
+  || die "the panel binary could not be installed (full disk, read-only mount or SELinux)"
+INSTALLED_BIN_SHA=$(sha256sum /opt/servika/bin/servika-server 2>/dev/null | awk '{print $1}')
+[ "$INSTALLED_BIN_SHA" = "$PACKAGE_BIN_SHA" ] \
+  || die "the panel binary reached the disk INCOMPLETE (checksum mismatch)"
 [ -f "$A/$ARCH/servika-seed-admin" ] && install -m 0755 "$A/$ARCH/servika-seed-admin" /opt/servika/bin/servika-seed-admin
 tar xzf "$A/frontend-dist.tar.gz" -C /opt/servika/frontend-dist && ok "frontend-dist"
 tar xzf "$A/migrations.tar.gz" -C /opt/servika/src/migrations && ok "migrations ($(ls /opt/servika/src/migrations/*.sql 2>/dev/null | wc -l) SQL)"
@@ -507,10 +531,14 @@ step "8) nginx (panel vhost + phpMyAdmin + perf)"
 # in 00-perf.conf, and defining it here would make nginx -t report a duplicate directive.
 grep -q "client_max_body_size 10240m" /etc/nginx/nginx.conf || \
   sed -i '/^http {/a\    client_max_body_size 10240m;' /etc/nginx/nginx.conf
-cp "$A/nginx/_panel.conf"      /etc/nginx/conf.d/_panel.conf
-cp "$A/nginx/_default80.conf"  /etc/nginx/conf.d/_default80.conf
-cp "$A/nginx/_default443.conf" /etc/nginx/conf.d/_default443.conf
-cp "$A/nginx/php-fpm.conf"     /etc/nginx/conf.d/php-fpm.conf 2>/dev/null
+# `install ... || die` rather than a bare `cp`: a copy that failed left the
+# previous file, or no file, and the installation carried on to report success.
+# Each of these four decides whether the panel and every unmatched host answer
+# at all, so a failure here is the end of the installation, not a note.
+install -m 0644 "$A/nginx/_panel.conf"      /etc/nginx/conf.d/_panel.conf      || die "_panel.conf could not be installed"
+install -m 0644 "$A/nginx/_default80.conf"  /etc/nginx/conf.d/_default80.conf  || die "_default80.conf could not be installed"
+install -m 0644 "$A/nginx/_default443.conf" /etc/nginx/conf.d/_default443.conf || die "_default443.conf could not be installed"
+install -m 0644 "$A/nginx/php-fpm.conf"     /etc/nginx/conf.d/php-fpm.conf     || die "the nginx php-fpm upstream could not be installed"
 # Suppress the default server block shipped by AlmaLinux nginx.rpm (conflicts with _default80.conf).
 if grep -q "^\s*server_name\s*_;\s*$" /etc/nginx/nginx.conf; then
   line=$(grep -n "^\s*server_name\s*_;\s*$" /etc/nginx/nginx.conf | cut -d: -f1 | head -1)
@@ -573,7 +601,7 @@ fi
 openssl rand -hex 32 > /etc/servika/pma-internal.token
 chown root:apache /etc/servika/pma-internal.token
 chmod 0640 /etc/servika/pma-internal.token
-cp "$A/php-fpm/phpmyadmin.conf" /etc/php-fpm.d/phpmyadmin.conf
+install -m 0644 "$A/php-fpm/phpmyadmin.conf" /etc/php-fpm.d/phpmyadmin.conf || die "the phpMyAdmin PHP-FPM pool could not be installed"
 [ -f "$A/php-fpm/roundcube.conf" ] && cp "$A/php-fpm/roundcube.conf" /etc/php-fpm.d/roundcube.conf
 mkdir -p /var/lib/phpmyadmin/{tmp,sessions} /var/lib/roundcube/{temp,sessions}
 # The phpMyAdmin pool runs as apache (assets/php-fpm/phpmyadmin.conf), so the
@@ -605,7 +633,7 @@ ok "phpMyAdmin and Roundcube pools + phpMyAdmin configuration + permissions"
 
 # ============ 10) systemd + services ============
 step "10) systemd + services"
-cp "$A/systemd/servika.service" /etc/systemd/system/servika.service
+install -m 0644 "$A/systemd/servika.service" /etc/systemd/system/servika.service || die "the servika unit could not be installed"
 for unit in servika-db-backup.service servika-db-backup.timer; do
   [ -f "$A/systemd/$unit" ] && cp "$A/systemd/$unit" "/etc/systemd/system/$unit"
 done
@@ -787,7 +815,7 @@ fi
 # binary. A PROVEN mismatch stops the installation; a state that could not be
 # measured is only reported, because failing there would stop an installation
 # for a reason that says nothing about the panel.
-BINARY_STATE=$(running_binary_state servika /opt/servika/bin/servika-server)
+BINARY_STATE=$(running_binary_state servika /opt/servika/bin/servika-server "$PACKAGE_BIN_SHA")
 case $? in
   0) ok "servika ACTIVE ($BINARY_STATE)" ;;
   1) die "servika is up but $BINARY_STATE; the restart did not take effect" ;;
