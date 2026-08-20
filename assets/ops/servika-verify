@@ -282,18 +282,78 @@ fi
 
 # ── Database ─────────────────────────────────────────────────────────────────
 section "Database"
-if mysql -N -e 'SELECT 1' >/dev/null 2>&1; then
-  pass "MariaDB connection" "SELECT 1 answered"
-  MIGRATIONS=$(mysql -N -e 'SELECT COUNT(*) FROM panel.schema_migrations;' 2>/dev/null)
-  TABLES=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='panel';" 2>/dev/null)
+# Connect the way the PANEL connects, never as root. root over the unix socket
+# always answers, so a check built on it stays green when the password in the
+# environment file is wrong or the GRANT was revoked, which is precisely the
+# state in which the panel cannot start. The password travels through a 0600
+# defaults file and never through argv, the same way servika-install.sh proves
+# the account it just created.
+# db_defaults_file sets DB_DEFAULTS, DB_NAME and DB_WHO from the panel DSN, and
+# answers non-zero when it cannot parse it. It ASSIGNS rather than prints: a
+# command substitution would run it in a subshell, where the other two values
+# never reach the caller (measured, and the empty database name then made the
+# migration query fail as "not measured").
+db_defaults_file() {
+  local dsn="$1" rest creds netpart proto addr db user pass file
+  rest=${dsn%%\?*}
+  case "$rest" in *@*) ;; *) return 1 ;; esac
+  creds=${rest%@*}
+  netpart=${rest##*@}
+  user=${creds%%:*}
+  case "$creds" in *:*) pass=${creds#*:} ;; *) pass="" ;; esac
+  [ -n "$user" ] || return 1
+  case "$netpart" in
+    *'('*')'*) proto=${netpart%%(*}; addr=${netpart#*(}; addr=${addr%%)*}; db=${netpart##*)/} ;;
+    *)         proto=""; addr=""; db=${netpart##*/} ;;
+  esac
+  [ -n "$db" ] || return 1
+  file=$(mktemp) || return 1
+  chmod 600 "$file" || { rm -f "$file"; return 1; }
+  {
+    printf '[client]\nuser=%s\n' "$user"
+    [ -n "$pass" ] && printf 'password=%s\n' "$pass"
+    case "$proto" in
+      unix) printf 'socket=%s\n' "$addr" ;;
+      tcp)  printf 'host=%s\nport=%s\n' "${addr%:*}" "${addr##*:}" ;;
+    esac
+  } > "$file"
+  DB_DEFAULTS="$file"; DB_NAME="$db"; DB_WHO="$user@${addr:-local}/$db"
+}
+
+DB_DSN=""; DB_NAME=""; DB_WHO=""; DB_DEFAULTS=""
+if [ -r /etc/servika/env ]; then
+  # A literal key, so no character range and no locale to depend on.
+  DB_DSN=$(sed -n 's/^SERVIKA_DB_DSN=//p' /etc/servika/env 2>/dev/null | tail -n 1)
+  DB_DSN=${DB_DSN%\"}; DB_DSN=${DB_DSN#\"}
+  DB_DSN=${DB_DSN%\'}; DB_DSN=${DB_DSN#\'}
+fi
+if [ -z "$DB_DSN" ]; then
+  crit "panel database identity" "SERVIKA_DB_DSN could not be read from /etc/servika/env"
+else
+  db_defaults_file "$DB_DSN" || DB_DEFAULTS=""
+  [ -n "$DB_DEFAULTS" ] || crit "panel database identity" "SERVIKA_DB_DSN could not be parsed"
+fi
+
+if [ -n "$DB_DEFAULTS" ] && mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SELECT 1' >/dev/null 2>&1; then
+  pass "MariaDB connection" "the panel's own credentials answered ($DB_WHO)"
+  MIGRATIONS=$(mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SELECT COUNT(*) FROM schema_migrations;' "$DB_NAME" 2>/dev/null)
+  TABLES=$(mysql --defaults-extra-file="$DB_DEFAULTS" -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME';" 2>/dev/null)
+  # The expected number is the number of files on disk. `> 0` passed a server
+  # that had applied one migration out of a hundred, which is the half-migrated
+  # state the updater's rollback path exists to prevent.
+  MIGR_DIR="${SERVIKA_MIGR:-/opt/servika/src/migrations}"
+  # shellcheck disable=SC2012 # counting files, and these names are release-controlled
+  MIGR_EXPECTED=$(ls "$MIGR_DIR"/*.sql 2>/dev/null | wc -l | tr -d ' ')
   # An empty answer is "could not measure", not "zero". Telling them apart is the
   # difference between reporting a broken query and reporting an empty schema.
   if [ -z "$MIGRATIONS" ]; then
     crit "applied migrations" "NOT MEASURED (schema_migrations could not be read)"
-  elif [ "$MIGRATIONS" -gt 0 ] 2>/dev/null; then
-    pass "applied migrations" "$MIGRATIONS applied"
+  elif [ "${MIGR_EXPECTED:-0}" -eq 0 ]; then
+    warn "applied migrations" "$MIGRATIONS applied, but $MIGR_DIR holds no files to compare against"
+  elif [ "$MIGRATIONS" -ge "$MIGR_EXPECTED" ] 2>/dev/null; then
+    pass "applied migrations" "$MIGRATIONS/$MIGR_EXPECTED applied"
   else
-    crit "applied migrations" "0 applied, the schema was never installed"
+    crit "applied migrations" "$MIGRATIONS/$MIGR_EXPECTED applied, the schema is HALF MIGRATED"
   fi
   if [ -z "$TABLES" ]; then
     crit "panel tables" "NOT MEASURED"
@@ -302,9 +362,10 @@ if mysql -N -e 'SELECT 1' >/dev/null 2>&1; then
   else
     crit "panel tables" "$TABLES tables, the schema is incomplete"
   fi
-else
-  crit "MariaDB connection" "could not connect, the panel cannot work"
+elif [ -n "$DB_DEFAULTS" ]; then
+  crit "MariaDB connection" "the panel's own credentials were REFUSED ($DB_WHO), so the panel cannot start"
 fi
+[ -n "$DB_DEFAULTS" ] && rm -f "$DB_DEFAULTS"
 
 # ── Tools ────────────────────────────────────────────────────────────────────
 section "Tools"
