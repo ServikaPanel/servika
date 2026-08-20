@@ -44,6 +44,44 @@ load_servika_env() {
 
 load_servika_env
 
+# The health check URL is DERIVED from SERVIKA_LISTEN, the one setting that says
+# where the backend listens. It used to be a setting of its own with the port
+# written into it, and the panel can MOVE its backend port, which never touched
+# that copy: this tool then health-checked a port nothing answers on, concluded
+# the new release was broken, and restored the previous binary, every release
+# asset and the pre-update database dump. A healthy update rolled itself back on
+# every attempt. Derived, there is nothing left to keep in sync.
+#
+# The derivation is done here rather than by asking servika-server, because
+# servika-restore carries the same code and exists precisely for a binary that
+# cannot run.
+#
+# A listen address may name no host (":8080") or a wildcard, and none of those
+# can be dialled, so they all collapse to loopback, where the panel answers in
+# every one of them. internal/panelport.HealthURL carries the same rule.
+derive_health_url() {
+  local listen="${SERVIKA_LISTEN:-}" host port
+  listen=${listen%\"}; listen=${listen#\"}
+  listen=${listen%\'}; listen=${listen#\'}
+  case "$listen" in
+    *:*) ;;
+    *) echo "SERVIKA_LISTEN ($listen) names no port, so the health check URL cannot be derived; set SERVIKA_HEALTH" >&2; return 1 ;;
+  esac
+  port=${listen##*:}
+  host=${listen%:*}
+  case "$port" in
+    ''|*[!0-9]*) echo "SERVIKA_LISTEN ($listen) names no port, so the health check URL cannot be derived; set SERVIKA_HEALTH" >&2; return 1 ;;
+  esac
+  host=${host#[}; host=${host%]}
+  case "$host" in
+    ''|0.0.0.0|::|'*') host=127.0.0.1 ;;
+  esac
+  case "$host" in
+    *:*) host="[$host]" ;;
+  esac
+  printf 'http://%s:%s/healthz\n' "$host" "$port"
+}
+
 REPO="${SERVIKA_REPO:-ServikaPanel/servika}"
 BRANCH="main"; DRY=0; FORCE=0; BRANCH_EXPLICIT=0
 PREFIX="${SERVIKA_PREFIX:-/opt/servika}"
@@ -54,7 +92,12 @@ MIGR="${SERVIKA_MIGR:-$PREFIX/src/migrations}"
 SCRIPTS="${SERVIKA_SCRIPTS:-$PREFIX/src/scripts}"
 OPSBIN="${SERVIKA_OPSBIN:-/usr/local/bin}"
 SVC="${SERVIKA_SVC:-servika}"
-HEALTH="${SERVIKA_HEALTH:-http://127.0.0.1:8080/healthz}"
+HEALTH="${SERVIKA_HEALTH:-}"
+if [ -z "$HEALTH" ]; then
+  # An empty result is left empty on purpose: validate_paths below refuses it by
+  # name rather than this guessing a port and reporting a dead one as healthy.
+  HEALTH=$(derive_health_url) || HEALTH=""
+fi
 DB_BACKUP="${SERVIKA_DBBK:-$OPSBIN/servika-db-backup}"
 DB_BACKUP_DIR="${SERVIKA_DBDIR:-/var/backups/servika/db}"
 # Durable home for the panel vhost this update replaces. The rollback snapshot is

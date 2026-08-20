@@ -1121,6 +1121,13 @@ func main() {
 	// panel that started it is not the panel that learns how it went. Its
 	// verdict is folded into the history table here.
 	panelport.FoldOutcome(d)
+	// The ops tools health-check the backend after a restart, and their URL used
+	// to be written with a port of its own that a backend port change never
+	// touched. servika-update then never saw the panel come up and restored the
+	// previous binary, every release asset and the pre-update database dump, so a
+	// healthy update rolled itself back on every attempt. The port change
+	// restarts this process, which is why the repair belongs here.
+	panelport.HealHealthURL()
 
 	firewall.TakeOverFirewalld()
 	if err := firewall.Reapply(d); err != nil {
