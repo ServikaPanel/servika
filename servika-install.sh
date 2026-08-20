@@ -778,7 +778,7 @@ if [ "$VERIFY_STATUS" -ne 0 ]; then
   echo -e "   Fix the failures above, then:"
   echo -e "     ${c_b}servika-verify${c_0}   (measure again)"
   echo -e "     ${c_b}servika-repair${c_0}   (repair the known problems)"
-  echo -e "   Re-running this installer is safe; it is idempotent."
+  echo -e "   Repair and measure again rather than re-running this installer."
   echo -e "${c_r}═══════════════════════════════════════════════${c_0}"
   exit 1
 fi
