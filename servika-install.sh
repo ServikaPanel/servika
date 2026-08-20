@@ -460,7 +460,15 @@ fi
 # Operations tools and phpMyAdmin signon
 OPS_INSTALLED=""
 for t in "$A"/ops/*; do
-  bn=$(basename "$t"); nm="${bn%.sh}"
+  bn=$(basename "$t")
+  # A configuration file is not a tool, and an editor or patch leftover is stale
+  # code that root could run by mistake. Without this, `50-servika-jail.conf`
+  # landed in /usr/local/bin as an executable on every installation. The panel
+  # reads that file from /opt/servika/src/scripts, which the copy below fills.
+  case "$bn" in
+    *.conf|*.service|*.timer|*.bak|*.bak.*|*.orig|*.rej|*~) continue ;;
+  esac
+  nm="${bn%.sh}"
   install -m 0755 "$t" "/usr/local/bin/$nm" 2>/dev/null || continue
   case "$nm" in servika-*) OPS_INSTALLED="$OPS_INSTALLED $nm" ;; esac
 done

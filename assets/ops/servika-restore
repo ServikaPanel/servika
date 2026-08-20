@@ -396,7 +396,17 @@ elif [ -d "$A/migrations" ]; then
 fi
 if [ -d "$A/ops" ]; then
   mkdir -p "$OPSBIN" "$SCRIPTS"
-  for t in "$A"/ops/*; do bn=$(basename "$t"); install -m 0755 "$t" "$OPSBIN/${bn%.sh}" 2>/dev/null || true; done
+  # A configuration file is not a tool, and an editor or patch leftover is stale
+  # code that root could run by mistake. Without this, `50-servika-jail.conf`
+  # landed in $OPSBIN as an executable. The panel reads that file from $SCRIPTS,
+  # which the copy below fills.
+  for t in "$A"/ops/*; do
+    bn=$(basename "$t")
+    case "$bn" in
+      *.conf|*.service|*.timer|*.bak|*.bak.*|*.orig|*.rej|*~) continue ;;
+    esac
+    install -m 0755 "$t" "$OPSBIN/${bn%.sh}" 2>/dev/null || true
+  done
   cp "$A"/ops/* "$SCRIPTS/" 2>/dev/null || true
   ok "ops-tools + src/scripts synced"
 fi
