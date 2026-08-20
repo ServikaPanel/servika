@@ -308,6 +308,7 @@ if [ "$DRY" = 1 ]; then
   echo "  • $SEED    → synced to canonical seed-admin"
   echo "  • $MIGR/   → new .sql files ADDED (existing preserved)"
   echo "  • $OPSBIN + $SCRIPTS → ops-tools synced"
+  echo "  • servika-repair --only htpasswd,clamav,frontend,signon (+mail when configured)"
   echo "  • mail templates under $PREFIX/src/mail-templates"
   echo "  • nginx and PHP-FPM panel integration files"
   echo "  • PRESERVED: /etc/servika/env · panel DB · /home/c_* · /var/backups/servika/*"
@@ -391,6 +392,38 @@ if [ -d "$A/ops" ]; then
   cp "$A"/ops/* "$SCRIPTS/" 2>/dev/null || true
   ok "ops-tools + src/scripts synced"
 fi
+
+# Targeted repair. This tool installs a new servika-repair a few lines above and
+# never RAN it, exactly as servika-update did not, so a repair section reached
+# the fleet's disk and executed only on a fresh install. On the tool an operator
+# reaches for when the installation is already broken, that is the wrong half.
+#
+# The section list matches servika-update's, and for the same measured reasons:
+# these four are the ones the running panel does NOT perform, while
+# provisioner.Init repairs phpMyAdmin, the nginx cache and tenant homes at every
+# start and firewall.TakeOverFirewalld masks firewalld. `domains` is excluded
+# because on a host whose ACL read test fails it runs `chown -R` across a live
+# document root and turns public_html 0750 into 2750. `mail` is conditional
+# because without the mail setup that section prints eight "absent" warnings.
+#
+# There is no shared library between these tools, so each carries its own copy,
+# the same way each carries its own PATH block and health-URL derivation.
+REPAIR_SECTIONS="htpasswd,clamav,frontend,signon"
+if [ -f /etc/postfix/mysql-virtual-domains.cf ]; then
+  REPAIR_SECTIONS="$REPAIR_SECTIONS,mail"
+fi
+if command -v servika-repair >/dev/null 2>&1; then
+  if servika-repair --quiet --only "$REPAIR_SECTIONS"; then
+    ok "targeted repair ($REPAIR_SECTIONS)"
+  else
+    warn "the targeted repair reported an error; run: servika-repair --only $REPAIR_SECTIONS"
+  fi
+elif [ -x "$OPSBIN/servika-repair" ]; then
+  warn "servika-repair is installed but not resolvable on PATH, so the targeted repair did not run"
+else
+  warn "servika-repair is absent, so the targeted repair did not run"
+fi
+
 if [ -d "$A/mail" ]; then
   MAIL_TMPL="$PREFIX/src/mail-templates"
   mkdir -p "$MAIL_TMPL"
