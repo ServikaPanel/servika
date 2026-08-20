@@ -451,13 +451,19 @@ fi
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
 if [ $JSON -eq 1 ]; then
+  # A detail carrying a quote, a backslash or a newline would produce output no
+  # JSON parser accepts, and this mode exists to be parsed. A literal newline is
+  # invalid inside a JSON string, so it is folded to a space rather than escaped:
+  # the failure lists below are multi-line by design.
+  json_string() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n\t' '  '; }
   printf '{"passed":%d,"critical":%d,"warnings":%d,"failures":[' "$PASSED" "$CRITICAL" "$WARNINGS"
   first=1
   for f in ${FAILURES[@]+"${FAILURES[@]}"}; do
     [ $first -eq 0 ] && printf ','
     first=0
     level=${f%%|*}; rest=${f#*|}; check=${rest%%|*}; detail=${rest#*|}
-    printf '{"level":"%s","check":"%s","detail":"%s"}' "$level" "$check" "$detail"
+    printf '{"level":"%s","check":"%s","detail":"%s"}' \
+      "$(json_string "$level")" "$(json_string "$check")" "$(json_string "$detail")"
   done
   printf ']}\n'
   [ $CRITICAL -gt 0 ] && exit 1
