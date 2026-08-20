@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// ── Brand pages: new-domain welcome + server-wide 404 ───────────────────────
+// ── Brand pages: new-domain welcome + server-wide 404 + catch-all park ──────
 // Both are FULL-PAGE two-column layouts: Lottie animation on the left, content
 // on the right. On mobile they collapse to a single column (animation on top).
 //
@@ -249,6 +249,48 @@ func error404HTML() string {
 %s
 </body>
 </html>`, brandStyle, brandDrawing, brandFooter, animScript("notfound.json"))
+}
+
+// defaultParkHTML is what a visitor sees when the Host header or the SNI name
+// matches no tenant on this server, served by both catch-all vhosts out of
+// defaultWebroot.
+//
+// It deliberately does NOT call animScript. That loader fetches
+// /_srv/lottie.min.js and /_srv/<file>, which errorPageBlock serves through
+// `location ^~ /_srv/` in TENANT vhosts only; neither catch-all declares such a
+// location, so every load would produce two 404s for an animation that could
+// never appear. brandDrawing is already the fallback for exactly that case and
+// stands on its own: .anim is display:none until the loader adds .anim-on.
+func defaultParkHTML() string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>No site is configured for this address</title>
+<style>%s</style>
+</head>
+<body>
+<div class="page">
+  <aside class="visual">
+%s
+    <div class="mark">servika</div>
+  </aside>
+  <main class="content">
+    <span class="eyebrow">Not configured</span>
+    <h1>No site is configured<br>for <span class="domain">this address</span></h1>
+    <p class="lead">The request reached this server, but no site here answers to the domain name you used. If the domain was pointed here recently, DNS may still be propagating.</p>
+    <ol class="steps">
+      <li><span class="num">1</span><span><b>If you own this domain</b> — add it from the <b>Domains</b> page in the panel.</span></li>
+      <li><span class="num">2</span><span><b>If you just added it</b> — wait a few minutes for DNS to propagate and try again.</span></li>
+      <li><span class="num">3</span><span><b>If you are a visitor</b> — check the address, or let the site owner know.</span></li>
+    </ol>
+%s
+  </main>
+</div>
+</body>
+</html>`, brandStyle, brandDrawing, brandFooter)
 }
 
 // Ensure404Page writes the server-wide 404 page into the root-owned directory

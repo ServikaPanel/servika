@@ -32,6 +32,18 @@ const (
 	// created it, and nginx -t does not check that a root exists, so the miss was
 	// invisible.
 	defaultWebroot = "/var/www/_default80"
+	// defaultParkPage is the file both vhosts fall back to. Its ABSENCE is not a
+	// blank page: `try_files $uri /index.html` redirects internally to a path that
+	// re-enters the same location, so nginx answers 500 and logs `rewrite or
+	// internal redirection cycle`. Measured against nginx 1.29.8 with the shipped
+	// _default80.conf: directory present and this file missing gives HTTP 500 for
+	// every request with an unmatched Host, and 200 as soon as it exists.
+	//
+	// The ACME location is unaffected either way, which was measured separately: a
+	// real token under /var/www/_acme still answered 200 with the right body while
+	// ordinary requests were failing, because that location carries its own root.
+	// So this never touched certificate renewal, only visitors.
+	defaultParkPage = defaultWebroot + "/index.html"
 )
 
 // knownDefault80 and knownDefault443 hold the SHA-256 of every version of each
@@ -98,6 +110,10 @@ func HealDefaultVhostsOnStartup() {
 	if err := os.MkdirAll(defaultWebroot, 0o755); err != nil {
 		log.Printf("default vhost heal: could not create %s: %v", defaultWebroot, err)
 	}
+	// The page goes down BEFORE the vhosts. The other order leaves a window in
+	// which nginx serves a location whose fallback file is not there yet, and the
+	// answer in that window is the 500 this exists to remove.
+	ensureDefaultParkPage()
 
 	changed := false
 	changed = healManagedVhost(default80Path, default80Conf, knownDefault80) || changed
@@ -109,6 +125,25 @@ func HealDefaultVhostsOnStartup() {
 	if output, err := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 		log.Printf("default vhost heal: nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
+}
+
+// ensureDefaultParkPage writes the catch-all fallback page, comparing content
+// first so a boot that changes nothing touches nothing. The shape is the same as
+// Ensure404Page: this is a panel-generated asset, not an operator's file, and an
+// operator who wants their own page edits the vhost, which the heal below
+// already leaves alone once it differs from every shipped version.
+func ensureDefaultParkPage() {
+	next := []byte(defaultParkHTML())
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	if existing, err := os.ReadFile(defaultParkPage); err == nil && string(existing) == string(next) {
+		return
+	}
+	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+	if err := os.WriteFile(defaultParkPage, next, 0o644); err != nil {
+		log.Printf("default vhost heal: could not write %s: %v", defaultParkPage, err)
+		return
+	}
+	log.Printf("default vhost heal: %s written", defaultParkPage)
 }
 
 // healManagedVhost applies one file and reports whether it wrote anything.
