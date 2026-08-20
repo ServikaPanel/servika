@@ -86,6 +86,51 @@ download(){
 # what stops an installation now, and warn-and-continue is the decision already
 # taken for the unresolvable case. <note> is the consequence of the step not
 # happening, appended to whichever warning fires; pass "" when there is none.
+# running_binary_state <unit> <installed path>: print a reason and answer
+# 0 when the running process IS the installed binary, 1 when it provably is not,
+# and 2 when it could not be measured.
+#
+# "the service is up" and "the binary we just installed is running" are different
+# claims. Measured against real systemd: after `install` replaced the binary,
+# `systemctl enable --now` left MainPID unchanged and `is-active` still answered
+# "active" while the OLD process kept running.
+#
+# The comparison is by CONTENT, never by inode. `/proc/<pid>/exe` reports
+# procfs's own device number, so `stat -c '%d:%i'` on it can never equal the
+# installed file and a check built that way calls every server stale. Measured
+# for one running program: 97:44078762 against 1048642:63995942.
+#
+# `install` gives the replacement a NEW inode, so the old one stays open in the
+# running process and readlink reports it with a " (deleted)" suffix. That is the
+# cheap half of the test; the checksum is what catches a replacement made some
+# other way.
+running_binary_state(){
+  local unit="$1" installed="$2" pid link running_hash installed_hash
+  pid=$(systemctl show -p MainPID --value "$unit" 2>/dev/null)
+  pid=${pid%%$'\n'*}
+  if [ -z "$pid" ] || [ "$pid" = "0" ]; then
+    echo "the unit reports no main process (MainPID=${pid:-empty})"; return 2
+  fi
+  if [ ! -r "/proc/$pid/exe" ]; then
+    echo "/proc/$pid/exe could not be read"; return 2
+  fi
+  if [ ! -f "$installed" ]; then
+    echo "the installed binary is missing ($installed)"; return 1
+  fi
+  link=$(readlink "/proc/$pid/exe" 2>/dev/null)
+  case "$link" in
+    *" (deleted)") echo "the running process holds a DELETED file ($link)"; return 1 ;;
+  esac
+  running_hash=$(sha256sum "/proc/$pid/exe" 2>/dev/null | awk '{print $1}')
+  installed_hash=$(sha256sum "$installed" 2>/dev/null | awk '{print $1}')
+  if [ -z "$running_hash" ] || [ -z "$installed_hash" ]; then
+    echo "the checksums could not be taken"; return 2
+  fi
+  if [ "$running_hash" = "$installed_hash" ]; then
+    echo "running process = installed binary"; return 0
+  fi
+  echo "the running process is a DIFFERENT binary (${link:-unknown})"; return 1
+}
 run_ops_tool(){
   local name="$1" label="$2" note="$3"; shift 3
   [ -z "$note" ] || note=" ($note)"
@@ -692,13 +737,21 @@ run_ops_tool servika-optimize "servika-optimize" ""
 
 # ============ 12) START PANEL; MIGRATIONS RUN AT STARTUP ============
 step "12) Starting panel"
-systemctl enable --now servika >/dev/null 2>&1; sleep 3
+# The restart is UNCONDITIONAL and separate from the enable. `enable --now` does
+# not restart a service that is already running, and the binary was replaced a
+# few steps above, so on a second run the OLD process would keep serving while
+# systemd went on reporting "active". Everything provisioner.Init repairs at
+# startup (the catch-all document roots and their park page, the nginx cache
+# zone, phpMyAdmin ownership, the WAF sync, the health URL) would then never run
+# again, which is the whole reason somebody runs this script a second time.
+systemctl enable servika >/dev/null 2>&1
+systemctl restart servika >/dev/null 2>&1; sleep 3
 systemctl enable --now nginx >/dev/null 2>&1; systemctl restart nginx >/dev/null 2>&1
 
 # The panel's external port is READ from the files that hold it, never assumed.
 # It is 8443 on a fresh host, but an operator can move it from the panel, and
-# this script is idempotent and meant to be re-run: assuming 8443 would open a
-# port nothing is on in the firewall, probe that same dead port in the
+# this script does get run again on a server that has one: assuming 8443 would
+# open a port nothing is on in the firewall, probe that same dead port in the
 # verification below, and finally print it as the address to log in at.
 PANEL_PORT=8443
 PORTS_REPORT=$(/opt/servika/bin/servika-server -print-ports 2>/dev/null)
@@ -709,7 +762,20 @@ done <<< "$PORTS_REPORT"
 if systemctl is-active --quiet firewalld 2>/dev/null; then
   firewall-cmd --add-port={80,443,"$PANEL_PORT"}/tcp --permanent >/dev/null 2>&1 && firewall-cmd --reload >/dev/null 2>&1 && ok "firewalld: port 80/tcp + 443/tcp + ${PANEL_PORT}/tcp opened"
 fi
-if systemctl is-active --quiet servika; then ok "servika ACTIVE"; else journalctl -u servika --no-pager -n 20; die "panel did not start"; fi
+if ! systemctl is-active --quiet servika; then
+  journalctl -u servika --no-pager -n 20; die "panel did not start"
+fi
+# Being up is not the same as running what was just installed, and every step
+# below plus the verification gate at the end would otherwise measure the wrong
+# binary. A PROVEN mismatch stops the installation; a state that could not be
+# measured is only reported, because failing there would stop an installation
+# for a reason that says nothing about the panel.
+BINARY_STATE=$(running_binary_state servika /opt/servika/bin/servika-server)
+case $? in
+  0) ok "servika ACTIVE ($BINARY_STATE)" ;;
+  1) die "servika is up but $BINARY_STATE; the restart did not take effect" ;;
+  *) warn "servika ACTIVE but the running binary could not be verified: $BINARY_STATE" ;;
+esac
 
 # ---- Run the Pure-FTPd setup after migrations create the ftp_accounts table ----
 # Running this in step 11 would make GRANT SELECT fail because the table does not exist yet.
