@@ -449,6 +449,175 @@ if [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "xfs" ]; then
   esac
 fi
 
+# ── What the installation is made of ─────────────────────────────────────────
+# Everything above asks whether the server ANSWERS. This asks whether it was
+# BUILT correctly, which is a different question: the panel can be up while a
+# release file never reached the disk, a directory was never created, or a
+# service is active without ever having bound its port. Those only surface when
+# somebody uses the feature, which means on a customer.
+#
+# Each group reports as a SUMMARY with only the failures listed, because silence
+# cannot be told apart from a check that never ran.
+
+section "Release files"
+# A file that exists but is EMPTY or truncated is not present in any useful
+# sense: a truncated frontend index is a white screen and a truncated tool is a
+# step that vanishes with no error. The minimum sizes are deliberately far below
+# the real ones; they catch zero and half-written, not drift.
+FILE_MISSING=""; FILE_OK=0; FILE_TOTAL=0
+while IFS='|' read -r fpath fkind fmin; do
+  [ -z "$fpath" ] && continue
+  FILE_TOTAL=$((FILE_TOTAL+1))
+  if [ ! -e "$fpath" ]; then
+    FILE_MISSING="$FILE_MISSING
+      MISSING    $fpath"
+  elif [ "$fkind" = "x" ] && [ ! -x "$fpath" ]; then
+    FILE_MISSING="$FILE_MISSING
+      NOT EXEC   $fpath"
+  else
+    fsize=$(stat -c%s "$fpath" 2>/dev/null)
+    if [ -z "$fsize" ]; then
+      FILE_MISSING="$FILE_MISSING
+      NOT MEASURED $fpath"
+    elif [ "$fsize" -lt "${fmin:-1}" ]; then
+      FILE_MISSING="$FILE_MISSING
+      TRUNCATED  $fpath ($fsize bytes, at least $fmin expected)"
+    else
+      FILE_OK=$((FILE_OK+1))
+    fi
+  fi
+done <<EOF
+$SERVIKA_BIN_PATH|x|1000000
+/opt/servika/frontend-dist/index.html|f|200
+/etc/servika/env|f|60
+/etc/systemd/system/servika.service|f|100
+/etc/nginx/conf.d/_panel.conf|f|100
+/etc/nginx/conf.d/_default80.conf|f|100
+/etc/nginx/conf.d/_default443.conf|f|100
+/var/www/_default80/index.html|f|200
+/usr/local/bin/servika-update|x|1000
+/usr/local/bin/servika-restore|x|1000
+/usr/local/bin/servika-repair|x|1000
+/usr/local/bin/servika-verify|x|1000
+EOF
+if [ -z "$FILE_MISSING" ]; then
+  pass "release files" "$FILE_OK/$FILE_TOTAL"
+else
+  crit "release files" "$FILE_OK/$FILE_TOTAL$FILE_MISSING"
+fi
+
+# The JS bundle carries a content hash in its name, so it is found by glob. Its
+# absence is the white screen `index.html` alone cannot reveal.
+FRONTEND_BUNDLE=""
+for b in /opt/servika/frontend-dist/assets/index-*.js; do
+  [ -f "$b" ] && { FRONTEND_BUNDLE="$b"; break; }
+done
+if [ -n "$FRONTEND_BUNDLE" ] && [ -s "$FRONTEND_BUNDLE" ]; then
+  pass "frontend bundle" "$(basename "$FRONTEND_BUNDLE")"
+else
+  crit "frontend bundle" "assets/index-*.js is missing or empty, so the panel is a white screen"
+fi
+
+section "Directories"
+DIR_MISSING=""; DIR_OK=0; DIR_TOTAL=0
+while IFS='|' read -r dpath downer; do
+  [ -z "$dpath" ] && continue
+  DIR_TOTAL=$((DIR_TOTAL+1))
+  if [ ! -d "$dpath" ]; then
+    DIR_MISSING="$DIR_MISSING
+      MISSING  $dpath"
+  elif [ -n "$downer" ]; then
+    dactual=$(stat -c%U "$dpath" 2>/dev/null)
+    if [ "$dactual" != "$downer" ]; then
+      DIR_MISSING="$DIR_MISSING
+      OWNER    $dpath (is $dactual, $downer expected)"
+    else
+      DIR_OK=$((DIR_OK+1))
+    fi
+  else
+    DIR_OK=$((DIR_OK+1))
+  fi
+done <<EOF
+/opt/servika/bin|root
+/opt/servika/frontend-dist|root
+${SERVIKA_MIGR:-/opt/servika/src/migrations}|root
+/opt/servika/src/scripts|root
+/etc/servika|root
+/var/www/_default80|
+/var/www/_acme|
+${SERVIKA_NGINX_CACHE_DIR:-/var/cache/nginx/servikacache}|nginx
+${SERVIKA_BACKUP_ROOT:-/var/backups/servika}|
+EOF
+if [ -z "$DIR_MISSING" ]; then
+  pass "directories" "$DIR_OK/$DIR_TOTAL"
+else
+  crit "directories" "$DIR_OK/$DIR_TOTAL$DIR_MISSING"
+fi
+
+section "Service to port"
+# "active" is not "listening". systemd calls a unit active while its process has
+# not bound anything: a wrong address, a refused bind or a port already taken all
+# leave it active and unreachable. Only services that are already ACTIVE are
+# measured here, because a stopped one is reported in the Services section above.
+if ! command -v ss >/dev/null 2>&1; then
+  warn "service to port" "NOT MEASURED (ss is missing)"
+else
+  LISTENING=$( { ss -tlnH 2>/dev/null; ss -ulnH 2>/dev/null; } )
+  PORT_MISSING=""; PORT_OK=0; PORT_TOTAL=0
+  while IFS='|' read -r sunit spattern sconsequence; do
+    [ -z "$sunit" ] && continue
+    [ "$spattern" = ":" ] && continue   # the port could not be discovered above
+    systemctl is-active --quiet "$sunit" 2>/dev/null || continue
+    PORT_TOTAL=$((PORT_TOTAL+1))
+    case "$LISTENING" in
+      *"$spattern"*) PORT_OK=$((PORT_OK+1)) ;;
+      *) PORT_MISSING="$PORT_MISSING
+      $sunit is ACTIVE but nothing listens on $spattern ($sconsequence)" ;;
+    esac
+  done <<EOF
+mariadb|:3306|the panel cannot reach its own database
+servika|:${PORT_BACKEND}|nginx cannot proxy to the panel
+nginx|:${PORT_EXTERNAL}|the panel is not reachable from a browser
+named|:53|no hosted domain resolves
+EOF
+  if [ -z "$PORT_MISSING" ]; then
+    pass "service to port" "$PORT_OK/$PORT_TOTAL"
+  else
+    crit "service to port" "$PORT_OK/$PORT_TOTAL$PORT_MISSING"
+  fi
+fi
+
+section "Crash history"
+# `journalctl -p err` does NOT show a Go panic: the runtime writes it to stderr,
+# which systemd records at notice priority. Any alarm built on a priority filter
+# misses this whole class, so the journal is searched by PATTERN instead.
+if ! command -v journalctl >/dev/null 2>&1; then
+  warn "panel crashes" "NOT MEASURED (journalctl is missing)"
+else
+  CRASHES=$(journalctl -u servika --since "24 hours ago" --no-pager 2>/dev/null \
+            | grep -ciE 'panic:|SIGSEGV|SIGBUS|fatal error:|runtime error:')
+  if [ -z "$CRASHES" ]; then
+    warn "panel crashes" "NOT MEASURED (the journal could not be read)"
+  elif [ "$CRASHES" -eq 0 ] 2>/dev/null; then
+    pass "panel crashes" "none in the last 24 hours"
+  else
+    crit "panel crashes" "$CRASHES lines in the last 24 hours (journalctl -u servika | grep -iE 'panic|SIGSEGV|fatal')"
+  fi
+fi
+
+section "Clock"
+# A wrong clock is never reported as an error by anything: it silently breaks
+# certificate validity, JWT lifetimes, backup timestamps and cron scheduling.
+if ! command -v timedatectl >/dev/null 2>&1; then
+  warn "clock synchronisation" "NOT MEASURED (timedatectl is missing)"
+else
+  case "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" in
+    yes) pass "clock synchronisation" "synchronised" ;;
+    no)  warn "clock synchronisation" "NOT synchronised, so certificate, session and backup times can drift" ;;
+    *)   warn "clock synchronisation" "NOT MEASURED" ;;
+  esac
+fi
+
 # ── Verdict ──────────────────────────────────────────────────────────────────
 if [ $JSON -eq 1 ]; then
   # A detail carrying a quote, a backslash or a newline would produce output no
