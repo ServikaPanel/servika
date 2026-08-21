@@ -11,7 +11,7 @@
   "version": { "title": "Versión PHP", "active": "Activa", "saveToApply": "Guardar para aplicar" },
   "cards": { "performance": "Rendimiento y seguridad", "general": "General", "debugMode": "Modo de depuración PHP", "lastErrors": "Últimos errores (registro de depuración)", "fpmPool": "Pool PHP-FPM", "installedModules": "Módulos PHP instalados", "disableDangerous": "Desactivar funciones peligrosas", "additionalDirectives": "Directivas de configuración adicionales" },
   "help": {
-    "memoryLimit": "Memoria máxima que puede asignar un script. Ejemplo: 256M.",
+    "memoryLimit": "Memoria máxima que puede asignar un script. Ejemplo: 2048M.",
     "maxExecutionTime": "Tiempo máximo de ejecución en segundos",
     "maxInputTime": "Tiempo para analizar datos POST/GET en segundos",
     "postMaxSize": "Tamaño máximo de datos POST. Debe ser mayor que upload_max_filesize.",
@@ -77,6 +77,6 @@
   },
   "additional": { "descPre": "Defina parámetros adicionales usando la sintaxis de php.ini. Ejemplo: " },
   "save": { "saving": "Guardando…", "saveAndApply": "Guardar y aplicar", "cancelReload": "Cancelar / Recargar" },
-  "select": { "custom": "Personalizado…" },
+  "size": {"placeholder": "por ejemplo 2048M, 8G o -1 para ilimitado"}, "refusal": {"sizeInvalid": "Un tamaño se compone de dígitos con K, M o G opcional, o -1 para ilimitado. PHP lee todo lo demás como cero.", "controlCharacter": "Un ajuste no puede contener un salto de línea ni un carácter NUL."},
   "flag": { "on": "✓ Activado", "off": "○ Desactivado" }
 }

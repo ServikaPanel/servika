@@ -37,7 +37,7 @@
     "additionalDirectives": "Directives de configuration supplémentaires"
   },
   "help": {
-    "memoryLimit": "Mémoire maximale qu'un script peut allouer, en octets. Exemple : 256M.",
+    "memoryLimit": "Mémoire maximale qu'un script peut allouer, en octets. Exemple : 2048M.",
     "maxExecutionTime": "Temps d'exécution maximal en secondes",
     "maxInputTime": "Temps d'analyse des données POST/GET en secondes",
     "postMaxSize": "Taille maximale des données POST. Doit être supérieure à upload_max_filesize.",
@@ -128,9 +128,7 @@
     "saveAndApply": "Enregistrer et appliquer",
     "cancelReload": "Annuler / recharger"
   },
-  "select": {
-    "custom": "Personnalisé…"
-  },
+  "size": {"placeholder": "par exemple 2048M, 8G ou -1 pour illimité"}, "refusal": {"sizeInvalid": "Une taille est composée de chiffres avec un K, M ou G facultatif, ou -1 pour illimité. PHP lit tout le reste comme zéro.", "controlCharacter": "Un réglage ne peut pas contenir de saut de ligne ni de caractère NUL."},
   "flag": {
     "on": "✓ Activé",
     "off": "○ Désactivé"

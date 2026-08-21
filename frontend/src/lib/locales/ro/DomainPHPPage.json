@@ -37,7 +37,7 @@
     "additionalDirectives": "Directive de configurare suplimentare"
   },
   "help": {
-    "memoryLimit": "Memoria maximă pe care o poate aloca un script, în octeți. Exemplu: 256M.",
+    "memoryLimit": "Memoria maximă pe care o poate aloca un script, în octeți. Exemplu: 2048M.",
     "maxExecutionTime": "Timpul maxim de execuție în secunde",
     "maxInputTime": "Timpul de analiză a datelor POST/GET în secunde",
     "postMaxSize": "Dimensiunea maximă a datelor POST. Trebuie să fie mai mare decât upload_max_filesize.",
@@ -128,9 +128,7 @@
     "saveAndApply": "Salvare și aplicare",
     "cancelReload": "Anulare / Reîncărcare"
   },
-  "select": {
-    "custom": "Personalizat…"
-  },
+  "size": {"placeholder": "de exemplu 2048M, 8G sau -1 pentru nelimitat"}, "refusal": {"sizeInvalid": "O dimensiune este formată din cifre cu K, M sau G opțional, ori -1 pentru nelimitat. PHP citește orice altceva ca zero.", "controlCharacter": "O setare nu poate conține un sfârșit de linie sau un caracter NUL."},
   "flag": {
     "on": "✓ Activat",
     "off": "○ Dezactivat"

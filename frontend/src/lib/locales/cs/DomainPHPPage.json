@@ -37,7 +37,7 @@
     "additionalDirectives": "Další konfigurační direktivy"
   },
   "help": {
-    "memoryLimit": "Maximální paměť, kterou skript může alokovat, v bajtech. Příklad: 256M.",
+    "memoryLimit": "Maximální paměť, kterou skript může alokovat, v bajtech. Příklad: 2048M.",
     "maxExecutionTime": "Maximální doba běhu v sekundách",
     "maxInputTime": "Doba na zpracování dat POST/GET v sekundách",
     "postMaxSize": "Maximální velikost dat POST. Musí být větší než upload_max_filesize.",
@@ -128,9 +128,7 @@
     "saveAndApply": "Uložit a použít",
     "cancelReload": "Zrušit / znovu načíst"
   },
-  "select": {
-    "custom": "Vlastní…"
-  },
+  "size": {"placeholder": "například 2048M, 8G nebo -1 pro neomezeně"}, "refusal": {"sizeInvalid": "Velikost tvoří číslice s volitelným K, M nebo G, případně -1 pro neomezeně. PHP čte cokoli jiného jako nulu.", "controlCharacter": "Nastavení nesmí obsahovat konec řádku ani znak NUL."},
   "flag": {
     "on": "✓ Zapnuto",
     "off": "○ Vypnuto"

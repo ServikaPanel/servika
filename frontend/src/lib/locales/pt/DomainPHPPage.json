@@ -37,7 +37,7 @@
     "additionalDirectives": "Diretivas de Configuração Adicionais"
   },
   "help": {
-    "memoryLimit": "Memória máxima que um script pode alocar em bytes. Exemplo: 256M.",
+    "memoryLimit": "Memória máxima que um script pode alocar em bytes. Exemplo: 2048M.",
     "maxExecutionTime": "Tempo máximo de execução em segundos",
     "maxInputTime": "Tempo para analisar dados POST/GET em segundos",
     "postMaxSize": "Tamanho máximo dos dados POST. Deve ser maior que upload_max_filesize.",
@@ -128,9 +128,7 @@
     "saveAndApply": "Guardar e Aplicar",
     "cancelReload": "Cancelar / Recarregar"
   },
-  "select": {
-    "custom": "Personalizado…"
-  },
+  "size": {"placeholder": "por exemplo 2048M, 8G ou -1 para ilimitado"}, "refusal": {"sizeInvalid": "Um tamanho é composto por dígitos com K, M ou G opcional, ou -1 para ilimitado. O PHP lê tudo o resto como zero.", "controlCharacter": "Uma definição não pode conter uma quebra de linha nem um carácter NUL."},
   "flag": {
     "on": "✓ Ativo",
     "off": "○ Inativo"

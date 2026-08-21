@@ -37,7 +37,7 @@
     "additionalDirectives": "Ek Yapılandırma Yönergeleri"
   },
   "help": {
-    "memoryLimit": "Bir betiğin bayt cinsinden ayırabileceği azami bellek. Örnek: 256M.",
+    "memoryLimit": "Bir betiğin bayt cinsinden ayırabileceği azami bellek. Örnek: 2048M.",
     "maxExecutionTime": "Saniye cinsinden azami çalışma süresi",
     "maxInputTime": "POST/GET verilerini ayrıştırma süresi (saniye)",
     "postMaxSize": "Azami POST veri boyutu. upload_max_filesize değerinden büyük olmalıdır.",
@@ -128,9 +128,7 @@
     "saveAndApply": "Kaydet ve Uygula",
     "cancelReload": "İptal / Yeniden Yükle"
   },
-  "select": {
-    "custom": "Özel…"
-  },
+  "size": {"placeholder": "örnek: 2048M, 8G veya sınırsız için -1"}, "refusal": {"sizeInvalid": "Boyut, rakam ve isteğe bağlı K, M ya da G olmalı; sınırsız için -1. PHP başka her şeyi sıfır okur.", "controlCharacter": "Bir ayar satır sonu ya da NUL karakteri içeremez."},
   "flag": {
     "on": "✓ Açık",
     "off": "○ Kapalı"

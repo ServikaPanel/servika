@@ -29,7 +29,6 @@ type Response = {
   modules?: string[]
 }
 
-const MEMORY_VALUES = ['64M', '128M', '256M', '384M', '512M', '768M', '1024M', '2048M']
 const PROCESS_MANAGER_OPTIONS = [
   { value: 'ondemand', label: 'ondemand (recommended, zero processes when idle)' },
   { value: 'dynamic', label: 'dynamic (scales with load)' },
@@ -92,9 +91,24 @@ export default function DomainPHPPage() {
       setSuccess(t('saved', { version: data.php_version, socket: data.socket }))
       load()
     } catch (e) {
-      setError(apiError(e, t('saveFailed')))
+      setError(refusalMessage(e, t('saveFailed')))
     } finally {
       setIsProcessing(false)
+    }
+  }
+
+  // The size boxes are free text now, so the server can refuse what was typed.
+  // It answers a stable CODE rather than a sentence, because this screen renders
+  // twelve languages. Anything that is not one of these codes passes through as
+  // the server wrote it, so a new refusal is never swallowed.
+  function refusalMessage(cause: unknown, fallback: string): string {
+    switch (apiError(cause, '')) {
+      case 'php_size_value_invalid':
+        return t('refusal.sizeInvalid')
+      case 'php_setting_contains_control_character':
+        return t('refusal.controlCharacter')
+      default:
+        return apiError(cause, fallback)
     }
   }
 
@@ -180,15 +194,15 @@ export default function DomainPHPPage() {
           <Card title={t('cards.performance')}>
             <Grid>
               <Section label="memory_limit" help={t('help.memoryLimit')}>
-                <SelectAndCustom value={settings.memory_limit} options={MEMORY_VALUES} onChange={v => updateSetting('memory_limit', v)} t={t} />
+                <Txt value={settings.memory_limit} onChange={v => updateSetting('memory_limit', v)} mono placeholder={t('size.placeholder')} />
               </Section>
               <NumberField label="max_execution_time" suffix="sec" help={t('help.maxExecutionTime')} value={settings.max_execution_time} onChange={v => updateSetting('max_execution_time', v)} />
               <NumberField label="max_input_time" suffix="sec" help={t('help.maxInputTime')} value={settings.max_input_time} onChange={v => updateSetting('max_input_time', v)} />
               <Section label="post_max_size" help={t('help.postMaxSize')}>
-                <SelectAndCustom value={settings.post_max_size} options={MEMORY_VALUES} onChange={v => updateSetting('post_max_size', v)} t={t} />
+                <Txt value={settings.post_max_size} onChange={v => updateSetting('post_max_size', v)} mono placeholder={t('size.placeholder')} />
               </Section>
               <Section label="upload_max_filesize" help={t('help.uploadMaxFilesize')}>
-                <SelectAndCustom value={settings.upload_max_filesize} options={MEMORY_VALUES} onChange={v => updateSetting('upload_max_filesize', v)} t={t} />
+                <Txt value={settings.upload_max_filesize} onChange={v => updateSetting('upload_max_filesize', v)} mono placeholder={t('size.placeholder')} />
               </Section>
               <Flag label="opcache.enable" help={t('help.opcacheEnable')} value={settings.opcache_enable} onChange={v => updateSetting('opcache_enable', v)} t={t} />
             </Grid>
@@ -507,21 +521,5 @@ function Flag({ label, help, value, onChange, t }: { label: string; help: string
         {value ? t('flag.on') : t('flag.off')}
       </button>
     </Section>
-  )
-}
-function SelectAndCustom({ value, options, onChange, t }: { value: string; options: string[]; onChange: (v: string) => void; t: TFunction }) {
-  const isCustom = !options.includes(value)
-  return (
-    <div className="flex gap-2">
-      <select value={isCustom ? '__custom' : value} onChange={e => {
-        if (e.target.value === '__custom') return
-        onChange(e.target.value)
-      }} className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono">
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-        <option value="__custom">{t('select.custom')}</option>
-      </select>
-      {isCustom && <input type="text" value={value} onChange={e => onChange(e.target.value)}
-        className="w-24 px-2 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono" />}
-    </div>
   )
 }

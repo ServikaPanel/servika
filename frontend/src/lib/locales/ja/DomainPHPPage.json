@@ -37,7 +37,7 @@
     "additionalDirectives": "追加の設定ディレクティブ"
   },
   "help": {
-    "memoryLimit": "スクリプトが確保できる最大メモリ (バイト単位)。例: 256M。",
+    "memoryLimit": "スクリプトが確保できる最大メモリ (バイト単位)。例: 2048M。",
     "maxExecutionTime": "最大実行時間 (秒)",
     "maxInputTime": "POST/GET データを解析する時間 (秒)",
     "postMaxSize": "POST データの最大サイズ。upload_max_filesize より大きくする必要があります。",
@@ -128,9 +128,7 @@
     "saveAndApply": "保存して適用",
     "cancelReload": "キャンセル / 再読み込み"
   },
-  "select": {
-    "custom": "カスタム…"
-  },
+  "size": {"placeholder": "例: 2048M、8G、無制限は -1"}, "refusal": {"sizeInvalid": "サイズは数字と任意の K、M、G、または無制限を表す -1 です。それ以外を PHP はゼロとして読みます。", "controlCharacter": "設定に改行や NUL 文字を含めることはできません。"},
   "flag": {
     "on": "✓ オン",
     "off": "○ オフ"

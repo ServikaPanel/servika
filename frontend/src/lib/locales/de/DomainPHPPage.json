@@ -37,7 +37,7 @@
     "additionalDirectives": "Zusätzliche Konfigurationsdirektiven"
   },
   "help": {
-    "memoryLimit": "Maximaler Speicher, den ein Skript in Bytes zuweisen kann. Beispiel: 256M.",
+    "memoryLimit": "Maximaler Speicher, den ein Skript in Bytes zuweisen kann. Beispiel: 2048M.",
     "maxExecutionTime": "Maximale Ausführungszeit in Sekunden",
     "maxInputTime": "Zeit zum Parsen von POST/GET-Daten in Sekunden",
     "postMaxSize": "Maximale POST-Datengröße. Muss größer als upload_max_filesize sein.",
@@ -128,9 +128,7 @@
     "saveAndApply": "Speichern und anwenden",
     "cancelReload": "Abbrechen / Neu laden"
   },
-  "select": {
-    "custom": "Benutzerdefiniert…"
-  },
+  "size": {"placeholder": "zum Beispiel 2048M, 8G oder -1 für unbegrenzt"}, "refusal": {"sizeInvalid": "Eine Größe besteht aus Ziffern mit optionalem K, M oder G, oder -1 für unbegrenzt. PHP liest alles andere als null.", "controlCharacter": "Eine Einstellung darf keinen Zeilenumbruch und kein NUL-Zeichen enthalten."},
   "flag": {
     "on": "✓ Ein",
     "off": "○ Aus"

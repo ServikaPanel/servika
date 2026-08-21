@@ -257,7 +257,54 @@ func sanitizeExtraDirectives(raw string) (string, error) {
 	return strings.Join(cleaned, "\n"), nil
 }
 
+// phpSizePattern is the shorthand PHP itself accepts for a byte quantity:
+// digits with an optional K, M or G multiplier in either case, plus the special
+// -1 for unlimited. Measured against PHP 8.3.32: `2048M`, `1g`, `1048576` and
+// `-1` are taken as written, while `2048MB` answers `unknown multiplier "B"`,
+// `2.5G` answers `Invalid quantity "2.5G"` and `notasize` answers
+// `no valid leading digits, interpreting as "0"`.
+//
+// The check is on the WRITE path because nothing downstream performs it. The
+// same measurement showed php-fpm -t reporting `test is successful` and exiting
+// 0 for a pool carrying `php_admin_value[memory_limit] = notasize`, so a typo
+// reaches the interpreter as a memory limit of zero and the site fails on every
+// request with no configuration error anywhere to explain it.
+var phpSizePattern = regexp.MustCompile(`^(?:-1|[0-9]+[KkMmGg]?)$`)
+
+// Reason codes for a refused setting. The API is English and the interface
+// ships twelve languages, so the screen receives a code and words it.
+const (
+	reasonControlCharacter = "php_setting_contains_control_character"
+	reasonInvalidSize      = "php_size_value_invalid"
+)
+
+// settingError carries the stable reason code beside a detail for the log. The
+// handler answers the code alone, so the screen has something it can translate
+// rather than one flat "invalid PHP settings" for every cause.
+type settingError struct {
+	Reason string
+	Detail string
+}
+
+func (e settingError) Error() string { return e.Reason + ": " + e.Detail }
+
 func sanitizeSettings(s Settings) (Settings, error) {
+	// Sizes are trimmed before they are checked and stored. PHP ignores the
+	// surrounding whitespace, so refusing " 2048M" would be refusing a value
+	// that works, and storing it would put the space into the pool file.
+	s.MemoryLimit = strings.TrimSpace(s.MemoryLimit)
+	s.PostMaxSize = strings.TrimSpace(s.PostMaxSize)
+	s.UploadMaxFilesize = strings.TrimSpace(s.UploadMaxFilesize)
+	for name, value := range map[string]string{
+		"memory_limit":        s.MemoryLimit,
+		"post_max_size":       s.PostMaxSize,
+		"upload_max_filesize": s.UploadMaxFilesize,
+	} {
+		if !phpSizePattern.MatchString(value) {
+			return Settings{}, settingError{Reason: reasonInvalidSize, Detail: name + " is not a PHP size value"}
+		}
+	}
+
 	scalars := map[string]string{
 		"memory_limit":                s.MemoryLimit,
 		"post_max_size":               s.PostMaxSize,
@@ -272,7 +319,7 @@ func sanitizeSettings(s Settings) (Settings, error) {
 	}
 	for name, value := range scalars {
 		if strings.ContainsAny(value, "\r\n\x00") {
-			return Settings{}, fmt.Errorf("setting %s contains a line break or NUL character", name)
+			return Settings{}, settingError{Reason: reasonControlCharacter, Detail: name + " contains a line break or NUL character"}
 		}
 	}
 	cleaned, err := sanitizeExtraDirectives(s.ExtraDirectives)
@@ -550,7 +597,15 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 
 	sanitized, err := sanitizeSettings(req.Settings)
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid PHP settings")
+		// Answer the reason CODE. With the size fields now free text, "invalid
+		// PHP settings" leaves an operator staring at a form with no idea which
+		// box the server refused or why.
+		reason := "invalid PHP settings"
+		var refused settingError
+		if errors.As(err, &refused) {
+			reason = refused.Reason
+		}
+		httpx.WriteError(w, http.StatusBadRequest, reason)
 		return
 	}
 	req.Settings = sanitized
