@@ -108,8 +108,48 @@ type ScanResult struct {
 	// that landed elsewhere, would leave the panel reporting a resource limit
 	// that never applied, which is the one thing av_scans.confined exists to
 	// prevent. The parent believes the worker rather than its own request.
-	Cgroup   string    `json:"cgroup"`
+	Cgroup string `json:"cgroup"`
+	// Nice is the scheduling priority the scan OBSERVED itself running at, for
+	// the same reason Cgroup is observed rather than assumed: a --nice an older
+	// systemd ignored would otherwise read as a courtesy that was extended.
+	Nice     int       `json:"nice"`
 	Findings []Finding `json:"findings"`
+}
+
+// observedNice reports this process's nice value, or 0 where it cannot be read.
+//
+// It reads /proc/self/stat rather than calling syscall.Getpriority, because that
+// wrapper returns the RAW platform answer and the two platforms disagree about
+// what that is. Measured: on Linux a process at nice 0 answers 20 and one at
+// nice 10 answers 10, so the value is 20 minus the nice level; on macOS an
+// ordinary process answers 0, which is the nice level itself. One conversion
+// cannot be right for both, and the field it feeds is a claim about what the
+// scheduler actually did.
+//
+// Field 19 of /proc/self/stat is the nice level, unambiguously. The worker only
+// ever runs on Linux, so a missing file is not a case that reaches production.
+func observedNice() int {
+	b, err := os.ReadFile("/proc/self/stat")
+	if err != nil {
+		return 0
+	}
+	// The second field is the executable name in parentheses and may itself
+	// contain spaces, so the fields are counted from the closing bracket.
+	closing := strings.LastIndexByte(string(b), ')')
+	if closing < 0 {
+		return 0
+	}
+	fields := strings.Fields(string(b)[closing+1:])
+	// After the name, field 3 is the state, so the nice level (field 19) is at
+	// index 16 of what is left.
+	if len(fields) < 17 {
+		return 0
+	}
+	nice, err := strconv.Atoi(fields[16])
+	if err != nil {
+		return 0
+	}
+	return nice
 }
 
 // selfCgroup reports this process's cgroup v2 path, or "" where it cannot be
@@ -183,7 +223,7 @@ func runWorker(requestPath, resultPath string) error {
 // worker binary and the unconfined fallback call this one function, so the two
 // paths cannot drift into scanning different things.
 func executeScan(ctx context.Context, req ScanRequest) ScanResult {
-	result := ScanResult{Cgroup: selfCgroup()}
+	result := ScanResult{Cgroup: selfCgroup(), Nice: observedNice()}
 	for _, root := range req.Roots {
 		scanned, findings, complete := runScan(ctx, root, req)
 		result.Scanned += scanned
@@ -277,6 +317,19 @@ func scanViaSystemd(ctx context.Context, bin string, req ScanRequest, label stri
 		"--property=EnvironmentFile=-" + config.EnvFile(),
 		"--property=RuntimeMaxSec=" + strconv.Itoa(int(unitBudget.Seconds())),
 		"--setenv=TMPDIR=" + os.TempDir(),
+		// The slice's CPUQuota and IOWeight are not the whole story. A quota
+		// bounds how much CPU the scan may take but says nothing about how
+		// eagerly the kernel schedules it against a site serving a request, and
+		// cgroup v2 io.weight is a RELATIVE share rather than an absolute cap.
+		// These two hand the kernel's schedulers a separate signal: measured on
+		// systemd 252, the child really runs at nice 10 and ionice reports
+		// `idle` against `0` and `none: prio 0` without them.
+		//
+		// They are applied to EVERY scan, not only the scheduled one. A sweep an
+		// operator starts by hand reads the same disks, and they usually start
+		// it because something is already wrong on that server.
+		"--nice=" + strconv.Itoa(scanNice),
+		"--property=IOSchedulingClass=idle",
 		self, "-" + workerFlag, requestPath, resultPath,
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); every value is a
@@ -329,6 +382,14 @@ const (
 	unitBudget   = scanBudget + 2*time.Minute
 	parentBudget = unitBudget + time.Minute
 )
+
+// scanNice is the scheduling priority the scan subprocess runs at.
+//
+// 10 is the value a nightly maintenance job conventionally takes: enough to
+// yield to anything a visitor is waiting on, not so much that the scan never
+// finishes inside its budget. It is a hint to the CPU scheduler and is separate
+// from the slice's CPUQuota, which is a ceiling rather than a priority.
+const scanNice = 10
 
 // unitName builds a transient unit name from a caller-supplied label.
 //

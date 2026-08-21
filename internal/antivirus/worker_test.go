@@ -273,6 +273,14 @@ func TestTheScanReallyRunsInsideTheResourceSlice(t *testing.T) {
 		t.Errorf("the planted webshell is not critical: %+v", result.Findings[0])
 	}
 
+	// The scan yields to the sites it protects. The value is what the WORKER
+	// observed, not what the parent asked for, which is the same rule Cgroup
+	// follows: a --nice an older systemd ignored would otherwise read as a
+	// courtesy that was extended.
+	if result.Nice != scanNice {
+		t.Errorf("the scan ran at nice %d, want %d", result.Nice, scanNice)
+	}
+
 	// And the kernel really held it: read the limit out of the cgroup the
 	// worker named, not out of systemd's own report.
 	if b, err := os.ReadFile("/sys/fs/cgroup" + filepath.Dir(result.Cgroup) + "/cpu.max"); err != nil {
@@ -303,5 +311,67 @@ func TestTheWorkerCarriesNoCredentials(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "dsn") || strings.Contains(string(encoded), "password") {
 		t.Errorf("the scan request carries a credential: %s", encoded)
+	}
+}
+
+// The two scheduler hints are passed on EVERY scan, not only the scheduled one.
+// A sweep an operator starts by hand reads the same disks, and they usually
+// start it because something is already wrong on that server.
+func TestEveryScanYieldsToTheSitesItProtects(t *testing.T) {
+	source, err := os.ReadFile("worker.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(source)
+	for _, arg := range []string{
+		`"--nice=" + strconv.Itoa(scanNice)`,
+		`"--property=IOSchedulingClass=idle"`,
+	} {
+		if !strings.Contains(body, arg) {
+			t.Errorf("the scan no longer passes %s", arg)
+		}
+	}
+	// Both belong to the ONE argument list, so there is no second scan path
+	// that could be built without them.
+	if strings.Count(body, "--slice=") != 1 {
+		t.Error("the scan is launched from more than one place")
+	}
+	// A nice level outside what the kernel accepts would make systemd-run
+	// refuse the unit, which reads as a scan that never ran.
+	if scanNice < -20 || scanNice > 19 {
+		t.Errorf("nice %d is outside the range the kernel accepts", scanNice)
+	}
+}
+
+// The nice level is read from /proc/self/stat, never from syscall.Getpriority.
+// That wrapper returns the RAW platform answer and the two platforms disagree:
+// measured, Linux answers 20 for a process at nice 0 and 10 for one at nice 10,
+// while macOS answers 0 for an ordinary process. One conversion cannot be right
+// for both, and reading Linux's answer straight reports every default process
+// as nice 20, which the kernel does not even accept as an input.
+func TestTheNiceValueIsNotReadFromAPlatformDependentWrapper(t *testing.T) {
+	source, err := os.ReadFile("worker.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(source)
+	// Matched as a CALL, so the comment explaining why the wrapper was refused
+	// does not read as the code using it.
+	if strings.Contains(body, "syscall.Getpriority(") {
+		t.Error("the nice value is read from a wrapper whose meaning differs per platform")
+	}
+	if !strings.Contains(body, `os.ReadFile("/proc/self/stat")`) {
+		t.Error("the nice value is no longer read from /proc/self/stat")
+	}
+	// The executable name in field 2 can contain spaces, so the fields must be
+	// counted from the closing bracket rather than split from the start.
+	if !strings.Contains(body, "strings.LastIndexByte(string(b), ')')") {
+		t.Error("the stat line is split without stepping over the executable name")
+	}
+	// Off Linux there is no such file, and the answer must be 0 rather than a
+	// panic or a wrong number. On Linux this process was not renice'd, so it is
+	// also 0. Either way the same assertion holds.
+	if got := observedNice(); got != 0 {
+		t.Errorf("an un-renice'd process observes nice %d, want 0", got)
 	}
 }
