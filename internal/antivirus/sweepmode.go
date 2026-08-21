@@ -125,8 +125,8 @@ func sweepNow(ctx context.Context, handle *sql.DB) error {
 
 	req := sweepRequest(settings)
 	res, err := handle.ExecContext(ctx,
-		`INSERT INTO av_scans (domain_id, scope, status, engine) VALUES (NULL,?,?,?)`,
-		settings.Scope, "running", engineName())
+		`INSERT INTO av_scans (domain_id, scope, status, engine, source) VALUES (NULL,?,?,?,?)`,
+		settings.Scope, "running", engineName(), SourceTimer)
 	if err != nil {
 		return fmt.Errorf("the sweep could not be recorded: %w", err)
 	}

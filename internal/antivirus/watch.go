@@ -265,9 +265,9 @@ func (w *watcher) record(ctx context.Context, settings avsettings.Settings, find
 	confined := avsettings.Confined(w.cgroup)
 
 	result, err := w.db.ExecContext(ctx,
-		`INSERT INTO av_scans (domain_id, scope, status, scanned, infected, engine, confined, finished_at)
-		 VALUES (?,?,?,?,?,?,?,NOW())`,
-		domainID, "realtime", "finished", 1, 1, "heuristic", confined)
+		`INSERT INTO av_scans (domain_id, scope, status, scanned, infected, engine, confined, source, finished_at)
+		 VALUES (?,?,?,?,?,?,?,?,NOW())`,
+		domainID, "realtime", "finished", 1, 1, "heuristic", confined, SourceRealtime)
 	if err != nil {
 		log.Printf("antivirus watcher: the detection could not be recorded: %v", err)
 		return

@@ -65,8 +65,8 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 	}
 	// domain_id is NULL: a sweep has no domain. Its findings resolve one each.
 	res, err := h.DB.Exec(
-		`INSERT INTO av_scans (domain_id, scope, status, engine) VALUES (NULL,?,?,?)`,
-		settings.Scope, "running", engineName())
+		`INSERT INTO av_scans (domain_id, scope, status, engine, source) VALUES (NULL,?,?,?,?)`,
+		settings.Scope, "running", engineName(), SourceManual)
 	if err != nil {
 		slot.Release()
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create scan record")
@@ -173,7 +173,7 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT id, status, scope, engine, scanned, infected, confined,
+		`SELECT id, status, scope, source, engine, scanned, infected, confined,
 		        auto_quarantined, auto_quarantine_failed, auto_quarantine_core_skipped,
 		        started_at, finished_at
 		   FROM av_scans WHERE domain_id IS NULL ORDER BY id DESC LIMIT 50`)
@@ -184,16 +184,16 @@ func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id int64
-		var status, scope, engine, startedAt string
+		var status, scope, source, engine, startedAt string
 		var finishedAt sql.NullString
 		var scanned, infected, autoTaken, autoFailed, autoCoreSkipped int
 		var confined bool
-		if err := rows.Scan(&id, &status, &scope, &engine, &scanned, &infected,
+		if err := rows.Scan(&id, &status, &scope, &source, &engine, &scanned, &infected,
 			&confined, &autoTaken, &autoFailed, &autoCoreSkipped, &startedAt, &finishedAt); err != nil {
 			continue
 		}
 		out = append(out, map[string]any{
-			"id": id, "status": status, "scope": scope, "engine": engine,
+			"id": id, "status": status, "scope": scope, "source": source, "engine": engine,
 			"scanned": scanned, "infected": infected, "confined": confined,
 			"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
 			"auto_quarantine_core_skipped": autoCoreSkipped,

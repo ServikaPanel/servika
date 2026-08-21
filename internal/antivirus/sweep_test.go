@@ -158,7 +158,11 @@ func TestTheSweepRecordsNoDomainForItselfAndOnePerFinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if !strings.Contains(source, "INSERT INTO av_scans (domain_id, scope, status, engine) VALUES (NULL,?,?,?)") {
+	// The property is the NULL domain and the sweep's own scope, not the exact
+	// column list: pinning the whole statement makes every later column an
+	// unrelated test failure, which teaches the next person to edit the test.
+	if !strings.Contains(source, "INSERT INTO av_scans (domain_id, scope,") ||
+		!strings.Contains(source, "VALUES (NULL,") {
 		t.Error("the sweep no longer records itself with a NULL domain and a scope")
 	}
 	if !strings.Contains(source, "insertSweepFinding(db, sid, owners.forPath(f.File), f)") {

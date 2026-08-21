@@ -178,9 +178,9 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 // direction to be wrong in.
 func RecordScan(db *sql.DB, domainID int64, engine string, scanned int, findings []Finding) (int64, error) {
 	result, err := db.Exec(
-		`INSERT INTO av_scans (domain_id, status, engine, scanned, infected, finished_at)
-		 VALUES (?, 'finished', ?, ?, ?, NOW())`,
-		domainID, engine, scanned, len(findings))
+		`INSERT INTO av_scans (domain_id, status, engine, scanned, infected, source, finished_at)
+		 VALUES (?, 'finished', ?, ?, ?, ?, NOW())`,
+		domainID, engine, scanned, len(findings), SourceManual)
 	if err != nil {
 		return 0, err
 	}
@@ -292,7 +292,8 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "another server scan is in progress; please wait")
 		return
 	}
-	res, err := h.DB.Exec(`INSERT INTO av_scans (domain_id, status, engine) VALUES (?,?,?)`, id, "running", engineName())
+	res, err := h.DB.Exec(`INSERT INTO av_scans (domain_id, status, engine, source) VALUES (?,?,?,?)`,
+		id, "running", engineName(), SourceManual)
 	if err != nil {
 		slot.Release()
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create scan record")

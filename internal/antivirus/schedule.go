@@ -107,8 +107,8 @@ func tickOnce(db *sql.DB, now func() time.Time) {
 
 	req := sweepRequest(settings)
 	res, err := db.Exec(
-		`INSERT INTO av_scans (domain_id, scope, status, engine) VALUES (NULL,?,?,?)`,
-		settings.Scope, "running", engineName())
+		`INSERT INTO av_scans (domain_id, scope, status, engine, source) VALUES (NULL,?,?,?,?)`,
+		settings.Scope, "running", engineName(), SourceScheduled)
 	if err != nil {
 		log.Printf("antivirus: the scheduled sweep could not be recorded: %v", err)
 		return
