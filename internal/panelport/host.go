@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"servika/internal/config"
 )
 
 // The files that hold the two ports.
@@ -22,7 +24,7 @@ import (
 // is the idiom internal/config already uses. A value fixed at init cannot be
 // retargeted, and the one thing that has to be exercised outside a live panel
 // is exactly the code that rewrites these files.
-func envPath() string { return envOr("SERVIKA_ENV_FILE", "/etc/servika/env") }
+func envPath() string { return envOr("SERVIKA_ENV_FILE", config.DefaultEnvFile) }
 
 func panelVhostPath() string { return envOr("SERVIKA_PANEL_VHOST", "/etc/nginx/conf.d/_panel.conf") }
 

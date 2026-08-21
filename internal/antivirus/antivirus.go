@@ -248,23 +248,29 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 	sid, _ := res.LastInsertId()
 	go func() {
 		defer scanning.Store(0)
-		ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
+		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
-		scanned, findings := runScan(ctx, root)
-		for _, f := range findings {
+		result, confined, err := Scan(ctx, ScanRequest{Roots: []string{root}}, strconv.FormatInt(sid, 10))
+		if err != nil {
+			// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
+			log.Printf("antivirus: scan %d could not run: %v", sid, err)
+		}
+		for _, f := range result.Findings {
 			_ = insertFinding(h.DB, sid, id, f)
 		}
 		// A scan that ran out of its budget covered part of the tree, so it is
 		// recorded as FAILED with the findings it did get. Calling it finished
 		// would present a partial sweep as a clean bill of health, which for a
 		// webshell in the part that was never reached is the worst answer the
-		// screen can give.
+		// screen can give. A scan that could not be placed in the resource slice
+		// at all is failed for the same reason: it produced nothing, and an
+		// empty finding list is exactly what a clean site looks like.
 		status := "finished"
-		if ctx.Err() != nil {
+		if err != nil || result.Partial || ctx.Err() != nil {
 			status = "failed"
 		}
-		_, _ = h.DB.Exec(`UPDATE av_scans SET status=?, scanned=?, infected=?, finished_at=NOW() WHERE id=?`,
-			status, scanned, len(findings), sid)
+		_, _ = h.DB.Exec(`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
+			status, result.Scanned, len(result.Findings), confined, sid)
 	}()
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"scan_id": sid})
 }
@@ -280,15 +286,21 @@ func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
 	var status, engine, startedAt string
 	var finishedAt sql.NullString
 	var scanned, infected int
+	var confined bool
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT status, engine, scanned, infected, started_at, finished_at FROM av_scans WHERE id=? AND domain_id=?`, sid, id).
-		Scan(&status, &engine, &scanned, &infected, &startedAt, &finishedAt); err != nil {
+		`SELECT status, engine, scanned, infected, confined, started_at, finished_at FROM av_scans WHERE id=? AND domain_id=?`, sid, id).
+		Scan(&status, &engine, &scanned, &infected, &confined, &startedAt, &finishedAt); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "scan not found")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"id": sid, "status": status, "engine": engine, "scanned": scanned,
 		"infected": infected, "started_at": startedAt, "finished_at": finishedAt.String,
+		// confined says whether the kernel really held the scan to the
+		// operator's resource limits. It is reported rather than assumed,
+		// because a host with no systemd runs the scan unlimited and nothing
+		// else on this screen would say so.
+		"confined": confined,
 		"findings": h.findings(r.Context(), sid),
 	})
 }

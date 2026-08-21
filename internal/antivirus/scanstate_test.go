@@ -13,14 +13,23 @@ import (
 func TestATimedOutScanIsRecordedAsFailed(t *testing.T) {
 	body := scanBody(t)
 
-	if !strings.Contains(body, `status := "finished"`) ||
-		!strings.Contains(body, "if ctx.Err() != nil {") ||
-		!strings.Contains(body, `status = "failed"`) {
+	if !strings.Contains(body, `status := "finished"`) || !strings.Contains(body, `status = "failed"`) {
 		t.Error("a scan that exhausted its budget is recorded as finished again")
 	}
+	// Three separate things make a scan's result untrustworthy, and each one
+	// looks identical on the screen to a clean site: the worker stopped early
+	// and said so (Partial), the panel's own deadline fired (ctx.Err), or the
+	// scan could not be launched into the resource slice at all (err). Any of
+	// them missing from the condition turns that case into a green result.
+	for _, source := range []string{"err != nil", "result.Partial", "ctx.Err() != nil"} {
+		if !strings.Contains(body, source) {
+			t.Errorf("a failed scan is reported as finished: %q no longer fails it", source)
+		}
+	}
 	// The status has to reach the UPDATE; a computed value nothing uses is the
-	// same as no check at all.
-	if !strings.Contains(body, "UPDATE av_scans SET status=?, scanned=?, infected=?, finished_at=NOW() WHERE id=?") {
+	// same as no check at all. confined travels with it, because "the scan ran"
+	// and "the kernel held it to the limit" are different claims.
+	if !strings.Contains(body, "UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?") {
 		t.Error("the scan status is no longer written from the computed value")
 	}
 	if strings.Contains(body, "UPDATE av_scans SET status='finished'") {

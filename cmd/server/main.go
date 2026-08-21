@@ -161,6 +161,16 @@ func main() {
 	if printPortsIfAsked() {
 		return
 	}
+	// The malware scan runs as a subprocess of this same binary, placed in a
+	// systemd slice so the kernel enforces the operator's resource limits: a
+	// child started by a service otherwise joins the SERVICE's cgroup, where
+	// servika.service sets no limits at all. Like the port reporter, it answers
+	// before config.Load, because a scan needs the paths from the environment
+	// file and nothing else, and it hands its findings back through a file
+	// rather than opening a database connection of its own.
+	if antivirus.RunWorkerIfAsked() {
+		return
+	}
 	pinTempDir()
 
 	cfg, err := config.Load()

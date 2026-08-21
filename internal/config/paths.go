@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	DefaultEnvFile      = "/etc/servika/env"
 	DefaultComposerBin  = "/usr/local/bin/composer"
 	DefaultWPCLIBin     = "/usr/local/bin/wp"
 	DefaultClamScanBin  = "/usr/bin/clamscan"
@@ -179,6 +180,13 @@ func mustURL(key, fallback string) string {
 	}
 	return value
 }
+
+// EnvFile is the panel's own environment file, the one the installer writes and
+// the systemd unit loads. Two packages need it for reasons that have nothing to
+// do with each other, internal/panelport to rewrite the listen address and
+// internal/antivirus to hand the same configuration to a detached scan, so it
+// is named once here rather than defaulted separately in each.
+func EnvFile() string { return mustAbsPath("SERVIKA_ENV_FILE", DefaultEnvFile) }
 
 func ComposerBin() string   { return mustAbsPath("SERVIKA_COMPOSER_BIN", DefaultComposerBin) }
 func WPCLIBin() string      { return mustAbsPath("SERVIKA_WPCLI_BIN", DefaultWPCLIBin) }
