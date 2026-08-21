@@ -125,6 +125,16 @@ case "$BACKUP_DIR" in
   *) echo "SERVIKA_DBDIR must be an absolute path: $BACKUP_DIR" >&2; exit 1 ;;
 esac
 RETENTION_DAYS=14
+# The ROOT is secured before the leaf, because `mkdir -p` creates every missing
+# component with the umask and the chmod below reaches only the last one. On a
+# stock server (umask 022) that left /var/backups/servika at 0755 while its
+# children were 0700, and the panel writes one child per tenant named after that
+# tenant's system user. Measured on AlmaLinux 9: a `c_*` account listing the root
+# read every other tenant's system user name, though not the archives inside.
+# 0700 root:root is right because nothing but root ever reads any of it (the
+# panel runs as root and this script's unit declares no User=).
+install -d -m 0700 "${SERVIKA_BACKUP_ROOT:-/var/backups/servika}" \
+  || echo "warning: the backup root could not be secured" >&2
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 

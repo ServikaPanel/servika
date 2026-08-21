@@ -4,7 +4,7 @@
 #
 # Usage:
 #   servika-repair [--dry-run] [--deep] [--only <sections>] [--quiet]
-#   sections: phpmyadmin,domains,htpasswd,binary,clamav,frontend,signon,firewall,mail (default: all)
+#   sections: phpmyadmin,domains,htpasswd,binary,backups,clamav,frontend,signon,firewall,mail (default: all)
 #   --dry-run : Show proposed repairs without applying changes
 #   --deep    : Recursively repair ownership in domain homes, which can be slow
 #
@@ -65,7 +65,7 @@ if [ "${1:-}" = "restore" ]; then
   echo "servika-restore not found (core content repair tool is not installed)" >&2; exit 127
 fi
 
-DRY=0; DEEP=0; QUIET=0; ONLY="phpmyadmin,domains,htpasswd,binary,clamav,frontend,signon,firewall,mail"
+DRY=0; DEEP=0; QUIET=0; ONLY="phpmyadmin,domains,htpasswd,binary,backups,clamav,frontend,signon,firewall,mail"
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
@@ -288,6 +288,28 @@ sec_htpasswd() {
   fi
 }
 
+# The backup root, closed to every account but root.
+#
+# Both writers create it as a by-product: servika-db-backup with `mkdir -p` and
+# internal/backups with os.MkdirAll. `mkdir -p` applies the umask to every
+# missing component and the chmod that follows reaches only the last one, so on
+# a stock server (umask 022) the root was 0755 while its children were 0700. The
+# panel writes one child per tenant, named after that tenant's system user, so a
+# `c_*` account listing the root read every other tenant's system user name
+# (measured on AlmaLinux 9; the archives inside stayed unreadable).
+#
+# The panel cannot repair this itself: os.MkdirAll decides the root's mode only
+# when the root is ABSENT, and it never revisits one that is already there. That
+# is why this section exists and why servika-update and servika-restore name it.
+#
+# 0700 root:root, because nothing but root ever reads any of it: internal/backups
+# runs as the panel (root) and the backup unit declares no User=.
+sec_backups() {
+  want backups || return 0
+  head_ "Backup root"
+  ensure_dir "${SERVIKA_BACKUP_ROOT:-/var/backups/servika}" 700 root:root
+}
+
 sec_clamav() {
   want clamav || return 0
   head_ "ClamAV signature database"
@@ -430,6 +452,7 @@ sec_phpmyadmin
 sec_domains
 sec_htpasswd
 sec_binary
+sec_backups
 sec_clamav
 sec_frontend
 sec_signon
