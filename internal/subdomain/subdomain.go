@@ -434,8 +434,9 @@ func backendBlock(socket string, web webRender, https bool) string {
         fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-%[5]s        fastcgi_read_timeout 60s;
+%[5]s        fastcgi_read_timeout %[7]ds;
         # Repeat headers because this location may define add_header below.
 %[3]s%[4]s    }
-`, socket, web.SkipCacheMap, web.Headers, web.FastCgiCache, httpsParam, rootLocation)
+`, socket, web.SkipCacheMap, web.Headers, web.FastCgiCache, httpsParam, rootLocation,
+		provisioner.FastCgiReadTimeout(web.MaxExecutionTime))
 }

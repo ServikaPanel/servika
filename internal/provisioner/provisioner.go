@@ -21,6 +21,7 @@ import (
 	"text/template"
 
 	"servika/internal/config"
+	"servika/internal/phpdefaults"
 )
 
 var (
@@ -802,7 +803,7 @@ server {
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
         fastcgi_param HTTPS on;
-        fastcgi_read_timeout 60s;
+        fastcgi_read_timeout {{.FastCgiReadTimeoutSeconds}}s;
         # Repeat headers because this location may define add_header below.
 {{.SecHeaders}}{{if .FastCgiCache}}        fastcgi_cache servikacache;
         fastcgi_cache_valid 200 301 302 {{.FastCgiCacheMinutes}}m;
@@ -886,7 +887,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
-        fastcgi_read_timeout 60s;
+        fastcgi_read_timeout {{.FastCgiReadTimeoutSeconds}}s;
         # Repeat headers because this location may define add_header below.
 {{.SecHeaders}}{{if .FastCgiCache}}        fastcgi_cache servikacache;
         fastcgi_cache_valid 200 301 302 {{.FastCgiCacheMinutes}}m;
@@ -1180,6 +1181,57 @@ type VhostOpts struct {
 	// omits its own `location /`, because two blocks for the same prefix are a
 	// duplicate nginx refuses.
 	AppOwnsRoot bool
+
+	// MaxExecutionTime is the domain's php_settings value, in seconds. It is
+	// read on every render so nginx does not give up before PHP does; see
+	// FastCgiReadTimeout. Zero means "not read", and the render then keeps the
+	// timeout this vhost has always carried.
+	MaxExecutionTime int
+}
+
+const (
+	// fastCgiReadTimeoutFloor is what every tenant vhost carried before the
+	// timeout was derived, so a domain can never come out of a render with a
+	// SHORTER timeout than it had.
+	fastCgiReadTimeoutFloor = 60
+	// fastCgiReadTimeoutMargin keeps nginx waiting a little past the point PHP
+	// kills the script itself, so the visitor gets PHP's own error rather than
+	// a 504 that says nothing about why.
+	fastCgiReadTimeoutMargin = 60
+	// fastCgiReadTimeoutCeiling bounds how long one worker may be held for a
+	// single request.
+	fastCgiReadTimeoutCeiling = 3600
+)
+
+// FastCgiReadTimeout answers the `fastcgi_read_timeout` a vhost should carry for
+// a domain whose PHP max_execution_time is the given number of seconds.
+//
+// The two are not independent. nginx stops waiting for the FastCGI response on
+// its own clock, so a max_execution_time above that clock is invisible: measured
+// with nginx 1.26.3 and a pool carrying max_execution_time 3000, a sleep(65)
+// request answered HTTP 504 after 60.06 seconds while sleep(2) answered 200. The
+// panel would report 3000 seconds while every script died at 60.
+func FastCgiReadTimeout(maxExecutionTime int) int {
+	timeout := maxExecutionTime + fastCgiReadTimeoutMargin
+	if maxExecutionTime <= 0 {
+		// Not read, or PHP's own "unlimited". Neither is a reason to hold a
+		// worker forever, and the floor is what this vhost carried before.
+		timeout = fastCgiReadTimeoutFloor
+	}
+	if timeout < fastCgiReadTimeoutFloor {
+		timeout = fastCgiReadTimeoutFloor
+	}
+	if timeout > fastCgiReadTimeoutCeiling {
+		timeout = fastCgiReadTimeoutCeiling
+	}
+	return timeout
+}
+
+// FastCgiReadTimeoutSeconds is what the vhost templates render. It goes through
+// the same clamp, so a VhostOpts built without MaxExecutionTime (every heal and
+// test that fills the struct by hand) keeps the timeout it has always had.
+func (o VhostOpts) FastCgiReadTimeoutSeconds() int {
+	return FastCgiReadTimeout(o.MaxExecutionTime)
 }
 
 func (o VhostOpts) SSL() bool {
@@ -2637,6 +2689,17 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 		opts.FastCgiCacheMinutes = fastCgiCacheMinutes
 		opts.BrowserCache = bBC == 1
 		opts.BrowserCacheDays = browserCacheDays
+	}
+	// The FastCGI read timeout follows the domain's own max_execution_time, or
+	// nginx gives up before PHP does and the panel reports a limit no visitor
+	// ever reaches. A domain with no php_settings row gets the same default the
+	// panel shows it.
+	opts.MaxExecutionTime = phpdefaults.MaxExecutionTime
+	var maxExecutionTime int
+	if err := db.QueryRow(
+		`SELECT max_execution_time FROM php_settings WHERE domain_id=? AND subdomain_id=0`,
+		domainID).Scan(&maxExecutionTime); err == nil && maxExecutionTime > 0 {
+		opts.MaxExecutionTime = maxExecutionTime
 	}
 	// Add protected-directory .htpasswd blocks regardless of whether nginx_settings has a row.
 	if pb := buildProtectedBlocks(db, domainID, 0, socket); pb != "" {

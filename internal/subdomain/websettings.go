@@ -12,6 +12,7 @@ import (
 
 	"servika/internal/httpx"
 	"servika/internal/nginxset"
+	"servika/internal/phpdefaults"
 	"servika/internal/provisioner"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +37,12 @@ type webRender struct {
 	// already computed once and threaded through every call site.
 	AppBlocks   string
 	AppOwnsRoot bool
+	// MaxExecutionTime is this scope's php_settings value, in seconds, RAW. The
+	// renderer puts it through provisioner.FastCgiReadTimeout, so a webRender
+	// built by hand keeps the timeout the vhost has always carried. Storing the
+	// clamped value here instead would add the margin a second time on the way
+	// out.
+	MaxExecutionTime int
 }
 
 // loadWebRender reads the subdomain's nginx settings and renders them. Defaults apply
@@ -54,7 +61,19 @@ func loadWebRender(ctx context.Context, db *sql.DB, domainID, subdomainID int64,
 				subdomainID, domainID).Scan(&backend)
 		}
 	}
+	// The FastCGI read timeout follows this scope's own max_execution_time. A
+	// scope with no php_settings row gets the same default the panel shows it.
+	maxExecutionTime := phpdefaults.MaxExecutionTime
+	if db != nil {
+		var stored int
+		if err := db.QueryRowContext(ctx,
+			`SELECT max_execution_time FROM php_settings WHERE domain_id=? AND subdomain_id=?`,
+			domainID, subdomainID).Scan(&stored); err == nil && stored > 0 {
+			maxExecutionTime = stored
+		}
+	}
 	out := renderWebSettings(settings, fqdn, https)
+	out.MaxExecutionTime = maxExecutionTime
 	out.Static = backend == "static"
 	if db != nil && subdomainID > 0 {
 		out.AppBlocks, out.AppOwnsRoot = provisioner.AppProxyBlocks(db, domainID, subdomainID)
