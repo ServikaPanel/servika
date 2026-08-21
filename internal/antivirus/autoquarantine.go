@@ -51,6 +51,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 		   FROM av_findings f JOIN domains d ON d.id = f.domain_id
 		  WHERE f.scan_id=? AND f.level=? AND f.quarantined=0`, scanID, LevelCritical)
 	if err != nil {
+		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
 		log.Printf("antivirus: automatic containment could not read the findings of scan %d: %v", scanID, err)
 		return out
 	}
@@ -67,6 +68,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 		// A short list here would silently leave files behind while reporting a
 		// completed pass, so the ones that were read are still contained and the
 		// rest are counted as failures rather than forgotten.
+		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
 		log.Printf("antivirus: the finding list for scan %d was cut short: %v", scanID, closeErr)
 		out.Failed++
 	}
@@ -92,6 +94,7 @@ func recordAutoQuarantine(db *sql.DB, scanID int64, out autoQuarantineOutcome) {
 	if _, err := db.Exec(
 		`UPDATE av_scans SET auto_quarantined=?, auto_quarantine_failed=? WHERE id=?`,
 		out.Taken, out.Failed, scanID); err != nil {
+		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
 		log.Printf("antivirus: what automatic containment did to scan %d could not be recorded: %v", scanID, err)
 	}
 }
