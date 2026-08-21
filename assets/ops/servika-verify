@@ -268,6 +268,21 @@ elif systemctl is-enabled --quiet servika-av-watch.service 2>/dev/null; then
   av_state=$(svc servika-av-watch)
   if [ "$av_state" = "active" ]; then
     pass "antivirus watcher" "active"
+    # Where the RUNNING process actually is, read out of the kernel.
+    #
+    # `systemctl show -p Slice` is the wrong question and it answers the wrong
+    # thing convincingly: measured, it reports the declared slice for a unit
+    # that has never run at all (MainPID 0, inactive) and for one naming a
+    # slice that does not exist. So it passes on a server where the limits
+    # reach nothing, which is the state this check exists to find.
+    av_pid=$(systemctl show -p MainPID --value servika-av-watch.service 2>/dev/null)
+    if [ -z "$av_pid" ] || [ "$av_pid" = "0" ] || [ ! -r "/proc/$av_pid/cgroup" ]; then
+      warn "antivirus watcher confinement" "NOT MEASURED (the running process could not be found)"
+    elif grep -q "/servika-av.slice/" "/proc/$av_pid/cgroup" 2>/dev/null; then
+      pass "antivirus watcher confinement" "the running process is inside servika-av.slice"
+    else
+      warn "antivirus watcher confinement" "the process runs OUTSIDE servika-av.slice, so the CPU, memory and I/O limits reach nothing"
+    fi
   else
     warn "antivirus watcher" "$av_state, but real-time watching is enabled (nothing is being watched)"
   fi
@@ -675,6 +690,22 @@ if [ -n "$DB_DEFAULTS" ] && mysql --defaults-extra-file="$DB_DEFAULTS" -N -e 'SE
   fi
   [ -n "$SCHEMA_WANT" ] && rm -f "$SCHEMA_WANT"
   [ -n "$SCHEMA_HAVE" ] && rm -f "$SCHEMA_HAVE"
+
+  # A scan is a TRANSIENT unit: it is gone by the time anybody looks, so there
+  # is no process left to ask. What survives is av_scans.confined, which the
+  # worker wrote from its OWN /proc/self/cgroup rather than from the request the
+  # panel made. Asking systemd for a slice and getting one are different claims,
+  # and the panel was already recording the answer while nothing read it.
+  AV_CONFINED=$(mysql --defaults-extra-file="$DB_DEFAULTS" -N -e \
+    "SELECT confined FROM av_scans WHERE status = 'finished' ORDER BY id DESC LIMIT 1;" \
+    "$DB_NAME" 2>/dev/null)
+  if [ -z "$AV_CONFINED" ]; then
+    pass "antivirus scan confinement" "no scan has finished yet"
+  elif [ "$AV_CONFINED" = "1" ]; then
+    pass "antivirus scan confinement" "the last scan ran inside the resource slice"
+  else
+    warn "antivirus scan confinement" "the last scan ran OUTSIDE the resource slice, so its CPU, memory and I/O limits reached nothing"
+  fi
 elif [ -n "$DB_DEFAULTS" ]; then
   crit "MariaDB connection" "the panel's own credentials were REFUSED ($DB_WHO), so the panel cannot start"
 fi
