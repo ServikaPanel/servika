@@ -273,12 +273,15 @@ func Scan(ctx context.Context, req ScanRequest, label string) (ScanResult, bool,
 	if err != nil {
 		return ScanResult{}, false, err
 	}
-	// The worker's own observation decides this, not the request that was made.
-	confined := strings.Contains(result.Cgroup, "/"+avsettings.SliceName+"/")
+	// The worker's own observation decides this, not the request that was made,
+	// and being IN the slice is not enough: a slice the panel never wrote is
+	// created implicitly by systemd with no limit on it at all, so the path
+	// alone would report an unlimited scan as a confined one.
+	confined := avsettings.Confined(result.Cgroup)
 	if !confined {
 		// #nosec G706 -- the logged value is this process's child's own /proc/self/cgroup line, supplied by the kernel; no tenant string reaches it.
-		log.Printf("antivirus: the scan was launched into %s but ran in %q; "+
-			"the resource limits did not apply", avsettings.SliceName, result.Cgroup)
+		log.Printf("antivirus: the scan ran in %q, which is not %s carrying a "+
+			"resource limit; the limits did not apply", result.Cgroup, avsettings.SliceName)
 	}
 	return result, confined, nil
 }

@@ -159,8 +159,10 @@ func TestADetectionIsRecordedAsItsOwnFinishedScan(t *testing.T) {
 		t.Error("the detection no longer writes a finding row")
 	}
 	// Whether the kernel confined it is read from this process's own cgroup,
-	// never from what the unit asked for.
-	if !strings.Contains(source, `strings.Contains(w.cgroup, "/"+avsettings.SliceName+"/")`) {
+	// never from what the unit asked for, and being IN the slice is not enough:
+	// a slice the panel never wrote is created implicitly with no limit on it,
+	// so the path alone reports an unlimited watcher as a confined one.
+	if !strings.Contains(source, "confined := avsettings.Confined(w.cgroup)") {
 		t.Error("confinement is no longer decided by what the kernel actually did")
 	}
 }

@@ -254,7 +254,7 @@ func (w *watcher) inspect(ctx context.Context, path string, read func(limit int6
 // also carries its own timestamp, which is the thing an operator reads.
 func (w *watcher) record(ctx context.Context, settings avsettings.Settings, finding Finding) {
 	domainID := w.owner.forPath(finding.File)
-	confined := strings.Contains(w.cgroup, "/"+avsettings.SliceName+"/")
+	confined := avsettings.Confined(w.cgroup)
 
 	result, err := w.db.ExecContext(ctx,
 		`INSERT INTO av_scans (domain_id, scope, status, scanned, infected, engine, confined, finished_at)

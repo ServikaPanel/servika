@@ -391,6 +391,24 @@ func main() {
 	protectionH := &passwordprotect.Handlers{DB: d}
 	avH := &antivirus.Handlers{DB: d}
 	avSettingsH := &avsettings.Handlers{DB: d}
+	// Write the antivirus resource slice from the stored settings at every
+	// start.
+	//
+	// Nothing else creates the file: ApplyLimits used to run only when an
+	// operator SAVED the settings screen, so on an installation where nobody
+	// ever did, the file did not exist. Measured on real systemd: systemd then
+	// creates the slice implicitly, reports CPUQuota, MemoryMax and TasksMax all
+	// as infinity, and every scan the panel launches into it runs unlimited
+	// while the screen shows the capacity-derived values it computed.
+	//
+	// ApplyWatcher and ApplyScheduleTimer are deliberately NOT called here.
+	// Both start or restart a unit, and doing that at boot would interrupt the
+	// watcher of an operator who changed nothing, on every panel restart.
+	if s, err := avsettings.Read(context.Background(), d); err != nil {
+		log.Printf("antivirus: the resource limits could not be read at startup: %v", err)
+	} else if err := avsettings.ApplyLimits(s); err != nil {
+		log.Printf("antivirus: the resource limits could not be applied at startup: %v", err)
+	}
 	copyH := &sitecopy.Handlers{DB: d}
 	importH := &siteimport.Handlers{DB: d}
 	wpH := &wordpress.Handlers{DB: d}
