@@ -146,14 +146,15 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 	sid, _ := strconv.ParseInt(chi.URLParam(r, "sid"), 10, 64)
 	var status, scope, engine, startedAt string
 	var finishedAt sql.NullString
-	var scanned, infected, autoTaken, autoFailed int
+	var scanned, infected, autoTaken, autoFailed, autoCoreSkipped int
 	var confined bool
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT status, scope, engine, scanned, infected, confined,
-		        auto_quarantined, auto_quarantine_failed, started_at, finished_at
+		        auto_quarantined, auto_quarantine_failed, auto_quarantine_core_skipped,
+		        started_at, finished_at
 		   FROM av_scans WHERE id=? AND domain_id IS NULL`, sid).
 		Scan(&status, &scope, &engine, &scanned, &infected, &confined,
-			&autoTaken, &autoFailed, &startedAt, &finishedAt); err != nil {
+			&autoTaken, &autoFailed, &autoCoreSkipped, &startedAt, &finishedAt); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "sweep not found")
 		return
 	}
@@ -162,7 +163,8 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 		"scanned": scanned, "infected": infected, "confined": confined,
 		"started_at": startedAt, "finished_at": finishedAt.String,
 		"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
-		"findings": h.sweepFindings(r.Context(), sid),
+		"auto_quarantine_core_skipped": autoCoreSkipped,
+		"findings":                     h.sweepFindings(r.Context(), sid),
 	})
 }
 
@@ -172,7 +174,8 @@ func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	rows, err := h.DB.QueryContext(r.Context(),
 		`SELECT id, status, scope, engine, scanned, infected, confined,
-		        auto_quarantined, auto_quarantine_failed, started_at, finished_at
+		        auto_quarantined, auto_quarantine_failed, auto_quarantine_core_skipped,
+		        started_at, finished_at
 		   FROM av_scans WHERE domain_id IS NULL ORDER BY id DESC LIMIT 50`)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "the sweeps could not be listed")
@@ -183,17 +186,18 @@ func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 		var id int64
 		var status, scope, engine, startedAt string
 		var finishedAt sql.NullString
-		var scanned, infected, autoTaken, autoFailed int
+		var scanned, infected, autoTaken, autoFailed, autoCoreSkipped int
 		var confined bool
 		if err := rows.Scan(&id, &status, &scope, &engine, &scanned, &infected,
-			&confined, &autoTaken, &autoFailed, &startedAt, &finishedAt); err != nil {
+			&confined, &autoTaken, &autoFailed, &autoCoreSkipped, &startedAt, &finishedAt); err != nil {
 			continue
 		}
 		out = append(out, map[string]any{
 			"id": id, "status": status, "scope": scope, "engine": engine,
 			"scanned": scanned, "infected": infected, "confined": confined,
 			"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
-			"started_at": startedAt, "finished_at": finishedAt.String,
+			"auto_quarantine_core_skipped": autoCoreSkipped,
+			"started_at":                   startedAt, "finished_at": finishedAt.String,
 		})
 	}
 	// A query that broke half way would otherwise answer 200 with a short list,

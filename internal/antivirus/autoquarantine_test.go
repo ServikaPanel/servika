@@ -41,13 +41,18 @@ func TestOnlyCriticalFindingsAreContainedAutomatically(t *testing.T) {
 // not happen.
 func TestBothHalvesOfAnAutomaticPassAreCounted(t *testing.T) {
 	source := sourceOf(t, "autoquarantine.go")
-	for _, half := range []string{"out.Taken++", "out.Failed++"} {
-		if !strings.Contains(source, half) {
-			t.Errorf("an automatic pass no longer counts %q", half)
+	// Three outcomes, not two. A WordPress core file is reported and left in
+	// place, which is neither a success nor a failure: counted as taken it
+	// claims a containment that did not happen, counted as failed it sends an
+	// operator after a fault that is not there, counted nowhere it lets a pass
+	// that left two infected core files read as a clean one.
+	for _, part := range []string{"out.Taken++", "out.Failed++", "out.CoreSkipped++"} {
+		if !strings.Contains(source, part) {
+			t.Errorf("an automatic pass no longer counts %q", part)
 		}
 	}
 	if !strings.Contains(source,
-		"UPDATE av_scans SET auto_quarantined=?, auto_quarantine_failed=? WHERE id=?") {
+		"UPDATE av_scans SET auto_quarantined=?, auto_quarantine_failed=?, auto_quarantine_core_skipped=? WHERE id=?") {
 		t.Error("what the automatic pass did is no longer recorded")
 	}
 	// A finding list cut short by a database error must not be reported as a
@@ -59,7 +64,7 @@ func TestBothHalvesOfAnAutomaticPassAreCounted(t *testing.T) {
 	// And both counts have to reach the API, or nothing renders them.
 	for _, file := range []string{"antivirus.go", "sweep.go"} {
 		body := sourceOf(t, file)
-		for _, field := range []string{"auto_quarantined", "auto_quarantine_failed"} {
+		for _, field := range []string{"auto_quarantined", "auto_quarantine_failed", "auto_quarantine_core_skipped"} {
 			if !strings.Contains(body, field) {
 				t.Errorf("%s no longer reports %q", file, field)
 			}

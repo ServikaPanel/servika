@@ -39,12 +39,15 @@ const quarantineMaxBytes = 512 << 20 // 512 MiB
 // languages, so a screen that matched the message would break on the first
 // wording change.
 const (
-	reasonFindingUnknown   = "av_finding_unknown"
-	reasonFileMissing      = "av_file_missing"
-	reasonPathOutsideHome  = "av_path_outside_home"
-	reasonTooLarge         = "av_too_large"
-	reasonRestoreOccupied  = "av_restore_target_exists"
-	reasonQuarantineFail   = "av_quarantine_failed"
+	reasonFindingUnknown  = "av_finding_unknown"
+	reasonFileMissing     = "av_file_missing"
+	reasonPathOutsideHome = "av_path_outside_home"
+	reasonTooLarge        = "av_too_large"
+	reasonRestoreOccupied = "av_restore_target_exists"
+	reasonQuarantineFail  = "av_quarantine_failed"
+	// reasonCoreFile is a REFUSAL, not a failure: the file is a WordPress core
+	// file, so it is reported and repaired rather than moved out of the tree.
+	reasonCoreFile         = "av_core_file_not_quarantined"
 	reasonQuarantineUnknwn = "av_quarantine_unknown"
 )
 
@@ -176,6 +179,13 @@ func (h *Handlers) quarantineFinding(domainID int64, systemUser string, findingI
 	}
 	if already == 1 {
 		return "" // nothing to do, and saying so would read as a failure
+	}
+	// A core file is reported and left where it is. Moving it takes the site
+	// down, and the repair that puts the official file back is a different
+	// action the panel already offers. The check is here rather than only in the
+	// automatic pass, because the manual button reaches the same file.
+	if CoreFileProtected(absolute, signature) {
+		return reasonCoreFile
 	}
 	home := "/home/" + systemUser
 	rel, inside := homeRelative(home, absolute)
@@ -436,6 +446,11 @@ func writeReason(w http.ResponseWriter, reason string) {
 		status, message = http.StatusRequestEntityTooLarge, "the file is too large to quarantine"
 	case reasonRestoreOccupied:
 		status, message = http.StatusConflict, "a file already exists at that path"
+	case reasonCoreFile:
+		// 409 rather than 400: the request was well formed and the refusal is
+		// about the state of the target, exactly as the restore conflict above.
+		status = http.StatusConflict
+		message = "this is a WordPress core file; removing it would take the site down. Repair the core instead."
 	case reasonQuarantineFail:
 		status = http.StatusInternalServerError
 	}

@@ -349,14 +349,14 @@ func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
 	sid, _ := strconv.ParseInt(chi.URLParam(r, "sid"), 10, 64)
 	var status, engine, startedAt string
 	var finishedAt sql.NullString
-	var scanned, infected, autoTaken, autoFailed int
+	var scanned, infected, autoTaken, autoFailed, autoCoreSkipped int
 	var confined bool
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT status, engine, scanned, infected, confined, auto_quarantined, auto_quarantine_failed,
-		        started_at, finished_at
+		        auto_quarantine_core_skipped, started_at, finished_at
 		   FROM av_scans WHERE id=? AND domain_id=?`, sid, id).
 		Scan(&status, &engine, &scanned, &infected, &confined, &autoTaken, &autoFailed,
-			&startedAt, &finishedAt); err != nil {
+			&autoCoreSkipped, &startedAt, &finishedAt); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "scan not found")
 		return
 	}
@@ -373,7 +373,11 @@ func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
 		// one case that matters.
 		"auto_quarantined":       autoTaken,
 		"auto_quarantine_failed": autoFailed,
-		"findings":               h.findings(r.Context(), sid),
+		// A WordPress core file is reported and left in place, because moving one
+		// takes the site down. It is neither taken nor failed, so it is counted
+		// on its own or a pass that left two infected core files reads as clean.
+		"auto_quarantine_core_skipped": autoCoreSkipped,
+		"findings":                     h.findings(r.Context(), sid),
 	})
 }
 

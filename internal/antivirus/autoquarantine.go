@@ -26,6 +26,10 @@ import (
 type autoQuarantineOutcome struct {
 	Taken  int
 	Failed int
+	// CoreSkipped counts the WordPress core files that were reported and
+	// deliberately left in place. It is neither a success nor a failure, and
+	// folding it into either would say something untrue about the pass.
+	CoreSkipped int
 }
 
 // autoQuarantine contains the critical findings of one scan.
@@ -40,6 +44,8 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 		findingID  int64
 		domainID   int64
 		systemUser string
+		file       string
+		signature  string
 	}
 	var targets []target
 
@@ -47,7 +53,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 	// domain has nowhere to be contained into, and one whose domain has been
 	// deleted since the scan has no home directory left either.
 	rows, err := h.DB.QueryContext(ctx,
-		`SELECT f.id, f.domain_id, d.system_user
+		`SELECT f.id, f.domain_id, d.system_user, f.file, f.signature
 		   FROM av_findings f JOIN domains d ON d.id = f.domain_id
 		  WHERE f.scan_id=? AND f.level=? AND f.quarantined=0`, scanID, LevelCritical)
 	if err != nil {
@@ -57,7 +63,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 	}
 	for rows.Next() {
 		var t target
-		if err := rows.Scan(&t.findingID, &t.domainID, &t.systemUser); err != nil {
+		if err := rows.Scan(&t.findingID, &t.domainID, &t.systemUser, &t.file, &t.signature); err != nil {
 			continue
 		}
 		targets = append(targets, t)
@@ -78,6 +84,14 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 	// on a single connection is what turns one slow containment into a stalled
 	// pass.
 	for _, t := range targets {
+		// A WordPress core file is reported and left alone. It is counted
+		// separately rather than as a failure, because nothing went wrong and a
+		// figure in the failed column would send an operator looking for a fault
+		// that is not there.
+		if CoreFileProtected(t.file, t.signature) {
+			out.CoreSkipped++
+			continue
+		}
 		if reason := h.quarantineFinding(t.domainID, t.systemUser, t.findingID); reason != "" {
 			// #nosec G706 -- logged values are integer ids and a fixed reason code from this package; no raw tenant string reaches the log.
 			log.Printf("antivirus: finding %d could not be contained automatically: %s", t.findingID, reason)
@@ -92,8 +106,8 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 // recordAutoQuarantine writes what the pass did beside the scan.
 func recordAutoQuarantine(db *sql.DB, scanID int64, out autoQuarantineOutcome) {
 	if _, err := db.Exec(
-		`UPDATE av_scans SET auto_quarantined=?, auto_quarantine_failed=? WHERE id=?`,
-		out.Taken, out.Failed, scanID); err != nil {
+		`UPDATE av_scans SET auto_quarantined=?, auto_quarantine_failed=?, auto_quarantine_core_skipped=? WHERE id=?`,
+		out.Taken, out.Failed, out.CoreSkipped, scanID); err != nil {
 		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
 		log.Printf("antivirus: what automatic containment did to scan %d could not be recorded: %v", scanID, err)
 	}
