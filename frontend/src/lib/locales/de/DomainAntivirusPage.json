@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Alle {{count}} Funde in Quarantäne verschieben? Die Dateien verlassen Ihre Website und lassen sich hier zurückholen.",
-  "held": {"loadFailed":"Die Liste der verwahrten Dateien konnte nicht gelesen werden und wird daher nicht angezeigt.","title":"Dateien in Quarantäne","subtitle":"Außerhalb Ihrer Website verwahrt. Holen Sie eine zurück, die Sie für unbedenklich halten, oder löschen Sie sie endgültig.","empty":"Es wird nichts verwahrt.","colFile":"Ursprünglicher Pfad","colSignature":"Signatur","colDate":"Datum","restore":"Zurückholen","delete":"Endgültig löschen","restoredOn":"zurückgeholt am {{date}}","confirmRestore":"{{file}} an den ursprünglichen Ort zurücklegen?","confirmDelete":"{{file}} endgültig löschen? Das lässt sich nicht rückgängig machen.","restoreFailed":"Die Datei konnte nicht zurückgeholt werden.","deleteFailed":"Die Datei konnte nicht gelöscht werden."},
+  "held": {
+    "loadFailed": "Die Liste der verwahrten Dateien konnte nicht gelesen werden und wird daher nicht angezeigt.",
+    "title": "Dateien in Quarantäne",
+    "subtitle": "Außerhalb Ihrer Website verwahrt. Holen Sie eine zurück, die Sie für unbedenklich halten, oder löschen Sie sie endgültig.",
+    "empty": "Es wird nichts verwahrt.",
+    "colFile": "Ursprünglicher Pfad",
+    "colSignature": "Signatur",
+    "colDate": "Datum",
+    "restore": "Zurückholen",
+    "delete": "Endgültig löschen",
+    "restoredOn": "zurückgeholt am {{date}}",
+    "confirmRestore": "{{file}} an den ursprünglichen Ort zurücklegen?",
+    "confirmDelete": "{{file}} endgültig löschen? Das lässt sich nicht rückgängig machen.",
+    "restoreFailed": "Die Datei konnte nicht zurückgeholt werden.",
+    "deleteFailed": "Die Datei konnte nicht gelöscht werden.",
+    "inspect": "Ansehen",
+    "inspectClose": "Schließen",
+    "inspectLoading": "Datei wird gelesen...",
+    "inspectFailed": "Die Datei in Quarantäne konnte nicht gelesen werden.",
+    "inspectBinary": "Binärdatei, {{size}} Bytes. Nichts Lesbares vorhanden.",
+    "inspectTruncated": "Die ersten {{shown}} von {{size}} Bytes werden angezeigt.",
+    "inspectWhole": "Ganze Datei, {{size}} Bytes."
+  },
   "loading": "Laden...",
   "notFound": "Nicht gefunden",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Sauber. Keine Malware gefunden.",
     "colFile": "Datei",
     "colLevel": "Schweregrad",
-    "level": { "critical": "Kritisch", "suspicious": "Verdächtig" },
+    "level": {
+      "critical": "Kritisch",
+      "suspicious": "Verdächtig"
+    },
     "colSignature": "Signatur",
     "colEngine": "Engine",
     "colStatus": "Status",

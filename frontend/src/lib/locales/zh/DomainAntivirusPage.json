@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "要隔离全部 {{count}} 项检出吗？文件将从站点移出，可从本页恢复。",
-  "held": {"loadFailed":"无法读取已保存文件列表，因此这里不显示。","title":"已隔离的文件","subtitle":"保存在站点之外。确认安全的可以恢复，否则可彻底删除。","empty":"没有正在保存的文件。","colFile":"原始路径","colSignature":"特征","colDate":"日期","restore":"恢复","delete":"彻底删除","restoredOn":"已于 {{date}} 恢复","confirmRestore":"将 {{file}} 放回原处吗？","confirmDelete":"彻底删除 {{file}}？此操作无法撤销。","restoreFailed":"无法恢复该文件。","deleteFailed":"无法删除该文件。"},
+  "held": {
+    "loadFailed": "无法读取已保存文件列表，因此这里不显示。",
+    "title": "已隔离的文件",
+    "subtitle": "保存在站点之外。确认安全的可以恢复，否则可彻底删除。",
+    "empty": "没有正在保存的文件。",
+    "colFile": "原始路径",
+    "colSignature": "特征",
+    "colDate": "日期",
+    "restore": "恢复",
+    "delete": "彻底删除",
+    "restoredOn": "已于 {{date}} 恢复",
+    "confirmRestore": "将 {{file}} 放回原处吗？",
+    "confirmDelete": "彻底删除 {{file}}？此操作无法撤销。",
+    "restoreFailed": "无法恢复该文件。",
+    "deleteFailed": "无法删除该文件。",
+    "inspect": "查看内容",
+    "inspectClose": "关闭",
+    "inspectLoading": "正在读取文件...",
+    "inspectFailed": "无法读取隔离区中的文件。",
+    "inspectBinary": "二进制文件，{{size}} 字节。没有可显示的文本。",
+    "inspectTruncated": "显示 {{size}} 字节中的前 {{shown}} 字节。",
+    "inspectWhole": "完整文件，{{size}} 字节。"
+  },
   "loading": "加载中...",
   "notFound": "未找到",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "干净。未发现恶意软件。",
     "colFile": "文件",
     "colLevel": "严重程度",
-    "level": { "critical": "严重", "suspicious": "可疑" },
+    "level": {
+      "critical": "严重",
+      "suspicious": "可疑"
+    },
     "colSignature": "特征",
     "colEngine": "引擎",
     "colStatus": "状态",

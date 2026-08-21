@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "¿Poner en cuarentena las {{count}} detecciones? Los archivos salen de su sitio y pueden restaurarse desde esta página.",
-  "held": {"loadFailed":"No se pudo leer la lista de archivos guardados, por eso no se muestra aquí.","title":"Archivos en cuarentena","subtitle":"Guardados fuera de su sitio. Restaure el que considere seguro o elimínelo para siempre.","empty":"No se guarda nada.","colFile":"Ruta original","colSignature":"Firma","colDate":"Fecha","restore":"Restaurar","delete":"Eliminar para siempre","restoredOn":"restaurado el {{date}}","confirmRestore":"¿Devolver {{file}} a su sitio?","confirmDelete":"¿Eliminar {{file}} para siempre? No se puede deshacer.","restoreFailed":"No se pudo restaurar el archivo.","deleteFailed":"No se pudo eliminar el archivo."},
+  "held": {
+    "loadFailed": "No se pudo leer la lista de archivos guardados, por eso no se muestra aquí.",
+    "title": "Archivos en cuarentena",
+    "subtitle": "Guardados fuera de su sitio. Restaure el que considere seguro o elimínelo para siempre.",
+    "empty": "No se guarda nada.",
+    "colFile": "Ruta original",
+    "colSignature": "Firma",
+    "colDate": "Fecha",
+    "restore": "Restaurar",
+    "delete": "Eliminar para siempre",
+    "restoredOn": "restaurado el {{date}}",
+    "confirmRestore": "¿Devolver {{file}} a su sitio?",
+    "confirmDelete": "¿Eliminar {{file}} para siempre? No se puede deshacer.",
+    "restoreFailed": "No se pudo restaurar el archivo.",
+    "deleteFailed": "No se pudo eliminar el archivo.",
+    "inspect": "Inspeccionar",
+    "inspectClose": "Cerrar",
+    "inspectLoading": "Leyendo el archivo...",
+    "inspectFailed": "No se pudo leer el archivo en cuarentena.",
+    "inspectBinary": "Archivo binario, {{size}} bytes. No hay nada legible que mostrar.",
+    "inspectTruncated": "Mostrando los primeros {{shown}} de {{size}} bytes.",
+    "inspectWhole": "Archivo completo, {{size}} bytes."
+  },
   "loading": "Cargando...",
   "notFound": "No encontrado",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Limpio. No se encontró malware.",
     "colFile": "Archivo",
     "colLevel": "Gravedad",
-    "level": { "critical": "Crítico", "suspicious": "Sospechoso" },
+    "level": {
+      "critical": "Crítico",
+      "suspicious": "Sospechoso"
+    },
     "colSignature": "Firma",
     "colEngine": "Motor",
     "colStatus": "Estado",

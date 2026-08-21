@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Mettere in quarantena tutte le {{count}} rilevazioni? I file lasciano il sito e possono essere ripristinati da questa pagina.",
-  "held": {"loadFailed":"Non è stato possibile leggere l'elenco dei file conservati, quindi non viene mostrato qui.","title":"File in quarantena","subtitle":"Conservati fuori dal sito. Ripristina quello che ritieni sicuro oppure eliminalo definitivamente.","empty":"Non è conservato nulla.","colFile":"Percorso originale","colSignature":"Firma","colDate":"Data","restore":"Ripristina","delete":"Elimina definitivamente","restoredOn":"ripristinato il {{date}}","confirmRestore":"Rimettere {{file}} al suo posto?","confirmDelete":"Eliminare {{file}} definitivamente? L'operazione non è reversibile.","restoreFailed":"Non è stato possibile ripristinare il file.","deleteFailed":"Non è stato possibile eliminare il file."},
+  "held": {
+    "loadFailed": "Non è stato possibile leggere l'elenco dei file conservati, quindi non viene mostrato qui.",
+    "title": "File in quarantena",
+    "subtitle": "Conservati fuori dal sito. Ripristina quello che ritieni sicuro oppure eliminalo definitivamente.",
+    "empty": "Non è conservato nulla.",
+    "colFile": "Percorso originale",
+    "colSignature": "Firma",
+    "colDate": "Data",
+    "restore": "Ripristina",
+    "delete": "Elimina definitivamente",
+    "restoredOn": "ripristinato il {{date}}",
+    "confirmRestore": "Rimettere {{file}} al suo posto?",
+    "confirmDelete": "Eliminare {{file}} definitivamente? L'operazione non è reversibile.",
+    "restoreFailed": "Non è stato possibile ripristinare il file.",
+    "deleteFailed": "Non è stato possibile eliminare il file.",
+    "inspect": "Ispeziona",
+    "inspectClose": "Chiudi",
+    "inspectLoading": "Lettura del file...",
+    "inspectFailed": "Non è stato possibile leggere il file in quarantena.",
+    "inspectBinary": "File binario, {{size}} byte. Niente di leggibile da mostrare.",
+    "inspectTruncated": "Vengono mostrati i primi {{shown}} byte su {{size}}.",
+    "inspectWhole": "File intero, {{size}} byte."
+  },
   "loading": "Caricamento...",
   "notFound": "Non trovato",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Pulito. Nessun malware trovato.",
     "colFile": "File",
     "colLevel": "Gravità",
-    "level": { "critical": "Critico", "suspicious": "Sospetto" },
+    "level": {
+      "critical": "Critico",
+      "suspicious": "Sospetto"
+    },
     "colSignature": "Firma",
     "colEngine": "Motore",
     "colStatus": "Stato",

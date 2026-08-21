@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Mettre en quarantaine les {{count}} détections ? Les fichiers quittent votre site et peuvent être restaurés depuis cette page.",
-  "held": {"loadFailed":"La liste des fichiers conservés n'a pas pu être lue, elle n'est donc pas affichée ici.","title":"Fichiers en quarantaine","subtitle":"Conservés hors de votre site. Restaurez celui que vous jugez sûr, ou détruisez-le définitivement.","empty":"Rien n'est conservé.","colFile":"Chemin d'origine","colSignature":"Signature","colDate":"Date","restore":"Restaurer","delete":"Supprimer définitivement","restoredOn":"restauré le {{date}}","confirmRestore":"Remettre {{file}} à sa place ?","confirmDelete":"Détruire {{file}} ? Cette action est irréversible.","restoreFailed":"Le fichier n'a pas pu être restauré.","deleteFailed":"Le fichier n'a pas pu être supprimé."},
+  "held": {
+    "loadFailed": "La liste des fichiers conservés n'a pas pu être lue, elle n'est donc pas affichée ici.",
+    "title": "Fichiers en quarantaine",
+    "subtitle": "Conservés hors de votre site. Restaurez celui que vous jugez sûr, ou détruisez-le définitivement.",
+    "empty": "Rien n'est conservé.",
+    "colFile": "Chemin d'origine",
+    "colSignature": "Signature",
+    "colDate": "Date",
+    "restore": "Restaurer",
+    "delete": "Supprimer définitivement",
+    "restoredOn": "restauré le {{date}}",
+    "confirmRestore": "Remettre {{file}} à sa place ?",
+    "confirmDelete": "Détruire {{file}} ? Cette action est irréversible.",
+    "restoreFailed": "Le fichier n'a pas pu être restauré.",
+    "deleteFailed": "Le fichier n'a pas pu être supprimé.",
+    "inspect": "Inspecter",
+    "inspectClose": "Fermer",
+    "inspectLoading": "Lecture du fichier...",
+    "inspectFailed": "Le fichier en quarantaine n'a pas pu être lu.",
+    "inspectBinary": "Fichier binaire, {{size}} octets. Rien de lisible à afficher.",
+    "inspectTruncated": "Affichage des {{shown}} premiers octets sur {{size}}.",
+    "inspectWhole": "Fichier entier, {{size}} octets."
+  },
   "loading": "Chargement...",
   "notFound": "Introuvable",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Propre. Aucun logiciel malveillant trouvé.",
     "colFile": "Fichier",
     "colLevel": "Gravité",
-    "level": { "critical": "Critique", "suspicious": "Suspect" },
+    "level": {
+      "critical": "Critique",
+      "suspicious": "Suspect"
+    },
     "colSignature": "Signature",
     "colEngine": "Moteur",
     "colStatus": "Statut",

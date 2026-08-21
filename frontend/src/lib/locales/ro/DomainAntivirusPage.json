@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Pui în carantină toate cele {{count}} detecții? Fișierele părăsesc site-ul și pot fi readuse din această pagină.",
-  "held": {"loadFailed":"Lista fișierelor păstrate nu a putut fi citită, așa că nu este afișată aici.","title":"Fișiere în carantină","subtitle":"Păstrate în afara site-ului. Readu-l pe cel pe care îl consideri sigur sau șterge-l definitiv.","empty":"Nu este păstrat nimic.","colFile":"Cale originală","colSignature":"Semnătură","colDate":"Dată","restore":"Readu","delete":"Șterge definitiv","restoredOn":"readus pe {{date}}","confirmRestore":"Pui {{file}} înapoi unde era?","confirmDelete":"Ștergi definitiv {{file}}? Operația nu poate fi anulată.","restoreFailed":"Fișierul nu a putut fi readus.","deleteFailed":"Fișierul nu a putut fi șters."},
+  "held": {
+    "loadFailed": "Lista fișierelor păstrate nu a putut fi citită, așa că nu este afișată aici.",
+    "title": "Fișiere în carantină",
+    "subtitle": "Păstrate în afara site-ului. Readu-l pe cel pe care îl consideri sigur sau șterge-l definitiv.",
+    "empty": "Nu este păstrat nimic.",
+    "colFile": "Cale originală",
+    "colSignature": "Semnătură",
+    "colDate": "Dată",
+    "restore": "Readu",
+    "delete": "Șterge definitiv",
+    "restoredOn": "readus pe {{date}}",
+    "confirmRestore": "Pui {{file}} înapoi unde era?",
+    "confirmDelete": "Ștergi definitiv {{file}}? Operația nu poate fi anulată.",
+    "restoreFailed": "Fișierul nu a putut fi readus.",
+    "deleteFailed": "Fișierul nu a putut fi șters.",
+    "inspect": "Inspectează",
+    "inspectClose": "Închide",
+    "inspectLoading": "Se citește fișierul...",
+    "inspectFailed": "Fișierul din carantină nu a putut fi citit.",
+    "inspectBinary": "Fișier binar, {{size}} octeți. Nu există nimic lizibil de afișat.",
+    "inspectTruncated": "Se afișează primii {{shown}} din {{size}} octeți.",
+    "inspectWhole": "Fișierul întreg, {{size}} octeți."
+  },
   "loading": "Se încarcă...",
   "notFound": "Negăsit",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Curat. Nu s-a găsit malware.",
     "colFile": "Fișier",
     "colLevel": "Severitate",
-    "level": { "critical": "Critic", "suspicious": "Suspect" },
+    "level": {
+      "critical": "Critic",
+      "suspicious": "Suspect"
+    },
     "colSignature": "Semnătură",
     "colEngine": "Motor",
     "colStatus": "Status",

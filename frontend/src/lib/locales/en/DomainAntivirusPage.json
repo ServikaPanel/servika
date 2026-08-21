@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Quarantine all {{count}} finding(s)? The files leave your site and can be put back from this page.",
-  "held": {"loadFailed":"The held file list could not be read, so it is not shown here.","title":"Quarantined files","subtitle":"Kept outside your site. Restore one you believe is safe, or destroy it for good.","empty":"Nothing is being held.","colFile":"Original path","colSignature":"Signature","colDate":"Date","restore":"Restore","delete":"Delete for good","restoredOn":"restored on {{date}}","confirmRestore":"Put {{file}} back where it was?","confirmDelete":"Destroy {{file}}? This cannot be undone.","restoreFailed":"The file could not be restored.","deleteFailed":"The file could not be deleted."},
+  "held": {
+    "loadFailed": "The held file list could not be read, so it is not shown here.",
+    "title": "Quarantined files",
+    "subtitle": "Kept outside your site. Restore one you believe is safe, or destroy it for good.",
+    "empty": "Nothing is being held.",
+    "colFile": "Original path",
+    "colSignature": "Signature",
+    "colDate": "Date",
+    "restore": "Restore",
+    "delete": "Delete for good",
+    "restoredOn": "restored on {{date}}",
+    "confirmRestore": "Put {{file}} back where it was?",
+    "confirmDelete": "Destroy {{file}}? This cannot be undone.",
+    "restoreFailed": "The file could not be restored.",
+    "deleteFailed": "The file could not be deleted.",
+    "inspect": "Inspect",
+    "inspectClose": "Close",
+    "inspectLoading": "Reading the file...",
+    "inspectFailed": "Could not read the quarantined file.",
+    "inspectBinary": "Binary file, {{size}} bytes. Nothing readable to show.",
+    "inspectTruncated": "Showing the first {{shown}} of {{size}} bytes.",
+    "inspectWhole": "Whole file, {{size}} bytes."
+  },
   "loading": "Loading...",
   "notFound": "Not found",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Clean. No malware found.",
     "colFile": "File",
     "colLevel": "Severity",
-    "level": { "critical": "Critical", "suspicious": "Suspicious" },
+    "level": {
+      "critical": "Critical",
+      "suspicious": "Suspicious"
+    },
     "colSignature": "Signature",
     "colEngine": "Engine",
     "colStatus": "Status",

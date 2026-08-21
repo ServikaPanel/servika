@@ -28,6 +28,18 @@ type Finding = {
   rules: string
   quarantined: number
 }
+// What the inspect endpoint answers. `truncated` matters: the preview stops at
+// 64 KiB and a prefix that reads as the whole file is how a payload appended
+// past the cut goes unnoticed.
+type Preview = {
+  path: string
+  size: number
+  shown: number
+  truncated: boolean
+  binary: boolean
+  content: string
+}
+
 type Quarantined = {
   id: number
   finding_id: number | null
@@ -66,6 +78,11 @@ export default function DomainAntivirusPage() {
   const scanning = startingScan || pollScanID !== null
   const [signatureLoading, setSignatureLoading] = useState(false)
   const [held, setHeld] = useState<Quarantined[]>([])
+  // Which quarantined file is being looked at, and what is in it. Restoring was
+  // a blind decision before this: the screen listed a path and offered to put
+  // the file back without ever showing what it was.
+  const [previewID, setPreviewID] = useState<number | null>(null)
+  const [preview, setPreview] = useState<Preview | null>(null)
   const [heldFailed, setHeldFailed] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -143,6 +160,14 @@ export default function DomainAntivirusPage() {
     try { await api.post(`/domains/${id}/antivirus/quarantine/${entry.id}/restore`, {}); load() }
     catch (e) { setError(apiError(e, t('held.restoreFailed'))) }
     finally { setBusy(false) }
+  }
+
+  async function inspect(entry: Quarantined) {
+    if (previewID === entry.id) { setPreviewID(null); setPreview(null); return }
+    setError(null); setPreviewID(entry.id); setPreview(null)
+    api.get<Preview>(`/domains/${id}/antivirus/quarantine/${entry.id}/inspect`)
+      .then(response => setPreview(response.data))
+      .catch(e => { setPreviewID(null); setError(apiError(e, t('held.inspectFailed'))) })
   }
 
   async function purge(entry: Quarantined) {
@@ -315,6 +340,9 @@ export default function DomainAntivirusPage() {
                       <td className={responsiveTableActionCellClass}>
                         {!entry.restored_at && (
                           <div className="flex gap-3 whitespace-nowrap">
+                            <button onClick={() => inspect(entry)}
+                              className="text-xs text-slate-600 hover:underline dark:text-slate-300">
+                              {previewID === entry.id ? t('held.inspectClose') : t('held.inspect')}</button>
                             <button onClick={() => restore(entry)} disabled={busy}
                               className="text-xs text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400">
                               {t('held.restore')}</button>
@@ -328,6 +356,31 @@ export default function DomainAntivirusPage() {
                   ))}
                 </tbody>
               </table>
+              {previewID !== null && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
+                  {!preview ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('held.inspectLoading')}</p>
+                  ) : preview.binary ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {t('held.inspectBinary', { size: preview.size })}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                        {preview.truncated
+                          ? t('held.inspectTruncated', { shown: preview.shown, size: preview.size })
+                          : t('held.inspectWhole', { size: preview.size })}
+                      </p>
+                      {/* The content is a KNOWN MALICIOUS file. React escapes
+                          text, so it is drawn as text and never as markup, and
+                          nothing here evaluates it. */}
+                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-[11px] leading-relaxed text-slate-800 dark:bg-slate-950 dark:text-slate-200">
+                        {preview.content}
+                      </pre>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

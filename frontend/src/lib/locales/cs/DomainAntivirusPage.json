@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Přesunout do karantény všech {{count}} nálezů? Soubory opustí web a lze je z této stránky vrátit.",
-  "held": {"loadFailed":"Seznam uložených souborů se nepodařilo načíst, proto se zde nezobrazuje.","title":"Soubory v karanténě","subtitle":"Uloženy mimo váš web. Vraťte ten, který považujete za bezpečný, nebo jej trvale odstraňte.","empty":"Nic není uloženo.","colFile":"Původní cesta","colSignature":"Signatura","colDate":"Datum","restore":"Vrátit zpět","delete":"Trvale odstranit","restoredOn":"vráceno {{date}}","confirmRestore":"Vrátit {{file}} na původní místo?","confirmDelete":"Trvale odstranit {{file}}? Akci nelze vzít zpět.","restoreFailed":"Soubor se nepodařilo vrátit.","deleteFailed":"Soubor se nepodařilo odstranit."},
+  "held": {
+    "loadFailed": "Seznam uložených souborů se nepodařilo načíst, proto se zde nezobrazuje.",
+    "title": "Soubory v karanténě",
+    "subtitle": "Uloženy mimo váš web. Vraťte ten, který považujete za bezpečný, nebo jej trvale odstraňte.",
+    "empty": "Nic není uloženo.",
+    "colFile": "Původní cesta",
+    "colSignature": "Signatura",
+    "colDate": "Datum",
+    "restore": "Vrátit zpět",
+    "delete": "Trvale odstranit",
+    "restoredOn": "vráceno {{date}}",
+    "confirmRestore": "Vrátit {{file}} na původní místo?",
+    "confirmDelete": "Trvale odstranit {{file}}? Akci nelze vzít zpět.",
+    "restoreFailed": "Soubor se nepodařilo vrátit.",
+    "deleteFailed": "Soubor se nepodařilo odstranit.",
+    "inspect": "Prohlédnout",
+    "inspectClose": "Zavřít",
+    "inspectLoading": "Načítání souboru...",
+    "inspectFailed": "Soubor v karanténě se nepodařilo načíst.",
+    "inspectBinary": "Binární soubor, {{size}} bajtů. Není co čitelného zobrazit.",
+    "inspectTruncated": "Zobrazuje se prvních {{shown}} z {{size}} bajtů.",
+    "inspectWhole": "Celý soubor, {{size}} bajtů."
+  },
   "loading": "Načítání...",
   "notFound": "Nenalezeno",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Čisté. Nebyl nalezen žádný malware.",
     "colFile": "Soubor",
     "colLevel": "Závažnost",
-    "level": { "critical": "Kritické", "suspicious": "Podezřelé" },
+    "level": {
+      "critical": "Kritické",
+      "suspicious": "Podezřelé"
+    },
     "colSignature": "Signatura",
     "colEngine": "Jádro",
     "colStatus": "Stav",

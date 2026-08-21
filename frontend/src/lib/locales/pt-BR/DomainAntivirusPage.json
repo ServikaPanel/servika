@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "Colocar em quarentena as {{count}} detecções? Os arquivos saem do site e podem ser restaurados nesta página.",
-  "held": {"loadFailed":"Não foi possível ler a lista de arquivos guardados, por isso ela não é exibida aqui.","title":"Arquivos em quarentena","subtitle":"Guardados fora do seu site. Restaure o que considerar seguro ou exclua definitivamente.","empty":"Nada está sendo guardado.","colFile":"Caminho original","colSignature":"Assinatura","colDate":"Data","restore":"Restaurar","delete":"Excluir definitivamente","restoredOn":"restaurado em {{date}}","confirmRestore":"Colocar {{file}} de volta no lugar?","confirmDelete":"Excluir {{file}} definitivamente? Não é possível desfazer.","restoreFailed":"Não foi possível restaurar o arquivo.","deleteFailed":"Não foi possível excluir o arquivo."},
+  "held": {
+    "loadFailed": "Não foi possível ler a lista de arquivos guardados, por isso ela não é exibida aqui.",
+    "title": "Arquivos em quarentena",
+    "subtitle": "Guardados fora do seu site. Restaure o que considerar seguro ou exclua definitivamente.",
+    "empty": "Nada está sendo guardado.",
+    "colFile": "Caminho original",
+    "colSignature": "Assinatura",
+    "colDate": "Data",
+    "restore": "Restaurar",
+    "delete": "Excluir definitivamente",
+    "restoredOn": "restaurado em {{date}}",
+    "confirmRestore": "Colocar {{file}} de volta no lugar?",
+    "confirmDelete": "Excluir {{file}} definitivamente? Não é possível desfazer.",
+    "restoreFailed": "Não foi possível restaurar o arquivo.",
+    "deleteFailed": "Não foi possível excluir o arquivo.",
+    "inspect": "Inspecionar",
+    "inspectClose": "Fechar",
+    "inspectLoading": "Lendo o arquivo...",
+    "inspectFailed": "Não foi possível ler o arquivo em quarentena.",
+    "inspectBinary": "Arquivo binário, {{size}} bytes. Nada legível para mostrar.",
+    "inspectTruncated": "Mostrando os primeiros {{shown}} de {{size}} bytes.",
+    "inspectWhole": "Arquivo completo, {{size}} bytes."
+  },
   "loading": "Carregando...",
   "notFound": "Não encontrado",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Limpo. Nenhum malware encontrado.",
     "colFile": "Arquivo",
     "colLevel": "Gravidade",
-    "level": { "critical": "Crítico", "suspicious": "Suspeito" },
+    "level": {
+      "critical": "Crítico",
+      "suspicious": "Suspeito"
+    },
     "colSignature": "Assinatura",
     "colEngine": "Motor",
     "colStatus": "Status",

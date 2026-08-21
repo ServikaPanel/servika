@@ -1,6 +1,28 @@
 {
   "confirmQuarantineAll": "{{count}} bulgunun hepsi karantinaya alınsın mı? Dosyalar sitenizden çıkar ve bu sayfadan geri getirilebilir.",
-  "held": {"loadFailed":"Tutulan dosya listesi okunamadı, bu yüzden burada gösterilmiyor.","title":"Karantinadaki dosyalar","subtitle":"Sitenizin dışında tutuluyor. Güvenli olduğuna inandığınızı geri getirin ya da kalıcı olarak silin.","empty":"Tutulan dosya yok.","colFile":"Özgün yol","colSignature":"İmza","colDate":"Tarih","restore":"Geri getir","delete":"Kalıcı sil","restoredOn":"{{date}} tarihinde geri getirildi","confirmRestore":"{{file}} eski yerine konsun mu?","confirmDelete":"{{file}} kalıcı olarak silinsin mi? Bu geri alınamaz.","restoreFailed":"Dosya geri getirilemedi.","deleteFailed":"Dosya silinemedi."},
+  "held": {
+    "loadFailed": "Tutulan dosya listesi okunamadı, bu yüzden burada gösterilmiyor.",
+    "title": "Karantinadaki dosyalar",
+    "subtitle": "Sitenizin dışında tutuluyor. Güvenli olduğuna inandığınızı geri getirin ya da kalıcı olarak silin.",
+    "empty": "Tutulan dosya yok.",
+    "colFile": "Özgün yol",
+    "colSignature": "İmza",
+    "colDate": "Tarih",
+    "restore": "Geri getir",
+    "delete": "Kalıcı sil",
+    "restoredOn": "{{date}} tarihinde geri getirildi",
+    "confirmRestore": "{{file}} eski yerine konsun mu?",
+    "confirmDelete": "{{file}} kalıcı olarak silinsin mi? Bu geri alınamaz.",
+    "restoreFailed": "Dosya geri getirilemedi.",
+    "deleteFailed": "Dosya silinemedi.",
+    "inspect": "İncele",
+    "inspectClose": "Kapat",
+    "inspectLoading": "Dosya okunuyor...",
+    "inspectFailed": "Karantinadaki dosya okunamadı.",
+    "inspectBinary": "İkili dosya, {{size}} bayt. Gösterilecek okunabilir içerik yok.",
+    "inspectTruncated": "{{size}} baytın ilk {{shown}} baytı gösteriliyor.",
+    "inspectWhole": "Dosyanın tamamı, {{size}} bayt."
+  },
   "loading": "Yükleniyor...",
   "notFound": "Bulunamadı",
   "breadcrumb": {
@@ -38,7 +60,10 @@
     "clean": "Temiz. Kötü amaçlı yazılım bulunamadı.",
     "colFile": "Dosya",
     "colLevel": "Önem",
-    "level": { "critical": "Kritik", "suspicious": "Şüpheli" },
+    "level": {
+      "critical": "Kritik",
+      "suspicious": "Şüpheli"
+    },
     "colSignature": "İmza",
     "colEngine": "Motor",
     "colStatus": "Durum",
