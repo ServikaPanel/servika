@@ -102,3 +102,30 @@ func TestTheStartupPathWritesTheSliceAndStartsNoUnit(t *testing.T) {
 		}
 	}
 }
+
+// The cgroup path arrives from a worker that read it in another process and
+// handed it back through a file, so it is confined to cgroupRoot rather than
+// trusted. A traversal must not read an arbitrary file and answer with its
+// first field.
+func TestACgroupPathCannotEscapeTheCgroupRoot(t *testing.T) {
+	root := t.TempDir()
+	restore := cgroupRoot
+	cgroupRoot = filepath.Join(root, "cgroup")
+	t.Cleanup(func() { cgroupRoot = restore })
+
+	if err := os.MkdirAll(cgroupRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A file outside the root whose first field is not "max", so reading it
+	// would be reported as a real limit.
+	outside := filepath.Join(root, "cpu.max")
+	if err := os.WriteFile(outside, []byte("150000 100000\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := readCgroupField("/../", "cpu.max"); ok {
+		t.Error("a traversal read a file outside the cgroup root")
+	}
+	if SliceHasLimit("/../") {
+		t.Error("a traversal was reported as a slice carrying a limit")
+	}
+}

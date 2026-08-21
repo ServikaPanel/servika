@@ -84,8 +84,19 @@ func SliceHasLimit(dir string) bool {
 
 // readCgroupField reads the first whitespace-separated field of a cgroup
 // attribute, and reports whether it could be read at all.
+//
+// The directory comes from a /proc/self/cgroup line, which the kernel writes,
+// so it is not tenant text. It is still confined to cgroupRoot rather than
+// trusted: this function is reached from a worker that read that line in
+// another process and handed it back through a file, and a value that travels
+// through a file outlives the code that wrote it.
 func readCgroupField(dir, name string) (string, bool) {
-	b, err := os.ReadFile(filepath.Join(cgroupRoot, strings.TrimPrefix(dir, "/"), name))
+	root := filepath.Clean(cgroupRoot)
+	full := filepath.Clean(filepath.Join(root, strings.TrimPrefix(dir, "/"), name))
+	if full != root && !strings.HasPrefix(full, root+string(filepath.Separator)) {
+		return "", false
+	}
+	b, err := os.ReadFile(full) // #nosec G304 -- confined to cgroupRoot on the line above; the path comes from the kernel's own /proc/self/cgroup.
 	if err != nil {
 		return "", false
 	}
