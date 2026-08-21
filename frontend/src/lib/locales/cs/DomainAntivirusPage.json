@@ -37,6 +37,8 @@
     "noScans": "Zatím žádné kontroly. Zvolte „Zkontrolovat nyní“ pro zahájení.",
     "clean": "Čisté. Nebyl nalezen žádný malware.",
     "colFile": "Soubor",
+    "colLevel": "Závažnost",
+    "level": { "critical": "Kritické", "suspicious": "Podezřelé" },
     "colSignature": "Signatura",
     "colEngine": "Jádro",
     "colStatus": "Stav",

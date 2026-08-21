@@ -37,6 +37,8 @@
     "noScans": "まだスキャンがありません。「今すぐスキャン」を選択して開始してください。",
     "clean": "クリーンです。マルウェアは見つかりませんでした。",
     "colFile": "ファイル",
+    "colLevel": "深刻度",
+    "level": { "critical": "重大", "suspicious": "疑わしい" },
     "colSignature": "シグネチャ",
     "colEngine": "エンジン",
     "colStatus": "ステータス",

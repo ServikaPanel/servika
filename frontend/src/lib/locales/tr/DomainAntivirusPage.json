@@ -37,6 +37,8 @@
     "noScans": "Henüz tarama yok. Başlamak için “Şimdi Tara” seçin.",
     "clean": "Temiz. Kötü amaçlı yazılım bulunamadı.",
     "colFile": "Dosya",
+    "colLevel": "Önem",
+    "level": { "critical": "Kritik", "suspicious": "Şüpheli" },
     "colSignature": "İmza",
     "colEngine": "Motor",
     "colStatus": "Durum",

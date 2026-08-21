@@ -37,6 +37,8 @@
     "noScans": "Noch keine Scans. Wählen Sie „Jetzt scannen“, um zu beginnen.",
     "clean": "Sauber. Keine Malware gefunden.",
     "colFile": "Datei",
+    "colLevel": "Schweregrad",
+    "level": { "critical": "Kritisch", "suspicious": "Verdächtig" },
     "colSignature": "Signatur",
     "colEngine": "Engine",
     "colStatus": "Status",

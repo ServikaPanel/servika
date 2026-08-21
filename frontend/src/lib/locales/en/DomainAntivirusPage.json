@@ -37,6 +37,8 @@
     "noScans": "No scans yet. Select “Scan Now” to begin.",
     "clean": "Clean. No malware found.",
     "colFile": "File",
+    "colLevel": "Severity",
+    "level": { "critical": "Critical", "suspicious": "Suspicious" },
     "colSignature": "Signature",
     "colEngine": "Engine",
     "colStatus": "Status",

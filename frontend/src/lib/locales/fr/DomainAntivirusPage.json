@@ -37,6 +37,8 @@
     "noScans": "Aucune analyse pour l'instant. Sélectionnez « Analyser maintenant » pour commencer.",
     "clean": "Propre. Aucun logiciel malveillant trouvé.",
     "colFile": "Fichier",
+    "colLevel": "Gravité",
+    "level": { "critical": "Critique", "suspicious": "Suspect" },
     "colSignature": "Signature",
     "colEngine": "Moteur",
     "colStatus": "Statut",

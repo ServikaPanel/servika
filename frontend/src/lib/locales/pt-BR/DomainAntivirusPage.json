@@ -37,6 +37,8 @@
     "noScans": "Nenhuma verificação ainda. Selecione \"Verificar agora\" para começar.",
     "clean": "Limpo. Nenhum malware encontrado.",
     "colFile": "Arquivo",
+    "colLevel": "Gravidade",
+    "level": { "critical": "Crítico", "suspicious": "Suspeito" },
     "colSignature": "Assinatura",
     "colEngine": "Motor",
     "colStatus": "Status",

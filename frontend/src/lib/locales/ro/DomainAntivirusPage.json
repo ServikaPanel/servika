@@ -37,6 +37,8 @@
     "noScans": "Nicio scanare încă. Selectați „Scanați acum” pentru a începe.",
     "clean": "Curat. Nu s-a găsit malware.",
     "colFile": "Fișier",
+    "colLevel": "Severitate",
+    "level": { "critical": "Critic", "suspicious": "Suspect" },
     "colSignature": "Semnătură",
     "colEngine": "Motor",
     "colStatus": "Status",

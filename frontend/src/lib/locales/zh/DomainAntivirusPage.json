@@ -37,6 +37,8 @@
     "noScans": "尚无扫描。选择“立即扫描”开始。",
     "clean": "干净。未发现恶意软件。",
     "colFile": "文件",
+    "colLevel": "严重程度",
+    "level": { "critical": "严重", "suspicious": "可疑" },
     "colSignature": "特征",
     "colEngine": "引擎",
     "colStatus": "状态",

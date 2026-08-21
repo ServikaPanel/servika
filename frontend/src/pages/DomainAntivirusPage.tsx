@@ -16,7 +16,18 @@ import {
   responsiveTableRowClass,
 } from '@/lib/table'
 
-type Finding = { id: number; file: string; signature: string; engine: string; quarantined: number }
+type Finding = {
+  id: number
+  file: string
+  signature: string
+  engine: string
+  score: number
+  level: string
+  // Every rule that fired, where signature names only the highest-scoring one.
+  // Empty for a detector with no rule set, such as ClamAV.
+  rules: string
+  quarantined: number
+}
 type Quarantined = {
   id: number
   finding_id: number | null
@@ -32,6 +43,17 @@ type Status = { clamav: boolean; signature_date: string; username: string; last_
 
 export default function DomainAntivirusPage() {
   const { t } = useTranslation('DomainAntivirusPage')
+
+  // A level the panel does not know is shown verbatim rather than dropped or
+  // relabelled: a row from a newer backend must not read as something milder
+  // than it is.
+  const levelLabel = (level: string) =>
+    level === 'critical' || level === 'suspicious' ? t(`findings.level.${level}`) : level
+  const levelClass = (level: string) =>
+    level === 'suspicious'
+      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
+      : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400'
+
   const { confirm } = useDialog()
   const { id } = useParams()
   const [d, setD] = useState<Status | null>(null)
@@ -223,6 +245,7 @@ export default function DomainAntivirusPage() {
                 <thead className={responsiveTableHeadClass}>
                   <tr>
                     <th className="py-2 pr-3 text-left">{t('findings.colFile')}</th>
+                    <th className="py-2 pr-3 text-left">{t('findings.colLevel')}</th>
                     <th className="py-2 pr-3 text-left">{t('findings.colSignature')}</th>
                     <th className="py-2 pr-3 text-left">{t('findings.colEngine')}</th>
                     <th className="py-2 pr-3 text-left">{t('findings.colStatus')}</th>
@@ -233,7 +256,18 @@ export default function DomainAntivirusPage() {
                   {d.findings.map((b, i) => (
                     <tr key={i} className={responsiveTableRowClass}>
                       <td data-label={t('findings.colFile')} className={`${responsiveTableCodeCellClass} break-all`}>{b.file}</td>
-                      <td data-label={t('findings.colSignature')} className={responsiveTableCellClass}>{b.signature}</td>
+                      <td data-label={t('findings.colLevel')} className={responsiveTableCellClass}>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${levelClass(b.level)}`}>{levelLabel(b.level)}</span>
+                      </td>
+                      <td data-label={t('findings.colSignature')} className={responsiveTableCellClass}>
+                        <div>{b.signature}</div>
+                        {/* The other rules that fired. A suspicious verdict is
+                            reached by adding up evidence, so showing only the
+                            strongest one hides why the total got there. */}
+                        {b.rules && b.rules !== b.signature && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">{b.rules}</div>
+                        )}
+                      </td>
                       <td data-label={t('findings.colEngine')} className={responsiveTableCellClass}><span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500">{b.engine}</span></td>
                       <td data-label={t('findings.colStatus')} className={responsiveTableCellClass}>
                         {b.quarantined ? <span className="text-xs text-amber-600 dark:text-amber-400">{t('findings.quarantined')}</span>

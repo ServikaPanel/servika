@@ -37,6 +37,8 @@
     "noScans": "Ainda não há análises. Selecione \"Analisar Agora\" para começar.",
     "clean": "Limpo. Nenhum malware encontrado.",
     "colFile": "Ficheiro",
+    "colLevel": "Gravidade",
+    "level": { "critical": "Crítico", "suspicious": "Suspeito" },
     "colSignature": "Assinatura",
     "colEngine": "Motor",
     "colStatus": "Estado",

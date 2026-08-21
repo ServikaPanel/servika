@@ -37,6 +37,8 @@
     "noScans": "Ancora nessuna scansione. Seleziona “Scansiona ora” per iniziare.",
     "clean": "Pulito. Nessun malware trovato.",
     "colFile": "File",
+    "colLevel": "Gravità",
+    "level": { "critical": "Critico", "suspicious": "Sospetto" },
     "colSignature": "Firma",
     "colEngine": "Motore",
     "colStatus": "Stato",
