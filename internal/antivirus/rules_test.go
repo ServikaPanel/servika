@@ -12,10 +12,10 @@ import (
 
 func TestARuleBelowTheThresholdProducesNoFinding(t *testing.T) {
 	set := []rule{
-		{"Test.Moderate", weightModerate, regexp.MustCompile(`MODERATE`)},
-		{"Test.Weak", weightWeak, regexp.MustCompile(`WEAK`)},
-		{"Test.Strong", weightStrong, regexp.MustCompile(`STRONG`)},
-		{"Test.Proof", weightProof, regexp.MustCompile(`PROOF`)},
+		{"Test.Moderate", weightModerate, regexp.MustCompile(`MODERATE`), nil},
+		{"Test.Weak", weightWeak, regexp.MustCompile(`WEAK`), nil},
+		{"Test.Strong", weightStrong, regexp.MustCompile(`STRONG`), nil},
+		{"Test.Proof", weightProof, regexp.MustCompile(`PROOF`), nil},
 	}
 	cases := []struct {
 		name  string
@@ -37,7 +37,7 @@ func TestARuleBelowTheThresholdProducesNoFinding(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			score, signature, matched := evaluateWith(set, []byte(c.body))
+			score, signature, matched := evaluateWith(set, ".php", []byte(c.body))
 			if score != c.score {
 				t.Fatalf("score %d, want %d (rules %v)", score, c.score, matched)
 			}
@@ -57,13 +57,13 @@ func TestARuleBelowTheThresholdProducesNoFinding(t *testing.T) {
 // two DISTINCT moderate rules is the case that reaches it.
 func TestTwoDistinctModerateSignalsReachSuspicious(t *testing.T) {
 	set := []rule{
-		{"Test.ModerateA", weightModerate, regexp.MustCompile(`AAA`)},
-		{"Test.ModerateB", weightModerate, regexp.MustCompile(`BBB`)},
+		{"Test.ModerateA", weightModerate, regexp.MustCompile(`AAA`), nil},
+		{"Test.ModerateB", weightModerate, regexp.MustCompile(`BBB`), nil},
 	}
-	if score, _, _ := evaluateWith(set, []byte("AAA")); levelFor(score) != "" {
+	if score, _, _ := evaluateWith(set, ".php", []byte("AAA")); levelFor(score) != "" {
 		t.Fatalf("one moderate rule produced a finding at score %d", score)
 	}
-	score, _, matched := evaluateWith(set, []byte("AAA and BBB"))
+	score, _, matched := evaluateWith(set, ".php", []byte("AAA and BBB"))
 	if got := levelFor(score); got != LevelSuspicious {
 		t.Fatalf("two moderate rules gave %q at score %d, want %q", got, score, LevelSuspicious)
 	}
@@ -103,7 +103,7 @@ func TestEveryShippedRuleIsStillCriticalOnItsOwn(t *testing.T) {
 			if h.score < scoreCritical {
 				t.Fatalf("weight %d is below the critical threshold %d", h.score, scoreCritical)
 			}
-			score, signature, matched := evaluate([]byte(body))
+			score, signature, matched := evaluate(".php", []byte(body))
 			if levelFor(score) != LevelCritical {
 				t.Fatalf("%s did not reach critical on its own sample (score %d, matched %v)", name, score, matched)
 			}
@@ -142,6 +142,9 @@ func TestEveryRuleMatchesSomething(t *testing.T) {
 		"PHP.Evasion.BotCloaking":         `<?php if (stripos($_SERVER['HTTP_USER_AGENT'], 'googlebot') !== false) {}`,
 		"PHP.Obf.HexEscapedName":          `<?php $f = "\x73\x79\x73\x74\x65\x6d";`,
 		"PHP.Obf.LongBase64Block":         `<?php $b = '` + strings.Repeat("QUJDRA", 100) + `';`,
+		"HTAccess.PHPHandlerInjection":    "AddType application/x-httpd-php .jpg\n",
+		"JS.EvalFromCharCode":             `eval(String.fromCharCode(97,98,99));`,
+		"JS.DocumentWriteUnescape":        `document.write(unescape('%3Cscript%3E'));`,
 	}
 	for _, h := range heuristics {
 		t.Run(h.name, func(t *testing.T) {
@@ -152,7 +155,85 @@ func TestEveryRuleMatchesSomething(t *testing.T) {
 			if !h.re.MatchString(body) {
 				t.Errorf("%s does not match its own sample:\n%s", h.name, body)
 			}
+			// The sample must reach the rule through the walk as well: a rule
+			// scoped to an extension the scan never opens can never fire, which
+			// is what the .htaccess and JavaScript rules were before the walk
+			// was widened.
+			ext := ".php"
+			if len(h.exts) > 0 {
+				ext = h.exts[0]
+			}
+			if readLimitFor(ext) == 0 {
+				t.Fatalf("%s applies to %q, which the scan does not open", h.name, ext)
+			}
+			if score, _, _ := evaluate(ext, []byte(body)); score < h.score {
+				t.Errorf("%s did not contribute its weight for a %s file (score %d)", h.name, ext, score)
+			}
 		})
+	}
+}
+
+// The two file kinds the scan never used to open, and the rules that depend on
+// them. Before the walk was widened these could not fire however they were
+// written, so the guard has to hold the walk and the rule together.
+func TestTheWidenedWalkReachesTheRulesThatNeedIt(t *testing.T) {
+	cases := []struct {
+		name, ext, body string
+	}{
+		{"php handler bound to an image extension", extHTAccess, "AddType application/x-httpd-php .jpg\n"},
+		{"php handler through AddHandler", extHTAccess, "AddHandler application/x-httpd-php5 .png\n"},
+		{"injected eval in a theme script", ".js", `eval(String.fromCharCode(97,98,99));`},
+		{"injected eval in a module", ".mjs", `eval(String.fromCharCode(97,98,99));`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if readLimitFor(c.ext) == 0 {
+				t.Fatalf("the scan does not open %q at all", c.ext)
+			}
+			score, _, matched := evaluate(c.ext, []byte(c.body))
+			if levelFor(score) != LevelCritical {
+				t.Errorf("not critical (score %d, matched %v)", score, matched)
+			}
+		})
+	}
+}
+
+// A rule scoped to one kind must not be tried against another. Sharing one set
+// across every file kind is only affordable because each rule declares what it
+// applies to.
+func TestARuleDoesNotLeakAcrossFileKinds(t *testing.T) {
+	htaccess := "AddType application/x-httpd-php .jpg\n"
+	if score, _, matched := evaluate(".php", []byte(htaccess)); score != 0 {
+		t.Errorf("the .htaccess rule fired on a PHP file (score %d, %v)", score, matched)
+	}
+	injected := `eval(String.fromCharCode(97,98,99));`
+	if score, _, matched := evaluate(".php", []byte(injected)); score != 0 {
+		t.Errorf("a JavaScript rule fired on a PHP file (score %d, %v)", score, matched)
+	}
+	php := `<?php eval($_POST['c']);`
+	if score, _, matched := evaluate(".js", []byte(php)); score != 0 {
+		t.Errorf("a PHP rule fired on a JavaScript file (score %d, %v)", score, matched)
+	}
+}
+
+// A JavaScript bundle is read up to a far smaller limit than a PHP file,
+// because the same tree holds 152.9 MB of JavaScript against 68.7 MB of PHP.
+// Reading both at the PHP limit took a measured sweep from 19 s to 55 s, which
+// on a large site is the difference between a finished scan and one reported as
+// partial.
+func TestTheReadLimitsMatchWhatEachKindCosts(t *testing.T) {
+	if readLimitFor(".php") <= readLimitFor(".js") {
+		t.Error("JavaScript is read at least as far as PHP, which is the cost this limit exists to bound")
+	}
+	for _, ext := range []string{".jpg", ".png", ".css", ".txt", ".zip", ""} {
+		if readLimitFor(ext) != 0 {
+			t.Errorf("%q is opened by the scan and no rule applies to it", ext)
+		}
+	}
+	for _, ext := range append([]string{".php", extHTAccess}, jsExts...) {
+		if readLimitFor(ext) == 0 {
+			t.Errorf("%q is not opened, so every rule scoped to it is dead", ext)
+		}
 	}
 }
 
@@ -168,7 +249,7 @@ func TestThePreviouslyMissedShapesAreCaught(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, matched := evaluate([]byte(c.body))
+			score, _, matched := evaluate(".php", []byte(c.body))
 			if levelFor(score) != LevelCritical {
 				t.Errorf("not critical (score %d, matched %v)", score, matched)
 			}
@@ -187,7 +268,7 @@ func TestDocumentedSuperglobalsAreNotBacktickExecution(t *testing.T) {
 	}
 	for _, c := range documented {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, matched := evaluate([]byte(c.body))
+			score, _, matched := evaluate(".php", []byte(c.body))
 			if level := levelFor(score); level != "" {
 				t.Errorf("false alarm %q at score %d: %v", level, score, matched)
 			}
@@ -210,7 +291,7 @@ func TestLegitimateCodeProducesNoFinding(t *testing.T) {
 	}
 	for _, c := range legitimate {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, matched := evaluate([]byte(c.body))
+			score, _, matched := evaluate(".php", []byte(c.body))
 			if level := levelFor(score); level != "" {
 				t.Errorf("false alarm %q at score %d: %v", level, score, matched)
 			}

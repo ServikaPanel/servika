@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -348,7 +349,7 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 		}
 	}
 
-	// 2) Heuristic PHP webshell scan
+	// 2) Heuristic scan of the file kinds a site executes or serves
 	scanned := 0
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
@@ -365,11 +366,13 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 			}
 			return nil
 		}
-		if !phpish(strings.ToLower(filepath.Ext(p))) {
+		ext := strings.ToLower(filepath.Ext(p))
+		limit := readLimitFor(ext)
+		if limit == 0 {
 			return nil
 		}
 		fi, e := d.Info()
-		if e != nil || fi.Size() > 3*1024*1024 {
+		if e != nil || fi.Size() > limit {
 			return nil
 		}
 		scanned++
@@ -385,7 +388,7 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 		// used to mean bulk cleanup contained it on the first row and then
 		// reported "file missing" twice for the same file it had just
 		// quarantined, so a successful cleanup read as two failures.
-		score, signature, matched := evaluate(b)
+		score, signature, matched := evaluate(ext, b)
 		level := levelFor(score)
 		if level == "" || seen["h|"+p] {
 			return nil
@@ -400,10 +403,44 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 	return scanned, findings
 }
 
-func phpish(ext string) bool {
-	switch ext {
-	case ".php", ".phtml", ".php3", ".php4", ".php5", ".php7", ".php8", ".phar", ".inc", ".pht":
-		return true
+// phpish reports whether a PHP-FPM pool would execute this extension. The list
+// lives in rules.go beside the rules scoped to it, so the two cannot drift.
+func phpish(ext string) bool { return slices.Contains(phpExts, ext) }
+
+// Read limits per file kind. Zero means the file is not opened at all.
+const (
+	// phpReadLimit is the limit the scan has always used for executable PHP.
+	phpReadLimit = 3 * 1024 * 1024
+	// jsReadLimit is deliberately far smaller. Measured on a real tenant tree
+	// (WordPress core plus the five most-installed plugins): 1972 JavaScript
+	// files hold 152.9 MB against 68.7 MB of PHP, because a handful of vendor
+	// bundles reach 13 MB while the median file is 6 KB. Reading them at the PHP
+	// limit took the whole sweep from 19 s to 55 s; at 256 KB it takes 31 s and
+	// still opens 1862 of the 1972 files. What that trades away is a payload
+	// appended to a multi-megabyte bundle, which is the same trade the PHP limit
+	// has always made, and the scan has an 8-minute budget it must finish inside
+	// or the result is reported as a partial one.
+	jsReadLimit = 256 * 1024
+	// htAccessReadLimit: an override file is a few kilobytes; anything at this
+	// size is not one.
+	htAccessReadLimit = 256 * 1024
+)
+
+// readLimitFor returns how many bytes of a file the scan will read, or 0 when
+// the file is not one a site executes or serves.
+//
+// .htaccess and JavaScript were never opened before, so the two rules that
+// depend on them, a PHP handler bound to an image extension and an injected
+// eval(String.fromCharCode(...)), could not have fired however they were
+// written.
+func readLimitFor(ext string) int64 {
+	switch {
+	case phpish(ext):
+		return phpReadLimit
+	case slices.Contains(jsExts, ext):
+		return jsReadLimit
+	case ext == extHTAccess:
+		return htAccessReadLimit
 	}
-	return false
+	return 0
 }
