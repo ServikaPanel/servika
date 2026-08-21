@@ -252,3 +252,39 @@ func TestTheMarkIsOnTheFilesystemAndNotOnTheMount(t *testing.T) {
 		t.Error("a mount mark is still placed; under ProtectSystem=strict it delivers no events at all")
 	}
 }
+
+// The unit is what makes the limits real and the containment possible, and
+// three of its lines are load-bearing in ways nothing in Go can check. Each was
+// measured against real systemd with the shipped unit, and each has a falling
+// path recorded beside it here.
+func TestTheWatcherUnitCarriesWhatContainmentNeeds(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "assets", "systemd", "servika-av-watch.service"))
+	if err != nil {
+		t.Fatalf("the watcher unit: %v", err)
+	}
+	unit := string(body)
+
+	// Without this the unit joins system.slice and every limit the settings
+	// screen reports is enforced on nothing.
+	if !strings.Contains(unit, "Slice="+avsettings.SliceName) {
+		t.Error("the unit does not join the antivirus slice")
+	}
+	// The quarantine store lives OUTSIDE the tenant home, so /home alone is not
+	// enough. Measured: with the store dropped from ReadWritePaths the watcher
+	// still DETECTED the webshell and left it in the document root.
+	if !strings.Contains(unit, "ReadWritePaths=/home -/var/lib/servika") {
+		t.Error("the unit does not open both the tenant tree and the quarantine store for writing")
+	}
+	// The leading dash. Measured: with ProtectSystem=strict and the directory
+	// absent, the unit dies at 226/NAMESPACE before the binary runs, so a
+	// server that has never quarantined anything loses detection as well.
+	if strings.Contains(unit, "ReadWritePaths=/home /var/lib/servika") {
+		t.Error("the quarantine store is named without the leading dash, so an absent directory stops the unit")
+	}
+	// Reading a tenant file needs DAC_READ_SEARCH; REMOVING one from a
+	// tenant-owned 0750 directory needs DAC_OVERRIDE. Measured: dropping it
+	// left the watcher detecting and every containment failing.
+	if !strings.Contains(unit, "CAP_DAC_OVERRIDE") {
+		t.Error("the unit cannot remove a file from a tenant-owned directory")
+	}
+}

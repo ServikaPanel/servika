@@ -24,6 +24,31 @@ Slice=servika-av.slice
 # is not a new privilege on the host; it is stated because it is the whole
 # reason this cannot be a goroutine in an unprivileged process.
 User=root
+NoNewPrivileges=yes
+ProtectSystem=strict
+# ProtectHome=no is REQUIRED, not a relaxation: the whole job is reading tenant
+# files under /home, and the default would hide them from the watcher entirely.
+ProtectHome=no
+# Both paths, and the second one is the trap. The quarantine store is
+# /var/lib/servika/quarantine, deliberately OUTSIDE the tenant home, so a
+# ReadWritePaths of /home alone leaves a watcher that detects a webshell and
+# then fails every containment in silence. Measured: with /home only, writing to
+# the store failed; adding /var/lib/servika fixed that half and nothing else.
+# The leading dash on the second path is not decoration. Measured: with
+# ProtectSystem=strict, a ReadWritePaths entry naming a directory that does not
+# exist makes systemd refuse the mount namespace and the unit dies with
+# 226/NAMESPACE before the binary runs at all, so a server that has never
+# quarantined anything would lose DETECTION as well as containment. With the
+# dash the unit starts and the watcher reports at startup that the store is not
+# writable, which is the right trade: detection is worth having on its own.
+ReadWritePaths=/home -/var/lib/servika
+# CAP_DAC_OVERRIDE is the other half, and it is not obvious. Reading a tenant
+# file needs CAP_DAC_READ_SEARCH, but REMOVING one from a tenant-owned 0750
+# directory needs CAP_DAC_OVERRIDE, and containment is a copy followed by a
+# removal. Measured against a real tenant tree: SYS_ADMIN plus DAC_READ_SEARCH
+# alone left the unlink failing even with the store writable, adding
+# DAC_OVERRIDE fixed it, and CAP_FOWNER changed nothing and is therefore absent.
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

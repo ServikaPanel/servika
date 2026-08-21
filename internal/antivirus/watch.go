@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"servika/internal/avsettings"
+	"servika/internal/config"
 	"servika/internal/db"
 )
 
@@ -115,12 +116,43 @@ func newWatcher(ctx context.Context, handle *sql.DB) (*watcher, error) {
 	if !settings.Realtime {
 		return nil, errWatchDisabled
 	}
+	// The unit hardens the watcher with ProtectSystem=strict and names the
+	// quarantine store in ReadWritePaths. That name is the SHIPPED default, and
+	// SERVIKA_QUARANTINE_DIR can move the store somewhere the unit does not
+	// name, where every containment would fail one at a time with nothing
+	// saying why. Ask once, at startup, where it can be answered plainly.
+	reportQuarantineWritable()
+
 	return &watcher{
 		db:       handle,
 		owner:    newOwnerLookup(handle),
 		settings: settings,
 		cgroup:   selfCgroup(),
 	}, nil
+}
+
+// reportQuarantineWritable logs whether the watcher can actually write to the
+// quarantine store. It does NOT refuse: detection is worth having even when
+// containment is not available, and a watcher that refused to start would take
+// the detection away too.
+func reportQuarantineWritable() {
+	dir := config.QuarantineDir()
+	// #nosec G301 -- the quarantine store holds files taken out of a tenant tree; 0700 root keeps every tenant out of it.
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		log.Printf("antivirus watcher: the quarantine store %s cannot be created, "+
+			"so containment will fail: %v", dir, err)
+		return
+	}
+	probe, err := os.CreateTemp(dir, ".writable-")
+	if err != nil {
+		log.Printf("antivirus watcher: the quarantine store %s is not writable, "+
+			"so containment will fail. Under ProtectSystem=strict the unit must "+
+			"name this path in ReadWritePaths: %v", dir, err)
+		return
+	}
+	name := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(name)
 }
 
 func (w *watcher) current() avsettings.Settings {

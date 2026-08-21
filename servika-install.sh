@@ -415,6 +415,15 @@ mkdir -p /opt/servika/bin /opt/servika/frontend-dist /opt/servika/src/migrations
 # very false gate this change removes. It is not silenced either.
 install -d -m 0700 /var/backups/servika \
   || warn "the backup root /var/backups/servika could not be created; the first backup run will create it"
+# The quarantine store, for the SAME reason and one more of its own.
+#
+# The real-time watcher runs under ProtectSystem=strict and names this path in
+# ReadWritePaths. Measured on real systemd: without the leading dash in the unit
+# an absent directory kills the unit at 226/NAMESPACE, and with the dash the
+# unit starts but the store is read-only, so every containment fails and the
+# watcher only reports. Creating it here is what makes the normal case work.
+install -d -m 0700 /var/lib/servika/quarantine \
+  || warn "the quarantine store /var/lib/servika/quarantine could not be created; malware findings will be reported but not contained"
 # Values the panel or its operations tools write LATER, and settings an operator
 # may have tuned. A re-run used to blank every one of them: servika-mail-setup
 # stores the Postfix/Dovecot and Roundcube database passwords and the Roundcube
