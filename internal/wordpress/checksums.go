@@ -12,14 +12,23 @@ package wordpress
 // re-downloading core, which Repair already does.
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"servika/internal/antivirus"
 	"servika/internal/httpx"
+	"servika/internal/wpchecksums"
 )
+
+// checksumWarmTimeout bounds the cache fetch and, when the command could not
+// measure, the comparison that follows. It is far shorter than the command's own
+// network budget because it is the SECOND thing on the path: a slow fetch here
+// would delay the check that is about to run anyway.
+const checksumWarmTimeout = 60 * time.Second
 
 // The signature names are the API contract the screen groups by, so they are
 // stable strings rather than derived from the wp-cli wording.
@@ -40,7 +49,18 @@ type verdict struct {
 	Rel string
 }
 
-// checksumPrefixes maps the measured wp-cli wording to a stable signature.
+// checksumSignatures maps the measured wp-cli wording to a stable signature.
+//
+// The messages are spelled once, in internal/wpchecksums, so the offline
+// comparison and the parser of the command's own output cannot drift into
+// reporting the same defect under two different signatures.
+var checksumSignatures = map[string]string{
+	wpchecksums.MessageExtra:    SignatureExtraFile,
+	wpchecksums.MessageModified: SignatureModified,
+	wpchecksums.MessageMissing:  SignatureMissing,
+}
+
+// checksumPrefixes is the same table as the line prefix the command prints.
 //
 // The order matters only for reading: the strings do not overlap. Anything else,
 // including the "Error: WordPress installation doesn't verify against checksums."
@@ -50,9 +70,9 @@ var checksumPrefixes = []struct {
 	prefix    string
 	signature string
 }{
-	{"Warning: File should not exist: ", SignatureExtraFile},
-	{"Warning: File doesn't verify against checksum: ", SignatureModified},
-	{"Warning: File doesn't exist: ", SignatureMissing},
+	{"Warning: " + wpchecksums.MessageExtra + ": ", SignatureExtraFile},
+	{"Warning: " + wpchecksums.MessageModified + ": ", SignatureModified},
+	{"Warning: " + wpchecksums.MessageMissing + ": ", SignatureMissing},
 }
 
 // parseChecksumReport turns wp-cli's output into verdicts.
@@ -86,11 +106,90 @@ func parseChecksumReport(output string) []verdict {
 	return out
 }
 
+// commandMeasured reports whether the command actually compared the tree.
+//
+// A zero exit is a comparison whatever it found, and a non-zero exit that still
+// printed a warning is a comparison that found something. A non-zero exit with
+// no warning at all is the command giving up before it compared anything, which
+// is every way of failing to obtain the table.
+func commandMeasured(runErr error, verdicts []verdict) bool {
+	return runErr == nil || len(verdicts) > 0
+}
+
+// runChecksums performs the check and reports whether anything was COMPARED.
+//
+// The command's exit status alone cannot answer that, measured against WP-CLI
+// 2.12.0:
+//
+//	clean installation, API up        exit 0, "Success: ..."
+//	extra file only, API up           exit 0, one Warning line
+//	modified core file, API up        exit 1, Warning lines plus an Error line
+//	api.wordpress.org unreachable     exit 1, "Error: RuntimeException: Failed to get url ..."
+//	version wordpress.org never had   exit 1, "Error: Couldn't get checksums from WordPress.org."
+//
+// An extra file is the webshell case this endpoint exists to catch and it exits
+// 0, so "exit 0 means clean" is false. What separates the last two rows from
+// everything above them is that the run produced NO parsed warning at all, which
+// is the test used here. Matching the error TEXT would work today and break on
+// the next wp-cli release, because that wording is the command's, not an API.
+//
+// When nothing was compared the cached table is tried, which is what
+// internal/wpchecksums keeps for exactly this moment.
+func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, output string, measured bool) {
+	home := "/home/" + systemUser
+	relDir := strings.TrimPrefix(strings.TrimPrefix(dir, home), "/")
+
+	// The table is fetched BEFORE the command runs, while the network is by
+	// definition working. Warming it only on the fallback path would fetch at the
+	// one moment the network is down, so the cache would never fill.
+	ctx, cancel := context.WithTimeout(context.Background(), checksumWarmTimeout)
+	defer cancel()
+	details, detailsErr := wpchecksums.ReadDetails(home, relDir)
+	if detailsErr == nil {
+		wpchecksums.Warm(ctx, details)
+	}
+
+	// The command reaches wordpress.org for the checksum list, so it gets the
+	// network budget rather than the local one.
+	raw, runErr := runWPTimeout(wpNetworkTimeout, systemUser, "core", "verify-checksums", "--path="+dir)
+	verdicts = parseChecksumReport(string(raw))
+	if commandMeasured(runErr, verdicts) {
+		return verdicts, strings.TrimSpace(string(raw)), true
+	}
+
+	if detailsErr != nil {
+		return nil, strings.TrimSpace(string(raw)), false
+	}
+	table, tableErr := wpchecksums.Table(ctx, details)
+	if tableErr != nil {
+		return nil, strings.TrimSpace(string(raw)), false
+	}
+	offline, verifyErr := wpchecksums.Verify(home, relDir, table)
+	if verifyErr != nil {
+		return nil, strings.TrimSpace(string(raw)), false
+	}
+	// The offline report is rendered in the command's own wording, so the screen
+	// shows one shape whichever engine answered.
+	lines := make([]string, 0, len(offline)+1)
+	for _, item := range offline {
+		verdicts = append(verdicts, verdict{Signature: checksumSignatures[item.Message], Rel: item.Rel})
+		lines = append(lines, "Warning: "+item.Message+": "+item.Rel)
+	}
+	lines = append(lines, "Compared against the cached checksum table; wordpress.org was not reachable.")
+	return verdicts, strings.Join(lines, "\n"), true
+}
+
 // POST /domains/{id}/wordpress/verify  {dir}
 //
 // The findings are recorded through internal/antivirus so quarantine and bulk
 // cleanup act on them exactly as they do on a scanner hit, rather than growing a
 // second finding model with its own listing and its own containment path.
+//
+// A check that could not compare anything answers `measured: false` and records
+// NOTHING. The endpoint used to discard the command's error, so an unreachable
+// api.wordpress.org produced zero verdicts and the screen told the customer the
+// core files matched the official checksums. Zero findings and no comparison are
+// the same JSON; they are not the same fact.
 func (h *Handlers) VerifyChecksums(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Dir string }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -107,10 +206,18 @@ func (h *Handlers) VerifyChecksums(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The command reaches wordpress.org for the checksum list, so it gets the
-	// network budget rather than the local one.
-	output, _ := runWPTimeout(wpNetworkTimeout, systemUser, "core", "verify-checksums", "--path="+dir)
-	verdicts := parseChecksumReport(string(output))
+	verdicts, output, measured := h.runChecksums(systemUser, dir)
+	if !measured {
+		// 200 rather than an error status: the request was handled and the answer
+		// is a fact about the check, which the screen has to render either way.
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{
+			"ok":       true,
+			"measured": false,
+			"reason":   "wp_checksums_unavailable",
+			"output":   truncateOutput(output),
+		})
+		return
+	}
 
 	home := "/home/" + systemUser
 	counts := map[string]int{}
@@ -146,10 +253,11 @@ func (h *Handlers) VerifyChecksums(w http.ResponseWriter, r *http.Request) {
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":       true,
+		"measured": true,
 		"scan_id":  scanID,
 		"extra":    counts[SignatureExtraFile],
 		"modified": counts[SignatureModified],
 		"missing":  counts[SignatureMissing],
-		"output":   truncateOutput(strings.TrimSpace(string(output))),
+		"output":   truncateOutput(output),
 	})
 }
