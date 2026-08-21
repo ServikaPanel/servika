@@ -305,3 +305,84 @@ func TestAPackageFromAnotherKeyChangesNothing(t *testing.T) {
 		t.Fatalf("the forged package changed the rules in use: %+v", RemoteRules())
 	}
 }
+
+// The built-in rules are a FLOOR: a package ADDS to them and can never take one
+// away. Nothing in the production code asserts this today, because it falls out
+// of how evaluate() is written: the shipped set is evaluated first and remote
+// matches are appended. A later refactor that merged the two sets into one slice
+// "for efficiency" would reintroduce exactly the defect this pins.
+//
+// The case is upstream's own proof of concept. There the remote set was ASSIGNED
+// over the base rather than merged, so a signed package carrying one inert rule
+// at a very high version removed every base rule, and the rule that catches an
+// eval(base64_decode(...)) backdoor disappeared in silence. A leaked signing key
+// would then have switched detection off by DELETING rules rather than by
+// adding any.
+func TestAThinPackageCannotTakeABuiltInRuleAway(t *testing.T) {
+	key := withSigningKey(t)
+	now := time.Now()
+	backdoor := []byte(`<?php eval(base64_decode($_POST['x'])); ?>`)
+
+	before := evaluate(".php", backdoor)
+	_, signatureBefore, _, levelBefore := verdict(before, 0)
+	if levelBefore != LevelCritical || signatureBefore != "PHP.Webshell.EvalBase64" {
+		t.Fatalf("the built-in set does not convict the sample, so this test proves nothing: %q %q",
+			signatureBefore, levelBefore)
+	}
+
+	thin := signedSet(t, key, 9999, now, aRule("Remote.Inert", `zzz-this-matches-nothing-zzz`, weightStrong))
+	if _, err := adoptPackage(thin, now); err != nil {
+		t.Fatalf("adopt: %v", err)
+	}
+	if RemoteRuleVersion() != 9999 || len(RemoteRules()) != 1 {
+		t.Fatalf("the package was not adopted, so the floor is untested: version %d, %d rules",
+			RemoteRuleVersion(), len(RemoteRules()))
+	}
+
+	after := evaluate(".php", backdoor)
+	_, signatureAfter, _, levelAfter := verdict(after, 0)
+	if len(after) != len(before) || signatureAfter != signatureBefore || levelAfter != levelBefore {
+		t.Fatalf("a thin package changed the built-in verdict: %d matches %q %q became %d matches %q %q",
+			len(before), signatureBefore, levelBefore, len(after), signatureAfter, levelAfter)
+	}
+
+	// Not vacuous in the other direction: the same adopted package really is in
+	// use, so it adds a finding to a file its own pattern matches.
+	own := evaluate(".php", []byte(`<?php /* zzz-this-matches-nothing-zzz */`))
+	if len(own) != 1 || !own[0].remote {
+		t.Fatalf("the adopted package produced %+v on a file its own rule matches", own)
+	}
+}
+
+// A package may not take a built-in rule's NAME either, which is a tighter rule
+// than the floor and closes what a floor alone leaves open.
+//
+// Upstream's merge keeps every base ID but writes `m[k.ID] = k`, so a remote
+// rule carrying a base rule's ID REPLACES its pattern. The rule count and the ID
+// survive while the behaviour is neutered, which is the same class of defect one
+// level down. Refusing the name outright is what makes the floor mean the
+// detection rather than the label.
+func TestAPackageCannotTakeABuiltInRuleName(t *testing.T) {
+	_, err := compilePackagedRule(packagedRule{
+		Name:    "PHP.Webshell.EvalBase64",
+		Score:   weightStrong,
+		Pattern: `zzz-this-matches-nothing-zzz`,
+		Kind:    "php",
+	})
+	if err == nil {
+		t.Fatal("a package replaced a built-in rule's pattern under its own name")
+	}
+	if !strings.Contains(err.Error(), "built-in") {
+		t.Errorf("refused for the wrong reason: %v", err)
+	}
+
+	// Not vacuous: the same rule under a name of its own is accepted.
+	if _, err := compilePackagedRule(packagedRule{
+		Name:    "Remote.EvalBase64",
+		Score:   weightStrong,
+		Pattern: `zzz-this-matches-nothing-zzz`,
+		Kind:    "php",
+	}); err != nil {
+		t.Errorf("a rule under its own name was refused: %v", err)
+	}
+}
