@@ -35,7 +35,27 @@ type Response struct {
 	// asked for, this says whether it is running. They disagree exactly when
 	// the watcher failed to start, which is the case nothing else would show.
 	WatchState string `json:"watch_state"`
+	// RuleSet is which malware rule set the scanner is running on, in the same
+	// spirit as WatchState: not what was configured, but what is in force. A
+	// signed rule package that went stale is refused and the built-in set takes
+	// over, and from the screen that is indistinguishable from a package
+	// adopted yesterday unless it is reported.
+	//
+	// It is nil when nothing wired the hook below, so a caller reads its
+	// absence as "not measured" rather than as the built-in set.
+	RuleSet any `json:"rule_set,omitempty"`
 }
+
+// RuleSetInUse reports which malware rule set is running.
+//
+// It is a hook rather than a direct call because internal/antivirus imports
+// this package to read the settings, so calling back into it from here would
+// close an import cycle. `main` wires it to antivirus.RuleSetInUse, which is
+// the same shape internal/apps uses for subdomain rendering.
+//
+// The return type is deliberately `any`: this package has no business knowing
+// the scanner's state shape, and it only passes the value through to JSON.
+var RuleSetInUse func() any
 
 // Get answers GET /admin/antivirus/settings.
 func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
@@ -82,12 +102,16 @@ func (h *Handlers) Put(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) respond(w http.ResponseWriter, settings Settings) {
 	capacity := ServerCapacity()
-	httpx.WriteJSON(w, http.StatusOK, Response{
+	response := Response{
 		Settings:   settings,
 		Capacity:   capacity,
 		Effective:  settings.Resolve(capacity),
 		Kernel:     ReadKernelLimits(),
 		ScanRoots:  settings.ScanRoots(),
 		WatchState: WatchState(),
-	})
+	}
+	if RuleSetInUse != nil {
+		response.RuleSet = RuleSetInUse()
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
 }

@@ -477,6 +477,11 @@ func main() {
 	appsH := &apps.Handlers{DB: d}
 	apps.RenderSubdomain = subdomain.ReRender
 	apps.HealOnStartup(d)
+	// Which malware rule set the scanner is on, for the antivirus settings
+	// screen. A hook for the same reason as the line above: internal/antivirus
+	// imports internal/avsettings to read the settings, so the dependency
+	// cannot be reversed.
+	avsettings.RuleSetInUse = func() any { return antivirus.RuleSetInUse() }
 	// PERF: move PHP availability discovery (dnf) to a background sweeper so request-path
 	// callers like /php/versions never block on a slow or locked dnf.
 	phpversion.StartAvailabilitySweeper()

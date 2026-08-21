@@ -2,6 +2,7 @@ package avsettings
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -108,5 +109,28 @@ func TestSavingAlsoApplies(t *testing.T) {
 	validate := strings.Index(body, "if err := s.Validate(); err != nil {")
 	if validate < 0 || validate > update {
 		t.Error("a settings row is stored before it is validated")
+	}
+}
+
+// The rule set travels the same way WatchState does: what is RUNNING, not what
+// was asked for. The hook is unset in every build that does not wire it, so the
+// field has to disappear rather than report the built-in set, which is a claim
+// nothing measured.
+func TestTheRuleSetIsReportedOnlyWhenSomethingMeasuredIt(t *testing.T) {
+	previous := RuleSetInUse
+	t.Cleanup(func() { RuleSetInUse = previous })
+
+	RuleSetInUse = nil
+	unwired := httptest.NewRecorder()
+	(&Handlers{}).respond(unwired, Settings{})
+	if strings.Contains(unwired.Body.String(), `"rule_set"`) {
+		t.Errorf("an unwired hook still reported a rule set: %s", unwired.Body.String())
+	}
+
+	RuleSetInUse = func() any { return map[string]string{"source": "package"} }
+	wired := httptest.NewRecorder()
+	(&Handlers{}).respond(wired, Settings{})
+	if !strings.Contains(wired.Body.String(), `"rule_set":{"source":"package"}`) {
+		t.Errorf("a wired hook did not reach the response: %s", wired.Body.String())
 	}
 }
