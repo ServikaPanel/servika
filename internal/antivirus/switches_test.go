@@ -135,7 +135,7 @@ func TestTheSettingsAreReadBeforeTheWorkerAndNotByIt(t *testing.T) {
 	// everything would ignore exactly the decision the operator made, on the
 	// server they made it for.
 	request := strings.Index(source, "req, err := scanRequest(")
-	lock := strings.Index(source, "scanning.CompareAndSwap(0, 1)")
+	lock := strings.Index(source, "takeScanSlot(r.Context(), h.DB)")
 	switch {
 	case request < 0:
 		t.Fatal("the handler no longer reads the settings")

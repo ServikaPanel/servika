@@ -87,11 +87,12 @@ func tickOnce(db *sql.DB, now func() time.Time) {
 	// The same single slot a hand-started scan takes. A tick that cannot get it
 	// simply waits for the next hour: forcing it would mean two sweeps reading
 	// the same trees under one resource limit.
-	if !scanning.CompareAndSwap(0, 1) {
+	slot, err := takeScanSlot(ctx, db)
+	if err != nil {
 		log.Printf("antivirus: the scheduled sweep was skipped, another scan is running")
 		return
 	}
-	defer scanning.Store(0)
+	defer slot.Release()
 
 	req := sweepRequest(settings)
 	res, err := db.Exec(

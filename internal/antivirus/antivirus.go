@@ -286,13 +286,14 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "the antivirus settings could not be read")
 		return
 	}
-	if !scanning.CompareAndSwap(0, 1) {
+	slot, err := takeScanSlot(r.Context(), h.DB)
+	if err != nil {
 		httpx.WriteError(w, http.StatusConflict, "another server scan is in progress; please wait")
 		return
 	}
 	res, err := h.DB.Exec(`INSERT INTO av_scans (domain_id, status, engine) VALUES (?,?,?)`, id, "running", engineName())
 	if err != nil {
-		scanning.Store(0)
+		slot.Release()
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create scan record")
 		return
 	}
@@ -303,7 +304,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 	// own budget instead, and the settings it needs were read from the request
 	// context above, before this goroutine starts.
 	go func() {
-		defer scanning.Store(0)
+		defer slot.Release()
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
 		result, confined, err := Scan(ctx, req, strconv.FormatInt(sid, 10))
@@ -381,11 +382,12 @@ func (h *Handlers) UpdateSignature(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "freshclam is not installed")
 		return
 	}
-	if !scanning.CompareAndSwap(0, 1) {
+	slot, err := takeScanSlot(r.Context(), h.DB)
+	if err != nil {
 		httpx.WriteError(w, http.StatusConflict, "another operation is in progress; please wait")
 		return
 	}
-	defer scanning.Store(0)
+	defer slot.Release()
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.

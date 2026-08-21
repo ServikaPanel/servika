@@ -55,8 +55,11 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The same single slot a domain scan takes. A sweep running beside a domain
-	// scan would read the same trees twice under one resource limit.
-	if !scanning.CompareAndSwap(0, 1) {
+	// scan would read the same trees twice under one resource limit, and the
+	// slot is now held in the DATABASE as well, so a sweep the systemd timer
+	// started in its own process is visible here too.
+	slot, err := takeScanSlot(r.Context(), h.DB)
+	if err != nil {
 		httpx.WriteError(w, http.StatusConflict, "another server scan is in progress; please wait")
 		return
 	}
@@ -65,7 +68,7 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO av_scans (domain_id, scope, status, engine) VALUES (NULL,?,?,?)`,
 		settings.Scope, "running", engineName())
 	if err != nil {
-		scanning.Store(0)
+		slot.Release()
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create scan record")
 		return
 	}
@@ -75,7 +78,7 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 	// a scan id immediately and polls, so closing the tab must not cancel a sweep
 	// of the whole server that is already under way.
 	go func() {
-		defer scanning.Store(0)
+		defer slot.Release()
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
 		runSweep(ctx, h.DB, sid, req)

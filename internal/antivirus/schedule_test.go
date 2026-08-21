@@ -43,7 +43,7 @@ func TestEveryConditionThatStopsATickIsStillThere(t *testing.T) {
 			"a sweep that would inspect nothing is no longer skipped"},
 		{"if recent, err := sweptRecently(ctx, db, now()); err != nil {",
 			"a sweep that already ran no longer stops the tick"},
-		{"if !scanning.CompareAndSwap(0, 1) {",
+		{"slot, err := takeScanSlot(ctx, db)",
 			"the tick no longer respects the single scan slot"},
 	} {
 		if !strings.Contains(source, guard.code) {
@@ -86,8 +86,8 @@ func TestTheRecencyComparisonUsesOneUnitOnBothSides(t *testing.T) {
 // it however the sweep ends.
 func TestTheScheduledSweepReleasesTheSlot(t *testing.T) {
 	source := sourceOf(t, "schedule.go")
-	lock := strings.Index(source, "if !scanning.CompareAndSwap(0, 1) {")
-	release := strings.Index(source, "defer scanning.Store(0)")
+	lock := strings.Index(source, "slot, err := takeScanSlot(ctx, db)")
+	release := strings.Index(source, "defer slot.Release()")
 	switch {
 	case lock < 0:
 		t.Fatal("the tick no longer takes the scan slot")
