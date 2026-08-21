@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -61,27 +60,21 @@ func HealRunningScans(db *sql.DB) {
 
 var errCap = errors.New("file-limit-reached")
 
-// Low false-positive, high-signal PHP webshell/obfuscation signatures
-var heuristics = []struct {
-	name string
-	re   *regexp.Regexp
-}{
-	{"PHP.Webshell.EvalBase64", regexp.MustCompile(`(?i)eval\s*\(\s*(base64_decode|gzinflate|gzuncompress|str_rot13|convert_uudecode)\s*\(`)},
-	{"PHP.Webshell.PregReplaceE", regexp.MustCompile(`(?i)preg_replace\s*\(\s*['"][^'"]{0,200}/e['"]`)},
-	{"PHP.Webshell.AssertInput", regexp.MustCompile(`(?i)assert\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)`)},
-	{"PHP.Webshell.SystemInput", regexp.MustCompile(`(?i)(shell_exec|passthru|system|popen|proc_open)\s*\(\s*\$_(GET|POST|REQUEST|COOKIE|SERVER)`)},
-	{"PHP.Webshell.KnownMarker", regexp.MustCompile(`(?i)(c99shell|r57shell|b374k|wso[_ ]?shell|filesman|indoxploit|angelshell|priv8|mini\s*shell)`)},
-	{"PHP.Obf.CreateFunc", regexp.MustCompile(`(?i)create_function\s*\([^)]*base64_decode`)},
-	{"PHP.Obf.CharObfEval", regexp.MustCompile(`(?i)\$\{?['"]?\w+['"]?\}?\s*\(\s*\$\{?['"]?\w+['"]?\}?\s*\)\s*;.*base64`)},
-}
-
 type Finding struct {
 	// ID is what the quarantine endpoint takes. The path is deliberately not
 	// accepted from a caller, so the screen has to name the row instead.
-	ID         int64  `json:"id"`
-	File       string `json:"file"`
-	Signature  string `json:"signature"`
-	Engine     string `json:"engine"`
+	ID        int64  `json:"id"`
+	File      string `json:"file"`
+	Signature string `json:"signature"`
+	Engine    string `json:"engine"`
+	// Score is the weighed evidence and Level is the verdict it produced. A
+	// detector with a verdict of its own (ClamAV, the WordPress checksum check)
+	// leaves both empty and RecordScan fills in the critical end.
+	Score int    `json:"score"`
+	Level string `json:"level"`
+	// Rules names every heuristic that matched, where Signature names only the
+	// highest-scoring one. It is empty for a detector that has no rule set.
+	Rules      string `json:"rules"`
 	Quarantine int    `json:"quarantined"`
 }
 
@@ -160,6 +153,12 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 // The paths must already be absolute and under the tenant home: the quarantine
 // path refuses anything else, but a caller that records a bad path leaves a
 // finding nothing can act on.
+//
+// A caller that leaves Level empty is a detector with a verdict of its own
+// rather than a weighed one, so its finding is recorded at the critical end.
+// Defaulting the other way would silently demote every such finding to a level
+// the screen shows less prominently, which for a webshell is the wrong
+// direction to be wrong in.
 func RecordScan(db *sql.DB, domainID int64, engine string, scanned int, findings []Finding) (int64, error) {
 	result, err := db.Exec(
 		`INSERT INTO av_scans (domain_id, status, engine, scanned, infected, finished_at)
@@ -173,25 +172,40 @@ func RecordScan(db *sql.DB, domainID int64, engine string, scanned int, findings
 		return 0, err
 	}
 	for _, finding := range findings {
-		if _, err := db.Exec(
-			`INSERT INTO av_findings (scan_id, domain_id, file, signature, engine) VALUES (?,?,?,?,?)`,
-			scanID, domainID, finding.File, finding.Signature, finding.Engine); err != nil {
+		if err := insertFinding(db, scanID, domainID, finding); err != nil {
 			return scanID, err
 		}
 	}
 	return scanID, nil
 }
 
+// insertFinding is the one place a finding row is written, so the critical
+// default cannot be applied on one path and forgotten on the other.
+func insertFinding(db *sql.DB, scanID, domainID int64, finding Finding) error {
+	level, score := finding.Level, finding.Score
+	if level == "" {
+		level, score = LevelCritical, scoreCritical
+	}
+	_, err := db.Exec(
+		`INSERT INTO av_findings (scan_id, domain_id, file, signature, engine, score, level, rules)
+		 VALUES (?,?,?,?,?,?,?,?)`,
+		scanID, domainID, finding.File, finding.Signature, finding.Engine, score, level, finding.Rules)
+	return err
+}
+
 func (h *Handlers) findings(ctx context.Context, sid int64) []Finding {
 	out := []Finding{}
-	rows, err := h.DB.QueryContext(ctx, `SELECT id, file, signature, engine, quarantined FROM av_findings WHERE scan_id=? ORDER BY id`, sid)
+	rows, err := h.DB.QueryContext(ctx,
+		`SELECT id, file, signature, engine, score, level, COALESCE(rules,''), quarantined
+		   FROM av_findings WHERE scan_id=? ORDER BY score DESC, id`, sid)
 	if err != nil {
 		return out
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var b Finding
-		if err := rows.Scan(&b.ID, &b.File, &b.Signature, &b.Engine, &b.Quarantine); err == nil {
+		if err := rows.Scan(&b.ID, &b.File, &b.Signature, &b.Engine,
+			&b.Score, &b.Level, &b.Rules, &b.Quarantine); err == nil {
 			out = append(out, b)
 		}
 	}
@@ -237,8 +251,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		scanned, findings := runScan(ctx, root)
 		for _, f := range findings {
-			_, _ = h.DB.Exec(`INSERT INTO av_findings (scan_id, domain_id, file, signature, engine) VALUES (?,?,?,?,?)`,
-				sid, id, f.File, f.Signature, f.Engine)
+			_ = insertFinding(h.DB, sid, id, f)
 		}
 		// A scan that ran out of its budget covered part of the tree, so it is
 		// recorded as FAILED with the findings it did get. Calling it finished
@@ -322,7 +335,13 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 					signature := strings.TrimSuffix(line[i+2:], " FOUND")
 					if !seen["c|"+file] {
 						seen["c|"+file] = true
-						findings = append(findings, Finding{File: file, Signature: signature, Engine: "clamav"})
+						// ClamAV reached a verdict of its own rather than an
+						// evidence weight, so it is recorded at the critical end
+						// instead of being fed through the thresholds.
+						findings = append(findings, Finding{
+							File: file, Signature: signature, Engine: "clamav",
+							Score: scoreCritical, Level: LevelCritical,
+						})
 					}
 				}
 			}
@@ -362,15 +381,20 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 		if e != nil {
 			return nil
 		}
-		for _, hs := range heuristics {
-			if hs.re.Match(b) {
-				k := "h|" + p + "|" + hs.name
-				if !seen[k] {
-					seen[k] = true
-					findings = append(findings, Finding{File: p, Signature: hs.name, Engine: "heuristic"})
-				}
-			}
+		// One finding per FILE, not per matching rule. Three rows for one file
+		// used to mean bulk cleanup contained it on the first row and then
+		// reported "file missing" twice for the same file it had just
+		// quarantined, so a successful cleanup read as two failures.
+		score, signature, matched := evaluate(b)
+		level := levelFor(score)
+		if level == "" || seen["h|"+p] {
+			return nil
 		}
+		seen["h|"+p] = true
+		findings = append(findings, Finding{
+			File: p, Signature: signature, Engine: "heuristic",
+			Score: score, Level: level, Rules: strings.Join(matched, ", "),
+		})
 		return nil
 	})
 	return scanned, findings

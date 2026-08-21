@@ -33,7 +33,11 @@ func TestATimedOutScanIsRecordedAsFailed(t *testing.T) {
 func TestAPartialScanKeepsWhatItFound(t *testing.T) {
 	body := scanBody(t)
 
-	insert := strings.Index(body, "INSERT INTO av_findings")
+	// The write is a call rather than the SQL itself: every finding row goes
+	// through one function so the critical default cannot be applied on one
+	// path and forgotten on the other. The SQL is asserted separately below,
+	// or this test would pass against a helper that writes nothing.
+	insert := strings.Index(body, "insertFinding(h.DB, sid, id, f)")
 	status := strings.Index(body, `status := "finished"`)
 	switch {
 	case insert < 0:
@@ -42,6 +46,14 @@ func TestAPartialScanKeepsWhatItFound(t *testing.T) {
 		t.Fatal("the status check moved; this test has to follow it")
 	case insert > status:
 		t.Error("the findings are written after the status decision, so a cut-short scan may lose them")
+	}
+
+	source, err := os.ReadFile("antivirus.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "INSERT INTO av_findings") {
+		t.Error("insertFinding no longer writes a finding row")
 	}
 }
 
