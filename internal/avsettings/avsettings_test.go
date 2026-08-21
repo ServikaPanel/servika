@@ -2,6 +2,7 @@ package avsettings
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -95,8 +96,17 @@ func TestExclusionMatchesOnASeparatorAndNotOnAPrefix(t *testing.T) {
 		{"/var/lib/mysqldata/x.php", false},
 		{"/proc/1/cmdline", true},
 		{"/procedures/x.php", false},
+		// A relative entry matches a whole SEGMENT.
 		{"/home/c_a/public_html/node_modules/left-pad/index.js", true},
-		{"/home/c_a/public_html/wp-content/cache/x.php", true},
+		{"/home/c_a/public_html/my-node_modules/x.php", false},
+		{"/home/c_a/public_html/node_modules_old/x.php", false},
+		// An entry that starts with "/" is an absolute prefix even when it also
+		// ends with one, so it anchors at the root rather than matching a
+		// fragment at any depth. This entry is removed from the seeded list by
+		// migration 0109 and is kept here only to pin what it means when an
+		// operator types one like it.
+		{"/wp-content/cache/x.php", true},
+		{"/home/c_a/public_html/wp-content/cache/x.php", false},
 		{"/home/c_a/public_html/wp-content/uploads/x.php", false},
 		{"/home/c_a/public_html/index.php", false},
 	}
@@ -105,6 +115,88 @@ func TestExclusionMatchesOnASeparatorAndNotOnAPrefix(t *testing.T) {
 			t.Errorf("Excluded(%q) = %v, want %v", c.path, got, c.want)
 		}
 	}
+}
+
+// The escape this matcher was changed for, kept as its own test because it is
+// the finding rather than a property of the syntax.
+//
+// A substring test excluded any path CONTAINING a listed fragment, and the
+// panel seeded `node_modules/`. Measured before the fix: a webshell under
+// `wp-content/uploads/node_modules/` was excluded from the nightly sweep and
+// from the real-time watcher alike, so `mkdir node_modules` hid it completely
+// and nothing reported it, because an excluded file is not a file that was
+// inspected and cleared.
+//
+// Segment matching alone does not close this: a real `node_modules` segment is
+// still excluded wherever it sits. Migration 0109 removes the seeded entries,
+// and this test holds both halves together.
+func TestATenantCannotHideAFileByCreatingADirectory(t *testing.T) {
+	const planted = "/home/c_a/public_html/wp-content/uploads/node_modules/shell.php"
+
+	// What the panel seeds today, after migration 0109.
+	seeded := Settings{ExcludedPaths: "/proc\n/sys\n/dev\n/run\n/var/lib/mysql\n" +
+		"/var/lib/containers\n/var/cache\n/var/backups\n" +
+		"/var/lib/servika/quarantine\n/opt/servika"}
+	if seeded.Excluded(planted) {
+		t.Error("a webshell under a directory the tenant created is still excluded from the scan")
+	}
+	// The system paths the seed exists for still work.
+	for _, p := range []string{"/proc/1/cmdline", "/var/lib/mysql/ibdata1", "/opt/servika/bin/x"} {
+		if !seeded.Excluded(p) {
+			t.Errorf("%s is no longer excluded, so the scan reads it on every pass", p)
+		}
+	}
+	// And an operator who deliberately re-adds the entry gets what they asked
+	// for, at any depth. The fix is the seeded default, not a refusal.
+	if !(Settings{ExcludedPaths: "node_modules/"}).Excluded(planted) {
+		t.Error("an operator's own relative exclusion no longer applies at depth")
+	}
+}
+
+// The seeded list is the other half, and it is the half segment matching cannot
+// close: a real `node_modules` segment stays excluded wherever it sits, so the
+// entry itself has to go.
+//
+// 0106 cannot be edited, because the runner tracks an applied migration by
+// checksum and calls log.Fatalf on a mismatch, so 0109 removes them instead.
+// This reads both files and holds them together.
+func TestEveryRelativeEntryTheSeedAddsIsRemovedAgain(t *testing.T) {
+	seed := readMigration(t, "0106_av_settings.sql")
+	removal := readMigration(t, "0109_av_exclusions.sql")
+
+	// The seeded literal is one SQL string with escaped newlines in it.
+	start := strings.Index(seed, "INSERT INTO av_settings (id, excluded_paths) VALUES (1,")
+	if start < 0 {
+		t.Fatal("0106 no longer seeds the exclusion list; this test has to follow it")
+	}
+	open := strings.Index(seed[start:], "'")
+	rest := seed[start+open+1:]
+	literal := rest[:strings.Index(rest, "'")]
+
+	var relative []string
+	for _, entry := range strings.Split(literal, `\n`) {
+		if entry != "" && !strings.HasPrefix(entry, "/") {
+			relative = append(relative, entry)
+		}
+	}
+	if len(relative) == 0 {
+		t.Skip("the seed carries no relative entry, so there is nothing to remove")
+	}
+	for _, entry := range relative {
+		if !strings.Contains(removal, `'\n`+entry+`\n'`) {
+			t.Errorf("0106 seeds the relative entry %q and 0109 does not remove it, "+
+				"so a tenant hides a file by creating a directory of that name", entry)
+		}
+	}
+}
+
+func readMigration(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(b)
 }
 
 func TestTheExclusionListIgnoresBlankLines(t *testing.T) {

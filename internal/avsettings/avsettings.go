@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -268,10 +269,9 @@ func (s Settings) ExcludedList() []string {
 
 // Excluded reports whether a path is covered by the exclusion list.
 //
-// An entry starting with "/" is an absolute prefix and matches at a path
-// SEPARATOR only, so excluding /var never excludes /variable. Any other entry
-// is a fragment matched anywhere in the path, which is what makes "node_modules/"
-// and "/wp-content/cache/" work at any depth.
+// An entry starting with "/" is an absolute PREFIX and matches at a path
+// separator only, so excluding /var never excludes /variable. Any other entry
+// is a relative name matched against WHOLE path segments.
 func (s Settings) Excluded(path string) bool { return PathExcluded(s.ExcludedList(), path) }
 
 // PathExcluded is the same test against an explicit list.
@@ -279,17 +279,50 @@ func (s Settings) Excluded(path string) bool { return PathExcluded(s.ExcludedLis
 // The scan runs in a separate process that has no database connection, so it
 // receives the list in its request rather than reading the settings row. Both
 // sides call this one function, or the screen would describe an exclusion the
-// scanner does not apply.
+// scanner does not apply. The real-time watcher calls it too, so a hole here is
+// a hole in every detection path at once.
+//
+// A relative entry matches a whole SEGMENT and never a substring. The
+// substring form was an escape, not a convenience: measured against the list
+// this panel used to seed, `/home/c_x/public_html/wp-content/uploads/node_modules/shell.php`
+// was excluded, so a tenant who could write a directory anywhere under their
+// document root hid a webshell from the sweep AND from the watcher by running
+// `mkdir node_modules`. Nothing reported it, because an excluded file is not a
+// file that was inspected and cleared.
+//
+// Segment matching alone does not close that, which is why migration 0109 also
+// removes the relative entries this panel seeded: a real `node_modules` segment
+// is still excluded, wherever it sits. What segment matching closes is the
+// other half, where `notnode_modulesbar` matched a rule written for
+// `node_modules`.
 func PathExcluded(list []string, path string) bool {
+	path = filepath.ToSlash(path)
 	for _, e := range list {
-		if strings.HasPrefix(e, "/") && !strings.HasSuffix(e, "/") {
-			if path == e || strings.HasPrefix(path, e+"/") {
+		e = filepath.ToSlash(e)
+		if strings.HasPrefix(e, "/") {
+			// Trailing slashes are trimmed so "/var/cache" and "/var/cache/"
+			// mean the same thing. An operator types both.
+			prefix := strings.TrimRight(e, "/")
+			if prefix == "" {
+				// "/" alone would exclude the whole filesystem and is almost
+				// certainly a typo. Refusing it here rather than at the write
+				// path as well, because the list travels through a request file
+				// that outlives the code that wrote it.
+				continue
+			}
+			if path == prefix || strings.HasPrefix(path, prefix+"/") {
 				return true
 			}
 			continue
 		}
-		if strings.Contains(path, e) {
-			return true
+		segment := strings.Trim(e, "/")
+		if segment == "" {
+			continue
+		}
+		for part := range strings.SplitSeq(path, "/") {
+			if part == segment {
+				return true
+			}
 		}
 	}
 	return false

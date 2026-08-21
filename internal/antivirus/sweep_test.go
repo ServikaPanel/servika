@@ -71,10 +71,13 @@ func TestTheSweepAppliesTheExclusionListToTheWalk(t *testing.T) {
 			len(findings), findings)
 	}
 
-	req.Excluded = []string{"/cache/"}
+	// A relative entry names a whole SEGMENT at any depth, which is the form an
+	// operator writes for "this directory name anywhere". The leading-slash form
+	// is an absolute prefix and would not match a path under t.TempDir().
+	req.Excluded = []string{"cache"}
 	_, findings, _ = runScan(context.Background(), root, req)
 	if len(findings) != 1 {
-		t.Fatalf("with /cache/ excluded one webshell must remain, got %d: %v",
+		t.Fatalf("with cache excluded one webshell must remain, got %d: %v",
 			len(findings), findings)
 	}
 	if !strings.HasSuffix(findings[0].File, "found.php") {
@@ -103,7 +106,7 @@ func TestAnExcludedDirectoryIsNotDescendedInto(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(blocked, 0o600) })
 
 	req := DefaultRequest(root)
-	req.Excluded = []string{"/excluded/"}
+	req.Excluded = []string{"excluded"}
 	scanned, findings, complete := runScan(context.Background(), root, req)
 	if scanned != 0 {
 		t.Errorf("the walk descended into an excluded directory: %d files counted", scanned)
