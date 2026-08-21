@@ -72,6 +72,11 @@ type ScanRequest struct {
 	// per-domain scan, whose root is one tenant tree, and carries the operator's
 	// list for a server-wide sweep.
 	Excluded []string `json:"excluded"`
+	// AutoQuarantine is read by the PANEL after the worker returns, never by the
+	// worker. It travels here only so both scan paths read the settings once,
+	// and it is deliberately not serialised: a worker that could act on it would
+	// be a worker that moves a customer's files.
+	AutoQuarantine bool `json:"-"`
 }
 
 // DefaultRequest is the scan every caller wants unless an operator has said

@@ -54,6 +54,7 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 		LocationHeuristics: settings.LocationHeuristics,
 		CriticalThreshold:  settings.CriticalThreshold,
 		Excluded:           settings.ExcludedList(),
+		AutoQuarantine:     settings.AutoQuarantine,
 	}
 	if !req.RuleEngine && !req.LocationHeuristics {
 		httpx.WriteError(w, http.StatusConflict,
@@ -97,6 +98,9 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 				log.Printf("antivirus: sweep %d could not record a finding: %v", sid, err)
 			}
 		}
+		if req.AutoQuarantine {
+			recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))
+		}
 		status := "finished"
 		if err != nil || result.Partial || ctx.Err() != nil {
 			status = "failed"
@@ -116,12 +120,14 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 	sid, _ := strconv.ParseInt(chi.URLParam(r, "sid"), 10, 64)
 	var status, scope, engine, startedAt string
 	var finishedAt sql.NullString
-	var scanned, infected int
+	var scanned, infected, autoTaken, autoFailed int
 	var confined bool
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT status, scope, engine, scanned, infected, confined, started_at, finished_at
+		`SELECT status, scope, engine, scanned, infected, confined,
+		        auto_quarantined, auto_quarantine_failed, started_at, finished_at
 		   FROM av_scans WHERE id=? AND domain_id IS NULL`, sid).
-		Scan(&status, &scope, &engine, &scanned, &infected, &confined, &startedAt, &finishedAt); err != nil {
+		Scan(&status, &scope, &engine, &scanned, &infected, &confined,
+			&autoTaken, &autoFailed, &startedAt, &finishedAt); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "sweep not found")
 		return
 	}
@@ -129,6 +135,7 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 		"id": sid, "status": status, "scope": scope, "engine": engine,
 		"scanned": scanned, "infected": infected, "confined": confined,
 		"started_at": startedAt, "finished_at": finishedAt.String,
+		"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
 		"findings": h.sweepFindings(r.Context(), sid),
 	})
 }
@@ -138,7 +145,8 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT id, status, scope, engine, scanned, infected, confined, started_at, finished_at
+		`SELECT id, status, scope, engine, scanned, infected, confined,
+		        auto_quarantined, auto_quarantine_failed, started_at, finished_at
 		   FROM av_scans WHERE domain_id IS NULL ORDER BY id DESC LIMIT 50`)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "the sweeps could not be listed")
@@ -149,15 +157,16 @@ func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 		var id int64
 		var status, scope, engine, startedAt string
 		var finishedAt sql.NullString
-		var scanned, infected int
+		var scanned, infected, autoTaken, autoFailed int
 		var confined bool
 		if err := rows.Scan(&id, &status, &scope, &engine, &scanned, &infected,
-			&confined, &startedAt, &finishedAt); err != nil {
+			&confined, &autoTaken, &autoFailed, &startedAt, &finishedAt); err != nil {
 			continue
 		}
 		out = append(out, map[string]any{
 			"id": id, "status": status, "scope": scope, "engine": engine,
 			"scanned": scanned, "infected": infected, "confined": confined,
+			"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
 			"started_at": startedAt, "finished_at": finishedAt.String,
 		})
 	}

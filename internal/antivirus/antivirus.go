@@ -210,6 +210,7 @@ func scanRequest(ctx context.Context, db *sql.DB, roots ...string) (ScanRequest,
 		RuleEngine:         settings.RuleEngine,
 		LocationHeuristics: settings.LocationHeuristics,
 		CriticalThreshold:  settings.CriticalThreshold,
+		AutoQuarantine:     settings.AutoQuarantine,
 	}, nil
 }
 
@@ -313,6 +314,12 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		// screen can give. A scan that could not be placed in the resource slice
 		// at all is failed for the same reason: it produced nothing, and an
 		// empty finding list is exactly what a clean site looks like.
+		// Containment runs BEFORE the status is written, so a screen that sees
+		// a finished scan sees the containment that went with it rather than a
+		// list of findings that are about to move under it.
+		if req.AutoQuarantine {
+			recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))
+		}
 		status := "finished"
 		if err != nil || result.Partial || ctx.Err() != nil {
 			status = "failed"
@@ -333,11 +340,14 @@ func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
 	sid, _ := strconv.ParseInt(chi.URLParam(r, "sid"), 10, 64)
 	var status, engine, startedAt string
 	var finishedAt sql.NullString
-	var scanned, infected int
+	var scanned, infected, autoTaken, autoFailed int
 	var confined bool
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT status, engine, scanned, infected, confined, started_at, finished_at FROM av_scans WHERE id=? AND domain_id=?`, sid, id).
-		Scan(&status, &engine, &scanned, &infected, &confined, &startedAt, &finishedAt); err != nil {
+		`SELECT status, engine, scanned, infected, confined, auto_quarantined, auto_quarantine_failed,
+		        started_at, finished_at
+		   FROM av_scans WHERE id=? AND domain_id=?`, sid, id).
+		Scan(&status, &engine, &scanned, &infected, &confined, &autoTaken, &autoFailed,
+			&startedAt, &finishedAt); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "scan not found")
 		return
 	}
@@ -349,7 +359,12 @@ func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
 		// because a host with no systemd runs the scan unlimited and nothing
 		// else on this screen would say so.
 		"confined": confined,
-		"findings": h.findings(r.Context(), sid),
+		// Both halves of an automatic containment. A run that left files behind
+		// is not a finished cleanup, and reporting only the successes hides the
+		// one case that matters.
+		"auto_quarantined":       autoTaken,
+		"auto_quarantine_failed": autoFailed,
+		"findings":               h.findings(r.Context(), sid),
 	})
 }
 
