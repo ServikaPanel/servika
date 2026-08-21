@@ -228,6 +228,59 @@ else
   ok "firewalld is not installed (Servika nftables is the single firewall)"
 fi
 
+# ============ 2d) Journal persistence ============
+# AlmaLinux ships journald with Storage=auto and NO /var/log/journal, so the
+# journal lives only in /run and every reboot erases it. Step 2b above asks the
+# operator for exactly one reboot, and `servika-verify` reads the last 24 hours
+# of that journal to report panel crashes: on a volatile journal that check
+# silently narrows to "since boot" and reports a crash-and-reboot as clean.
+#
+# The setting goes in a drop-in rather than an edit of journald.conf, because
+# AlmaLinux 10 ships /etc/systemd/journald.conf as an RPM %ghost (declared by
+# the package, absent from disk) and the vendor default under /usr/lib
+# recommends journald.conf.d itself. Drop-ins apply in lexical order and the
+# last assignment wins, so the numeric prefix leaves an operator a higher
+# number to override this with.
+step "2d) Journal persistence"
+JOURNAL_DROPIN=/etc/systemd/journald.conf.d/10-servika.conf
+JOURNAL_WANT='[Journal]
+Storage=persistent
+SystemMaxUse=500M'
+JOURNAL_CHANGED=0
+mkdir -p /var/log/journal /etc/systemd/journald.conf.d 2>/dev/null \
+  || warn "the journal directories could not be created"
+if [ "$(cat "$JOURNAL_DROPIN" 2>/dev/null || true)" != "$JOURNAL_WANT" ]; then
+  if printf '%s\n' "$JOURNAL_WANT" > "$JOURNAL_DROPIN" 2>/dev/null; then
+    chmod 644 "$JOURNAL_DROPIN" 2>/dev/null || true
+    JOURNAL_CHANGED=1
+  else
+    warn "the journald drop-in $JOURNAL_DROPIN could not be written"
+  fi
+fi
+# `mkdir -p` leaves the directory 0755 root:root. The shipped tmpfiles rule
+# (`z /var/log/journal 2755 root systemd-journal`) sets the setgid bit and the
+# group that lets systemd-journal members read the journal.
+systemd-tmpfiles --create --prefix /var/log/journal >/dev/null 2>&1 \
+  || warn "systemd-tmpfiles could not apply the journal directory permissions"
+JOURNAL_STORED=$(find /var/log/journal -maxdepth 2 -type f -name '*.journal' -print -quit 2>/dev/null || true)
+if [ "$JOURNAL_CHANGED" = 1 ] || [ -z "$JOURNAL_STORED" ]; then
+  systemctl restart systemd-journald >/dev/null 2>&1 \
+    || warn "systemd-journald could not be restarted"
+  # The restart alone leaves the persistent store EMPTY: journald keeps writing
+  # to /run until it is told to move. Measured on AlmaLinux 10, only this flush
+  # created /var/log/journal/<machine-id>/system.journal, carrying the 2170
+  # entries this installation had produced so far.
+  journalctl --flush >/dev/null 2>&1 || warn "the journal could not be flushed to disk"
+  JOURNAL_STORED=$(find /var/log/journal -maxdepth 2 -type f -name '*.journal' -print -quit 2>/dev/null || true)
+fi
+# Report a FILE on disk, never the directory: the sequence above without the
+# flush produces exactly the directory-exists-but-nothing-in-it state.
+if [ -n "$JOURNAL_STORED" ]; then
+  ok "journal is persistent (/var/log/journal, capped at 500M)"
+else
+  warn "the journal is still volatile; a reboot will erase the panel's crash history"
+fi
+
 # ============ 3) PHP (8 versions + base + wp-cli) ============
 step "3) PHP versions (8 Remi + base) + wp-cli"
 # Disable dnf automatic timers before batch install to prevent lock contention.
