@@ -93,7 +93,17 @@ func (h *Handlers) IonCubeInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = member.Close() }()
 
-	// 5. Copy the loader into extension_dir, from the descriptor that was
+	// 5. Prove the member is an object this interpreter can load, BEFORE it is
+	// copied into extension_dir and named in a zend_extension line. The
+	// publisher gives no checksum and no signature, so this is what establishes
+	// that the file is even an object, and it is also the only way to notice a
+	// wrong architecture: the two published archives use identical member names.
+	if err := verifyLoaderELF(member); err != nil {
+		httpx.WriteError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	// 6. Copy the loader into extension_dir, from the descriptor that was
 	// checked rather than from the path, so nothing can be swapped in between.
 	soDst := filepath.Join(extDir, "ioncube_loader_lin_"+req.Version+".so")
 	if err := copyFromMember(member, soDst); err != nil {
@@ -103,7 +113,7 @@ func (h *Handlers) IonCubeInstall(w http.ResponseWriter, r *http.Request) {
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 	_ = os.Chmod(soDst, 0644)
 
-	// 6. Write an .ini file that loads the extension before OPcache through the 00 prefix.
+	// 7. Write an .ini file that loads the extension before OPcache through the 00 prefix.
 	iniPath := filepath.Join(s.IniDir, "00-ioncube.ini")
 	iniContent := "; IonCube Loader must load before OPcache\nzend_extension = " + soDst + "\n"
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
@@ -112,7 +122,7 @@ func (h *Handlers) IonCubeInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 7. Reload PHP-FPM.
+	// 8. Reload PHP-FPM.
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 	if _, err := exec.CommandContext(ctx, "systemctl", "reload-or-restart", s.Service).CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError,
@@ -120,7 +130,7 @@ func (h *Handlers) IonCubeInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 8. Verify that php -m reports IonCube.
+	// 9. Verify that php -m reports IonCube.
 	verifyCtx, vc := context.WithTimeout(r.Context(), 5*time.Second)
 	defer vc()
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.

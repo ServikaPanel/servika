@@ -21,10 +21,12 @@ package phpext
 // this way.
 
 import (
+	"debug/elf"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"syscall"
 )
 
@@ -56,6 +58,66 @@ func openArchiveMember(path string) (*os.File, error) {
 		return nil, errors.New("the archive member is not a plain file")
 	}
 	return handle, nil
+}
+
+// loaderMachine is the ELF machine this server can actually load.
+//
+// The two published archives use IDENTICAL member names and differ only in the
+// ELF machine (measured: both carry ioncube/ioncube_loader_lin_8.3.so), so the
+// path cannot tell them apart and reading the header is the only thing that can.
+func loaderMachine() (elf.Machine, bool) {
+	switch runtime.GOARCH {
+	case "amd64":
+		return elf.EM_X86_64, true
+	case "arm64":
+		return elf.EM_AARCH64, true
+	default:
+		return 0, false
+	}
+}
+
+// verifyLoaderELF requires the member to be a 64-bit ELF shared object built for
+// this server's architecture, before it is copied into extension_dir and named
+// in a zend_extension line.
+//
+// This is the second half of making the artefact prove what it is. The publisher
+// gives no checksum and no signature, so nothing else establishes that the file
+// about to be loaded into every PHP process on the server is even an object.
+//
+// It also catches the wrong architecture, which until now produced no error at
+// all. Measured with a real aarch64 loader on an amd64 PHP 8.3: the interpreter
+// prints "Failed loading ..." on stderr and CONTINUES, exit 0. So the install
+// reported success, the endpoint answered 201, and every PHP invocation on that
+// version wrote a load failure from then on into the tenant's own FPM error log.
+//
+// The file offset is restored, because the caller copies from this same
+// descriptor.
+func verifyLoaderELF(handle *os.File) error {
+	want, ok := loaderMachine()
+	if !ok {
+		return fmt.Errorf("IonCube Loader is not supported on %s", runtime.GOARCH)
+	}
+	defer func() { _, _ = handle.Seek(0, io.SeekStart) }()
+
+	// elf.NewFile reads through ReaderAt, so it does not disturb the offset
+	// itself; the seek above covers a caller that read before calling.
+	file, err := elf.NewFile(handle)
+	if err != nil {
+		return errors.New("the downloaded IonCube Loader is not an ELF object")
+	}
+	defer func() { _ = file.Close() }()
+
+	if file.Class != elf.ELFCLASS64 {
+		return errors.New("the downloaded IonCube Loader is not a 64-bit object")
+	}
+	if file.Type != elf.ET_DYN {
+		return errors.New("the downloaded IonCube Loader is not a shared object")
+	}
+	if file.Machine != want {
+		return fmt.Errorf("the downloaded IonCube Loader is built for %s, not for %s",
+			file.Machine, want)
+	}
+	return nil
 }
 
 // copyFromMember writes an already-opened, already-checked member to its
