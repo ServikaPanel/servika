@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -134,8 +135,17 @@ const (
 	// runs an authoritative BIND for the domains it hosts, so /etc/resolv.conf
 	// pointing at it would answer from the local zone and hide the mismatch the
 	// screen exists to find.
-	DefaultDNSVerifyResolver  = "1.1.1.1:53"
-	DefaultIonCubeURL         = "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz"
+	DefaultDNSVerifyResolver = "1.1.1.1:53"
+	// The IonCube loader is published per architecture, and the two archives
+	// carry IDENTICAL member names (measured: both hold
+	// ioncube/ioncube_loader_lin_8.3.so), so nothing downstream can notice that
+	// the wrong one was fetched. The panel ships arm64 builds, and on such a
+	// server the x86-64 URL installed an object PHP could not load: measured,
+	// the interpreter prints "Failed loading ..." on stderr and CONTINUES, exit
+	// 0, so the install reported success and every later PHP invocation wrote a
+	// load failure into the tenant's own FPM error log.
+	DefaultIonCubeURLAMD64    = "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz"
+	DefaultIonCubeURLARM64    = "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_aarch64.tar.gz"
 	DefaultUpdateBootstrapURL = "https://raw.githubusercontent.com/ServikaPanel/servika/main/assets/ops/servika-update"
 	DefaultVersionEndpoint    = "https://raw.githubusercontent.com/ServikaPanel/servika/main/version.json"
 )
@@ -336,8 +346,30 @@ func DNSVerifyResolver() string {
 	return value
 }
 
-func GitHubAPI() string  { return mustURL("SERVIKA_GITHUB_API", DefaultGitHubAPI) }
-func IonCubeURL() string { return mustURL("SERVIKA_IONCUBE_URL", DefaultIonCubeURL) }
+func GitHubAPI() string { return mustURL("SERVIKA_GITHUB_API", DefaultGitHubAPI) }
+
+// DefaultIonCubeURLForArch answers the published archive for the architecture
+// this binary was built for, which on a Servika server is the host's: the
+// installer picks the release bundle by uname -m.
+//
+// An unknown architecture keeps the amd64 address rather than answering empty,
+// because an empty URL would fail EnvURL and stop the panel from starting over a
+// feature nobody on that platform can use. The ELF check in internal/phpext
+// refuses the download there, which is the right place for that refusal.
+func DefaultIonCubeURLForArch() string { return ionCubeURLForArch(runtime.GOARCH) }
+
+// ionCubeURLForArch takes the architecture as an argument so both answers can be
+// measured on one machine. A test that could only ever exercise the platform it
+// runs on would leave the other half of the mapping unproven, which is the half
+// that was wrong.
+func ionCubeURLForArch(goarch string) string {
+	if goarch == "arm64" {
+		return DefaultIonCubeURLARM64
+	}
+	return DefaultIonCubeURLAMD64
+}
+
+func IonCubeURL() string { return mustURL("SERVIKA_IONCUBE_URL", DefaultIonCubeURLForArch()) }
 func UpdateBootstrapURL() string {
 	return mustURL("SERVIKA_UPDATE_BOOTSTRAP_URL", DefaultUpdateBootstrapURL)
 }
@@ -406,7 +438,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_NGINX_UPGRADE_MAP_CONF", DefaultNginxUpgradeMapConf, false},
 		{"SERVIKA_OPSBIN", "/usr/local/bin", false},
 		{"SERVIKA_GITHUB_API", DefaultGitHubAPI, true},
-		{"SERVIKA_IONCUBE_URL", DefaultIonCubeURL, true},
+		{"SERVIKA_IONCUBE_URL", DefaultIonCubeURLForArch(), true},
 		{"SERVIKA_UPDATE_BOOTSTRAP_URL", DefaultUpdateBootstrapURL, true},
 		{"SERVIKA_VERSION_ENDPOINT", DefaultVersionEndpoint, true},
 	}
