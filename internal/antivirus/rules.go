@@ -200,9 +200,10 @@ type match struct {
 	score int
 }
 
-// evaluate weighs one file's content against the rule set.
+// evaluate weighs one file's content against the rule set and the signals that
+// are not patterns.
 func evaluate(ext string, content []byte) []match {
-	return evaluateWith(heuristics, ext, content)
+	return append(evaluateWith(heuristics, ext, content), entropyMatches(ext, content)...)
 }
 
 // evaluateWith is the same weighing against an explicit set, so a test can
