@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/wpchecksums"
 )
 
 // reSlug strictly validates plugin and theme slugs to prevent argument injection, including leading hyphens.
@@ -331,6 +332,23 @@ func (h *Handlers) Repair(w http.ResponseWriter, r *http.Request) {
 	dlArgs := []string{"core", "download", "--force", "--skip-content", "--path=" + dir}
 	if version != "" {
 		dlArgs = append(dlArgs, "--version="+version)
+	}
+	// A repair must put back the core the site was RUNNING, and `wp core
+	// download` defaults to en_US whatever is installed. Measured on a real
+	// Turkish WordPress 7.1: the command announces "Downloading WordPress 7.1
+	// (en_US)" and wp-includes/version.php loses its $wp_local_package line, md5
+	// 45ddd1e0... becoming c77f737c.... Only that one core file differs between
+	// the two packages (wp-content/languages is preserved by --skip-content), but
+	// WordPress reads that global to decide which package it updates from
+	// afterwards, so the site drifts to the English core for good.
+	//
+	// The locale is read from version.php beneath the home rather than from the
+	// command, so a symlink planted where that file belongs cannot choose it. An
+	// unreadable locale leaves the argument off, which is exactly today's
+	// behaviour: losing a working repair over a line nothing else depends on
+	// would be the worse failure.
+	if details, err := wpchecksums.ReadDetails("/home/"+systemUser, relativeToHome(systemUser, dir)); err == nil && details.Locale != "" {
+		dlArgs = append(dlArgs, "--locale="+details.Locale)
 	}
 	// Reinstall core while preserving content, plugins, and themes, then update the database.
 	_, dlErr := runWPTimeout(wpNetworkTimeout, systemUser, dlArgs...)

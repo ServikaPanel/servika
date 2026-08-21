@@ -120,6 +120,16 @@ const (
 	StateNotMeasured = "not-measured"
 )
 
+// relativeToHome turns the absolute installation directory into the path
+// beneath the tenant home that safeio needs.
+//
+// prepareMutation has already confined dir to the home, so this is a rewrite
+// rather than a check. A dir that is the home itself yields the empty string,
+// which openat2 reads as the home directory.
+func relativeToHome(systemUser, dir string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(dir, "/home/"+systemUser), "/")
+}
+
 // checksumState turns a check's result into the state the screen renders.
 func checksumState(verdicts []verdict, measured bool) string {
 	switch {
@@ -163,7 +173,7 @@ func commandMeasured(runErr error, verdicts []verdict) bool {
 // internal/wpchecksums keeps for exactly this moment.
 func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, output string, measured bool) {
 	home := "/home/" + systemUser
-	relDir := strings.TrimPrefix(strings.TrimPrefix(dir, home), "/")
+	relDir := relativeToHome(systemUser, dir)
 
 	// The table is fetched BEFORE the command runs, while the network is by
 	// definition working. Warming it only on the fallback path would fetch at the

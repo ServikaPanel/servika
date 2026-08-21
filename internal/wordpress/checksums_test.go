@@ -205,6 +205,22 @@ func TestTheRepairStatesKeepNotMeasuredSeparate(t *testing.T) {
 	}
 }
 
+// The installation directory reaches safeio as a path beneath the home, so the
+// rewrite has to hold for the shapes prepareMutation produces.
+func TestTheInstallationPathIsRewrittenRelativeToTheHome(t *testing.T) {
+	cases := map[string]string{
+		"/home/c_site/public_html":          "public_html",
+		"/home/c_site/public_html/blog":     "public_html/blog",
+		"/home/c_site":                      "",
+		"/home/c_site/domains/x.com/htdocs": "domains/x.com/htdocs",
+	}
+	for dir, want := range cases {
+		if got := relativeToHome("c_site", dir); got != want {
+			t.Errorf("relativeToHome(c_site, %q) = %q, want %q", dir, got, want)
+		}
+	}
+}
+
 // The three verdicts are distinct actions, so the signatures must stay distinct
 // and stable: the screen groups by them and only the extra-file one is
 // quarantined.
