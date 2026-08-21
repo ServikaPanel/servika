@@ -551,7 +551,7 @@ fi
 # so a healthy server stays silent and a repaired one says what it repaired. A
 # rollback does not undo any of this, and must not: permissions and SELinux
 # labels belong to the host, never to the release being rolled back.
-REPAIR_SECTIONS="htpasswd,backups,clamav,frontend,signon"
+REPAIR_SECTIONS="htpasswd,backups,journal,clamav,frontend,signon"
 if [ -f /etc/postfix/mysql-virtual-domains.cf ]; then
   REPAIR_SECTIONS="$REPAIR_SECTIONS,mail"
 fi

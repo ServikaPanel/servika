@@ -4,7 +4,7 @@
 #
 # Usage:
 #   servika-repair [--dry-run] [--deep] [--only <sections>] [--quiet]
-#   sections: phpmyadmin,domains,htpasswd,binary,backups,clamav,frontend,signon,firewall,mail (default: all)
+#   sections: phpmyadmin,domains,htpasswd,binary,backups,journal,clamav,frontend,signon,firewall,mail (default: all)
 #   --dry-run : Show proposed repairs without applying changes
 #   --deep    : Recursively repair ownership in domain homes, which can be slow
 #
@@ -65,7 +65,7 @@ if [ "${1:-}" = "restore" ]; then
   echo "servika-restore not found (core content repair tool is not installed)" >&2; exit 127
 fi
 
-DRY=0; DEEP=0; QUIET=0; ONLY="phpmyadmin,domains,htpasswd,binary,backups,clamav,frontend,signon,firewall,mail"
+DRY=0; DEEP=0; QUIET=0; ONLY="phpmyadmin,domains,htpasswd,binary,backups,journal,clamav,frontend,signon,firewall,mail"
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
@@ -310,6 +310,65 @@ sec_backups() {
   ensure_dir "${SERVIKA_BACKUP_ROOT:-/var/backups/servika}" 700 root:root
 }
 
+# AlmaLinux ships journald with Storage=auto and no /var/log/journal, so the
+# journal lives only in /run and every reboot erases it. servika-verify reads
+# the last 24 hours of it to report panel crashes: on a volatile journal that
+# window silently narrows to the current boot, so a crash that caused a reboot
+# is reported as no crashes at all. Nothing in the running panel repairs this,
+# so an existing server receives it only here, which is why servika-update and
+# servika-restore name this section.
+sec_journal() {
+  want journal || return 0
+  head_ "Journal persistence"
+  local D=/var/log/journal
+  local DROPIN=/etc/systemd/journald.conf.d/10-servika.conf
+  local changed=0
+  # Resolve the group before the directory is claimed for it: ensure_owner
+  # swallows a failed chown, so an unresolvable group would leave the directory
+  # reported as repaired while it still belonged to root:root.
+  if ! getent group systemd-journal >/dev/null 2>&1; then
+    warn "the systemd-journal group does not exist, skipping"
+    return 0
+  fi
+  ensure_dir "$D" 2755 root:systemd-journal
+  local want_cfg='[Journal]
+Storage=persistent
+SystemMaxUse=500M'
+  if [ "$(cat "$DROPIN" 2>/dev/null || true)" != "$want_cfg" ]; then
+    act "write $DROPIN (Storage=persistent, SystemMaxUse=500M)"
+    changed=1
+    if [ $DRY -eq 0 ]; then
+      mkdir -p "$(dirname "$DROPIN")" 2>/dev/null || true
+      printf '%s\n' "$want_cfg" > "$DROPIN" 2>/dev/null || err "$DROPIN could not be written"
+      chmod 644 "$DROPIN" 2>/dev/null || true
+    fi
+  else
+    ok "journald drop-in $DROPIN"
+  fi
+  # journald keeps writing to /run until it is told to move, so restarting it is
+  # not enough on its own and the flush is what fills the persistent store.
+  # Both run only when something actually changed or nothing has reached the
+  # disk yet, or every update would restart journald for nothing.
+  local stored
+  stored=$(find "$D" -maxdepth 2 -type f -name '*.journal' -print -quit 2>/dev/null || true)
+  if [ $DRY -eq 0 ] && { [ "$changed" -eq 1 ] || [ -z "$stored" ]; }; then
+    act "restart systemd-journald and flush the journal to $D"
+    systemctl restart systemd-journald >/dev/null 2>&1 || err "systemd-journald could not be restarted"
+    journalctl --flush >/dev/null 2>&1 || err "the journal could not be flushed to disk"
+    stored=$(find "$D" -maxdepth 2 -type f -name '*.journal' -print -quit 2>/dev/null || true)
+  fi
+  # Assert on a FILE, never on the directory: the whole sequence without the
+  # flush produces exactly the directory-exists-but-nothing-in-it state. In a
+  # dry run nothing was applied, so nothing is asserted.
+  if [ $DRY -eq 0 ]; then
+    if [ -n "$stored" ]; then
+      ok "the journal is stored on disk ($D)"
+    else
+      warn "the journal is still volatile; a reboot will erase the panel's crash history"
+    fi
+  fi
+}
+
 sec_clamav() {
   want clamav || return 0
   head_ "ClamAV signature database"
@@ -453,6 +512,7 @@ sec_domains
 sec_htpasswd
 sec_binary
 sec_backups
+sec_journal
 sec_clamav
 sec_frontend
 sec_signon

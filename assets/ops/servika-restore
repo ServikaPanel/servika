@@ -431,7 +431,7 @@ fi
 #
 # There is no shared library between these tools, so each carries its own copy,
 # the same way each carries its own PATH block and health-URL derivation.
-REPAIR_SECTIONS="htpasswd,backups,clamav,frontend,signon"
+REPAIR_SECTIONS="htpasswd,backups,journal,clamav,frontend,signon"
 if [ -f /etc/postfix/mysql-virtual-domains.cf ]; then
   REPAIR_SECTIONS="$REPAIR_SECTIONS,mail"
 fi
