@@ -20,6 +20,7 @@ package antivirus
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -118,10 +119,21 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 		log.Printf("antivirus: sweep %d could not run: %v", sid, err)
 	}
 	owners := newOwnerLookup(db)
+	// Counted while the findings are recorded, so the alert below is written from
+	// what actually reached the database rather than from what the scan returned.
+	perDomain := map[int64]int{}
+	unowned := 0
 	for _, f := range result.Findings {
-		if err := insertSweepFinding(db, sid, owners.forPath(f.File), f); err != nil {
+		owner := owners.forPath(f.File)
+		if err := insertSweepFinding(db, sid, owner, f); err != nil {
 			// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
 			log.Printf("antivirus: sweep %d could not record a finding: %v", sid, err)
+			continue
+		}
+		if owner.Valid {
+			perDomain[owner.Int64]++
+		} else {
+			unowned++
 		}
 	}
 	// Containment runs BEFORE the status is written, so a screen that sees a
@@ -139,6 +151,10 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 		// #nosec G706 -- sid is an integer and err is a MariaDB driver error for a statement whose arguments are all parameterized; no tenant string reaches it.
 		log.Printf("antivirus: sweep %d could not be closed: %v", sid, err)
 	}
+	// Last, so a screen that follows the alert to the scan finds it finished. A
+	// partial sweep still alerts: the files it did find are infected whether or
+	// not the rest of the tree was reached.
+	notifySweep(ctx, db, sid, perDomain, unowned)
 }
 
 // SweepStatus reports one sweep. GET /admin/antivirus/sweep/{sid}.
@@ -283,8 +299,20 @@ func (o *ownerLookup) forPath(path string) sql.NullInt64 {
 	err := o.db.QueryRow(
 		`SELECT id FROM domains WHERE system_user=? AND parent_domain_id IS NULL LIMIT 1`, user).
 		Scan(&found)
-	if err == nil {
+	switch {
+	case err == nil:
 		id = sql.NullInt64{Int64: found, Valid: true}
+	case errors.Is(err, sql.ErrNoRows):
+		// A genuine answer: no domain answers to that user. Caching it is the
+		// point of the cache.
+	default:
+		// Anything else is the database being unwell, and caching it would
+		// attribute every later finding under this tenant to nobody for the rest
+		// of the sweep. The alert then names no domain and reaches no customer,
+		// which reads as a site that is clean.
+		// #nosec G706 -- the logged value is a database error for a statement whose one argument is parameterized; no tenant string reaches it.
+		log.Printf("antivirus: the owner of a finding could not be resolved: %v", err)
+		return sql.NullInt64{}
 	}
 	o.cache[user] = id
 	return id

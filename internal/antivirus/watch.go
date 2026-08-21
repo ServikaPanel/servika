@@ -284,8 +284,13 @@ func (w *watcher) record(ctx context.Context, settings avsettings.Settings, find
 	log.Printf("antivirus watcher: %s %s (score %d) %s",
 		finding.Level, finding.Signature, finding.Score, finding.File)
 
+	contained := false
 	if settings.AutoQuarantine {
 		out := (&Handlers{DB: w.db}).autoQuarantine(ctx, sid)
 		recordAutoQuarantine(w.db, sid, out)
+		contained = out.Taken > 0
 	}
+	// The alert says whether the file was taken away, because "we found it" and
+	// "we found it and it is gone" ask different things of the reader.
+	notifyRealtime(ctx, w.db, sid, domainID, contained)
 }

@@ -165,7 +165,11 @@ func TestTheSweepRecordsNoDomainForItselfAndOnePerFinding(t *testing.T) {
 		!strings.Contains(source, "VALUES (NULL,") {
 		t.Error("the sweep no longer records itself with a NULL domain and a scope")
 	}
-	if !strings.Contains(source, "insertSweepFinding(db, sid, owners.forPath(f.File), f)") {
+	// The owner is resolved per finding and that resolution is what is recorded.
+	// A single domain id for the whole sweep would attribute every finding on the
+	// server to one tenant.
+	if !strings.Contains(source, "owner := owners.forPath(f.File)") ||
+		!strings.Contains(source, "insertSweepFinding(db, sid, owner, f)") {
 		t.Error("the sweep no longer resolves a domain per finding")
 	}
 	if !strings.Contains(source, "domain_id IS NULL") {
