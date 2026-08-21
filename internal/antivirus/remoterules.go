@@ -254,6 +254,21 @@ func adoptPackage(raw []byte, now time.Time) (int, error) {
 	return header.Version, nil
 }
 
+// CheckRulePackageBody reports how many rules of a candidate package body this
+// scanner would actually use, and refuses a body it could use nothing from.
+//
+// It exists for the offline signing tool. A package whose rules are all dropped
+// verifies perfectly and detects nothing, and the only moment that can be caught
+// is before it is signed: afterwards it is a valid package that quietly does
+// nothing, on every server that adopts it.
+func CheckRulePackageBody(body []byte) (int, error) {
+	rules, err := compilePackagedSet(body)
+	if err != nil {
+		return 0, err
+	}
+	return len(rules), nil
+}
+
 // compilePackagedSet turns a verified body into rules.
 //
 // A rule that does not compile is DROPPED and the rest of the set is kept: one
