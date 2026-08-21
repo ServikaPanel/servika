@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -205,12 +206,18 @@ func scanRequest(ctx context.Context, db *sql.DB, roots ...string) (ScanRequest,
 	if err != nil {
 		return ScanRequest{}, err
 	}
+	// The throughput settings go through Resolve, the same function the slice
+	// file is written from, so "0 means automatic" cannot mean one thing on the
+	// screen and another in the scan.
+	effective := settings.Resolve(avsettings.ServerCapacity())
 	return ScanRequest{
 		Roots:              roots,
 		RuleEngine:         settings.RuleEngine,
 		LocationHeuristics: settings.LocationHeuristics,
 		CriticalThreshold:  settings.CriticalThreshold,
 		AutoQuarantine:     settings.AutoQuarantine,
+		Workers:            effective.ScanWorkers,
+		FileRatePerSec:     effective.FileRatePerSec,
 	}, nil
 }
 
@@ -435,6 +442,87 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 	}
 
 	// 2) Heuristic scan of the file kinds a site executes or serves
+	//
+	// The WALK stays single-threaded and keeps everything that has to be
+	// deterministic: which files are counted, when the cap fires, and the order
+	// findings come back in. A walk is readdir plus a stat, so it is not what
+	// costs. What the pool parallelises is the part that does, reading the file
+	// and running the rules over it.
+	type job struct {
+		index   int
+		path    string
+		ext     string
+		limit   int64
+		matches []match
+	}
+	type produced struct {
+		index   int
+		finding Finding
+	}
+	workers := max(req.Workers, 1)
+	jobs := make(chan job, workers*4)
+
+	// The rate ceiling is ONE shared ticker. Every worker takes a tick before
+	// it opens a file, so N workers inspect at most FileRatePerSec files a
+	// second between them rather than that many each.
+	var ticks <-chan time.Time
+	if req.FileRatePerSec > 0 {
+		interval := time.Second / time.Duration(req.FileRatePerSec)
+		if interval <= 0 {
+			// NewTicker PANICS on a non-positive duration. The write path
+			// refuses a rate this high, but the request reaches the worker
+			// through a file that outlives the code which wrote it.
+			interval = time.Nanosecond
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		ticks = ticker.C
+	}
+
+	var (
+		mu     sync.Mutex
+		output []produced
+		wg     sync.WaitGroup
+	)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobs {
+				if ticks != nil {
+					select {
+					case <-ticks:
+					case <-ctx.Done():
+						return
+					}
+				}
+				matches := j.matches
+				if j.limit > 0 {
+					// #nosec G122 G304 -- operator-initiated antivirus scan reads files under the scan root; content is only pattern-matched, never returned to a tenant.
+					if b, e := os.ReadFile(j.path); e == nil {
+						matches = append(matches, evaluate(j.ext, b)...)
+					}
+				}
+				// One finding per FILE, not per matching rule. Three rows for
+				// one file used to mean bulk cleanup contained it on the first
+				// row and then reported "file missing" twice for the same file
+				// it had just quarantined, so a successful cleanup read as two
+				// failures.
+				score, signature, matched, level := verdict(matches, req.CriticalThreshold)
+				if level == "" {
+					continue
+				}
+				mu.Lock()
+				output = append(output, produced{j.index, Finding{
+					File: j.path, Signature: signature, Engine: "heuristic",
+					Score: score, Level: level, Rules: strings.Join(matched, ", "),
+				}})
+				mu.Unlock()
+			}
+		}()
+	}
+
+	dispatched := 0
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -482,27 +570,34 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 		if scanned > fileCap {
 			return errCap
 		}
-		if limit > 0 && fi.Size() <= limit {
-			// #nosec G122 G304 -- operator-initiated antivirus scan reads files under the scan root; content is only pattern-matched, never returned to a tenant.
-			if b, e := os.ReadFile(p); e == nil {
-				matches = append(matches, evaluate(ext, b)...)
-			}
+		if limit > 0 && fi.Size() > limit {
+			limit = 0
 		}
-		// One finding per FILE, not per matching rule. Three rows for one file
-		// used to mean bulk cleanup contained it on the first row and then
-		// reported "file missing" twice for the same file it had just
-		// quarantined, so a successful cleanup read as two failures.
-		score, signature, matched, level := verdict(matches, req.CriticalThreshold)
-		if level == "" || seen["h|"+p] {
-			return nil
+		// The send selects on the context too. Without that, a pool whose
+		// workers have all returned on cancellation leaves the walk blocked on
+		// a channel nobody reads, and the scan never ends at all.
+		select {
+		case jobs <- job{index: dispatched, path: p, ext: ext, limit: limit, matches: matches}:
+			dispatched++
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		seen["h|"+p] = true
-		findings = append(findings, Finding{
-			File: p, Signature: signature, Engine: "heuristic",
-			Score: score, Level: level, Rules: strings.Join(matched, ", "),
-		})
 		return nil
 	})
+	close(jobs)
+	wg.Wait()
+
+	// Findings come back in DISPATCH order, not in whichever order the workers
+	// happened to finish, so the same tree produces the same list on a machine
+	// with one core and on one with thirty-two.
+	slices.SortFunc(output, func(a, b produced) int { return a.index - b.index })
+	for _, o := range output {
+		if seen["h|"+o.finding.File] {
+			continue
+		}
+		seen["h|"+o.finding.File] = true
+		findings = append(findings, o.finding)
+	}
 	// A sweep that stopped at the file cap or ran out of its budget covered part
 	// of the tree. Reporting it as complete would present it as a clean bill of
 	// health for everything it never reached, which is the same defect the

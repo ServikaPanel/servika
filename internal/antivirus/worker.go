@@ -72,6 +72,14 @@ type ScanRequest struct {
 	// per-domain scan, whose root is one tenant tree, and carries the operator's
 	// list for a server-wide sweep.
 	Excluded []string `json:"excluded"`
+	// Workers is how many files are inspected at once. Zero or less means one,
+	// which is what every scan did before the pool existed.
+	Workers int `json:"workers"`
+	// FileRatePerSec caps how many files a second are inspected across the
+	// whole pool. Zero means no ceiling. The cgroup CPU quota does not cover
+	// this: a scan is mostly disk reads, and cgroup v2 io.weight is a relative
+	// share rather than an absolute cap.
+	FileRatePerSec int `json:"file_rate_per_sec"`
 	// AutoQuarantine is read by the PANEL after the worker returns, never by the
 	// worker. It travels here only so both scan paths read the settings once,
 	// and it is deliberately not serialised: a worker that could act on it would
