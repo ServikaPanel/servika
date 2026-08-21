@@ -1009,6 +1009,16 @@ func main() {
 				r.With(middleware.AdminOnly).Get("/admin/migrations/{id}", transfersH.MigrationDetail)
 				r.With(middleware.AdminOnly).Get("/admin/migrations/{id}/log", transfersH.MigrationLog)
 				r.With(middleware.AdminOnly).Post("/admin/migrations/{id}/cancel", transfersH.MigrationCancel)
+				// Malware sweep across every tenant tree, or the whole
+				// filesystem. Admin only, with no scoped variant: there is no
+				// ownership chain to narrow a sweep of the whole server by, and
+				// its scope is a server-wide setting rather than a per-request
+				// choice. Findings that land under a tenant home still reach that
+				// tenant's own screen and quarantine.
+				r.With(middleware.AdminOnly).Post("/admin/antivirus/sweep", avH.Sweep)
+				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep", avH.SweepList)
+				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep/{sid}", avH.SweepStatus)
+				r.With(middleware.AdminOnly).Post("/admin/antivirus/sweep/finding/{fid}/quarantine", avH.SweepQuarantine)
 				// Hostnames no tenant may add. Admin only: the list decides what
 				// this server is willing to answer for, which is not a customer's
 				// call.

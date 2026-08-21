@@ -222,8 +222,16 @@ func (s Settings) ExcludedList() []string {
 // SEPARATOR only, so excluding /var never excludes /variable. Any other entry
 // is a fragment matched anywhere in the path, which is what makes "node_modules/"
 // and "/wp-content/cache/" work at any depth.
-func (s Settings) Excluded(path string) bool {
-	for _, e := range s.ExcludedList() {
+func (s Settings) Excluded(path string) bool { return PathExcluded(s.ExcludedList(), path) }
+
+// PathExcluded is the same test against an explicit list.
+//
+// The scan runs in a separate process that has no database connection, so it
+// receives the list in its request rather than reading the settings row. Both
+// sides call this one function, or the screen would describe an exclusion the
+// scanner does not apply.
+func PathExcluded(list []string, path string) bool {
+	for _, e := range list {
 		if strings.HasPrefix(e, "/") && !strings.HasSuffix(e, "/") {
 			if path == e || strings.HasPrefix(path, e+"/") {
 				return true

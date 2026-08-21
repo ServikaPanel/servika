@@ -68,6 +68,10 @@ type ScanRequest struct {
 	// CriticalThreshold is the score at which a file is called critical rather
 	// than suspicious. Zero means the shipped value.
 	CriticalThreshold int `json:"critical_threshold"`
+	// Excluded are the paths the walk does not descend into. It is empty for a
+	// per-domain scan, whose root is one tenant tree, and carries the operator's
+	// list for a server-wide sweep.
+	Excluded []string `json:"excluded"`
 }
 
 // DefaultRequest is the scan every caller wants unless an operator has said

@@ -86,6 +86,11 @@ type Finding struct {
 	// highest-scoring one. It is empty for a detector that has no rule set.
 	Rules      string `json:"rules"`
 	Quarantine int    `json:"quarantined"`
+	// DomainID is the tenant a finding belongs to, and 0 means none. Only a
+	// server-wide sweep produces the second case: it can reach a file outside
+	// every tenant home, which is reported and nothing more, because the
+	// quarantine store is keyed on a tenant.
+	DomainID int64 `json:"domain_id"`
 }
 
 func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, demo, ok bool) {
@@ -382,7 +387,13 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 	seen := map[string]bool{}
 
 	// 1) ClamAV
-	if _, err := os.Stat(clamBin()); err == nil {
+	//
+	// It is given the root and walks the tree itself, so it cannot be told about
+	// the exclusion list. A server-wide sweep therefore does not run it: pointing
+	// clamscan at / would read every data file on the machine, which is exactly
+	// the cost the exclusion list exists to avoid, and it has no way to be told
+	// otherwise.
+	if _, err := os.Stat(clamBin()); err == nil && len(req.Excluded) == 0 {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		cmd := exec.CommandContext(ctx, clamBin(), "-r", "-i", "--no-summary", "--stdout",
 			"--max-filesize=25M", "--max-scansize=500M", root)
@@ -422,6 +433,15 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 			case ".git", "node_modules", "vendor", ".quarantined":
 				return filepath.SkipDir
 			}
+			// An excluded DIRECTORY is skipped whole. Testing each file inside it
+			// instead would still walk /proc and /sys entry by entry, which is
+			// most of what the exclusion list exists to avoid.
+			if avsettings.PathExcluded(req.Excluded, p) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if avsettings.PathExcluded(req.Excluded, p) {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(p))
