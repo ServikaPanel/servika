@@ -96,3 +96,52 @@ func TestWellKnownIsNotCountedTwice(t *testing.T) {
 		t.Errorf("rules %v, want the .well-known rule", names)
 	}
 }
+
+// The rule used to be strings.Contains(rel, "/."), which matched a hidden FILE
+// as well as a hidden directory, and the weight is exactly scoreSuspicious so
+// one ordinary file convicted on its own. Measured on a real composer install of
+// friendsofphp/php-cs-fixer plus phpunit/phpunit, 3011 files: the only dotted
+// PHP path in the whole tree is vendor/phar-io/manifest/.php-cs-fixer.dist.php,
+// shipped by a PHPUnit dependency, so every PHP project that uses PHPUnit
+// carried one false finding.
+func TestAnOrdinaryDottedFileIsNotAFinding(t *testing.T) {
+	root := "/home/c_site/public_html"
+	quiet := []string{
+		root + "/.php-cs-fixer.dist.php",
+		root + "/vendor/phar-io/manifest/.php-cs-fixer.dist.php",
+		root + "/.php_cs.php",
+		// Ordinary dotted DIRECTORIES a project really keeps.
+		root + "/.github/workflows/build.php",
+		root + "/.docker/entrypoint.php",
+		root + "/.vscode/x.php",
+	}
+	for _, path := range quiet {
+		for _, m := range locationMatches(root, path) {
+			if m.name == "Location.HiddenDirectory" {
+				t.Errorf("%s was reported as hidden", path)
+			}
+		}
+	}
+}
+
+// The other direction: a dotted directory nothing ordinarily keeps is still
+// where a payload goes to be missed, so the rule must not have been turned off.
+func TestAPaylodInAHiddenDirectoryIsStillFound(t *testing.T) {
+	root := "/home/c_site/public_html"
+	loud := []string{
+		root + "/.hidden/shell.php",
+		root + "/assets/.cache2/shell.php",
+		root + "/.tmp/deep/shell.php",
+	}
+	for _, path := range loud {
+		var found bool
+		for _, m := range locationMatches(root, path) {
+			if m.name == "Location.HiddenDirectory" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s was not reported as hidden", path)
+		}
+	}
+}

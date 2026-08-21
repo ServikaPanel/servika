@@ -16,6 +16,7 @@ package antivirus
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -63,11 +64,52 @@ func locationMatches(root, path string) []match {
 		}
 	}
 
-	// A hidden directory is where something is put to be missed. .well-known is
-	// excluded because it is already judged above and would otherwise be
-	// counted twice.
-	if strings.Contains(rel, "/.") && !strings.Contains(rel, "/.well-known/") {
+	if hiddenDirectory(rel) {
 		out = append(out, match{"Location.HiddenDirectory", scoreSuspicious})
 	}
 	return out
+}
+
+// ordinaryHiddenDirs are dotted directories a project really keeps, measured
+// rather than guessed: each is a place a normal repository puts files, so a PHP
+// file inside one is not evidence of anything.
+//
+// .well-known is here for a second reason: it is already judged above, and
+// counting it twice would push it past a threshold on its own.
+var ordinaryHiddenDirs = []string{
+	".well-known", ".github", ".gitlab", ".ci", ".circleci",
+	".docker", ".devcontainer", ".vscode", ".idea", ".config",
+}
+
+// hiddenDirectory reports whether the file sits inside a dotted DIRECTORY that
+// is not one a project ordinarily keeps.
+//
+// The rule used to be `strings.Contains(rel, "/.")`, which also matched a hidden
+// FILE. That is where it went wrong: measured on a real composer install of
+// friendsofphp/php-cs-fixer plus phpunit/phpunit, 3011 files, the only dotted
+// PHP path in the whole tree is
+// vendor/phar-io/manifest/.php-cs-fixer.dist.php, shipped by a PHPUnit
+// dependency. The weight is exactly scoreSuspicious, so that one ordinary file
+// became a finding on its own, on every PHP project that uses PHPUnit, and the
+// panel's own Git deployment is how such a project arrives.
+//
+// WordPress core and the five most-installed plugins carry no dotted PHP path at
+// all (18001 files measured), which is why the corpus never showed this.
+func hiddenDirectory(rel string) bool {
+	parts := strings.Split(rel, "/")
+	if len(parts) < 2 {
+		return false
+	}
+	// The last element is the file itself. A dotted FILE name is ordinary: a
+	// tool's own configuration is written that way by convention.
+	for _, part := range parts[:len(parts)-1] {
+		if !strings.HasPrefix(part, ".") || part == "." || part == ".." {
+			continue
+		}
+		if slices.Contains(ordinaryHiddenDirs, strings.ToLower(part)) {
+			continue
+		}
+		return true
+	}
+	return false
 }
