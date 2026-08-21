@@ -1,0 +1,34 @@
+[Unit]
+Description=Servika antivirus real-time watcher
+After=network-online.target mariadb.service servika.service
+Wants=network-online.target
+# Both StartLimit keys belong here and nowhere else: systemd answers
+# `Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.` while
+# silently accepting StartLimitBurst there, which would leave the burst counting
+# against the default ten-second window. With RestartSec=10 only one start fits
+# that window, the burst is never reached, and a watcher that cannot start
+# restarts for good instead of reaching `failed`, which is the one state a
+# screen reads as broken.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/servika/env
+ExecStart=/opt/servika/bin/servika-server -av-watch
+# The watcher runs in the same slice as the scan, so an operator's CPU, memory
+# and I/O limits reach it too. A unit without this joins system.slice and the
+# limits the panel reports are enforced on nothing.
+Slice=servika-av.slice
+# fanotify_init requires CAP_SYS_ADMIN. The panel already runs as root, so this
+# is not a new privilege on the host; it is stated because it is the whole
+# reason this cannot be a goroutine in an unprivileged process.
+User=root
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=servika-av-watch
+
+[Install]
+WantedBy=multi-user.target

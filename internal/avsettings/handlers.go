@@ -30,6 +30,11 @@ type Response struct {
 	Effective Effective    `json:"effective"`
 	Kernel    KernelLimits `json:"kernel"`
 	ScanRoots []string     `json:"scan_roots"`
+	// WatchState is what systemd reports for the watcher right now, which is a
+	// different claim from the realtime setting: the setting says what was
+	// asked for, this says whether it is running. They disagree exactly when
+	// the watcher failed to start, which is the case nothing else would show.
+	WatchState string `json:"watch_state"`
 }
 
 // Get answers GET /admin/antivirus/settings.
@@ -78,10 +83,11 @@ func (h *Handlers) Put(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) respond(w http.ResponseWriter, settings Settings) {
 	capacity := ServerCapacity()
 	httpx.WriteJSON(w, http.StatusOK, Response{
-		Settings:  settings,
-		Capacity:  capacity,
-		Effective: settings.Resolve(capacity),
-		Kernel:    ReadKernelLimits(),
-		ScanRoots: settings.ScanRoots(),
+		Settings:   settings,
+		Capacity:   capacity,
+		Effective:  settings.Resolve(capacity),
+		Kernel:     ReadKernelLimits(),
+		ScanRoots:  settings.ScanRoots(),
+		WatchState: WatchState(),
 	})
 }

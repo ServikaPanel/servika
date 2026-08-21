@@ -376,5 +376,11 @@ func Write(ctx context.Context, db *sql.DB, s Settings) error {
 		s.Realtime, s.ScanWorkers, s.FileRatePerSec); err != nil {
 		return err
 	}
-	return ApplyLimits(s)
+	if err := ApplyLimits(s); err != nil {
+		return err
+	}
+	// The watcher is applied AFTER the limits, so a watcher that starts here
+	// starts into a slice that already carries the values just saved. The other
+	// order gives it the previous limits until something else rewrites them.
+	return ApplyWatcher(s)
 }

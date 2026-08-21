@@ -172,6 +172,13 @@ func main() {
 	if antivirus.RunWorkerIfAsked() {
 		return
 	}
+	// The real-time watcher, which is the same binary again under its own unit.
+	// It answers here for the same reason: watching files is not a reason to
+	// need the JWT secret. Unlike the scan worker it DOES open the database,
+	// because a long-running watcher has no parent to hand its findings to.
+	if antivirus.RunWatcherIfAsked() {
+		return
+	}
 	pinTempDir()
 
 	cfg, err := config.Load()

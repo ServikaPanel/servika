@@ -80,14 +80,22 @@ func TestSavingAlsoApplies(t *testing.T) {
 	}
 	body := string(source)
 	update := strings.Index(body, "UPDATE av_settings SET")
-	apply := strings.Index(body, "return ApplyLimits(s)")
+	apply := strings.Index(body, "if err := ApplyLimits(s); err != nil {")
+	watch := strings.Index(body, "return ApplyWatcher(s)")
 	switch {
 	case update < 0:
 		t.Fatal("the settings are no longer stored")
 	case apply < 0:
 		t.Fatal("saving no longer applies the resource limits")
+	case watch < 0:
+		t.Fatal("saving no longer starts or stops the watcher")
 	case apply < update:
 		t.Error("the limits are applied before the row is stored")
+	case watch < apply:
+		// A watcher started before the limits are written joins a slice
+		// carrying the PREVIOUS values and keeps them until something else
+		// rewrites the file.
+		t.Error("the watcher is applied before the limits it should run under")
 	}
 	// And the validation runs first, or an invalid value reaches the slice file.
 	validate := strings.Index(body, "if err := s.Validate(); err != nil {")
