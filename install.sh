@@ -52,6 +52,38 @@ verify_release_bundle(){
   [ "$actual" = "$expected" ] || die "checksum mismatch for $bundle_name"
 }
 
+# SERVIKA_RELEASE_PUBKEY is the Ed25519 public half of the release signing key.
+# Its private half lives on the maintainer's own machine and never reaches CI or
+# GitHub, which is the entire point: SHA256SUMS and the bundle it describes are
+# published to the SAME release, so anybody who can rewrite one can rewrite the
+# other, and a checksum verified against a checksum list from the same place
+# proves only that the download was not corrupted in transit.
+#
+# An EMPTY value means no release signing key exists yet for this line of
+# releases, and the signature step is skipped in silence. Once a key is set here
+# the signature is REQUIRED: "verify it if the .sig is present" is not a check,
+# because an attacker who can replace the artefacts can simply not publish one.
+SERVIKA_RELEASE_PUBKEY=''
+
+# verify_release_signature <sums_path> <sig_path> checks SHA256SUMS against the
+# embedded key. It is a no-op when no key is embedded.
+verify_release_signature(){
+  local sums_path="$1" sig_path="$2" pubfile
+  [ -n "$SERVIKA_RELEASE_PUBKEY" ] || return 0
+  command -v openssl >/dev/null 2>&1 || dnf -y install openssl >/dev/null 2>&1 || true
+  command -v openssl >/dev/null 2>&1 || die "openssl is required to verify the release signature"
+  [ -s "$sig_path" ] || die "the release carries no SHA256SUMS.sig; refusing to install an unsigned release"
+  pubfile=$(mktemp)
+  printf '%s\n' "$SERVIKA_RELEASE_PUBKEY" > "$pubfile"
+  if ! openssl pkeyutl -verify -pubin -inkey "$pubfile" -rawin \
+       -in "$sums_path" -sigfile "$sig_path" >/dev/null 2>&1; then
+    rm -f "$pubfile"
+    die "the SHA256SUMS signature did not verify; refusing to install"
+  fi
+  rm -f "$pubfile"
+  echo -e "${c_g}✓ release signature verified${c_0}"
+}
+
 [ "$(id -u)" = 0 ] || die "root is required:  curl ... | sudo bash"
 command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v tar  >/dev/null 2>&1 || die "tar is required"
@@ -75,6 +107,7 @@ VERSION="${TAG#v}"
 BUNDLE="servika-${VERSION}-${ARCH}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${TAG}/${BUNDLE}"
 SUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/SHA256SUMS"
+SIG_URL="https://github.com/${REPO}/releases/download/${TAG}/SHA256SUMS.sig"
 echo -e "${c_b}══ Downloading Servika ${VERSION} (${ARCH}) ══${c_0}"
 
 TMP=$(mktemp -d)
@@ -83,6 +116,11 @@ download_file "$URL" "$TMP/$BUNDLE" || die "download failed: $URL"
 # Verify the bundle against the release SHA256SUMS before extracting so a
 # corrupted or tampered artifact is never unpacked as root.
 download_file "$SUMS_URL" "$TMP/SHA256SUMS" || die "download failed: $SUMS_URL"
+# The signature is checked BEFORE the checksum, because the checksum is only
+# worth what the list it came from is worth. A missing signature file is not
+# fatal here only while no key is embedded above; once one is, it is.
+download_file "$SIG_URL" "$TMP/SHA256SUMS.sig" || true
+verify_release_signature "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig"
 verify_release_bundle "$TMP/$BUNDLE" "$TMP/SHA256SUMS" "$BUNDLE"
 echo -e "${c_g}✓ checksum verified${c_0}"
 tar xz -C "$TMP" -f "$TMP/$BUNDLE" || die "extraction failed"

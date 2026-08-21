@@ -168,6 +168,48 @@ verify_release_bundle() {
   [ "$actual" = "$expected" ]
 }
 
+# SERVIKA_RELEASE_PUBKEY is the Ed25519 public half of the release signing key.
+# Its private half lives on the maintainer's own machine and never reaches CI or
+# GitHub. That matters because SHA256SUMS and the bundle it describes are
+# published to the SAME release: anybody who can rewrite one can rewrite the
+# other, so a checksum verified against a list from the same place proves only
+# that the download was not corrupted in transit.
+#
+# An EMPTY value means no release signing key exists yet, and the signature step
+# is skipped in silence. Once a key is set here the signature is REQUIRED:
+# "verify it if the .sig is present" is not a check, because an attacker who can
+# replace the artefacts can simply not publish one.
+SERVIKA_RELEASE_PUBKEY=''
+
+# fetch_release_signature <url> <out> downloads the detached signature. With no
+# key embedded there is nothing to verify, so a missing file is not an error;
+# with one, an absent signature has to fail, and it fails in verify below rather
+# than here so both reasons carry one message.
+fetch_release_signature() {
+  local url="$1" out="$2"
+  [ -n "$SERVIKA_RELEASE_PUBKEY" ] || return 0
+  curl -fsSL --retry 3 -o "$out" "$url" 2>/dev/null || return 0
+}
+
+# verify_release_signature <sums_path> <sig_path> checks SHA256SUMS against the
+# embedded key. It returns 0 when no key is embedded, and non-zero on any failure
+# so the caller can treat it exactly as it treats a checksum mismatch: fatal,
+# never a reason to fall back to a source with no checksum at all.
+verify_release_signature() {
+  local sums_path="$1" sig_path="$2" pubfile rc
+  [ -n "$SERVIKA_RELEASE_PUBKEY" ] || return 0
+  command -v openssl >/dev/null 2>&1 || dnf -y install openssl >/dev/null 2>&1 || true
+  command -v openssl >/dev/null 2>&1 || return 1
+  [ -s "$sig_path" ] || return 1
+  pubfile=$(mktemp)
+  printf '%s\n' "$SERVIKA_RELEASE_PUBKEY" > "$pubfile"
+  openssl pkeyutl -verify -pubin -inkey "$pubfile" -rawin \
+    -in "$sums_path" -sigfile "$sig_path" >/dev/null 2>&1
+  rc=$?
+  rm -f "$pubfile"
+  return "$rc"
+}
+
 # restore_release_assets undoes every pre-restart asset swap from snapshots taken
 # during this run. Each step is existence-guarded and best-effort so a missing
 # snapshot for one asset never blocks the restore of the others. Called only on
@@ -274,6 +316,7 @@ if [ "$BRANCH_EXPLICIT" = 0 ]; then
     BUNDLE="servika-${VERSION_TAG}-${ARCH}.tar.gz"
     BUNDLE_URL="https://github.com/$REPO/releases/download/$TAG/$BUNDLE"
     SUMS_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
+    SIG_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS.sig"
     step "Servika update (release $TAG, $ARCH)"
     echo "  downloading release bundle..."
     # A download that does not arrive and a bundle that does not match its
@@ -290,6 +333,13 @@ if [ "$BRANCH_EXPLICIT" = 0 ]; then
        || ! curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$SUMS_URL"; then
       warn "release bundle download failed ($BUNDLE_URL); falling back to branch '$BRANCH'"
       rm -rf "${TMP:?}/"* 2>/dev/null || true
+    elif ! fetch_release_signature "$SIG_URL" "$TMP/SHA256SUMS.sig" \
+         || ! verify_release_signature "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig"; then
+      # Judged exactly as a checksum mismatch is, and for the same reason: a
+      # signature that does not hold is evidence that SHA256SUMS is not the one
+      # the maintainer signed, and falling back to a source with NO checksum
+      # would hand that outcome to anyone able to break the signature.
+      die "the SHA256SUMS signature did not verify for $TAG; refusing to continue. Re-run with --branch $BRANCH only if you accept an unverified source."
     elif ! verify_release_bundle "$TMP/$BUNDLE" "$TMP/SHA256SUMS" "$BUNDLE"; then
       die "checksum mismatch for $BUNDLE against the $TAG release SHA256SUMS; refusing to continue. Re-run with --branch $BRANCH only if you accept an unverified source."
     elif ! tar xz -C "$TMP" -f "$TMP/$BUNDLE"; then
