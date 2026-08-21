@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "Les fichiers du cœur correspondent aux sommes de contrôle officielles.",
     "verifyFound": "{{extra}} fichier(s) étranger(s), {{modified}} modifié(s), {{missing}} manquant(s). Les fichiers étrangers peuvent être mis en quarantaine depuis la page des logiciels malveillants.",
+    "verifyUnavailable": "La vérification n'a pas pu être effectuée : wordpress.org est injoignable et aucune table de sommes de contrôle n'est en cache. Ce n'est pas un résultat propre.",
     "coreUpdated": "Cœur de WordPress mis à jour.",
     "allUpdated": "Cœur, extensions et thèmes mis à jour.",
     "maintenanceEnabled": "Mode maintenance activé.",

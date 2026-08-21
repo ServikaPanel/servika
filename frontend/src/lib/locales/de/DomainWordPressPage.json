@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "Die Kerndateien stimmen mit den offiziellen Prüfsummen überein.",
     "verifyFound": "{{extra}} fremde Datei(en), {{modified}} verändert, {{missing}} fehlend. Fremde Dateien lassen sich auf der Malware-Seite in Quarantäne verschieben.",
+    "verifyUnavailable": "Die Prüfung konnte nicht durchgeführt werden: wordpress.org war nicht erreichbar und es liegt keine zwischengespeicherte Prüfsummentabelle vor. Das ist kein sauberes Ergebnis.",
     "coreUpdated": "WordPress-Core aktualisiert.",
     "allUpdated": "Core, Plugins und Themes aktualisiert.",
     "maintenanceEnabled": "Wartungsmodus aktiviert.",

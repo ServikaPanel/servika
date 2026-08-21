@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "Çekirdek dosyalar resmi sağlama toplamlarıyla eşleşiyor.",
     "verifyFound": "{{extra}} ait olmayan dosya, {{modified}} değiştirilmiş, {{missing}} eksik. Ait olmayan dosyalar zararlı yazılım sayfasından karantinaya alınabilir.",
+    "verifyUnavailable": "Denetim yapılamadı: wordpress.org'a ulaşılamadı ve önbellekte sağlama toplamı tablosu yok. Bu, temiz sonucu anlamına gelmez.",
     "coreUpdated": "WordPress çekirdeği güncellendi.",
     "allUpdated": "Çekirdek, eklentiler ve temalar güncellendi.",
     "maintenanceEnabled": "Bakım modu açıldı.",

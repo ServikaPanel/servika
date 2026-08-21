@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "Fișierele nucleului corespund sumelor de control oficiale.",
     "verifyFound": "{{extra}} fișier(e) străine, {{modified}} modificate, {{missing}} lipsă. Fișierele străine pot fi puse în carantină din pagina de malware.",
+    "verifyUnavailable": "Verificarea nu a putut fi efectuată: wordpress.org nu a putut fi contactat și nu există un tabel de sume de control în cache. Acesta nu este un rezultat curat.",
     "coreUpdated": "Nucleul WordPress a fost actualizat.",
     "allUpdated": "Nucleul, pluginurile și temele au fost actualizate.",
     "maintenanceEnabled": "Mod de mentenanță activat.",

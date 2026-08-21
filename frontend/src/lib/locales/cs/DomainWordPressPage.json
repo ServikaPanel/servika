@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "Soubory jádra odpovídají oficiálním kontrolním součtům.",
     "verifyFound": "{{extra}} cizí soubor(ů), {{modified}} změněných, {{missing}} chybějících. Cizí soubory lze přesunout do karantény na stránce malwaru.",
+    "verifyUnavailable": "Kontrolu nebylo možné provést: wordpress.org je nedostupný a v mezipaměti není žádná tabulka kontrolních součtů. Toto není čistý výsledek.",
     "coreUpdated": "Jádro WordPress aktualizováno.",
     "allUpdated": "Jádro, pluginy a šablony aktualizovány.",
     "maintenanceEnabled": "Režim údržby povolen.",

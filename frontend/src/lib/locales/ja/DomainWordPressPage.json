@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "コアファイルは公式のチェックサムと一致しています。",
     "verifyFound": "本来存在しないファイル {{extra}} 件、改変 {{modified}} 件、欠落 {{missing}} 件。本来存在しないファイルはマルウェアのページから隔離できます。",
+    "verifyUnavailable": "チェックを実行できませんでした。wordpress.org に接続できず、キャッシュされたチェックサム表もありません。これはクリーンな結果ではありません。",
     "coreUpdated": "WordPress コアを更新しました。",
     "allUpdated": "コア、プラグイン、テーマを更新しました。",
     "maintenanceEnabled": "メンテナンスモードを有効にしました。",

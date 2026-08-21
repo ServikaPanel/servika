@@ -47,6 +47,7 @@
   "messages": {
     "verifyClean": "Core files match the official checksums.",
     "verifyFound": "{{extra}} file(s) that do not belong, {{modified}} modified, {{missing}} missing. Extra files can be quarantined from the malware page.",
+    "verifyUnavailable": "The check could not be performed: wordpress.org could not be reached and no cached checksum table is available. This is not a clean result.",
     "coreUpdated": "WordPress core updated.",
     "allUpdated": "Core, plugins, and themes updated.",
     "maintenanceEnabled": "Maintenance mode enabled.",

@@ -28,6 +28,7 @@
   "messages": {
     "verifyClean": "Los archivos del núcleo coinciden con las sumas de comprobación oficiales.",
     "verifyFound": "{{extra}} archivo(s) que no corresponden, {{modified}} modificados, {{missing}} ausentes. Los archivos que no corresponden pueden ponerse en cuarentena desde la página de malware.",
+    "verifyUnavailable": "No se pudo realizar la comprobación: no se pudo contactar con wordpress.org y no hay tabla de sumas de verificación en caché. Esto no es un resultado limpio.",
     "coreUpdated": "Núcleo de WordPress actualizado.",
     "allUpdated": "Núcleo, complementos y temas actualizados.",
     "maintenanceEnabled": "Modo mantenimiento activado.",

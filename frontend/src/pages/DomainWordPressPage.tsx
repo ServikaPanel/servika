@@ -169,7 +169,21 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
   const updateAll = () => run('all', async () => (await api.post(`${base}/wordpress/tool`, { dir, action: 'update-all' })).data, t('messages.allUpdated'), () => { loadStatus(); setPlugins(null); setThemes(null); onChange() })
   const maintenanceToggle = () => run('maintenance', async () => (await api.post(`${base}/wordpress/tool`, { dir, action: status?.maintenance ? 'maintenance-off' : 'maintenance-on' })).data, status?.maintenance ? t('messages.maintenanceDisabled') : t('messages.maintenanceEnabled'), loadStatus)
   const clearCache = () => run('cache', async () => (await api.post(`${base}/wordpress/tool`, { dir, action: 'cache-clear' })).data, t('messages.cacheCleared'))
-  const repair = () => run('repair', async () => (await api.post(`${base}/wordpress/repair`, { dir })).data, t('messages.repairDone'), loadStatus)
+  // The repair reports its before and after states, and "not-measured" is a
+  // third one: an unreachable wordpress.org leaves the check with nothing to
+  // compare against, which is neither a clean core nor a repair that failed.
+  async function repair() {
+    setBusy('repair'); setError(null); setSuccess(null); setOutput(null)
+    try {
+      const { data } = await api.post<{ before?: string; after?: string; output?: string }>(
+        `${base}/wordpress/repair`, { dir })
+      if (data.after === 'not-measured') setError(t('messages.verifyUnavailable'))
+      else setSuccess(t('messages.repairDone'))
+      if (data.output) setOutput(data.output)
+      loadStatus()
+    } catch (error) { setError(apiError(error, t('errors.operationFailed'))) }
+    finally { setBusy(null) }
+  }
   // Verification only REPORTS, and the report decides the message, so it does not
   // go through run(): that helper writes a fixed success line after the request
   // resolves, which would announce a clean core over a dirty one. The three
@@ -179,11 +193,17 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
   async function verify() {
     setBusy('verify'); setError(null); setSuccess(null); setOutput(null)
     try {
-      const { data } = await api.post<{ extra: number; modified: number; missing: number; output?: string }>(
+      const { data } = await api.post<{ measured?: boolean; extra: number; modified: number; missing: number; output?: string }>(
         `${base}/wordpress/verify`, { dir })
-      const total = data.extra + data.modified + data.missing
-      if (total === 0) setSuccess(t('messages.verifyClean'))
-      else setError(t('messages.verifyFound', { extra: data.extra, modified: data.modified, missing: data.missing }))
+      // A check that compared nothing answers measured:false with every count
+      // absent, so the totals below would add to zero and announce a clean core
+      // for a comparison that never happened.
+      if (data.measured === false) setError(t('messages.verifyUnavailable'))
+      else {
+        const total = data.extra + data.modified + data.missing
+        if (total === 0) setSuccess(t('messages.verifyClean'))
+        else setError(t('messages.verifyFound', { extra: data.extra, modified: data.modified, missing: data.missing }))
+      }
       if (data.output) setOutput(data.output)
     } catch (error) { setError(apiError(error, t('errors.operationFailed'))) }
     finally { setBusy(null) }
