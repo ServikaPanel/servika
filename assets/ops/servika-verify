@@ -290,6 +290,51 @@ else
   pass "antivirus watcher" "off (real-time watching is not enabled)"
 fi
 
+# The scheduled sweep timer is optional and normally absent: the panel's own Go
+# scheduler owns the hour by default, and the timer only takes over when an
+# operator enables it. So "not enabled" is not a finding either.
+#
+# What IS worth reporting is the pair that DISAGREES. The panel writes the hour
+# from av_settings.scheduled_hour into a drop-in; if that write failed, the timer
+# goes on firing at the previous hour while the settings screen shows the new
+# one, and nothing else on the server says so. The timed sweep deliberately does
+# not re-check the hour, because refusing there would mean no sweep at all
+# rather than one at the old hour, which is why this check exists instead.
+#
+# Every finding here is a WARNING. A sweep at the wrong hour, or two sweeps a
+# day, is a feature behaving badly rather than a panel that does not work, and a
+# critical would exit 1 and fail servika-update for it.
+AV_TIMER_DROPIN=/etc/systemd/system/servika-av-scan.timer.d/10-servika-hour.conf
+if [ ! -f /etc/systemd/system/servika-av-scan.timer ]; then
+  warn "antivirus sweep timer" "the unit is not installed, so systemd cannot own the sweep hour"
+elif systemctl is-enabled --quiet servika-av-scan.timer 2>/dev/null; then
+  # The value systemd RESOLVED, not the one in a file: a drop-in that failed to
+  # land leaves the file saying one thing and the armed timer another.
+  av_cal=$(systemctl show servika-av-scan.timer -p TimersCalendar --value 2>/dev/null)
+  av_armed=$(printf '%s\n' "$av_cal" | grep -oE 'OnCalendar=\*-\*-\* [0-9]{2}:' | grep -oE '[0-9]{2}' | tr '\n' ' ')
+  av_armed=${av_armed% }
+  if [ -z "$av_armed" ]; then
+    warn "antivirus sweep timer" "NOT MEASURED (systemd reports no calendar for the enabled timer)"
+  elif [ ! -f "$AV_TIMER_DROPIN" ]; then
+    warn "antivirus sweep timer" "enabled but the panel has never written the hour, so it fires at the unit's placeholder ${av_armed}:00"
+  else
+    # OnCalendar is a LIST and a drop-in ADDS to it unless the panel's empty
+    # reset landed. More than one armed hour means the reset is missing and the
+    # server sweeps twice a day.
+    av_count=$(printf '%s' "$av_armed" | wc -w | tr -d ' ')
+    av_want=$(grep -oE '^OnCalendar=\*-\*-\* [0-9]{2}:' "$AV_TIMER_DROPIN" | tail -1 | grep -oE '[0-9]{2}')
+    if [ "$av_count" -gt 1 ]; then
+      warn "antivirus sweep timer" "armed at MORE THAN ONE hour ($av_armed), so the server sweeps more than once a day"
+    elif [ -n "$av_want" ] && [ "$av_want" != "$av_armed" ]; then
+      warn "antivirus sweep timer" "systemd fires it at ${av_armed}:00 while the panel asked for ${av_want}:00"
+    else
+      pass "antivirus sweep timer" "enabled, armed at ${av_armed}:00"
+    fi
+  fi
+else
+  pass "antivirus sweep timer" "off (the panel's own scheduler owns the sweep hour)"
+fi
+
 # ── Panel HTTP surface ───────────────────────────────────────────────────────
 section "Panel HTTP surface"
 if [ -z "$PORT_EXTERNAL" ] || [ -z "$PORT_BACKEND" ]; then
