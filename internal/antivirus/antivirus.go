@@ -493,9 +493,7 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 		wg     sync.WaitGroup
 	)
 	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for j := range jobs {
 				if ticks != nil {
 					select {
@@ -526,7 +524,7 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 				}})
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 
 	dispatched := 0
@@ -698,10 +696,7 @@ func readOpenForScan(f *os.File, limit int64) ([]byte, error) {
 	// the limit the two windows would overlap and the same line could match
 	// twice, which is harmless for the verdict but makes the buffer larger than
 	// either limit says it is.
-	from := size - tailReadLimit
-	if from < limit {
-		from = limit
-	}
+	from := max(size-tailReadLimit, limit)
 	if _, err := f.Seek(from, io.SeekStart); err != nil {
 		return head, nil // the head is still worth judging
 	}

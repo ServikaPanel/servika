@@ -174,7 +174,7 @@ func TestEveryRelativeEntryTheSeedAddsIsRemovedAgain(t *testing.T) {
 	literal := rest[:strings.Index(rest, "'")]
 
 	var relative []string
-	for _, entry := range strings.Split(literal, `\n`) {
+	for entry := range strings.SplitSeq(literal, `\n`) {
 		if entry != "" && !strings.HasPrefix(entry, "/") {
 			relative = append(relative, entry)
 		}

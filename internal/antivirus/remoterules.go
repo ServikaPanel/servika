@@ -396,10 +396,7 @@ func compilePackagedRule(candidate packagedRule) (rule, error) {
 	// rule may carry is not hostile in itself, and dropping the rule would lose
 	// a detection over a number; what must not happen is the rule convicting a
 	// file on its own, and clamping is exactly what prevents that.
-	score := candidate.Score
-	if score > weightStrong {
-		score = weightStrong
-	}
+	score := min(candidate.Score, weightStrong)
 	return rule{name: candidate.Name, score: score, re: expression, exts: exts}, nil
 }
 
