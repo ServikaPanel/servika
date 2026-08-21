@@ -42,6 +42,7 @@
     "dnsTemplate": { "title": "Plantilla DNS", "subtitle": "Registros DNS predeterminados" },
     "bannedDomains": { "title": "Dominios prohibidos", "subtitle": "Nombres de host que ningún cliente puede añadir" },
     "siteSecurity": { "title": "Seguridad del sitio", "subtitle": "Vulnerabilidades conocidas en las dependencias" },
+    "malwareScan": { "title": "Análisis de malware", "subtitle": "Análisis de malware en todo el servidor, límites de recursos y cuarentena" },
     "appCatalog": { "title": "Catálogo de aplicaciones", "subtitle": "Versiones, direcciones de descarga y sumas de verificación que ofrece el instalador." },
     "panelUpdate": { "title": "Actualización del panel", "subtitle": "Versión y actualizaciones del panel" }
   },

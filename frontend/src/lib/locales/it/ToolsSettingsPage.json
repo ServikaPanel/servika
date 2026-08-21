@@ -63,6 +63,10 @@
       "title": "Sicurezza del sito",
       "description": "CVE note nei plugin WordPress e nelle dipendenze npm e Composer di un cliente."
     },
+    "malwareScan": {
+      "title": "Scansione malware",
+      "description": "Scansione su tutto il server con limiti di risorse imposti dal kernel, quarantena automatica e pianificazione."
+    },
     "bannedDomains": {
       "title": "Domini vietati",
       "description": "Hostname che nessun cliente può aggiungere a questo server. Contro il phishing."

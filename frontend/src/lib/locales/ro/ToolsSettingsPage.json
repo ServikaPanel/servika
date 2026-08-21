@@ -64,6 +64,10 @@
       "title": "Securitatea site-ului",
       "description": "CVE-uri cunoscute în pluginurile WordPress și în dependențele npm și Composer ale unui client."
     },
+    "malwareScan": {
+      "title": "Scanare malware",
+      "description": "Scanare pe tot serverul cu limite de resurse impuse de nucleu, carantină automată și programare."
+    },
     "bannedDomains": {
       "title": "Domenii interzise",
       "description": "Hostname-uri pe care niciun client nu le poate adăuga pe acest server. Împotriva phishingului."

@@ -62,6 +62,10 @@
       "title": "サイトセキュリティ",
       "description": "顧客の WordPress プラグイン、npm および Composer 依存関係にある既知の CVE。"
     },
+    "malwareScan": {
+      "title": "マルウェアスキャン",
+      "description": "カーネルが強制する資源制限、自動隔離、スケジュールを備えたサーバー全体のマルウェアスキャン。"
+    },
     "bannedDomains": {
       "title": "禁止ドメイン",
       "description": "顧客がこのサーバーに追加できないホスト名。フィッシング対策に使います。"

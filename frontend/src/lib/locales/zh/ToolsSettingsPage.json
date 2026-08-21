@@ -62,6 +62,10 @@
       "title": "站点安全",
       "description": "客户的 WordPress 插件、npm 与 Composer 依赖中的已知 CVE。"
     },
+    "malwareScan": {
+      "title": "恶意软件扫描",
+      "description": "由内核强制资源限制的全服务器恶意软件扫描，支持自动隔离与计划任务。"
+    },
     "bannedDomains": {
       "title": "禁止域名",
       "description": "客户不可添加到此服务器的主机名。用于防范钓鱼。"

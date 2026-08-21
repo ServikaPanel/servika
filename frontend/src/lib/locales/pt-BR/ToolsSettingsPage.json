@@ -63,6 +63,10 @@
       "title": "Segurança do site",
       "description": "CVEs conhecidas nos plugins WordPress e nas dependências npm e Composer de um cliente."
     },
+    "malwareScan": {
+      "title": "Verificação de malware",
+      "description": "Verificação em todo o servidor com limites de recursos impostos pelo kernel, quarentena automática e agendamento."
+    },
     "bannedDomains": {
       "title": "Domínios bloqueados",
       "description": "Hostnames que nenhum cliente pode adicionar a este servidor. Contra phishing."

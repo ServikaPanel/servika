@@ -24,6 +24,7 @@ import (
 	"servika/internal/apps"
 	"servika/internal/auth"
 	"servika/internal/autoconfig"
+	"servika/internal/avsettings"
 	"servika/internal/backups"
 	"servika/internal/composer"
 	"servika/internal/config"
@@ -375,6 +376,7 @@ func main() {
 	laravelH := &laravel.Handlers{DB: d}
 	protectionH := &passwordprotect.Handlers{DB: d}
 	avH := &antivirus.Handlers{DB: d}
+	avSettingsH := &avsettings.Handlers{DB: d}
 	copyH := &sitecopy.Handlers{DB: d}
 	importH := &siteimport.Handlers{DB: d}
 	wpH := &wordpress.Handlers{DB: d}
@@ -1019,6 +1021,11 @@ func main() {
 				// its scope is a server-wide setting rather than a per-request
 				// choice. Findings that land under a tenant home still reach that
 				// tenant's own screen and quarantine.
+				// What the scan inspects, what it may do about it, and what the
+				// kernel lets it spend. Admin only: the resource limits belong to
+				// the server rather than to any one customer.
+				r.With(middleware.AdminOnly).Get("/admin/antivirus/settings", avSettingsH.Get)
+				r.With(middleware.AdminOnly).Put("/admin/antivirus/settings", avSettingsH.Put)
 				r.With(middleware.AdminOnly).Post("/admin/antivirus/sweep", avH.Sweep)
 				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep", avH.SweepList)
 				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep/{sid}", avH.SweepStatus)

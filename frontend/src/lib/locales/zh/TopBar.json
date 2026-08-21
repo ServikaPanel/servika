@@ -42,6 +42,7 @@
     "dnsTemplate": { "title": "DNS 模板", "subtitle": "默认 DNS 记录" },
     "bannedDomains": { "title": "禁止域名", "subtitle": "客户不可添加的主机名" },
     "siteSecurity": { "title": "站点安全", "subtitle": "依赖项中的已知漏洞" },
+    "malwareScan": { "title": "恶意软件扫描", "subtitle": "全服务器恶意软件扫描、资源限制与隔离" },
     "appCatalog": { "title": "应用目录", "subtitle": "一键安装提供的版本、下载地址与校验和。" },
     "panelUpdate": { "title": "面板更新", "subtitle": "面板版本和更新" }
   },

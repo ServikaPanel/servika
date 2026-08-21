@@ -42,6 +42,7 @@
     "dnsTemplate": { "title": "Șablon DNS", "subtitle": "Înregistrări DNS implicite" },
     "bannedDomains": { "title": "Domenii interzise", "subtitle": "Hostname-uri pe care niciun client nu le poate adăuga" },
     "siteSecurity": { "title": "Securitatea site-ului", "subtitle": "Vulnerabilități cunoscute în dependențe" },
+    "malwareScan": { "title": "Scanare malware", "subtitle": "Scanare malware pe tot serverul, limite de resurse și carantină" },
     "appCatalog": { "title": "Catalog de aplicații", "subtitle": "Versiunile, adresele de descărcare și sumele de control pe care le oferă instalatorul." },
     "panelUpdate": { "title": "Actualizare panou", "subtitle": "Versiune panou și actualizări" }
   },

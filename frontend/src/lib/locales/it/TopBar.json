@@ -42,6 +42,7 @@
     "dnsTemplate": { "title": "Modello DNS", "subtitle": "Record DNS predefiniti" },
     "bannedDomains": { "title": "Domini vietati", "subtitle": "Hostname che nessun cliente può aggiungere" },
     "siteSecurity": { "title": "Sicurezza del sito", "subtitle": "Vulnerabilità note nelle dipendenze" },
+    "malwareScan": { "title": "Scansione malware", "subtitle": "Scansione malware su tutto il server, limiti di risorse e quarantena" },
     "appCatalog": { "title": "Catalogo applicazioni", "subtitle": "Versioni, indirizzi di download e checksum offerti dall'installatore." },
     "panelUpdate": { "title": "Aggiornamento Pannello", "subtitle": "Versione e aggiornamenti pannello" }
   },

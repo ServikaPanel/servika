@@ -63,6 +63,10 @@
       "title": "Site Security",
       "description": "Known CVEs in a tenant's WordPress plugins, npm and Composer dependencies."
     },
+    "malwareScan": {
+      "title": "Malware Scan",
+      "description": "Server-wide malware sweep with kernel-enforced resource limits, automatic quarantine and a schedule."
+    },
     "bannedDomains": {
       "title": "Banned Domains",
       "description": "Hostnames no customer may add to this server. Used against phishing."

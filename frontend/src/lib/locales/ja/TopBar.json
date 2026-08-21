@@ -42,6 +42,7 @@
     "dnsTemplate": { "title": "DNS テンプレート", "subtitle": "デフォルトの DNS レコード" },
     "bannedDomains": { "title": "禁止ドメイン", "subtitle": "顧客が追加できないホスト名" },
     "siteSecurity": { "title": "サイトセキュリティ", "subtitle": "依存関係の既知の脆弱性" },
+    "malwareScan": { "title": "マルウェアスキャン", "subtitle": "サーバー全体のマルウェアスキャン、資源制限、隔離" },
     "appCatalog": { "title": "アプリケーションカタログ", "subtitle": "ワンクリック導入で提供するバージョン、ダウンロード先、チェックサム。" },
     "panelUpdate": { "title": "パネル更新", "subtitle": "パネルのバージョンと更新" }
   },

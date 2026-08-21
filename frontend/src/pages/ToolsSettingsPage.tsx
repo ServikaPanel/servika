@@ -87,6 +87,8 @@ const GROUPS: Group[] = [
         key: 'phishing blacklist blocked hostname refuse' },
       { id: 'siteSecurity', href: '/site-security', icon: ICONS.shield, badge: 'serverWide',
         key: 'cve vulnerability plugin dependency npm composer wordpress' },
+      { id: 'malwareScan', href: '/malware-scan', icon: ICONS.shield, badge: 'serverWide',
+        key: 'antivirus malware webshell quarantine clamav sweep cgroup resource limit' },
       { id: 'backupManager', href: '/backup-management', icon: ICONS.server,
         key: 'backup s3 sftp size' },
       { id: 'monitoring', href: '/monitoring', icon: ICONS.chart,

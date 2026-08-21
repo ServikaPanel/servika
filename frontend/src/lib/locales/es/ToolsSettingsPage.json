@@ -23,6 +23,7 @@
     "domains": { "title": "Dominios", "description": "Examine, busque y acceda rápidamente a todos los dominios." },
     "bannedDomains": { "title": "Dominios prohibidos", "description": "Nombres de host que ningún cliente puede añadir a este servidor. Contra el phishing." },
     "siteSecurity": { "title": "Seguridad del sitio", "description": "CVE conocidas en los plugins de WordPress y las dependencias npm y Composer de un cliente." },
+    "malwareScan": { "title": "Análisis de malware", "description": "Análisis en todo el servidor con límites de recursos impuestos por el núcleo, cuarentena automática y programación." },
     "firewall": { "title": "Cortafuegos", "description": "Bloqueo de IP/puerto, lista de permitidos, cierre de puertos. Los puertos críticos están protegidos." },
     "backupManager": { "title": "Gestor de copias de seguridad", "description": "Vea tamaños de copias de todos los dominios, copia con un clic, destinos S3/SFTP." },
     "monitoring": { "title": "Monitorización y registros", "description": "Gráficos de CPU/RAM/disco y registros del servidor desde journald (panel/nginx/SSH…)." }

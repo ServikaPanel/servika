@@ -42,6 +42,7 @@
     "dnsTemplate": { "title": "DNS Template", "subtitle": "Default DNS records" },
     "bannedDomains": { "title": "Banned Domains", "subtitle": "Hostnames no customer may add" },
     "siteSecurity": { "title": "Site Security", "subtitle": "Known vulnerabilities in site dependencies" },
+    "malwareScan": { "title": "Malware Scan", "subtitle": "Server-wide malware sweep, resource limits and quarantine" },
     "appCatalog": { "title": "Application catalog", "subtitle": "Versions, download addresses and checksums the one-click installer offers." },
     "panelUpdate": { "title": "Panel Update", "subtitle": "Panel version and updates" }
   },

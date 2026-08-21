@@ -64,6 +64,10 @@
       "title": "Zabezpečení webu",
       "description": "Známé CVE v pluginech WordPressu a v závislostech npm a Composeru zákazníka."
     },
+    "malwareScan": {
+      "title": "Kontrola malwaru",
+      "description": "Kontrola na celém serveru s limity zdrojů vynucenými jádrem, automatickou karanténou a plánováním."
+    },
     "bannedDomains": {
       "title": "Zakázané domény",
       "description": "Hostname, které žádný zákazník nesmí na tento server přidat. Proti phishingu."

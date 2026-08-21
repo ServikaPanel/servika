@@ -62,6 +62,10 @@
       "title": "Site Güvenliği",
       "description": "Kiracının WordPress eklentileri, npm ve Composer bağımlılıklarındaki bilinen CVE'ler."
     },
+    "malwareScan": {
+      "title": "Zararlı Yazılım Taraması",
+      "description": "Çekirdek tarafından zorlanan kaynak limitleri, otomatik karantina ve zamanlama ile sunucu geneli zararlı yazılım taraması."
+    },
     "bannedDomains": {
       "title": "Yasaklı Alan Adları",
       "description": "Hiçbir müşterinin bu sunucuya ekleyemeyeceği hostname'ler. Phishing'e karşı kullanılır."
