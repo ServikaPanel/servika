@@ -1,11 +1,22 @@
 package avsettings
 
 import (
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
+
+func sourceOf(t *testing.T, name string) string {
+	t.Helper()
+	body, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
 
 // The suggestion clamps must hold on a machine where the measurement is not
 // available at all. Go tests run natively on macOS here, where /proc/meminfo
@@ -200,5 +211,119 @@ func TestTheSliceCarriesTheResolvedValuesAndNotTheStoredZeroes(t *testing.T) {
 	}
 	if !strings.Contains(auto, "MemoryMax="+strconv.Itoa(c.SuggestRAMMB)+"M") {
 		t.Errorf("automatic ram did not render the suggestion (%dM):\n%s", c.SuggestRAMMB, auto)
+	}
+}
+
+// The worker ceiling is set by the slice, not by taste. TasksMax counts every
+// thread in the cgroup, so a pool sized at the slice's whole budget leaves no
+// room for the Go runtime's own threads or for a clamscan subprocess, and the
+// kernel refuses the last workers rather than reporting anything.
+func TestTheWorkerCeilingLeavesRoomInsideTheSliceBudget(t *testing.T) {
+	if MaxScanWorkers >= sliceTasksMax {
+		t.Errorf("a ceiling of %d workers fills the slice's TasksMax of %d",
+			MaxScanWorkers, sliceTasksMax)
+	}
+	if MaxScanWorkers < 2 {
+		t.Errorf("a ceiling of %d makes the pool pointless", MaxScanWorkers)
+	}
+}
+
+// time.NewTicker panics on a non-positive duration, and the rate becomes
+// time.Second/rate. The ceiling is what keeps that division above zero.
+func TestTheFileRateCeilingCannotProduceAZeroInterval(t *testing.T) {
+	if interval := time.Second / time.Duration(MaxFileRatePerSec); interval <= 0 {
+		t.Fatalf("a rate of %d gives a ticker interval of %v, which panics",
+			MaxFileRatePerSec, interval)
+	}
+}
+
+// An automatic worker count follows the CPU quota, because a worker beyond the
+// quota does not scan a file sooner: it waits in the run queue while holding
+// its share of the memory ceiling.
+func TestAnAutomaticWorkerCountFollowsTheQuotaAndIsNeverZero(t *testing.T) {
+	cases := []struct {
+		name   string
+		cpuPct int
+		want   int
+	}{
+		{"eight cores, a quarter of them", 200, 2},
+		{"one core, half of it", 50, 1},
+		{"nothing measured at all", 0, 1},
+		{"a quota larger than the slice can run", 100 * (MaxScanWorkers + 5), MaxScanWorkers},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := suggestWorkers(c.cpuPct); got != c.want {
+				t.Errorf("suggested %d workers, want %d", got, c.want)
+			}
+			resolved := (Settings{}).Resolve(Capacity{SuggestWorkers: suggestWorkers(c.cpuPct)}).ScanWorkers
+			if resolved != c.want {
+				t.Errorf("resolved %d workers, want %d", resolved, c.want)
+			}
+		})
+	}
+	// A capacity nothing filled in must not resolve to a pool of zero, which
+	// would scan no files at all rather than scanning slowly.
+	if got := (Settings{}).Resolve(Capacity{}).ScanWorkers; got != 1 {
+		t.Errorf("an unmeasured capacity resolved to %d workers", got)
+	}
+	// An explicit count wins over the suggestion.
+	if got := (Settings{ScanWorkers: 7}).Resolve(Capacity{SuggestWorkers: 2}).ScanWorkers; got != 7 {
+		t.Errorf("an explicit worker count resolved to %d", got)
+	}
+}
+
+// The file rate has NO automatic value. 0 means no ceiling, and resolving it to
+// some suggested number would throttle every installation that never asked for
+// a limit.
+func TestAnUnsetFileRateStaysUnlimited(t *testing.T) {
+	if got := (Settings{}).Resolve(ServerCapacity()).FileRatePerSec; got != 0 {
+		t.Errorf("an unset file rate resolved to %d instead of no ceiling", got)
+	}
+}
+
+// Both new fields are refused out of range rather than clamped, because a
+// clamped value leaves the screen showing a number the scan is not using.
+func TestTheThroughputSettingsAreRefusedOutOfRange(t *testing.T) {
+	base := Settings{Scope: ScopeHost, CriticalThreshold: 100, IOWeight: 50}
+	cases := []struct {
+		name string
+		s    Settings
+		code string
+	}{
+		{"negative workers", func() Settings { s := base; s.ScanWorkers = -1; return s }(), ReasonWorkersRange},
+		{"workers past the slice budget", func() Settings { s := base; s.ScanWorkers = MaxScanWorkers + 1; return s }(), ReasonWorkersRange},
+		{"negative file rate", func() Settings { s := base; s.FileRatePerSec = -1; return s }(), ReasonFileRateRange},
+		{"file rate that zeroes the ticker", func() Settings { s := base; s.FileRatePerSec = MaxFileRatePerSec + 1; return s }(), ReasonFileRateRange},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ReasonCode(c.s.Validate()); got != c.code {
+				t.Errorf("refused with %q, want %q", got, c.code)
+			}
+		})
+	}
+	// And the automatic values are accepted, or turning the feature off would
+	// be impossible.
+	ok := base
+	ok.ScanWorkers, ok.FileRatePerSec = 0, 0
+	if err := ok.Validate(); err != nil {
+		t.Errorf("the automatic values were refused: %v", err)
+	}
+}
+
+// Every column the row carries has to be read back and written, or a setting
+// saves and then reads as its zero value on the next request.
+func TestTheNewColumnsAreBothReadAndWritten(t *testing.T) {
+	source := sourceOf(t, "avsettings.go")
+	for _, column := range []string{"realtime", "scan_workers", "file_rate_per_sec"} {
+		if strings.Count(source, column) < 2 {
+			t.Errorf("%s does not appear in both the SELECT and the UPDATE", column)
+		}
+	}
+	for _, field := range []string{"&s.Realtime", "&s.ScanWorkers", "&s.FileRatePerSec"} {
+		if !strings.Contains(source, field) {
+			t.Errorf("the row no longer scans into %s", field)
+		}
 	}
 }

@@ -54,6 +54,9 @@ type Settings struct {
 	IOWeight           int    `json:"io_weight"`
 	ScheduledScan      bool   `json:"scheduled_scan"`
 	ScheduledHour      int    `json:"scheduled_hour"`
+	Realtime           bool   `json:"realtime"`
+	ScanWorkers        int    `json:"scan_workers"`
+	FileRatePerSec     int    `json:"file_rate_per_sec"`
 }
 
 // Capacity is what this server actually has, and what the panel proposes when a
@@ -63,17 +66,20 @@ type Settings struct {
 // rather than an abstract percentage. Choosing a ceiling without knowing what
 // is being capped is not a decision.
 type Capacity struct {
-	CPUCores      int `json:"cpu_cores"`
-	TotalRAMMB    int `json:"total_ram_mb"`
-	SuggestCPUPct int `json:"suggest_cpu_percent"`
-	SuggestRAMMB  int `json:"suggest_ram_mb"`
+	CPUCores       int `json:"cpu_cores"`
+	TotalRAMMB     int `json:"total_ram_mb"`
+	SuggestCPUPct  int `json:"suggest_cpu_percent"`
+	SuggestRAMMB   int `json:"suggest_ram_mb"`
+	SuggestWorkers int `json:"suggest_workers"`
 }
 
 // Effective is a Settings after every "0 = automatic" has been resolved.
 type Effective struct {
-	CPUPercent int `json:"cpu_percent"`
-	RAMMB      int `json:"ram_mb"`
-	IOWeight   int `json:"io_weight"`
+	CPUPercent     int `json:"cpu_percent"`
+	RAMMB          int `json:"ram_mb"`
+	IOWeight       int `json:"io_weight"`
+	ScanWorkers    int `json:"scan_workers"`
+	FileRatePerSec int `json:"file_rate_per_sec"`
 }
 
 // Reason codes for a refused write. The screen renders twelve languages, so the
@@ -86,6 +92,8 @@ const (
 	ReasonHourOutOfRange   = "av_scheduled_hour_out_of_range"
 	ReasonCPUPercentTooBig = "av_cpu_percent_too_large"
 	ReasonRAMTooSmall      = "av_ram_too_small"
+	ReasonWorkersRange     = "av_scan_workers_out_of_range"
+	ReasonFileRateRange    = "av_file_rate_out_of_range"
 )
 
 // Refusal carries a stable code beside its English message.
@@ -122,6 +130,25 @@ const minRAMMB = 128
 // while the screen still shows a number.
 const maxCPUPercent = 6400
 
+// MaxScanWorkers bounds how many files the sweep inspects at once.
+//
+// The ceiling is set by the slice, not by taste. The scan runs inside
+// servika-av.slice, which carries TasksMax=64, and that counts every THREAD in
+// the cgroup: the Go runtime's own threads plus one per worker plus whatever a
+// clamscan subprocess adds. Letting an operator ask for 64 workers means the
+// kernel refuses to create the last of them, and a scan short of workers looks
+// exactly like a slow scan. Half the slice's budget leaves room for everything
+// that is not a worker.
+const MaxScanWorkers = 32
+
+// MaxFileRatePerSec bounds the files-per-second ceiling.
+//
+// The rate becomes a ticker interval of time.Second/rate, and NewTicker PANICS
+// on a non-positive duration. At this ceiling the interval is 10 microseconds,
+// which is far faster than any disk can serve a file anyway, so the bound costs
+// nothing real and removes the value that would crash the worker.
+const MaxFileRatePerSec = 100000
+
 // ServerCapacity MEASURES the host. It never assumes.
 func ServerCapacity() Capacity {
 	c := Capacity{CPUCores: runtime.NumCPU()}
@@ -144,7 +171,18 @@ func ServerCapacity() Capacity {
 	case c.SuggestRAMMB > 2048:
 		c.SuggestRAMMB = 2048
 	}
+
+	c.SuggestWorkers = suggestWorkers(c.SuggestCPUPct)
 	return c
+}
+
+// suggestWorkers derives a pool size from the CPU quota rather than from the
+// core count. The quota is what the kernel will actually let the scan run, so a
+// worker beyond it does not scan a file sooner: it waits in the run queue while
+// holding its share of the memory ceiling. One worker per full core of quota,
+// floor 1, capped at the slice's budget.
+func suggestWorkers(cpuPct int) int {
+	return min(max(cpuPct/100, 1), MaxScanWorkers)
 }
 
 // totalRAMMB reads MemTotal. It returns 0 where /proc/meminfo does not exist,
@@ -189,6 +227,18 @@ func (s Settings) Resolve(c Capacity) Effective {
 	if e.IOWeight <= 0 {
 		e.IOWeight = 50
 	}
+	e.ScanWorkers = s.ScanWorkers
+	if e.ScanWorkers <= 0 {
+		e.ScanWorkers = c.SuggestWorkers
+	}
+	// A capacity that was never measured leaves SuggestWorkers at zero, and a
+	// worker pool of zero scans nothing at all rather than scanning slowly.
+	if e.ScanWorkers <= 0 {
+		e.ScanWorkers = 1
+	}
+	// The file rate has no automatic value: 0 means no ceiling, which is what
+	// an operator who has not thought about it should get.
+	e.FileRatePerSec = s.FileRatePerSec
 	return e
 }
 
@@ -250,11 +300,13 @@ func Read(ctx context.Context, db *sql.DB) (Settings, error) {
 	var s Settings
 	err := db.QueryRowContext(ctx, `SELECT rule_engine, location_heuristics, wp_integrity,
 		critical_threshold, auto_quarantine, scope, excluded_paths,
-		cpu_percent, ram_mb, io_weight, scheduled_scan, scheduled_hour
+		cpu_percent, ram_mb, io_weight, scheduled_scan, scheduled_hour,
+		realtime, scan_workers, file_rate_per_sec
 		FROM av_settings WHERE id=1`).
 		Scan(&s.RuleEngine, &s.LocationHeuristics, &s.WPIntegrity,
 			&s.CriticalThreshold, &s.AutoQuarantine, &s.Scope, &s.ExcludedPaths,
-			&s.CPUPercent, &s.RAMMB, &s.IOWeight, &s.ScheduledScan, &s.ScheduledHour)
+			&s.CPUPercent, &s.RAMMB, &s.IOWeight, &s.ScheduledScan, &s.ScheduledHour,
+			&s.Realtime, &s.ScanWorkers, &s.FileRatePerSec)
 	return s, err
 }
 
@@ -290,6 +342,16 @@ func (s Settings) Validate() error {
 	if s.ScheduledHour < 0 || s.ScheduledHour > 23 {
 		return refuse(ReasonHourOutOfRange, "scheduled hour must be between 0 and 23")
 	}
+	if s.ScanWorkers < 0 || s.ScanWorkers > MaxScanWorkers {
+		return refuse(ReasonWorkersRange,
+			"scan workers must be between 1 and "+strconv.Itoa(MaxScanWorkers)+
+				" or 0 for automatic")
+	}
+	if s.FileRatePerSec < 0 || s.FileRatePerSec > MaxFileRatePerSec {
+		return refuse(ReasonFileRateRange,
+			"file rate must be between 1 and "+strconv.Itoa(MaxFileRatePerSec)+
+				" files per second or 0 for no ceiling")
+	}
 	return nil
 }
 
@@ -305,11 +367,13 @@ func Write(ctx context.Context, db *sql.DB, s Settings) error {
 	if _, err := db.ExecContext(ctx, `UPDATE av_settings SET
 		rule_engine=?, location_heuristics=?, wp_integrity=?,
 		critical_threshold=?, auto_quarantine=?, scope=?, excluded_paths=?,
-		cpu_percent=?, ram_mb=?, io_weight=?, scheduled_scan=?, scheduled_hour=?
+		cpu_percent=?, ram_mb=?, io_weight=?, scheduled_scan=?, scheduled_hour=?,
+		realtime=?, scan_workers=?, file_rate_per_sec=?
 		WHERE id=1`,
 		s.RuleEngine, s.LocationHeuristics, s.WPIntegrity,
 		s.CriticalThreshold, s.AutoQuarantine, s.Scope, s.ExcludedPaths,
-		s.CPUPercent, s.RAMMB, s.IOWeight, s.ScheduledScan, s.ScheduledHour); err != nil {
+		s.CPUPercent, s.RAMMB, s.IOWeight, s.ScheduledScan, s.ScheduledHour,
+		s.Realtime, s.ScanWorkers, s.FileRatePerSec); err != nil {
 		return err
 	}
 	return ApplyLimits(s)
