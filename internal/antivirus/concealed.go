@@ -59,7 +59,7 @@ func concealedMatches(ext string, content []byte) []match {
 	lowerRaw := bytes.ToLower(content)
 	for _, name := range found {
 		if !bytes.Contains(lowerRaw, bytes.ToLower(name)) {
-			return []match{{"PHP.Obf.ConcealedFunctionName", weightProof}}
+			return []match{{name: "PHP.Obf.ConcealedFunctionName", score: weightProof}}
 		}
 	}
 	return nil

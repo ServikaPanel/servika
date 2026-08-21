@@ -73,12 +73,12 @@ func taintMatches(ext string, content []byte) []match {
 	}
 	for _, m := range taintedVarCall.FindAllStringSubmatch(body, -1) {
 		if assigned[strings.ToLower(m[1])] {
-			return []match{{"PHP.Taint.RequestNameExecuted", weightProof}}
+			return []match{{name: "PHP.Taint.RequestNameExecuted", score: weightProof}}
 		}
 	}
 	for _, m := range taintedSinkArg.FindAllStringSubmatch(body, -1) {
 		if assigned[strings.ToLower(m[1])] {
-			return []match{{"PHP.Taint.RequestValueToSink", weightProof}}
+			return []match{{name: "PHP.Taint.RequestValueToSink", score: weightProof}}
 		}
 	}
 	return nil

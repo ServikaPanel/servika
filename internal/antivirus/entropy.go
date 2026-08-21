@@ -78,7 +78,7 @@ func entropyMatches(ext string, content []byte) []match {
 	if highestLineEntropy(content) <= entropyThreshold {
 		return nil
 	}
-	return []match{{"PHP.Obf.HighEntropyLine", weightWeak}}
+	return []match{{name: "PHP.Obf.HighEntropyLine", score: weightWeak}}
 }
 
 // highestLineEntropy returns the Shannon entropy of the densest long line, or 0

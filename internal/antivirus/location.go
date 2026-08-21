@@ -45,27 +45,27 @@ func locationMatches(root, path string) []match {
 	var out []match
 	switch {
 	case strings.Contains(rel, "/wp-content/uploads/"):
-		out = append(out, match{"Location.UploadsExecutable", weightProof})
+		out = append(out, match{name: "Location.UploadsExecutable", score: weightProof})
 	case strings.Contains(rel, "/wp-content/cache/"):
 		// A cache directory holds generated PHP on some stacks, so this is
 		// evidence rather than a verdict.
-		out = append(out, match{"Location.CacheExecutable", weightStrong})
+		out = append(out, match{name: "Location.CacheExecutable", score: weightStrong})
 	case strings.Contains(rel, "/.well-known/"):
 		// That directory exists to serve fixed verification files to an ACME
 		// server and to a browser. Nothing there is meant to execute.
-		out = append(out, match{"Location.WellKnownExecutable", weightProof})
+		out = append(out, match{name: "Location.WellKnownExecutable", score: weightProof})
 	}
 
 	base := strings.ToLower(filepath.Base(rel))
 	for _, fake := range fakeExtensions {
 		if strings.Contains(base, fake) {
-			out = append(out, match{"Location.DoubleExtension", 80})
+			out = append(out, match{name: "Location.DoubleExtension", score: 80})
 			break
 		}
 	}
 
 	if hiddenDirectory(rel) {
-		out = append(out, match{"Location.HiddenDirectory", scoreSuspicious})
+		out = append(out, match{name: "Location.HiddenDirectory", score: scoreSuspicious})
 	}
 	return out
 }

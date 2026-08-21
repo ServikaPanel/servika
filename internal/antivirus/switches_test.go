@@ -156,7 +156,7 @@ func TestTheSettingsAreReadBeforeTheWorkerAndNotByIt(t *testing.T) {
 // word, which is the operator's call.
 func TestTheCriticalThresholdMovesAndTheReportingThresholdDoesNot(t *testing.T) {
 	// One weightStrong signal: 60, which is suspicious under the shipped 100.
-	strong := []match{{"X.Strong", weightStrong}}
+	strong := []match{{name: "X.Strong", score: weightStrong}}
 
 	if _, _, _, level := verdict(strong, 0); level != LevelSuspicious {
 		t.Errorf("a single strong signal is %q under the shipped threshold, want suspicious", level)
@@ -170,7 +170,7 @@ func TestTheCriticalThresholdMovesAndTheReportingThresholdDoesNot(t *testing.T) 
 
 	// A weak signal alone is below the reporting threshold, and no critical
 	// threshold an operator can set may change that.
-	weak := []match{{"X.Weak", weightWeak}}
+	weak := []match{{name: "X.Weak", score: weightWeak}}
 	for _, critical := range []int{0, 1, 20, 100, 5000} {
 		if _, _, _, level := verdict(weak, critical); level != "" {
 			t.Errorf("a single weak signal became %q at critical=%d", level, critical)

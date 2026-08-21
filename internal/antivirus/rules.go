@@ -272,6 +272,10 @@ func levelFor(score, critical int) string {
 type match struct {
 	name  string
 	score int
+	// remote marks a rule that arrived in a signed package rather than one
+	// compiled into this binary. It is what keeps an unmeasured rule from
+	// driving containment; see verdict.
+	remote bool
 }
 
 // evaluate weighs one file's content against the rule set and the signals that
@@ -280,7 +284,18 @@ func evaluate(ext string, content []byte) []match {
 	out := evaluateWith(heuristics, ext, content)
 	out = append(out, entropyMatches(ext, content)...)
 	out = append(out, taintMatches(ext, content)...)
-	return append(out, concealedMatches(ext, content)...)
+	out = append(out, concealedMatches(ext, content)...)
+
+	// Remote rules are weighed in a separate pass and MARKED, rather than being
+	// merged into the shipped set. Every weight above was measured against a
+	// real clean corpus; a rule that arrived in a package has not been, and the
+	// mark is what stops an unmeasured rule from driving containment. See
+	// remoterules.go.
+	for _, found := range evaluateWith(RemoteRules(), ext, content) {
+		found.remote = true
+		out = append(out, found)
+	}
+	return out
 }
 
 // evaluateWith is the same weighing against an explicit set, so a test can
@@ -294,7 +309,7 @@ func evaluateWith(rules []rule, ext string, content []byte) []match {
 			continue
 		}
 		if h.re.Match(content) {
-			out = append(out, match{h.name, h.score})
+			out = append(out, match{name: h.name, score: h.score})
 		}
 	}
 	return out
@@ -309,12 +324,28 @@ func evaluateWith(rules []rule, ext string, content []byte) []match {
 // means the total did not reach the reporting threshold and no row is written.
 func verdict(matches []match, critical int) (score int, signature string, names []string, level string) {
 	best := 0
+	builtIn := false
 	for _, m := range matches {
 		score += m.score
 		names = append(names, m.name)
+		if !m.remote {
+			builtIn = true
+		}
 		if m.score > best {
 			best, signature = m.score, m.name
 		}
 	}
-	return score, signature, names, levelFor(score, critical)
+	level = levelFor(score, critical)
+
+	// A critical verdict needs at least one rule that was measured against the
+	// clean corpus. Remote rules are already capped below scoreCritical so no
+	// single one can convict, but two of them add up, and a critical finding is
+	// what automatic containment acts on: it MOVES a file out of a customer's
+	// live site, which is the one action here that a wrong rule cannot be
+	// forgiven for. Reporting is reversible, containment is not, so remote
+	// evidence can raise a file to suspicious and no further on its own.
+	if level == LevelCritical && !builtIn {
+		level = LevelSuspicious
+	}
+	return score, signature, names, level
 }

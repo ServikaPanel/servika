@@ -201,6 +201,13 @@ func runWorker(requestPath, resultPath string) error {
 	if len(req.Roots) == 0 {
 		return errors.New("the request names no root to scan")
 	}
+	// The signed rule package the panel last verified, if there is one. This
+	// process does not fetch: it is confined and its budget is for reading
+	// files. A failure here leaves the built-in set running, which is what a
+	// worker did before packages existed, so it is reported and not fatal.
+	if err := LoadRulesFromDisk(); err != nil && !errors.Is(err, ErrRuleKeyAbsent) && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "scan worker: packaged rules not in use: %v\n", err)
+	}
 	// The unit's own RuntimeMaxSec is the outer bound; this one exists so the
 	// worker writes what it found before being killed, rather than being killed
 	// with the result file still empty.

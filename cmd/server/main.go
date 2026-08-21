@@ -342,6 +342,13 @@ func main() {
 	// here; the 24-hour manifest poll starts its own goroutine.
 	system.StartVersionCheck(version, buildDate)
 
+	// The signed malware rule package, if this build carries a signing key. The
+	// PANEL is the only process that fetches: the scan worker runs inside
+	// servika-av.slice with nested deadlines and the watcher's unit is sandboxed
+	// for reading tenant trees, so both read the disk copy written here. A build
+	// with no key configured starts nothing at all.
+	antivirus.StartRuleUpdater(context.Background())
+
 	// Backfill customer panel accounts onto the multi-user model.
 	// Idempotent: exits silently when there is no tenant to migrate. The
 	// generated accounts have no password and therefore cannot log in until an

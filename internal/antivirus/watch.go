@@ -77,6 +77,14 @@ func runWatcher() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// The signed rule package the panel last verified, if there is one. The
+	// watcher does not fetch: its unit is sandboxed for reading tenant trees,
+	// and the panel is the only process that writes this file. A failure leaves
+	// the built-in set running, so it is reported and not fatal.
+	if err := LoadRulesFromDisk(); err != nil && !errors.Is(err, ErrRuleKeyAbsent) && !os.IsNotExist(err) {
+		log.Printf("antivirus watcher: packaged rules not in use: %v", err)
+	}
+
 	w, err := newWatcher(ctx, handle)
 	if err != nil {
 		if errors.Is(err, errWatchDisabled) {

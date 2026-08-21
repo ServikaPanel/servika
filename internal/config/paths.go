@@ -76,6 +76,14 @@ const (
 	// only, and a table re-downloaded on every update would leave the integrity
 	// check offline for exactly as long as wordpress.org is unreachable.
 	DefaultWPChecksumDir = "/var/lib/servika/wp-checksums"
+	// DefaultAVRulesFile holds the last signed malware rule package that
+	// verified. It sits on persistent state for the same reason the GeoIP
+	// database does: servika-update replaces bin/, frontend-dist and src/ only,
+	// and a package re-fetched on every update would leave the scanner on the
+	// built-in set for as long as the publication host is unreachable. The scan
+	// worker and the real-time watcher are separate processes and read this file
+	// rather than the network, so the panel is the only thing that fetches.
+	DefaultAVRulesFile = "/var/lib/servika/av/rules.svkav"
 	// DefaultTuningBackupDir holds the copy of a configuration file taken before
 	// the tuning screen edits it. The copy is what a revert restores, so it must
 	// outlive the panel process and must NOT sit beside the file it copies:
@@ -147,7 +155,13 @@ const (
 	DefaultIonCubeURLAMD64    = "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz"
 	DefaultIonCubeURLARM64    = "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_aarch64.tar.gz"
 	DefaultUpdateBootstrapURL = "https://raw.githubusercontent.com/ServikaPanel/servika/main/assets/ops/servika-update"
-	DefaultVersionEndpoint    = "https://raw.githubusercontent.com/ServikaPanel/servika/main/version.json"
+	// DefaultAVRulesURL is where the signed malware rule package is published.
+	// The host does not have to be trusted: the package carries an Ed25519
+	// signature made with a key that never reaches the publication host, and a
+	// package that does not verify is refused rather than loaded. That is why
+	// serving it from the same branch path as version.json is safe.
+	DefaultAVRulesURL      = "https://raw.githubusercontent.com/ServikaPanel/servika/main/assets/av/rules.svkav"
+	DefaultVersionEndpoint = "https://raw.githubusercontent.com/ServikaPanel/servika/main/version.json"
 )
 
 // EnvString returns a trimmed environment value or its fallback.
@@ -374,6 +388,8 @@ func UpdateBootstrapURL() string {
 	return mustURL("SERVIKA_UPDATE_BOOTSTRAP_URL", DefaultUpdateBootstrapURL)
 }
 func VersionEndpoint() string { return mustURL("SERVIKA_VERSION_ENDPOINT", DefaultVersionEndpoint) }
+func AVRulesURL() string      { return mustURL("SERVIKA_AV_RULES_URL", DefaultAVRulesURL) }
+func AVRulesFile() string     { return mustAbsPath("SERVIKA_AV_RULES_FILE", DefaultAVRulesFile) }
 
 // OpsTool returns the absolute path for an operations helper under SERVIKA_OPSBIN.
 func OpsTool(name string) string {
@@ -441,6 +457,8 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_IONCUBE_URL", DefaultIonCubeURLForArch(), true},
 		{"SERVIKA_UPDATE_BOOTSTRAP_URL", DefaultUpdateBootstrapURL, true},
 		{"SERVIKA_VERSION_ENDPOINT", DefaultVersionEndpoint, true},
+		{"SERVIKA_AV_RULES_URL", DefaultAVRulesURL, true},
+		{"SERVIKA_AV_RULES_FILE", DefaultAVRulesFile, false},
 	}
 	for _, check := range checks {
 		var err error
