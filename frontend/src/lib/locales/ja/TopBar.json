@@ -12,76 +12,283 @@
   "copied": "コピーしました",
   "themeToggle": "テーマ: {{theme}}、クリックで変更",
   "pages": {
-    "home": { "title": "ホーム", "subtitle": "パネル概要" },
-    "domains": { "title": "ドメイン", "subtitle": "ドメインとサブスクリプション" },
-    "servicePlans": { "title": "サービスプラン", "subtitle": "パッケージとクォータのプラン" },
-    "customers": { "title": "顧客", "subtitle": "顧客と連絡先の記録" },
-    "users": { "title": "ユーザー", "subtitle": "パネルアカウント" },
-    "dns": { "title": "DNS 管理", "subtitle": "サーバー全体の DNS レコード" },
-    "ssl": { "title": "SSL 証明書", "subtitle": "TLS と証明書の管理" },
-    "mail": { "title": "メールアカウント", "subtitle": "メールボックスとメール" },
-    "databases": { "title": "データベース", "subtitle": "MySQL データベース" },
-    "wordpress": { "title": "WordPress", "subtitle": "WordPress サイト" },
-    "serverStatus": { "title": "サーバーステータス", "subtitle": "リソースとサービスの概要" },
-    "profile": { "title": "プロフィールと設定", "subtitle": "アカウントとセキュリティの設定" },
-    "accountTransfer": { "title": "アカウント移行", "subtitle": "アカウントとサイトの移行" },
-    "siteMigration": { "title": "サイト移行", "subtitle": "cPanel、Plesk、DirectAdmin からの移行" },
-    "toolsSettings": { "title": "ツールと設定", "subtitle": "パネルツール" },
-    "optimize": { "title": "サーバー最適化", "subtitle": "サーバーチューニング" },
-    "serverIPs": { "title": "サーバーアドレス", "subtitle": "追加の IPv4 アドレス" },
-    "panelPort": { "title": "パネルのポート", "subtitle": "パネル自身のポート" },
-    "hostApps": { "title": "サーバーアプリケーション", "subtitle": "Gitea、Grafana などのサーバーソフトウェア" },
-    "statistics": { "title": "統計", "subtitle": "使用統計" },
-    "firewall": { "title": "ファイアウォール", "subtitle": "ファイアウォールルール" },
-    "monitoring": { "title": "モニタリング", "subtitle": "リアルタイムのサーバーメトリックとログ" },
-    "auditLog": { "title": "セキュリティログ", "subtitle": "セキュリティイベント" },
-    "services": { "title": "サービス", "subtitle": "システムサービス" },
-    "phpVersions": { "title": "PHP バージョン", "subtitle": "PHP バージョン管理" },
-    "phpModules": { "title": "PHP モジュール", "subtitle": "PHP 拡張機能の管理" },
-    "packages": { "title": "パッケージマネージャー", "subtitle": "システムパッケージ" },
-    "dnsTemplate": { "title": "DNS テンプレート", "subtitle": "デフォルトの DNS レコード" },
-    "bannedDomains": { "title": "禁止ドメイン", "subtitle": "顧客が追加できないホスト名" },
-    "siteSecurity": { "title": "サイトセキュリティ", "subtitle": "依存関係の既知の脆弱性" },
-    "malwareScan": { "title": "マルウェアスキャン", "subtitle": "サーバー全体のマルウェアスキャン、資源制限、隔離" },
-    "appCatalog": { "title": "アプリケーションカタログ", "subtitle": "ワンクリック導入で提供するバージョン、ダウンロード先、チェックサム。" },
-    "panelUpdate": { "title": "パネル更新", "subtitle": "パネルのバージョンと更新" }
+    "home": {
+      "title": "ホーム",
+      "subtitle": "パネル概要"
+    },
+    "domains": {
+      "title": "ドメイン",
+      "subtitle": "ドメインとサブスクリプション"
+    },
+    "servicePlans": {
+      "title": "サービスプラン",
+      "subtitle": "パッケージとクォータのプラン"
+    },
+    "customers": {
+      "title": "顧客",
+      "subtitle": "顧客と連絡先の記録"
+    },
+    "users": {
+      "title": "ユーザー",
+      "subtitle": "パネルアカウント"
+    },
+    "dns": {
+      "title": "DNS 管理",
+      "subtitle": "サーバー全体の DNS レコード"
+    },
+    "ssl": {
+      "title": "SSL 証明書",
+      "subtitle": "TLS と証明書の管理"
+    },
+    "mail": {
+      "title": "メールアカウント",
+      "subtitle": "メールボックスとメール"
+    },
+    "databases": {
+      "title": "データベース",
+      "subtitle": "MySQL データベース"
+    },
+    "wordpress": {
+      "title": "WordPress",
+      "subtitle": "WordPress サイト"
+    },
+    "serverStatus": {
+      "title": "サーバーステータス",
+      "subtitle": "リソースとサービスの概要"
+    },
+    "profile": {
+      "title": "プロフィールと設定",
+      "subtitle": "アカウントとセキュリティの設定"
+    },
+    "accountTransfer": {
+      "title": "アカウント移行",
+      "subtitle": "アカウントとサイトの移行"
+    },
+    "siteMigration": {
+      "title": "サイト移行",
+      "subtitle": "cPanel、Plesk、DirectAdmin からの移行"
+    },
+    "toolsSettings": {
+      "title": "ツールと設定",
+      "subtitle": "パネルツール"
+    },
+    "optimize": {
+      "title": "サーバー最適化",
+      "subtitle": "サーバーチューニング"
+    },
+    "serverIPs": {
+      "title": "サーバーアドレス",
+      "subtitle": "追加の IPv4 アドレス"
+    },
+    "panelPort": {
+      "title": "パネルのポート",
+      "subtitle": "パネル自身のポート"
+    },
+    "hostApps": {
+      "title": "サーバーアプリケーション",
+      "subtitle": "Gitea、Grafana などのサーバーソフトウェア"
+    },
+    "statistics": {
+      "title": "統計",
+      "subtitle": "使用統計"
+    },
+    "firewall": {
+      "title": "ファイアウォール",
+      "subtitle": "ファイアウォールルール"
+    },
+    "monitoring": {
+      "title": "モニタリング",
+      "subtitle": "リアルタイムのサーバーメトリックとログ"
+    },
+    "auditLog": {
+      "title": "セキュリティログ",
+      "subtitle": "セキュリティイベント"
+    },
+    "services": {
+      "title": "サービス",
+      "subtitle": "システムサービス"
+    },
+    "phpVersions": {
+      "title": "PHP バージョン",
+      "subtitle": "PHP バージョン管理"
+    },
+    "phpModules": {
+      "title": "PHP モジュール",
+      "subtitle": "PHP 拡張機能の管理"
+    },
+    "packages": {
+      "title": "パッケージマネージャー",
+      "subtitle": "システムパッケージ"
+    },
+    "dnsTemplate": {
+      "title": "DNS テンプレート",
+      "subtitle": "デフォルトの DNS レコード"
+    },
+    "bannedDomains": {
+      "title": "禁止ドメイン",
+      "subtitle": "顧客が追加できないホスト名"
+    },
+    "siteSecurity": {
+      "title": "サイトセキュリティ",
+      "subtitle": "依存関係の既知の脆弱性"
+    },
+    "malwareScan": {
+      "title": "マルウェアスキャン",
+      "subtitle": "サーバー全体のマルウェアスキャン、資源制限、隔離"
+    },
+    "appCatalog": {
+      "title": "アプリケーションカタログ",
+      "subtitle": "ワンクリック導入で提供するバージョン、ダウンロード先、チェックサム。"
+    },
+    "panelUpdate": {
+      "title": "パネル更新",
+      "subtitle": "パネルのバージョンと更新"
+    }
   },
   "domain": {
-    "overview": { "title": "概要", "subtitle": "ドメイン概要" },
-    "files": { "title": "ファイルマネージャー", "subtitle": "ファイルとディレクトリ" },
-    "webServer": { "title": "Apache & nginx", "subtitle": "Web サーバー設定" },
-    "php": { "title": "PHP 設定", "subtitle": "PHP と FPM の設定" },
-    "composer": { "title": "Composer", "subtitle": "PHP パッケージ管理" },
-    "performance": { "title": "パフォーマンス", "subtitle": "サイトパフォーマンス設定" },
-    "redis": { "title": "Redis キャッシュ", "subtitle": "キャッシュ管理" },
-    "wordpress": { "title": "WordPress", "subtitle": "WordPress ツール" },
-    "dns": { "title": "DNS 設定", "subtitle": "ドメインの DNS レコード" },
-    "subdomains": { "title": "サブドメイン", "subtitle": "サブドメイン" },
-    "addonDomains": { "title": "アドオンドメイン", "subtitle": "エイリアスドメイン" },
-    "ssl": { "title": "SSL/TLS", "subtitle": "HTTPS 証明書" },
-    "databases": { "title": "データベース", "subtitle": "MySQL データベース" },
-    "ftp": { "title": "FTP アカウント", "subtitle": "FTP アクセス" },
-    "mail": { "title": "メール", "subtitle": "メールボックス" },
-    "mailReports": { "title": "配信到達性", "subtitle": "DMARC と MTA-STS" },
-    "backups": { "title": "バックアップ", "subtitle": "ドメインバックアップ" },
-    "copy": { "title": "サイトをコピー", "subtitle": "サイトの複製" },
-    "git": { "title": "Git デプロイ", "subtitle": "Git デプロイ" },
-    "laravel": { "title": "Laravel ツールキット", "subtitle": "Laravel ツール" },
-    "cron": { "title": "スケジュールされたタスク", "subtitle": "cron ジョブ" },
-    "apps": { "title": "アプリケーション", "subtitle": "Node.js と Python のプロセス" },
-    "ssh": { "title": "SSH アクセス", "subtitle": "ターミナルアクセス" },
-    "logs": { "title": "ログ", "subtitle": "アクセスログとエラーログ" },
-    "waf": { "title": "WAF", "subtitle": "Web アプリケーションファイアウォール" },
-    "accessControl": { "title": "アクセス制御", "subtitle": "IP アクセスルール" },
+    "overview": {
+      "title": "概要",
+      "subtitle": "ドメイン概要"
+    },
+    "files": {
+      "title": "ファイルマネージャー",
+      "subtitle": "ファイルとディレクトリ"
+    },
+    "webServer": {
+      "title": "Apache & nginx",
+      "subtitle": "Web サーバー設定"
+    },
+    "php": {
+      "title": "PHP 設定",
+      "subtitle": "PHP と FPM の設定"
+    },
+    "composer": {
+      "title": "Composer",
+      "subtitle": "PHP パッケージ管理"
+    },
+    "performance": {
+      "title": "パフォーマンス",
+      "subtitle": "サイトパフォーマンス設定"
+    },
+    "redis": {
+      "title": "Redis キャッシュ",
+      "subtitle": "キャッシュ管理"
+    },
+    "wordpress": {
+      "title": "WordPress",
+      "subtitle": "WordPress ツール"
+    },
+    "dns": {
+      "title": "DNS 設定",
+      "subtitle": "ドメインの DNS レコード"
+    },
+    "subdomains": {
+      "title": "サブドメイン",
+      "subtitle": "サブドメイン"
+    },
+    "addonDomains": {
+      "title": "アドオンドメイン",
+      "subtitle": "エイリアスドメイン"
+    },
+    "ssl": {
+      "title": "SSL/TLS",
+      "subtitle": "HTTPS 証明書"
+    },
+    "databases": {
+      "title": "データベース",
+      "subtitle": "MySQL データベース"
+    },
+    "ftp": {
+      "title": "FTP アカウント",
+      "subtitle": "FTP アクセス"
+    },
+    "mail": {
+      "title": "メール",
+      "subtitle": "メールボックス"
+    },
+    "mailReports": {
+      "title": "配信到達性",
+      "subtitle": "DMARC と MTA-STS"
+    },
+    "backups": {
+      "title": "バックアップ",
+      "subtitle": "ドメインバックアップ"
+    },
+    "copy": {
+      "title": "サイトをコピー",
+      "subtitle": "サイトの複製"
+    },
+    "git": {
+      "title": "Git デプロイ",
+      "subtitle": "Git デプロイ"
+    },
+    "laravel": {
+      "title": "Laravel ツールキット",
+      "subtitle": "Laravel ツール"
+    },
+    "cron": {
+      "title": "スケジュールされたタスク",
+      "subtitle": "cron ジョブ"
+    },
+    "apps": {
+      "title": "アプリケーション",
+      "subtitle": "Node.js と Python のプロセス"
+    },
+    "ssh": {
+      "title": "SSH アクセス",
+      "subtitle": "ターミナルアクセス"
+    },
+    "logs": {
+      "title": "ログ",
+      "subtitle": "アクセスログとエラーログ"
+    },
+    "waf": {
+      "title": "WAF",
+      "subtitle": "Web アプリケーションファイアウォール"
+    },
+    "accessControl": {
+      "title": "アクセス制御",
+      "subtitle": "IP アクセスルール"
+    },
     "maintenance": {
       "title": "メンテナンスモード",
       "subtitle": "サイトを一時的に閉じる"
     },
-    "passwordProtection": { "title": "パスワード保護", "subtitle": "ディレクトリのパスワード" },
-    "imunify": { "title": "Imunify", "subtitle": "マルウェアスキャン" },
-    "siteSecurity": { "title": "サイトセキュリティ", "subtitle": "依存関係の既知の脆弱性" },
-    "appInstaller": { "title": "アプリケーション", "subtitle": "ワンクリックのアプリ導入" },
-    "stats": { "title": "統計", "subtitle": "ドメイン使用データ" },
-    "connection": { "title": "接続情報", "subtitle": "FTP とデータベースの詳細" }
+    "passwordProtection": {
+      "title": "パスワード保護",
+      "subtitle": "ディレクトリのパスワード"
+    },
+    "imunify": {
+      "title": "Imunify",
+      "subtitle": "マルウェアスキャン"
+    },
+    "siteSecurity": {
+      "title": "サイトセキュリティ",
+      "subtitle": "依存関係の既知の脆弱性"
+    },
+    "appInstaller": {
+      "title": "アプリケーション",
+      "subtitle": "ワンクリックのアプリ導入"
+    },
+    "stats": {
+      "title": "統計",
+      "subtitle": "ドメイン使用データ"
+    },
+    "connection": {
+      "title": "接続情報",
+      "subtitle": "FTP とデータベースの詳細"
+    }
+  },
+  "notify": {
+    "markAll": "すべて既読にする",
+    "empty": "報告はありません。",
+    "failed": "通知を読み込めませんでした。",
+    "serverWide": "サーバー全体",
+    "antivirus": {
+      "sweepDomain": "{{domain}} でマルウェアを検出しました: {{count}} 件のファイル。",
+      "sweepServer": "サーバースキャンで {{sites}} 件のサイトに {{count}} 件の感染ファイルを検出しました。",
+      "realtimeDetected": "{{domain}} に書き込まれたファイルが感染しています。ファイルはまだ残っています。",
+      "realtimeContained": "{{domain}} に書き込まれたファイルが感染していたため、隔離しました。"
+    }
   }
 }
