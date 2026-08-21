@@ -878,6 +878,22 @@ EOF
 fi
 
 section "Crash history"
+# The window below is only as good as the journal it reads. AlmaLinux ships
+# journald with Storage=auto and no /var/log/journal, so the journal lives in
+# /run alone and every reboot erases it: "the last 24 hours" then silently means
+# "since boot", and a crash that CAUSED a reboot is reported as none at all.
+#
+# This is a WARNING and never a critical. The panel works perfectly well on a
+# volatile journal, so failing the installation over it would be another gate
+# that stops a healthy server. The result asserts on a FILE, because a directory
+# with no journal in it is exactly what a persistence attempt that never flushed
+# leaves behind.
+JOURNAL_STORE=$(find /var/log/journal -maxdepth 2 -type f -name '*.journal' -print -quit 2>/dev/null || true)
+if [ -n "$JOURNAL_STORE" ]; then
+  pass "journal persistence" "the journal is stored on disk (/var/log/journal)"
+else
+  warn "journal persistence" "the journal is volatile, so the crash window below covers only the current boot (fix: servika-repair --only journal)"
+fi
 # `journalctl -p err` does NOT show a Go panic: the runtime writes it to stderr,
 # which systemd records at notice priority. Any alarm built on a priority filter
 # misses this whole class, so the journal is searched by PATTERN instead.
