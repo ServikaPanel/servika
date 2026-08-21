@@ -48,6 +48,7 @@
     "verifyClean": "Çekirdek dosyalar resmi sağlama toplamlarıyla eşleşiyor.",
     "verifyFound": "{{extra}} ait olmayan dosya, {{modified}} değiştirilmiş, {{missing}} eksik. Ait olmayan dosyalar zararlı yazılım sayfasından karantinaya alınabilir.",
     "verifyUnavailable": "Denetim yapılamadı: wordpress.org'a ulaşılamadı ve önbellekte sağlama toplamı tablosu yok. Bu, temiz sonucu anlamına gelmez.",
+    "verifyUnknownVersion": "Denetim yapılamadı: bu kurulumun version.php dosyası, wordpress.org'un yayımlamadığı bir WordPress sürümü belirtiyor, yani karşılaştırılacak bir şey yok. version.php dosyasını inceleyin, çünkü onu değiştirmek çekirdekteki tüm değişiklikleri gizler.",
     "coreUpdated": "WordPress çekirdeği güncellendi.",
     "allUpdated": "Çekirdek, eklentiler ve temalar güncellendi.",
     "maintenanceEnabled": "Bakım modu açıldı.",

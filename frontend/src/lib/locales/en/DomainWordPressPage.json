@@ -48,6 +48,7 @@
     "verifyClean": "Core files match the official checksums.",
     "verifyFound": "{{extra}} file(s) that do not belong, {{modified}} modified, {{missing}} missing. Extra files can be quarantined from the malware page.",
     "verifyUnavailable": "The check could not be performed: wordpress.org could not be reached and no cached checksum table is available. This is not a clean result.",
+    "verifyUnknownVersion": "The check could not be performed: this installation's version.php names a WordPress version that wordpress.org does not publish, so there is nothing to compare against. Check version.php, because editing it hides every core change.",
     "coreUpdated": "WordPress core updated.",
     "allUpdated": "Core, plugins, and themes updated.",
     "maintenanceEnabled": "Maintenance mode enabled.",

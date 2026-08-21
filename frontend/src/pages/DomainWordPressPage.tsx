@@ -193,12 +193,19 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
   async function verify() {
     setBusy('verify'); setError(null); setSuccess(null); setOutput(null)
     try {
-      const { data } = await api.post<{ measured?: boolean; extra: number; modified: number; missing: number; output?: string }>(
+      const { data } = await api.post<{ measured?: boolean; reason?: string; extra: number; modified: number; missing: number; output?: string }>(
         `${base}/wordpress/verify`, { dir })
       // A check that compared nothing answers measured:false with every count
       // absent, so the totals below would add to zero and announce a clean core
-      // for a comparison that never happened.
-      if (data.measured === false) setError(t('messages.verifyUnavailable'))
+      // for a comparison that never happened. The two reasons are worded apart:
+      // one is a network fault, the other is this installation naming a version
+      // wordpress.org does not publish, which is how a single edit to
+      // version.php hides every other change to the core.
+      if (data.measured === false) {
+        setError(data.reason === 'wp_checksums_unknown_version'
+          ? t('messages.verifyUnknownVersion')
+          : t('messages.verifyUnavailable'))
+      }
       else {
         const total = data.extra + data.modified + data.missing
         if (total === 0) setSuccess(t('messages.verifyClean'))

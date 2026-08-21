@@ -48,6 +48,7 @@
     "verifyClean": "Les fichiers du cœur correspondent aux sommes de contrôle officielles.",
     "verifyFound": "{{extra}} fichier(s) étranger(s), {{modified}} modifié(s), {{missing}} manquant(s). Les fichiers étrangers peuvent être mis en quarantaine depuis la page des logiciels malveillants.",
     "verifyUnavailable": "La vérification n'a pas pu être effectuée : wordpress.org est injoignable et aucune table de sommes de contrôle n'est en cache. Ce n'est pas un résultat propre.",
+    "verifyUnknownVersion": "La vérification n'a pas pu être effectuée : le version.php de cette installation indique une version de WordPress que wordpress.org ne publie pas, il n'y a donc rien à comparer. Examinez version.php, car le modifier masque toute modification du cœur.",
     "coreUpdated": "Cœur de WordPress mis à jour.",
     "allUpdated": "Cœur, extensions et thèmes mis à jour.",
     "maintenanceEnabled": "Mode maintenance activé.",

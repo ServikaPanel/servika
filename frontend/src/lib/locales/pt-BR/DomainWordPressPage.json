@@ -48,6 +48,7 @@
     "verifyClean": "Os arquivos do núcleo correspondem às somas de verificação oficiais.",
     "verifyFound": "{{extra}} arquivo(s) que não pertencem, {{modified}} modificados, {{missing}} ausentes. Os arquivos que não pertencem podem ir para quarentena na página de malware.",
     "verifyUnavailable": "Não foi possível realizar a verificação: o wordpress.org está inacessível e não há tabela de checksums em cache. Isso não é um resultado limpo.",
+    "verifyUnknownVersion": "Não foi possível realizar a verificação: o version.php desta instalação indica uma versão do WordPress que o wordpress.org não publica, então não há nada com que comparar. Verifique o version.php, porque alterá-lo esconde qualquer alteração no núcleo.",
     "coreUpdated": "Núcleo do WordPress atualizado.",
     "allUpdated": "Núcleo, plugins e temas atualizados.",
     "maintenanceEnabled": "Modo de manutenção ativado.",

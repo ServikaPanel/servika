@@ -48,6 +48,7 @@
     "verifyClean": "コアファイルは公式のチェックサムと一致しています。",
     "verifyFound": "本来存在しないファイル {{extra}} 件、改変 {{modified}} 件、欠落 {{missing}} 件。本来存在しないファイルはマルウェアのページから隔離できます。",
     "verifyUnavailable": "チェックを実行できませんでした。wordpress.org に接続できず、キャッシュされたチェックサム表もありません。これはクリーンな結果ではありません。",
+    "verifyUnknownVersion": "チェックを実行できませんでした。このインストールの version.php は wordpress.org が公開していない WordPress バージョンを示しているため、比較対象がありません。version.php を確認してください。この ファイル の改変はコアの変更をすべて隠します。",
     "coreUpdated": "WordPress コアを更新しました。",
     "allUpdated": "コア、プラグイン、テーマを更新しました。",
     "maintenanceEnabled": "メンテナンスモードを有効にしました。",

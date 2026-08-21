@@ -29,6 +29,7 @@
     "verifyClean": "Los archivos del núcleo coinciden con las sumas de comprobación oficiales.",
     "verifyFound": "{{extra}} archivo(s) que no corresponden, {{modified}} modificados, {{missing}} ausentes. Los archivos que no corresponden pueden ponerse en cuarentena desde la página de malware.",
     "verifyUnavailable": "No se pudo realizar la comprobación: no se pudo contactar con wordpress.org y no hay tabla de sumas de verificación en caché. Esto no es un resultado limpio.",
+    "verifyUnknownVersion": "No se pudo realizar la comprobación: el version.php de esta instalación indica una versión de WordPress que wordpress.org no publica, así que no hay nada con lo que comparar. Revise version.php, porque modificarlo oculta cualquier cambio en el núcleo.",
     "coreUpdated": "Núcleo de WordPress actualizado.",
     "allUpdated": "Núcleo, complementos y temas actualizados.",
     "maintenanceEnabled": "Modo mantenimiento activado.",

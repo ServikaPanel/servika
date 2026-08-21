@@ -48,6 +48,7 @@
     "verifyClean": "核心文件与官方校验和一致。",
     "verifyFound": "不应存在的文件 {{extra}} 个，被修改 {{modified}} 个，缺失 {{missing}} 个。不应存在的文件可在恶意软件页面隔离。",
     "verifyUnavailable": "无法执行检查：无法连接 wordpress.org，且没有缓存的校验和表。这不代表结果是干净的。",
+    "verifyUnknownVersion": "无法执行检查：此安装的 version.php 声明了一个 wordpress.org 未发布的 WordPress 版本，因此没有可比对的对象。请检查 version.php，因为修改它会隐藏所有核心改动。",
     "coreUpdated": "WordPress 核心已更新。",
     "allUpdated": "核心、插件和主题已更新。",
     "maintenanceEnabled": "维护模式已启用。",

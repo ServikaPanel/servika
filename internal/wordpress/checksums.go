@@ -14,6 +14,7 @@ package wordpress
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -106,6 +107,21 @@ func parseChecksumReport(output string) []verdict {
 	return out
 }
 
+// The two reasons a check could not compare anything. They are separate because
+// only one of them is a fault of the network.
+const (
+	// ReasonUnavailable means wordpress.org could not be reached and no cached
+	// table was available.
+	ReasonUnavailable = "wp_checksums_unavailable"
+	// ReasonUnknownVersion means wordpress.org ANSWERED and publishes nothing
+	// for the version this installation names. Since version.php is both where
+	// that version comes from and one of the files being verified, editing it to
+	// name a version that was never released blinds the whole check and the
+	// edited file escapes with it. Reporting that as a network fault hides an
+	// attack behind an outage.
+	ReasonUnknownVersion = "wp_checksums_unknown_version"
+)
+
 // The three states the repair screen reports for a check. They are the API
 // contract that screen groups by, so they are stable strings.
 const (
@@ -171,7 +187,7 @@ func commandMeasured(runErr error, verdicts []verdict) bool {
 //
 // When nothing was compared the cached table is tried, which is what
 // internal/wpchecksums keeps for exactly this moment.
-func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, output string, measured bool) {
+func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, output string, measured bool, reason string) {
 	home := "/home/" + systemUser
 	relDir := relativeToHome(systemUser, dir)
 
@@ -181,8 +197,16 @@ func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, out
 	ctx, cancel := context.WithTimeout(context.Background(), checksumWarmTimeout)
 	defer cancel()
 	details, detailsErr := wpchecksums.ReadDetails(home, relDir)
+	// The result of the warm is kept, because it is the only thing that can tell
+	// a version wordpress.org never published apart from a wordpress.org nobody
+	// can reach. Both make wp-cli exit 1 with no warning line, and only one of
+	// them is an attack: version.php is BOTH where the version comes from and one
+	// of the files being verified, so editing it to name a version that was never
+	// released blinds the whole check and the edited file escapes with it.
+	var table map[string]string
+	var tableErr error
 	if detailsErr == nil {
-		wpchecksums.Warm(ctx, details)
+		table, tableErr = wpchecksums.Table(ctx, details)
 	}
 
 	// The command reaches wordpress.org for the checksum list, so it gets the
@@ -190,19 +214,19 @@ func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, out
 	raw, runErr := runWPTimeout(wpNetworkTimeout, systemUser, "core", "verify-checksums", "--path="+dir)
 	verdicts = parseChecksumReport(string(raw))
 	if commandMeasured(runErr, verdicts) {
-		return verdicts, strings.TrimSpace(string(raw)), true
+		return verdicts, strings.TrimSpace(string(raw)), true, ""
 	}
 
-	if detailsErr != nil {
-		return nil, strings.TrimSpace(string(raw)), false
+	unavailable := ReasonUnavailable
+	if errors.Is(tableErr, wpchecksums.ErrUnknownVersion) {
+		unavailable = ReasonUnknownVersion
 	}
-	table, tableErr := wpchecksums.Table(ctx, details)
-	if tableErr != nil {
-		return nil, strings.TrimSpace(string(raw)), false
+	if detailsErr != nil || tableErr != nil {
+		return nil, strings.TrimSpace(string(raw)), false, unavailable
 	}
 	offline, verifyErr := wpchecksums.Verify(home, relDir, table)
 	if verifyErr != nil {
-		return nil, strings.TrimSpace(string(raw)), false
+		return nil, strings.TrimSpace(string(raw)), false, unavailable
 	}
 	// The offline report is rendered in the command's own wording, so the screen
 	// shows one shape whichever engine answered.
@@ -212,7 +236,7 @@ func (h *Handlers) runChecksums(systemUser, dir string) (verdicts []verdict, out
 		lines = append(lines, "Warning: "+item.Message+": "+item.Rel)
 	}
 	lines = append(lines, "Compared against the cached checksum table; wordpress.org was not reachable.")
-	return verdicts, strings.Join(lines, "\n"), true
+	return verdicts, strings.Join(lines, "\n"), true, ""
 }
 
 // POST /domains/{id}/wordpress/verify  {dir}
@@ -242,14 +266,14 @@ func (h *Handlers) VerifyChecksums(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	verdicts, output, measured := h.runChecksums(systemUser, dir)
+	verdicts, output, measured, reason := h.runChecksums(systemUser, dir)
 	if !measured {
 		// 200 rather than an error status: the request was handled and the answer
 		// is a fact about the check, which the screen has to render either way.
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"ok":       true,
 			"measured": false,
-			"reason":   "wp_checksums_unavailable",
+			"reason":   reason,
 			"output":   truncateOutput(output),
 		})
 		return

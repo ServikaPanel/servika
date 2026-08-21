@@ -322,7 +322,7 @@ func (h *Handlers) Repair(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	beforeVerdicts, beforeOutput, beforeMeasured := h.runChecksums(systemUser, dir)
+	beforeVerdicts, beforeOutput, beforeMeasured, _ := h.runChecksums(systemUser, dir)
 	before := checksumState(beforeVerdicts, beforeMeasured)
 	// Download the installed version to avoid an unintended upgrade.
 	version := ""
@@ -357,7 +357,7 @@ func (h *Handlers) Repair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = runWP(systemUser, "core", "update-db", "--path="+dir)
-	afterVerdicts, afterOutput, afterMeasured := h.runChecksums(systemUser, dir)
+	afterVerdicts, afterOutput, afterMeasured, _ := h.runChecksums(systemUser, dir)
 	after := checksumState(afterVerdicts, afterMeasured)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "before": before, "after": after,

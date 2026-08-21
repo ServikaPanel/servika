@@ -3,6 +3,7 @@ package wordpress
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -202,6 +203,24 @@ func TestTheRepairStatesKeepNotMeasuredSeparate(t *testing.T) {
 	}
 	if StateClean == StateNotMeasured || StateIssuesFound == StateNotMeasured {
 		t.Error("the three states must stay distinct; the screen groups by them")
+	}
+}
+
+// version.php is BOTH where the version comes from and one of the files being
+// verified, so editing it to name a version that was never released blinds the
+// whole check and the edited file escapes with it. Measured: with
+// $wp_version = '6.99.99', wp-cli exits 1 printing only "Error: Couldn't get
+// checksums from WordPress.org." and api.wordpress.org answers HTTP 200 with
+// {"checksums":false}. Both of those look exactly like a network fault from the
+// command's output alone, so the two reasons must not share one code.
+func TestBlindingAndAnOutageAreSeparateReasons(t *testing.T) {
+	if ReasonUnknownVersion == ReasonUnavailable {
+		t.Fatal("the two reasons collapsed into one; blinding would read as an outage")
+	}
+	for _, code := range []string{ReasonUnknownVersion, ReasonUnavailable} {
+		if !strings.HasPrefix(code, "wp_checksums_") {
+			t.Errorf("%q does not follow the reason-code convention", code)
+		}
 	}
 }
 
