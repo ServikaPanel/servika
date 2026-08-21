@@ -327,14 +327,74 @@ esac
 
 # ── nginx ────────────────────────────────────────────────────────────────────
 section "nginx"
+NGINX_OK=0
 if ! command -v nginx >/dev/null 2>&1; then
   # Not the same finding as an invalid configuration, and saying so matters:
   # one is a file to fix, the other is a package that was never installed.
   crit "nginx -t" "nginx is not installed, so this was NOT MEASURED"
-elif nginx -t >/dev/null 2>&1; then
-  pass "nginx -t" "valid"
 else
-  crit "nginx -t" "the configuration is INVALID, the next reload will fail"
+  # The output is CAPTURED, never discarded. `nginx -t >/dev/null 2>&1` reads
+  # only the exit code, and nginx reports a configuration that silently serves
+  # the WRONG CONTENT as a warning with status 0. Measured on nginx 1.26.3 with
+  # a real php-fpm backend: a `fastcgi_cache` whose zone has no
+  # `fastcgi_cache_key` answers
+  #     nginx: [warn] no "fastcgi_cache_key" for "fastcgi_cache"
+  # on stderr and exits 0. The key is then the empty string, so the cache file
+  # is named md5("") = d41d8cd98f00b204e9800998ecf8427e and every page in the
+  # site writes and reads that one file: requesting /alpha then /beta returned
+  # /alpha's body twice, from a single cache file. With the key defined the same
+  # two requests produced two cache files and two correct bodies.
+  if NGINX_TEST=$(nginx -t 2>&1); then
+    NGINX_OK=1
+    pass "nginx -t" "valid"
+  else
+    crit "nginx -t" "the configuration is INVALID, the next reload will fail"
+  fi
+  # NOTHING is filtered. The upstream this came from dropped every
+  # `conflicting server name` line as noise; on a hosting panel that line names
+  # two vhosts claiming one domain, one of which nginx SILENTLY IGNORES, so that
+  # domain serves its neighbour's site (measured: warning, exit 0). A clean
+  # Servika installation emits no warnings at all, which is what gives this
+  # check a passing path.
+  NGINX_WARN_KEY=$(printf '%s\n' "$NGINX_TEST" | grep -F '[warn]' | grep -F 'fastcgi_cache_key')
+  NGINX_WARN_REST=$(printf '%s\n' "$NGINX_TEST" | grep -F '[warn]' | grep -vF 'fastcgi_cache_key')
+  if [ -n "$NGINX_WARN_KEY" ]; then
+    crit "nginx warnings" "fastcgi_cache_key is UNDEFINED, so every cached page shares one entry and visitors are served the wrong page"
+  fi
+  if [ -n "$NGINX_WARN_REST" ]; then
+    # Bounded on purpose: a server whose vhosts collide produces one line per
+    # domain, and an unbounded list buries every other finding in this report.
+    # `sed -n '1,3p'` rather than `head -3`, which closes the pipe early and
+    # takes SIGPIPE under pipefail (design rule 4).
+    warn "nginx warnings" "$(printf '%s\n' "$NGINX_WARN_REST" | wc -l | tr -d ' ') warning(s): $(printf '%s\n' "$NGINX_WARN_REST" | sed -n '1,3p' | tr '\n' ' ')"
+  elif [ -z "$NGINX_WARN_KEY" ]; then
+    pass "nginx warnings" "none"
+  fi
+fi
+
+# The warning above only appears when a vhost is ACTUALLY using the zone.
+# Measured: with the key undefined and no vhost using `fastcgi_cache`, nginx -t
+# reported nothing at all, which is exactly why the upstream this came from
+# carried the defect for months on test servers that hosted no tenant sites.
+# Ask the RESOLVED configuration instead, so the finding arrives before the
+# first customer turns caching on rather than after.
+#
+# The zone NAME is a Go constant (`provisioner.cacheZoneName`) with no
+# SERVIKA_* override, unlike its directory, so it is written out here.
+if [ "$NGINX_OK" = 1 ]; then
+  if NGINX_DUMP=$(nginx -T 2>/dev/null); then
+    ZONE_DEFINED=$(printf '%s\n' "$NGINX_DUMP" | grep -cF 'keys_zone=servikacache')
+    KEY_DEFINED=$(printf '%s\n' "$NGINX_DUMP" | grep -cF 'fastcgi_cache_key')
+    if [ "${ZONE_DEFINED:-0}" -eq 0 ]; then
+      pass "fastcgi cache key" "the servikacache zone is not defined, so there is nothing to key"
+    elif [ "${KEY_DEFINED:-0}" -gt 0 ]; then
+      pass "fastcgi cache key" "defined beside the servikacache zone"
+    else
+      crit "fastcgi cache key" "the servikacache zone is defined with NO fastcgi_cache_key; the first tenant that enables caching will serve the wrong page"
+    fi
+  else
+    warn "fastcgi cache key" "NOT MEASURED (nginx -T could not dump the configuration)"
+  fi
 fi
 
 # Measure the production path: a permission bit says nothing if a parent
