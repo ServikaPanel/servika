@@ -24,10 +24,10 @@ func payloadOf(t *testing.T, body string) string {
 	return base64.StdEncoding.EncodeToString([]byte(body))
 }
 
-// The quoted-run rule and this one cover different halves of the same problem,
-// so a change that makes one redundant should show up here. The last row is
-// covered by neither and is asserted so the gap stays visible.
-func TestTheTwoBlobSignalsCoverDifferentShapes(t *testing.T) {
+// The alphabet rule and this one cover different halves of the same problem, so
+// a change that makes one redundant should show up here. Every shape must be
+// seen by at least one of them, and the last column asserts that.
+func TestEveryBlobShapeIsSeenBySomething(t *testing.T) {
 	blob := payload(t, 3000)
 	plain := payloadOf(t, strings.Repeat("<?php function h($q){ return $q->all(); } ", 70))
 	cases := []struct {
@@ -38,9 +38,13 @@ func TestTheTwoBlobSignalsCoverDifferentShapes(t *testing.T) {
 	}{
 		{"quoted, compressed", `<?php $d = '` + blob + `';`, true, true},
 		{"quoted, plain source", `<?php $d = '` + plain + `';`, false, true},
-		{"heredoc, compressed", "<?php $d = <<<EOT\n" + blob + "\nEOT;", true, false},
+		// A delimiter is not what makes a blob suspicious, so the heredoc and
+		// nowdoc forms reach the alphabet rule exactly as the quoted one does.
+		{"heredoc, compressed", "<?php $d = <<<EOT\n" + blob + "\nEOT;", true, true},
+		{"heredoc, plain source", "<?php $d = <<<EOT\n" + plain + "\nEOT;", false, true},
+		{"nowdoc, plain source", "<?php $d = <<<'EOT'\n" + plain + "\nEOT;", false, true},
+		// Broken into pieces too short to be a run, so only density sees it.
 		{"concatenated", `<?php $d = '` + blob[:400] + `' . '` + blob[400:800] + `' . '` + blob[800:1200] + `';`, true, false},
-		{"heredoc, plain source", "<?php $d = <<<EOT\n" + plain + "\nEOT;", false, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -51,6 +55,9 @@ func TestTheTwoBlobSignalsCoverDifferentShapes(t *testing.T) {
 				t.Errorf("entropy=%v (want %v) pattern=%v (want %v), line entropy %.3f",
 					gotEntropy, c.wantEntropy, gotPattern, c.wantPattern,
 					highestLineEntropy([]byte(c.body)))
+			}
+			if !gotEntropy && !gotPattern {
+				t.Error("no signal at all sees this shape")
 			}
 		})
 	}
@@ -82,10 +89,10 @@ func TestTheEntropyThresholdSeparatesPayloadsFromDenseCode(t *testing.T) {
 		{"a hex byte table", `<?php $sbox = "` + strings.Repeat(`\x41\x42\x43\x44`, 60) + `";`, false},
 		{"nothing long enough to judge", `<?php eval(base64_decode('` + blob[:100] + `'));`, false},
 	}
-	// The gap this signal does NOT close, stated rather than hidden: base64 of
-	// plain source measures inside the range clean code occupies, so no
-	// threshold reaches it. PHP.Obf.LongBase64Block covers the quoted form of
-	// it by alphabet instead.
+	// What this signal does NOT reach, stated rather than hidden: base64 of
+	// plain uncompressed source measures inside the range clean code occupies,
+	// so no threshold gets to it. PHP.Obf.LongBase64Block covers that shape by
+	// alphabet instead, whatever delimiter it carries.
 	plainSource := payloadOf(t, strings.Repeat("<?php function h($q){ return $q->all(); } ", 70))
 	cases = append(cases, struct {
 		name string

@@ -25,19 +25,20 @@ package antivirus
 // the rule needs 200, so the entropy layer never ran.
 //
 // What it adds over PHP.Obf.LongBase64Block, which looks for the same payloads
-// by their ALPHABET, is a real question and the answer is two shapes. That rule
-// needs the blob inside one pair of quotes, so measured:
+// by their ALPHABET, is one shape: a blob split across concatenation, where no
+// single run reaches that rule's length. Measured:
 //
-//	shape                      entropy  quoted-run rule
+//	shape                      entropy  alphabet rule
 //	quoted blob, compressed      fires   fires
 //	quoted blob, plain source      no    fires
-//	HEREDOC blob, compressed     fires     no
+//	heredoc blob, compressed     fires   fires
+//	heredoc blob, plain source     no    fires
 //	concatenated blob            fires     no
-//	heredoc blob, plain source     no      no
 //
-// The two rules cover different halves and the last row is covered by neither,
-// which is stated rather than hidden: base64 of plain PHP source measures 5.030
-// to 5.633, inside the range clean code occupies, so no threshold reaches it.
+// The alphabet rule carries no delimiter, so the heredoc rows are covered by it
+// rather than left open. Entropy is what remains for a blob broken into pieces
+// too short to be a run, and it is also the only one of the two that says
+// anything about a payload in a form nobody has enumerated.
 //
 // The threshold sits at 5.9 rather than at the midpoint because the two sides
 // are not alike. A base64 alphabet has 64 symbols, so an encoded blob of

@@ -153,7 +153,17 @@ var phpHeuristics = []rule{
 	// which is why upstream's weight of 60, enough to report on its own, is not
 	// carried over.
 	{"PHP.Obf.HexEscapedName", weightWeak, regexp.MustCompile(`["'](?:\\x[0-9a-fA-F]{2}){5,}["']`), nil},
-	{"PHP.Obf.LongBase64Block", weightWeak, regexp.MustCompile(`["'][A-Za-z0-9+/]{500,}={0,2}["']`), nil},
+
+	// The base64 run carries NO delimiter, deliberately. Requiring quotes around
+	// it was an anchor of convenience rather than a claim: a blob is not less
+	// suspicious in a heredoc than in a string literal, and a heredoc is exactly
+	// where a payload goes to step around a quoted-string rule. Measured across
+	// 8536 clean PHP files, dropping the quotes costs ONE match, an embedded
+	// `data:image/svg+xml;base64,` icon in WooCommerce, which is the shape that
+	// keeps this rule at the lightest weight anyway. Excluding a `data:` prefix
+	// would buy that one back and hand every attacker a four-character prefix to
+	// hide behind.
+	{"PHP.Obf.LongBase64Block", weightWeak, regexp.MustCompile(`[A-Za-z0-9+/]{500,}={0,2}`), nil},
 }
 
 // otherHeuristics name the file kind they apply to, because it is not PHP.
@@ -203,7 +213,9 @@ type match struct {
 // evaluate weighs one file's content against the rule set and the signals that
 // are not patterns.
 func evaluate(ext string, content []byte) []match {
-	return append(evaluateWith(heuristics, ext, content), entropyMatches(ext, content)...)
+	out := evaluateWith(heuristics, ext, content)
+	out = append(out, entropyMatches(ext, content)...)
+	return append(out, concealedMatches(ext, content)...)
 }
 
 // evaluateWith is the same weighing against an explicit set, so a test can
