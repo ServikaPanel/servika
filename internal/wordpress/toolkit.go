@@ -321,11 +321,8 @@ func (h *Handlers) Repair(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	beforeOutput, beforeErr := runWPTimeout(wpNetworkTimeout, systemUser, "core", "verify-checksums", "--path="+dir)
-	before := "clean"
-	if beforeErr != nil {
-		before = "issues-found"
-	}
+	beforeVerdicts, beforeOutput, beforeMeasured := h.runChecksums(systemUser, dir)
+	before := checksumState(beforeVerdicts, beforeMeasured)
 	// Download the installed version to avoid an unintended upgrade.
 	version := ""
 	if b, e := runWP(systemUser, "core", "version", "--path="+dir); e == nil {
@@ -342,14 +339,11 @@ func (h *Handlers) Repair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = runWP(systemUser, "core", "update-db", "--path="+dir)
-	afterOutput, afterErr := runWPTimeout(wpNetworkTimeout, systemUser, "core", "verify-checksums", "--path="+dir)
-	after := "clean"
-	if afterErr != nil {
-		after = "issues-found"
-	}
+	afterVerdicts, afterOutput, afterMeasured := h.runChecksums(systemUser, dir)
+	after := checksumState(afterVerdicts, afterMeasured)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "before": before, "after": after,
-		"output": truncateOutput(strings.TrimSpace(string(beforeOutput)) + "\n---\n" + strings.TrimSpace(string(afterOutput))),
+		"output": truncateOutput(beforeOutput + "\n---\n" + afterOutput),
 	})
 }
 

@@ -106,6 +106,32 @@ func parseChecksumReport(output string) []verdict {
 	return out
 }
 
+// The three states the repair screen reports for a check. They are the API
+// contract that screen groups by, so they are stable strings.
+const (
+	// StateClean means the tree was compared and matched.
+	StateClean = "clean"
+	// StateIssuesFound means the tree was compared and did not match.
+	StateIssuesFound = "issues-found"
+	// StateNotMeasured means nothing was compared. It is deliberately NOT folded
+	// into either of the others: reporting it as clean is the defect this exists
+	// to remove, and reporting it as issues-found makes a repair that worked
+	// look like one that failed.
+	StateNotMeasured = "not-measured"
+)
+
+// checksumState turns a check's result into the state the screen renders.
+func checksumState(verdicts []verdict, measured bool) string {
+	switch {
+	case !measured:
+		return StateNotMeasured
+	case len(verdicts) > 0:
+		return StateIssuesFound
+	default:
+		return StateClean
+	}
+}
+
 // commandMeasured reports whether the command actually compared the tree.
 //
 // A zero exit is a comparison whatever it found, and a non-zero exit that still

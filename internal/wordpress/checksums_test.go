@@ -174,6 +174,37 @@ func TestAPathThatOnlyContainsDotsIsKept(t *testing.T) {
 	}
 }
 
+// The repair screen used to have two states and derived them from the exit
+// status alone, so an unreachable api.wordpress.org reported "issues-found"
+// before AND after a repair that had nothing to compare against, which reads as
+// a repair that failed.
+func TestTheRepairStatesKeepNotMeasuredSeparate(t *testing.T) {
+	found := []verdict{{Signature: SignatureModified, Rel: "wp-includes/version.php"}}
+	cases := []struct {
+		verdicts []verdict
+		measured bool
+		want     string
+	}{
+		{nil, true, StateClean},
+		{found, true, StateIssuesFound},
+		{nil, false, StateNotMeasured},
+		// A verdict list from a run that could not measure is not possible today,
+		// but the state must follow "measured" rather than the list, or a future
+		// caller passing both would report findings from a comparison that did
+		// not happen.
+		{found, false, StateNotMeasured},
+	}
+	for _, item := range cases {
+		if got := checksumState(item.verdicts, item.measured); got != item.want {
+			t.Errorf("checksumState(%d verdicts, measured=%v) = %q, want %q",
+				len(item.verdicts), item.measured, got, item.want)
+		}
+	}
+	if StateClean == StateNotMeasured || StateIssuesFound == StateNotMeasured {
+		t.Error("the three states must stay distinct; the screen groups by them")
+	}
+}
+
 // The three verdicts are distinct actions, so the signatures must stay distinct
 // and stable: the screen groups by them and only the extra-file one is
 // quarantined.
