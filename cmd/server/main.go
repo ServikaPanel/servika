@@ -882,6 +882,9 @@ func main() {
 				r.With(middleware.CustomerScope).Post("/domains/{id}/antivirus/quarantine/all", avH.QuarantineAll)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/antivirus/quarantine/{qid}/restore", avH.QuarantineRestore)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/antivirus/quarantine/{qid}", avH.QuarantineDelete)
+				// Restoring used to be a blind decision: the screen offered to put a
+				// file back without ever showing what was in it.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/antivirus/quarantine/{qid}/inspect", avH.QuarantineInspect)
 				r.With(middleware.AdminOnly).Post("/domains/{id}/antivirus/update-signature", avH.UpdateSignature)
 				// Generic import: a site archive, a SQL dump and the config rewrite
 				// that points the imported application at its new database.

@@ -12,6 +12,7 @@ package antivirus
 // original survives is taken back rather than reported as contained.
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -455,4 +456,87 @@ func writeReason(w http.ResponseWriter, reason string) {
 		status = http.StatusInternalServerError
 	}
 	httpx.WriteJSON(w, status, map[string]any{"error": message, "reason": reason})
+}
+
+// inspectMaxBytes bounds one preview. A quarantined file may be up to
+// quarantineMaxBytes, so the whole file is never read: the point is to let a
+// person recognise their own code, and the top of the file is where an
+// obfuscated payload and a plugin header both are.
+const inspectMaxBytes = 64 << 10
+
+// QuarantineInspect answers GET /domains/{id}/antivirus/quarantine/{qid}/inspect.
+//
+// Restoring was a BLIND decision: the screen listed a path and a signature and
+// offered to put the file back, so an operator facing a false positive either
+// restored something they had not seen or deleted something they might have
+// needed. A false positive is real here, because obfuscated legitimate plugin
+// code looks like a webshell to any rule set.
+//
+// Nothing about the request names a file. The row is read by id NARROWED to the
+// domain, and the store path is built from the validated system user and the
+// stored name, so a caller's text never reaches a file operation.
+//
+// The file being opened is a KNOWN MALICIOUS one, so it is opened through
+// openat2 with RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS and the regular-file test is
+// on the DESCRIPTOR, not on a separate stat of the path. Reading is all that
+// happens to it: the content leaves as a JSON string and nothing on either side
+// executes it.
+func (h *Handlers) QuarantineInspect(w http.ResponseWriter, r *http.Request) {
+	id, systemUser, ok := h.tenant(w, r)
+	if !ok {
+		return
+	}
+	qid, _ := strconv.ParseInt(chi.URLParam(r, "qid"), 10, 64)
+	var rel, stored string
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT orig_rel, stored_name FROM av_quarantine
+		  WHERE id=? AND domain_id=?`, qid, id).Scan(&rel, &stored); err != nil {
+		writeReason(w, reasonQuarantineUnknwn)
+		return
+	}
+	handle, err := files.OpenBeneath(userStore(systemUser), stored)
+	if err != nil {
+		writeReason(w, reasonFileMissing)
+		return
+	}
+	defer func() { _ = handle.Close() }()
+
+	info, err := handle.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		writeReason(w, reasonFileMissing)
+		return
+	}
+
+	// One byte past the limit, so "there is more" is measured rather than
+	// inferred from a read that happened to fill the buffer exactly.
+	buffer := make([]byte, inspectMaxBytes+1)
+	read, err := io.ReadFull(handle, buffer)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		writeReason(w, reasonFileMissing)
+		return
+	}
+	truncated := read > inspectMaxBytes
+	if truncated {
+		read = inspectMaxBytes
+	}
+	content := buffer[:read]
+
+	response := map[string]any{
+		"path":      "/home/" + systemUser + "/" + rel,
+		"size":      info.Size(),
+		"shown":     read,
+		"truncated": truncated,
+	}
+	// A NUL byte means this is not text. Sending the raw bytes would put a
+	// mangled binary through a JSON string and tell the reader nothing; saying
+	// so is the honest answer, and the size is already above.
+	if bytes.IndexByte(content, 0) >= 0 {
+		response["binary"] = true
+		response["content"] = ""
+		httpx.WriteJSON(w, http.StatusOK, response)
+		return
+	}
+	response["binary"] = false
+	response["content"] = string(content)
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
