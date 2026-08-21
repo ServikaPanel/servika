@@ -368,28 +368,32 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 		}
 		ext := strings.ToLower(filepath.Ext(p))
 		limit := readLimitFor(ext)
-		if limit == 0 {
+		// The path is judged even when the content will not be read. A payload
+		// can sit in a file past the read limit, and where it sits is evidence
+		// that costs nothing to collect.
+		matches := locationMatches(root, p)
+		if limit == 0 && len(matches) == 0 {
 			return nil
 		}
 		fi, e := d.Info()
-		if e != nil || fi.Size() > limit {
+		if e != nil {
 			return nil
 		}
 		scanned++
 		if scanned > 50000 {
 			return errCap
 		}
-		// #nosec G122 G304 -- operator-initiated antivirus scan reads files under the scan root; content is only pattern-matched, never returned to a tenant.
-		b, e := os.ReadFile(p)
-		if e != nil {
-			return nil
+		if limit > 0 && fi.Size() <= limit {
+			// #nosec G122 G304 -- operator-initiated antivirus scan reads files under the scan root; content is only pattern-matched, never returned to a tenant.
+			if b, e := os.ReadFile(p); e == nil {
+				matches = append(matches, evaluate(ext, b)...)
+			}
 		}
 		// One finding per FILE, not per matching rule. Three rows for one file
 		// used to mean bulk cleanup contained it on the first row and then
 		// reported "file missing" twice for the same file it had just
 		// quarantined, so a successful cleanup read as two failures.
-		score, signature, matched := evaluate(ext, b)
-		level := levelFor(score)
+		score, signature, matched, level := verdict(matches)
 		if level == "" || seen["h|"+p] {
 			return nil
 		}

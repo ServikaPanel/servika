@@ -37,7 +37,7 @@ func TestARuleBelowTheThresholdProducesNoFinding(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			score, signature, matched := evaluateWith(set, ".php", []byte(c.body))
+			score, signature, matched, _ := verdict(evaluateWith(set, ".php", []byte(c.body)))
 			if score != c.score {
 				t.Fatalf("score %d, want %d (rules %v)", score, c.score, matched)
 			}
@@ -60,10 +60,10 @@ func TestTwoDistinctModerateSignalsReachSuspicious(t *testing.T) {
 		{"Test.ModerateA", weightModerate, regexp.MustCompile(`AAA`), nil},
 		{"Test.ModerateB", weightModerate, regexp.MustCompile(`BBB`), nil},
 	}
-	if score, _, _ := evaluateWith(set, ".php", []byte("AAA")); levelFor(score) != "" {
+	if score, _, _, level := verdict(evaluateWith(set, ".php", []byte("AAA"))); level != "" {
 		t.Fatalf("one moderate rule produced a finding at score %d", score)
 	}
-	score, _, matched := evaluateWith(set, ".php", []byte("AAA and BBB"))
+	score, _, matched, _ := verdict(evaluateWith(set, ".php", []byte("AAA and BBB")))
 	if got := levelFor(score); got != LevelSuspicious {
 		t.Fatalf("two moderate rules gave %q at score %d, want %q", got, score, LevelSuspicious)
 	}
@@ -103,7 +103,7 @@ func TestEveryShippedRuleIsStillCriticalOnItsOwn(t *testing.T) {
 			if h.score < scoreCritical {
 				t.Fatalf("weight %d is below the critical threshold %d", h.score, scoreCritical)
 			}
-			score, signature, matched := evaluate(".php", []byte(body))
+			score, signature, matched, _ := verdict(evaluate(".php", []byte(body)))
 			if levelFor(score) != LevelCritical {
 				t.Fatalf("%s did not reach critical on its own sample (score %d, matched %v)", name, score, matched)
 			}
@@ -166,7 +166,7 @@ func TestEveryRuleMatchesSomething(t *testing.T) {
 			if readLimitFor(ext) == 0 {
 				t.Fatalf("%s applies to %q, which the scan does not open", h.name, ext)
 			}
-			if score, _, _ := evaluate(ext, []byte(body)); score < h.score {
+			if score, _, _, _ := verdict(evaluate(ext, []byte(body))); score < h.score {
 				t.Errorf("%s did not contribute its weight for a %s file (score %d)", h.name, ext, score)
 			}
 		})
@@ -190,7 +190,7 @@ func TestTheWidenedWalkReachesTheRulesThatNeedIt(t *testing.T) {
 			if readLimitFor(c.ext) == 0 {
 				t.Fatalf("the scan does not open %q at all", c.ext)
 			}
-			score, _, matched := evaluate(c.ext, []byte(c.body))
+			score, _, matched, _ := verdict(evaluate(c.ext, []byte(c.body)))
 			if levelFor(score) != LevelCritical {
 				t.Errorf("not critical (score %d, matched %v)", score, matched)
 			}
@@ -203,15 +203,15 @@ func TestTheWidenedWalkReachesTheRulesThatNeedIt(t *testing.T) {
 // applies to.
 func TestARuleDoesNotLeakAcrossFileKinds(t *testing.T) {
 	htaccess := "AddType application/x-httpd-php .jpg\n"
-	if score, _, matched := evaluate(".php", []byte(htaccess)); score != 0 {
+	if score, _, matched, _ := verdict(evaluate(".php", []byte(htaccess))); score != 0 {
 		t.Errorf("the .htaccess rule fired on a PHP file (score %d, %v)", score, matched)
 	}
 	injected := `eval(String.fromCharCode(97,98,99));`
-	if score, _, matched := evaluate(".php", []byte(injected)); score != 0 {
+	if score, _, matched, _ := verdict(evaluate(".php", []byte(injected))); score != 0 {
 		t.Errorf("a JavaScript rule fired on a PHP file (score %d, %v)", score, matched)
 	}
 	php := `<?php eval($_POST['c']);`
-	if score, _, matched := evaluate(".js", []byte(php)); score != 0 {
+	if score, _, matched, _ := verdict(evaluate(".js", []byte(php))); score != 0 {
 		t.Errorf("a PHP rule fired on a JavaScript file (score %d, %v)", score, matched)
 	}
 }
@@ -249,7 +249,7 @@ func TestThePreviouslyMissedShapesAreCaught(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, matched := evaluate(".php", []byte(c.body))
+			score, _, matched, _ := verdict(evaluate(".php", []byte(c.body)))
 			if levelFor(score) != LevelCritical {
 				t.Errorf("not critical (score %d, matched %v)", score, matched)
 			}
@@ -268,7 +268,7 @@ func TestDocumentedSuperglobalsAreNotBacktickExecution(t *testing.T) {
 	}
 	for _, c := range documented {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, matched := evaluate(".php", []byte(c.body))
+			score, _, matched, _ := verdict(evaluate(".php", []byte(c.body)))
 			if level := levelFor(score); level != "" {
 				t.Errorf("false alarm %q at score %d: %v", level, score, matched)
 			}
@@ -291,7 +291,7 @@ func TestLegitimateCodeProducesNoFinding(t *testing.T) {
 	}
 	for _, c := range legitimate {
 		t.Run(c.name, func(t *testing.T) {
-			score, _, matched := evaluate(".php", []byte(c.body))
+			score, _, matched, _ := verdict(evaluate(".php", []byte(c.body)))
 			if level := levelFor(score); level != "" {
 				t.Errorf("false alarm %q at score %d: %v", level, score, matched)
 			}

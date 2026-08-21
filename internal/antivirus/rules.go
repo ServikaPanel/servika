@@ -194,13 +194,14 @@ func levelFor(score int) string {
 	}
 }
 
+// match is one rule that fired, whether it read the file or only its path.
+type match struct {
+	name  string
+	score int
+}
+
 // evaluate weighs one file's content against the rule set.
-//
-// The returned signature is the name of the HIGHEST-scoring match, because the
-// screen groups by it and a joined list groups by nothing. Ties keep the
-// earlier rule, which is stable because the set is a fixed slice. The full list
-// travels beside it so an operator can see every reason.
-func evaluate(ext string, content []byte) (score int, signature string, matched []string) {
+func evaluate(ext string, content []byte) []match {
 	return evaluateWith(heuristics, ext, content)
 }
 
@@ -208,20 +209,34 @@ func evaluate(ext string, content []byte) (score int, signature string, matched 
 // exercise the thresholds with rules at every tier. The shipped set carries no
 // rule below the critical weight that also matches a one-line sample, which
 // cannot demonstrate that a moderate rule alone produces nothing.
-func evaluateWith(rules []rule, ext string, content []byte) (score int, signature string, matched []string) {
-	best := 0
+func evaluateWith(rules []rule, ext string, content []byte) []match {
+	var out []match
 	for _, h := range rules {
 		if !appliesTo(h, ext) {
 			continue
 		}
-		if !h.re.Match(content) {
-			continue
-		}
-		score += h.score
-		matched = append(matched, h.name)
-		if h.score > best {
-			best, signature = h.score, h.name
+		if h.re.Match(content) {
+			out = append(out, match{h.name, h.score})
 		}
 	}
-	return score, signature, matched
+	return out
+}
+
+// verdict folds every match into one result.
+//
+// The signature is the name of the HIGHEST-scoring match, because the screen
+// groups by it and a joined list groups by nothing. Ties keep the earlier
+// match, which is stable because both sources iterate fixed slices. The full
+// list travels beside it so an operator can see every reason. An empty level
+// means the total did not reach the reporting threshold and no row is written.
+func verdict(matches []match) (score int, signature string, names []string, level string) {
+	best := 0
+	for _, m := range matches {
+		score += m.score
+		names = append(names, m.name)
+		if m.score > best {
+			best, signature = m.score, m.name
+		}
+	}
+	return score, signature, names, levelFor(score)
 }
