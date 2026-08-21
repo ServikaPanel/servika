@@ -62,6 +62,14 @@ func HealRunningScans(db *sql.DB) {
 
 var errCap = errors.New("file-limit-reached")
 
+// fileCap bounds one walk. It exists so the 8-minute budget is reached by a
+// sweep that is genuinely huge rather than by one that is stuck, and a walk
+// that hits it is reported as INCOMPLETE.
+//
+// It is a variable so a test can exercise the cap without writing fifty
+// thousand files, which took 24 seconds and would be paid on every CI run.
+var fileCap = 50000
+
 type Finding struct {
 	// ID is what the quarantine endpoint takes. The path is deliberately not
 	// accepted from a caller, so the screen has to name the row instead.
@@ -370,8 +378,7 @@ func (h *Handlers) UpdateSignature(w http.ResponseWriter, r *http.Request) {
 // would throw away the only concrete thing turning a layer off buys, which is
 // the CPU and the file reads it does not spend, and the operator turning it off
 // is doing so on a server the scan is slowing down.
-func runScan(ctx context.Context, root string, req ScanRequest) (int, []Finding) {
-	var findings []Finding
+func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, findings []Finding, complete bool) {
 	seen := map[string]bool{}
 
 	// 1) ClamAV
@@ -402,9 +409,8 @@ func runScan(ctx context.Context, root string, req ScanRequest) (int, []Finding)
 	}
 
 	// 2) Heuristic scan of the file kinds a site executes or serves
-	scanned := 0
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -438,7 +444,7 @@ func runScan(ctx context.Context, root string, req ScanRequest) (int, []Finding)
 			return nil
 		}
 		scanned++
-		if scanned > 50000 {
+		if scanned > fileCap {
 			return errCap
 		}
 		if limit > 0 && fi.Size() <= limit {
@@ -462,7 +468,13 @@ func runScan(ctx context.Context, root string, req ScanRequest) (int, []Finding)
 		})
 		return nil
 	})
-	return scanned, findings
+	// A sweep that stopped at the file cap or ran out of its budget covered part
+	// of the tree. Reporting it as complete would present it as a clean bill of
+	// health for everything it never reached, which is the same defect the
+	// status check in the handler exists to prevent. The cap was silently
+	// swallowed here before: the walk's error was discarded and 50000 files was
+	// reported as a finished scan of the whole tree.
+	return scanned, findings, walkErr == nil && ctx.Err() == nil
 }
 
 // phpish reports whether a PHP-FPM pool would execute this extension. The list

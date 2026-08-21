@@ -32,7 +32,7 @@ func plantForSwitches(t *testing.T) string {
 
 func scanFiles(t *testing.T, root string, req ScanRequest) map[string]Finding {
 	t.Helper()
-	_, findings := runScan(context.Background(), root, req)
+	_, findings, _ := runScan(context.Background(), root, req)
 	out := map[string]Finding{}
 	for _, f := range findings {
 		out[filepath.Base(f.File)] = f
@@ -110,7 +110,7 @@ func TestALayerThatIsOffIsNotRunAtAll(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
 
-	scanned, findings := runScan(context.Background(), root, ScanRequest{Roots: []string{root}})
+	scanned, findings, _ := runScan(context.Background(), root, ScanRequest{Roots: []string{root}})
 	if len(findings) != 0 {
 		t.Errorf("a scan with every layer off still reported %v", findings)
 	}

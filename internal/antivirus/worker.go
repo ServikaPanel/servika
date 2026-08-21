@@ -168,11 +168,13 @@ func runWorker(requestPath, resultPath string) error {
 func executeScan(ctx context.Context, req ScanRequest) ScanResult {
 	result := ScanResult{Cgroup: selfCgroup()}
 	for _, root := range req.Roots {
-		scanned, findings := runScan(ctx, root, req)
+		scanned, findings, complete := runScan(ctx, root, req)
 		result.Scanned += scanned
 		result.Findings = append(result.Findings, findings...)
-		if ctx.Err() != nil {
+		if !complete {
 			result.Partial = true
+		}
+		if ctx.Err() != nil {
 			break
 		}
 	}
