@@ -363,21 +363,41 @@ func ResellerOwnsCustomer(r *http.Request, resellerUserID, customerID int64) boo
 // would fall through to WHERE 1 = 0 and every scoped list endpoint would return
 // empty for that customer.
 func ScopeSQL(r *http.Request, domainAlias string) (string, []any) {
+	cond, args, unrestricted := ScopeCondition(r, domainAlias)
+	if unrestricted {
+		return "", nil
+	}
+	return " WHERE " + cond, args
+}
+
+// ScopeCondition is the same narrowing as a bare CONDITION, so a caller that
+// already has a WHERE clause can AND it in.
+//
+// Some tables are not narrowed by ownership alone. A notification with a NULL
+// domain_id is panel-wide and belongs to admins only, which no ownership
+// condition can express, so that query needs its own clause beside this one and
+// cannot use ScopeSQL. Writing the ownership SQL a second time is how the two
+// copies drift, so ScopeSQL is built on this and the chain exists once.
+//
+// The third return value says the caller is unrestricted (admin). It is a bool
+// rather than a sentinel string, because comparing the returned SQL to decide
+// that would break the moment the text is reworded.
+func ScopeCondition(r *http.Request, domainAlias string) (string, []any, bool) {
 	c := ClaimsFrom(r)
 	if c == nil {
-		return " WHERE 1 = 0", nil
+		return "1 = 0", nil, false
 	}
 	switch c.Role {
 	case RoleAdmin:
-		return "", nil
+		return "1 = 1", nil, true
 	case RoleReseller:
-		return " WHERE EXISTS (SELECT 1 FROM customers sc WHERE sc.id = " +
-			domainAlias + ".customer_id AND sc.owner_user_id = ?)", []any{c.UserID}
+		return "EXISTS (SELECT 1 FROM customers sc WHERE sc.id = " +
+			domainAlias + ".customer_id AND sc.owner_user_id = ?)", []any{c.UserID}, false
 	case RoleUser:
-		return " WHERE EXISTS (SELECT 1 FROM customers sc WHERE sc.id = " +
-			domainAlias + ".customer_id AND sc.user_id = ?)", []any{c.UserID}
+		return "EXISTS (SELECT 1 FROM customers sc WHERE sc.id = " +
+			domainAlias + ".customer_id AND sc.user_id = ?)", []any{c.UserID}, false
 	}
-	return " WHERE 1 = 0", nil
+	return "1 = 0", nil, false
 }
 
 // EnforceCustomerNotSuspended applies the same suspended-domain gate as CustomerScope

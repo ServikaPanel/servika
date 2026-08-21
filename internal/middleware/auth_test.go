@@ -197,6 +197,47 @@ func TestScopeSQL(t *testing.T) {
 	}
 }
 
+// ScopeSQL is now built on ScopeCondition, so the two must say the same thing
+// for every role. A table that cannot use ScopeSQL (a notification with a NULL
+// domain_id is panel-wide and belongs to admins alone, which no ownership
+// condition expresses) ANDs the condition into its own clause, and a second
+// hand-written copy of the ownership chain is how the two drift apart.
+func TestTheComposableConditionSaysTheSameThingAsScopeSQL(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		req  *http.Request
+	}{
+		{"admin", reqRole(RoleAdmin, 1)},
+		{"reseller", reqRole(RoleReseller, 7)},
+		{"customer", reqRole(RoleUser, 42)},
+		{"anonymous", httptest.NewRequest(http.MethodGet, "/", nil)},
+	} {
+		clause, clauseArgs := ScopeSQL(tc.req, "d")
+		cond, condArgs, unrestricted := ScopeCondition(tc.req, "d")
+
+		want := ""
+		if !unrestricted {
+			want = " WHERE " + cond
+		}
+		if clause != want {
+			t.Errorf("%s: ScopeSQL answered %q while the condition builds %q", tc.name, clause, want)
+		}
+		if len(clauseArgs) != len(condArgs) {
+			t.Errorf("%s: the two disagree on argument count: %v vs %v", tc.name, clauseArgs, condArgs)
+		}
+		// Only an admin is unrestricted, and an admin is the only one ScopeSQL
+		// answers with no clause at all.
+		if unrestricted != (tc.name == "admin") {
+			t.Errorf("%s: unrestricted=%v", tc.name, unrestricted)
+		}
+		// The condition never carries the leading keyword, or ANDing it into
+		// another clause produces a syntax error rather than a narrowed query.
+		if strings.HasPrefix(strings.TrimSpace(cond), "WHERE") {
+			t.Errorf("%s: the condition still carries its own WHERE: %q", tc.name, cond)
+		}
+	}
+}
+
 func TestDomainOwnedByFailsClosed(t *testing.T) {
 	// scopeDB is nil (no DB in this test) → a reseller's ownership cannot be
 	// verified, so access must be DENIED. If it failed open, a DB error would
