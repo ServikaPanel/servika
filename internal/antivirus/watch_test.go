@@ -226,3 +226,29 @@ func TestAWebshellClearsTheThresholdThroughTheWatchersOwnPath(t *testing.T) {
 		t.Error("the watcher would not open the file it is meant to catch")
 	}
 }
+
+// The mark kind, pinned on the CALL rather than on the comment beside it. The
+// comment names both constants, so matching the bare word would pass whichever
+// one the code actually uses.
+//
+// Measured against real systemd with the shipped unit, which carries
+// ProtectSystem=strict: a mount mark is ACCEPTED, fanotify_mark returns
+// success, and not one event is ever delivered, because strict builds the
+// service its own namespace out of read-only binds and the mark lands on the
+// service's private clone while tenants write through the host's. A filesystem
+// mark is on the superblock both share and the event arrives. PrivateMounts=yes
+// alone did not break the mount mark, so this is specific to what the unit
+// ships. Nothing reports the broken state, which is why it is pinned.
+func TestTheMarkIsOnTheFilesystemAndNotOnTheMount(t *testing.T) {
+	body, err := os.ReadFile("watch_linux.go")
+	if err != nil {
+		t.Fatalf("the fanotify loop: %v", err)
+	}
+	src := string(body)
+	if !strings.Contains(src, "unix.FAN_MARK_FILESYSTEM") {
+		t.Error("the mark is not placed on the filesystem, so hardening leaves the watcher blind")
+	}
+	if strings.Contains(src, "unix.FAN_MARK_MOUNT") {
+		t.Error("a mount mark is still placed; under ProtectSystem=strict it delivers no events at all")
+	}
+}

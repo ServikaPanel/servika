@@ -7,7 +7,7 @@ package antivirus
 //  1. fanotify rather than inotify. inotify needs a watch PER DIRECTORY, and a
 //     hosting server has hundreds of thousands of them: the marks alone exhaust
 //     max_user_watches and cost megabytes of kernel memory. fanotify places one
-//     mark and the kernel reports the whole mount.
+//     mark and the kernel reports the whole filesystem.
 //
 //  2. FAN_CLOSE_WRITE rather than FAN_MODIFY. FAN_MODIFY fires on every write(),
 //     so a 10 MB upload produces hundreds of events and the file is inspected
@@ -60,23 +60,44 @@ func (w *watcher) run(ctx context.Context) error {
 	defer func() { _ = unix.Close(fd) }()
 
 	for _, root := range roots {
-		if err := unix.FanotifyMark(fd, unix.FAN_MARK_ADD|unix.FAN_MARK_MOUNT,
+		// FAN_MARK_FILESYSTEM, never FAN_MARK_MOUNT, and the reason is the
+		// unit rather than the kernel API.
+		//
+		// A mount mark is attached to the vfsmount the path resolves to. The
+		// watcher unit carries ProtectSystem=strict, which gives the service
+		// its own mount namespace built from read-only binds, so the mark
+		// lands on the service's PRIVATE clone of the mount while every tenant
+		// writes through the host's. Measured on 6.x with the shipped unit: the
+		// mark is accepted, fanotify_mark returns success, and not one event is
+		// ever delivered. Nothing reports it, so the screen shows a running
+		// watcher that has been blind since the day the hardening was added.
+		//
+		// A filesystem mark is attached to the SUPERBLOCK, which both mounts
+		// share, so a write through any of them is reported. Same measurement,
+		// same unit, filesystem mark: the event arrives. PrivateMounts=yes
+		// alone did NOT break the mount mark, so this is specific to the
+		// read-only binds strict builds, which is exactly what the unit ships.
+		//
+		// It needs Linux 4.20. AlmaLinux 9 is on 5.14 and AlmaLinux 10 on 6.12,
+		// so a failure here is reported rather than downgraded to a mount mark:
+		// the downgrade is the silent blindness above.
+		if err := unix.FanotifyMark(fd, unix.FAN_MARK_ADD|unix.FAN_MARK_FILESYSTEM,
 			unix.FAN_CLOSE_WRITE, unix.AT_FDCWD, root); err != nil {
-			return fmt.Errorf("fanotify_mark %s: %w", root, err)
+			return fmt.Errorf("fanotify_mark %s: %w (FAN_MARK_FILESYSTEM needs Linux 4.20 or newer)", root, err)
 		}
-		// FAN_MARK_MOUNT marks the MOUNT the path is on, not the subtree under
-		// it. Measured on a single-filesystem host: marking /home reported
-		// writes under /var/tmp and /opt as well. AlmaLinux's default layout is
-		// one / partition, so on most servers this really is a mark on the
-		// whole filesystem and the exclusion list is the only thing narrowing
-		// it. Say so, rather than letting an operator read "watching /home" as
-		// a statement about cost.
+		// The mark covers the whole filesystem the root sits on, not the
+		// subtree under it. Measured on a single-filesystem host: marking /home
+		// reported writes under /var/tmp and /opt as well. AlmaLinux's default
+		// layout is one / partition, so on most servers this really is a mark
+		// on everything and the exclusion list is the only thing narrowing it.
+		// Say so, rather than letting an operator read "watching /home" as a
+		// statement about cost.
 		mount := mountPointOf(root)
 		if mount == root {
 			log.Printf("antivirus watcher: watching %s", root)
 		} else {
-			log.Printf("antivirus watcher: watching %s, which marks the whole %s mount "+
-				"because %s is not a separate filesystem; the exclusion list is what narrows it",
+			log.Printf("antivirus watcher: watching %s, which marks the whole %s filesystem "+
+				"because %s is not a separate one; the exclusion list is what narrows it",
 				root, mount, root)
 		}
 	}
