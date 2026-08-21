@@ -346,6 +346,22 @@ fi
 step "5) Directories + environment"
 mkdir -p /opt/servika/bin /opt/servika/frontend-dist /opt/servika/src/migrations \
          /opt/servika/src/mail-templates /opt/servika/src/scripts /opt/servika/pma-signon /etc/servika /etc/ssl/servika
+# The backup root is created HERE rather than left to the first backup run. Both
+# writers create it only while taking a backup (servika-db-backup with mkdir -p,
+# internal/backups with os.MkdirAll), and the scheduled run is at 03:30, so an
+# installation finishing at 10:00 leaves it absent for the next 17 hours. It is
+# the only directory the verification step checks that nothing creates eagerly.
+#
+# The mode is 0700, not the 0755 an unmasked mkdir leaves behind: every child is
+# 0700, so a readable parent leaks nothing but the directory NAMES, and those
+# names are the tenants' system users. Measured on AlmaLinux 9 with the previous
+# behaviour, a tenant reading the parent got the full list.
+#
+# It warns rather than dying: the panel still works without it and the first
+# backup run creates it, so refusing to finish the installation would be the
+# very false gate this change removes. It is not silenced either.
+install -d -m 0700 /var/backups/servika \
+  || warn "the backup root /var/backups/servika could not be created; the first backup run will create it"
 # Values the panel or its operations tools write LATER, and settings an operator
 # may have tuned. A re-run used to blank every one of them: servika-mail-setup
 # stores the Postfix/Dovecot and Roundcube database passwords and the Roundcube
