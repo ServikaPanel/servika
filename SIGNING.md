@@ -145,6 +145,42 @@ the built-in set, which is what it runs with no package at all. This is on
 purpose: without an age limit, anyone who can merely withhold the new package
 pins a server to old rules forever with every check still passing.
 
+## Checking which rule set a server is on
+
+A package past its age limit is refused and the built-in set takes over. That is
+the correct behaviour, but it is also the one event you have to act on, so three
+places report which set is in force:
+
+```bash
+servika-server -print-av-rules
+```
+
+```
+configured=yes        this build carries a signing key
+source=package        builtin when no package is in force
+cache=verified        verified | absent | stale | refused
+version=2
+produced=2026-08-21T09:14:02Z
+rules=1
+age_days=0
+max_age_days=60
+```
+
+`age_days` comes from the SIGNED `produced` stamp, never from the cache file's
+mtime. The panel writes that file only when a NEWER version arrives, so its
+mtime says when a new version last landed, and a server whose rule set has not
+changed in a month would look stale on that reading while being perfectly
+healthy.
+
+`servika-verify` reports the same thing. No signing key is a PASS, because that
+is the default on every installation. A package within its age limit is a PASS
+with its version and age. Everything else is a WARNING, including a package past
+80 percent of the limit, which is your notice to publish a new one before the
+fallback happens rather than after.
+
+The antivirus settings screen carries one line for it beside the detection
+layers, and the API answers it as `rule_set` on `GET /admin/antivirus/settings`.
+
 ## What a package cannot carry
 
 A packaged rule is one regular expression over one file's bytes, plus a weight
