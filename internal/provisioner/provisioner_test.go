@@ -66,6 +66,27 @@ func TestManagedCacheZoneMatchesVhostUsage(t *testing.T) {
 	}
 }
 
+// TestTheCacheKeyTravelsWithTheZone holds the two directives together, because
+// nginx has NO DEFAULT for fastcgi_cache_key and does not refuse a zone that
+// lacks one: it warns and exits 0. Measured on nginx 1.26.3 with a real
+// php-fpm backend, the key is then the empty string, the cache file is named
+// md5("") = d41d8cd98f00b204e9800998ecf8427e, and every page in the site shares
+// it, so a request for /beta was answered with /alpha's body. Deleting the key
+// line from cacheZoneBody would leave every other test passing.
+func TestTheCacheKeyTravelsWithTheZone(t *testing.T) {
+	body := cacheZoneBody()
+	if !strings.Contains(body, "keys_zone="+cacheZoneName+":") {
+		t.Fatalf("managed configuration does not define cache zone %q", cacheZoneName)
+	}
+	// The value separates scheme, method, host and the full request URI, so
+	// HTTP and HTTPS, GET and HEAD, two domains on one server, and two query
+	// strings never collide on one entry.
+	const key = `fastcgi_cache_key "$scheme$request_method$host$request_uri";`
+	if !strings.Contains(body, key) {
+		t.Fatalf("managed configuration defines the cache zone with no cache key; want a line %q, got:\n%s", key, body)
+	}
+}
+
 func TestTenantVhostAppliesHardeningAtEveryHeaderBoundary(t *testing.T) {
 	opts := VhostOpts{
 		DomainName:       "example.com",
