@@ -3,6 +3,8 @@ package wpchecksums
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -219,24 +221,90 @@ func TestTheCacheAnswersWithTheEndpointGone(t *testing.T) {
 	}
 }
 
-// Measured against the real endpoint: a version wordpress.org never published
-// answers 200 with an empty body rather than a 404, so a short table is the only
-// signal there is and it must not be cached as an answer.
-func TestAnUnpublishedVersionIsNotCachedAsAnAnswer(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("SERVIKA_WP_CHECKSUM_DIR", dir)
+// Measured against the live endpoint: a version wordpress.org never published
+// answers HTTP 200 with the body {"checksums":false}. It is neither a 404 nor an
+// empty object, and decoding that field straight into a map turns the one
+// definite answer there is into "cannot unmarshal bool", which reads exactly
+// like a truncated response.
+//
+// The distinction is the whole point. version.php is BOTH the source of the
+// version and one of the files being verified, so editing it to name a version
+// that was never released blinds the entire check and the edited file escapes
+// with it. Reporting that as "wordpress.org is unreachable" hides an attack
+// behind a network fault.
+func TestAnUnpublishedVersionIsAnAnswerRatherThanAFailure(t *testing.T) {
+	for _, body := range []string{`{"checksums":false}`, `{"checksums":null}`, `{"checksums":{}}`} {
+		dir := t.TempDir()
+		t.Setenv("SERVIKA_WP_CHECKSUM_DIR", dir)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, body)
+		}))
+		swapEndpoint(t, server.URL)
 
+		_, err := Table(context.Background(), Details{Version: "99.99"})
+		if !errors.Is(err, ErrUnknownVersion) {
+			t.Errorf("%s: err = %v, want ErrUnknownVersion", body, err)
+		}
+		if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+			t.Errorf("%s: the cache directory holds %d entries, want 0", body, len(entries))
+		}
+		server.Close()
+	}
+}
+
+// A transport failure is TEMPORARY and must never be remembered. Caching it
+// would leave that installation unchecked for the life of the process because
+// wordpress.org hiccupped once, which is the opposite of what the negative cache
+// is for.
+func TestATemporaryFailureIsNotRemembered(t *testing.T) {
+	t.Setenv("SERVIKA_WP_CHECKSUM_DIR", t.TempDir())
+	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"checksums": map[string]string{}})
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"checksums": map[string]string{"wp-admin/index.php": "abc"},
+		})
 	}))
 	defer server.Close()
 	swapEndpoint(t, server.URL)
 
-	if _, err := Table(context.Background(), Details{Version: "99.99"}); err == nil {
-		t.Fatal("an empty table was accepted")
+	details := Details{Version: "7.1"}
+	if _, err := Table(context.Background(), details); err == nil {
+		t.Fatal("a 502 was accepted as an answer")
 	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Fatalf("the cache directory holds %d entries, want 0", len(entries))
+	table, err := Table(context.Background(), details)
+	if err != nil {
+		t.Fatalf("the second attempt was refused from the negative cache: %v", err)
+	}
+	if table["wp-admin/index.php"] != "abc" {
+		t.Fatalf("table = %v", table)
+	}
+}
+
+// The definite answer, on the other hand, IS remembered, or a site on a version
+// nobody published asks wordpress.org again on every check.
+func TestADefiniteAbsenceIsAskedOnlyOnce(t *testing.T) {
+	t.Setenv("SERVIKA_WP_CHECKSUM_DIR", t.TempDir())
+	asked := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		asked++
+		_, _ = io.WriteString(w, `{"checksums":false}`)
+	}))
+	defer server.Close()
+	swapEndpoint(t, server.URL)
+
+	details := Details{Version: "6.99.99"}
+	for range 3 {
+		if _, err := Table(context.Background(), details); !errors.Is(err, ErrUnknownVersion) {
+			t.Fatalf("err = %v, want ErrUnknownVersion", err)
+		}
+	}
+	if asked != 1 {
+		t.Fatalf("wordpress.org was asked %d times, want 1", asked)
 	}
 }
 

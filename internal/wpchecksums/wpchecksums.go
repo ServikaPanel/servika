@@ -119,6 +119,16 @@ const (
 // reachable, so nothing was compared. It is never a clean result.
 var ErrNoTable = errors.New("no checksum table for this version and locale")
 
+// ErrUnknownVersion means wordpress.org ANSWERED and publishes nothing for this
+// version and locale. It is a different fact from being unable to ask, and the
+// difference is the whole point: version.php is both the source of the version
+// and one of the files being verified, so editing it to name a version that was
+// never released blinds the entire check, and the edited file escapes with it.
+//
+// Measured against the live endpoint: a made-up version answers HTTP 200 with
+// the body {"checksums":false}.
+var ErrUnknownVersion = errors.New("wordpress.org publishes no checksums for this version and locale")
+
 // client is the HTTP client used for the fetch. A variable so a test can point
 // it at a server it built; the production value is created once.
 var client = &http.Client{Timeout: 30 * time.Second}
@@ -239,15 +249,21 @@ func Table(ctx context.Context, d Details) (map[string]string, error) {
 		return table, nil
 	}
 	if _, refused := negative.Load(key); refused {
-		return nil, ErrNoTable
+		return nil, ErrUnknownVersion
 	}
 	table, err := fetch(ctx, d)
 	if err != nil {
+		// A transport failure is TEMPORARY and must not be remembered. Caching it
+		// would leave that installation unchecked for the life of the process
+		// because wordpress.org hiccupped once.
 		return nil, err
 	}
 	if table == nil {
+		// wordpress.org answered and does not publish this version and locale.
+		// That is definite, so it is remembered, and it is a DIFFERENT fact from
+		// being unable to ask.
 		negative.Store(key, struct{}{})
-		return nil, ErrNoTable
+		return nil, ErrUnknownVersion
 	}
 	writeCache(key, table)
 	return table, nil
@@ -291,18 +307,32 @@ func fetch(ctx context.Context, d Details) (map[string]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("wordpress.org answered %d", resp.StatusCode)
 	}
+	// The field is taken raw because wordpress.org answers a version it never
+	// published with HTTP 200 and the body {"checksums":false} (measured, not a
+	// 404 and not an empty object). Decoding straight into a map turns that into
+	// "cannot unmarshal bool into map[string]string", which is a decode error
+	// and therefore indistinguishable from a truncated response or a proxy
+	// serving something else. It has to be readable as an ANSWER, because it is
+	// the only thing that separates a version this installation invented from a
+	// wordpress.org nobody can reach.
 	var wrapper struct {
-		Checksums map[string]string `json:"checksums"`
+		Checksums json.RawMessage `json:"checksums"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, tableCeiling)).Decode(&wrapper); err != nil {
 		return nil, err
 	}
-	if len(wrapper.Checksums) == 0 {
-		// Measured: an unpublished version answers 200 with an empty body rather
-		// than a 404, so a short table is the only signal there is.
+	trimmed := strings.TrimSpace(string(wrapper.Checksums))
+	if trimmed == "" || trimmed == "false" || trimmed == "null" {
 		return nil, nil
 	}
-	return wrapper.Checksums, nil
+	var table map[string]string
+	if err := json.Unmarshal(wrapper.Checksums, &table); err != nil {
+		return nil, err
+	}
+	if len(table) == 0 {
+		return nil, nil
+	}
+	return table, nil
 }
 
 // cachePath is the file a table is kept in. The key is validated by construction
