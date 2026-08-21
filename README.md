@@ -204,11 +204,14 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_FPM_LOG_DIR`           | `/var/log/servika-fpm`                             | Root-owned 0700 directory holding one PHP-FPM error log per tenant, kept out of `/var/log/php-fpm` so the distribution's rotation rule cannot claim it. |
 | `SERVIKA_GEOIP_DIR`             | `/var/lib/servika/geoip`                           | Country database and the nginx include generated from it. |
 | `SERVIKA_QUARANTINE_DIR`        | `/var/lib/servika/quarantine`                      | Files the malware scanner took out of a tenant tree, kept outside every home so the account they came from cannot reach them. |
+| `SERVIKA_WP_CHECKSUM_DIR`       | `/var/lib/servika/wp-checksums`                    | WordPress core checksum tables fetched from wordpress.org, one file per version and locale, so the integrity check still measures something while wordpress.org is unreachable. |
+| `SERVIKA_AV_RULES_FILE`         | `/var/lib/servika/av/rules.svkav`                  | The last signed malware rule package that verified. Only the panel writes it; the scan worker and the real-time watcher read it and check its signature again. |
 | `SERVIKA_TUNING_BACKUP_DIR`     | `/var/lib/servika/tuning-backups`                  | Copies of the configuration files the tuning screen edits, taken before each change and restored by a revert. Kept outside every directory a daemon reads as configuration. |
 | `SERVIKA_HOST_APP_ROOT`         | `/opt/servika-apps`                                | One directory per server-level application, outside `/home` so no tenant sweep, quota or backup schedule claims it. |
 | `SERVIKA_HOST_APP_LOG_DIR`      | `/var/log/servika-hostapps`                        | Root-owned directory holding one log per server-level application. |
 | `SERVIKA_HOST_APP_ENV_DIR`      | `/etc/servika/host-apps`                           | Directory of per-application 0600 `EnvironmentFile`s for server-level applications. |
 | `SERVIKA_HOST_APP_BACKUP_DIR`   | `/var/lib/servika/host-app-backups`                | Archives of an application's data directory, taken before removal and kept outside the tree removal deletes. |
+| `SERVIKA_ENV_FILE`              | `/etc/servika/env`                                 | The panel's own environment file, the one the installer writes and the systemd unit loads. Read by `internal/panelport` when it rewrites the listen address and by the scan worker when it hands the same configuration to a detached scan. |
 | `SERVIKA_INSTALLATION_ID`       | `/etc/servika/installation-id`                     | Random installation ID storage path for version checks. |
 | `SERVIKA_VERSION_CACHE`         | `/opt/servika/version-cache.json`                  | Cached version manifest path.                           |
 | `SERVIKA_PMA_TOKEN`             | `/etc/servika/pma-internal.token`                  | Internal phpMyAdmin signon token path.                  |
@@ -232,9 +235,10 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | Variable                       | Default                                 | Purpose                                                                    |
 |--------------------------------|-----------------------------------------|----------------------------------------------------------------------------|
 | `SERVIKA_GITHUB_API`           | `https://api.github.com`                | GitHub API base URL used by repository integrations.                       |
-| `SERVIKA_IONCUBE_URL`          | ionCube Linux x86-64 loader archive URL | ionCube loader download URL.                                               |
+| `SERVIKA_IONCUBE_URL`          | ionCube loader archive for this server's architecture | ionCube loader download URL. The default follows the build's architecture, x86-64 or aarch64; set this to point at an internal mirror. |
 | `SERVIKA_UPDATE_BOOTSTRAP_URL` | public `servika-update` raw URL         | Update tool bootstrap URL used when the panel has to download the updater. |
 | `SERVIKA_VERSION_ENDPOINT`     | public version manifest URL             | Version manifest endpoint used by the update checker.                      |
+| `SERVIKA_AV_RULES_URL`         | public signed rule package raw URL      | Where the panel fetches the signed malware rule package. The host is not trusted: an unverified package is refused and the built-in rule set keeps running. Ignored entirely when the build carries no signing key (see `SIGNING.md`). |
 | `SERVIKA_DNS_VERIFY_RESOLVER`  | `1.1.1.1:53`                            | Recursive resolver used by the DNS verification screen. It is deliberately not the system resolver: this host runs an authoritative BIND for the domains it serves, so `/etc/resolv.conf` would answer from the local zone and hide the very mismatch the screen exists to find. |
 
 Disable external version checks:
