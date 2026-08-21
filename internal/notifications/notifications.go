@@ -23,6 +23,7 @@ package notifications
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -62,6 +63,8 @@ type Notification struct {
 	Category  string `json:"category"`
 	Title     string `json:"title"`
 	Message   string `json:"message"`
+	Key       string `json:"key"`
+	Params    string `json:"params"`
 	DomainID  *int64 `json:"domain_id"`
 	Domain    string `json:"domain"`
 	RefType   string `json:"ref_type"`
@@ -70,24 +73,54 @@ type Notification struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// Event is what a module hands in. It is a struct rather than a positional
+// argument list because five of its fields are strings and a caller that swaps
+// two of them compiles, ships, and puts the message in the title.
+type Event struct {
+	Level    string
+	Category string
+	// Title and Message are ENGLISH and are the fallback. They are what a client
+	// that does not know Key shows, and what a log line carries.
+	Title   string
+	Message string
+	// Key names a string the frontend owns and Params carries the values it
+	// interpolates, so the sentence is composed in the READER's language. Stored
+	// English cannot be: the text is written when the event happens and read
+	// later by somebody whose language nothing knew at that moment.
+	Key    string
+	Params any
+	// DomainID nil means panel-wide, which only admins see.
+	DomainID *int64
+	RefType  string
+	RefID    int64
+}
+
 // Write records one notification.
 //
-// domainID nil means panel-wide, which only admins see. The error is RETURNED
-// rather than logged and discarded: a notification that was never written reads
-// exactly like one that was delivered, and the caller is the only code that
-// knows whether losing it matters.
-func Write(ctx context.Context, db *sql.DB, level, category, title, message string, domainID *int64, refType string, refID int64) error {
+// The error is RETURNED rather than logged and discarded: a notification that
+// was never written reads exactly like one that was delivered, and the caller is
+// the only code that knows whether losing it matters.
+func Write(ctx context.Context, db *sql.DB, e Event) error {
 	if db == nil {
 		return fmt.Errorf("notifications: no database")
 	}
 	var domain any
-	if domainID != nil {
-		domain = *domainID
+	if e.DomainID != nil {
+		domain = *e.DomainID
+	}
+	params := "{}"
+	if e.Params != nil {
+		encoded, err := json.Marshal(e.Params)
+		if err != nil {
+			return fmt.Errorf("notifications: the parameters could not be encoded: %w", err)
+		}
+		params = string(encoded)
 	}
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO notifications (level, category, title, message, domain_id, ref_type, ref_id)
-		 VALUES (?,?,?,?,?,?,?)`,
-		level, category, truncate(title, 200), message, domain, refType, refID)
+		`INSERT INTO notifications (level, category, title, message, message_key, params, domain_id, ref_type, ref_id)
+		 VALUES (?,?,?,?,?,?,?,?,?)`,
+		e.Level, e.Category, truncate(e.Title, 200), e.Message, truncate(e.Key, 64), params,
+		domain, e.RefType, e.RefID)
 	if err != nil {
 		return fmt.Errorf("notifications: the notification could not be written: %w", err)
 	}
@@ -132,7 +165,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	// The reader's own read state is resolved by the JOIN, so two people looking
 	// at the same notification see their own answer.
 	// #nosec G202 G701 -- cond comes from visibility(), which is either the literal "1 = 1" or a literal prefix plus a middleware.ScopeCondition fragment built from literals and the literal alias "d"; no request text reaches the statement and every value is bound.
-	query := `SELECT n.id, n.level, n.category, n.title, n.message, n.domain_id,
+	query := `SELECT n.id, n.level, n.category, n.title, n.message, n.message_key, n.params, n.domain_id,
 	                 COALESCE(d.domain_name, ''), n.ref_type, n.ref_id,
 	                 (nr.user_id IS NOT NULL),
 	                 DATE_FORMAT(n.created_at, '%Y-%m-%d %H:%i:%s')
@@ -156,7 +189,8 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		var item Notification
 		var domainID sql.NullInt64
 		if err := rows.Scan(&item.ID, &item.Level, &item.Category, &item.Title, &item.Message,
-			&domainID, &item.Domain, &item.RefType, &item.RefID, &item.Read, &item.CreatedAt); err != nil {
+			&item.Key, &item.Params, &domainID, &item.Domain, &item.RefType, &item.RefID,
+			&item.Read, &item.CreatedAt); err != nil {
 			log.Printf("notifications: a row could not be read: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the notifications could not be read")
 			return
