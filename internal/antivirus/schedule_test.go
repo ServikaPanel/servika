@@ -151,3 +151,29 @@ func TestEverySweepPathGoesThroughTheOneRequestBuilder(t *testing.T) {
 		}
 	}
 }
+
+// Two things arming sweeps is what internal/backups refuses a timer outright
+// for: one of them reads a fixed OnCalendar and ignores the hour the operator
+// picked. Here the timer carries that hour, so the two coexist only because the
+// in-process scheduler stands down whenever the timer is enabled.
+//
+// The question is asked inside the tick rather than once at startup, because an
+// operator turns the timer on from the settings screen while the panel is
+// running.
+func TestTheInProcessSchedulerStandsDownWhenTheTimerOwnsTheSchedule(t *testing.T) {
+	source := sourceOf(t, "schedule.go")
+	stand := strings.Index(source, "if avsettings.ScanTimerEnabled() {")
+	if stand < 0 {
+		t.Fatal("the in-process scheduler no longer stands down, so two things arm sweeps")
+	}
+	read := strings.Index(source, "settings, err := avsettings.Read(ctx, db)")
+	if read >= 0 && stand > read {
+		t.Error("the timer is checked after the settings are read, which is a row read per hour for nothing")
+	}
+	if !strings.Contains(source, "func tickOnce(db *sql.DB, now func() time.Time) {") {
+		t.Fatal("tickOnce moved; this test has to follow it")
+	}
+	if idx := strings.Index(source, "func tickOnce("); idx >= 0 && stand < idx {
+		t.Error("the stand-down is outside the tick, so it is decided once at startup")
+	}
+}

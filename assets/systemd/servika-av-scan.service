@@ -1,0 +1,23 @@
+[Unit]
+Description=Servika nightly malware sweep
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/servika/env
+ExecStart=/opt/servika/bin/servika-server -av-sweep
+# The same slice the scan itself is launched into, so an operator's CPU, memory
+# and I/O limits cover the coordinator as well. It does almost no work of its
+# own (the walk and the reads happen in a transient unit systemd-run places in
+# this slice), but a coordinator outside the slice would be the one part of the
+# feature the limits did not reach.
+Slice=servika-av.slice
+User=root
+# A sweep that could not finish inside this is a sweep that has gone wrong. The
+# scan's own budget is well under it, so this only fires when something below
+# has stopped answering.
+TimeoutStartSec=1800
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=servika-av-scan

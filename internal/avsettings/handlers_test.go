@@ -81,7 +81,8 @@ func TestSavingAlsoApplies(t *testing.T) {
 	body := string(source)
 	update := strings.Index(body, "UPDATE av_settings SET")
 	apply := strings.Index(body, "if err := ApplyLimits(s); err != nil {")
-	watch := strings.Index(body, "return ApplyWatcher(s)")
+	watch := strings.Index(body, "if err := ApplyWatcher(s); err != nil {")
+	timer := strings.Index(body, "return ApplyScheduleTimer(s)")
 	switch {
 	case update < 0:
 		t.Fatal("the settings are no longer stored")
@@ -89,6 +90,8 @@ func TestSavingAlsoApplies(t *testing.T) {
 		t.Fatal("saving no longer applies the resource limits")
 	case watch < 0:
 		t.Fatal("saving no longer starts or stops the watcher")
+	case timer < 0:
+		t.Fatal("saving no longer arms or disarms the scheduled sweep timer")
 	case apply < update:
 		t.Error("the limits are applied before the row is stored")
 	case watch < apply:
@@ -96,6 +99,10 @@ func TestSavingAlsoApplies(t *testing.T) {
 		// carrying the PREVIOUS values and keeps them until something else
 		// rewrites the file.
 		t.Error("the watcher is applied before the limits it should run under")
+	case timer < update:
+		// A sweep the timer starts a second later reads the row, so the row
+		// has to be there first.
+		t.Error("the sweep timer is armed before the row it will read is stored")
 	}
 	// And the validation runs first, or an invalid value reaches the slice file.
 	validate := strings.Index(body, "if err := s.Validate(); err != nil {")

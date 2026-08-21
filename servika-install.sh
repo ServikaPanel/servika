@@ -722,7 +722,7 @@ install -m 0644 "$A/systemd/servika.service" /etc/systemd/system/servika.service
 # watching defaults to off, and the panel starts the unit when an operator turns
 # the setting on. Enabling it now would start a watcher on every server whose
 # operator never asked for one.
-for unit in servika-db-backup.service servika-db-backup.timer servika-av-watch.service; do
+for unit in servika-db-backup.service servika-db-backup.timer servika-av-watch.service servika-av-scan.service servika-av-scan.timer; do
   [ -f "$A/systemd/$unit" ] && cp "$A/systemd/$unit" "/etc/systemd/system/$unit"
 done
 systemctl daemon-reload

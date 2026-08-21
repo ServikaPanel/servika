@@ -57,6 +57,17 @@ func tickOnce(db *sql.DB, now func() time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 	defer cancel()
 
+	// systemd owns the schedule whenever the timer is enabled, and then this
+	// scheduler stands down. Two things arming sweeps is the whole reason
+	// internal/backups refuses a timer outright: one of them would be reading a
+	// fixed OnCalendar and ignoring the hour the operator picked.
+	//
+	// The question is asked here rather than once at startup, because an
+	// operator turns the timer on from the settings screen while the panel is
+	// running, and a scheduler that had already decided would keep sweeping.
+	if avsettings.ScanTimerEnabled() {
+		return
+	}
 	settings, err := avsettings.Read(ctx, db)
 	if err != nil {
 		log.Printf("antivirus: the scheduled sweep could not read its settings: %v", err)

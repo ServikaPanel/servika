@@ -22,7 +22,9 @@ const WatchUnit = "servika-av-watch.service"
 // save there would be reporting their input as wrong when nothing about it is.
 // This is the same test internal/antivirus makes before it tries to confine a
 // scan.
-func systemdRunning() bool {
+// It is a variable so a test can drive the systemctl call ORDER, which has
+// nothing to do with the platform, on a machine that has no systemd.
+var systemdRunning = func() bool {
 	_, err := os.Stat("/run/systemd/system")
 	return err == nil
 }

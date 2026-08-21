@@ -382,5 +382,11 @@ func Write(ctx context.Context, db *sql.DB, s Settings) error {
 	// The watcher is applied AFTER the limits, so a watcher that starts here
 	// starts into a slice that already carries the values just saved. The other
 	// order gives it the previous limits until something else rewrites them.
-	return ApplyWatcher(s)
+	if err := ApplyWatcher(s); err != nil {
+		return err
+	}
+	// The sweep timer is last, for the same reason and one more: a sweep the
+	// timer starts a second later reads the row that was just written, so the
+	// row has to be there first.
+	return ApplyScheduleTimer(s)
 }

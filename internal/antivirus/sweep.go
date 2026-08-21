@@ -136,6 +136,7 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 	if _, err := db.Exec(
 		`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
 		status, result.Scanned, len(result.Findings), confined, sid); err != nil {
+		// #nosec G706 -- sid is an integer and err is a MariaDB driver error for a statement whose arguments are all parameterized; no tenant string reaches it.
 		log.Printf("antivirus: sweep %d could not be closed: %v", sid, err)
 	}
 }

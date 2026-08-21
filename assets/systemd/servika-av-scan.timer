@@ -1,0 +1,27 @@
+[Unit]
+Description=Servika nightly malware sweep
+
+[Timer]
+# This value is a PLACEHOLDER and is normally overridden.
+#
+# The hour the operator picked lives in av_settings.scheduled_hour, and
+# avsettings.ApplyScheduleTimer writes it into a drop-in under
+# servika-av-scan.timer.d/. Two measured facts make this line necessary anyway.
+#
+# OnCalendar is a LIST and a drop-in ADDS to it: measured, a base of 04:00 plus
+# a drop-in of 07:00 leaves the timer firing at BOTH. So the drop-in writes an
+# empty `OnCalendar=` first, which resets the list.
+#
+# And a timer whose base carries no OnCalendar at all is refused: measured,
+# `systemctl start` answers `Unit has a bad unit file setting` and the unit
+# loads as `bad-setting`. So the placeholder cannot simply be left out.
+OnCalendar=*-*-* 04:00:00
+# A fleet of panels installed from one script would otherwise all sweep on the
+# same second.
+RandomizedDelaySec=600
+# A server that was off at the scheduled hour still gets its sweep. The 23-hour
+# gap in the sweep process is what stops that becoming a second one.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

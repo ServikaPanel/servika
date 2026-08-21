@@ -131,6 +131,7 @@ func sweepNow(ctx context.Context, handle *sql.DB) error {
 		return fmt.Errorf("the sweep could not be recorded: %w", err)
 	}
 	sid, _ := res.LastInsertId()
+	// #nosec G706 -- sid is an integer and req.Roots is one of two compiled-in literals ("/" or "/home"), chosen by a scope the write path validates against two constants. No tenant text reaches this line.
 	log.Printf("antivirus: timed sweep %d starting over %v", sid, req.Roots)
 	runSweep(ctx, handle, sid, req)
 	return nil
