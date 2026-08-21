@@ -172,6 +172,13 @@ func main() {
 	if antivirus.RunWorkerIfAsked() {
 		return
 	}
+	// Which malware rule set is loaded, for servika-verify. Same reasoning as
+	// the port reporter: the panel already reads and verifies the signed
+	// package, so the shell is handed that answer rather than growing a second
+	// reader of a binary container.
+	if antivirus.PrintRuleSetIfAsked() {
+		return
+	}
 	// The real-time watcher, which is the same binary again under its own unit.
 	// It answers here for the same reason: watching files is not a reason to
 	// need the JWT secret. Unlike the scan worker it DOES open the database,

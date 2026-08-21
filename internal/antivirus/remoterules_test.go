@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -384,5 +385,67 @@ func TestAPackageCannotTakeABuiltInRuleName(t *testing.T) {
 		Kind:    "php",
 	}); err != nil {
 		t.Errorf("a rule under its own name was refused: %v", err)
+	}
+}
+
+// A stale package is refused and the built-in set takes over, which is the safe
+// behaviour but is invisible from outside the process: a panel that adopted a
+// package yesterday and one that fell back a month ago both scan and both
+// report. An operator told nothing reads a scan as covering rules it never had.
+func TestTheStateSaysWhichRuleSetIsRunning(t *testing.T) {
+	key := withSigningKey(t)
+	now := time.Now()
+
+	before := RuleSetInUse()
+	if before.Source != "builtin" || before.Version != 0 || before.Produced != "" {
+		t.Fatalf("with no package adopted the state reads %+v", before)
+	}
+	if !before.Configured {
+		t.Fatal("a build with a key reports itself unconfigured")
+	}
+	if before.MaxAgeDays != int(RemoteRuleMaxAge/(24*time.Hour)) {
+		t.Errorf("the reported limit is %d days, not the one the code enforces", before.MaxAgeDays)
+	}
+
+	// The age comes from the package's own SIGNED stamp, never from the cache
+	// file's timestamp: that file is written only when a NEWER package arrives,
+	// so its age means "when a new version last came", not "how old these rules
+	// are". A rule set that simply has not changed would make a file-age check
+	// warn on a healthy server.
+	produced := now.AddDate(0, 0, -20)
+	if _, err := adoptPackage(signedSet(t, key, 12, produced, aRule("Remote.Seen", `AAAA`, weightStrong)), now); err != nil {
+		t.Fatal(err)
+	}
+	after := RuleSetInUse()
+	if after.Source != "package" || after.Version != 12 || after.Rules != 1 {
+		t.Fatalf("after adopting, the state reads %+v", after)
+	}
+	if after.AgeDays != 20 {
+		t.Errorf("age is %d days, want 20 from the signed stamp", after.AgeDays)
+	}
+	if after.Produced == "" {
+		t.Error("the state carries no production stamp")
+	}
+}
+
+// "The built-in set is running" is one answer to several different questions,
+// and they need different actions: a new installation has never fetched, while a
+// cache that fails its signature is a file somebody replaced on disk.
+func TestTheCacheStateSeparatesWhyTheBuiltInSetIsRunning(t *testing.T) {
+	cases := map[string]struct {
+		err  error
+		want string
+	}{
+		"a verified package":     {nil, "verified"},
+		"no key in this build":   {ErrRuleKeyAbsent, "absent"},
+		"no package on disk":     {os.ErrNotExist, "absent"},
+		"past the freshness cap": {ErrRuleSetStale, "stale"},
+		"a bad signature":        {avpackage.ErrUnverified, "refused"},
+		"not a package at all":   {avpackage.ErrNotAPackage, "refused"},
+	}
+	for name, item := range cases {
+		if got := cacheStateFrom(item.err); got != item.want {
+			t.Errorf("%s reported %q, want %q", name, got, item.want)
+		}
 	}
 }

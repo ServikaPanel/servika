@@ -182,6 +182,60 @@ func RemoteRuleVersion() int {
 	return set.version
 }
 
+// RuleSetState is which rule set the scanner is running on right now.
+//
+// It answers a question nothing else did. A stale package is REFUSED and the
+// built-in set takes over, which is the safe behaviour, but from outside the
+// process that is indistinguishable from a panel that adopted a package
+// yesterday: both scan, both report, and the fallback shows up only in the log.
+// An operator who is told nothing reads a scan as covering rules it never had.
+type RuleSetState struct {
+	// Configured says whether this build carries a signing key at all. When it
+	// is false every other field describes the built-in set and nothing is
+	// wrong: that is the default and what most installations run.
+	Configured bool `json:"configured"`
+	// Source is "builtin" or "package".
+	Source string `json:"source"`
+	// Version is the adopted package version, 0 for the built-in set.
+	Version int `json:"version"`
+	// Produced is the package's own SIGNED production stamp, RFC3339, empty for
+	// the built-in set.
+	//
+	// The age is taken from here rather than from the cache file's timestamp,
+	// and the difference is not cosmetic. The file is written only when a NEWER
+	// package is adopted, so its timestamp means "when a new version last
+	// arrived", not "when the mirror was last reached". A rule set that has
+	// simply not changed for two months would make a file-age check warn on a
+	// perfectly healthy server.
+	Produced string `json:"produced"`
+	// Rules is how many packaged rules are in use, beside the built-in set.
+	Rules int `json:"rules"`
+	// AgeDays is how old the adopted package is, from Produced.
+	AgeDays int `json:"age_days"`
+	// MaxAgeDays is the panel's own freshness limit, so a reader compares
+	// against the number the code enforces instead of inventing a second one.
+	MaxAgeDays int `json:"max_age_days"`
+}
+
+// RuleSetInUse reports the current state.
+func RuleSetInUse() RuleSetState {
+	state := RuleSetState{
+		Configured: RemoteRulesConfigured(),
+		Source:     "builtin",
+		MaxAgeDays: int(RemoteRuleMaxAge / (24 * time.Hour)),
+	}
+	set := activeRemote.Load()
+	if set == nil {
+		return state
+	}
+	state.Source = "package"
+	state.Version = set.version
+	state.Rules = len(set.rules)
+	state.Produced = set.produced.UTC().Format(time.RFC3339)
+	state.AgeDays = int(time.Since(set.produced) / (24 * time.Hour))
+	return state
+}
+
 // rulePublicKey decodes the compiled-in key. An empty or malformed key means the
 // remote path is off rather than broken: this is a build-time constant, so a bad
 // one is a mistake made once and must not stop a panel from starting.
@@ -347,6 +401,75 @@ func compilePackagedRule(candidate packagedRule) (rule, error) {
 		score = weightStrong
 	}
 	return rule{name: candidate.Name, score: score, re: expression, exts: exts}, nil
+}
+
+// printRulesFlag is the argument servika-verify passes.
+const printRulesFlag = "print-av-rules"
+
+// PrintRuleSetIfAsked answers "-print-av-rules" and reports whether it did.
+//
+// servika-verify is a shell script and the package is a binary container, so
+// parsing the signed header in shell would mean a second reader of a format
+// that already has one. This hands the panel's own answer to the shell, exactly
+// as -print-ports hands it the panel's ports rather than growing a second
+// parser.
+//
+// Like that flag it runs before config.Load, which requires the JWT and secret
+// keys: reporting which rules are loaded is not a reason to need them, and the
+// tool has to work on an installation broken enough to be worth verifying.
+//
+// It loads the cached package first, because this process is not the panel and
+// holds nothing in memory. That read verifies the signature, so a tampered
+// cache reports the built-in set, which is what the panel would run.
+func PrintRuleSetIfAsked() bool {
+	if len(os.Args) < 2 || (os.Args[1] != "-"+printRulesFlag && os.Args[1] != "--"+printRulesFlag) {
+		return false
+	}
+	// The load narrates through log, which writes to stderr and would sit in the
+	// middle of a caller's output. This mode reports rather than narrates.
+	log.SetOutput(io.Discard)
+	cache := cacheStateFrom(LoadRulesFromDisk())
+	state := RuleSetInUse()
+
+	// Plain KEY=VALUE lines so a shell reads them field by field. Never a form
+	// that invites eval: this output is parsed by a tool running as root.
+	fmt.Printf("configured=%s\n", yesNo(state.Configured))
+	fmt.Printf("source=%s\n", state.Source)
+	fmt.Printf("cache=%s\n", cache)
+	fmt.Printf("version=%d\n", state.Version)
+	fmt.Printf("produced=%s\n", state.Produced)
+	fmt.Printf("rules=%d\n", state.Rules)
+	fmt.Printf("age_days=%d\n", state.AgeDays)
+	fmt.Printf("max_age_days=%d\n", state.MaxAgeDays)
+	return true
+}
+
+// cacheStateFrom names WHY the built-in set is in use, which "source=builtin"
+// alone cannot.
+//
+// A panel that has never fetched a package and one whose cached package fails
+// its signature both run the built-in set, and they need different actions: the
+// first is an ordinary new installation, the second is a file that was replaced
+// on disk. This is the same separation the container itself makes between a
+// download that went wrong and a package somebody else made.
+func cacheStateFrom(err error) string {
+	switch {
+	case err == nil:
+		return "verified"
+	case errors.Is(err, ErrRuleKeyAbsent), errors.Is(err, os.ErrNotExist):
+		return "absent"
+	case errors.Is(err, ErrRuleSetStale):
+		return "stale"
+	default:
+		return "refused"
+	}
+}
+
+func yesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
 }
 
 // LoadRulesFromDisk adopts the package the panel last verified, if there is one.
