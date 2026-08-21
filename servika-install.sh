@@ -709,7 +709,11 @@ ok "phpMyAdmin and Roundcube pools + phpMyAdmin configuration + permissions"
 # ============ 10) systemd + services ============
 step "10) systemd + services"
 install -m 0644 "$A/systemd/servika.service" /etc/systemd/system/servika.service || die "the servika unit could not be installed"
-for unit in servika-db-backup.service servika-db-backup.timer; do
+# The antivirus watcher unit is INSTALLED but never enabled here. Real-time
+# watching defaults to off, and the panel starts the unit when an operator turns
+# the setting on. Enabling it now would start a watcher on every server whose
+# operator never asked for one.
+for unit in servika-db-backup.service servika-db-backup.timer servika-av-watch.service; do
   [ -f "$A/systemd/$unit" ] && cp "$A/systemd/$unit" "/etc/systemd/system/$unit"
 done
 systemctl daemon-reload

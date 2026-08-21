@@ -357,7 +357,7 @@ fi
   || die "the release does not contain the database backup tool; update was not started"
 install -m 0755 "$A/ops/servika-db-backup" "$DB_BACKUP"
 UNITS_INSTALLED=0
-for unit in servika-db-backup.service servika-db-backup.timer; do
+for unit in servika-db-backup.service servika-db-backup.timer servika-av-watch.service; do
   if [ -f "$A/systemd/$unit" ]; then
     install -m 0644 "$A/systemd/$unit" "/etc/systemd/system/$unit"
     UNITS_INSTALLED=1
@@ -635,6 +635,17 @@ fi
 
 step "Restarting"
 systemctl restart "$SVC"
+# The antivirus watcher runs the SAME binary that was just replaced, under its
+# own unit. `systemctl restart servika` does not touch it, so without this an
+# operator who turned real-time watching on keeps running the previous release's
+# rule set until the next reboot, with nothing saying so. It is restarted only
+# when it is already enabled: starting it here would turn the feature on for
+# every server whose operator left it off.
+if systemctl is-enabled --quiet servika-av-watch.service 2>/dev/null; then
+  systemctl restart servika-av-watch.service >/dev/null 2>&1 \
+    && ok "antivirus watcher restarted on the new binary" \
+    || warn "the antivirus watcher could not be restarted"
+fi
 HEALTHY=0
 for _i in 1 2 3 4 5 6; do
   sleep 2

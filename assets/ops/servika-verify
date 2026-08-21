@@ -257,6 +257,24 @@ for s in valkey named crond postfix dovecot opendkim pure-ftpd httpd; do
   if [ "$state" = "active" ]; then pass "$s" "active"; else warn "$s" "$state"; fi
 done
 
+# The antivirus watcher is the one unit that is NORMALLY off, so "inactive" is
+# not a finding: real-time watching defaults to off and the panel starts the
+# unit when an operator turns it on. What is worth reporting is the pair that
+# disagrees, a unit the operator ENABLED which is not running, because the only
+# other place that shows is the settings screen nobody has open.
+if [ ! -f /etc/systemd/system/servika-av-watch.service ]; then
+  warn "antivirus watcher" "the unit is not installed, so real-time watching cannot be turned on"
+elif systemctl is-enabled --quiet servika-av-watch.service 2>/dev/null; then
+  av_state=$(svc servika-av-watch)
+  if [ "$av_state" = "active" ]; then
+    pass "antivirus watcher" "active"
+  else
+    warn "antivirus watcher" "$av_state, but real-time watching is enabled (nothing is being watched)"
+  fi
+else
+  pass "antivirus watcher" "off (real-time watching is not enabled)"
+fi
+
 # ── Panel HTTP surface ───────────────────────────────────────────────────────
 section "Panel HTTP surface"
 if [ -z "$PORT_EXTERNAL" ] || [ -z "$PORT_BACKEND" ]; then
