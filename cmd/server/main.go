@@ -179,6 +179,13 @@ func main() {
 	if antivirus.RunWatcherIfAsked() {
 		return
 	}
+	// The nightly sweep, when a systemd timer owns the schedule rather than the
+	// in-process scheduler below. It opens the database like the watcher and for
+	// the same reason, and it answers here so a sweep does not need the JWT
+	// secret either.
+	if antivirus.RunSweepIfAsked() {
+		return
+	}
 	pinTempDir()
 
 	cfg, err := config.Load()

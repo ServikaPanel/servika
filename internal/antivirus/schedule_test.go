@@ -102,3 +102,52 @@ func TestTheScheduledSweepReleasesTheSlot(t *testing.T) {
 func TestTheSchedulerSurvivesANilDatabase(t *testing.T) {
 	StartScheduler(nil)
 }
+
+// The timed sweep process makes the same decisions as the in-process
+// scheduler, minus the hour, which the timer's OnCalendar has already decided.
+// A path that skipped one of these would sweep a server whose operator had
+// switched the feature off, or record a scan of nothing as a clean result.
+func TestTheTimedSweepKeepsEveryConditionExceptTheHour(t *testing.T) {
+	source := sourceOf(t, "sweepmode.go")
+	for _, guard := range []struct{ code, why string }{
+		{"if !settings.ScheduledScan {",
+			"a timer that outlived the setting now sweeps anyway"},
+		{"if !settings.RuleEngine && !settings.LocationHeuristics {",
+			"a sweep that would inspect nothing is no longer skipped"},
+		{"if recent, err := sweptRecently(ctx, handle, time.Now()); err != nil {",
+			"a sweep the panel already ran is no longer respected"},
+		{"slot, err := takeScanSlot(ctx, handle)",
+			"the timed sweep no longer takes the cross-process scan slot"},
+		{"defer slot.Release()",
+			"the timed sweep no longer releases the slot"},
+	} {
+		if !strings.Contains(source, guard.code) {
+			t.Error(guard.why)
+		}
+	}
+	// The hour is deliberately absent. Refusing here when the drop-in and the
+	// database disagree would mean no sweep at all rather than one at the old
+	// hour, and servika-verify reports the disagreement itself.
+	if strings.Contains(source, "ScheduledHour") {
+		t.Error("the timed sweep re-checks the hour, so a stale drop-in stops it sweeping at all")
+	}
+	// A skipped sweep is not a failure. A timer unit that exits non-zero is
+	// recorded as `failed`, which is the one state a screen reads as broken.
+	if !strings.Contains(source, "errors.Is(err, errSweepNotDue)") {
+		t.Error("a skipped sweep is no longer reported as a zero exit status")
+	}
+}
+
+// All three sweep paths build the request through sweepRequest and run it
+// through runSweep, so a switch honoured on one is honoured on all of them.
+func TestEverySweepPathGoesThroughTheOneRequestBuilder(t *testing.T) {
+	for _, file := range []string{"sweep.go", "schedule.go", "sweepmode.go"} {
+		source := sourceOf(t, file)
+		if !strings.Contains(source, "sweepRequest(settings)") {
+			t.Errorf("%s builds its own sweep request", file)
+		}
+		if !strings.Contains(source, "runSweep(ctx,") {
+			t.Errorf("%s does not run the shared sweep", file)
+		}
+	}
+}
