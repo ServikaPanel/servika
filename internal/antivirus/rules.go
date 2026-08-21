@@ -109,7 +109,7 @@ func buildHeuristics() []rule {
 }
 
 var phpHeuristics = []rule{
-	{"PHP.Webshell.EvalBase64", weightProof, regexp.MustCompile(`(?i)eval\s*\(\s*(base64_decode|gzinflate|gzuncompress|str_rot13|convert_uudecode)\s*\(`), nil},
+	{"PHP.Webshell.EvalBase64", weightProof, regexp.MustCompile(`(?i)eval\s*\(\s*(base64_decode|gzinflate|gzuncompress|gzdecode|str_rot13|strrev|hex2bin|convert_uudecode|pack)\s*\(`), nil},
 	{"PHP.Webshell.PregReplaceE", weightProof, regexp.MustCompile(`(?i)preg_replace\s*\(\s*['"][^'"]{0,200}/e['"]`), nil},
 	{"PHP.Webshell.AssertInput", weightProof, regexp.MustCompile(`(?i)assert\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)`), nil},
 	{"PHP.Webshell.SystemInput", weightProof, regexp.MustCompile(`(?i)(shell_exec|passthru|system|popen|proc_open)\s*\(\s*\$_(GET|POST|REQUEST|COOKIE|SERVER)`), nil},
@@ -121,7 +121,26 @@ var phpHeuristics = []rule{
 	// superglobal to eval, to a variable function, or to a remote include.
 	{"PHP.Webshell.EvalSuperglobal", weightProof, regexp.MustCompile(`(?i)eval\s*\(\s*\$_(GET|POST|REQUEST|COOKIE|SERVER)\s*\[`), nil},
 	{"PHP.Webshell.VariableFunction", weightProof, regexp.MustCompile(`\$[a-zA-Z_][a-zA-Z0-9_]*\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)\s*\[`), nil},
-	{"PHP.Webshell.RemoteInclude", weightProof, regexp.MustCompile(`(?i)(include|require)(_once)?\s*\(?\s*['"]https?://`), nil},
+	// call_user_func is a variable function with a different spelling, and the
+	// adjacency rule above does not see it.
+	{"PHP.Webshell.CallUserFuncInput", weightProof, regexp.MustCompile(`(?i)call_user_func(_array)?\s*\(\s*\$_(GET|POST|REQUEST|COOKIE|SERVER)\s*\[`), nil},
+
+	// A dangerous function named as a STRING callback. This is the modern
+	// replacement for preg_replace's /e modifier, which the rule above covers.
+	//
+	// The `[^;\[]` is not cosmetic. An ARRAY callback `[$obj, 'method']` names a
+	// method on an object, not a global function: a Redis client's
+	// `call_user_func_array([$this->redis, 'eval'], $args)` is a Lua eval on the
+	// server and has nothing to do with PHP's eval. Letting `[` into the gap
+	// turns every such line into a critical finding on a live site.
+	{"PHP.Webshell.DangerousStringCallback", weightProof, regexp.MustCompile(`(?i)(preg_replace_callback|array_map|array_filter|array_walk|usort|uasort)\s*\([^;\[]{0,80}['"](assert|system|exec|eval|shell_exec|passthru|proc_open|create_function)['"]`), nil},
+
+	// phar:// is deliberately ABSENT. Measured on the clean corpus: Guzzle ships
+	// `require_once 'phar://guzzle.phar/vendor/...'` in its own phar stub, which
+	// is what a phar stub is for, so the wrapper produces a finding on a live
+	// site. A phar deserialization attack does not arrive through include in any
+	// case; it arrives through a file function given a phar path.
+	{"PHP.Webshell.RemoteInclude", weightProof, regexp.MustCompile(`(?i)(include|require)(_once)?\s*\(?\s*['"](https?|ftp|php|data)://`), nil},
 	{"PHP.Webshell.RemoteFetchEval", weightProof, regexp.MustCompile(`(?i)eval\s*\(\s*(file_get_contents|curl_exec)\s*\(`), nil},
 	{"PHP.Webshell.MoveUploadedPHP", weightProof, regexp.MustCompile(`(?i)move_uploaded_file\s*\([^)]*\.ph(p|tml|ar)`), nil},
 	{"PHP.Webshell.PasswordGate", weightProof, regexp.MustCompile(`(?i)\$(pass|password|pwd)\s*=\s*['"][0-9a-f]{32}['"]\s*;.{0,200}(md5|hash)\s*\(\s*\$_`), nil},
@@ -246,6 +265,7 @@ type match struct {
 func evaluate(ext string, content []byte) []match {
 	out := evaluateWith(heuristics, ext, content)
 	out = append(out, entropyMatches(ext, content)...)
+	out = append(out, taintMatches(ext, content)...)
 	return append(out, concealedMatches(ext, content)...)
 }
 
