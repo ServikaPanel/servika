@@ -158,7 +158,7 @@ func TestTheSweepRecordsNoDomainForItselfAndOnePerFinding(t *testing.T) {
 	if !strings.Contains(source, "INSERT INTO av_scans (domain_id, scope, status, engine) VALUES (NULL,?,?,?)") {
 		t.Error("the sweep no longer records itself with a NULL domain and a scope")
 	}
-	if !strings.Contains(source, "insertSweepFinding(h.DB, sid, owners.forPath(f.File), f)") {
+	if !strings.Contains(source, "insertSweepFinding(db, sid, owners.forPath(f.File), f)") {
 		t.Error("the sweep no longer resolves a domain per finding")
 	}
 	if !strings.Contains(source, "domain_id IS NULL") {

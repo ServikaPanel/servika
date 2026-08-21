@@ -346,6 +346,10 @@ func main() {
 	accountsH := &accounts.Handlers{DB: d}
 	backupsH := &backups.Handlers{DB: d}
 	backups.StartScheduler(d)
+	// The nightly malware sweep. It does nothing at all until an operator
+	// turns it on, and it takes the same single scan slot a hand-started scan
+	// does, so it waits for the next hour rather than running beside one.
+	antivirus.StartScheduler(d)
 	// nginx has no notion of time, so a maintenance window that ends by itself
 	// needs something to re-render the vhost when its deadline passes.
 	domains.StartMaintenanceScheduler(d)

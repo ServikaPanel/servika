@@ -47,15 +47,7 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "the antivirus settings could not be read")
 		return
 	}
-	roots := settings.ScanRoots()
-	req := ScanRequest{
-		Roots:              roots,
-		RuleEngine:         settings.RuleEngine,
-		LocationHeuristics: settings.LocationHeuristics,
-		CriticalThreshold:  settings.CriticalThreshold,
-		Excluded:           settings.ExcludedList(),
-		AutoQuarantine:     settings.AutoQuarantine,
-	}
+	req := sweepRequest(settings)
 	if !req.RuleEngine && !req.LocationHeuristics {
 		httpx.WriteError(w, http.StatusConflict,
 			"every detection layer is switched off, so a sweep would inspect nothing")
@@ -86,33 +78,63 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 		defer scanning.Store(0)
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
-		result, confined, err := Scan(ctx, req, "sweep-"+strconv.FormatInt(sid, 10))
-		if err != nil {
-			// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("antivirus: sweep %d could not run: %v", sid, err)
-		}
-		owners := newOwnerLookup(h.DB)
-		for _, f := range result.Findings {
-			if err := insertSweepFinding(h.DB, sid, owners.forPath(f.File), f); err != nil {
-				// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
-				log.Printf("antivirus: sweep %d could not record a finding: %v", sid, err)
-			}
-		}
-		if req.AutoQuarantine {
-			recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))
-		}
-		status := "finished"
-		if err != nil || result.Partial || ctx.Err() != nil {
-			status = "failed"
-		}
-		_, _ = h.DB.Exec(
-			`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
-			status, result.Scanned, len(result.Findings), confined, sid)
+		runSweep(ctx, h.DB, sid, req)
 	}()
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"scan_id": sid, "scope": settings.Scope, "roots": roots,
+		"scan_id": sid, "scope": settings.Scope, "roots": req.Roots,
 	})
+}
+
+// sweepRequest turns the operator's settings into a scan request.
+//
+// The handler and the scheduler both start the same sweep, so they build it
+// through one function: a switch honoured on one path and not the other is a
+// switch that is not honoured.
+func sweepRequest(s avsettings.Settings) ScanRequest {
+	return ScanRequest{
+		Roots:              s.ScanRoots(),
+		RuleEngine:         s.RuleEngine,
+		LocationHeuristics: s.LocationHeuristics,
+		CriticalThreshold:  s.CriticalThreshold,
+		Excluded:           s.ExcludedList(),
+		AutoQuarantine:     s.AutoQuarantine,
+	}
+}
+
+// runSweep performs a sweep whose row already exists and whose lock is already
+// held, and closes the row when it is done.
+//
+// The caller owns the lock rather than this function, because the handler has to
+// answer a refusal before it starts a goroutine while the scheduler simply skips
+// the hour.
+func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
+	result, confined, err := Scan(ctx, req, "sweep-"+strconv.FormatInt(sid, 10))
+	if err != nil {
+		// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("antivirus: sweep %d could not run: %v", sid, err)
+	}
+	owners := newOwnerLookup(db)
+	for _, f := range result.Findings {
+		if err := insertSweepFinding(db, sid, owners.forPath(f.File), f); err != nil {
+			// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
+			log.Printf("antivirus: sweep %d could not record a finding: %v", sid, err)
+		}
+	}
+	// Containment runs BEFORE the status is written, so a screen that sees a
+	// finished sweep sees the containment that went with it.
+	if req.AutoQuarantine {
+		recordAutoQuarantine(db, sid, (&Handlers{DB: db}).autoQuarantine(ctx, sid))
+	}
+	status := "finished"
+	if err != nil || result.Partial || ctx.Err() != nil {
+		status = "failed"
+	}
+	if _, err := db.Exec(
+		`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
+		status, result.Scanned, len(result.Findings), confined, sid); err != nil {
+		log.Printf("antivirus: sweep %d could not be closed: %v", sid, err)
+	}
 }
 
 // SweepStatus reports one sweep. GET /admin/antivirus/sweep/{sid}.

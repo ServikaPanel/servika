@@ -87,14 +87,28 @@ func TestTheContainmentRunsAfterTheResultSetIsClosed(t *testing.T) {
 // Both scan paths honour the switch, and neither acts when it is off. A switch
 // enforced on one path is not enforced.
 func TestBothScanPathsHonourTheSwitch(t *testing.T) {
-	for _, file := range []string{"antivirus.go", "sweep.go"} {
+	// The per-domain scan runs the containment inline; every sweep, whether an
+	// operator started it or the scheduler did, goes through runSweep.
+	for file, call := range map[string]string{
+		"antivirus.go": "recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))",
+		"sweep.go":     "recordAutoQuarantine(db, sid, (&Handlers{DB: db}).autoQuarantine(ctx, sid))",
+	} {
 		source := sourceOf(t, file)
 		if !strings.Contains(source, "if req.AutoQuarantine {") {
 			t.Errorf("%s does not gate automatic containment on the switch", file)
 		}
-		if !strings.Contains(source, "recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))") {
+		if !strings.Contains(source, call) {
 			t.Errorf("%s no longer runs automatic containment", file)
 		}
+	}
+	// The scheduler must not have grown a second copy of the sweep: a switch
+	// honoured on one path and not the other is a switch that is not honoured.
+	schedule := sourceOf(t, "schedule.go")
+	if !strings.Contains(schedule, "runSweep(ctx, db, sid, req)") {
+		t.Error("the scheduled sweep no longer goes through the shared sweep path")
+	}
+	if strings.Contains(schedule, "recordAutoQuarantine(") {
+		t.Error("the scheduler grew its own copy of automatic containment")
 	}
 }
 
