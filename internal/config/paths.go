@@ -68,6 +68,13 @@ const (
 	// account that planted the file, it is charged to their disk quota, and it
 	// joins their backups. Root-owned 0700, one directory per system user.
 	DefaultQuarantineDir = "/var/lib/servika/quarantine"
+	// DefaultWPChecksumDir holds the WordPress core checksum tables the panel
+	// fetched from wordpress.org, one file per version and locale. It sits on
+	// persistent state rather than under /opt/servika for the same reason the
+	// GeoIP database does: servika-update replaces bin/, frontend-dist and src/
+	// only, and a table re-downloaded on every update would leave the integrity
+	// check offline for exactly as long as wordpress.org is unreachable.
+	DefaultWPChecksumDir = "/var/lib/servika/wp-checksums"
 	// DefaultTuningBackupDir holds the copy of a configuration file taken before
 	// the tuning screen edits it. The copy is what a revert restores, so it must
 	// outlive the panel process and must NOT sit beside the file it copies:
@@ -232,6 +239,12 @@ func GeoIPDir() string  { return mustAbsPath("SERVIKA_GEOIP_DIR", DefaultGeoIPDi
 // every home so the account it came from cannot reach it.
 func QuarantineDir() string {
 	return mustAbsPath("SERVIKA_QUARANTINE_DIR", DefaultQuarantineDir)
+}
+
+// WPChecksumDir is where the WordPress core checksum tables are cached, so the
+// integrity check still has an answer when api.wordpress.org cannot be reached.
+func WPChecksumDir() string {
+	return mustAbsPath("SERVIKA_WP_CHECKSUM_DIR", DefaultWPChecksumDir)
 }
 
 // TuningBackupDir is where the tuning screen keeps the copy of a configuration
