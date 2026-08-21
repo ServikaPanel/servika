@@ -161,9 +161,42 @@ func (h *Handlers) IonCubeRemove(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "version": req.Version})
 }
 
+// maxLoaderRedirects bounds the redirect chain. Go's own default is 10; the
+// number is written out here because the policy below replaces the default
+// entirely and a policy that forgets to count is a policy that loops.
+const maxLoaderRedirects = 5
+
+// loaderClient refuses a redirect that leaves TLS.
+//
+// http.DefaultClient follows a redirect from https to plain http without a
+// word. Measured with a real Go client against a TLS server redirecting to a
+// plain one: the request started at https, ended at http, and the body came
+// back over the plaintext hop. So the shipped https:// address proves nothing
+// on its own about how the bytes arrived, and these bytes become a
+// zend_extension loaded into every PHP process on the server.
+//
+// The test is against the FIRST request rather than the previous hop, so a
+// chain cannot step down through an intermediate. A download that started on
+// plain http is left alone: SERVIKA_IONCUBE_URL accepts one deliberately
+// (config.EnvURL allows http), and refusing there would break an operator's
+// internal mirror rather than close anything.
+func loaderClient() *http.Client {
+	return &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= maxLoaderRedirects {
+				return fmt.Errorf("stopped after %d redirects", maxLoaderRedirects)
+			}
+			if via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+				return fmt.Errorf("refusing a redirect from https to %s", req.URL.Scheme)
+			}
+			return nil
+		},
+	}
+}
+
 func download(ctx context.Context, url, destination string) error {
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := loaderClient().Do(req)
 	if err != nil {
 		return err
 	}
