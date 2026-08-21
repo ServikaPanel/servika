@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/phpdefaults"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -78,7 +79,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	var opcache, fileUploads int
 	var memLimit, pmStrategy string
 	var pmMaxChildren, maxExec int
-	opcache, memLimit, pmStrategy, pmMaxChildren, maxExec = 1, "256M", "ondemand", 8, 30
+	opcache, memLimit, pmStrategy, pmMaxChildren, maxExec = 1, phpdefaults.MemoryLimit, "ondemand", 8, phpdefaults.MaxExecutionTime
 	_ = h.DB.QueryRowContext(r.Context(),
 		`SELECT opcache_enable, memory_limit, pm_strategy, pm_max_children, max_execution_time
 		   FROM php_settings WHERE domain_id=? AND subdomain_id=0`, id).

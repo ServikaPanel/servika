@@ -21,6 +21,7 @@ import (
 	"text/template"
 
 	"servika/internal/httpx"
+	"servika/internal/phpdefaults"
 	"servika/internal/phpversion"
 	"servika/internal/provisioner"
 	"servika/internal/subdomain"
@@ -106,11 +107,11 @@ type Settings struct {
 // Defaults returns the default per-domain PHP settings.
 func Defaults() Settings {
 	return Settings{
-		MemoryLimit:       "256M",
-		MaxExecutionTime:  30,
-		MaxInputTime:      60,
-		PostMaxSize:       "64M",
-		UploadMaxFilesize: "32M",
+		MemoryLimit:       phpdefaults.MemoryLimit,
+		MaxExecutionTime:  phpdefaults.MaxExecutionTime,
+		MaxInputTime:      phpdefaults.MaxInputTime,
+		PostMaxSize:       phpdefaults.PostMaxSize,
+		UploadMaxFilesize: phpdefaults.UploadMaxFilesize,
 		OpcacheEnable:     true,
 		DisableFunctions:  "exec,passthru,shell_exec,system,proc_open,popen",
 		DisplayErrors:     false,

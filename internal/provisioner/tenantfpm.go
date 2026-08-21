@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"servika/internal/phpdefaults"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -238,11 +240,11 @@ const hardenedDisableFunctions = "exec,passthru,shell_exec,system,proc_open,pope
 
 func tenantReadPoolSettings(db *sql.DB, domainID, subdomainID int64) tenantPoolSettings {
 	settings := tenantPoolSettings{
-		MemoryLimit:       "256M",
-		MaxExecutionTime:  30,
-		MaxInputTime:      60,
-		PostMaxSize:       "64M",
-		UploadMaxFilesize: "32M",
+		MemoryLimit:       phpdefaults.MemoryLimit,
+		MaxExecutionTime:  phpdefaults.MaxExecutionTime,
+		MaxInputTime:      phpdefaults.MaxInputTime,
+		PostMaxSize:       phpdefaults.PostMaxSize,
+		UploadMaxFilesize: phpdefaults.UploadMaxFilesize,
 		DisableFunctions:  hardenedDisableFunctions,
 		PMStrategy:        "ondemand",
 		PMMaxRequests:     500,
