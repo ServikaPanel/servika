@@ -94,3 +94,31 @@ func TestTheNewRulesReportNothingOnLegitimateCode(t *testing.T) {
 		})
 	}
 }
+
+// The extension gate is the ON/OFF switch for the whole content layer, so an
+// extension missing from it is not a weaker scan but no scan at all. This
+// panel's nginx vhosts route only `\.php$`, but a domain can be switched to the
+// `apache` backend, where an .htaccess AddHandler decides what runs.
+func TestEveryPHPAlternativeExtensionIsInspected(t *testing.T) {
+	shell := []byte(`<?php system($_GET['cmd']); ?>`)
+	for _, ext := range []string{
+		".php", ".phtml", ".phtm", ".pht", ".phps",
+		".php3", ".php4", ".php5", ".php7", ".php8", ".phar", ".inc", ".shtml",
+	} {
+		t.Run(ext, func(t *testing.T) {
+			if readLimitFor(ext) == 0 {
+				t.Fatalf("%s is never opened, so a webshell in one is invisible", ext)
+			}
+			if _, _, _, level := verdict(evaluate(ext, shell), scoreCritical); level != LevelCritical {
+				t.Errorf("a webshell in a %s file was not reported critical", ext)
+			}
+		})
+	}
+	// And an extension nothing executes stays closed, or the scan reads every
+	// image on the server.
+	for _, ext := range []string{".jpg", ".png", ".css", ".txt", ".sql", ".zip"} {
+		if readLimitFor(ext) != 0 {
+			t.Errorf("%s is opened by the scan; nothing executes one", ext)
+		}
+	}
+}

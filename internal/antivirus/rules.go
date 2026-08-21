@@ -45,11 +45,25 @@ const extHTAccess = ".htaccess"
 // jsExts are the JavaScript forms a site actually serves.
 var jsExts = []string{".js", ".mjs", ".cjs"}
 
-// phpExts are the extensions a PHP-FPM pool will execute. This is the ONE list:
+// phpExts are the extensions a PHP handler may execute. This is the ONE list:
 // phpish reads it, the read limits read it, and every PHP rule is scoped to it,
 // so a new extension cannot be honoured in one place and missed in another.
+//
+// It is deliberately WIDER than what this panel's own nginx vhosts route. Those
+// send only `\.php$` to php-fpm, but a domain can be switched to the `apache`
+// backend, and there an `.htaccess` carrying `AddHandler` decides what runs.
+// The list is the ON/OFF gate for the whole content layer, so an extension
+// missing from it is not a weaker scan, it is no scan at all for that file.
+//
+// The cost of a wide list is nil here: measured across WordPress core plus the
+// five most-installed plugins, not one file carries .phtm, .phps or .shtml, so
+// the additions open no file that a real site actually ships. Two of them are
+// not executed by a stock configuration at all (.phps displays source, .shtml
+// is server-side includes) and are listed because the failure is silent in one
+// direction and free in the other.
 var phpExts = []string{
-	".php", ".phtml", ".php3", ".php4", ".php5", ".php7", ".php8", ".phar", ".inc", ".pht",
+	".php", ".phtml", ".phtm", ".pht", ".phps", ".php3", ".php4", ".php5", ".php7", ".php8",
+	".phar", ".inc", ".shtml",
 }
 
 // Weight tiers, named so a rule's score reads as a claim about evidence rather
