@@ -53,6 +53,7 @@ import (
 	"servika/internal/monitor"
 	"servika/internal/mtasts"
 	"servika/internal/nginxset"
+	"servika/internal/notifications"
 	"servika/internal/optimize"
 	"servika/internal/overview"
 	"servika/internal/packages"
@@ -349,6 +350,10 @@ func main() {
 	// here; the 24-hour manifest poll starts its own goroutine.
 	system.StartVersionCheck(version, buildDate)
 
+	// Notifications have a writer that fires on every real-time detection, so
+	// without a retention pass the table grows for the life of the installation.
+	notifications.StartPrune(context.Background(), d)
+
 	// The signed malware rule package, if this build carries a signing key. The
 	// PANEL is the only process that fetches: the scan worker runs inside
 	// servika-av.slice with nested deadlines and the watcher's unit is sandboxed
@@ -405,6 +410,7 @@ func main() {
 	protectionH := &passwordprotect.Handlers{DB: d}
 	avH := &antivirus.Handlers{DB: d}
 	avSettingsH := &avsettings.Handlers{DB: d}
+	notificationsH := &notifications.Handlers{DB: d}
 	// Write the antivirus resource slice from the stored settings at every
 	// start.
 	//
@@ -586,6 +592,15 @@ func main() {
 			r.With(middleware.ResellerOrAbove).Get("/me/2fa/setup", authH.TwoFASetup)
 			r.With(middleware.ResellerOrAbove).Post("/me/2fa/enable", authH.TwoFAEnable)
 			r.With(middleware.ResellerOrAbove).Post("/me/2fa/disable", authH.TwoFADisable)
+			// The notification bell. Deliberately NO role middleware: the whole
+			// point is that a customer sees their own domain's alerts, and the
+			// narrowing lives in the query, because a row-by-row ownership check
+			// does not work on a list endpoint. A panel-wide notification names no
+			// domain and is admin-only, which the query says and no middleware
+			// tier could.
+			r.Get("/notifications", notificationsH.List)
+			r.Post("/notifications/read-all", notificationsH.MarkRead)
+			r.Post("/notifications/{id}/read", notificationsH.MarkRead)
 			// NOTE: /domains can be opened to resellers only after the scope filter
 			// (Phase 5D) lands — opening it unfiltered would show every domain.
 			r.With(middleware.ResellerOrAbove).Get("/domains", domainsH.List)
