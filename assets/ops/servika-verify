@@ -351,6 +351,67 @@ else
   pass "antivirus sweep timer" "off (the panel's own scheduler owns the sweep hour)"
 fi
 
+# Which malware rule set the scanner is on. A signed rule package is refused
+# once it is past its age limit and the built-in set takes over silently, which
+# is the correct behaviour (without an age limit, anyone who can merely WITHHOLD
+# the new package pins a server to old rules forever) but it is also the one
+# event an operator has to act on, and until this check nothing on the server
+# said it had happened.
+#
+# The age comes from the SIGNED produced stamp the binary reports, never from
+# the file's mtime: the panel writes the file only when a NEWER version arrives,
+# so its mtime says when a new version last landed, and a healthy server whose
+# rule set has not changed in a month would warn every time.
+#
+# No signing key configured is a PASS, not a warning. That is the default on
+# every installation and a warning there would report a healthy server as
+# broken, which is the defect the backup-root check already had.
+if [ ! -x "$SERVIKA_BIN_PATH" ]; then
+  warn "antivirus rule set" "NOT MEASURED (the panel binary could not be run)"
+elif ! AV_RULES_OUT=$("$SERVIKA_BIN_PATH" -print-av-rules 2>&1); then
+  warn "antivirus rule set" "NOT MEASURED (the binary could not report it: $AV_RULES_OUT)"
+else
+  av_conf=""; av_cache=""; av_ver=""; av_rules=""; av_age=""; av_max=""
+  while IFS='=' read -r key value; do
+    case "$key" in
+      configured)   av_conf="$value" ;;
+      cache)        av_cache="$value" ;;
+      version)      av_ver="$value" ;;
+      rules)        av_rules="$value" ;;
+      age_days)     av_age="$value" ;;
+      max_age_days) av_max="$value" ;;
+    esac
+  done <<< "$AV_RULES_OUT"
+  if [ "$av_conf" = "no" ]; then
+    pass "antivirus rule set" "built-in (no signed rule package is configured)"
+  elif [ "$av_conf" != "yes" ]; then
+    warn "antivirus rule set" "NOT MEASURED (the binary named no rule set)"
+  else
+    case "$av_cache" in
+      absent)
+        warn "antivirus rule set" "built-in: this build carries a signing key but no verified package has been fetched" ;;
+      stale)
+        warn "antivirus rule set" "built-in: the cached package is older than ${av_max} days and was refused, so a newer one has to be published" ;;
+      refused)
+        warn "antivirus rule set" "built-in: the cached package did NOT verify against this build's key" ;;
+      verified)
+        # Warn BEFORE the limit, not after: past it the panel has already fallen
+        # back and the operator finds out from a rule that stopped firing.
+        av_near=""
+        if [ -n "$av_max" ] && [ "$av_max" -gt 0 ] 2>/dev/null; then
+          av_near=$(( av_max * 80 / 100 ))
+        fi
+        if [ -n "$av_near" ] && [ -n "$av_age" ] && [ "$av_age" -ge "$av_near" ] 2>/dev/null; then
+          warn "antivirus rule set" "package version $av_ver is $av_age days old against a ${av_max}-day limit, so the panel falls back to the built-in set soon"
+        else
+          pass "antivirus rule set" "package version $av_ver, $av_age days old, rules $av_rules"
+        fi ;;
+      *)
+        warn "antivirus rule set" "NOT MEASURED (the binary named no cache state)" ;;
+    esac
+  fi
+fi
+
 # ── Panel HTTP surface ───────────────────────────────────────────────────────
 section "Panel HTTP surface"
 if [ -z "$PORT_EXTERNAL" ] || [ -z "$PORT_BACKEND" ]; then
