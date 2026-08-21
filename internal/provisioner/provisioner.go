@@ -2809,7 +2809,15 @@ func buildProtectedBlocks(db *sql.DB, domainID, subdomainID int64, socket string
 }
 
 const (
-	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v2_done"
+	// vhostHardenSentinel gates the sweep below, which is the ONLY thing that
+	// re-renders an existing tenant's FPM pool and vhost after an update. A
+	// change to either template therefore reaches a fresh install only, unless
+	// this version is raised in the same commit.
+	//
+	// v3 delivers two changes that are invisible without it: the raised PHP
+	// limits (the pool is re-rendered by writePoolValidated below) and the
+	// FastCGI read timeout derived from max_execution_time.
+	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v3_done"
 	panelVhostPath      = "/etc/nginx/conf.d/_panel.conf"
 	panelSecSentinel    = "# SERVIKA-PANEL-SEC v2"
 )
