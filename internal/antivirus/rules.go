@@ -134,7 +134,20 @@ var phpHeuristics = []rule{
 	// reported 184, wp-admin/admin.php among them. Requiring an assignment or
 	// an output keyword reports none of them and still catches every shape an
 	// attacker can use, since a webshell has to READ the command's output.
-	{"PHP.Webshell.BacktickInput", weightProof, regexp.MustCompile("(?i)(=|\\(|,|\\breturn\\b|\\becho\\b|\\bprint\\b)\\s*`[^`\\r\\n]*\\$_(GET|POST|REQUEST|COOKIE)\\s*\\[[^`\\r\\n]*`"), nil},
+	//
+	// Concatenation belongs in that context list, and it is the one alternative
+	// that must NOT be written as a bare operator. `$o = 'log: ' . `id
+	// {$_GET['u']}`;` puts a `.` immediately before the backtick and the
+	// assignment too far back for `\s*` to reach, so the shape was missed
+	// entirely. A bare `.` also matches English prose, where a sentence ends
+	// with a period and the next word is a backtick-quoted superglobal:
+	// "Sanitises the input. `$_GET['id']` is unslashed first." matches. That
+	// shape does NOT occur in the corpus, which reports 0 either way, so the
+	// narrowing is a constructed guard rather than a measured repair.
+	// Concatenation needs an OPERAND before the dot, so the dot is accepted
+	// only after a string literal, a closing bracket or a variable; a sentence
+	// ends with a letter and is refused.
+	{"PHP.Webshell.BacktickInput", weightProof, regexp.MustCompile("(?i)(=|\\(|,|\\breturn\\b|\\becho\\b|\\bprint\\b|(?:['\")\\]]|\\$[a-zA-Z_][a-zA-Z0-9_]*)\\s*\\.)\\s*`[^`\\r\\n]*\\$_(GET|POST|REQUEST|COOKIE)\\s*\\[[^`\\r\\n]*`"), nil},
 
 	// Obfuscation and evasion. None of these is a verdict on its own: a real
 	// plugin builds a string from chr(), suppresses an error and reads a user

