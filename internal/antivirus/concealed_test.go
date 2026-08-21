@@ -57,7 +57,7 @@ func TestTheSplitNameWebshellIsReported(t *testing.T) {
 	body := []byte("<?php\n$d = <<<EOT\n" + blob + "\nEOT;\n" +
 		"$f = 'base'.'64_decode';\n$g = 'ev'.'al';\n$g($f($d));\n")
 
-	score, _, names, level := verdict(evaluate(".php", body))
+	score, _, names, level := verdict(evaluate(".php", body), 0)
 	if level != LevelCritical {
 		t.Fatalf("level %q at score %d, want %q (matched %v)", level, score, LevelCritical, names)
 	}
@@ -67,7 +67,7 @@ func TestTheSplitNameWebshellIsReported(t *testing.T) {
 	// Without the concealment the same file is only weak evidence, which is what
 	// made this shape worth a rule of its own.
 	withoutExecution := []byte("<?php\n$d = <<<EOT\n" + blob + "\nEOT;\n")
-	if _, _, _, level := verdict(evaluate(".php", withoutExecution)); level != "" {
+	if _, _, _, level := verdict(evaluate(".php", withoutExecution), 0); level != "" {
 		t.Errorf("the blob alone produced %q; it is weak evidence by design", level)
 	}
 }

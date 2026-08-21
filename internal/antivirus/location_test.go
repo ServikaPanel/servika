@@ -35,7 +35,7 @@ func TestALocationIsEvidenceOnlyWhereItShouldBe(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			score, signature, names, level := verdict(locationMatches(scanRoot, c.path))
+			score, signature, names, level := verdict(locationMatches(scanRoot, c.path), 0)
 			if level != c.level {
 				t.Fatalf("level %q, want %q (score %d, rules %v)", level, c.level, score, names)
 			}
@@ -54,11 +54,11 @@ func TestALocationIsEvidenceOnlyWhereItShouldBe(t *testing.T) {
 // what matching the absolute path would do.
 func TestTheRootItselfIsNotJudged(t *testing.T) {
 	root := "/home/c_tenant/.local/public_html"
-	if score, _, names, level := verdict(locationMatches(root, root+"/index.php")); level != "" {
+	if score, _, names, level := verdict(locationMatches(root, root+"/index.php"), 0); level != "" {
 		t.Errorf("the scan root's own path produced %q at score %d: %v", level, score, names)
 	}
 	// A hidden directory INSIDE that root is still a finding.
-	if _, _, _, level := verdict(locationMatches(root, root+"/.hidden/s.php")); level == "" {
+	if _, _, _, level := verdict(locationMatches(root, root+"/.hidden/s.php"), 0); level == "" {
 		t.Error("a hidden directory inside the root was not judged")
 	}
 }
@@ -70,14 +70,14 @@ func TestLocationAndContentEvidenceCombine(t *testing.T) {
 	path := scanRoot + "/wp-content/cache/x.php"
 	body := []byte(`<?php ini_set('disable_functions', '');`)
 
-	if _, _, _, level := verdict(locationMatches(scanRoot, path)); level != LevelSuspicious {
+	if _, _, _, level := verdict(locationMatches(scanRoot, path), 0); level != LevelSuspicious {
 		t.Fatalf("the cache location alone should be suspicious, got %q", level)
 	}
-	if _, _, _, level := verdict(evaluate(".php", body)); level != LevelSuspicious {
+	if _, _, _, level := verdict(evaluate(".php", body), 0); level != LevelSuspicious {
 		t.Fatalf("the content alone should be suspicious, got %q", level)
 	}
 	combined := append(locationMatches(scanRoot, path), evaluate(".php", body)...)
-	score, _, names, level := verdict(combined)
+	score, _, names, level := verdict(combined, 0)
 	if level != LevelCritical {
 		t.Errorf("together they should be critical, got %q at score %d: %v", level, score, names)
 	}
@@ -87,7 +87,7 @@ func TestLocationAndContentEvidenceCombine(t *testing.T) {
 // deliberately, because counting the same directory twice would turn a single
 // piece of evidence into a verdict by arithmetic.
 func TestWellKnownIsNotCountedTwice(t *testing.T) {
-	_, _, names, _ := verdict(locationMatches(scanRoot, scanRoot+"/.well-known/x.php"))
+	_, _, names, _ := verdict(locationMatches(scanRoot, scanRoot+"/.well-known/x.php"), 0)
 	joined := strings.Join(names, ",")
 	if strings.Contains(joined, "Location.HiddenDirectory") {
 		t.Errorf("counted twice: %v", names)

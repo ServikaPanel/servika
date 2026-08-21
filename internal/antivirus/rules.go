@@ -191,11 +191,29 @@ func appliesTo(h rule, ext string) bool {
 	return slices.Contains(h.exts, ext)
 }
 
-// levelFor maps a total score to a verdict. An empty level means the score did
-// not reach the reporting threshold and no finding is written.
-func levelFor(score int) string {
+// levelFor maps a total score to a verdict against a critical threshold. An
+// empty level means the score did not reach the reporting threshold and no
+// finding is written.
+//
+// The critical threshold is a setting; scoreSuspicious deliberately is not.
+// The two numbers were chosen together so that no single rule below
+// scoreSuspicious can produce a finding at all, and lowering the reporting
+// threshold would let one weak signal convict a file on its own, which is the
+// false-positive behaviour the weighing exists to prevent. Raising the critical
+// threshold only makes the panel more cautious about the word "critical", which
+// is a judgement an operator is entitled to make on their own server.
+//
+// A threshold of zero means the caller did not set one and gets the shipped
+// value, so a request that predates the setting behaves exactly as before.
+func levelFor(score, critical int) string {
+	if critical <= 0 {
+		critical = scoreCritical
+	}
+	if critical < scoreSuspicious {
+		critical = scoreSuspicious
+	}
 	switch {
-	case score >= scoreCritical:
+	case score >= critical:
 		return LevelCritical
 	case score >= scoreSuspicious:
 		return LevelSuspicious
@@ -242,7 +260,7 @@ func evaluateWith(rules []rule, ext string, content []byte) []match {
 // match, which is stable because both sources iterate fixed slices. The full
 // list travels beside it so an operator can see every reason. An empty level
 // means the total did not reach the reporting threshold and no row is written.
-func verdict(matches []match) (score int, signature string, names []string, level string) {
+func verdict(matches []match, critical int) (score int, signature string, names []string, level string) {
 	best := 0
 	for _, m := range matches {
 		score += m.score
@@ -251,5 +269,5 @@ func verdict(matches []match) (score int, signature string, names []string, leve
 			best, signature = m.score, m.name
 		}
 	}
-	return score, signature, names, levelFor(score)
+	return score, signature, names, levelFor(score, critical)
 }

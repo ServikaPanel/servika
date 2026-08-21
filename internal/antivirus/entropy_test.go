@@ -49,7 +49,7 @@ func TestEveryBlobShapeIsSeenBySomething(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			gotEntropy := len(entropyMatches(".php", []byte(c.body))) > 0
-			_, _, names, _ := verdict(evaluateWith(heuristics, ".php", []byte(c.body)))
+			_, _, names, _ := verdict(evaluateWith(heuristics, ".php", []byte(c.body)), 0)
 			gotPattern := strings.Contains(strings.Join(names, ","), "PHP.Obf.LongBase64Block")
 			if gotEntropy != c.wantEntropy || gotPattern != c.wantPattern {
 				t.Errorf("entropy=%v (want %v) pattern=%v (want %v), line entropy %.3f",
@@ -132,7 +132,7 @@ func TestEntropyIsNotAppliedToJavaScript(t *testing.T) {
 // build artefact can also be, so it can only ever add to something else.
 func TestADenseLineAloneIsNotAFinding(t *testing.T) {
 	body := []byte(`<?php $data = '` + payload(t, 3000) + `';`)
-	score, _, names, level := verdict(evaluate(".php", body))
+	score, _, names, level := verdict(evaluate(".php", body), 0)
 	if level != "" {
 		t.Fatalf("a packed literal alone produced %q at score %d: %v", level, score, names)
 	}
@@ -142,7 +142,7 @@ func TestADenseLineAloneIsNotAFinding(t *testing.T) {
 
 	// With one more independent signal it becomes a verdict.
 	withExec := []byte(`<?php @system($cmd); $data = '` + payload(t, 3000) + `';`)
-	if _, _, names, level := verdict(evaluate(".php", withExec)); level == "" {
+	if _, _, names, level := verdict(evaluate(".php", withExec), 0); level == "" {
 		t.Errorf("a packed literal beside a suppressed exec produced nothing: %v", names)
 	}
 }

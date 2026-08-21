@@ -54,8 +54,26 @@ const workerFlag = "scan-worker"
 const resultLimit = 64 << 20
 
 // ScanRequest is what the parent hands the worker. It carries no credentials.
+//
+// The layer switches travel WITH the request rather than being read from the
+// database by the worker, which is what keeps the worker free of a connection.
+// A zero value scans nothing and reports nothing, so every caller states what
+// it wants explicitly instead of inheriting a default from a struct literal.
 type ScanRequest struct {
 	Roots []string `json:"roots"`
+	// RuleEngine opens files and weighs their content.
+	RuleEngine bool `json:"rule_engine"`
+	// LocationHeuristics judges a file by where it sits, without reading it.
+	LocationHeuristics bool `json:"location_heuristics"`
+	// CriticalThreshold is the score at which a file is called critical rather
+	// than suspicious. Zero means the shipped value.
+	CriticalThreshold int `json:"critical_threshold"`
+}
+
+// DefaultRequest is the scan every caller wants unless an operator has said
+// otherwise: both layers on, the shipped threshold.
+func DefaultRequest(roots ...string) ScanRequest {
+	return ScanRequest{Roots: roots, RuleEngine: true, LocationHeuristics: true}
 }
 
 // ScanResult is what the worker hands back.
@@ -150,7 +168,7 @@ func runWorker(requestPath, resultPath string) error {
 func executeScan(ctx context.Context, req ScanRequest) ScanResult {
 	result := ScanResult{Cgroup: selfCgroup()}
 	for _, root := range req.Roots {
-		scanned, findings := runScan(ctx, root)
+		scanned, findings := runScan(ctx, root, req)
 		result.Scanned += scanned
 		result.Findings = append(result.Findings, findings...)
 		if ctx.Err() != nil {
@@ -227,6 +245,8 @@ func scanViaSystemd(ctx context.Context, bin string, req ScanRequest, label stri
 	if err != nil {
 		return ScanResult{}, fmt.Errorf("encode the scan request: %w", err)
 	}
+	// #nosec G306 G703 -- root-owned handoff file, 0600, inside the 0700 temp
+	// directory created just above; the path is server-internal.
 	if err := os.WriteFile(requestPath, body, 0o600); err != nil {
 		return ScanResult{}, fmt.Errorf("write the scan request: %w", err)
 	}

@@ -46,7 +46,7 @@ func plantTree(t *testing.T) string {
 // executeScan for exactly that reason, and this is what holds them together.
 func TestTheWorkerAndTheFallbackFindTheSameThing(t *testing.T) {
 	root := plantTree(t)
-	req := ScanRequest{Roots: []string{root}}
+	req := DefaultRequest(root)
 
 	direct := executeScan(context.Background(), req)
 	if len(direct.Findings) != 1 {
@@ -159,7 +159,7 @@ func TestAHostWithoutSystemdScansUnconfinedAndSaysSo(t *testing.T) {
 	t.Cleanup(func() { systemdRunBin = restore })
 
 	root := plantTree(t)
-	result, confined, err := Scan(context.Background(), ScanRequest{Roots: []string{root}}, "1")
+	result, confined, err := Scan(context.Background(), DefaultRequest(root), "1")
 	if err != nil {
 		t.Fatalf("the fallback failed: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestAFailedLaunchIsRefusedRatherThanRunUnconfined(t *testing.T) {
 	}
 
 	root := plantTree(t)
-	result, confined, err := Scan(context.Background(), ScanRequest{Roots: []string{root}}, "1")
+	result, confined, err := Scan(context.Background(), DefaultRequest(root), "1")
 	if err == nil {
 		t.Fatal("a failed launch was reported as a successful scan")
 	}
@@ -252,7 +252,7 @@ func TestTheScanReallyRunsInsideTheResourceSlice(t *testing.T) {
 	}
 
 	root := plantTree(t)
-	result, confined, err := Scan(context.Background(), ScanRequest{Roots: []string{root}}, "e2e")
+	result, confined, err := Scan(context.Background(), DefaultRequest(root), "e2e")
 	if err != nil {
 		t.Fatalf("the confined scan failed: %v", err)
 	}

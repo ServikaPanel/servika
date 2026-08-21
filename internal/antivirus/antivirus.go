@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"servika/internal/avsettings"
 	"servika/internal/config"
 	"servika/internal/httpx"
 
@@ -180,6 +181,25 @@ func RecordScan(db *sql.DB, domainID int64, engine string, scanned int, findings
 	return scanID, nil
 }
 
+// scanRequest builds a request from the operator's stored settings.
+//
+// The settings are read here, in the panel process, and travel to the worker in
+// its request file. Letting the worker read them itself would give it a
+// database connection, which is the one thing keeping it a scanner rather than
+// a second half of the panel.
+func scanRequest(ctx context.Context, db *sql.DB, roots ...string) (ScanRequest, error) {
+	settings, err := avsettings.Read(ctx, db)
+	if err != nil {
+		return ScanRequest{}, err
+	}
+	return ScanRequest{
+		Roots:              roots,
+		RuleEngine:         settings.RuleEngine,
+		LocationHeuristics: settings.LocationHeuristics,
+		CriticalThreshold:  settings.CriticalThreshold,
+	}, nil
+}
+
 // insertFinding is the one place a finding row is written, so the critical
 // default cannot be applied on one path and forgotten on the other.
 func insertFinding(db *sql.DB, scanID, domainID int64, finding Finding) error {
@@ -235,6 +255,16 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "public_html not found")
 		return
 	}
+	// The layer switches are read BEFORE the lock is taken and travel with the
+	// request, because the worker has no database connection to read them with.
+	// An unreadable settings row does not silently fall back to scanning
+	// everything: the operator turned a layer off on a server the scan was
+	// slowing down, and ignoring that is the failure they would notice.
+	req, err := scanRequest(r.Context(), h.DB, root)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the antivirus settings could not be read")
+		return
+	}
 	if !scanning.CompareAndSwap(0, 1) {
 		httpx.WriteError(w, http.StatusConflict, "another server scan is in progress; please wait")
 		return
@@ -246,11 +276,16 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sid, _ := res.LastInsertId()
+	// #nosec G118 -- the request context is deliberately NOT used: the caller
+	// gets a scan id immediately and polls for the result, so closing the tab
+	// must not cancel a sweep that is already under way. The scan carries its
+	// own budget instead, and the settings it needs were read from the request
+	// context above, before this goroutine starts.
 	go func() {
 		defer scanning.Store(0)
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
-		result, confined, err := Scan(ctx, ScanRequest{Roots: []string{root}}, strconv.FormatInt(sid, 10))
+		result, confined, err := Scan(ctx, req, strconv.FormatInt(sid, 10))
 		if err != nil {
 			// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("antivirus: scan %d could not run: %v", sid, err)
@@ -330,7 +365,12 @@ func (h *Handlers) UpdateSignature(w http.ResponseWriter, r *http.Request) {
 }
 
 // runScan: ClamAV (if available) + heuristics. Returns scanned file count + findings.
-func runScan(ctx context.Context, root string) (int, []Finding) {
+//
+// A layer the request turns off is SKIPPED, not run and then filtered. Filtering
+// would throw away the only concrete thing turning a layer off buys, which is
+// the CPU and the file reads it does not spend, and the operator turning it off
+// is doing so on a server the scan is slowing down.
+func runScan(ctx context.Context, root string, req ScanRequest) (int, []Finding) {
 	var findings []Finding
 	seen := map[string]bool{}
 
@@ -380,10 +420,16 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 		}
 		ext := strings.ToLower(filepath.Ext(p))
 		limit := readLimitFor(ext)
+		if !req.RuleEngine {
+			limit = 0
+		}
 		// The path is judged even when the content will not be read. A payload
 		// can sit in a file past the read limit, and where it sits is evidence
 		// that costs nothing to collect.
-		matches := locationMatches(root, p)
+		var matches []match
+		if req.LocationHeuristics {
+			matches = locationMatches(root, p)
+		}
 		if limit == 0 && len(matches) == 0 {
 			return nil
 		}
@@ -405,7 +451,7 @@ func runScan(ctx context.Context, root string) (int, []Finding) {
 		// used to mean bulk cleanup contained it on the first row and then
 		// reported "file missing" twice for the same file it had just
 		// quarantined, so a successful cleanup read as two failures.
-		score, signature, matched, level := verdict(matches)
+		score, signature, matched, level := verdict(matches, req.CriticalThreshold)
 		if level == "" || seen["h|"+p] {
 			return nil
 		}
