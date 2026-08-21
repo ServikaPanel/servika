@@ -53,6 +53,48 @@ esac
 # brand name SERVIKA carries an I, so this reaches the environment loader too.
 export LC_ALL=C
 
+ENV_FILE=/etc/servika/env
+
+# Read the configuration the PANEL runs on, the way the other eleven ops scripts
+# do. This tool was the only one without a loader, and nothing exports these:
+# servika-install.sh sets not one of them in its own environment, so every
+# `${SERVIKA_*:-default}` below resolved to the default. On a stock server the
+# defaults are right, because the installer manages every path key. On a server
+# whose operator edited the environment file afterwards (an update preserves that
+# edit) they are wrong, and this tool then measured a path the panel does not
+# use: a relocated SERVIKA_BIN alone produces three criticals, because the ports
+# become unreadable.
+#
+# ENV_PERM_PROBLEM is the one deliberate difference from the other scripts. They
+# EXIT on an exposed environment file because they are about to write with those
+# credentials; this one is a REPORT, and a single line where a report should be
+# loses everything else it had to say. The reason is recorded instead, the values
+# are not read, and the Files section states it as the critical finding it is.
+ENV_PERM_PROBLEM=""
+load_servika_env() {
+  [ -f "$ENV_FILE" ] || return 0
+  [ "$(stat -c %u "$ENV_FILE" 2>/dev/null)" = 0 ] || { ENV_PERM_PROBLEM="it is not owned by root"; return 0; }
+  local mode
+  mode=$(stat -c %a "$ENV_FILE" 2>/dev/null) || { ENV_PERM_PROBLEM="its mode could not be read"; return 0; }
+  [ $((8#$mode & 077)) -eq 0 ] || { ENV_PERM_PROBLEM="its mode is $mode, readable beyond root"; return 0; }
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    # POSIX classes, never `A-Za-z0-9`: a range is collation-ordered and under
+    # tr_TR.UTF-8 it excludes `i`, which silently skipped SERVIKA_LISTEN.
+    [[ "$line" =~ ^[[:space:]]*(SERVIKA_[[:alnum:]_]*)=(.*)$ ]] || continue
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]%$'\r'}
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then value=${value:1:${#value}-2}; fi
+    if [[ "$value" == \'*\' && "$value" == *\' ]]; then value=${value:1:${#value}-2}; fi
+    if [ -z "${!key+x}" ]; then
+      printf -v "$key" '%s' "$value"
+      export "${key?}"
+    fi
+  done < "$ENV_FILE"
+}
+
+load_servika_env
+
 BRIEF=0; JSON=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -431,15 +473,19 @@ db_defaults_file() {
   DB_DEFAULTS="$file"; DB_NAME="$db"; DB_WHO="$user@${addr:-local}/$db"
 }
 
-DB_DSN=""; DB_NAME=""; DB_WHO=""; DB_DEFAULTS=""
-if [ -r /etc/servika/env ]; then
-  # A literal key, so no character range and no locale to depend on.
-  DB_DSN=$(sed -n 's/^SERVIKA_DB_DSN=//p' /etc/servika/env 2>/dev/null | tail -n 1)
-  DB_DSN=${DB_DSN%\"}; DB_DSN=${DB_DSN#\"}
-  DB_DSN=${DB_DSN%\'}; DB_DSN=${DB_DSN#\'}
-fi
+DB_NAME=""; DB_WHO=""; DB_DEFAULTS=""
+# The loader at the top already read this, quotes stripped, taking the LAST
+# assignment the way the panel's own unit does.
+DB_DSN="${SERVIKA_DB_DSN:-}"
 if [ -z "$DB_DSN" ]; then
-  crit "panel database identity" "SERVIKA_DB_DSN could not be read from /etc/servika/env"
+  # Naming the cause matters: a refused read and an absent setting call for
+  # different repairs, and the second message sends an operator looking for a
+  # line that is already there.
+  if [ -n "$ENV_PERM_PROBLEM" ]; then
+    crit "panel database identity" "$ENV_FILE was NOT read ($ENV_PERM_PROBLEM), so the database was not measured"
+  else
+    crit "panel database identity" "SERVIKA_DB_DSN could not be read from $ENV_FILE"
+  fi
 else
   db_defaults_file "$DB_DSN" || DB_DEFAULTS=""
   [ -n "$DB_DEFAULTS" ] || crit "panel database identity" "SERVIKA_DB_DSN could not be parsed"
@@ -714,6 +760,19 @@ if [ -z "$FILE_MISSING" ]; then
   pass "release files" "$FILE_OK/$FILE_TOTAL"
 else
   crit "release files" "$FILE_OK/$FILE_TOTAL$FILE_MISSING"
+fi
+
+# The loop above measures that the environment file EXISTS and is not truncated.
+# Its MODE was measured nowhere at all, and the file carries SERVIKA_JWT_SECRET,
+# SERVIKA_SECRET_KEY and the database password: readable by one more account,
+# every session on this panel can be forged. The loader at the top refuses to
+# read it in that state and records why, which is what is reported here.
+if [ ! -f "$ENV_FILE" ]; then
+  : # already reported as missing above; saying it twice helps nobody
+elif [ -n "$ENV_PERM_PROBLEM" ]; then
+  crit "environment file exposure" "$ENV_PERM_PROBLEM; it carries the JWT secret, the encryption key and the database password"
+else
+  pass "environment file exposure" "$(stat -c '%a %U:%G' "$ENV_FILE" 2>/dev/null)"
 fi
 
 # The JS bundle carries a content hash in its name, so it is found by glob. Its
