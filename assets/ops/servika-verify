@@ -756,12 +756,33 @@ ${SERVIKA_MIGR:-/opt/servika/src/migrations}|root
 /var/www/_default80|
 /var/www/_acme|
 ${SERVIKA_NGINX_CACHE_DIR:-/var/cache/nginx/servikacache}|nginx
-${SERVIKA_BACKUP_ROOT:-/var/backups/servika}|
 EOF
 if [ -z "$DIR_MISSING" ]; then
   pass "directories" "$DIR_OK/$DIR_TOTAL"
 else
   crit "directories" "$DIR_OK/$DIR_TOTAL$DIR_MISSING"
+fi
+
+# Directories nothing creates until it is first needed. Their absence is not a
+# fault and must never be reported as one.
+#
+# The backup root was in the CRITICAL list above and it FAILED a healthy
+# installation: nothing creates it eagerly, and the scheduled backup that does
+# runs at 03:30, so every measurement between the installation and that hour
+# reported a working server as broken. Since this tool is a gate, the installer
+# then printed "Installation NOT complete" and exited 1, and servika-update and
+# servika-restore exit 1 on a critical too. A check that produces a false
+# positive is worse than no check at all, and this one did real damage.
+#
+# The message names what is actually true on a fresh server AND on one that has
+# been running for months. "It will be created on the first run" is right for
+# the first and misleading for the second, where the fact worth reporting is
+# that no backup has ever been written.
+BACKUP_ROOT_DIR="${SERVIKA_BACKUP_ROOT:-/var/backups/servika}"
+if [ -d "$BACKUP_ROOT_DIR" ]; then
+  pass "backup root" "$BACKUP_ROOT_DIR"
+else
+  warn "backup root" "$BACKUP_ROOT_DIR does not exist, so no backup has been written yet (servika-db-backup creates it)"
 fi
 
 section "Service to port"
