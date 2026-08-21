@@ -4,6 +4,7 @@ package phpext
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,17 +74,29 @@ func (h *Handlers) IonCubeInstall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Select the shared object matching the PHP version.
+	//
+	// The member is opened rather than stat'ed, because os.Stat FOLLOWS a
+	// symlink and a symlink is the one member kind extraction still creates
+	// freely. See internal/phpext/loaderfile.go for the measurement.
 	soSrc := filepath.Join(tmpDir, "ioncube", "ioncube_loader_lin_"+req.Version+".so")
-	if _, err := os.Stat(soSrc); err != nil {
-		// A missing non-thread-safe loader means the version is unavailable.
-		httpx.WriteError(w, http.StatusBadRequest,
-			"IonCube Loader is unavailable for PHP "+req.Version)
+	member, err := openArchiveMember(soSrc)
+	if err != nil {
+		if errors.Is(err, errMemberMissing) {
+			// A missing non-thread-safe loader means the version is unavailable.
+			httpx.WriteError(w, http.StatusBadRequest,
+				"IonCube Loader is unavailable for PHP "+req.Version)
+			return
+		}
+		httpx.WriteError(w, http.StatusBadGateway,
+			"the downloaded IonCube archive does not carry a plain file for PHP "+req.Version)
 		return
 	}
+	defer func() { _ = member.Close() }()
 
-	// 5. Copy the loader into extension_dir.
+	// 5. Copy the loader into extension_dir, from the descriptor that was
+	// checked rather than from the path, so nothing can be swapped in between.
 	soDst := filepath.Join(extDir, "ioncube_loader_lin_"+req.Version+".so")
-	if err := copyFile(soSrc, soDst); err != nil {
+	if err := copyFromMember(member, soDst); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to copy IonCube Loader")
 		return
 	}
@@ -165,22 +178,5 @@ func download(ctx context.Context, url, destination string) error {
 	}
 	defer func() { _ = f.Close() }()
 	_, err = io.Copy(f, resp.Body)
-	return err
-}
-
-func copyFile(src, dst string) error {
-	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = out.Close() }()
-	_, err = io.Copy(out, in)
 	return err
 }
