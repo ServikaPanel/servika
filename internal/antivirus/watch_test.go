@@ -46,10 +46,20 @@ func TestTheContentComesFromTheEventDescriptorAndNotFromThePath(t *testing.T) {
 	if !strings.Contains(source, "readEventFile(file, limit)") {
 		t.Error("the watcher no longer reads through the event descriptor")
 	}
+	// The read itself is shared with the sweep, so an oversized file is judged
+	// on its head and tail here too rather than being skipped.
+	if !strings.Contains(source, "readOpenForScan(file, limit)") {
+		t.Error("the watcher no longer shares the sweep's reader, so a size limit is an escape again")
+	}
 	// And the regular-file test is on the descriptor rather than on a stat of
-	// the path, which is the rule every root-run read here follows.
-	if !strings.Contains(source, "info, err := file.Stat()") ||
-		!strings.Contains(source, "info.Mode().IsRegular()") {
+	// the path, which is the rule every root-run read here follows. It lives in
+	// the shared reader now, so it is asserted where it actually is.
+	shared := sourceOf(t, "antivirus.go")
+	if !strings.Contains(shared, "func readOpenForScan(f *os.File, limit int64)") {
+		t.Fatal("readOpenForScan moved; this test has to follow it")
+	}
+	if !strings.Contains(shared, "info, err := f.Stat()") ||
+		!strings.Contains(shared, "info.Mode().IsRegular()") {
 		t.Error("the regular-file test no longer runs on the descriptor")
 	}
 }

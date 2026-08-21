@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -500,8 +501,7 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 				}
 				matches := j.matches
 				if j.limit > 0 {
-					// #nosec G122 G304 -- operator-initiated antivirus scan reads files under the scan root; content is only pattern-matched, never returned to a tenant.
-					if b, e := os.ReadFile(j.path); e == nil {
+					if b, e := readForScan(j.path, j.limit); e == nil {
 						matches = append(matches, evaluate(j.ext, b)...)
 					}
 				}
@@ -572,9 +572,11 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 		if scanned > fileCap {
 			return errCap
 		}
-		if limit > 0 && fi.Size() > limit {
-			limit = 0
-		}
+		// A file past its limit is NOT skipped. Zeroing the limit here was the
+		// escape: padding a webshell past 3 MiB stepped around every content
+		// rule while the file was still recorded as scanned. readForScan reads
+		// the head to the limit and the tail beyond it.
+		_ = fi
 		// The send selects on the context too. Without that, a pool whose
 		// workers have all returned on cancellation leaves the walk blocked on
 		// a channel nobody reads, and the scan never ends at all.
@@ -630,7 +632,83 @@ const (
 	// htAccessReadLimit: an override file is a few kilobytes; anything at this
 	// size is not one.
 	htAccessReadLimit = 256 * 1024
+	// tailReadLimit is how much of the END of an oversized file is read.
+	//
+	// A file past its limit used to be skipped by the content layer entirely,
+	// which made the limit an escape rather than a budget: padding a webshell
+	// past 3 MiB stepped around every content rule at once, and the file was
+	// then recorded as scanned. The head still carries the budget; the tail is
+	// here because appending to the end of an existing file is the ordinary
+	// shape of a WordPress infection, and the head of a large legitimate file
+	// is exactly where the payload will not be.
+	tailReadLimit = 256 * 1024
 )
+
+// seam separates the head from the tail so no rule can match across the join.
+//
+// Concatenating two distant parts of a file invents adjacency that is not in
+// it: a head ending in `system(` beside a tail starting with `$_GET[` would be
+// reported as a webshell that nobody wrote. No rule in this package uses
+// `(?s)`, so `.` never matches a newline and a newline in the seam ends every
+// pattern. The NUL is there so the join is visible to anyone dumping the buffer.
+var seam = []byte("\n\x00\n")
+
+// readForScan reads the bytes a rule set is run against.
+//
+// Up to limit bytes from the start, plus up to tailReadLimit from the end when
+// the file is longer than that. A file at or under the limit is read once and
+// no tail is appended, so the ordinary case is unchanged.
+func readForScan(path string, limit int64) ([]byte, error) {
+	// #nosec G304 -- operator-initiated antivirus scan reads files under the scan root; content is only pattern-matched, never returned to a tenant.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return readOpenForScan(f, limit)
+}
+
+// readOpenForScan is the same read against a descriptor that is already open.
+//
+// The real-time watcher must use this one: its path sits in a directory a
+// tenant writes to, so re-opening it resolves every component again as root and
+// can answer with a different file. The descriptor is the object itself.
+func readOpenForScan(f *os.File, limit int64) ([]byte, error) {
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
+	head, err := io.ReadAll(io.LimitReader(f, limit))
+	if err != nil {
+		return nil, err
+	}
+	size := info.Size()
+	if size <= limit {
+		return head, nil
+	}
+	// Never re-read bytes the head already covers: on a file only slightly over
+	// the limit the two windows would overlap and the same line could match
+	// twice, which is harmless for the verdict but makes the buffer larger than
+	// either limit says it is.
+	from := size - tailReadLimit
+	if from < limit {
+		from = limit
+	}
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return head, nil // the head is still worth judging
+	}
+	tail, err := io.ReadAll(io.LimitReader(f, tailReadLimit))
+	if err != nil {
+		return head, nil
+	}
+	out := make([]byte, 0, len(head)+len(seam)+len(tail))
+	out = append(out, head...)
+	out = append(out, seam...)
+	return append(out, tail...), nil
+}
 
 // readLimitFor returns how many bytes of a file the scan will read, or 0 when
 // the file is not one a site executes or serves.

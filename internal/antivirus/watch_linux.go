@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -203,18 +202,13 @@ func (w *watcher) handleEvent(ctx context.Context, fd int) {
 // The regular-file test is on the DESCRIPTOR rather than on a stat of the path,
 // which is the same rule every other root-run read in this repository follows:
 // a path can be replaced between the check and the open, a descriptor cannot.
+//
+// It shares readOpenForScan with the sweep. A size over the limit used to be an
+// error here, which made the watcher skip the file entirely: padding a webshell
+// past the limit for its kind stepped around every content rule, on the one
+// detection path that was supposed to catch it as it was written.
 func readEventFile(file *os.File, limit int64) ([]byte, error) {
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("not a regular file")
-	}
-	if info.Size() > limit {
-		return nil, errors.New("larger than the read limit for its kind")
-	}
-	return io.ReadAll(io.LimitReader(file, limit))
+	return readOpenForScan(file, limit)
 }
 
 // mountPointOf walks up from a path until the device number changes, which is
