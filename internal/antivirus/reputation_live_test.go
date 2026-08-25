@@ -310,7 +310,7 @@ func TestAZoneListIsValidatedOnTheWritePath(t *testing.T) {
 
 	long := strings.Repeat("a.example.test ", dnsbl.MaxZones+1)
 	code, body = save(long)
-	if code != http.StatusBadRequest || !strings.Contains(body, reasonZonesTooMany) {
+	if code != http.StatusBadRequest || !strings.Contains(body, reasonTooManyZones) {
 		t.Errorf("an over-long zone list answered %d: %s", code, body)
 	}
 

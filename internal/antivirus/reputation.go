@@ -66,11 +66,17 @@ const (
 	// reputationBudget bounds the whole pass, so a server full of domains and a
 	// slow blocklist cannot leave the goroutine running into the next interval.
 	reputationBudget = 30 * time.Minute
-	// reasonZonesInvalid and reasonZonesTooMany are the stable codes a refused
+	// reasonZonesInvalid and reasonTooManyZones are the stable codes a refused
 	// zone list answers with. The screen renders twelve languages, so it matches
 	// on these rather than on prose.
+	//
+	// Neither may END in an i18next plural category (_zero, _one, _two, _few,
+	// _many, _other). The natural spelling of the second, domain_dnsbl_zones_
+	// too_many, is read by i18next as the _many form of a key nobody wrote, so
+	// it resolves in English (whose plural set is _one and _other) and in no
+	// other language. scripts/i18n-verify.mjs is what reports it.
 	reasonZonesInvalid = "domain_dnsbl_zone_invalid"
-	reasonZonesTooMany = "domain_dnsbl_zones_too_many"
+	reasonTooManyZones = "domain_dnsbl_too_many_zones"
 )
 
 // reputationResolver is the seam a test replaces. Production resolves through
@@ -285,7 +291,7 @@ func (h *Handlers) AdminReputationZonesSave(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		var zoneErr *dnsbl.ZoneError
 		if errors.As(err, &zoneErr) && zoneErr.TooMany {
-			httpx.WriteError(w, http.StatusBadRequest, reasonZonesTooMany)
+			httpx.WriteError(w, http.StatusBadRequest, reasonTooManyZones)
 			return
 		}
 		httpx.WriteError(w, http.StatusBadRequest, reasonZonesInvalid)
