@@ -1099,6 +1099,18 @@ func main() {
 				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep", avH.SweepList)
 				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep/{sid}", avH.SweepStatus)
 				r.With(middleware.AdminOnly).Post("/admin/antivirus/sweep/finding/{fid}/quarantine", avH.SweepQuarantine)
+				// Quarantine across every domain the caller may see. Not
+				// AdminOnly: a sweep contains files across every tenant at
+				// once, and a reseller reaching their own customers' held
+				// files should not have to ask an admin. The narrowing is in
+				// the QUERY (ScopeSQL on the joined domain), which is what
+				// internal/sitesecurity already does for its cross-domain
+				// list, so a row outside the caller's scope reads exactly like
+				// one that does not exist.
+				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/quarantine", avH.AdminQuarantineList)
+				r.With(middleware.ResellerOrAbove).Post("/admin/antivirus/quarantine/{qid}/restore", avH.AdminQuarantineRestore)
+				r.With(middleware.ResellerOrAbove).Delete("/admin/antivirus/quarantine/{qid}", avH.AdminQuarantineDelete)
+				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/quarantine/{qid}/inspect", avH.AdminQuarantineInspect)
 				// Hostnames no tenant may add. Admin only: the list decides what
 				// this server is willing to answer for, which is not a customer's
 				// call.

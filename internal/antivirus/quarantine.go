@@ -50,6 +50,12 @@ const (
 	// file, so it is reported and repaired rather than moved out of the tree.
 	reasonCoreFile         = "av_core_file_not_quarantined"
 	reasonQuarantineUnknwn = "av_quarantine_unknown"
+	// The file operation succeeded and the row did not. These are separate from
+	// reasonQuarantineFail because the server is in a DIFFERENT state: the file
+	// has already moved, so a screen that repeats the action would act on
+	// something that is no longer where the row says it is.
+	reasonRestoreRecordFail = "av_restore_record_failed"
+	reasonDeleteRecordFail  = "av_delete_record_failed"
 )
 
 // Entry is one file the panel is holding.
@@ -334,6 +340,48 @@ func (h *Handlers) QuarantineList(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"entries": out})
 }
 
+// restoreEntry puts one quarantined file back and returns the reason code when
+// it cannot. An empty reason means it worked, and the restored path comes back
+// beside it for the response.
+//
+// The row is already resolved by the caller, which is what keeps the two entry
+// points honest: the per-domain handler narrows by `domain_id`, the server-wide
+// one narrows by the ownership chain, and NEITHER lets a caller name a file.
+// Everything below this point works from values read out of that row.
+func (h *Handlers) restoreEntry(systemUser, rel, stored string, qid int64) (string, string) {
+	// #nosec G304 -- path is built from config.QuarantineDir(), a validated system user and a stored name derived from a row id; no caller text reaches it.
+	source, err := os.Open(filepath.Join(userStore(systemUser), stored))
+	if err != nil {
+		return "", reasonFileMissing
+	}
+	defer func() { _ = source.Close() }()
+
+	home := "/home/" + systemUser
+	// The directory the file came from may be gone: containment happened at some
+	// earlier point and the tenant has been working in the tree since. open(2)
+	// never creates a parent, so without this a legitimate restore of a file
+	// whose folder was deleted fails with the generic reason code and the screen
+	// cannot say why. MkdirAllBeneath is the symlink-safe mkdir -p: every
+	// component goes through Mkdirat plus an O_NOFOLLOW openat, so a link the
+	// tenant planted in the path is refused rather than followed as root.
+	if err := files.MkdirAllBeneath(home, filepath.Dir(rel), systemUser); err != nil {
+		return "", reasonQuarantineFail
+	}
+	// StreamIntoBeneath refuses an existing target, so a restore cannot write over
+	// whatever the tenant has since put at that path.
+	if _, err := files.StreamIntoBeneath(home, rel, source, systemUser); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return "", reasonRestoreOccupied
+		}
+		return "", reasonQuarantineFail
+	}
+	if _, err := h.DB.Exec(`UPDATE av_quarantine SET restored_at=NOW() WHERE id=?`, qid); err != nil {
+		return "", reasonRestoreRecordFail
+	}
+	_ = os.Remove(filepath.Join(userStore(systemUser), stored))
+	return home + "/" + rel, ""
+}
+
 // POST /domains/{id}/antivirus/quarantine/{qid}/restore
 func (h *Handlers) QuarantineRestore(w http.ResponseWriter, r *http.Request) {
 	id, systemUser, ok := h.tenant(w, r)
@@ -348,42 +396,26 @@ func (h *Handlers) QuarantineRestore(w http.ResponseWriter, r *http.Request) {
 		writeReason(w, reasonQuarantineUnknwn)
 		return
 	}
-	// #nosec G304 -- path is built from config.QuarantineDir(), a validated system user and a stored name derived from a row id; no caller text reaches it.
-	source, err := os.Open(filepath.Join(userStore(systemUser), stored))
-	if err != nil {
-		writeReason(w, reasonFileMissing)
+	path, reason := h.restoreEntry(systemUser, rel, stored, qid)
+	if reason != "" {
+		writeReason(w, reason)
 		return
 	}
-	defer func() { _ = source.Close() }()
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "path": path})
+}
 
-	home := "/home/" + systemUser
-	// The directory the file came from may be gone: containment happened at some
-	// earlier point and the tenant has been working in the tree since. open(2)
-	// never creates a parent, so without this a legitimate restore of a file
-	// whose folder was deleted fails with the generic reason code and the screen
-	// cannot say why. MkdirAllBeneath is the symlink-safe mkdir -p: every
-	// component goes through Mkdirat plus an O_NOFOLLOW openat, so a link the
-	// tenant planted in the path is refused rather than followed as root.
-	if err := files.MkdirAllBeneath(home, filepath.Dir(rel), systemUser); err != nil {
-		writeReason(w, reasonQuarantineFail)
-		return
+// deleteEntry removes one quarantined file and its row, and returns the reason
+// code when it cannot.
+func (h *Handlers) deleteEntry(systemUser, stored string, qid int64) string {
+	// The file goes first. A row removed while the file survived would leave an
+	// orphan nothing can name, since the name is derived from the row id.
+	if err := os.Remove(filepath.Join(userStore(systemUser), stored)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return reasonQuarantineFail
 	}
-	// StreamIntoBeneath refuses an existing target, so a restore cannot write over
-	// whatever the tenant has since put at that path.
-	if _, err := files.StreamIntoBeneath(home, rel, source, systemUser); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			writeReason(w, reasonRestoreOccupied)
-			return
-		}
-		writeReason(w, reasonQuarantineFail)
-		return
+	if _, err := h.DB.Exec(`DELETE FROM av_quarantine WHERE id=?`, qid); err != nil {
+		return reasonDeleteRecordFail
 	}
-	if _, err := h.DB.Exec(`UPDATE av_quarantine SET restored_at=NOW() WHERE id=?`, qid); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "the file was restored but the record could not be updated")
-		return
-	}
-	_ = os.Remove(filepath.Join(userStore(systemUser), stored))
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "path": home + "/" + rel})
+	return ""
 }
 
 // DELETE /domains/{id}/antivirus/quarantine/{qid}
@@ -399,14 +431,8 @@ func (h *Handlers) QuarantineDelete(w http.ResponseWriter, r *http.Request) {
 		writeReason(w, reasonQuarantineUnknwn)
 		return
 	}
-	// The file goes first. A row removed while the file survived would leave an
-	// orphan nothing can name, since the name is derived from the row id.
-	if err := os.Remove(filepath.Join(userStore(systemUser), stored)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		writeReason(w, reasonQuarantineFail)
-		return
-	}
-	if _, err := h.DB.Exec(`DELETE FROM av_quarantine WHERE id=? AND domain_id=?`, qid, id); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not remove the record")
+	if reason := h.deleteEntry(systemUser, stored, qid); reason != "" {
+		writeReason(w, reason)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -465,6 +491,12 @@ func writeReason(w http.ResponseWriter, reason string) {
 		message = "this is a WordPress core file; removing it would take the site down. Repair the core instead."
 	case reasonQuarantineFail:
 		status = http.StatusInternalServerError
+	case reasonRestoreRecordFail:
+		status = http.StatusInternalServerError
+		message = "the file was restored but the record could not be updated"
+	case reasonDeleteRecordFail:
+		status = http.StatusInternalServerError
+		message = "the file was removed but the record could not be"
 	}
 	httpx.WriteJSON(w, status, map[string]any{"error": message, "reason": reason})
 }
@@ -505,17 +537,27 @@ func (h *Handlers) QuarantineInspect(w http.ResponseWriter, r *http.Request) {
 		writeReason(w, reasonQuarantineUnknwn)
 		return
 	}
+	response, reason := inspectEntry(systemUser, rel, stored)
+	if reason != "" {
+		writeReason(w, reason)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
+}
+
+// inspectEntry reads the preview for one held file and returns the reason code
+// when it cannot. It takes no request and no database handle, because the row is
+// already resolved: both entry points reach the same bytes the same way.
+func inspectEntry(systemUser, rel, stored string) (map[string]any, string) {
 	handle, err := files.OpenBeneath(userStore(systemUser), stored)
 	if err != nil {
-		writeReason(w, reasonFileMissing)
-		return
+		return nil, reasonFileMissing
 	}
 	defer func() { _ = handle.Close() }()
 
 	info, err := handle.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		writeReason(w, reasonFileMissing)
-		return
+		return nil, reasonFileMissing
 	}
 
 	// One byte past the limit, so "there is more" is measured rather than
@@ -523,8 +565,7 @@ func (h *Handlers) QuarantineInspect(w http.ResponseWriter, r *http.Request) {
 	buffer := make([]byte, inspectMaxBytes+1)
 	read, err := io.ReadFull(handle, buffer)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		writeReason(w, reasonFileMissing)
-		return
+		return nil, reasonFileMissing
 	}
 	truncated := read > inspectMaxBytes
 	if truncated {
@@ -544,10 +585,9 @@ func (h *Handlers) QuarantineInspect(w http.ResponseWriter, r *http.Request) {
 	if bytes.IndexByte(content, 0) >= 0 {
 		response["binary"] = true
 		response["content"] = ""
-		httpx.WriteJSON(w, http.StatusOK, response)
-		return
+		return response, ""
 	}
 	response["binary"] = false
 	response["content"] = string(content)
-	httpx.WriteJSON(w, http.StatusOK, response)
+	return response, ""
 }
