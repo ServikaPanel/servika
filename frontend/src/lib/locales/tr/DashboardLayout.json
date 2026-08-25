@@ -53,7 +53,8 @@
     "laravel": "Laravel Araçları",
     "logs": "Günlükler",
     "backups": "Yedekler",
-    "siteImport": "Site İçe Aktarma"
+    "siteImport": "Site İçe Aktarma",
+    "malwareScan": "Zararlı Yazılım Taraması"
   },
   "mobile": {
     "overview": "Genel Bakış",

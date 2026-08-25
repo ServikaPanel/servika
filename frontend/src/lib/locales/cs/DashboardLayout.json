@@ -53,7 +53,8 @@
     "laravel": "Sada nástrojů Laravel",
     "logs": "Protokoly",
     "backups": "Zálohy",
-    "siteImport": "Import webu"
+    "siteImport": "Import webu",
+    "malwareScan": "Kontrola malwaru"
   },
   "mobile": {
     "overview": "Přehled",

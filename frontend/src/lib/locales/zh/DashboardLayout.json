@@ -53,7 +53,8 @@
     "laravel": "Laravel 工具包",
     "logs": "日志",
     "backups": "备份",
-    "siteImport": "站点导入"
+    "siteImport": "站点导入",
+    "malwareScan": "恶意软件扫描"
   },
   "mobile": {
     "overview": "概览",

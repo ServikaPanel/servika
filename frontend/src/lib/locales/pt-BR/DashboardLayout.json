@@ -53,7 +53,8 @@
     "laravel": "Ferramentas Laravel",
     "logs": "Registros",
     "backups": "Backups",
-    "siteImport": "Importação de site"
+    "siteImport": "Importação de site",
+    "malwareScan": "Verificação de malware"
   },
   "mobile": {
     "overview": "Visão geral",

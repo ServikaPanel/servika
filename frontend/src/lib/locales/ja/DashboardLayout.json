@@ -53,7 +53,8 @@
     "laravel": "Laravel ツールキット",
     "logs": "ログ",
     "backups": "バックアップ",
-    "siteImport": "サイトインポート"
+    "siteImport": "サイトインポート",
+    "malwareScan": "マルウェアスキャン"
   },
   "mobile": {
     "overview": "概要",

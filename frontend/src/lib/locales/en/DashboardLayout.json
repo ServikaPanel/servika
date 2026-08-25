@@ -53,7 +53,8 @@
     "laravel": "Laravel Toolkit",
     "logs": "Logs",
     "backups": "Backups",
-    "siteImport": "Site Import"
+    "siteImport": "Site Import",
+    "malwareScan": "Malware Scan"
   },
   "mobile": {
     "overview": "Overview",

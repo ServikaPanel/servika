@@ -38,6 +38,9 @@ const ICONS = {
   database:    'M4 7v10c0 2 4 3 8 3s8-1 8-3V7M4 7c0 2 4 3 8 3s8-1 8-3M4 7c0-2 4-3 8-3s8 1 8 3',
   audit:       'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
   transfer:    'M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4',
+  // A bug rather than the firewall's shield: the shield is already this menu's
+  // firewall entry, and two identical icons in one group name nothing.
+  malware:     'M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5l-1.4 1.4M7.9 16.1l-1.4 1.4m11.6 0l-1.4-1.4M7.9 7.9L6.5 6.5M16 12a4 4 0 11-8 0 4 4 0 018 0z',
 }
 
 const NAV: NavGroup[] = [
@@ -65,6 +68,10 @@ const NAV: NavGroup[] = [
     { to: '/extensions',          labelKey: 'extensions',         icon: ICONS.extensions },
     { to: '/wordpress',           labelKey: 'wordpress',          icon: ICONS.wp },
     { to: '/firewall',            labelKey: 'firewall',    icon: ICONS.firewall },
+    // Admin only, and deliberately absent from RESELLER_NAV: every endpoint the
+    // page reads for its settings and sweeps is AdminOnly, so a reseller
+    // following this link would meet a screen that 403s on load.
+    { to: '/malware-scan',        labelKey: 'malwareScan', icon: ICONS.malware },
     { to: '/monitoring',              labelKey: 'monitoring',             icon: ICONS.monitoring },
     { to: '/users',                   labelKey: 'users',                  icon: ICONS.reseller },
     { to: '/audit-log',               labelKey: 'auditLog',           icon: ICONS.audit },

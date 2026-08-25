@@ -53,7 +53,8 @@
     "laravel": "Boîte à outils Laravel",
     "logs": "Journaux",
     "backups": "Sauvegardes",
-    "siteImport": "Import de site"
+    "siteImport": "Import de site",
+    "malwareScan": "Analyse de logiciels malveillants"
   },
   "mobile": {
     "overview": "Aperçu",
