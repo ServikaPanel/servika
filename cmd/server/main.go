@@ -384,6 +384,10 @@ func main() {
 	// turns it on, and it takes the same single scan slot a hand-started scan
 	// does, so it waits for the next hour rather than running beside one.
 	antivirus.StartScheduler(d)
+	// Domain blocklist state. It queries nothing until an operator names a
+	// zone, and it refreshes a table rather than answering a request, because
+	// one query per zone per domain is not work an HTTP request can do.
+	antivirus.StartReputationScanner(d)
 	// nginx has no notion of time, so a maintenance window that ends by itself
 	// needs something to re-render the vhost when its deadline passes.
 	domains.StartMaintenanceScheduler(d)
@@ -1121,6 +1125,13 @@ func main() {
 				// on, and they appeared on no screen but the detail of the one
 				// sweep that produced them.
 				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/history", avH.AdminHistory)
+				// Whether a domain is on a DNS blocklist. Reading is scoped the
+				// same way, because a listing is the domain owner's problem to
+				// act on. Changing the zone list is AdminOnly: it decides which
+				// third-party service this server queries about every domain on
+				// it, which is the operator's decision and not a per-scope one.
+				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/reputation", avH.AdminReputation)
+				r.With(middleware.AdminOnly).Put("/admin/antivirus/reputation/zones", avH.AdminReputationZonesSave)
 				// Hostnames no tenant may add. Admin only: the list decides what
 				// this server is willing to answer for, which is not a customer's
 				// call.
