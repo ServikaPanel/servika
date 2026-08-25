@@ -69,7 +69,8 @@
     "colStatus": "Stato",
     "quarantined": "🔒 In quarantena",
     "active": "⚠ Attivo",
-    "quarantine": "Metti in quarantena"
+    "quarantine": "Metti in quarantena",
+    "notAFile": "Non è un file"
   },
   "backToSubscription": "← Torna all'abbonamento"
 }

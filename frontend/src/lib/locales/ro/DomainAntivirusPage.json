@@ -69,7 +69,8 @@
     "colStatus": "Status",
     "quarantined": "🔒 În carantină",
     "active": "⚠ Activ",
-    "quarantine": "Carantină"
+    "quarantine": "Carantină",
+    "notAFile": "Nu este un fișier"
   },
   "backToSubscription": "← Înapoi la abonament"
 }

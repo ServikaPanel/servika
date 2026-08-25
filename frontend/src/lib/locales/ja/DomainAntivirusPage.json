@@ -69,7 +69,8 @@
     "colStatus": "ステータス",
     "quarantined": "🔒 隔離済み",
     "active": "⚠ 有効",
-    "quarantine": "隔離"
+    "quarantine": "隔離",
+    "notAFile": "ファイルではありません"
   },
   "backToSubscription": "← サブスクリプションに戻る"
 }

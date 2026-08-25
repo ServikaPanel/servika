@@ -52,10 +52,17 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 	// The join is what restricts this to a tenant's own tree: a finding with no
 	// domain has nowhere to be contained into, and one whose domain has been
 	// deleted since the scan has no home directory left either.
+	//
+	// The engine test excludes a finding whose subject is not a file. Selecting
+	// it and letting the containment refuse would count the refusal in
+	// auto_quarantine_failed, which sends an operator after a fault that is not
+	// there; the narrowing is in the QUERY so the count is right by construction
+	// rather than by a branch further down.
 	rows, err := h.DB.QueryContext(ctx,
 		`SELECT f.id, f.domain_id, d.system_user, f.file, f.signature
 		   FROM av_findings f JOIN domains d ON d.id = f.domain_id
-		  WHERE f.scan_id=? AND f.level=? AND f.quarantined=0`, scanID, LevelCritical)
+		  WHERE f.scan_id=? AND f.level=? AND f.quarantined=0 AND f.engine <> ?`,
+		scanID, LevelCritical, EngineDatabase)
 	if err != nil {
 		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
 		log.Printf("antivirus: automatic containment could not read the findings of scan %d: %v", scanID, err)

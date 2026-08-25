@@ -69,7 +69,8 @@
     "colStatus": "状态",
     "quarantined": "🔒 已隔离",
     "active": "⚠ 活动",
-    "quarantine": "隔离"
+    "quarantine": "隔离",
+    "notAFile": "不是文件"
   },
   "backToSubscription": "← 返回订阅"
 }

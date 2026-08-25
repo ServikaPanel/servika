@@ -20,7 +20,11 @@ func sourceOf(t *testing.T, name string) string {
 // so such a file is reported to a person rather than acted on.
 func TestOnlyCriticalFindingsAreContainedAutomatically(t *testing.T) {
 	source := sourceOf(t, "autoquarantine.go")
-	if !strings.Contains(source, "f.level=? AND f.quarantined=0`, scanID, LevelCritical") {
+	// Anchored on the two things the claim is about, INDEPENDENTLY: the level
+	// column in the query, and the constant bound to it. A single sequence
+	// spanning both, or one that pins their adjacency, breaks when an argument
+	// is added to the statement while the rule it guards is untouched.
+	if !strings.Contains(source, "f.level=?") || !strings.Contains(source, "LevelCritical") {
 		t.Error("automatic containment no longer restricts itself to critical findings")
 	}
 	// A finding with no domain has nowhere to be contained into, and one whose

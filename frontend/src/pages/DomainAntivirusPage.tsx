@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError as apiError } from '@/lib/api'
+import { containable } from '@/lib/antivirus'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import ResourceNotice from '@/components/ResourceNotice'
@@ -299,7 +300,12 @@ export default function DomainAntivirusPage() {
                           : <span className="text-xs text-red-600 dark:text-red-400">{t('findings.active')}</span>}
                       </td>
                       <td className={responsiveTableActionCellClass}>
-                        {!b.quarantined && <button onClick={() => quarantineFinding(b)} className="text-xs text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">{t('findings.quarantine')}</button>}
+                        {/* A finding whose subject is not a file has nothing to
+                            contain, and the server refuses it, so no button is
+                            drawn rather than one that always fails. */}
+                        {!b.quarantined && (containable(b.engine)
+                          ? <button onClick={() => quarantineFinding(b)} className="text-xs text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">{t('findings.quarantine')}</button>
+                          : <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{t('findings.notAFile')}</span>)}
                       </td>
                     </tr>
                   ))}

@@ -69,7 +69,8 @@
     "colStatus": "Durum",
     "quarantined": "🔒 Karantinada",
     "active": "⚠ Aktif",
-    "quarantine": "Karantinaya Al"
+    "quarantine": "Karantinaya Al",
+    "notAFile": "Dosya değil"
   },
   "backToSubscription": "← Aboneliğe Geri Dön"
 }

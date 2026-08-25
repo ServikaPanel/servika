@@ -69,7 +69,8 @@
     "colStatus": "Stav",
     "quarantined": "🔒 V karanténě",
     "active": "⚠ Aktivní",
-    "quarantine": "Karanténa"
+    "quarantine": "Karanténa",
+    "notAFile": "Není soubor"
   },
   "backToSubscription": "← Zpět na předplatné"
 }

@@ -69,7 +69,8 @@
     "colStatus": "Status",
     "quarantined": "🔒 Quarantined",
     "active": "⚠ Active",
-    "quarantine": "Quarantine"
+    "quarantine": "Quarantine",
+    "notAFile": "Not a file"
   },
   "backToSubscription": "← Back to Subscription"
 }

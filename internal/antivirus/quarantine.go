@@ -48,7 +48,11 @@ const (
 	reasonQuarantineFail  = "av_quarantine_failed"
 	// reasonCoreFile is a REFUSAL, not a failure: the file is a WordPress core
 	// file, so it is reported and repaired rather than moved out of the tree.
-	reasonCoreFile         = "av_core_file_not_quarantined"
+	reasonCoreFile = "av_core_file_not_quarantined"
+	// reasonNotAFile is the other REFUSAL: the finding does not describe a file
+	// at all, so there is nothing to move. Containment is a copy followed by a
+	// removal, and neither has a subject here.
+	reasonNotAFile         = "av_finding_is_not_a_file"
 	reasonQuarantineUnknwn = "av_quarantine_unknown"
 	// The file operation succeeded and the row did not. These are separate from
 	// reasonQuarantineFail because the server is in a DIFFERENT state: the file
@@ -186,6 +190,15 @@ func (h *Handlers) quarantineFinding(domainID int64, systemUser string, findingI
 	}
 	if already == 1 {
 		return "" // nothing to do, and saying so would read as a failure
+	}
+	// A finding that does not describe a file has nothing to contain. It is
+	// refused HERE as well as being excluded from the automatic pass and from
+	// the button, because each of the three closes a different hole: the query
+	// stops the automatic pass counting a refusal as a failure, this stops the
+	// endpoint acting on a request the screen never offered, and the button
+	// stops the screen offering an action that can only fail.
+	if !Containable(engine) {
+		return reasonNotAFile
 	}
 	// A core file is reported and left where it is. Moving it takes the site
 	// down, and the repair that puts the official file back is a different
