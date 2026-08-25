@@ -85,6 +85,12 @@ type ScanRequest struct {
 	// and it is deliberately not serialised: a worker that could act on it would
 	// be a worker that moves a customer's files.
 	AutoQuarantine bool `json:"-"`
+	// CacheFile records what this scan found clean, so the next one can skip a
+	// file that has not changed since. Empty means no cache is read and none is
+	// written, which is what a per-domain scan and the real-time watcher get:
+	// somebody who clicked scan on their own site is waiting for a real answer,
+	// and a file the watcher sees has just been written anyway.
+	CacheFile string `json:"cache_file"`
 }
 
 // DefaultRequest is the scan every caller wants unless an operator has said
@@ -96,6 +102,13 @@ func DefaultRequest(roots ...string) ScanRequest {
 // ScanResult is what the worker hands back.
 type ScanResult struct {
 	Scanned int `json:"scanned"`
+	// Skipped counts files the last sweep read and found clean, unchanged since.
+	//
+	// It travels back separately rather than being folded into Scanned, because
+	// the two are different claims: one is what this scan READ, the other is what
+	// it took on the previous scan's word. Reporting only the sum would hide how
+	// much of the tree was actually inspected tonight.
+	Skipped int `json:"skipped"`
 	// Partial is true when the budget ran out before the walk finished. A
 	// partial sweep presented as a clean bill of health is the worst answer this
 	// feature can give, so it travels back explicitly rather than being inferred
@@ -231,9 +244,13 @@ func runWorker(requestPath, resultPath string) error {
 // paths cannot drift into scanning different things.
 func executeScan(ctx context.Context, req ScanRequest) ScanResult {
 	result := ScanResult{Cgroup: selfCgroup(), Nice: observedNice()}
+	// One cache spans every root, because it is keyed by absolute path and the
+	// roots do not overlap.
+	cache := newScanCache(req)
 	for _, root := range req.Roots {
-		scanned, findings, complete := runScan(ctx, root, req)
+		scanned, skipped, findings, complete := runScan(ctx, root, req, cache)
 		result.Scanned += scanned
+		result.Skipped += skipped
 		result.Findings = append(result.Findings, findings...)
 		if !complete {
 			result.Partial = true
@@ -241,6 +258,16 @@ func executeScan(ctx context.Context, req ScanRequest) ScanResult {
 		if ctx.Err() != nil {
 			break
 		}
+	}
+	// The cache is written even for a partial scan. It holds only what was
+	// observed, so a short walk writes fewer entries and the files it never
+	// reached are simply inspected next time.
+	if err := cache.save(req); err != nil {
+		// A cache that could not be written costs the next sweep its saving and
+		// nothing else, so this is reported rather than failing the scan. Saying
+		// nothing would leave a sweep that reads the whole tree every night with
+		// no explanation anywhere.
+		log.Printf("antivirus: the scan cache was not written: %v", err)
 	}
 	return result
 }

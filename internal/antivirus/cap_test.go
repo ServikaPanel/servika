@@ -36,7 +36,7 @@ func TestHittingTheFileCapIsReportedAsIncomplete(t *testing.T) {
 		}
 	}
 
-	scanned, findings, complete := runScan(context.Background(), root, DefaultRequest(root))
+	scanned, _, findings, complete := runScan(context.Background(), root, DefaultRequest(root), nil)
 	if complete {
 		t.Errorf("a walk stopped by the file cap reported itself complete (%d files)", scanned)
 	}
@@ -53,7 +53,7 @@ func TestHittingTheFileCapIsReportedAsIncomplete(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(small, "a.php"), []byte("<?php echo 1;"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, complete := runScan(context.Background(), small, DefaultRequest(small)); !complete {
+	if _, _, _, complete := runScan(context.Background(), small, DefaultRequest(small), nil); !complete {
 		t.Error("an ordinary small tree was reported as an incomplete scan")
 	}
 }
@@ -71,7 +71,7 @@ func TestAnExhaustedBudgetIsReportedAsIncomplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
 	defer cancel()
 
-	if _, _, complete := runScan(ctx, root, DefaultRequest(root)); complete {
+	if _, _, _, complete := runScan(ctx, root, DefaultRequest(root), nil); complete {
 		t.Error("a scan whose budget had already expired reported itself complete")
 	}
 }

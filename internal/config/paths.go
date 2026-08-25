@@ -84,6 +84,13 @@ const (
 	// worker and the real-time watcher are separate processes and read this file
 	// rather than the network, so the panel is the only thing that fetches.
 	DefaultAVRulesFile = "/var/lib/servika/av/rules.svkav"
+	// DefaultAVCacheFile records, per file the sweep inspected and found clean,
+	// the size, mtime and ctime it had at that moment. The next sweep skips a
+	// file whose three values still match, which is what makes a nightly sweep
+	// of a whole server cheap. It sits on persistent state beside the rule
+	// package, because a cache thrown away on every update would make the first
+	// sweep after each release a full one.
+	DefaultAVCacheFile = "/var/lib/servika/av/rapidscan.json"
 	// DefaultTuningBackupDir holds the copy of a configuration file taken before
 	// the tuning screen edits it. The copy is what a revert restores, so it must
 	// outlive the panel process and must NOT sit beside the file it copies:
@@ -391,6 +398,9 @@ func VersionEndpoint() string { return mustURL("SERVIKA_VERSION_ENDPOINT", Defau
 func AVRulesURL() string      { return mustURL("SERVIKA_AV_RULES_URL", DefaultAVRulesURL) }
 func AVRulesFile() string     { return mustAbsPath("SERVIKA_AV_RULES_FILE", DefaultAVRulesFile) }
 
+// AVCacheFile is where the sweep records what it inspected and found clean.
+func AVCacheFile() string { return mustAbsPath("SERVIKA_AV_CACHE_FILE", DefaultAVCacheFile) }
+
 // OpsTool returns the absolute path for an operations helper under SERVIKA_OPSBIN.
 func OpsTool(name string) string {
 	return filepath.Join(mustAbsPath("SERVIKA_OPSBIN", "/usr/local/bin"), name)
@@ -459,6 +469,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_VERSION_ENDPOINT", DefaultVersionEndpoint, true},
 		{"SERVIKA_AV_RULES_URL", DefaultAVRulesURL, true},
 		{"SERVIKA_AV_RULES_FILE", DefaultAVRulesFile, false},
+		{"SERVIKA_AV_CACHE_FILE", DefaultAVCacheFile, false},
 	}
 	for _, check := range checks {
 		var err error

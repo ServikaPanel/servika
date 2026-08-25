@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"servika/internal/avsettings"
+	"servika/internal/config"
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
@@ -103,6 +104,10 @@ func sweepRequest(s avsettings.Settings) ScanRequest {
 		CriticalThreshold:  s.CriticalThreshold,
 		Excluded:           s.ExcludedList(),
 		AutoQuarantine:     s.AutoQuarantine,
+		// Only a sweep reads and writes the cache. A per-domain scan leaves it
+		// empty, because whoever clicked scan on their own site is waiting for
+		// an answer about it rather than for last night's.
+		CacheFile: config.AVCacheFile(),
 	}
 }
 
@@ -146,8 +151,8 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 		status = "failed"
 	}
 	if _, err := db.Exec(
-		`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
-		status, result.Scanned, len(result.Findings), confined, sid); err != nil {
+		`UPDATE av_scans SET status=?, scanned=?, skipped=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
+		status, result.Scanned, result.Skipped, len(result.Findings), confined, sid); err != nil {
 		// #nosec G706 -- sid is an integer and err is a MariaDB driver error for a statement whose arguments are all parameterized; no tenant string reaches it.
 		log.Printf("antivirus: sweep %d could not be closed: %v", sid, err)
 	}
@@ -162,21 +167,21 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 	sid, _ := strconv.ParseInt(chi.URLParam(r, "sid"), 10, 64)
 	var status, scope, engine, startedAt string
 	var finishedAt sql.NullString
-	var scanned, infected, autoTaken, autoFailed, autoCoreSkipped int
+	var scanned, skipped, infected, autoTaken, autoFailed, autoCoreSkipped int
 	var confined bool
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT status, scope, engine, scanned, infected, confined,
+		`SELECT status, scope, engine, scanned, skipped, infected, confined,
 		        auto_quarantined, auto_quarantine_failed, auto_quarantine_core_skipped,
 		        started_at, finished_at
 		   FROM av_scans WHERE id=? AND domain_id IS NULL`, sid).
-		Scan(&status, &scope, &engine, &scanned, &infected, &confined,
+		Scan(&status, &scope, &engine, &scanned, &skipped, &infected, &confined,
 			&autoTaken, &autoFailed, &autoCoreSkipped, &startedAt, &finishedAt); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "sweep not found")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"id": sid, "status": status, "scope": scope, "engine": engine,
-		"scanned": scanned, "infected": infected, "confined": confined,
+		"scanned": scanned, "skipped": skipped, "infected": infected, "confined": confined,
 		"started_at": startedAt, "finished_at": finishedAt.String,
 		"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
 		"auto_quarantine_core_skipped": autoCoreSkipped,
@@ -189,7 +194,7 @@ func (h *Handlers) SweepStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT id, status, scope, source, engine, scanned, infected, confined,
+		`SELECT id, status, scope, source, engine, scanned, skipped, infected, confined,
 		        auto_quarantined, auto_quarantine_failed, auto_quarantine_core_skipped,
 		        started_at, finished_at
 		   FROM av_scans WHERE domain_id IS NULL ORDER BY id DESC LIMIT 50`)
@@ -202,15 +207,20 @@ func (h *Handlers) SweepList(w http.ResponseWriter, r *http.Request) {
 		var id int64
 		var status, scope, source, engine, startedAt string
 		var finishedAt sql.NullString
-		var scanned, infected, autoTaken, autoFailed, autoCoreSkipped int
+		var scanned, skipped, infected, autoTaken, autoFailed, autoCoreSkipped int
 		var confined bool
-		if err := rows.Scan(&id, &status, &scope, &source, &engine, &scanned, &infected,
-			&confined, &autoTaken, &autoFailed, &autoCoreSkipped, &startedAt, &finishedAt); err != nil {
-			continue
+		// A failed Scan is REPORTED, never skipped. Dropping the row answers 200
+		// with a short list, and "fewer sweeps than expected" reads as a server
+		// that has been scanned less often than it has.
+		if err := rows.Scan(&id, &status, &scope, &source, &engine, &scanned, &skipped,
+			&infected, &confined, &autoTaken, &autoFailed, &autoCoreSkipped,
+			&startedAt, &finishedAt); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "the sweeps could not be listed")
+			return
 		}
 		out = append(out, map[string]any{
 			"id": id, "status": status, "scope": scope, "source": source, "engine": engine,
-			"scanned": scanned, "infected": infected, "confined": confined,
+			"scanned": scanned, "skipped": skipped, "infected": infected, "confined": confined,
 			"auto_quarantined": autoTaken, "auto_quarantine_failed": autoFailed,
 			"auto_quarantine_core_skipped": autoCoreSkipped,
 			"started_at":                   startedAt, "finished_at": finishedAt.String,

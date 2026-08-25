@@ -413,7 +413,7 @@ func (h *Handlers) UpdateSignature(w http.ResponseWriter, r *http.Request) {
 // would throw away the only concrete thing turning a layer off buys, which is
 // the CPU and the file reads it does not spend, and the operator turning it off
 // is doing so on a server the scan is slowing down.
-func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, findings []Finding, complete bool) {
+func runScan(ctx context.Context, root string, req ScanRequest, cache *scanCache) (scanned, skipped int, findings []Finding, complete bool) {
 	seen := map[string]bool{}
 
 	// 1) ClamAV
@@ -457,10 +457,14 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 	// costs. What the pool parallelises is the part that does, reading the file
 	// and running the rules over it.
 	type job struct {
-		index   int
-		path    string
-		ext     string
-		limit   int64
+		index int
+		path  string
+		ext   string
+		limit int64
+		// key is this file's size:mtime:ctime, taken from the stat the walk
+		// already paid for. A worker that finds the file clean records it under
+		// this key, so the next sweep can skip it while it still looks the same.
+		key     string
 		matches []match
 	}
 	type produced struct {
@@ -515,6 +519,10 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 				// failures.
 				score, signature, matched, level := verdict(matches, req.CriticalThreshold)
 				if level == "" {
+					// Clean, and only clean. A file that produced a finding is
+					// reported again by every sweep until it stops producing
+					// one, so suspicious and critical are never recorded here.
+					cache.markClean(j.path, j.key)
 					continue
 				}
 				mu.Lock()
@@ -571,6 +579,20 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 		if e != nil {
 			return nil
 		}
+		// A file the last sweep read and found clean, unchanged since. The key
+		// is size:mtime:ctime and ctime cannot be put back by any syscall, so a
+		// file edited in place with its mtime restored does NOT match.
+		//
+		// A skipped file does not count towards the cap. The cap bounds how much
+		// this sweep READS, and a tree larger than the cap would otherwise have
+		// the same first 50000 files walked every night with the rest never
+		// reached at all.
+		key := fileKey(fi)
+		if cache.unchanged(p, key) {
+			skipped++
+			cache.markClean(p, key)
+			return nil
+		}
 		scanned++
 		if scanned > fileCap {
 			return errCap
@@ -579,12 +601,12 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 		// escape: padding a webshell past 3 MiB stepped around every content
 		// rule while the file was still recorded as scanned. readForScan reads
 		// the head to the limit and the tail beyond it.
-		_ = fi
+		//
 		// The send selects on the context too. Without that, a pool whose
 		// workers have all returned on cancellation leaves the walk blocked on
 		// a channel nobody reads, and the scan never ends at all.
 		select {
-		case jobs <- job{index: dispatched, path: p, ext: ext, limit: limit, matches: matches}:
+		case jobs <- job{index: dispatched, path: p, ext: ext, limit: limit, key: key, matches: matches}:
 			dispatched++
 		case <-ctx.Done():
 			return ctx.Err()
@@ -611,7 +633,7 @@ func runScan(ctx context.Context, root string, req ScanRequest) (scanned int, fi
 	// status check in the handler exists to prevent. The cap was silently
 	// swallowed here before: the walk's error was discarded and 50000 files was
 	// reported as a finished scan of the whole tree.
-	return scanned, findings, walkErr == nil && ctx.Err() == nil
+	return scanned, skipped, findings, walkErr == nil && ctx.Err() == nil
 }
 
 // phpish reports whether a PHP-FPM pool would execute this extension. The list

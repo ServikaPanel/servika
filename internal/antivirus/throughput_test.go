@@ -38,7 +38,7 @@ func TestTheWorkerCountChangesNeitherTheFindingsNorTheirOrder(t *testing.T) {
 	var reference []string
 	for _, workers := range []int{0, 1, 2, 8, 32} {
 		req.Workers = workers
-		scanned, findings, complete := runScan(context.Background(), root, req)
+		scanned, _, findings, complete := runScan(context.Background(), root, req, nil)
 		if !complete {
 			t.Fatalf("%d workers: the scan reported itself incomplete", workers)
 		}
@@ -77,14 +77,14 @@ func TestTheFileRateCeilingSlowsTheScanDown(t *testing.T) {
 	req.Workers = 8
 
 	unlimited := time.Now()
-	if _, _, complete := runScan(context.Background(), root, req); !complete {
+	if _, _, _, complete := runScan(context.Background(), root, req, nil); !complete {
 		t.Fatal("the unlimited scan reported itself incomplete")
 	}
 	unlimitedFor := time.Since(unlimited)
 
 	req.FileRatePerSec = rate
 	limited := time.Now()
-	_, findings, complete := runScan(context.Background(), root, req)
+	_, _, findings, complete := runScan(context.Background(), root, req, nil)
 	limitedFor := time.Since(limited)
 	if !complete {
 		t.Fatal("the rate-limited scan reported itself incomplete")
@@ -111,7 +111,7 @@ func TestARateTooLargeForATickerDoesNotCrashTheScan(t *testing.T) {
 	root := treeWithShells(t, 3)
 	req := DefaultRequest(root)
 	req.FileRatePerSec = 2_000_000_000 // time.Second/this rounds to 0
-	scanned, findings, complete := runScan(context.Background(), root, req)
+	scanned, _, findings, complete := runScan(context.Background(), root, req, nil)
 	if !complete {
 		t.Fatal("the scan reported itself incomplete")
 	}
@@ -137,7 +137,7 @@ func TestACancelledScanDoesNotHangOnItsOwnPool(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		_, _, complete := runScan(ctx, root, req)
+		_, _, _, complete := runScan(ctx, root, req, nil)
 		done <- complete
 	}()
 	select {

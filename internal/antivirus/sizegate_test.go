@@ -35,7 +35,7 @@ func TestPaddingAFilePastTheReadLimitNoLongerHidesIt(t *testing.T) {
 		}
 	}
 
-	_, findings, _ := runScan(context.Background(), root, DefaultRequest(root))
+	_, _, findings, _ := runScan(context.Background(), root, DefaultRequest(root), nil)
 	found := map[string]bool{}
 	for _, f := range findings {
 		found[filepath.Base(f.File)] = true

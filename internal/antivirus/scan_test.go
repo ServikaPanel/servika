@@ -48,7 +48,7 @@ func TestTheScanReportsWhatItShouldAndNothingElse(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	scanned, findings, _ := runScan(ctx, root, DefaultRequest(root))
+	scanned, _, findings, _ := runScan(ctx, root, DefaultRequest(root), nil)
 	t.Logf("scanned=%d findings=%d", scanned, len(findings))
 	got := map[string]Finding{}
 	for _, f := range findings {

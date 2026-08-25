@@ -65,7 +65,7 @@ func TestTheSweepAppliesTheExclusionListToTheWalk(t *testing.T) {
 	}
 
 	req := DefaultRequest(root)
-	_, findings, _ := runScan(context.Background(), root, req)
+	_, _, findings, _ := runScan(context.Background(), root, req, nil)
 	if len(findings) != 2 {
 		t.Fatalf("without an exclusion list both webshells must be found, got %d: %v",
 			len(findings), findings)
@@ -75,7 +75,7 @@ func TestTheSweepAppliesTheExclusionListToTheWalk(t *testing.T) {
 	// operator writes for "this directory name anywhere". The leading-slash form
 	// is an absolute prefix and would not match a path under t.TempDir().
 	req.Excluded = []string{"cache"}
-	_, findings, _ = runScan(context.Background(), root, req)
+	_, _, findings, _ = runScan(context.Background(), root, req, nil)
 	if len(findings) != 1 {
 		t.Fatalf("with cache excluded one webshell must remain, got %d: %v",
 			len(findings), findings)
@@ -107,7 +107,7 @@ func TestAnExcludedDirectoryIsNotDescendedInto(t *testing.T) {
 
 	req := DefaultRequest(root)
 	req.Excluded = []string{"excluded"}
-	scanned, findings, complete := runScan(context.Background(), root, req)
+	scanned, _, findings, complete := runScan(context.Background(), root, req, nil)
 	if scanned != 0 {
 		t.Errorf("the walk descended into an excluded directory: %d files counted", scanned)
 	}
