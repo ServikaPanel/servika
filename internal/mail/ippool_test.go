@@ -110,21 +110,6 @@ func TestSenderTransportDoesNotDependOnMapOrder(t *testing.T) {
 	}
 }
 
-// A blocklist answers by resolving the reversed address under its zone.
-func TestReverseIPv4(t *testing.T) {
-	if got := reverseIPv4("203.0.113.5"); got != "5.113.0.203" {
-		t.Errorf("reverseIPv4 = %q, want 5.113.0.203", got)
-	}
-	// IPv6 is not queried this way, and producing a nonsense name would send a
-	// query that can only ever fail.
-	if got := reverseIPv4("2001:db8::1"); got != "" {
-		t.Errorf("reverseIPv4 of an IPv6 address = %q, want empty", got)
-	}
-	if got := reverseIPv4("not-an-ip"); got != "" {
-		t.Errorf("reverseIPv4 of a non-address = %q, want empty", got)
-	}
-}
-
 // A lookup that fails for any reason other than a listing must not count as a
 // hit: reporting an unreachable blocklist as a listing sends an operator
 // chasing a delisting that was never needed.
@@ -143,6 +128,29 @@ func TestUnreachableBlocklistIsNotAHit(t *testing.T) {
 	}
 	if !queried {
 		t.Error("an IPv4 address with zones configured was reported as not queried")
+	}
+}
+
+// The one that reaches an operator: with a Spamhaus zone configured and the
+// host resolving through a public resolver, every pool address answered
+// 127.255.255.254 and was recorded as LISTED. Measured against the live service
+// through 1.1.1.1: dbltest.com, which IS listed, and a domain that is not, both
+// answer that code, so the panel could not tell them apart and reported the
+// whole pool as blocklisted.
+func TestAnOpenResolverErrorDoesNotListTheWholePool(t *testing.T) {
+	original := poolResolver
+	t.Cleanup(func() { poolResolver = original })
+	poolResolver = func() addrLookup {
+		return scanResolver{hosts: map[string][]string{
+			"5.113.0.203.zen.test": {"127.255.255.254"},
+		}}
+	}
+	hits, queried := dnsblHits(context.Background(), "203.0.113.5", []string{"zen.test"})
+	if len(hits) != 0 {
+		t.Errorf("an open-resolver error was recorded as a listing: %v", hits)
+	}
+	if !queried {
+		t.Error("the zone answered, so the address was queried")
 	}
 }
 

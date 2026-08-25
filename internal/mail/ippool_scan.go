@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"log"
-	"net"
 	"strings"
+
+	"servika/internal/dnsbl"
 	"time"
 )
 
@@ -153,51 +154,31 @@ func announceListing(address string, wasListed bool, hits []string) {
 // dnsblHits returns the zones that list the address, and whether the address
 // could be queried at all.
 //
-// A blocklist answers by resolving the reversed address under its zone, so a
-// name that resolves means listed and one that does not means clean. A lookup
-// that fails for any other reason is NOT counted as a hit: reporting an
-// unreachable blocklist as a listing would have an operator chasing a delisting
-// that was never needed.
+// The reading of a blocklist answer lives in internal/dnsbl, shared with the
+// domain reputation scan, because getting it wrong is wrong in both places at
+// once. The resolver is built HERE and handed in: choosing it needs
+// internal/config, and internal/dnsbl imports nothing from this repository.
 //
-// The second return separates "queried and clean" from "never queried". They
-// are not the same answer and used to be indistinguishable: an IPv6 address has
-// no reversed IPv4 form, so it returned no hits and read as clean, which is a
-// false assurance about an address that was never checked.
+// Each query carries its own deadline. A zone that answers never must not spend
+// the whole scan's budget on one address.
 func dnsblHits(ctx context.Context, value string, zones []string) ([]string, bool) {
 	if len(zones) == 0 {
+		// Asked before the resolver is built, so a server with the feature off
+		// makes no resolver and no query.
 		return nil, false
 	}
-	reversed := reverseIPv4(value)
-	if reversed == "" {
+	if dnsbl.ReverseIPv4(value) == "" {
 		return nil, false // only IPv4 blocklists are queried this way
 	}
-	resolver := poolResolver()
-	var hits []string
-	for _, zone := range zones {
-		query, cancel := context.WithTimeout(ctx, dnsblQueryTimeout)
-		addresses, err := resolver.LookupHost(query, reversed+"."+zone)
-		cancel()
-		if err == nil && len(addresses) > 0 {
-			hits = append(hits, zone)
-		}
-	}
-	return hits, true
+	return dnsbl.LookupIP(ctx, boundedResolver{ctx: ctx}, value, zones)
 }
 
-// reverseIPv4 turns 203.0.113.5 into 5.113.0.203, which is how a blocklist zone
-// is queried. Anything that is not IPv4 returns empty.
-func reverseIPv4(value string) string {
-	ip := net.ParseIP(value)
-	if ip == nil {
-		return ""
-	}
-	four := ip.To4()
-	if four == nil {
-		return ""
-	}
-	parts := strings.Split(four.String(), ".")
-	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
-		parts[i], parts[j] = parts[j], parts[i]
-	}
-	return strings.Join(parts, ".")
+// boundedResolver gives every query its own timeout while presenting the one
+// method internal/dnsbl asks for.
+type boundedResolver struct{ ctx context.Context }
+
+func (b boundedResolver) LookupHost(_ context.Context, host string) ([]string, error) {
+	query, cancel := context.WithTimeout(b.ctx, dnsblQueryTimeout)
+	defer cancel()
+	return poolResolver().LookupHost(query, host)
 }

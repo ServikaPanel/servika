@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"servika/internal/dnsbl"
 )
 
 // The zone list goes into a Postfix parameter. A value carrying a space or a
@@ -44,7 +46,7 @@ func TestServerSettingBoundsAreEnforced(t *testing.T) {
 		"absurd message size":   {MaxMessageSizeMB: maxMessageSizeMB + 1},
 		"negative domain limit": {DomainSendLimitHour: -1},
 		"absurd client limit":   {ClientSendLimitHour: maxSendLimitHour + 1},
-		"too many zones":        {DNSBLZones: strings.Repeat("a.test ", maxDNSBLZoneCount+1)},
+		"too many zones":        {DNSBLZones: strings.Repeat("a.test ", dnsbl.MaxZones+1)},
 	}
 	for name, settings := range cases {
 		if _, err := validateServerSettings(&settings); err == nil {

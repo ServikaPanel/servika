@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"servika/internal/dnsbl"
 	"servika/internal/httpx"
 )
 
@@ -35,19 +35,9 @@ type ServerSettings struct {
 	DNSBLZones string `json:"dnsbl_zones"`
 }
 
-// dnsblZonePattern is what a blocklist zone may look like. The value goes into a
-// Postfix parameter, so anything that is not a hostname is refused rather than
-// quoted: a stray space or newline there rewrites the restriction list.
-//
-// At least one dot is required. A single label is never a blocklist zone, and
-// accepting one would let a typo in a space-separated list pass as an extra
-// entry that then silently matches nothing.
-var dnsblZonePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
-
 const (
 	maxMessageSizeMB   = 512
 	maxSendLimitHour   = 1000000
-	maxDNSBLZoneCount  = 8
 	postfixSizeParam   = "message_size_limit"
 	postfixClientParam = "smtpd_client_restrictions"
 )
@@ -174,14 +164,20 @@ func validateServerSettings(req *ServerSettings) ([]string, error) {
 		return nil, fmt.Errorf("send limits must be between 0 and %d", maxSendLimitHour)
 	}
 
-	zones := strings.Fields(strings.ToLower(req.DNSBLZones))
-	if len(zones) > maxDNSBLZoneCount {
-		return nil, fmt.Errorf("at most %d blocklist zones are allowed", maxDNSBLZoneCount)
-	}
-	for _, zone := range zones {
-		if !dnsblZonePattern.MatchString(zone) {
-			return nil, fmt.Errorf("%q is not a valid blocklist zone name", zone)
+	// The zone rules live in internal/dnsbl beside the query that uses them, so
+	// the pattern this refuses on and the pattern the scanner queries with
+	// cannot drift apart. The wording stays here, because it is the only prose
+	// this endpoint produces.
+	zones, err := dnsbl.ValidateZones(req.DNSBLZones)
+	if err != nil {
+		var zoneErr *dnsbl.ZoneError
+		if errors.As(err, &zoneErr) && zoneErr.TooMany {
+			return nil, fmt.Errorf("at most %d blocklist zones are allowed", dnsbl.MaxZones)
 		}
+		if errors.As(err, &zoneErr) {
+			return nil, fmt.Errorf("%q is not a valid blocklist zone name", zoneErr.Zone)
+		}
+		return nil, err
 	}
 	return zones, nil
 }
