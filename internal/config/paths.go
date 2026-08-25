@@ -91,6 +91,15 @@ const (
 	// package, because a cache thrown away on every update would make the first
 	// sweep after each release a full one.
 	DefaultAVCacheFile = "/var/lib/servika/av/rapidscan.json"
+
+	// DefaultMySQLSocket is where MariaDB listens locally.
+	//
+	// It is the ONLY way to reach a tenant database account: the panel creates
+	// every one of them as 'user'@'localhost' (credentials.MySQLCreateScopedUser),
+	// and MariaDB treats a TCP connection to 127.0.0.1 as a different host, so
+	// it answers access denied. The panel's own connection is the exception,
+	// because the installer creates 'panel'@'127.0.0.1' deliberately.
+	DefaultMySQLSocket = "/var/lib/mysql/mysql.sock"
 	// DefaultTuningBackupDir holds the copy of a configuration file taken before
 	// the tuning screen edits it. The copy is what a revert restores, so it must
 	// outlive the panel process and must NOT sit beside the file it copies:
@@ -401,6 +410,10 @@ func AVRulesFile() string     { return mustAbsPath("SERVIKA_AV_RULES_FILE", Defa
 // AVCacheFile is where the sweep records what it inspected and found clean.
 func AVCacheFile() string { return mustAbsPath("SERVIKA_AV_CACHE_FILE", DefaultAVCacheFile) }
 
+// MySQLSocket is the local MariaDB socket, the only path a tenant database
+// account can be reached over.
+func MySQLSocket() string { return mustAbsPath("SERVIKA_MYSQL_SOCKET", DefaultMySQLSocket) }
+
 // OpsTool returns the absolute path for an operations helper under SERVIKA_OPSBIN.
 func OpsTool(name string) string {
 	return filepath.Join(mustAbsPath("SERVIKA_OPSBIN", "/usr/local/bin"), name)
@@ -470,6 +483,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_AV_RULES_URL", DefaultAVRulesURL, true},
 		{"SERVIKA_AV_RULES_FILE", DefaultAVRulesFile, false},
 		{"SERVIKA_AV_CACHE_FILE", DefaultAVCacheFile, false},
+		{"SERVIKA_MYSQL_SOCKET", DefaultMySQLSocket, false},
 	}
 	for _, check := range checks {
 		var err error

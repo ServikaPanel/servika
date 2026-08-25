@@ -15,10 +15,12 @@ import (
 	"servika/internal/config"
 )
 
-const (
-	pmaPoolPath   = "/etc/php-fpm.d/phpmyadmin.conf"
-	pmaSocketPath = "/var/lib/mysql/mysql.sock"
-)
+const pmaPoolPath = "/etc/php-fpm.d/phpmyadmin.conf"
+
+// pmaSocketPath is where phpMyAdmin's pool is told MariaDB listens. It reads
+// the same setting every other local connection does, so relocating the socket
+// moves all of them together rather than leaving this one behind.
+func pmaSocketPath() string { return config.MySQLSocket() }
 
 func pmaSignonDir() string { return config.PMASignonDir() }
 
@@ -353,7 +355,7 @@ func ensurePMAPoolSocket() {
 	changed := false
 	for _, setting := range []string{"mysqli.default_socket", "pdo_mysql.default_socket"} {
 		pattern := regexp.MustCompile(`(?m)^\s*php_value\[` + regexp.QuoteMeta(setting) + `\]\s*=.*$`)
-		line := "php_value[" + setting + "] = " + pmaSocketPath
+		line := "php_value[" + setting + "] = " + pmaSocketPath()
 		if pattern.MatchString(updated) {
 			replaced := pattern.ReplaceAllString(updated, line)
 			changed = changed || replaced != updated

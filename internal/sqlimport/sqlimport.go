@@ -36,6 +36,7 @@ import (
 	"regexp"
 	"strings"
 
+	"servika/internal/config"
 	"servika/internal/credentials"
 )
 
@@ -215,7 +216,7 @@ func writeOptionFile(user, password string) (string, func(), error) {
 		return "", func() {}, errors.New("the generated import credentials contain a line break")
 	}
 	_, err = file.WriteString("[client]\nuser=" + user + "\npassword=\"" + optionFileEscape(password) +
-		"\"\nsocket=/var/lib/mysql/mysql.sock\n")
+		"\"\nsocket=" + config.MySQLSocket() + "\n")
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}

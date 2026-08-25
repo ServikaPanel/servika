@@ -1099,6 +1099,10 @@ func main() {
 				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep", avH.SweepList)
 				r.With(middleware.AdminOnly).Get("/admin/antivirus/sweep/{sid}", avH.SweepStatus)
 				r.With(middleware.AdminOnly).Post("/admin/antivirus/sweep/finding/{fid}/quarantine", avH.SweepQuarantine)
+				// The WordPress database scan. Admin only and deliberately not
+				// scoped: it opens a connection to every tenant database on the
+				// server, which no reseller's scope makes reasonable.
+				r.With(middleware.AdminOnly).Post("/admin/antivirus/db-scan", avH.AdminDBScan)
 				// Quarantine across every domain the caller may see. Not
 				// AdminOnly: a sweep contains files across every tenant at
 				// once, and a reseller reaching their own customers' held

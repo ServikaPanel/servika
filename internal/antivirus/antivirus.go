@@ -167,9 +167,12 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 // would need its own listing and its own containment path. The caller owns the
 // engine name, which is what the screen groups by.
 //
-// The paths must already be absolute and under the tenant home: the quarantine
-// path refuses anything else, but a caller that records a bad path leaves a
-// finding nothing can act on.
+// A finding's File must be an absolute path under the tenant home UNLESS the
+// engine says it is not a file at all. The quarantine refuses anything else, so
+// a caller that records a bad path leaves a finding nothing can act on; a
+// caller whose subject is genuinely not a file declares that through its engine
+// name instead, and Containable is what the three places that would act on a
+// path ask before they try. See engine.go.
 //
 // A caller that leaves Level empty is a detector with a verdict of its own
 // rather than a weighed one, so its finding is recorded at the critical end.
