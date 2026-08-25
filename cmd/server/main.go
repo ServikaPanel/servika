@@ -1111,6 +1111,12 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Post("/admin/antivirus/quarantine/{qid}/restore", avH.AdminQuarantineRestore)
 				r.With(middleware.ResellerOrAbove).Delete("/admin/antivirus/quarantine/{qid}", avH.AdminQuarantineDelete)
 				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/quarantine/{qid}/inspect", avH.AdminQuarantineInspect)
+				// Every detection this server has recorded, whatever became of
+				// the file. Scoped the same way and for the same reason: the
+				// findings nobody contained are the ones somebody has to act
+				// on, and they appeared on no screen but the detail of the one
+				// sweep that produced them.
+				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/history", avH.AdminHistory)
 				// Hostnames no tenant may add. Admin only: the list decides what
 				// this server is willing to answer for, which is not a customer's
 				// call.
