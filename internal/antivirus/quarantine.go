@@ -357,6 +357,17 @@ func (h *Handlers) QuarantineRestore(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = source.Close() }()
 
 	home := "/home/" + systemUser
+	// The directory the file came from may be gone: containment happened at some
+	// earlier point and the tenant has been working in the tree since. open(2)
+	// never creates a parent, so without this a legitimate restore of a file
+	// whose folder was deleted fails with the generic reason code and the screen
+	// cannot say why. MkdirAllBeneath is the symlink-safe mkdir -p: every
+	// component goes through Mkdirat plus an O_NOFOLLOW openat, so a link the
+	// tenant planted in the path is refused rather than followed as root.
+	if err := files.MkdirAllBeneath(home, filepath.Dir(rel), systemUser); err != nil {
+		writeReason(w, reasonQuarantineFail)
+		return
+	}
 	// StreamIntoBeneath refuses an existing target, so a restore cannot write over
 	// whatever the tenant has since put at that path.
 	if _, err := files.StreamIntoBeneath(home, rel, source, systemUser); err != nil {
