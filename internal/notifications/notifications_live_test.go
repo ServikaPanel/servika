@@ -54,7 +54,14 @@ func newFixture(t *testing.T, db *sql.DB) fixture {
 	ctx := context.Background()
 	var f fixture
 
-	insert := func(query string, args ...any) int64 {
+	// The cleanup for a row is registered AS SOON AS the row exists, not after
+	// the whole fixture is built. Registering it at the end means an insert that
+	// fails half way leaves everything before it behind, and since the names are
+	// derived from the test name the NEXT run then fails on a duplicate rather
+	// than on the real defect. Measured: a fixture that aborted on the
+	// notifications insert left its four users, and the following run reported
+	// `Duplicate entry 'adm_TestEachRoleSeesOnly_1' for key 'username'`.
+	insert := func(table, query string, args ...any) int64 {
 		t.Helper()
 		res, err := db.ExecContext(ctx, query, args...)
 		if err != nil {
@@ -64,34 +71,33 @@ func newFixture(t *testing.T, db *sql.DB) fixture {
 		if err != nil {
 			t.Fatalf("fixture id: %v", err)
 		}
+		t.Cleanup(func() {
+			// #nosec G202 -- table is a literal from this file, never caller text.
+			_, _ = db.Exec(`DELETE FROM `+table+` WHERE id=?`, id)
+		})
 		return id
 	}
 
-	f.adminID = insert(`INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'admin')`, uniqueName(t, "adm"))
-	f.resellerA = insert(`INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'reseller')`, uniqueName(t, "resa"))
-	f.resellerB = insert(`INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'reseller')`, uniqueName(t, "resb"))
-	f.customerA = insert(`INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'user')`, uniqueName(t, "cusa"))
+	f.adminID = insert("users", `INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'admin')`, uniqueName(t, "adm"))
+	f.resellerA = insert("users", `INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'reseller')`, uniqueName(t, "resa"))
+	f.resellerB = insert("users", `INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'reseller')`, uniqueName(t, "resb"))
+	f.customerA = insert("users", `INSERT INTO users (username, password_hash, dashboard_layout, role) VALUES (?, 'x', '', 'user')`, uniqueName(t, "cusa"))
 
-	custA := insert(`INSERT INTO customers (name, email, owner_user_id, user_id) VALUES ('A', 'a@example.com', ?, ?)`, f.resellerA, f.customerA)
-	custB := insert(`INSERT INTO customers (name, email, owner_user_id) VALUES ('B', 'b@example.com', ?)`, f.resellerB)
+	custA := insert("customers", `INSERT INTO customers (name, email, owner_user_id, user_id) VALUES ('A', ?, ?, ?)`, uniqueName(t, "a")+"@example.com", f.resellerA, f.customerA)
+	custB := insert("customers", `INSERT INTO customers (name, email, owner_user_id) VALUES ('B', ?, ?)`, uniqueName(t, "b")+"@example.com", f.resellerB)
 
-	f.domainA = insert(`INSERT INTO domains (domain_name, system_user, customer_id) VALUES (?, ?, ?)`,
+	f.domainA = insert("domains", `INSERT INTO domains (domain_name, system_user, customer_id) VALUES (?, ?, ?)`,
 		uniqueName(t, "a")+".example.com", uniqueName(t, "c_a"), custA)
-	f.domainB = insert(`INSERT INTO domains (domain_name, system_user, customer_id) VALUES (?, ?, ?)`,
+	f.domainB = insert("domains", `INSERT INTO domains (domain_name, system_user, customer_id) VALUES (?, ?, ?)`,
 		uniqueName(t, "b")+".example.com", uniqueName(t, "c_b"), custB)
 
-	f.noteA = insert(`INSERT INTO notifications (level, category, title, message, domain_id) VALUES ('critical','antivirus','A','m',?)`, f.domainA)
-	f.noteB = insert(`INSERT INTO notifications (level, category, title, message, domain_id) VALUES ('critical','antivirus','B','m',?)`, f.domainB)
-	f.notePanel = insert(`INSERT INTO notifications (level, category, title, message, domain_id) VALUES ('warning','antivirus','P','m',NULL)`)
+	// The rows a domain owns go with it through the foreign keys; these three
+	// are removed by their own registered cleanup, which is why the panel-wide
+	// one needs no special case any more.
+	f.noteA = insert("notifications", `INSERT INTO notifications (level, category, title, message, domain_id) VALUES ('critical','antivirus','A','m',?)`, f.domainA)
+	f.noteB = insert("notifications", `INSERT INTO notifications (level, category, title, message, domain_id) VALUES ('critical','antivirus','B','m',?)`, f.domainB)
+	f.notePanel = insert("notifications", `INSERT INTO notifications (level, category, title, message, domain_id) VALUES ('warning','antivirus','P','m',NULL)`)
 
-	t.Cleanup(func() {
-		// The notification rows and their reads go with the domains through the
-		// foreign keys; the panel-wide one names no domain, so it is removed here.
-		_, _ = db.Exec(`DELETE FROM notifications WHERE id=?`, f.notePanel)
-		_, _ = db.Exec(`DELETE FROM domains WHERE id IN (?,?)`, f.domainA, f.domainB)
-		_, _ = db.Exec(`DELETE FROM customers WHERE id IN (?,?)`, custA, custB)
-		_, _ = db.Exec(`DELETE FROM users WHERE id IN (?,?,?,?)`, f.adminID, f.resellerA, f.resellerB, f.customerA)
-	})
 	return f
 }
 
@@ -146,6 +152,43 @@ func has(body listBody, id int64) bool {
 		}
 	}
 	return false
+}
+
+// A writer that carries only the English text must be accepted.
+//
+// 0112's header states that both new columns default to empty "so a writer that
+// supplies only English is still valid", and for `params` that was false: the
+// column was NOT NULL with no default, and MariaDB answers such an INSERT with
+// `ERROR 1364 ... Field 'params' doesn't have a default value`. Nothing in the
+// panel broke, because `Write` always supplies the column, but the fixture in
+// this very file did not, and the failure was invisible for as long as nobody
+// ran these tests against a real database.
+//
+// The insert is written the way a caller reaching for the simplest shape would
+// write it, which is what makes this a test of the SCHEMA rather than of Write.
+func TestANotificationCanBeWrittenWithNothingButItsEnglish(t *testing.T) {
+	db := liveDB(t)
+	var id int64
+	res, err := db.Exec(
+		`INSERT INTO notifications (level, category, title, message) VALUES ('info','test','T','m')`)
+	if err != nil {
+		t.Fatalf("an English-only notification was refused: %v", err)
+	}
+	id, err = res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec(`DELETE FROM notifications WHERE id=?`, id) })
+
+	var key, params string
+	if err := db.QueryRow(`SELECT message_key, params FROM notifications WHERE id=?`, id).Scan(&key, &params); err != nil {
+		t.Fatal(err)
+	}
+	// Empty rather than NULL, so "no key" is one value and every reader tests it
+	// the same way.
+	if key != "" || params != "" {
+		t.Errorf("the defaults are %q and %q, want both empty", key, params)
+	}
 }
 
 // A reseller must not read a neighbour's alert off a screen built to tell them
