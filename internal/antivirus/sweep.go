@@ -97,6 +97,13 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 // through one function: a switch honoured on one path and not the other is a
 // switch that is not honoured.
 func sweepRequest(s avsettings.Settings) ScanRequest {
+	// The throughput settings go through Resolve, the same function the slice
+	// file is written from, so "0 means automatic" cannot mean one thing on the
+	// screen and another in the scan. This is the same call scanRequest makes for
+	// a single domain, and the sweep needs it MORE: it walks every tenant home on
+	// the server, so it is the scan the worker pool and the file-rate ceiling
+	// were added for.
+	effective := s.Resolve(avsettings.ServerCapacity())
 	return ScanRequest{
 		Roots:              s.ScanRoots(),
 		RuleEngine:         s.RuleEngine,
@@ -104,6 +111,8 @@ func sweepRequest(s avsettings.Settings) ScanRequest {
 		CriticalThreshold:  s.CriticalThreshold,
 		Excluded:           s.ExcludedList(),
 		AutoQuarantine:     s.AutoQuarantine,
+		Workers:            effective.ScanWorkers,
+		FileRatePerSec:     effective.FileRatePerSec,
 		// Only a sweep reads and writes the cache. A per-domain scan leaves it
 		// empty, because whoever clicked scan on their own site is waiting for
 		// an answer about it rather than for last night's.
