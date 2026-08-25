@@ -80,13 +80,17 @@ func TestSavingAlsoApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := string(source)
-	update := strings.Index(body, "UPDATE av_settings SET")
+	// The anchor is the CALL that stores the row, not the SQL text. The
+	// statement itself lives in writeRow so a live test can exercise the column
+	// list without reaching systemd, and its position in the file says nothing
+	// about the order Write does things in, which is what this test is about.
+	update := strings.Index(body, "if err := writeRow(ctx, db, s); err != nil {")
 	apply := strings.Index(body, "if err := ApplyLimits(s); err != nil {")
 	watch := strings.Index(body, "if err := ApplyWatcher(s); err != nil {")
 	timer := strings.Index(body, "return ApplyScheduleTimer(s)")
 	switch {
 	case update < 0:
-		t.Fatal("the settings are no longer stored")
+		t.Fatal("the settings are no longer stored; this test has to follow the call")
 	case apply < 0:
 		t.Fatal("saving no longer applies the resource limits")
 	case watch < 0:

@@ -129,3 +129,51 @@ func TestACgroupPathCannotEscapeTheCgroupRoot(t *testing.T) {
 		t.Error("a traversal was reported as a slice carrying a limit")
 	}
 }
+
+// A CPU WEIGHT is not a limit, and reading it as one would undo this whole
+// file.
+//
+// The slice now writes CPUWeight beside CPUQuota, so cpu.weight is present in
+// the antivirus cgroup on every server. It is present in every OTHER cgroup
+// too: the kernel creates it wherever the cpu controller is enabled and
+// defaults it to 100, so it is never absent and never "unset". Counting it as
+// evidence of a limit would report the implicitly created slice, the one that
+// carries no limit at all, as confining the scan.
+//
+// Both directions are exercised against the same directory, because the first
+// half alone would also pass if Confined answered false for everything.
+func TestACPUWeightIsNotALimit(t *testing.T) {
+	root := t.TempDir()
+	restore := cgroupRoot
+	cgroupRoot = root
+	t.Cleanup(func() { cgroupRoot = restore })
+
+	const cgroup = "/servika.slice/" + SliceName + "/run-scan.service"
+	sliceDir := filepath.Join(root, "servika.slice", SliceName)
+	if err := os.MkdirAll(sliceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(sliceDir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The shape systemd creates on its own: a weight, and nothing capped.
+	write("cpu.weight", "50\n")
+	write("cpu.max", "max 100000\n")
+	write("memory.max", "max\n")
+	write("memory.high", "max\n")
+	write("pids.max", "max\n")
+	if Confined(cgroup) {
+		t.Error("a slice carrying only a cpu.weight was reported as confining the scan")
+	}
+
+	// The same directory with one real cap. Without this half the test above
+	// would pass on a Confined that always answered false.
+	write("cpu.max", "150000 100000\n")
+	if !Confined(cgroup) {
+		t.Error("a slice carrying a cpu.max was reported as unlimited")
+	}
+}

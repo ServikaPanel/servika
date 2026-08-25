@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -246,5 +247,62 @@ func TestTheKernelReallyEnforcesTheSlice(t *testing.T) {
 		t.Errorf("memory.max is unreadable after the second apply: %v", err)
 	} else if got := strings.TrimSpace(string(b)); got != "629145600" {
 		t.Errorf("a foreign override outlived the apply: memory.max = %q, want \"629145600\"", got)
+	}
+}
+
+// The rendered slice carries a CPU WEIGHT beside its quota, and the live update
+// carries it too.
+//
+// The quota is a ceiling: the scan gets the same share of the processor on an
+// idle server and on a busy one, so without a weight it takes that quota out of
+// real traffic exactly when there is real traffic. Rendering the weight into the
+// file and forgetting the live update would leave a running scan on whatever
+// weight it started with, which is the case an operator lowering it is trying
+// to fix.
+func TestTheSliceCarriesACPUWeight(t *testing.T) {
+	// An operator's own value is rendered as written.
+	if body := SliceContent(Settings{CPUPercent: 150, RAMMB: 400, IOWeight: 50, CPUWeight: 20}); !strings.Contains(body, "\nCPUWeight=20\n") {
+		t.Errorf("the slice does not carry the weight that was set:\n%s", body)
+	}
+
+	// Zero is AUTOMATIC and must never reach the file. systemd refuses
+	// CPUWeight=0 with "Numerical result out of range", ignores the line, and
+	// starts anyway on the kernel default of 100, so the scan would compete
+	// with tenant sites on equal footing while the screen showed a number.
+	body := SliceContent(Settings{CPUPercent: 150, RAMMB: 400, IOWeight: 50})
+	if strings.Contains(body, "CPUWeight=0") {
+		t.Errorf("a weight of 0 reached the slice, which systemd ignores:\n%s", body)
+	}
+	if !strings.Contains(body, "\nCPUWeight="+strconv.Itoa(defaultCPUWeight)+"\n") {
+		t.Errorf("an automatic weight did not resolve to %d:\n%s", defaultCPUWeight, body)
+	}
+
+	var calls [][]string
+	restore := sliceCommand
+	sliceCommand = func(name string, arg ...string) *exec.Cmd {
+		calls = append(calls, append([]string{name}, arg...))
+		return exec.Command("true")
+	}
+	t.Cleanup(func() { sliceCommand = restore })
+
+	dir := t.TempDir()
+	restorePath := slicePath
+	slicePath = dir + "/" + SliceName
+	t.Cleanup(func() { slicePath = restorePath })
+
+	if err := ApplyLimits(Settings{CPUPercent: 150, RAMMB: 400, IOWeight: 50, CPUWeight: 20}); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	var setProperty []string
+	for _, c := range calls {
+		if len(c) > 1 && c[1] == "set-property" {
+			setProperty = c
+		}
+	}
+	if setProperty == nil {
+		t.Fatalf("set-property was never called; calls: %v", calls)
+	}
+	if !slices.Contains(setProperty, "CPUWeight=20") {
+		t.Errorf("the live update does not carry the weight, so a running scan keeps the old one: %v", setProperty)
 	}
 }

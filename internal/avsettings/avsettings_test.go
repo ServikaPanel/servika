@@ -408,14 +408,63 @@ func TestTheThroughputSettingsAreRefusedOutOfRange(t *testing.T) {
 // saves and then reads as its zero value on the next request.
 func TestTheNewColumnsAreBothReadAndWritten(t *testing.T) {
 	source := sourceOf(t, "avsettings.go")
-	for _, column := range []string{"realtime", "scan_workers", "file_rate_per_sec"} {
+	for _, column := range []string{"realtime", "scan_workers", "file_rate_per_sec", "cpu_weight"} {
 		if strings.Count(source, column) < 2 {
 			t.Errorf("%s does not appear in both the SELECT and the UPDATE", column)
 		}
 	}
-	for _, field := range []string{"&s.Realtime", "&s.ScanWorkers", "&s.FileRatePerSec"} {
+	for _, field := range []string{"&s.Realtime", "&s.ScanWorkers", "&s.FileRatePerSec", "&s.CPUWeight"} {
 		if !strings.Contains(source, field) {
 			t.Errorf("the row no longer scans into %s", field)
 		}
+	}
+}
+
+// The CPU weight is refused out of range rather than clamped, and the reason is
+// not symmetry with the other fields.
+//
+// systemd is the layer that would otherwise catch it, and measured on systemd
+// 257 it does not: CPUWeight=0 is answered "Failed to parse CPUWeight=0,
+// ignoring: Numerical result out of range", the unit starts anyway on the
+// kernel default of 100, and `systemd-analyze verify` on that same file still
+// exits 0. So a value refused by the kernel leaves no trace anywhere except a
+// scan that quietly competes with tenant sites on equal footing.
+func TestTheCPUWeightIsRefusedOutOfRange(t *testing.T) {
+	base := Settings{Scope: ScopeHost, CriticalThreshold: 100, IOWeight: 50}
+	for _, c := range []struct {
+		name   string
+		weight int
+	}{
+		{"negative", -1},
+		{"past what systemd accepts", MaxCgroupWeight + 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := base
+			s.CPUWeight = c.weight
+			if got := ReasonCode(s.Validate()); got != ReasonCPUWeightRange {
+				t.Errorf("refused with %q, want %q", got, ReasonCPUWeightRange)
+			}
+		})
+	}
+	// Both ends of the accepted range, and the automatic value. Without these
+	// the test above would pass on a Validate that refused everything.
+	for _, weight := range []int{0, 1, MaxCgroupWeight} {
+		s := base
+		s.CPUWeight = weight
+		if err := s.Validate(); err != nil {
+			t.Errorf("a weight of %d was refused: %v", weight, err)
+		}
+	}
+}
+
+// An unset weight resolves to the automatic value, and a set one is passed
+// through. The resolved value is what reaches the slice, so a zero surviving
+// here is a line systemd ignores.
+func TestAnUnsetCPUWeightResolvesToTheAutomaticValue(t *testing.T) {
+	if got := (Settings{}).Resolve(ServerCapacity()).CPUWeight; got != defaultCPUWeight {
+		t.Errorf("an unset weight resolved to %d, want %d", got, defaultCPUWeight)
+	}
+	if got := (Settings{CPUWeight: 7}).Resolve(ServerCapacity()).CPUWeight; got != 7 {
+		t.Errorf("a weight of 7 resolved to %d", got)
 	}
 }

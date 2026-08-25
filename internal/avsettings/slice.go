@@ -83,12 +83,17 @@ MemoryAccounting=yes
 IOAccounting=yes
 TasksAccounting=yes
 
+# CPUQuota is a CEILING and CPUWeight is a SHARE. The ceiling is the same on an
+# idle server and on a busy one, so without a weight the scan takes its quota
+# out of real traffic exactly when there is real traffic. A weight costs nothing
+# while nobody else wants the processor.
 CPUQuota=%d%%
+CPUWeight=%d
 MemoryMax=%dM
 MemoryHigh=%dM
 IOWeight=%d
 TasksMax=%d
-`, e.CPUPercent, e.RAMMB, e.RAMMB*90/100, e.IOWeight, sliceTasksMax)
+`, e.CPUPercent, e.CPUWeight, e.RAMMB, e.RAMMB*90/100, e.IOWeight, sliceTasksMax)
 }
 
 // ApplyLimits writes the slice and, when it already holds a running scan,
@@ -117,6 +122,7 @@ func ApplyLimits(s Settings) error {
 	e := s.Resolve(ServerCapacity())
 	out, err := sliceCommand("systemctl", "set-property", "--runtime", SliceName,
 		fmt.Sprintf("CPUQuota=%d%%", e.CPUPercent),
+		fmt.Sprintf("CPUWeight=%d", e.CPUWeight),
 		fmt.Sprintf("MemoryMax=%dM", e.RAMMB),
 		fmt.Sprintf("MemoryHigh=%dM", e.RAMMB*90/100),
 		fmt.Sprintf("IOWeight=%d", e.IOWeight)).CombinedOutput()
@@ -154,7 +160,7 @@ type KernelLimits struct {
 func ReadKernelLimits() KernelLimits {
 	k := KernelLimits{Values: map[string]string{}}
 	k.Active = sliceCommand("systemctl", "is-active", "--quiet", SliceName).Run() == nil
-	for _, property := range []string{"CPUQuotaPerSecUSec", "MemoryMax", "MemoryHigh", "IOWeight", "TasksMax"} {
+	for _, property := range []string{"CPUQuotaPerSecUSec", "CPUWeight", "MemoryMax", "MemoryHigh", "IOWeight", "TasksMax"} {
 		b, err := sliceCommand("systemctl", "show", "-p", property, "--value", SliceName).Output()
 		if err != nil {
 			k.Values[property] = KernelUnmeasured

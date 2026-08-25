@@ -67,6 +67,13 @@ func sliceDirOf(cgroup string) string {
 // An unreadable cgroup counts as UNLIMITED. The other direction reports a slice
 // nobody could measure as limited, which is the reassurance this whole check
 // exists to withhold.
+//
+// cpu.weight is deliberately NOT in this list, even though the slice now writes
+// CPUWeight. A weight is a share and not a limit: it exists in every cgroup the
+// cpu controller is enabled for, always carries a value, and defaults to 100.
+// Reading it as a limit would report the implicitly created, entirely unlimited
+// slice above as confined, which is exactly the defect this file exists to
+// catch.
 func SliceHasLimit(dir string) bool {
 	// cpu.max is "max <period>" when unset and "<quota> <period>" when set, so
 	// the FIRST field is the answer. memory.max and pids.max are "max" or a

@@ -53,11 +53,16 @@ type Settings struct {
 	CPUPercent         int    `json:"cpu_percent"`
 	RAMMB              int    `json:"ram_mb"`
 	IOWeight           int    `json:"io_weight"`
-	ScheduledScan      bool   `json:"scheduled_scan"`
-	ScheduledHour      int    `json:"scheduled_hour"`
-	Realtime           bool   `json:"realtime"`
-	ScanWorkers        int    `json:"scan_workers"`
-	FileRatePerSec     int    `json:"file_rate_per_sec"`
+	// CPUWeight is the scan's SHARE of a contended processor, which is a
+	// different question from CPUPercent, its ceiling. The ceiling is the same
+	// whether the server is idle or busy, so it is taken out of real traffic
+	// exactly when there is real traffic; the weight is what decides who yields.
+	CPUWeight      int  `json:"cpu_weight"`
+	ScheduledScan  bool `json:"scheduled_scan"`
+	ScheduledHour  int  `json:"scheduled_hour"`
+	Realtime       bool `json:"realtime"`
+	ScanWorkers    int  `json:"scan_workers"`
+	FileRatePerSec int  `json:"file_rate_per_sec"`
 }
 
 // Capacity is what this server actually has, and what the panel proposes when a
@@ -79,6 +84,7 @@ type Effective struct {
 	CPUPercent     int `json:"cpu_percent"`
 	RAMMB          int `json:"ram_mb"`
 	IOWeight       int `json:"io_weight"`
+	CPUWeight      int `json:"cpu_weight"`
 	ScanWorkers    int `json:"scan_workers"`
 	FileRatePerSec int `json:"file_rate_per_sec"`
 }
@@ -95,6 +101,7 @@ const (
 	ReasonRAMTooSmall      = "av_ram_too_small"
 	ReasonWorkersRange     = "av_scan_workers_out_of_range"
 	ReasonFileRateRange    = "av_file_rate_out_of_range"
+	ReasonCPUWeightRange   = "av_cpu_weight_out_of_range"
 )
 
 // Refusal carries a stable code beside its English message.
@@ -149,6 +156,24 @@ const MaxScanWorkers = 32
 // which is far faster than any disk can serve a file anyway, so the bound costs
 // nothing real and removes the value that would crash the worker.
 const MaxFileRatePerSec = 100000
+
+// MaxCgroupWeight is the ceiling systemd accepts for CPUWeight and IOWeight.
+// Both map to the same cgroup v2 idea, so they share one bound.
+const MaxCgroupWeight = 10000
+
+// defaultCPUWeight is what a CPU weight of 0 resolves to.
+//
+// It is the same number IOWeight already resolves to, and for the same reason:
+// the scan is worth half of a site it is protecting. A weight is a SHARE, so
+// this costs nothing on an idle server. Measured on cgroup v2 with both groups
+// pinned to one core, a weight-10 group alone took 99% of that core, and the
+// same group against a weight-100 group took 9% while the other took 90%.
+//
+// It is deliberately not 1. A scan that never gets the processor under
+// sustained load never finishes, and a sweep that ran out of its budget is
+// recorded as a partial one, which is the answer this whole feature exists to
+// avoid producing every night.
+const defaultCPUWeight = 50
 
 // ServerCapacity MEASURES the host. It never assumes.
 func ServerCapacity() Capacity {
@@ -227,6 +252,14 @@ func (s Settings) Resolve(c Capacity) Effective {
 	}
 	if e.IOWeight <= 0 {
 		e.IOWeight = 50
+	}
+	// A weight of 0 never reaches the slice. systemd REFUSES CPUWeight=0 with
+	// "Numerical result out of range" and then IGNORES the line, leaving the
+	// kernel default of 100, so the scan would silently compete with tenant
+	// sites on equal footing while the screen showed a number.
+	e.CPUWeight = s.CPUWeight
+	if e.CPUWeight <= 0 {
+		e.CPUWeight = defaultCPUWeight
 	}
 	e.ScanWorkers = s.ScanWorkers
 	if e.ScanWorkers <= 0 {
@@ -333,12 +366,12 @@ func Read(ctx context.Context, db *sql.DB) (Settings, error) {
 	var s Settings
 	err := db.QueryRowContext(ctx, `SELECT rule_engine, location_heuristics, wp_integrity,
 		critical_threshold, auto_quarantine, scope, excluded_paths,
-		cpu_percent, ram_mb, io_weight, scheduled_scan, scheduled_hour,
+		cpu_percent, ram_mb, io_weight, cpu_weight, scheduled_scan, scheduled_hour,
 		realtime, scan_workers, file_rate_per_sec
 		FROM av_settings WHERE id=1`).
 		Scan(&s.RuleEngine, &s.LocationHeuristics, &s.WPIntegrity,
 			&s.CriticalThreshold, &s.AutoQuarantine, &s.Scope, &s.ExcludedPaths,
-			&s.CPUPercent, &s.RAMMB, &s.IOWeight, &s.ScheduledScan, &s.ScheduledHour,
+			&s.CPUPercent, &s.RAMMB, &s.IOWeight, &s.CPUWeight, &s.ScheduledScan, &s.ScheduledHour,
 			&s.Realtime, &s.ScanWorkers, &s.FileRatePerSec)
 	return s, err
 }
@@ -357,8 +390,18 @@ func (s Settings) Validate() error {
 			"critical threshold must be at least "+strconv.Itoa(MinCriticalThreshold)+
 				" (a lower one reports every inspected file as malware)")
 	}
-	if s.IOWeight < 1 || s.IOWeight > 10000 {
-		return refuse(ReasonIOWeightRange, "io weight must be between 1 and 10000")
+	if s.IOWeight < 1 || s.IOWeight > MaxCgroupWeight {
+		return refuse(ReasonIOWeightRange,
+			"io weight must be between 1 and "+strconv.Itoa(MaxCgroupWeight))
+	}
+	// This is the ONLY place a bad weight is caught. systemd parses
+	// CPUWeight=0 as out of range, prints "ignoring", and starts anyway with
+	// the kernel default, and `systemd-analyze verify` still exits 0 on that
+	// file (both measured on systemd 257), so nothing downstream reports it.
+	if s.CPUWeight < 0 || s.CPUWeight > MaxCgroupWeight {
+		return refuse(ReasonCPUWeightRange,
+			"cpu weight must be between 1 and "+strconv.Itoa(MaxCgroupWeight)+
+				" or 0 for automatic")
 	}
 	if s.CPUPercent < 0 || s.RAMMB < 0 {
 		return refuse(ReasonNegativeLimit, "resource limits cannot be negative (0 means automatic)")
@@ -388,6 +431,26 @@ func (s Settings) Validate() error {
 	return nil
 }
 
+// writeRow stores the settings and nothing else.
+//
+// It is separate from Write so the column list can be exercised against a real
+// server without also reaching systemd. The two lists here and in Read are
+// written by hand, and a name that drifts from the schema COMPILES: the failure
+// shows up only as a setting that saves and reads back as its zero value.
+func writeRow(ctx context.Context, db *sql.DB, s Settings) error {
+	_, err := db.ExecContext(ctx, `UPDATE av_settings SET
+		rule_engine=?, location_heuristics=?, wp_integrity=?,
+		critical_threshold=?, auto_quarantine=?, scope=?, excluded_paths=?,
+		cpu_percent=?, ram_mb=?, io_weight=?, cpu_weight=?, scheduled_scan=?, scheduled_hour=?,
+		realtime=?, scan_workers=?, file_rate_per_sec=?
+		WHERE id=1`,
+		s.RuleEngine, s.LocationHeuristics, s.WPIntegrity,
+		s.CriticalThreshold, s.AutoQuarantine, s.Scope, s.ExcludedPaths,
+		s.CPUPercent, s.RAMMB, s.IOWeight, s.CPUWeight, s.ScheduledScan, s.ScheduledHour,
+		s.Realtime, s.ScanWorkers, s.FileRatePerSec)
+	return err
+}
+
 // Write validates, stores, and then applies the resource limits.
 //
 // The two are inseparable. Storing the row without rewriting the slice leaves
@@ -397,16 +460,7 @@ func Write(ctx context.Context, db *sql.DB, s Settings) error {
 	if err := s.Validate(); err != nil {
 		return err
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE av_settings SET
-		rule_engine=?, location_heuristics=?, wp_integrity=?,
-		critical_threshold=?, auto_quarantine=?, scope=?, excluded_paths=?,
-		cpu_percent=?, ram_mb=?, io_weight=?, scheduled_scan=?, scheduled_hour=?,
-		realtime=?, scan_workers=?, file_rate_per_sec=?
-		WHERE id=1`,
-		s.RuleEngine, s.LocationHeuristics, s.WPIntegrity,
-		s.CriticalThreshold, s.AutoQuarantine, s.Scope, s.ExcludedPaths,
-		s.CPUPercent, s.RAMMB, s.IOWeight, s.ScheduledScan, s.ScheduledHour,
-		s.Realtime, s.ScanWorkers, s.FileRatePerSec); err != nil {
+	if err := writeRow(ctx, db, s); err != nil {
 		return err
 	}
 	if err := ApplyLimits(s); err != nil {
