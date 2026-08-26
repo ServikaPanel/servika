@@ -61,3 +61,33 @@ html.dark ::-webkit-scrollbar {
 html.dark ::-webkit-scrollbar-track { background: #1e293b; }
 html.dark ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
 html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* The antivirus status shield.
+   Nothing moves while the server is idle: motion here means a scan is actually
+   running, so it is information rather than decoration. Only the two classes
+   the shield adds while scanning carry an animation. */
+@keyframes svk-av-radar {
+  0%   { transform: scale(.55); opacity: .7 }
+  100% { transform: scale(1.7); opacity: 0 }
+}
+@keyframes svk-av-sweep {
+  to { transform: rotate(360deg) }
+}
+.svk-av-radar {
+  transform-origin: 60px 60px;
+  animation: svk-av-radar 2.6s ease-out infinite;
+}
+.svk-av-radar-late { animation-delay: 1.3s }
+.svk-av-sweep {
+  transform-origin: 60px 60px;
+  animation: svk-av-sweep 2.6s linear infinite;
+}
+
+/* A reader who asked their system for less motion gets none. The shield still
+   draws and still changes colour, so no information is lost. */
+@media (prefers-reduced-motion: reduce) {
+  .svk-av-radar,
+  .svk-av-sweep {
+    animation: none;
+  }
+}
