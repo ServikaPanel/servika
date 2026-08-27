@@ -620,7 +620,11 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	var socket string
 	provisioner.WriteDebugShim(h.DB, systemUser, id)
 	if provisioner.TenantFPMActive(systemUser) {
-		socket, err = provisioner.EnableTenantFPM(h.DB, id, systemUser, version)
+		// The GUARDED variant: this is a person saving one domain's settings, so
+		// a master that starts and then dies is worth watching for and putting
+		// back. The watching is asynchronous and adds nothing to this response.
+		// The startup and drift paths keep calling the plain EnableTenantFPM.
+		socket, err = provisioner.EnableTenantFPMGuarded(h.DB, id, systemUser, version)
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply tenant PHP-FPM configuration")
 			return
