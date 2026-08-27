@@ -394,7 +394,15 @@ func scanPosts(ctx context.Context, handle *sql.DB, table string) ([]Finding, er
 // theme storing an analytics script are each one signal, and reporting either
 // would report a working site.
 func weighRow(table, kind string, id int64, name, value string) (Finding, bool) {
-	matches := evaluateDatabaseValue(clampValue(value))
+	// The rule set follows the CONTENT KIND, not the table it came from. An
+	// option value is serialized configuration and a post body is HTML somebody
+	// wrote, so a rule matching a bare PHP function name is evidence in the first
+	// and prose in the second (the measured corpora are in dbrules.go).
+	evaluate := evaluateDatabaseValue
+	if kind == "post" {
+		evaluate = evaluateDatabasePost
+	}
+	matches := evaluate(clampValue(value))
 	if len(matches) == 0 {
 		return Finding{}, false
 	}

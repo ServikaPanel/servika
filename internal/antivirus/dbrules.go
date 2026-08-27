@@ -23,10 +23,42 @@ package antivirus
 
 import "regexp"
 
-// extDatabase is the pseudo-extension these rules are scoped to. It can never
-// collide with a real file: the walk lowercases a real extension and every real
-// one begins with a dot.
-const extDatabase = "<database>"
+// extDatabase and extPost are the pseudo-extensions these rules are scoped to.
+// Neither can collide with a real file: the walk lowercases a real extension and
+// every real one begins with a dot.
+//
+// A POST value is a third distribution again, and the same argument that
+// separates this file from the source rules separates the two of these. An
+// option value is serialized configuration that WordPress loads on every
+// request; post content is HTML rendered in a browser, and the PHP function
+// names in it are the subject somebody is writing ABOUT. Measured against seven
+// realistic post bodies, all of which pass postPrefilter and are therefore read:
+// four produced findings and two were critical, including a post explaining that
+// backdoors hide a payload with base64_decode() and run it with eval(). A
+// WordPress blog about PHP security is exactly the site a hosting customer runs.
+const (
+	extDatabase = "<database>"
+	extPost     = "<database-post>"
+)
+
+// postApplicable names the rules that also judge post content.
+//
+// Each of these requires a CONSTRUCT with no prose counterpart: request data
+// adjacent to a sink, a decoder adjacent to eval, or a <script> carrying a
+// decoder. Everything else in the set below is a bare PHP function NAME, and a
+// name in prose is what a blog about PHP is made of. Measured on the same
+// corpora, this scoping reports none of the seven prose bodies and still reports
+// all five real injections as critical.
+//
+// The dividing line is NOT the weight. DB.Webshell.FilesMan and
+// DB.Webshell.PregReplaceE are weightProof and still bare-name shaped: the
+// second convicted a post explaining that PHP 7 removed the /e modifier.
+var postApplicable = map[string]bool{
+	"DB.Webshell.EvalDecoder":      true,
+	"DB.Webshell.AssertInput":      true,
+	"DB.Webshell.SystemInput":      true,
+	"DB.Injected.ObfuscatedScript": true,
+}
 
 // dbHeuristics is the weighed rule set for a value read out of a tenant's
 // WordPress tables.
@@ -36,6 +68,9 @@ func buildDatabaseHeuristics() []rule {
 	out := make([]rule, 0, len(databaseRules))
 	for _, r := range databaseRules {
 		r.exts = []string{extDatabase}
+		if postApplicable[r.name] {
+			r.exts = append(r.exts, extPost)
+		}
 		out = append(out, r)
 	}
 	return out
@@ -91,6 +126,16 @@ var databaseRules = []rule{
 // file content and declares a file kind, so a package cannot reach this set.
 func evaluateDatabaseValue(value string) []match {
 	return evaluateWith(dbHeuristics, extDatabase, []byte(value))
+}
+
+// evaluateDatabasePost weighs one post body, which is the narrower set.
+//
+// It is a separate function rather than a parameter so the two callers in
+// dbscan.go say which distribution they are judging at the call site: a rule set
+// applied to the wrong kind of content is the defect this exists to prevent, and
+// it is silent in both directions.
+func evaluateDatabasePost(value string) []match {
+	return evaluateWith(dbHeuristics, extPost, []byte(value))
 }
 
 // dbValueLimit bounds how much of one value is weighed.
