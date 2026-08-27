@@ -411,11 +411,30 @@ func migrateTenantPoolLayout(systemUser string) error {
 	return os.Rename(legacy, tenantMainPoolPath(systemUser))
 }
 
+// renderTenantUnit writes the systemd unit that runs one tenant's PHP.
+//
+// The StartLimit keys belong to [Unit] and NOWHERE else. systemd answers
+// `Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.` while
+// silently ACCEPTING StartLimitBurst there, so the [Service] spelling leaves the
+// burst counting against the default ten-second window. `internal/apps`,
+// `internal/laravel` and `internal/hostapps` all carry them; this renderer was
+// the one left out, and it is the one running a CUSTOMER's site.
+//
+// The default window is what makes their absence dangerous rather than merely
+// inconsistent: with no keys systemd uses 10s and 5 starts, and `RestartSec=2`
+// puts starts at t=0,2,4,6,8, exactly on that boundary. Whichever side it lands
+// on is bad in its own direction. If the limit is never reached the master
+// restarts every two seconds for good; if it is, the unit reaches `failed` and
+// the site stays 502 with nothing putting it back. 300s over 5 starts is the
+// value the other three renderers already use, and it makes the crash-loop
+// reach `failed` promptly, which is the state guardPostStart reads.
 func renderTenantUnit(systemUser, fpmBinary string) string {
 	return fmt.Sprintf(`[Unit]
 Description=Servika per-tenant PHP-FPM for %s
 After=network.target
 Before=nginx.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=notify
