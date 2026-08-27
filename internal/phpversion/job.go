@@ -116,6 +116,11 @@ func startPHPOp(descriptor opDescriptor, script string) error {
 	if err := os.WriteFile(config.PHPOpState(), body, 0o640); err != nil {
 		return fmt.Errorf("record the operation: %w", err)
 	}
+	// A dnf install or remove is about to change which versions exist, so the
+	// scan cache stops being an answer about this server the moment the unit
+	// starts. Dropped BEFORE launching rather than after, since the launch
+	// returns as soon as systemd-run has accepted the unit.
+	InvalidateAllVersions()
 	return launchPHPOp(script)
 }
 
@@ -143,8 +148,17 @@ func readOpDescriptor() opDescriptor {
 // before this page was opened, is picked up rather than lost.
 func (h *Handlers) Status(w http.ResponseWriter, _ *http.Request) {
 	descriptor := readOpDescriptor()
+	running := phpOpRunning()
+	// This is the TRANSITION point, and it is observed for free: the screen polls
+	// this endpoint for as long as an operation runs, so the first poll that sees
+	// it stopped is the first moment the version list can have changed. Putting
+	// phpOpRunning on the cache's READ path instead would trade the 24 execs the
+	// cache saves for one `systemctl is-active` on every read.
+	if !running {
+		InvalidateAllVersions()
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"running":  phpOpRunning(),
+		"running":  running,
 		"version":  descriptor.Version,
 		"resource": descriptor.Resource,
 		"action":   descriptor.Action,

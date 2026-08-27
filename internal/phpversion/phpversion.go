@@ -289,20 +289,84 @@ func Discover(m VersionMetadata) Version {
 	return s
 }
 
-// AllVersions discovers all supported versions.
-func AllVersions() []Version {
-	out := make([]Version, 0, len(SupportedVersions))
-	for _, m := range SupportedVersions {
-		out = append(out, Discover(m))
-	}
-	// Sort installed versions first, then by version descending.
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Loaded != out[j].Loaded {
-			return out[i].Loaded
+// ---- Version scan cache ----
+//
+// PERF: Discover execs `php -v` AND `php -m` for every INSTALLED version, so one
+// AllVersions() call costs two execs per installed version. Measured with a
+// counter against the real call chain, GET /php-settings runs AllVersions()
+// TWICE (versionInfo resolves the domain's version, then runtimeChoicesWithSource
+// lists them all), which on a host carrying six versions is 24 execs on the
+// request path. The dnf half of Discover was already off the request path
+// through availabilityCache above; these execs were not.
+//
+// The set of installed versions only changes when somebody installs or removes
+// one, so it is cached. The TTL is a backstop for a change made OUTSIDE the
+// panel, such as an operator running dnf by hand; changes the panel itself makes
+// are invalidated explicitly at the two points that make them (see job.go).
+const allVersionsTTL = 60 * time.Second
+
+var (
+	allVersionsMu    sync.Mutex
+	allVersionsCache []Version
+	allVersionsAt    time.Time
+
+	// discoverAll is the uncached scan. It is a variable so a test can count how
+	// often the cache actually recomputes, which is the same shape dnfProbe,
+	// phpOpState and launchPHPOp already use in this package.
+	discoverAll = func() []Version {
+		out := make([]Version, 0, len(SupportedVersions))
+		for _, m := range SupportedVersions {
+			out = append(out, Discover(m))
 		}
-		return compareVersions(out[i].Version, out[j].Version) > 0
-	})
-	return out
+		// Sort installed versions first, then by version descending.
+		sort.SliceStable(out, func(i, j int) bool {
+			if out[i].Loaded != out[j].Loaded {
+				return out[i].Loaded
+			}
+			return compareVersions(out[i].Version, out[j].Version) > 0
+		})
+		return out
+	}
+)
+
+// InvalidateAllVersions drops the scan cache.
+//
+// It is called from the points that CHANGE the answer rather than left to the
+// TTL, because a version install or removal is exactly the moment an operator is
+// watching the list and a minute of stale data reads as the operation having
+// done nothing.
+func InvalidateAllVersions() {
+	allVersionsMu.Lock()
+	allVersionsCache = nil
+	allVersionsMu.Unlock()
+}
+
+// AllVersions discovers all supported versions.
+//
+// The returned slice is a COPY. Handing out the cached slice would give every
+// caller one backing array, so a caller that sorted or appended to its result
+// would silently rewrite what the next one reads. Nine elements cost nothing and
+// the whole class of defect goes with them.
+func AllVersions() []Version {
+	allVersionsMu.Lock()
+	if allVersionsCache != nil && time.Since(allVersionsAt) < allVersionsTTL {
+		cached := append([]Version(nil), allVersionsCache...)
+		allVersionsMu.Unlock()
+		return cached
+	}
+	allVersionsMu.Unlock()
+
+	// Deliberately computed OUTSIDE the lock: Discover execs, and holding the
+	// mutex across it would serialise every concurrent reader behind one scan.
+	// Two racing scans both write and the last wins, which is harmless because
+	// the answer does not depend on who computed it.
+	out := discoverAll()
+
+	allVersionsMu.Lock()
+	allVersionsCache = out
+	allVersionsAt = time.Now()
+	allVersionsMu.Unlock()
+	return append([]Version(nil), out...)
 }
 
 func compareVersions(a, b string) int {

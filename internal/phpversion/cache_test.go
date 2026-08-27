@@ -1,9 +1,11 @@
 package phpversion
 
 import (
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // resetAvailabilityCache clears the cache for deterministic test runs.
@@ -205,5 +207,169 @@ func TestAvailabilityVerifyThreeState(t *testing.T) {
 	}
 	if a, c := availabilityVerify(VersionMetadata{Version: "8.3", Code: "", Resource: "appstream"}); !a || !c {
 		t.Fatalf("appstream should be (true,true): a=%v c=%v", a, c)
+	}
+}
+
+// ---- Version scan cache ----
+//
+// What the cache is FOR is measured elsewhere: with a counter against the real
+// call chain, GET /php-settings runs AllVersions() twice, and each run execs
+// `php -v` and `php -m` per installed version. What is measured here is that the
+// cache answers the same thing the scan would, that it stops being an answer at
+// the points that change it, and that one caller cannot rewrite what the next
+// one reads.
+
+// countedScan replaces the scan with a fixed answer and counts how often it
+// runs. The cache is emptied first, because it is package state every test in
+// this file shares.
+func countedScan(t *testing.T, versions ...Version) *atomic.Int64 {
+	t.Helper()
+	var scans atomic.Int64
+	previous := discoverAll
+	discoverAll = func() []Version {
+		scans.Add(1)
+		return append([]Version(nil), versions...)
+	}
+	t.Cleanup(func() {
+		discoverAll = previous
+		InvalidateAllVersions()
+	})
+	InvalidateAllVersions()
+	return &scans
+}
+
+func scanned(version, real string) Version {
+	return Version{
+		VersionMetadata: VersionMetadata{Version: version, Resource: "remi"},
+		Loaded:          true,
+		RealVersion:     real,
+	}
+}
+
+// The whole point: the second reader of one request pays nothing.
+func TestASecondCallInsideTheWindowDoesNotScanAgain(t *testing.T) {
+	scans := countedScan(t, scanned("8.3", "8.3.31"))
+
+	first, second := AllVersions(), AllVersions()
+	if got := scans.Load(); got != 1 {
+		t.Errorf("two calls ran %d scans, want 1", got)
+	}
+	if len(first) != 1 || len(second) != 1 {
+		t.Fatalf("the cached answer lost its contents: %d then %d", len(first), len(second))
+	}
+	if first[0].RealVersion != second[0].RealVersion {
+		t.Errorf("the cached answer differs from the scanned one: %q vs %q",
+			first[0].RealVersion, second[0].RealVersion)
+	}
+}
+
+// The TTL is the backstop for a change made outside the panel, so it has to
+// actually expire. The clock is moved rather than slept on: waiting out the
+// shipped sixty seconds would measure the same thing at sixty times the cost.
+func TestTheAnswerIsScannedAgainOnceTheWindowHasPassed(t *testing.T) {
+	scans := countedScan(t, scanned("8.3", "8.3.31"))
+
+	_ = AllVersions()
+	allVersionsMu.Lock()
+	allVersionsAt = time.Now().Add(-allVersionsTTL - time.Second)
+	allVersionsMu.Unlock()
+	_ = AllVersions()
+
+	if got := scans.Load(); got != 2 {
+		t.Errorf("a call past the window ran %d scans in total, want 2", got)
+	}
+}
+
+// A change the panel itself makes is not left to the window, because the
+// operator is watching the list at exactly that moment.
+func TestInvalidatingMakesTheNextCallScan(t *testing.T) {
+	scans := countedScan(t, scanned("8.3", "8.3.31"))
+
+	_ = AllVersions()
+	InvalidateAllVersions()
+	_ = AllVersions()
+
+	if got := scans.Load(); got != 2 {
+		t.Errorf("a call after invalidation ran %d scans in total, want 2", got)
+	}
+}
+
+// One caller must not be able to rewrite what the next one reads. This is what
+// handing out the cache's own slice costs, and it is measured on BOTH paths:
+// the call that filled the cache and the call that was served from it.
+func TestOneCallerCannotRewriteWhatTheNextOneReads(t *testing.T) {
+	countedScan(t, scanned("8.3", "8.3.31"))
+
+	filled := AllVersions() // the scan
+	filled[0].RealVersion = "rewritten by the first caller"
+	served := AllVersions() // the cache
+	if served[0].RealVersion != "8.3.31" {
+		t.Errorf("the caller that ran the scan rewrote the cache: %q", served[0].RealVersion)
+	}
+
+	served[0].RealVersion = "rewritten by the second caller"
+	if next := AllVersions(); next[0].RealVersion != "8.3.31" {
+		t.Errorf("a caller served from the cache rewrote it: %q", next[0].RealVersion)
+	}
+}
+
+// A dnf install or remove is about to change which versions exist, so the cache
+// stops being an answer the moment the unit starts.
+func TestStartingAnOperationDropsTheScan(t *testing.T) {
+	opPaths(t)
+	stubUnit(t, "active", nil)
+	scans := countedScan(t, scanned("8.3", "8.3.31"))
+	m := remiVersion(t)
+
+	_ = AllVersions()
+	if err := startPHPOp(opDescriptor{Version: m.Version, Resource: m.Resource, Action: "install"},
+		installScript(m)); err != nil {
+		t.Fatalf("startPHPOp: %v", err)
+	}
+	_ = AllVersions()
+
+	if got := scans.Load(); got != 2 {
+		t.Errorf("starting an operation left %d scans in total, want 2", got)
+	}
+}
+
+// The transition is observed for free: the screen polls this endpoint for as
+// long as an operation runs, so the first poll that sees it stopped is the first
+// moment the list can have changed.
+func TestStatusDropsTheScanOnceTheOperationHasStopped(t *testing.T) {
+	opPaths(t)
+	stubUnit(t, "inactive", nil)
+	scans := countedScan(t, scanned("8.3", "8.3.31"))
+
+	_ = AllVersions()
+	recorder := httptest.NewRecorder()
+	(&Handlers{}).Status(recorder, httptest.NewRequest("GET", "/php-versions/status", nil))
+	if recorder.Code != 200 {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+	_ = AllVersions()
+
+	if got := scans.Load(); got != 2 {
+		t.Errorf("a finished operation left %d scans in total, want 2", got)
+	}
+}
+
+// The other direction, or the check above would pass on a Status that drops the
+// cache unconditionally: while dnf is still running the version list cannot have
+// changed yet, and every poll would pay for a full scan.
+func TestStatusKeepsTheScanWhileTheOperationIsStillRunning(t *testing.T) {
+	opPaths(t)
+	stubUnit(t, "active", nil)
+	scans := countedScan(t, scanned("8.3", "8.3.31"))
+
+	_ = AllVersions()
+	for range 3 {
+		recorder := httptest.NewRecorder()
+		(&Handlers{}).Status(recorder, httptest.NewRequest("GET", "/php-versions/status", nil))
+	}
+	_ = AllVersions()
+
+	if got := scans.Load(); got != 1 {
+		t.Errorf("polling a running operation ran %d scans, want 1", got)
 	}
 }
