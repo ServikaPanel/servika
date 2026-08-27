@@ -27,6 +27,35 @@ func TestTheResponseCarriesEveryViewOfTheLimits(t *testing.T) {
 	}
 }
 
+// The screen draws a slider for the CPU quota and the memory ceiling, and a
+// slider is only correct while its bounds are the ones the write path enforces.
+// The alternative is a copy of the numbers in the frontend, which drifts in
+// silence: the limit moves here and the control goes on offering a value
+// Validate refuses.
+func TestTheCapacityCarriesTheBoundsTheWritePathEnforces(t *testing.T) {
+	c := ServerCapacity()
+	if c.MaxCPUPercent != maxCPUPercent {
+		t.Errorf("the reported CPU ceiling is %d, but Validate enforces %d",
+			c.MaxCPUPercent, maxCPUPercent)
+	}
+	if c.MinRAMMB != minRAMMB {
+		t.Errorf("the reported memory floor is %d, but Validate enforces %d",
+			c.MinRAMMB, minRAMMB)
+	}
+
+	// And both reach the wire, or the screen reads them as absent and falls
+	// back to a number nothing here chose.
+	body, err := json.Marshal(Response{Capacity: c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"max_cpu_percent"`, `"min_ram_mb"`} {
+		if !strings.Contains(string(body), field) {
+			t.Errorf("the settings response no longer carries %s: %s", field, body)
+		}
+	}
+}
+
 // A refused FIELD is the operator's input and carries a stable code the screen
 // words in twelve languages. Anything else is the server failing, and
 // presenting that as a field they typed wrong sends them looking in the wrong

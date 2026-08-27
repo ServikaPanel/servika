@@ -71,12 +71,19 @@ type Settings struct {
 // The screen shows it so an operator sizing a limit sees "two of eight cores"
 // rather than an abstract percentage. Choosing a ceiling without knowing what
 // is being capped is not a decision.
+//
+// It also carries the bounds Validate enforces, so a control on the screen can
+// be drawn from the numbers this package actually applies rather than from a
+// copy of them. A copy is what drifts: the limit moves here and the control
+// goes on offering a value the write path refuses.
 type Capacity struct {
 	CPUCores       int `json:"cpu_cores"`
 	TotalRAMMB     int `json:"total_ram_mb"`
 	SuggestCPUPct  int `json:"suggest_cpu_percent"`
 	SuggestRAMMB   int `json:"suggest_ram_mb"`
 	SuggestWorkers int `json:"suggest_workers"`
+	MaxCPUPercent  int `json:"max_cpu_percent"`
+	MinRAMMB       int `json:"min_ram_mb"`
 }
 
 // Effective is a Settings after every "0 = automatic" has been resolved.
@@ -200,6 +207,8 @@ func ServerCapacity() Capacity {
 	}
 
 	c.SuggestWorkers = suggestWorkers(c.SuggestCPUPct)
+	c.MaxCPUPercent = maxCPUPercent
+	c.MinRAMMB = minRAMMB
 	return c
 }
 
