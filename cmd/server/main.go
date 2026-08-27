@@ -1125,6 +1125,13 @@ func main() {
 				// on, and they appeared on no screen but the detail of the one
 				// sweep that produced them.
 				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/history", avH.AdminHistory)
+				// One row per domain with what the scanner knows about it, so
+				// "which of my sites is infected" has a screen instead of being
+				// answered by grouping a detection list by eye. Scoped like the
+				// two lists around it. Scanning ONE domain needs no route here:
+				// /domains/{id}/antivirus/scan already exists under CustomerScope,
+				// which is wider than admin-only and is what this screen calls.
+				r.With(middleware.ResellerOrAbove).Get("/admin/antivirus/domains", avH.AdminDomains)
 				// Whether a domain is on a DNS blocklist. Reading is scoped the
 				// same way, because a listing is the domain owner's problem to
 				// act on. Changing the zone list is AdminOnly: it decides which
