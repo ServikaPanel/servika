@@ -214,8 +214,12 @@ func TestTheExclusionListIgnoresBlankLines(t *testing.T) {
 // Every refusal needs a failing path and a passing one, or the check is not
 // measuring anything.
 func TestValidateRefusesWhatTheScannerCouldNotHonour(t *testing.T) {
+	// A fixed capacity rather than the real host's, so the table below says the
+	// same thing on a laptop and on a hosting server.
+	host := Capacity{CPUCores: 8, TotalRAMMB: 16384}
+
 	ok := Settings{Scope: ScopeHost, CriticalThreshold: 100, IOWeight: 50, ScheduledHour: 4}
-	if err := ok.Validate(); err != nil {
+	if err := ok.Validate(host); err != nil {
 		t.Fatalf("a valid row was refused: %v", err)
 	}
 
@@ -234,13 +238,17 @@ func TestValidateRefusesWhatTheScannerCouldNotHonour(t *testing.T) {
 		{"negative ram", func(s *Settings) { s.RAMMB = -1 }, ReasonNegativeLimit},
 		{"cpu beyond 64 cores", func(s *Settings) { s.CPUPercent = maxCPUPercent + 1 }, ReasonCPUPercentTooBig},
 		{"ram below the working set", func(s *Settings) { s.RAMMB = minRAMMB - 1 }, ReasonRAMTooSmall},
+		// A ceiling at or above what the machine has can never fire, so it is a
+		// number on the screen and nothing in the kernel.
+		{"ram at what the machine has", func(s *Settings) { s.RAMMB = 16384 }, ReasonRAMTooLarge},
+		{"ram above what the machine has", func(s *Settings) { s.RAMMB = 999999 }, ReasonRAMTooLarge},
 		{"hour below range", func(s *Settings) { s.ScheduledHour = -1 }, ReasonHourOutOfRange},
 		{"hour above range", func(s *Settings) { s.ScheduledHour = 24 }, ReasonHourOutOfRange},
 	}
 	for _, c := range cases {
 		s := ok
 		c.set(&s)
-		err := s.Validate()
+		err := s.Validate(host)
 		if err == nil {
 			t.Errorf("%s: accepted", c.name)
 			continue
@@ -253,14 +261,39 @@ func TestValidateRefusesWhatTheScannerCouldNotHonour(t *testing.T) {
 	// Zero is automatic, not a refused negative.
 	auto := ok
 	auto.CPUPercent, auto.RAMMB = 0, 0
-	if err := auto.Validate(); err != nil {
+	if err := auto.Validate(host); err != nil {
 		t.Errorf("automatic limits were refused: %v", err)
 	}
 	// A hour of 0 is midnight, not an unset value.
 	midnight := ok
 	midnight.ScheduledHour = 0
-	if err := midnight.Validate(); err != nil {
+	if err := midnight.Validate(host); err != nil {
 		t.Errorf("midnight was refused: %v", err)
+	}
+	// One below what the machine has is a real ceiling and is accepted.
+	fits := ok
+	fits.RAMMB = 16383
+	if err := fits.Validate(host); err != nil {
+		t.Errorf("a ceiling below the machine's memory was refused: %v", err)
+	}
+}
+
+// A host whose memory could not be measured keeps working. There is no honest
+// number to compare a ceiling against there, and refusing every ceiling would
+// take the setting away on exactly the machines the panel knows least about.
+func TestAnUnmeasurableHostDoesNotRefuseEveryCeiling(t *testing.T) {
+	blind := Capacity{CPUCores: 8, TotalRAMMB: 0}
+	s := Settings{Scope: ScopeHost, CriticalThreshold: 100, IOWeight: 50, ScheduledHour: 4, RAMMB: 999999}
+	if err := s.Validate(blind); err != nil {
+		t.Errorf("an unmeasurable host refused a ceiling: %v", err)
+	}
+
+	// The same value is refused the moment the memory IS measured, so the skip
+	// above is the measurement failing rather than the rule being absent.
+	seeing := Capacity{CPUCores: 8, TotalRAMMB: 16384}
+	err := s.Validate(seeing)
+	if got := ReasonCode(err); got != ReasonRAMTooLarge {
+		t.Errorf("a measured host answered %q, want %q", got, ReasonRAMTooLarge)
 	}
 }
 
@@ -377,6 +410,7 @@ func TestAnUnsetFileRateStaysUnlimited(t *testing.T) {
 // Both new fields are refused out of range rather than clamped, because a
 // clamped value leaves the screen showing a number the scan is not using.
 func TestTheThroughputSettingsAreRefusedOutOfRange(t *testing.T) {
+	host := Capacity{CPUCores: 8, TotalRAMMB: 16384}
 	base := Settings{Scope: ScopeHost, CriticalThreshold: 100, IOWeight: 50}
 	cases := []struct {
 		name string
@@ -390,7 +424,7 @@ func TestTheThroughputSettingsAreRefusedOutOfRange(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := ReasonCode(c.s.Validate()); got != c.code {
+			if got := ReasonCode(c.s.Validate(host)); got != c.code {
 				t.Errorf("refused with %q, want %q", got, c.code)
 			}
 		})
@@ -399,7 +433,7 @@ func TestTheThroughputSettingsAreRefusedOutOfRange(t *testing.T) {
 	// be impossible.
 	ok := base
 	ok.ScanWorkers, ok.FileRatePerSec = 0, 0
-	if err := ok.Validate(); err != nil {
+	if err := ok.Validate(host); err != nil {
 		t.Errorf("the automatic values were refused: %v", err)
 	}
 }
@@ -430,6 +464,7 @@ func TestTheNewColumnsAreBothReadAndWritten(t *testing.T) {
 // exits 0. So a value refused by the kernel leaves no trace anywhere except a
 // scan that quietly competes with tenant sites on equal footing.
 func TestTheCPUWeightIsRefusedOutOfRange(t *testing.T) {
+	host := Capacity{CPUCores: 8, TotalRAMMB: 16384}
 	base := Settings{Scope: ScopeHost, CriticalThreshold: 100, IOWeight: 50}
 	for _, c := range []struct {
 		name   string
@@ -441,7 +476,7 @@ func TestTheCPUWeightIsRefusedOutOfRange(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			s := base
 			s.CPUWeight = c.weight
-			if got := ReasonCode(s.Validate()); got != ReasonCPUWeightRange {
+			if got := ReasonCode(s.Validate(host)); got != ReasonCPUWeightRange {
 				t.Errorf("refused with %q, want %q", got, ReasonCPUWeightRange)
 			}
 		})
@@ -451,7 +486,7 @@ func TestTheCPUWeightIsRefusedOutOfRange(t *testing.T) {
 	for _, weight := range []int{0, 1, MaxCgroupWeight} {
 		s := base
 		s.CPUWeight = weight
-		if err := s.Validate(); err != nil {
+		if err := s.Validate(host); err != nil {
 			t.Errorf("a weight of %d was refused: %v", weight, err)
 		}
 	}

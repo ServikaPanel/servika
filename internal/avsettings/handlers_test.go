@@ -110,7 +110,9 @@ func TestSavingAlsoApplies(t *testing.T) {
 		t.Error("the sweep timer is armed before the row it will read is stored")
 	}
 	// And the validation runs first, or an invalid value reaches the slice file.
-	validate := strings.Index(body, "if err := s.Validate(); err != nil {")
+	// Anchored on the CALL rather than on the whole line, so adding an argument
+	// to Validate does not silently stop this from measuring anything.
+	validate := strings.Index(body, "s.Validate(")
 	if validate < 0 || validate > update {
 		t.Error("a settings row is stored before it is validated")
 	}

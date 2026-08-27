@@ -99,6 +99,7 @@ const (
 	ReasonHourOutOfRange   = "av_scheduled_hour_out_of_range"
 	ReasonCPUPercentTooBig = "av_cpu_percent_too_large"
 	ReasonRAMTooSmall      = "av_ram_too_small"
+	ReasonRAMTooLarge      = "av_ram_too_large"
 	ReasonWorkersRange     = "av_scan_workers_out_of_range"
 	ReasonFileRateRange    = "av_file_rate_out_of_range"
 	ReasonCPUWeightRange   = "av_cpu_weight_out_of_range"
@@ -381,7 +382,12 @@ func Read(ctx context.Context, db *sql.DB) (Settings, error) {
 // Every check runs on the WRITE path rather than only where the screen draws
 // the field: a value stored here is read by a scheduler and by a detached
 // subprocess, neither of which has a form to refuse it in.
-func (s Settings) Validate() error {
+//
+// It takes the capacity because one of the rules genuinely depends on the
+// machine: a memory ceiling is only a ceiling while it is below what the host
+// has. Passing the measurement in rather than taking it here also keeps the
+// tests independent of whatever machine they run on.
+func (s Settings) Validate(c Capacity) error {
 	if s.Scope != ScopeHost && s.Scope != ScopeServer {
 		return refuse(ReasonScopeInvalid, "scope must be "+ScopeHost+" or "+ScopeServer)
 	}
@@ -414,6 +420,21 @@ func (s Settings) Validate() error {
 		return refuse(ReasonRAMTooSmall,
 			"memory ceiling must be at least "+strconv.Itoa(minRAMMB)+
 				"M or 0 for automatic (a lower one is killed rather than slowed)")
+	}
+	// The other end of the same rule the CPU quota already carries: the kernel
+	// accepts a MemoryMax the machine cannot reach, and such a ceiling can never
+	// fire, so the screen would report a limit that constrains nothing. The test
+	// is >= rather than >, because a ceiling equal to MemTotal is unreachable
+	// too: the kernel and every other process eat from the same memory.
+	//
+	// An unmeasurable host (TotalRAMMB 0, which is every machine without a
+	// readable /proc/meminfo) is skipped rather than refused. There is no honest
+	// number to compare against there, and refusing is the opposite of the
+	// direction SuggestRAMMB's clamp already takes for the same measurement.
+	if c.TotalRAMMB > 0 && s.RAMMB >= c.TotalRAMMB {
+		return refuse(ReasonRAMTooLarge,
+			"memory ceiling must be below this server's "+strconv.Itoa(c.TotalRAMMB)+
+				"M of memory or 0 for automatic (a higher one never takes effect)")
 	}
 	if s.ScheduledHour < 0 || s.ScheduledHour > 23 {
 		return refuse(ReasonHourOutOfRange, "scheduled hour must be between 0 and 23")
@@ -457,7 +478,7 @@ func writeRow(ctx context.Context, db *sql.DB, s Settings) error {
 // the panel reporting a limit the kernel has never heard of, which is the exact
 // failure this package exists to prevent.
 func Write(ctx context.Context, db *sql.DB, s Settings) error {
-	if err := s.Validate(); err != nil {
+	if err := s.Validate(ServerCapacity()); err != nil {
 		return err
 	}
 	if err := writeRow(ctx, db, s); err != nil {
