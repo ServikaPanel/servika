@@ -362,8 +362,11 @@ func (h *Handlers) QuarantineList(w http.ResponseWriter, r *http.Request) {
 // one narrows by the ownership chain, and NEITHER lets a caller name a file.
 // Everything below this point works from values read out of that row.
 func (h *Handlers) restoreEntry(systemUser, rel, stored string, qid int64) (string, string) {
-	// #nosec G304 -- path is built from config.QuarantineDir(), a validated system user and a stored name derived from a row id; no caller text reaches it.
-	source, err := os.Open(filepath.Join(userStore(systemUser), stored))
+	// Opened exactly as inspectEntry opens the same file. Two paths reading one
+	// file must not use two strengths of primitive, because the weaker one
+	// decides what the pair is worth: `stored` is interpolated from a DATABASE
+	// ROW, and a row outlives the code that wrote it.
+	source, err := files.OpenBeneath(userStore(systemUser), stored)
 	if err != nil {
 		return "", reasonFileMissing
 	}
@@ -391,7 +394,7 @@ func (h *Handlers) restoreEntry(systemUser, rel, stored string, qid int64) (stri
 	if _, err := h.DB.Exec(`UPDATE av_quarantine SET restored_at=NOW() WHERE id=?`, qid); err != nil {
 		return "", reasonRestoreRecordFail
 	}
-	_ = os.Remove(filepath.Join(userStore(systemUser), stored))
+	_ = files.RemoveAllBeneath(userStore(systemUser), stored)
 	return home + "/" + rel, ""
 }
 
@@ -422,7 +425,13 @@ func (h *Handlers) QuarantineRestore(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) deleteEntry(systemUser, stored string, qid int64) string {
 	// The file goes first. A row removed while the file survived would leave an
 	// orphan nothing can name, since the name is derived from the row id.
-	if err := os.Remove(filepath.Join(userStore(systemUser), stored)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	//
+	// RemoveAllBeneath rather than os.Remove for the reason restoreEntry opens
+	// through OpenBeneath. unlink(2) never follows the FINAL component, so the
+	// symlink half was already closed here; what was not is the traversal
+	// filepath.Join would perform on a `stored` that no longer looks the way
+	// this code wrote it.
+	if err := files.RemoveAllBeneath(userStore(systemUser), stored); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return reasonQuarantineFail
 	}
 	if _, err := h.DB.Exec(`DELETE FROM av_quarantine WHERE id=?`, qid); err != nil {

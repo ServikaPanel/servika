@@ -1,6 +1,7 @@
 package antivirus
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,6 +9,8 @@ import (
 	"testing"
 
 	"servika/internal/files"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // withStore points the quarantine store at a temporary directory for one test.
@@ -171,6 +174,157 @@ func TestOnlyATenantStoreCanBeRemoved(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(store, "c_site")); !os.IsNotExist(err) {
 		t.Error("the tenant store survived its own removal")
+	}
+}
+
+// unreachableDB is a handle that opens without connecting and fails on the first
+// statement. restoreEntry and deleteEntry act on the FILE before they touch the
+// database, so this lets the file half be measured on its own: the reason code
+// that comes back names the database step, which is the proof the file step ran.
+func unreachableDB(t *testing.T) *sql.DB {
+	t.Helper()
+	// Port 1 refuses immediately; sql.Open itself never dials.
+	handle, err := sql.Open("mysql", "u:p@tcp(127.0.0.1:1)/none")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = handle.Close() })
+	return handle
+}
+
+// A stored name that no longer looks the way this code wrote it may not reach
+// outside the store.
+//
+// `stored` is interpolated from av_quarantine.stored_name, a DATABASE ROW, and a
+// row outlives the code that wrote it. filepath.Join CLEANS a leading "..", so a
+// plain os.Open/os.Remove pair resolves such a name to a real file above the
+// store and acts on it as root.
+func TestAStoredNameCannotReachOutsideTheStore(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("safeio is Linux-only; the stub refuses everything")
+	}
+	store := withStore(t)
+	if err := os.MkdirAll(filepath.Join(store, "c_site"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A file one level ABOVE the tenant's own store directory.
+	outside := filepath.Join(store, "someone-elses-evidence")
+	if err := os.WriteFile(outside, []byte("not this tenant's"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handlers{DB: unreachableDB(t)}
+
+	if _, reason := h.restoreEntry("c_site", "public_html/shell.php", "../someone-elses-evidence", 1); reason != reasonFileMissing {
+		t.Errorf("a traversing stored name was opened for restore: reason %q", reason)
+	}
+	// Measured: RemoveAllBeneath answers nil for a traversing rel rather than an
+	// error. The ".." is resolved inside the jail, so the leaf names nothing and
+	// the removal is a no-op that reports success. What the caller must not do is
+	// reach the file, so the assertion that carries the boundary is the one below,
+	// not this reason code.
+	if reason := h.deleteEntry("c_site", "../someone-elses-evidence", 1); reason != reasonDeleteRecordFail {
+		t.Errorf("deleting a traversing stored name answered %q, want the database step to be the failure", reason)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("the file above the store was removed: %v", err)
+	}
+	// The read half is asserted through inspect, which reaches the same store
+	// with the same primitive and, unlike restore, does not build a path under
+	// /home that a test cannot create.
+	if _, reason := inspectEntry("c_site", "public_html/shell.php", "../someone-elses-evidence"); reason != reasonFileMissing {
+		t.Errorf("a traversing stored name was read: reason %q", reason)
+	}
+}
+
+// A symlink standing where a stored file belongs is refused rather than followed.
+//
+// The store is root-owned 0700 so no tenant can plant one today, which is why
+// this is hardening rather than a reachable bug. It is asserted anyway because
+// the two paths that read this file must not use two strengths of primitive:
+// inspectEntry already opens through openat2, and the weaker of the two is what
+// decides what the pair is worth.
+func TestASymlinkInTheStoreIsNotFollowed(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("safeio is Linux-only; the stub refuses everything")
+	}
+	store := withStore(t)
+	userDir := filepath.Join(store, "c_site")
+	if err := os.MkdirAll(userDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(t.TempDir(), "shadow")
+	if err := os.WriteFile(secret, []byte("root:$6$hash"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(userDir, "1_shell.php")); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handlers{DB: unreachableDB(t)}
+
+	if _, reason := h.restoreEntry("c_site", "public_html/shell.php", "1_shell.php", 1); reason != reasonFileMissing {
+		t.Errorf("the link was followed for restore: reason %q", reason)
+	}
+	if _, reason := inspectEntry("c_site", "public_html/shell.php", "1_shell.php"); reason != reasonFileMissing {
+		t.Errorf("inspect followed the link: reason %q", reason)
+	}
+
+	// Deleting removes the LINK and leaves its target alone. unlink(2) never
+	// follows a final component, so this half held before the change too; it is
+	// asserted so a later rewrite cannot lose it.
+	if reason := h.deleteEntry("c_site", "1_shell.php", 1); reason != reasonDeleteRecordFail {
+		t.Errorf("removing the link answered %q, want the database step to be the failure", reason)
+	}
+	if _, err := os.Lstat(filepath.Join(userDir, "1_shell.php")); !os.IsNotExist(err) {
+		t.Error("the link itself survived the deletion")
+	}
+	if _, err := os.Stat(secret); err != nil {
+		t.Errorf("the link's target was deleted: %v", err)
+	}
+}
+
+// The non-vacuity of the two above: an ORDINARY stored file is still opened and
+// still removed. Without this both would pass on a pair of calls that refuse
+// everything.
+//
+// restoreEntry builds the tenant home itself as "/home/<user>", so its success
+// path cannot be exercised without writing under /home, which a test may not do.
+// It does not need to be: reasonFileMissing is returned by the OPEN and nothing
+// else, so a restore that reaches a LATER step is a restore whose open
+// succeeded, and that open is the line this change touched.
+func TestAnOrdinaryStoredFileIsStillOpenedAndRemoved(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("safeio is Linux-only; the stub refuses everything")
+	}
+	store := withStore(t)
+	userDir := filepath.Join(store, "c_site")
+	if err := os.MkdirAll(userDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stored := filepath.Join(userDir, "5_shell.php")
+	body := "<?php eval($_GET['x']);"
+	if err := os.WriteFile(stored, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := &Handlers{DB: unreachableDB(t)}
+
+	if _, reason := h.restoreEntry("c_site", "public_html/back.php", "5_shell.php", 5); reason == reasonFileMissing {
+		t.Error("an ordinary stored file could not be opened for restore")
+	}
+	// The same call inspect makes, on the same store and the same name, so the
+	// bytes are proved to come back rather than only the absence of a refusal.
+	response, reason := inspectEntry("c_site", "public_html/back.php", "5_shell.php")
+	if reason != "" {
+		t.Fatalf("an ordinary stored file could not be read: reason %q", reason)
+	}
+	if response["content"] != body {
+		t.Errorf("read %q, want %q", response["content"], body)
+	}
+
+	if reason := h.deleteEntry("c_site", "5_shell.php", 5); reason != reasonDeleteRecordFail {
+		t.Fatalf("an ordinary stored file did not delete: reason %q", reason)
+	}
+	if _, err := os.Stat(stored); !os.IsNotExist(err) {
+		t.Error("the ordinary stored file survived its own deletion")
 	}
 }
 
