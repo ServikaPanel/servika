@@ -17,7 +17,10 @@ func TestALocationIsEvidenceOnlyWhereItShouldBe(t *testing.T) {
 		level string
 		rule  string
 	}{
-		{"executable under uploads", scanRoot + "/wp-content/uploads/2026/08/shell.php", LevelCritical, "Location.UploadsExecutable"},
+		// Uploads location alone is corroborating evidence, below suspicious, so
+		// a contentless legitimate plugin file there is NOT a finding; the
+		// dedicated test below proves location + webshell content is critical.
+		{"executable under uploads alone is not a verdict", scanRoot + "/wp-content/uploads/2026/08/shell.php", "", ""},
 		{"executable under cache", scanRoot + "/wp-content/cache/x.php", LevelSuspicious, "Location.CacheExecutable"},
 		{"executable under .well-known", scanRoot + "/.well-known/x.php", LevelCritical, "Location.WellKnownExecutable"},
 		{"image extension before php", scanRoot + "/photo.jpg.php", LevelSuspicious, "Location.DoubleExtension"},
@@ -80,6 +83,37 @@ func TestLocationAndContentEvidenceCombine(t *testing.T) {
 	score, _, names, level := verdict(combined, 0)
 	if level != LevelCritical {
 		t.Errorf("together they should be critical, got %q at score %d: %v", level, score, names)
+	}
+}
+
+// A .php under uploads is corroborating evidence, not a verdict: real plugins
+// write legitimate PHP there, so a contentless file must not be quarantined,
+// while a real webshell there is critical on its content plus the location.
+func TestUploadsExecutableIsCorroborating(t *testing.T) {
+	path := scanRoot + "/wp-content/uploads/2026/08/x.php"
+
+	// Location alone stays below the suspicious threshold, but the rule still
+	// fires so it can corroborate content evidence.
+	score, _, names, level := verdict(locationMatches(scanRoot, path), 0)
+	if level != "" {
+		t.Fatalf("uploads location alone produced %q at score %d, want no finding", level, score)
+	}
+	if !strings.Contains(strings.Join(names, ","), "Location.UploadsExecutable") {
+		t.Fatalf("the uploads rule did not fire: %v", names)
+	}
+
+	// A real webshell under uploads is critical: content plus the location.
+	body := []byte(`<?php eval(base64_decode($_POST['c']));`)
+	combined := append(locationMatches(scanRoot, path), evaluate(".php", body)...)
+	if _, _, n, lvl := verdict(combined, 0); lvl != LevelCritical {
+		t.Fatalf("a webshell under uploads was %q, want critical: %v", lvl, n)
+	}
+
+	// A contentless "Silence is golden" guard file is not a finding at all.
+	guard := []byte("<?php // Silence is golden")
+	quiet := append(locationMatches(scanRoot, path), evaluate(".php", guard)...)
+	if _, _, n, lvl := verdict(quiet, 0); lvl != "" {
+		t.Fatalf("a contentless uploads guard file was %q, want no finding: %v", lvl, n)
 	}
 }
 

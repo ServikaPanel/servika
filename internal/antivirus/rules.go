@@ -154,7 +154,11 @@ var phpHeuristics = []rule{
 	// is what a phar stub is for, so the wrapper produces a finding on a live
 	// site. A phar deserialization attack does not arrive through include in any
 	// case; it arrives through a file function given a phar path.
-	{"PHP.Webshell.RemoteInclude", weightProof, regexp.MustCompile(`(?i)(include|require)(_once)?\s*\(?\s*['"](https?|ftp|php|data)://`), nil},
+	// The trailing [^'"\s] requires a real host after the scheme, so a quoted
+	// empty URL such as a comment "does not include \"http://\"" is not a match;
+	// a real remote include always names a host (measured on a Google Site Kit
+	// comment that was auto-quarantining a legitimate plugin file).
+	{"PHP.Webshell.RemoteInclude", weightProof, regexp.MustCompile(`(?i)(include|require)(_once)?\s*\(?\s*['"](https?|ftp|php|data)://[^'"\s]`), nil},
 	{"PHP.Webshell.RemoteFetchEval", weightProof, regexp.MustCompile(`(?i)eval\s*\(\s*(file_get_contents|curl_exec)\s*\(`), nil},
 	{"PHP.Webshell.MoveUploadedPHP", weightProof, regexp.MustCompile(`(?i)move_uploaded_file\s*\([^)]*\.ph(p|tml|ar)`), nil},
 	{"PHP.Webshell.PasswordGate", weightProof, regexp.MustCompile(`(?i)\$(pass|password|pwd)\s*=\s*['"][0-9a-f]{32}['"]\s*;.{0,200}(md5|hash)\s*\(\s*\$_`), nil},

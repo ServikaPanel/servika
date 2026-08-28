@@ -29,22 +29,28 @@ func TestTheScanReportsWhatItShouldAndNothingElse(t *testing.T) {
 	// Clean files that must NOT be reported.
 	write(t, root, "index.php", "<?php require_once __DIR__.'/wp-load.php';")
 	write(t, root, "wp-content/uploads/2026/08/photo.jpg", "\xff\xd8\xff\xe0JFIF")
+	// A legitimate "Silence is golden" guard file under uploads: location is
+	// corroborating evidence, so a contentless file there is not quarantined.
+	write(t, root, "wp-content/uploads/2026/08/index.php", "<?php // Silence is golden")
 	write(t, root, "wp-content/plugins/x/class.wp.hooks.php", "<?php add_action('init', function(){});")
 	write(t, root, ".well-known/acme-challenge/tok3n", "abc123")
 	write(t, root, "assets/app.min.js", `!function(e,t){"object"==typeof exports&&module.exports}(this);`)
 	write(t, root, ".htaccess", "RewriteEngine On\nRewriteRule ^ index.php [L]\n")
-	// Files that MUST be reported.
-	write(t, root, "wp-content/uploads/2026/08/shell.php", "<?php echo 1;")
+	// Files that MUST be reported. A .php under uploads is corroborating
+	// evidence rather than a verdict, so these carry real webshell content; a
+	// contentless file there is legitimate and is checked in the clean list.
+	write(t, root, "wp-content/uploads/2026/08/shell.php", `<?php eval(base64_decode($_POST['c']));`)
 	write(t, root, "photo.jpg.php", "<?php echo 1;")
 	write(t, root, "wp-content/themes/y/hacked.js", `eval(String.fromCharCode(97,98));`)
 	write(t, root, "sub/.htaccess", "AddType application/x-httpd-php .jpg\n")
 	write(t, root, "wp-content/plugins/z/back.php", `<?php eval($_POST['c']);`)
-	// A payload past the read limit: only its location can convict it.
+	// A large file is still scanned by its readable head, so a webshell at the
+	// start is caught even when padding runs past the read limit.
 	big := make([]byte, 4*1024*1024)
 	for i := range big {
 		big[i] = 'a'
 	}
-	write(t, root, "wp-content/uploads/2026/08/huge.php", string(big))
+	write(t, root, "wp-content/uploads/2026/08/huge.php", `<?php eval($_POST['c']);`+"\n"+string(big))
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -67,6 +73,7 @@ func TestTheScanReportsWhatItShouldAndNothingElse(t *testing.T) {
 	}
 	for _, clean := range []string{
 		"index.php", "wp-content/uploads/2026/08/photo.jpg",
+		"wp-content/uploads/2026/08/index.php",
 		"wp-content/plugins/x/class.wp.hooks.php", ".well-known/acme-challenge/tok3n",
 		"assets/app.min.js", ".htaccess",
 	} {

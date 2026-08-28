@@ -17,13 +17,16 @@ func plantForSwitches(t *testing.T) string {
 		[]byte("<?php eval($_POST['c']); ?>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	uploads := filepath.Join(root, "wp-content", "uploads")
-	if err := os.MkdirAll(uploads, 0o700); err != nil {
+	// A cache directory, where the location layer convicts on its own
+	// (weightStrong). Uploads is only corroborating evidence now, so it needs
+	// content to convict and cannot show a switch controlling location alone.
+	cache := filepath.Join(root, "wp-content", "cache")
+	if err := os.MkdirAll(cache, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// Ordinary WordPress code, in a place no plugin writes .php to. Its content
-	// is clean, so only the location heuristic can convict it.
-	if err := os.WriteFile(filepath.Join(uploads, "thumb.php"),
+	// Ordinary generated code. Its content is clean, so only the location
+	// heuristic can convict it.
+	if err := os.WriteFile(filepath.Join(cache, "thumb.php"),
 		[]byte("<?php echo get_header(); ?>"), 0o600); err != nil {
 		t.Fatal(err)
 	}

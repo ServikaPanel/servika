@@ -114,9 +114,11 @@ var databaseRules = []rule{
 	{"DB.Exec.FileWrite", weightModerate,
 		regexp.MustCompile(`(?i)\b(move_uploaded_file|file_put_contents)\s*\(`), nil},
 	// A remote include reached from a stored value. http:// alone is every
-	// option that holds a URL, so the include is what carries the signal.
+	// option that holds a URL, so the include is what carries the signal. The
+	// trailing [^'"\s] requires a real host, so a post that merely writes about
+	// includes ("do not include \"http://\" links") is not a match.
 	{"DB.Include.Remote", weightModerate,
-		regexp.MustCompile(`(?i)\b(include|require)(_once)?\s*\(?\s*['"]https?://`), nil},
+		regexp.MustCompile(`(?i)\b(include|require)(_once)?\s*\(?\s*['"]https?://[^'"\s]`), nil},
 }
 
 // evaluateDatabaseValue weighs one stored value.

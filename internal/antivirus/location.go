@@ -4,15 +4,19 @@ package antivirus
 // evidence there is: no read, no pattern, just the path.
 //
 // A .php file under wp-content/uploads is the single most common shape a
-// compromised WordPress site takes. WordPress never writes PHP there and
-// neither do plugins: measured against the five most-installed ones,
-// WooCommerce, Elementor, Contact Form 7, Wordfence and UpdraftPlus, not one
-// writes a PHP file into the upload directory (WooCommerce writes index.html).
-// That makes it a verdict on its own, and it costs nothing to reach, which
-// matters because a payload can also sit in a file too large to read.
+// compromised WordPress site takes, so where a file sits is real evidence. It
+// is NOT a verdict on its own, though: the five-plugin corpus (WooCommerce,
+// Elementor, Contact Form 7, Wordfence, UpdraftPlus) writes no PHP there, but
+// widely used plugins outside it do. A live migration proved it, with a
+// customer's legitimate uploads PHP auto-quarantined and the site broken:
+// Redux Framework writes field templates, WPForms writes a PHP cache, and
+// WordPress protection drops a "Silence is golden" index.php into every folder.
+// So uploads is weightModerate, below scoreSuspicious: a contentless legitimate
+// file produces NO finding, while a real webshell already carries strong
+// content and location then pushes it to critical.
 //
-// Every weight here was measured against WordPress core plus those five
-// plugins, 7142 real executable files: none of the five rules fires once.
+// The other weights here were measured against WordPress core plus those five
+// plugins, 7142 real executable files: none of those rules fires once.
 
 import (
 	"path/filepath"
@@ -45,7 +49,10 @@ func locationMatches(root, path string) []match {
 	var out []match
 	switch {
 	case strings.Contains(rel, "/wp-content/uploads/"):
-		out = append(out, match{name: "Location.UploadsExecutable", score: weightProof})
+		// Corroborating evidence, not a verdict: real plugins write legitimate
+		// PHP here (see the file comment), so a contentless file stays below
+		// scoreSuspicious and a real webshell reaches critical on its content.
+		out = append(out, match{name: "Location.UploadsExecutable", score: weightModerate})
 	case strings.Contains(rel, "/wp-content/cache/"):
 		// A cache directory holds generated PHP on some stacks, so this is
 		// evidence rather than a verdict.

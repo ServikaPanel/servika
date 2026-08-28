@@ -226,14 +226,15 @@ func TestANewFingerprintReAnalysesEveryFile(t *testing.T) {
 	//
 	// Turning LOCATION off is the direction that does it. Every file is still
 	// read and weighed on its content, so a content-clean file IS recorded clean.
-	// A PHP file under wp-content/uploads is one the location layer convicts on
-	// its own, and without the fingerprint it would be skipped for good the
-	// moment that layer came back on.
+	// A PHP file under wp-content/cache is one the location layer convicts on
+	// its own (weightStrong), and without the fingerprint it would be skipped for
+	// good the moment that layer came back on. Uploads is corroborating evidence
+	// now, so it cannot stand in here: it needs content to convict.
 	root := t.TempDir()
 	cachePath := filepath.Join(t.TempDir(), "rapidscan.json")
 	writeTree(t, root, map[string]string{
-		"public_html/wp-content/uploads/2026/01/note.php": cleanPHP,
-		"public_html/index.php":                           cleanPHP,
+		"public_html/wp-content/cache/note.php": cleanPHP,
+		"public_html/index.php":                 cleanPHP,
 	})
 
 	noLocation := ScanRequest{Roots: []string{root}, RuleEngine: true, CacheFile: cachePath}
@@ -262,9 +263,9 @@ func TestANewFingerprintReAnalysesEveryFile(t *testing.T) {
 		t.Fatalf("the sweep read %d files, not 2", scanned)
 	}
 	if len(findings) != 1 {
-		t.Fatalf("the executable file under uploads was not reported once the location rules came back on: %d findings", len(findings))
+		t.Fatalf("the executable file under cache was not reported once the location rules came back on: %d findings", len(findings))
 	}
 	if !strings.Contains(findings[0].File, "note.php") {
-		t.Fatalf("the finding names %q rather than the file under uploads", findings[0].File)
+		t.Fatalf("the finding names %q rather than the file under cache", findings[0].File)
 	}
 }
