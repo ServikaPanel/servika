@@ -224,3 +224,28 @@ func TestShellQuotingSurvivesAQuoteInAValue(t *testing.T) {
 		t.Errorf("shellQuote = %s, want the value in one quoted word", got)
 	}
 }
+
+// The IonCube hook is appended AFTER the service is enabled, so the pool it
+// reloads exists, and only when the hook is set, so an install job is unchanged
+// on a build that never wired it.
+func TestTheInstallScriptAppendsTheIonCubeHook(t *testing.T) {
+	m := remiVersion(t)
+
+	if strings.Contains(installScript(m), "IONCUBE-HOOK") {
+		t.Fatal("the install script carried the hook while it was unset")
+	}
+
+	IonCubePostInstall = func(version string) string { return "\nIONCUBE-HOOK " + version + "\n" }
+	t.Cleanup(func() { IonCubePostInstall = nil })
+
+	script := installScript(m)
+	marker := strings.Index(script, "IONCUBE-HOOK "+m.Version)
+	if marker == -1 {
+		t.Fatalf("the install script did not append the hook: %q", script)
+	}
+	enable := strings.Index(script, "systemctl enable --now")
+	done := strings.Index(script, "Done: PHP")
+	if enable == -1 || done == -1 || enable >= marker || marker >= done {
+		t.Errorf("the hook is not between enabling the service and the final line (enable=%d hook=%d done=%d)", enable, marker, done)
+	}
+}

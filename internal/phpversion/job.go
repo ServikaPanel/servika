@@ -207,6 +207,13 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
+// IonCubePostInstall, when set, returns shell that is appended to a PHP install
+// so the IonCube Loader is ready on the new version within the same detached
+// job. It is a hook wired in main rather than a direct call, because
+// internal/phpext imports this package and a direct call would close the import
+// cycle. A nil hook or an empty return injects nothing.
+var IonCubePostInstall func(version string) string
+
 // installScript renders the wrapper for an installation.
 //
 // It carries the whole sequence, not just dnf: the pool directory, the Remi
@@ -222,6 +229,16 @@ func installScript(m VersionMetadata) string {
 	packages := make([]string, 0, len(PackageNames(m)))
 	for _, name := range PackageNames(m) {
 		packages = append(packages, shellQuote(name))
+	}
+
+	// The loader step runs after the service is enabled, so the pool it reloads
+	// exists. It is appended by main through IonCubePostInstall; it re-invokes
+	// this same binary in its hardened -ioncube-install mode rather than a raw
+	// curl+tar, so the ELF, TLS-redirect and symlink checks apply. A nil hook
+	// injects nothing, so an install job is unchanged when the hook is unset.
+	ioncube := ""
+	if IonCubePostInstall != nil {
+		ioncube = IonCubePostInstall(m.Version)
 	}
 
 	return `#!/usr/bin/env bash
@@ -247,7 +264,7 @@ max_input_vars = 10000
 INI
 
 systemctl enable --now ` + shellQuote(service) + ` || echo "WARNING: ` + service + ` did not start"
-echo "Done: PHP ` + m.Version + ` is installed"
+` + ioncube + `echo "Done: PHP ` + m.Version + ` is installed"
 `
 }
 

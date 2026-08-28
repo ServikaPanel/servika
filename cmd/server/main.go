@@ -201,6 +201,13 @@ func main() {
 	if antivirus.RunProcWatcherIfAsked() {
 		return
 	}
+	// The IonCube Loader install for one PHP version, re-invoked by a PHP install
+	// job so the loader is ready within the same detached job. It answers here for
+	// the reason the workers do: fetching and verifying the loader needs the
+	// archive URL and the interpreter path, not the JWT secret or the database.
+	if phpext.RunIonCubeInstallIfAsked() {
+		return
+	}
 	pinTempDir()
 
 	cfg, err := config.Load()
@@ -495,6 +502,17 @@ func main() {
 	appsH := &apps.Handlers{DB: d}
 	apps.RenderSubdomain = subdomain.ReRender
 	apps.HealOnStartup(d)
+	// The IonCube Loader is installed automatically. A hook rather than a direct
+	// call, because internal/phpext imports internal/phpversion and a call the
+	// other way would close the import cycle: a PHP install job appends a call to
+	// the binary's hardened -ioncube-install mode so the loader is ready on a new
+	// version within the same job.
+	phpversion.IonCubePostInstall = phpext.IonCubeInstallShell
+	// And the startup heal reaches every version already installed, plus a fresh
+	// install: it downloads the archive once and installs the loader for each
+	// version missing it, and returns without downloading anything when none are.
+	// It runs in the background because it fetches over the network and execs php.
+	go phpext.HealIonCube(context.Background())
 	// Which malware rule set the scanner is on, for the antivirus settings
 	// screen. A hook for the same reason as the line above: internal/antivirus
 	// imports internal/avsettings to read the settings, so the dependency
