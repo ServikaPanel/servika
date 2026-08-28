@@ -1,5 +1,7 @@
 {
-  "remote": {"title": "Uzak erişim — {{user}}"},
+  "remote": {
+    "title": "Uzak erişim — {{user}}"
+  },
   "breadcrumb": {
     "home": "Ana Sayfa",
     "domains": "Alan Adları",
@@ -19,6 +21,7 @@
     "host": "Sunucu",
     "password": "Parola",
     "created": "Oluşturulma",
+    "size": "Boyut",
     "actions": "İşlemler"
   },
   "password": {

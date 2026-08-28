@@ -1,5 +1,7 @@
 {
-  "remote": {"title": "Accès distant — {{user}}"},
+  "remote": {
+    "title": "Accès distant — {{user}}"
+  },
   "breadcrumb": {
     "home": "Accueil",
     "domains": "Domaines",
@@ -19,6 +21,7 @@
     "host": "Hôte",
     "password": "Mot de passe",
     "created": "Créé le",
+    "size": "Taille",
     "actions": "Actions"
   },
   "password": {

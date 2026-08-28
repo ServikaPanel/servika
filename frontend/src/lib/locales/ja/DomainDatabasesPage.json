@@ -1,5 +1,7 @@
 {
-  "remote": {"title": "リモート接続 — {{user}}"},
+  "remote": {
+    "title": "リモート接続 — {{user}}"
+  },
   "breadcrumb": {
     "home": "ホーム",
     "domains": "ドメイン",
@@ -19,6 +21,7 @@
     "host": "ホスト",
     "password": "パスワード",
     "created": "作成日",
+    "size": "サイズ",
     "actions": "操作"
   },
   "password": {

@@ -23,7 +23,17 @@ import {
 type Domain = { id: number; domain_name: string; system_user: string }
 type DB = {
   id: number; domain_id: number; db_name: string; db_user: string;
-  db_host: string; db_pass: string; created_at: string
+  db_host: string; db_pass: string; created_at: string; size: number
+}
+
+// Human-readable byte size. An unknown size (0, or a size query that failed on
+// the server) renders as a dash rather than "0 B".
+function formatBytes(b: number): string {
+  if (!b || b <= 0) return '—'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0, v = b
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`
 }
 
 export default function DomainDatabasesPage() {
@@ -133,6 +143,7 @@ export default function DomainDatabasesPage() {
               <th className="text-left px-4 py-2.5">{t('columns.host')}</th>
               <th className="text-left px-4 py-2.5">{t('columns.password')}</th>
               <th className="text-left px-4 py-2.5">{t('columns.created')}</th>
+              <th className="text-right px-4 py-2.5">{t('columns.size')}</th>
               <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
             </tr>
           </thead>
@@ -159,6 +170,9 @@ export default function DomainDatabasesPage() {
                   </div>
                 </td>
                 <td data-label={t('columns.created')} className={responsiveTableCellClass}>{d.created_at}</td>
+                <td data-label={t('columns.size')} className={`${responsiveTableCellClass} text-right`}>
+                  <span className="font-mono tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{formatBytes(d.size)}</span>
+                </td>
                 <td className={responsiveTableActionCellClass}>
                   <button onClick={() => openPma(d)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded" title={t('row.pmaTitle')}>{t('row.pma')}</button>
                   <button onClick={() => setPwResetFor(d)} className="text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded">{t('row.resetPassword')}</button>

@@ -1,5 +1,7 @@
 {
-  "remote": {"title": "Vzdálený přístup — {{user}}"},
+  "remote": {
+    "title": "Vzdálený přístup — {{user}}"
+  },
   "breadcrumb": {
     "home": "Domů",
     "domains": "Domény",
@@ -19,6 +21,7 @@
     "host": "Host",
     "password": "Heslo",
     "created": "Vytvořeno",
+    "size": "Velikost",
     "actions": "Akce"
   },
   "password": {

@@ -1,5 +1,7 @@
 {
-  "remote": {"title": "Acces la distanță — {{user}}"},
+  "remote": {
+    "title": "Acces la distanță — {{user}}"
+  },
   "breadcrumb": {
     "home": "Acasă",
     "domains": "Domenii",
@@ -19,6 +21,7 @@
     "host": "Gazdă",
     "password": "Parolă",
     "created": "Creat",
+    "size": "Dimensiune",
     "actions": "Acțiuni"
   },
   "password": {

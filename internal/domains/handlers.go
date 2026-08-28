@@ -1128,6 +1128,7 @@ type DBAccount struct {
 	DBHost    string `json:"db_host"`
 	DBPass    string `json:"db_pass"`
 	CreatedAt string `json:"created_at"`
+	Size      int64  `json:"size"` // data+index length in bytes, 0 when unknown
 }
 
 func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
@@ -1154,6 +1155,22 @@ func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
 			d.DBPass = ""
 		}
 		out = append(out, d)
+	}
+	// Fill each database's on-disk size (data+index). This needs root over the
+	// unix socket, so it is best-effort: a failure leaves the sizes at 0 rather
+	// than failing the list the customer asked for.
+	if len(out) > 0 {
+		names := make([]string, len(out))
+		for i := range out {
+			names[i] = out[i].DBName
+		}
+		if sizes, err := credentials.SchemaSizes(r.Context(), names); err != nil {
+			log.Printf("database sizes could not be read: %v", err)
+		} else {
+			for i := range out {
+				out[i].Size = sizes[out[i].DBName]
+			}
+		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }

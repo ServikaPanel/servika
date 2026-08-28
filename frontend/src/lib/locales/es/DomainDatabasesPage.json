@@ -1,16 +1,51 @@
 {
-  "remote": {"title": "Acceso remoto — {{user}}"},
-  "breadcrumb": { "home": "Inicio", "domains": "Dominios", "databases": "Bases de datos" },
+  "remote": {
+    "title": "Acceso remoto — {{user}}"
+  },
+  "breadcrumb": {
+    "home": "Inicio",
+    "domains": "Dominios",
+    "databases": "Bases de datos"
+  },
   "title": "Bases de datos",
-  "actions": { "new": "+ Nueva base de datos", "refresh": "↻ Actualizar" },
+  "actions": {
+    "new": "+ Nueva base de datos",
+    "refresh": "↻ Actualizar"
+  },
   "count": "{{count}} bases de datos",
   "loading": "Cargando...",
   "empty": "Aún no hay bases de datos",
-  "columns": { "database": "Base de datos", "username": "Usuario", "host": "Host", "password": "Contraseña", "created": "Creado", "actions": "Acciones" },
-  "password": { "show": "Mostrar", "hide": "Ocultar", "copy": "Copiar" },
-  "row": { "remoteAccess": "Acceso remoto", "remoteAccessTitle": "Qué direcciones llegan a esta cuenta desde fuera", "pma": "🔓 phpMyAdmin", "pmaTitle": "Abrir phpMyAdmin en una nueva pestaña", "resetPassword": "🔑 Restablecer contraseña", "delete": "Eliminar" },
-  "errors": { "pmaToken": "No se pudo obtener el token de phpMyAdmin", "deleteFailed": "La eliminación falló" },
-  "delete": { "title": "Eliminar base de datos", "message": "La base de datos «{{name}}» y su usuario serán eliminados permanentemente. Esta acción no puede deshacerse.", "confirm": "Sí, eliminar" },
+  "columns": {
+    "database": "Base de datos",
+    "username": "Usuario",
+    "host": "Host",
+    "password": "Contraseña",
+    "created": "Creado",
+    "size": "Tamaño",
+    "actions": "Acciones"
+  },
+  "password": {
+    "show": "Mostrar",
+    "hide": "Ocultar",
+    "copy": "Copiar"
+  },
+  "row": {
+    "remoteAccess": "Acceso remoto",
+    "remoteAccessTitle": "Qué direcciones llegan a esta cuenta desde fuera",
+    "pma": "🔓 phpMyAdmin",
+    "pmaTitle": "Abrir phpMyAdmin en una nueva pestaña",
+    "resetPassword": "🔑 Restablecer contraseña",
+    "delete": "Eliminar"
+  },
+  "errors": {
+    "pmaToken": "No se pudo obtener el token de phpMyAdmin",
+    "deleteFailed": "La eliminación falló"
+  },
+  "delete": {
+    "title": "Eliminar base de datos",
+    "message": "La base de datos «{{name}}» y su usuario serán eliminados permanentemente. Esta acción no puede deshacerse.",
+    "confirm": "Sí, eliminar"
+  },
   "newModal": {
     "title": "Nueva base de datos",
     "created": "✓ Base de datos creada",
@@ -45,5 +80,8 @@
       "createFailed": "La creación falló"
     }
   },
-  "resultRow": { "copied": "✓", "copy": "Copiar" }
+  "resultRow": {
+    "copied": "✓",
+    "copy": "Copiar"
+  }
 }

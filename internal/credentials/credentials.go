@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -395,6 +396,59 @@ func runRootSQL(statements ...string) error {
 		return fmt.Errorf("mysql: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
+}
+
+// rootQueryCommand builds the privileged MariaDB client for a SELECT whose
+// tab-separated output is read back (-N drops column names, -B is batch mode).
+// root@localhost authenticates through the unix_socket plugin, exactly as
+// rootSQLCommand. A variable so a test can substitute a stub. The request
+// context bounds it: this is a read-only query, so cancelling it strands nothing.
+var rootQueryCommand = func(ctx context.Context) *exec.Cmd {
+	// #nosec G204 G702 -- fixed binary, no shell; the query travels on stdin, not argv.
+	return exec.CommandContext(ctx, "mysql", "-N", "-B")
+}
+
+// SchemaSizes returns the on-disk size (data_length+index_length, in bytes) of
+// each named schema, keyed by schema name; a schema absent from the result has
+// size 0.
+//
+// Only root over the unix socket can read information_schema.tables for a tenant
+// schema. The panel connection ('panel'@'127.0.0.1', GRANT ALL on panel.* alone)
+// sees none of them, so this cannot go through *sql.DB. The client's text output
+// is parsed here, which internal/antivirus/dbscan deliberately refuses for a
+// content scan, but the values here are schema NAMES (already validated to the
+// c_<system_user>_ namespace) and integers, never tenant content. Every name is
+// re-validated before it is interpolated, because information_schema takes no
+// placeholder where a schema name goes.
+func SchemaSizes(ctx context.Context, names []string) (map[string]int64, error) {
+	quoted := make([]string, 0, len(names))
+	for _, n := range names {
+		if ValidDBIdentifier(n) {
+			quoted = append(quoted, "'"+n+"'")
+		}
+	}
+	if len(quoted) == 0 {
+		return map[string]int64{}, nil
+	}
+	query := "SELECT table_schema, COALESCE(SUM(data_length+index_length),0) " +
+		"FROM information_schema.tables WHERE table_schema IN (" +
+		strings.Join(quoted, ",") + ") GROUP BY table_schema;"
+	cmd := rootQueryCommand(ctx)
+	cmd.Stdin = strings.NewReader(query)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("schema sizes: %w", err)
+	}
+	sizes := map[string]int64{}
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 {
+			continue
+		}
+		v, _ := strconv.ParseInt(f[len(f)-1], 10, 64)
+		sizes[f[0]] = v
+	}
+	return sizes, nil
 }
 
 // RunRootSQL executes statements against MariaDB as the OS root user.
