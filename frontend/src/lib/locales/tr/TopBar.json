@@ -290,6 +290,7 @@
       "realtimeDetected": "{{domain}} üzerine yazılan bir dosyada zararlı yazılım bulundu. Dosya hâlâ yerinde.",
       "realtimeContained": "{{domain}} üzerine yazılan bir dosyada zararlı yazılım bulundu, dosya karantinaya alındı."
     },
-    "newCount": "{{n}} yeni"
+    "newCount": "{{n}} yeni",
+    "showAll": "Tümünü göster →"
   }
 }

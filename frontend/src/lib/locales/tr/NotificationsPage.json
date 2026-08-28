@@ -1,0 +1,20 @@
+{
+  "home": "Anasayfa",
+  "title": "Bildirimler",
+  "markAllRead": "Tümünü okundu işaretle ({{n}})",
+  "unreadOnly": "Yalnız okunmamış",
+  "allCategories": "Tümü",
+  "failed": "Bildirimler okunamadı.",
+  "loading": "Yükleniyor…",
+  "empty": "Bildirim yok.",
+  "emptyUnread": "Okunmamış bildirim yok.",
+  "critical": "Kritik",
+  "category": {
+    "antivirus": "Antivirüs",
+    "ssl": "SSL",
+    "backup": "Yedek",
+    "quota": "Kota",
+    "system": "Sistem",
+    "general": "Genel"
+  }
+}

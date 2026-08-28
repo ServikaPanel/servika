@@ -1,0 +1,20 @@
+{
+  "home": "Home",
+  "title": "Notifications",
+  "markAllRead": "Mark all read ({{n}})",
+  "unreadOnly": "Unread only",
+  "allCategories": "All",
+  "failed": "The notifications could not be read.",
+  "loading": "Loading…",
+  "empty": "No notifications.",
+  "emptyUnread": "No unread notifications.",
+  "critical": "Critical",
+  "category": {
+    "antivirus": "Antivirus",
+    "ssl": "SSL",
+    "backup": "Backup",
+    "quota": "Quota",
+    "system": "System",
+    "general": "General"
+  }
+}

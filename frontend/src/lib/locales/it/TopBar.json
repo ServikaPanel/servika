@@ -290,6 +290,7 @@
       "realtimeDetected": "Un file scritto su {{domain}} è infetto. È ancora al suo posto.",
       "realtimeContained": "Un file scritto su {{domain}} è infetto ed è stato messo in quarantena."
     },
-    "newCount": "{{n}} nuovo/i"
+    "newCount": "{{n}} nuovo/i",
+    "showAll": "Mostra tutto →"
   }
 }

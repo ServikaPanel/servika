@@ -1,0 +1,20 @@
+{
+  "home": "Startseite",
+  "title": "Benachrichtigungen",
+  "markAllRead": "Alle als gelesen markieren ({{n}})",
+  "unreadOnly": "Nur ungelesene",
+  "allCategories": "Alle",
+  "failed": "Die Benachrichtigungen konnten nicht gelesen werden.",
+  "loading": "Wird geladen…",
+  "empty": "Keine Benachrichtigungen.",
+  "emptyUnread": "Keine ungelesenen Benachrichtigungen.",
+  "critical": "Kritisch",
+  "category": {
+    "antivirus": "Antivirus",
+    "ssl": "SSL",
+    "backup": "Backup",
+    "quota": "Kontingent",
+    "system": "System",
+    "general": "Allgemein"
+  }
+}

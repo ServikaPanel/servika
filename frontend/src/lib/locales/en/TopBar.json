@@ -290,6 +290,7 @@
       "realtimeDetected": "A file written on {{domain}} was found infected. It is still in place.",
       "realtimeContained": "A file written on {{domain}} was found infected and moved to quarantine."
     },
-    "newCount": "{{n}} new"
+    "newCount": "{{n}} new",
+    "showAll": "Show all →"
   }
 }

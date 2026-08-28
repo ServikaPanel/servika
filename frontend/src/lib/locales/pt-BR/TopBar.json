@@ -290,6 +290,7 @@
       "realtimeDetected": "Um arquivo gravado em {{domain}} está infectado. Ele continua no lugar.",
       "realtimeContained": "Um arquivo gravado em {{domain}} está infectado e foi movido para a quarentena."
     },
-    "newCount": "{{n}} novo(s)"
+    "newCount": "{{n}} novo(s)",
+    "showAll": "Mostrar tudo →"
   }
 }

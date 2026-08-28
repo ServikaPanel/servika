@@ -290,6 +290,7 @@
       "realtimeDetected": "{{domain}} に書き込まれたファイルが感染しています。ファイルはまだ残っています。",
       "realtimeContained": "{{domain}} に書き込まれたファイルが感染していたため、隔離しました。"
     },
-    "newCount": "新着 {{n}} 件"
+    "newCount": "新着 {{n}} 件",
+    "showAll": "すべて表示 →"
   }
 }

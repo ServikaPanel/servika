@@ -1,0 +1,20 @@
+{
+  "home": "Acasă",
+  "title": "Notificări",
+  "markAllRead": "Marchează toate ca citite ({{n}})",
+  "unreadOnly": "Doar necitite",
+  "allCategories": "Toate",
+  "failed": "Notificările nu au putut fi citite.",
+  "loading": "Se încarcă…",
+  "empty": "Nicio notificare.",
+  "emptyUnread": "Nicio notificare necitită.",
+  "critical": "Critic",
+  "category": {
+    "antivirus": "Antivirus",
+    "ssl": "SSL",
+    "backup": "Copie de rezervă",
+    "quota": "Cotă",
+    "system": "Sistem",
+    "general": "General"
+  }
+}

@@ -290,6 +290,7 @@
       "realtimeDetected": "Um ficheiro escrito em {{domain}} está infetado. Continua no lugar.",
       "realtimeContained": "Um ficheiro escrito em {{domain}} está infetado e foi movido para quarentena."
     },
-    "newCount": "{{n}} novo(s)"
+    "newCount": "{{n}} novo(s)",
+    "showAll": "Mostrar tudo →"
   }
 }

@@ -1,0 +1,20 @@
+{
+  "home": "ホーム",
+  "title": "通知",
+  "markAllRead": "すべて既読にする ({{n}})",
+  "unreadOnly": "未読のみ",
+  "allCategories": "すべて",
+  "failed": "通知を読み込めませんでした。",
+  "loading": "読み込み中…",
+  "empty": "通知はありません。",
+  "emptyUnread": "未読の通知はありません。",
+  "critical": "重大",
+  "category": {
+    "antivirus": "アンチウイルス",
+    "ssl": "SSL",
+    "backup": "バックアップ",
+    "quota": "クォータ",
+    "system": "システム",
+    "general": "一般"
+  }
+}

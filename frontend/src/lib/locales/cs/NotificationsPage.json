@@ -1,0 +1,20 @@
+{
+  "home": "Domů",
+  "title": "Oznámení",
+  "markAllRead": "Označit vše jako přečtené ({{n}})",
+  "unreadOnly": "Pouze nepřečtené",
+  "allCategories": "Vše",
+  "failed": "Oznámení se nepodařilo načíst.",
+  "loading": "Načítání…",
+  "empty": "Žádná oznámení.",
+  "emptyUnread": "Žádná nepřečtená oznámení.",
+  "critical": "Kritické",
+  "category": {
+    "antivirus": "Antivirus",
+    "ssl": "SSL",
+    "backup": "Záloha",
+    "quota": "Kvóta",
+    "system": "Systém",
+    "general": "Obecné"
+  }
+}

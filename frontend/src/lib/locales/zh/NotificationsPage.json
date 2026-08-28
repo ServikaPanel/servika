@@ -1,0 +1,20 @@
+{
+  "home": "首页",
+  "title": "通知",
+  "markAllRead": "全部标记为已读 ({{n}})",
+  "unreadOnly": "仅未读",
+  "allCategories": "全部",
+  "failed": "无法读取通知。",
+  "loading": "加载中…",
+  "empty": "暂无通知。",
+  "emptyUnread": "暂无未读通知。",
+  "critical": "严重",
+  "category": {
+    "antivirus": "杀毒",
+    "ssl": "SSL",
+    "backup": "备份",
+    "quota": "配额",
+    "system": "系统",
+    "general": "常规"
+  }
+}

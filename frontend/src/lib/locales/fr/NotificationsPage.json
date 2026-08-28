@@ -1,0 +1,20 @@
+{
+  "home": "Accueil",
+  "title": "Notifications",
+  "markAllRead": "Tout marquer comme lu ({{n}})",
+  "unreadOnly": "Non lues uniquement",
+  "allCategories": "Toutes",
+  "failed": "Les notifications n'ont pas pu être lues.",
+  "loading": "Chargement…",
+  "empty": "Aucune notification.",
+  "emptyUnread": "Aucune notification non lue.",
+  "critical": "Critique",
+  "category": {
+    "antivirus": "Antivirus",
+    "ssl": "SSL",
+    "backup": "Sauvegarde",
+    "quota": "Quota",
+    "system": "Système",
+    "general": "Général"
+  }
+}

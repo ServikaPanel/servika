@@ -1,0 +1,20 @@
+{
+  "home": "Início",
+  "title": "Notificações",
+  "markAllRead": "Marcar todas como lidas ({{n}})",
+  "unreadOnly": "Apenas não lidas",
+  "allCategories": "Todas",
+  "failed": "Não foi possível ler as notificações.",
+  "loading": "Carregando…",
+  "empty": "Sem notificações.",
+  "emptyUnread": "Sem notificações não lidas.",
+  "critical": "Crítico",
+  "category": {
+    "antivirus": "Antivírus",
+    "ssl": "SSL",
+    "backup": "Backup",
+    "quota": "Cota",
+    "system": "Sistema",
+    "general": "Geral"
+  }
+}

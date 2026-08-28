@@ -290,6 +290,7 @@
       "realtimeDetected": "Soubor zapsaný na {{domain}} je infikovaný. Stále je na místě.",
       "realtimeContained": "Soubor zapsaný na {{domain}} je infikovaný a byl přesunut do karantény."
     },
-    "newCount": "{{n}} nových"
+    "newCount": "{{n}} nových",
+    "showAll": "Zobrazit vše →"
   }
 }

@@ -290,6 +290,7 @@
       "realtimeDetected": "Un fișier scris pe {{domain}} este infectat. Este încă la locul lui.",
       "realtimeContained": "Un fișier scris pe {{domain}} este infectat și a fost mutat în carantină."
     },
-    "newCount": "{{n}} noi"
+    "newCount": "{{n}} noi",
+    "showAll": "Afișează tot →"
   }
 }
