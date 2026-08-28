@@ -291,6 +291,12 @@ type match struct {
 // evaluate weighs one file's content against the rule set and the signals that
 // are not patterns.
 func evaluate(ext string, content []byte) []match {
+	// A commercial encoder's encrypted body is opaque: it cannot be decoded here
+	// and its ~random bytes random-match a signature, so it is removed from what
+	// every pass below sees. The plaintext preamble and any injected code stay.
+	if stripped, _, packed := commercialEncoderExtract(ext, content); packed {
+		content = stripped
+	}
 	out := evaluateWith(heuristics, ext, content)
 	out = append(out, entropyMatches(ext, content)...)
 	out = append(out, taintMatches(ext, content)...)
