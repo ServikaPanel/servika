@@ -200,6 +200,45 @@ func tenantSanitizeScalar(value, fallback string) string {
 	return value
 }
 
+// mandatoryDisableFunctions is the floor a tenant can NEVER open. Whatever the
+// panel stores (even an empty disable_functions), these are ALWAYS blocked in the
+// rendered pool. The set is deliberately only LPE / isolation-escape primitives:
+// legitimate web applications (WordPress, WHMCS, XenForo) do not call them, but a
+// tenant that gains a shell (exec) escalates privilege with them or writes outside
+// its jail with symlink. The shell-execution category (exec/system/shell_exec/
+// passthru/proc_open/popen) is deliberately NOT in the floor, so an operator can
+// open it from the panel (the shell toggle must work). So an empty df no longer
+// leaves a tenant fully exposed: the most dangerous non-web primitives stay blocked.
+//
+// History: an empty df once fell back to the hardened set (the toggle "came back"),
+// then a fix that wrote df verbatim let an empty df disable the guard entirely (a
+// tenant fully open). This floor solves both: the toggle works, the LPE primitives
+// never drop.
+const mandatoryDisableFunctions = "dl,symlink,link,pcntl_exec,proc_nice,posix_kill,posix_mkfifo,posix_setpgid,posix_setsid,posix_setuid,posix_setgid"
+
+// MergeMandatoryDisableFunctions appends the mandatory floor to the user's
+// disable_functions, dropping duplicates and preserving order: everything the
+// operator set stays, and the floor is completed when missing. It is exported so
+// the shared-master renderer (internal/php) applies the same floor as a tenant's
+// own master.
+func MergeMandatoryDisableFunctions(userDF string) string {
+	seen := map[string]bool{}
+	var result []string
+	add := func(csv string) {
+		for function := range strings.SplitSeq(csv, ",") {
+			function = strings.TrimSpace(function)
+			if function == "" || seen[function] {
+				continue
+			}
+			seen[function] = true
+			result = append(result, function)
+		}
+	}
+	add(userDF)                    // the operator's choices first (may or may not include shell)
+	add(mandatoryDisableFunctions) // then the never-dropped floor
+	return strings.Join(result, ",")
+}
+
 // tenantDisableFunctions resolves disable_functions for a tenant's own PHP-FPM
 // master. It is SPECIAL: it is reached only when a php_settings row exists (an
 // absent row returns earlier with the hardened default), so an empty value here
@@ -207,12 +246,13 @@ func tenantSanitizeScalar(value, fallback string) string {
 // panel's shell-execution toggle turned on. tenantSanitizeScalar would treat
 // empty as "no value" and re-harden it, leaving the toggle on while PHP stays
 // blocked, a UI-versus-runtime divergence. Only a control-character injection
-// falls back to the hardened default.
+// falls back to the hardened default. The mandatory floor is ALWAYS merged, so
+// an empty df still blocks the LPE primitives a tenant must never reach.
 func tenantDisableFunctions(stored string) string {
 	if strings.ContainsAny(stored, "\r\n\x00") {
-		return hardenedDisableFunctions
+		return MergeMandatoryDisableFunctions(hardenedDisableFunctions)
 	}
-	return strings.TrimSpace(stored)
+	return MergeMandatoryDisableFunctions(strings.TrimSpace(stored))
 }
 
 func resolveTenantPMMaxChildren(pmMaxChildren, ramMB int) int {

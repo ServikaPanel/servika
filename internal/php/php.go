@@ -389,6 +389,11 @@ func RenderPool(systemUser string, sockDir string, s Settings) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// The mandatory floor is merged at render time so a shared-master pool blocks
+	// the same LPE primitives a tenant's own master does. An empty disable_functions
+	// must not leave the tenant fully open. It is applied here, not on the stored
+	// value, so the settings screen keeps showing exactly what the operator set.
+	sanitized.DisableFunctions = provisioner.MergeMandatoryDisableFunctions(sanitized.DisableFunctions)
 	var buf bytes.Buffer
 	err = poolTmpl.Execute(&buf, map[string]any{"SystemUser": systemUser, "SockDir": sockDir, "S": sanitized})
 	return buf.String(), err

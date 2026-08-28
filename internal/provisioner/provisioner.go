@@ -2817,7 +2817,12 @@ const (
 	// v3 delivers two changes that are invisible without it: the raised PHP
 	// limits (the pool is re-rendered by writePoolValidated below) and the
 	// FastCGI read timeout derived from max_execution_time.
-	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v3_done"
+	//
+	// v4 delivers the mandatory disable_functions floor to shared-master tenants:
+	// RenderPool now merges it, so writePoolValidated below re-renders the pool with
+	// the LPE primitives blocked. Own-master tenants already receive it through
+	// EnsureTenantFPMOnStartup's repairTenantPoolDrift, which is not sentinel-gated.
+	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v4_done"
 	panelVhostPath      = "/etc/nginx/conf.d/_panel.conf"
 	panelSecSentinel    = "# SERVIKA-PANEL-SEC v2"
 )

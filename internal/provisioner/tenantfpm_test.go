@@ -137,21 +137,58 @@ func valueOf(t *testing.T, unit, key string) int {
 	return 0
 }
 
-// A php_settings row with an EMPTY disable_functions means the operator allowed
-// every function (the panel's shell-execution toggle is on). It must be kept as
-// empty, not re-hardened, or the tenant's own PHP-FPM master blocks PHP while the
-// panel toggle reads as on. Only a control-character injection falls back.
-func TestAnEmptyDisableFunctionsIsKeptAsAllowAll(t *testing.T) {
-	if got := tenantDisableFunctions(""); got != "" {
-		t.Errorf("empty = %q, want it kept empty (operator allowed all)", got)
+// A php_settings row with an EMPTY disable_functions means the operator turned on
+// the shell-execution toggle (exec/system allowed). The shell category must stay
+// open, but the mandatory LPE floor (dl, symlink, ...) is ALWAYS merged: an empty
+// df must never leave a tenant fully exposed. A control-character injection falls
+// back to the hardened default, which already contains the floor.
+func TestAnEmptyDisableFunctionsStillCarriesTheMandatoryFloor(t *testing.T) {
+	// Empty df: shell stays open, but the LPE floor is present.
+	got := tenantDisableFunctions("")
+	for _, fn := range []string{"dl", "symlink", "link", "pcntl_exec", "posix_setuid"} {
+		if !containsFunction(got, fn) {
+			t.Errorf("empty df = %q, missing mandatory floor function %q", got, fn)
+		}
 	}
-	if got := tenantDisableFunctions("   "); got != "" {
-		t.Errorf("whitespace-only = %q, want empty", got)
+	if containsFunction(got, "system") || containsFunction(got, "exec") {
+		t.Errorf("empty df = %q, shell category must stay open (toggle on)", got)
 	}
-	if got := tenantDisableFunctions("exec,system"); got != "exec,system" {
-		t.Errorf("a set value = %q, want it preserved", got)
+	if got := tenantDisableFunctions("   "); !containsFunction(got, "symlink") {
+		t.Errorf("whitespace-only df = %q, want the mandatory floor", got)
 	}
-	if got := tenantDisableFunctions("exec\nsystem"); got != hardenedDisableFunctions {
-		t.Errorf("a control-character injection = %q, want the hardened default", got)
+
+	// A set value is preserved AND the floor is appended (deduped, order kept).
+	set := tenantDisableFunctions("exec,system")
+	if !containsFunction(set, "exec") || !containsFunction(set, "system") {
+		t.Errorf("a set value = %q, want the operator's functions preserved", set)
 	}
+	if !containsFunction(set, "dl") || !containsFunction(set, "symlink") {
+		t.Errorf("a set value = %q, want the mandatory floor appended", set)
+	}
+
+	// A value that already names a floor function does not duplicate it.
+	dedup := MergeMandatoryDisableFunctions("dl,exec")
+	if strings.Count(dedup, "dl") != 1 {
+		t.Errorf("merge = %q, want dl exactly once", dedup)
+	}
+	if !strings.HasPrefix(dedup, "dl,exec,") {
+		t.Errorf("merge = %q, want the operator's order preserved first", dedup)
+	}
+
+	// A control-character injection falls back to hardened, which carries the floor.
+	inj := tenantDisableFunctions("exec\nsystem")
+	if !containsFunction(inj, "symlink") || !containsFunction(inj, "exec") {
+		t.Errorf("a control-character injection = %q, want the hardened default with the floor", inj)
+	}
+}
+
+// containsFunction reports whether a comma-separated disable_functions list names
+// fn as a whole entry, so "link" does not match "symlink".
+func containsFunction(csv, fn string) bool {
+	for entry := range strings.SplitSeq(csv, ",") {
+		if strings.TrimSpace(entry) == fn {
+			return true
+		}
+	}
+	return false
 }
