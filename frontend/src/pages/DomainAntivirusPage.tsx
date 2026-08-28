@@ -165,6 +165,29 @@ function PathBox({ path }: { path: string }) {
   )
 }
 
+// A single-path icon sized for a button.
+const Icon = ({ d, className = 'h-3.5 w-3.5' }: { d: string; className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className={className} aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+  </svg>
+)
+const ICON_PATH = {
+  lock: 'M8 11V7a4 4 0 118 0v4m-9 0h10a1 1 0 011 1v7a1 1 0 01-1 1H7a1 1 0 01-1-1v-7a1 1 0 011-1z',
+  search: 'M21 21l-4.35-4.35M11 18a7 7 0 110-14 7 7 0 010 14z',
+  restore: 'M9 15L3 9l6-6M3 9h12a6 6 0 010 12h-3',
+  trash: 'M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-1 0v11a2 2 0 01-2 2h-4a2 2 0 01-2-2V7',
+}
+// The action styles live in one place so the four buttons stay consistent, each
+// with an accessible focus ring. The delete button is FILLED because it is the
+// primary destructive action; restore and quarantine are outlined.
+const BTN_BASE = 'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition focus:outline-none focus:ring-2 disabled:opacity-50 whitespace-nowrap'
+const BTN = {
+  dangerOutline: `${BTN_BASE} border border-red-300 text-red-700 hover:bg-red-50 focus:ring-red-400/40 dark:border-red-700/70 dark:text-red-300 dark:hover:bg-red-900/30`,
+  neutral: `${BTN_BASE} border border-slate-300 text-slate-600 hover:bg-slate-100 focus:ring-slate-400/30 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700`,
+  confirmOutline: `${BTN_BASE} border border-emerald-300 text-emerald-700 hover:bg-emerald-50 focus:ring-emerald-400/40 dark:border-emerald-700/70 dark:text-emerald-300 dark:hover:bg-emerald-900/30`,
+  dangerFilled: `${BTN_BASE} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/50`,
+}
+
 export default function DomainAntivirusPage() {
   const { t } = useTranslation('DomainAntivirusPage')
 
@@ -319,6 +342,7 @@ export default function DomainAntivirusPage() {
           { label: t('breadcrumb.domains'), href: '/domains' },
           { label: t('breadcrumb.antivirus') },
         ]} />
+        <Link to={`/subscriptions/${id}`} className="mb-2 inline-flex items-center gap-1 text-sm text-brand-600 hover:underline dark:text-brand-400">{t('backToSubscription')}</Link>
         <div className="flex items-center gap-3 mb-1">
           <Shield scanning={scanning} className="h-10 w-10 flex-shrink-0" />
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
@@ -437,7 +461,7 @@ export default function DomainAntivirusPage() {
                             contain, and the server refuses it, so no button is
                             drawn rather than one that always fails. */}
                         {!b.quarantined && (containable(b.engine)
-                          ? <button onClick={() => quarantineFinding(b)} className="text-xs text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">{t('findings.quarantine')}</button>
+                          ? <button onClick={() => quarantineFinding(b)} className={`${BTN.dangerOutline} lg:ml-auto`}><Icon d={ICON_PATH.lock} /> {t('findings.quarantine')}</button>
                           : <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{t('findings.notAFile')}</span>)}
                       </td>
                     </tr>
@@ -480,16 +504,13 @@ export default function DomainAntivirusPage() {
                       </td>
                       <td className={responsiveTableActionCellClass}>
                         {!entry.restored_at && (
-                          <div className="flex gap-3 whitespace-nowrap">
-                            <button onClick={() => inspect(entry)}
-                              className="text-xs text-slate-600 hover:underline dark:text-slate-300">
-                              {previewID === entry.id ? t('held.inspectClose') : t('held.inspect')}</button>
-                            <button onClick={() => restore(entry)} disabled={busy}
-                              className="text-xs text-brand-600 hover:underline disabled:opacity-50 dark:text-brand-400">
-                              {t('held.restore')}</button>
-                            <button onClick={() => purge(entry)} disabled={busy}
-                              className="text-xs text-red-600 hover:underline disabled:opacity-50 dark:text-red-400">
-                              {t('held.delete')}</button>
+                          <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                            <button onClick={() => inspect(entry)} className={BTN.neutral}>
+                              <Icon d={ICON_PATH.search} /> {previewID === entry.id ? t('held.inspectClose') : t('held.inspect')}</button>
+                            <button onClick={() => restore(entry)} disabled={busy} className={BTN.confirmOutline}>
+                              <Icon d={ICON_PATH.restore} /> {t('held.restore')}</button>
+                            <button onClick={() => purge(entry)} disabled={busy} className={BTN.dangerFilled}>
+                              <Icon d={ICON_PATH.trash} /> {t('held.delete')}</button>
                           </div>
                         )}
                       </td>
@@ -526,8 +547,6 @@ export default function DomainAntivirusPage() {
           )}
         </div>
         )}
-
-        <div className="mt-4"><Link to={`/subscriptions/${id}`} className="text-sm text-brand-600 dark:text-brand-400">{t('backToSubscription')}</Link></div>
       </div>
     </div>
   )
