@@ -1,0 +1,55 @@
+#!/bin/sh
+# servika-cron-report runs one scheduled task and reports its outcome to the
+# panel, so a run that crond starts still reaches the in-panel notification
+# stream. The panel wraps a task's crontab line in this helper only when the
+# task asks for a notification.
+#
+# Args: <domain_id> <mode> <token> <base64-command>
+#   mode: errors (report only a non-zero exit) | always (report every run)
+#
+# It runs as the tenant, exactly as the unwrapped command would, so it adds no
+# capability: the command was already the tenant's own and already destined to
+# run under this identity. The token is a domain-bound HMAC the panel signs; a
+# tenant can read it from their own crontab, but it authenticates only their own
+# domain, so forging it buys nothing.
+
+# Parse in the C locale. Under tr_TR.UTF-8 the ranges `a-z` and `A-Z` do NOT
+# contain `i`, so a character-range parse is cut at the first one.
+export LC_ALL=C
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+domain_id=$1
+mode=$2
+token=$3
+b64=$4
+
+# The panel backend on the loopback. It matches the fixed address the phpMyAdmin
+# and Roundcube sign-on helpers already use for the internal endpoints.
+REPORT_URL=http://127.0.0.1:8080/api/v1/internal/cron-report
+
+# A malformed argument set is not the tenant's command; do nothing rather than
+# run something unintended.
+[ -n "$domain_id" ] && [ -n "$mode" ] && [ -n "$token" ] && [ -n "$b64" ] || exit 0
+
+cmd=$(printf '%s' "$b64" | base64 -d 2>/dev/null) || exit 0
+[ -n "$cmd" ] || exit 0
+
+# Run the command, letting its output flow to crond as usual, and keep its exit
+# code so this helper exits with the same status the unwrapped command would.
+sh -c "$cmd"
+code=$?
+
+# In errors mode a successful run is not reported.
+if [ "$mode" = errors ] && [ "$code" -eq 0 ]; then
+  exit "$code"
+fi
+
+# Report the outcome. A failure to reach the panel must not fail the run.
+curl -fsS --max-time 10 \
+  --data-urlencode "domain_id=$domain_id" \
+  --data-urlencode "token=$token" \
+  --data-urlencode "exit=$code" \
+  --data-urlencode "cmd=$cmd" \
+  "$REPORT_URL" >/dev/null 2>&1 || true
+
+exit "$code"

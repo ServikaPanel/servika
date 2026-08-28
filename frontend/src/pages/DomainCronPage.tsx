@@ -29,6 +29,7 @@ type Task = {
   enabled: boolean
   type?: string          // "command" | "url" | "php"
   php_version?: string
+  notify?: string        // "none" | "errors" | "always"
 }
 
 type TaskResponse = {
@@ -43,6 +44,7 @@ type TaskResponse = {
   enabled: boolean
   type?: string
   php_version?: string
+  notify?: string
 }
 
 type Domain = { id: number; domain_name: string; system_user: string }
@@ -93,6 +95,7 @@ export default function DomainCronPage() {
           enabled: task.enabled,
           type: task.type,
           php_version: task.php_version,
+          notify: task.notify,
         })))
       })
       .catch(e => setError(apiError(e)))
@@ -267,6 +270,7 @@ function CronTaskModal({ task, phpVersions, domainId, onClose, onSaved }: {
   const [script, setScript] = useState(parsed.script)
   const [args, setArgs] = useState(parsed.args)
   const [phpVersion, setPhpVersion] = useState(existing?.php_version || versions[0])
+  const [notify, setNotify] = useState(existing?.notify || 'none')
   const [comment, setComment] = useState(existing?.comment || '')
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -280,7 +284,7 @@ function CronTaskModal({ task, phpVersions, domainId, onClose, onSaved }: {
     setProcessing(true); setError(null)
     try {
       const body: Record<string, unknown> = {
-        minute, hour, day, month, week: weekday, enabled, type, comment: comment.trim(),
+        minute, hour, day, month, week: weekday, enabled, type, notify, comment: comment.trim(),
       }
       if (type === 'command') body.command = command.trim()
       else if (type === 'url') body.url = url.trim()
@@ -370,6 +374,18 @@ function CronTaskModal({ task, phpVersions, domainId, onClose, onSaved }: {
             <Field label={t('modal.fields.weekday')} value={weekday} onChange={setWeekday} />
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">{t('modal.cronHint')} <code className="font-mono">*</code>{t('modal.cronHintPost')} <code className="font-mono">*/5</code>{t('modal.cronEvery')} <code className="font-mono">0,15,30</code>{t('modal.cronList')} <code className="font-mono">9-17</code>{t('modal.cronRange')}</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.notifyLabel')}</label>
+          <div className="flex flex-wrap gap-4">
+            {[['none', t('modal.notifyNone')], ['errors', t('modal.notifyErrors')], ['always', t('modal.notifyAlways')]].map(([v, l]) => (
+              <label key={v} className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="radio" name="cronNotify" checked={notify === v} onChange={() => setNotify(v)} className="accent-brand-600" />
+                {l}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div>

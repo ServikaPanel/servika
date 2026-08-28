@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "{{domain}} üzerinde saldırı zinciri tespit edildi: {{stages}} — güven %{{confidence}}."
+    },
+    "cron": {
+      "ran": "{{domain}} üzerinde zamanlanmış görev çalıştı: {{command}}",
+      "failed": "{{domain}} üzerinde zamanlanmış görev başarısız oldu (exit {{code}}): {{command}}"
     }
   }
 }

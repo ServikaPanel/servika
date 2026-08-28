@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "Cadena de ataque detectada en {{domain}}: {{stages}} — confianza {{confidence}}%."
+    },
+    "cron": {
+      "ran": "Tarea programada ejecutada en {{domain}}: {{command}}",
+      "failed": "La tarea programada falló en {{domain}} (exit {{code}}): {{command}}"
     }
   }
 }

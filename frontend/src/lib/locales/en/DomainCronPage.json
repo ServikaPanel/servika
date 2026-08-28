@@ -68,6 +68,10 @@
     "argsOptional": "(optional)",
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Schedule",
+    "notifyLabel": "Notify me when it runs",
+    "notifyNone": "Never",
+    "notifyErrors": "Only on failure",
+    "notifyAlways": "Every run",
     "fields": {
       "minute": "Minute",
       "hour": "Hour",

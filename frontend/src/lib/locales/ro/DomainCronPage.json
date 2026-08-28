@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Planificare",
     "save": "Salvează",
-    "saving": "Se salvează..."
+    "saving": "Se salvează...",
+    "notifyLabel": "Notifică-mă la execuție",
+    "notifyNone": "Niciodată",
+    "notifyErrors": "Doar la eșec",
+    "notifyAlways": "La fiecare execuție"
   },
   "run": {
     "noOutput": "(fără ieșire)",

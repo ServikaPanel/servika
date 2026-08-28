@@ -5,7 +5,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +21,9 @@ import (
 	"strings"
 	"time"
 
+	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/notifications"
 	"servika/internal/phpversion"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +53,15 @@ const (
 	TypePHP     = "php"
 )
 
+// Notification preferences for a scheduled run. An empty value reads as
+// NotifyNone. When a task wants a notification, its crontab command is wrapped
+// in the on-host reporter so a run that crond starts still reaches the panel.
+const (
+	NotifyNone   = "none"   // no notification
+	NotifyErrors = "errors" // notify only when the run exits non-zero
+	NotifyAlways = "always" // notify on every run
+)
+
 type Task struct {
 	Idx     int    `json:"idx"`
 	Minute  string `json:"minute"`
@@ -64,10 +79,17 @@ type Task struct {
 	// generated shell command that actually runs.
 	Type       string `json:"type,omitempty"`
 	PHPVersion string `json:"php_version,omitempty"` // Type == TypePHP: which PHP version runs it.
+	// Notify is whether a scheduled run reports its outcome to the panel, and
+	// when. NotifyNone (or empty) wraps nothing; the other values wrap the
+	// command in the reporter.
+	Notify string `json:"notify,omitempty"`
 }
 
 type Handlers struct {
 	DB *sql.DB
+	// SecretKey signs the domain-bound token the on-host reporter carries, so a
+	// scheduled run can report its outcome without a panel session.
+	SecretKey []byte
 }
 
 var (
@@ -75,7 +97,9 @@ var (
 	errBad  = errors.New("security: user without c_ prefix rejected")
 )
 
-func (h *Handlers) lookup(r *http.Request) (string, error) {
+// lookup returns the domain's system user and its id. The id is needed on the
+// write paths to sign the reporter's domain-bound token.
+func (h *Handlers) lookup(r *http.Request) (string, int64, error) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var systemUser string
 	var isDemo int
@@ -83,18 +107,18 @@ func (h *Handlers) lookup(r *http.Request) (string, error) {
 		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
 		Scan(&systemUser, &isDemo)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", os.ErrNotExist
+		return "", 0, os.ErrNotExist
 	}
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if isDemo == 1 {
-		return "", errDemo
+		return "", 0, errDemo
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
-		return "", errBad
+		return "", 0, errBad
 	}
-	return systemUser, nil
+	return systemUser, id, nil
 }
 
 // cronPath returns the domain user's crontab path.
@@ -146,8 +170,16 @@ func parseCrontab(r io.Reader) ([]Task, error) {
 				task.Type = v
 			}
 			task.PHPVersion = meta["php_version"]
+			task.Notify = meta["notify"]
 			if meta["enabled"] == "0" {
 				task.Enabled = false
+			}
+			// A notifying task's cron line runs the reporter, not the command; the
+			// original was stored base64'd so the panel shows and edits the real one.
+			if b64 := meta["cmd"]; b64 != "" {
+				if raw, err := base64.StdEncoding.DecodeString(b64); err == nil {
+					task.Command = string(raw)
+				}
 			}
 		}
 		out = append(out, task)
@@ -215,9 +247,31 @@ func looksCron(s string) bool {
 	return true
 }
 
+// notifies reports whether a task wants a notification, which is what makes its
+// cron line run the reporter instead of the command directly.
+func notifies(task Task) bool {
+	return task.Notify == NotifyErrors || task.Notify == NotifyAlways
+}
+
+// reporterPath is the on-host helper that runs a scheduled task and reports its
+// outcome to the panel.
+func reporterPath() string {
+	return config.OpsTool("servika-cron-report")
+}
+
+// reportToken signs a domain-bound token the reporter carries. A tenant can read
+// their own crontab and so this token, but it authenticates ONLY their own
+// domain, so forging it buys nothing they could not already do.
+func reportToken(secret []byte, domainID int64) string {
+	mac := hmac.New(sha256.New, secret)
+	// hash.Hash.Write is documented never to return an error.
+	_, _ = fmt.Fprintf(mac, "cron:%d", domainID)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // serializeCrontab renders the tasks into a crontab. It is separated from write
 // so the round-trip can be tested without the spool path and its chown.
-func serializeCrontab(systemUser string, list []Task) []byte {
+func serializeCrontab(systemUser string, domainID int64, secret []byte, list []Task) []byte {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%s\n", bannerLine)
 	fmt.Fprintf(&buf, "# last update: %s\n\n", systemUser)
@@ -231,8 +285,20 @@ func serializeCrontab(systemUser string, list []Task) []byte {
 		if task.PHPVersion != "" {
 			meta = append(meta, "php_version="+task.PHPVersion)
 		}
+		if notifies(task) {
+			meta = append(meta, "notify="+task.Notify)
+		}
 		if !task.Enabled {
 			meta = append(meta, "enabled=0")
+		}
+		// A notifying task's cron line runs the reporter; the original command is
+		// stored base64'd so read() can show and edit the real one.
+		runCommand := task.Command
+		if notifies(task) {
+			b64 := base64.StdEncoding.EncodeToString([]byte(task.Command))
+			meta = append(meta, "cmd="+b64)
+			runCommand = fmt.Sprintf("%s %d %s %s %s",
+				reporterPath(), domainID, task.Notify, reportToken(secret, domainID), b64)
 		}
 		if len(meta) > 0 {
 			fmt.Fprintf(&buf, "# %s %s\n", metaPrefix, strings.Join(meta, " "))
@@ -247,13 +313,13 @@ func serializeCrontab(systemUser string, list []Task) []byte {
 			prefix = "#"
 		}
 		fmt.Fprintf(&buf, "%s%s %s %s %s %s %s\n",
-			prefix, task.Minute, task.Hour, task.Day, task.Month, task.Week, task.Command)
+			prefix, task.Minute, task.Hour, task.Day, task.Month, task.Week, runCommand)
 	}
 	return buf.Bytes()
 }
 
-func write(systemUser string, list []Task) error {
-	content := serializeCrontab(systemUser, list)
+func write(systemUser string, domainID int64, secret []byte, list []Task) error {
+	content := serializeCrontab(systemUser, domainID, secret, list)
 	p := cronPath(systemUser)
 	tmp := p + ".tmp"
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
@@ -413,7 +479,7 @@ func statusFromErr(err error) int {
 }
 
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	systemUser, err := h.lookup(r)
+	systemUser, _, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, statusFromErr(err), "operation failed")
 		return
@@ -432,7 +498,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
-	systemUser, err := h.lookup(r)
+	systemUser, domainID, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, statusFromErr(err), "operation failed")
 		return
@@ -457,7 +523,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	list = append(list, task)
-	if err := write(systemUser, list); err != nil {
+	if err := write(systemUser, domainID, h.SecretKey, list); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -466,7 +532,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 // Update replaces one existing task in place (PUT /domains/{id}/cron/{idx}).
 func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
-	systemUser, err := h.lookup(r)
+	systemUser, domainID, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, statusFromErr(err), "operation failed")
 		return
@@ -492,7 +558,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	list[idx] = task
-	if err := write(systemUser, list); err != nil {
+	if err := write(systemUser, domainID, h.SecretKey, list); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -500,7 +566,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
-	systemUser, err := h.lookup(r)
+	systemUser, domainID, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, statusFromErr(err), "operation failed")
 		return
@@ -517,7 +583,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	deleted := list[idx]
 	list = append(list[:idx], list[idx+1:]...)
-	if err := write(systemUser, list); err != nil {
+	if err := write(systemUser, domainID, h.SecretKey, list); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -533,7 +599,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 // forward. runuser drops to the tenant; no privilege is added. lookup enforces the
 // demo and scope checks.
 func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
-	systemUser, err := h.lookup(r)
+	systemUser, _, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, statusFromErr(err), "operation failed")
 		return
@@ -572,4 +638,69 @@ func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+// commandSnippet trims a command for the notification's English fallback text so
+// a long command line does not fill the alert.
+func commandSnippet(command string) string {
+	command = strings.TrimSpace(command)
+	if len(command) > 80 {
+		return command[:80] + "..."
+	}
+	return command
+}
+
+// Report turns a scheduled task's outcome, sent by the on-host reporter over the
+// loopback, into a panel notification. It carries no session; the reporter
+// authenticates with a domain-bound HMAC token, so a tenant can only ever report
+// for their own domain, which is harmless. This is what makes the per-task
+// notification setting a real preference rather than a stored value nothing reads.
+func (h *Handlers) Report(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	domainID, _ := strconv.ParseInt(r.FormValue("domain_id"), 10, 64)
+	token := r.FormValue("token")
+	if domainID <= 0 || !hmac.Equal([]byte(token), []byte(reportToken(h.SecretKey, domainID))) {
+		httpx.WriteError(w, http.StatusForbidden, "invalid token")
+		return
+	}
+	var domainName string
+	err := h.DB.QueryRowContext(r.Context(),
+		`SELECT domain_name FROM domains WHERE id=?`, domainID).Scan(&domainName)
+	if errors.Is(err, sql.ErrNoRows) {
+		httpx.WriteError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
+	exit, _ := strconv.Atoi(r.FormValue("exit"))
+	snippet := commandSnippet(r.FormValue("cmd"))
+	d := domainID
+	event := notifications.Event{
+		Category: "cron",
+		Key:      "cron.ran",
+		Level:    notifications.LevelInfo,
+		Title:    "Scheduled task ran",
+		Message:  fmt.Sprintf("Scheduled task ran on %s: %s", domainName, snippet),
+		Params:   map[string]any{"domain": domainName, "code": exit, "command": snippet},
+		DomainID: &d,
+		RefType:  "domain",
+		RefID:    domainID,
+	}
+	if exit != 0 {
+		event.Key = "cron.failed"
+		event.Level = notifications.LevelWarning
+		event.Title = "Scheduled task failed"
+		event.Message = fmt.Sprintf("Scheduled task failed on %s (exit %d): %s", domainName, exit, snippet)
+	}
+	// A failed notification write must not fail the report; the run already ran.
+	if err := notifications.Write(r.Context(), h.DB, event); err != nil {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": false})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

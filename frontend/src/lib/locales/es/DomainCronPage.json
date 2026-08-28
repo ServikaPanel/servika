@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Programación",
     "save": "Guardar",
-    "saving": "Guardando..."
+    "saving": "Guardando...",
+    "notifyLabel": "Notificarme cuando se ejecute",
+    "notifyNone": "Nunca",
+    "notifyErrors": "Solo en caso de fallo",
+    "notifyAlways": "Cada ejecución"
   },
   "run": {
     "noOutput": "(sin salida)",

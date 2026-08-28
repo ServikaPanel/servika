@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "在 {{domain}} 上检测到攻击链：{{stages}} — 置信度 {{confidence}}%。"
+    },
+    "cron": {
+      "ran": "{{domain}} 上的计划任务已运行：{{command}}",
+      "failed": "{{domain}} 上的计划任务失败（exit {{code}}）：{{command}}"
     }
   }
 }

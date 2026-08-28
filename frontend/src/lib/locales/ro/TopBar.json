@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "Lanț de atac detectat pe {{domain}}: {{stages}} — încredere {{confidence}}%."
+    },
+    "cron": {
+      "ran": "Sarcina planificată a rulat pe {{domain}}: {{command}}",
+      "failed": "Sarcina planificată a eșuat pe {{domain}} (exit {{code}}): {{command}}"
     }
   }
 }

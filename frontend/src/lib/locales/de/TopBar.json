@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "Angriffskette auf {{domain}} erkannt: {{stages}} — Konfidenz {{confidence}}%."
+    },
+    "cron": {
+      "ran": "Geplante Aufgabe auf {{domain}} ausgeführt: {{command}}",
+      "failed": "Geplante Aufgabe auf {{domain}} fehlgeschlagen (exit {{code}}): {{command}}"
     }
   }
 }

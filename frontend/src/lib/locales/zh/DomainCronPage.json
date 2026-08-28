@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "计划",
     "save": "保存",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "notifyLabel": "运行时通知我",
+    "notifyNone": "从不",
+    "notifyErrors": "仅失败时",
+    "notifyAlways": "每次运行"
   },
   "run": {
     "noOutput": "(无输出)",

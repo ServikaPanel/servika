@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "スケジュール",
     "save": "保存",
-    "saving": "保存中..."
+    "saving": "保存中...",
+    "notifyLabel": "実行時に通知",
+    "notifyNone": "通知しない",
+    "notifyErrors": "失敗時のみ",
+    "notifyAlways": "毎回"
   },
   "run": {
     "noOutput": "(出力なし)",

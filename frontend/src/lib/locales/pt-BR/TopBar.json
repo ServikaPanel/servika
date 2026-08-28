@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "Cadeia de ataque detectada em {{domain}}: {{stages}} — confiança {{confidence}}%."
+    },
+    "cron": {
+      "ran": "Tarefa agendada executada em {{domain}}: {{command}}",
+      "failed": "Tarefa agendada falhou em {{domain}} (exit {{code}}): {{command}}"
     }
   }
 }

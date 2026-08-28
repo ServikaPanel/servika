@@ -386,7 +386,7 @@ func main() {
 	usersH := &users.Handlers{DB: d}
 	domainsH := &domains.Handlers{DB: d, IPv4: ipv4}
 	filesH := &files.Handlers{DB: d}
-	cronH := &cron.Handlers{DB: d}
+	cronH := &cron.Handlers{DB: d, SecretKey: cfg.SecretKey}
 	logsH := &logs.Handlers{DB: d}
 	plansH := &plans.Handlers{DB: d}
 	dnsH := &dns.Handlers{DB: d}
@@ -550,6 +550,12 @@ func main() {
 	r.With(middleware.RateLimit("git-webhook", 30, time.Minute)).
 		Post("/api/v1/git-webhook/{secret}", gitH.Webhook)
 	r.Post("/api/v1/internal/pma-redeem", pmaH.Redeem)
+	// A scheduled task's on-host reporter posts its outcome here over the loopback.
+	// It has no panel session; a domain-bound HMAC token stands in for one, so a
+	// tenant can only ever report for their own domain. Throttled per IP because it
+	// is reachable from every tenant's crontab.
+	r.With(middleware.RateLimit("cron-report", 120, time.Minute)).
+		Post("/api/v1/internal/cron-report", cronH.Report)
 	// Roundcube exchanges a signon token for the master credential over the
 	// loopback. It has no panel session either, so the shared secret file and the
 	// single-use token are what stand in for one.

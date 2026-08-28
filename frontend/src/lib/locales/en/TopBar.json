@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "Attack chain detected on {{domain}}: {{stages}} — confidence {{confidence}}%."
+    },
+    "cron": {
+      "ran": "Scheduled task ran on {{domain}}: {{command}}",
+      "failed": "Scheduled task failed on {{domain}} (exit {{code}}): {{command}}"
     }
   }
 }

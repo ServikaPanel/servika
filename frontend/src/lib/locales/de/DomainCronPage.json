@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Zeitplan",
     "save": "Speichern",
-    "saving": "Wird gespeichert..."
+    "saving": "Wird gespeichert...",
+    "notifyLabel": "Benachrichtigen, wenn ausgeführt",
+    "notifyNone": "Nie",
+    "notifyErrors": "Nur bei Fehler",
+    "notifyAlways": "Bei jedem Lauf"
   },
   "run": {
     "noOutput": "(keine Ausgabe)",

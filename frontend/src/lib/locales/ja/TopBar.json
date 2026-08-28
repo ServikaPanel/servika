@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "{{domain}} で攻撃チェーンを検出しました：{{stages}} — 信頼度 {{confidence}}%。"
+    },
+    "cron": {
+      "ran": "{{domain}} でスケジュールされたタスクが実行されました: {{command}}",
+      "failed": "{{domain}} でスケジュールされたタスクが失敗しました (exit {{code}}): {{command}}"
     }
   }
 }

@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Plán",
     "save": "Uložit",
-    "saving": "Ukládání..."
+    "saving": "Ukládání...",
+    "notifyLabel": "Upozornit při spuštění",
+    "notifyNone": "Nikdy",
+    "notifyErrors": "Pouze při selhání",
+    "notifyAlways": "Při každém spuštění"
   },
   "run": {
     "noOutput": "(žádný výstup)",

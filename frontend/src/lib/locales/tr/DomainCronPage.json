@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Zamanlama",
     "save": "Kaydet",
-    "saving": "Kaydediliyor..."
+    "saving": "Kaydediliyor...",
+    "notifyLabel": "Çalıştığında bildir",
+    "notifyNone": "Asla",
+    "notifyErrors": "Yalnızca başarısızlıkta",
+    "notifyAlways": "Her çalışmada"
   },
   "run": {
     "noOutput": "(çıktı yok)",

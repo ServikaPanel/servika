@@ -299,6 +299,10 @@
     },
     "chain": {
       "detected": "Na {{domain}} zjištěn řetězec útoku: {{stages}} — jistota {{confidence}} %."
+    },
+    "cron": {
+      "ran": "Naplánovaná úloha proběhla na {{domain}}: {{command}}",
+      "failed": "Naplánovaná úloha selhala na {{domain}} (exit {{code}}): {{command}}"
     }
   }
 }

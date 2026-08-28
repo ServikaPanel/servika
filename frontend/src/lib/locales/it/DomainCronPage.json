@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Pianificazione",
     "save": "Salva",
-    "saving": "Salvataggio..."
+    "saving": "Salvataggio...",
+    "notifyLabel": "Avvisami all'esecuzione",
+    "notifyNone": "Mai",
+    "notifyErrors": "Solo in caso di errore",
+    "notifyAlways": "Ogni esecuzione"
   },
   "run": {
     "noOutput": "(nessun output)",

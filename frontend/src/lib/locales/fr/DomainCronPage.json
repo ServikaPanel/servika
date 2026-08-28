@@ -85,7 +85,11 @@
     "argsPlaceholder": "--flag value",
     "scheduleLabel": "Planification",
     "save": "Enregistrer",
-    "saving": "Enregistrement..."
+    "saving": "Enregistrement...",
+    "notifyLabel": "Me notifier à l'exécution",
+    "notifyNone": "Jamais",
+    "notifyErrors": "Uniquement en cas d'échec",
+    "notifyAlways": "À chaque exécution"
   },
   "run": {
     "noOutput": "(aucune sortie)",
