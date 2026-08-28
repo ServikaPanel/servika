@@ -71,6 +71,13 @@ func run(ctx context.Context, name string, args ...string) (string, error) {
 // callers. A revert reads its path out of a database row, and a row is exactly
 // the kind of thing that outlives the code that wrote it.
 func knownTarget(path string) bool {
+	// The sysctl drop-in was renamed to sort last (see propose.go). A revert of a
+	// row written under the OLD name must still restore it, and that path is no
+	// longer in the specs table, so it is accepted here for the same reason the
+	// check exists: a row outlives the code that wrote it.
+	if path == sysctlOldPath {
+		return true
+	}
 	for _, item := range specs {
 		if item.file == path {
 			return true
@@ -304,6 +311,15 @@ func applyFile(ctx context.Context, db *sql.DB, path string, proposals []Proposa
 			ID: proposal.ID, Service: proposal.Service, Param: proposal.Param,
 			Old: proposal.Current, New: proposal.Proposed, BackupID: id,
 		})
+	}
+
+	// The sysctl drop-in was renamed to sort last. Remove the pre-rename file so
+	// one setting never lives in two drop-ins. It runs only AFTER the new file is
+	// fully written, validated, activated and recorded, so a rolled-back apply
+	// never loses the old values first; a pre-rename row stays revertable because
+	// its restore recreates the file from the backup copy, which is untouched.
+	if proposals[0].Service == ServiceSysctl && path == sysctlPath {
+		_ = os.Remove(sysctlOldPath)
 	}
 	return applied, notes, nil
 }

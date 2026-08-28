@@ -39,6 +39,19 @@ func TestOnlyTheTunedFilesCanBeWritten(t *testing.T) {
 	}
 }
 
+// The sysctl drop-in was renamed to sort last (99-zz-). A change written under
+// the OLD name must still be revertable, so knownTarget accepts it even though it
+// is no longer in the specs table. A path that merely resembles it stays refused,
+// the same way the trailing-space case above is.
+func TestTheOldSysctlPathStaysRevertable(t *testing.T) {
+	if !knownTarget(sysctlOldPath) {
+		t.Errorf("the pre-rename sysctl path %q must stay revertable", sysctlOldPath)
+	}
+	if knownTarget(sysctlOldPath + " ") {
+		t.Errorf("a path resembling the old sysctl file must not be accepted")
+	}
+}
+
 // The backup name is built from the target path, so it must flatten to
 // something that can only land directly in the backup directory. A name that
 // kept its separators would make filepath.Join place the copy under whatever
@@ -48,7 +61,7 @@ func TestABackupNameCannotCarryAPath(t *testing.T) {
 		"/etc/nginx/nginx.conf",
 		"/etc/my.cnf.d/servika-tuning.cnf",
 		"/etc/php-fpm.d/www.conf",
-		"/etc/sysctl.d/90-servika.conf",
+		"/etc/sysctl.d/99-zz-servika.conf",
 	} {
 		name := backupName(path)
 		if name != filepath.Base(name) {

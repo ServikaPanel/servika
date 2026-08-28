@@ -34,15 +34,25 @@ const (
 
 // The files each service is tuned through.
 //
-// The MariaDB and sysctl paths are the panel's own drop-ins, named to sort
-// after the installer's own files. The nginx and php-fpm paths are the
-// distribution's, because the directives live there and nginx refuses a
-// duplicate directive from an include.
+// The MariaDB and sysctl paths are the panel's own drop-ins. The nginx and
+// php-fpm paths are the distribution's, because the directives live there and
+// nginx refuses a duplicate directive from an include.
+//
+// The sysctl name carries a "99-zz-" prefix on PURPOSE. systemd-sysctl loads
+// /etc/sysctl.d/*.conf in DICTIONARY ORDER and a LATER file overrides an
+// earlier one for a shared key. The old name, 90-servika.conf, sorted BEFORE
+// any 99-* file, so on a VM guest a vendor drop-in such as 99-<vendor>-perf.conf
+// loaded AFTER it and quietly overrode swappiness, somaxconn and the rest on the
+// next boot: the operator applied a value, the runtime took it (apply writes the
+// live value with "sysctl -w"), and it silently reverted at the next reboot.
+// "99-zz-" sorts after the ordinary 99-* files, so the panel's deliberate choice
+// wins. Apply removes the old 90- file so one setting never lives in two drop-ins.
 const (
-	myCnfPath   = "/etc/my.cnf.d/servika-tuning.cnf"
-	sysctlPath  = "/etc/sysctl.d/90-servika.conf"
-	nginxPath   = "/etc/nginx/nginx.conf"
-	fpmPoolPath = "/etc/php-fpm.d/www.conf"
+	myCnfPath     = "/etc/my.cnf.d/servika-tuning.cnf"
+	sysctlPath    = "/etc/sysctl.d/99-zz-servika.conf"
+	sysctlOldPath = "/etc/sysctl.d/90-servika.conf" // pre-rename name; revert-only (a row outlives the code that wrote it)
+	nginxPath     = "/etc/nginx/nginx.conf"
+	fpmPoolPath   = "/etc/php-fpm.d/www.conf"
 )
 
 // Facts are what was measured off the host.
