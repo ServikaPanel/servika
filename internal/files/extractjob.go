@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -97,6 +98,18 @@ func newExtractJobID() (string, error) {
 // valid until the extractor has read them. It uses a background context, never
 // the request's, which is cancelled when the handler returns the job id.
 func runExtractJob(job *extractJob, archiveFd, targetFd *os.File, archivePinned, targetPinned, systemUser string, limits archivex.Limits) {
+	// The synchronous extractor ran inside the net/http handler goroutine, which
+	// carries a per-request recover: a panic there fails one request. This runs in
+	// a bare goroutine, where an unrecovered panic takes the WHOLE panel process
+	// down, every other tenant with it. Recover here and record the panic as a
+	// failed job instead. The reason code is fixed so no panic text (which can
+	// carry an internal path) reaches the client; the detail is logged.
+	defer func() {
+		if p := recover(); p != nil {
+			log.Printf("files: extract job panicked: %v", p)
+			job.fail("extract_internal_error")
+		}
+	}()
 	defer func() {
 		_ = archiveFd.Close()
 		_ = targetFd.Close()
