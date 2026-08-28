@@ -107,12 +107,19 @@ done`
 // DirectAdmin: php1_select is an INDEX (1/2/3), not a version — it maps to
 // phpN_release in the custombuild options.conf file.
 const discoverDirectAdmin = `oc=/usr/local/directadmin/custombuild/options.conf
+# DirectAdmin keeps the MySQL admin account password-protected, so a credential-
+# less mysql is refused with 1045 and the database list comes back EMPTY. Read
+# the admin credentials from DA's own config (same source as mysqlAdminAuth); the
+# password stays on the remote side and never reaches this panel's argv or ps.
+mc=/usr/local/directadmin/conf/mysql.conf
+dbu=$(sed -n 's/^user=//p' "$mc" 2>/dev/null)
+dbp=$(sed -n 's/^passwd=//p' "$mc" 2>/dev/null)
 for ud in /usr/local/directadmin/data/users/*; do
   [ -d "$ud" ] || continue
   u=$(basename "$ud")
   case "$u" in admin) continue ;; esac
   echo "###USER:$u"
-  echo "###DB:$(mysql -N -B -e "SHOW DATABASES" 2>/dev/null | grep -E "^${u}_" | tr '\n' ',')"
+  echo "###DB:$(MYSQL_PWD="$dbp" mysql -u"$dbu" -N -B -e "SHOW DATABASES" 2>/dev/null | grep -E "^${u}_" | tr '\n' ',')"
   first=1
   while read -r d; do
     [ -n "$d" ] || continue

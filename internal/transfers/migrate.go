@@ -413,7 +413,10 @@ func (h *Handlers) copyDatabase(ctx context.Context, source *RemoteSource, sourc
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
 
-	inner := "mysqldump --single-transaction --quick --routines --triggers " +
+	// The source MySQL admin client needs credentials on Plesk/DirectAdmin; a
+	// credential-less mysqldump is refused there with 1045 (mysqlAdminAuth).
+	dumpEnv, dumpUser := source.mysqlAdminAuth()
+	inner := dumpEnv + "mysqldump " + dumpUser + "--single-transaction --quick --routines --triggers " +
 		"--no-tablespaces --default-character-set=utf8mb4 " + shellQuote(sourceDB) + " | gzip -c"
 	// bash is forced for pipefail; without it the command falls back to sh and
 	// the end-of-dump marker is the only remaining guard.

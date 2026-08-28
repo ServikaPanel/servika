@@ -131,6 +131,26 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// mysqlAdminAuth returns the REMOTE-shell prefix that authenticates the source
+// MySQL admin client, per panel type. cPanel returns empty because root reads
+// its own ~/.my.cnf; Plesk and DirectAdmin keep the MySQL admin account
+// PASSWORD-PROTECTED, so a credential-less client is refused with 1045
+// "Access denied ... (using password: NO)" (measured on a live Plesk source),
+// which for mysqldump then reads as an empty database rather than a failure.
+// The password is read on the REMOTE side with $(...), so it never enters an
+// argument list here or the remote host's `ps`; only the command reading it is
+// visible. Both returned fragments already carry a trailing space.
+func (s *RemoteSource) mysqlAdminAuth() (env, userArg string) {
+	switch s.Type {
+	case "plesk":
+		return `MYSQL_PWD="$(cat /etc/psa/.psa.shadow 2>/dev/null)" `, "-uadmin "
+	case "directadmin":
+		return `MYSQL_PWD="$(sed -n 's/^passwd=//p' /usr/local/directadmin/conf/mysql.conf 2>/dev/null)" `,
+			`-u"$(sed -n 's/^user=//p' /usr/local/directadmin/conf/mysql.conf 2>/dev/null)" `
+	}
+	return "", ""
+}
+
 // ---------------------------------------------------------------------------
 // Remote execution
 // ---------------------------------------------------------------------------
