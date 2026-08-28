@@ -276,6 +276,12 @@ type match struct {
 	// compiled into this binary. It is what keeps an unmeasured rule from
 	// driving containment; see verdict.
 	remote bool
+	// decoded marks a rule that fired against a DECODED layer of the file rather
+	// than its literal bytes (see decoded.go). It is capped exactly like remote:
+	// decoding turns an arbitrary blob into text this rule set has never been
+	// measured against, so a match there can raise a file to suspicious but not,
+	// on its own, drive the containment that MOVES a customer's file.
+	decoded bool
 }
 
 // evaluate weighs one file's content against the rule set and the signals that
@@ -285,6 +291,7 @@ func evaluate(ext string, content []byte) []match {
 	out = append(out, entropyMatches(ext, content)...)
 	out = append(out, taintMatches(ext, content)...)
 	out = append(out, concealedMatches(ext, content)...)
+	out = append(out, decodedMatches(ext, content)...)
 
 	// Remote rules are weighed in a separate pass and MARKED, rather than being
 	// merged into the shipped set. Every weight above was measured against a
@@ -324,12 +331,22 @@ func evaluateWith(rules []rule, ext string, content []byte) []match {
 // means the total did not reach the reporting threshold and no row is written.
 func verdict(matches []match, critical int) (score int, signature string, names []string, level string) {
 	best := 0
-	builtIn := false
+	clearBuiltIn := false     // a shipped rule fired against the file's literal bytes
+	clearBehavioural := false // such a rule that is also weightModerate or above
+	hasRemote, hasDecoded := false, false
 	for _, m := range matches {
 		score += m.score
 		names = append(names, m.name)
-		if !m.remote {
-			builtIn = true
+		switch {
+		case m.remote:
+			hasRemote = true
+		case m.decoded:
+			hasDecoded = true
+		default:
+			clearBuiltIn = true
+			if m.score >= weightModerate {
+				clearBehavioural = true
+			}
 		}
 		if m.score > best {
 			best, signature = m.score, m.name
@@ -337,14 +354,20 @@ func verdict(matches []match, critical int) (score int, signature string, names 
 	}
 	level = levelFor(score, critical)
 
-	// A critical verdict needs at least one rule that was measured against the
-	// clean corpus. Remote rules are already capped below scoreCritical so no
-	// single one can convict, but two of them add up, and a critical finding is
-	// what automatic containment acts on: it MOVES a file out of a customer's
-	// live site, which is the one action here that a wrong rule cannot be
-	// forgiven for. Reporting is reversible, containment is not, so remote
-	// evidence can raise a file to suspicious and no further on its own.
-	if level == LevelCritical && !builtIn {
+	// A critical verdict is what automatic containment acts on: it MOVES a file
+	// out of a customer's live site, the one action here a wrong rule cannot be
+	// forgiven for. Evidence that was NOT measured against the clean corpus can
+	// therefore raise a file to suspicious but not, on its own, convict.
+	//
+	// A remote rule needs any in-clear shipped rule beside it (remote weights
+	// are already capped below scoreCritical). A DECODED match needs more: an
+	// in-clear BEHAVIOURAL rule (weightModerate+), because the weak in-clear
+	// signal it would otherwise lean on is the encoding SHAPE the decode layer
+	// is already built on, the same evidence rather than corroboration.
+	switch {
+	case level == LevelCritical && hasDecoded && !clearBehavioural:
+		level = LevelSuspicious
+	case level == LevelCritical && hasRemote && !clearBuiltIn:
 		level = LevelSuspicious
 	}
 	return score, signature, names, level

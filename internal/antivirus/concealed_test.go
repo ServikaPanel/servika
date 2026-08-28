@@ -64,11 +64,15 @@ func TestTheSplitNameWebshellIsReported(t *testing.T) {
 	if !strings.Contains(strings.Join(names, ","), "PHP.Obf.ConcealedFunctionName") {
 		t.Errorf("matched %v, want the concealed-name rule among them", names)
 	}
-	// Without the concealment the same file is only weak evidence, which is what
-	// made this shape worth a rule of its own.
+	// Without the concealed execution the same file is not CRITICAL, which is
+	// what made the concealment worth a rule of its own. The decode layer
+	// (decoded.go) does see the staged `system($_GET)` payload inside the blob
+	// and reports it as suspicious, but a decoded match is capped there and
+	// cannot drive containment on its own; it is the concealed execution that
+	// makes the full file critical.
 	withoutExecution := []byte("<?php\n$d = <<<EOT\n" + blob + "\nEOT;\n")
-	if _, _, _, level := verdict(evaluate(".php", withoutExecution), 0); level != "" {
-		t.Errorf("the blob alone produced %q; it is weak evidence by design", level)
+	if _, _, _, level := verdict(evaluate(".php", withoutExecution), 0); level == LevelCritical {
+		t.Errorf("the blob alone produced %q; without the execution it must not be critical", level)
 	}
 }
 
