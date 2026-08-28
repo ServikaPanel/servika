@@ -291,7 +291,9 @@ func evaluate(ext string, content []byte) []match {
 	out = append(out, entropyMatches(ext, content)...)
 	out = append(out, taintMatches(ext, content)...)
 	out = append(out, concealedMatches(ext, content)...)
-	out = append(out, decodedMatches(ext, content)...)
+	// The decode pass rewards only a NEW signal, so it is told which shipped
+	// rules already fired against the file's literal bytes.
+	out = append(out, decodedMatches(ext, content, clearRuleNames(out))...)
 
 	// Remote rules are weighed in a separate pass and MARKED, rather than being
 	// merged into the shipped set. Every weight above was measured against a
