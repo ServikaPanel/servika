@@ -31,26 +31,21 @@
     "antivirus": "Antivirus"
   },
   "title": "Antivirus Malware Scan",
-  "subtitlePrefix": "is scanned using ClamAV signatures and built-in webshell heuristics.",
+  "subtitlePrefix": "is scanned by the panel's own engine: a weighted rule chain plus built-in webshell heuristics.",
   "toast": {
     "quarantineAllPartial": "{{done}} file(s) quarantined, {{failed}} could not be: they are still in place.",
     "startScanFailed": "Could not start scan",
-    "quarantineFailed": "Could not quarantine file",
-    "updateSignatureFailed": "Could not update signatures"
+    "quarantineFailed": "Could not quarantine file"
   },
   "confirmQuarantine": "Quarantine this file?\n{{file}}\n\n(The file will be moved under ~/.quarantined and become inaccessible.)",
   "status": {
     "enginePrefix": "Engine:",
-    "engineFull": "ClamAV + Heuristics",
-    "engineHeuristics": "Heuristics Only",
-    "signatureDatabase": "Signature database: {{date}}",
     "latestScan": "Latest scan: {{date}}. {{scanned}} files. {{infected}} findings",
-    "updating": "Updating...",
-    "updateSignatures": "Update Signatures",
     "scanning": "Scanning...",
     "scanNow": "Scan Now",
     "inProgress": "Scan in progress. Large sites may take several minutes.",
-    "resourceWarning": "A scan raises CPU use for as long as it runs, so a large document root can slow the whole server down for a few minutes."
+    "resourceWarning": "A scan raises CPU use for as long as it runs, so a large document root can slow the whole server down for a few minutes.",
+    "engineName": "Rule engine + heuristics"
   },
   "findings": {
     "quarantineAll": "Quarantine all ({{count}})",

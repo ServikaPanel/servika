@@ -31,26 +31,21 @@
     "antivirus": "Antivirus"
   },
   "title": "Analyse antivirus des logiciels malveillants",
-  "subtitlePrefix": "est analysé à l'aide des signatures ClamAV et d'heuristiques webshell intégrées.",
+  "subtitlePrefix": "est analysé par le moteur du panneau : une chaîne de règles pondérée et des heuristiques webshell intégrées.",
   "toast": {
     "quarantineAllPartial": "{{done}} fichier(s) mis en quarantaine, {{failed}} non : ceux-ci restent en place.",
     "startScanFailed": "Impossible de démarrer l'analyse",
-    "quarantineFailed": "Impossible de mettre le fichier en quarantaine",
-    "updateSignatureFailed": "Impossible de mettre à jour les signatures"
+    "quarantineFailed": "Impossible de mettre le fichier en quarantaine"
   },
   "confirmQuarantine": "Mettre ce fichier en quarantaine ?\n{{file}}\n\n(Le fichier sera déplacé sous ~/.quarantined et deviendra inaccessible.)",
   "status": {
     "enginePrefix": "Moteur :",
-    "engineFull": "ClamAV + heuristiques",
-    "engineHeuristics": "Heuristiques uniquement",
-    "signatureDatabase": "Base de signatures : {{date}}",
     "latestScan": "Dernière analyse : {{date}}. {{scanned}} fichiers. {{infected}} résultats",
-    "updating": "Mise à jour...",
-    "updateSignatures": "Mettre à jour les signatures",
     "scanning": "Analyse...",
     "scanNow": "Analyser maintenant",
     "inProgress": "Analyse en cours. Les grands sites peuvent prendre plusieurs minutes.",
-    "resourceWarning": "Une analyse augmente l'usage du CPU pendant toute sa durée : avec une racine de documents volumineuse, tout le serveur peut ralentir quelques minutes."
+    "resourceWarning": "Une analyse augmente l'usage du CPU pendant toute sa durée : avec une racine de documents volumineuse, tout le serveur peut ralentir quelques minutes.",
+    "engineName": "Moteur de règles + heuristique"
   },
   "findings": {
     "quarantineAll": "Tout mettre en quarantaine ({{count}})",

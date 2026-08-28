@@ -31,26 +31,21 @@
     "antivirus": "杀毒"
   },
   "title": "杀毒恶意软件扫描",
-  "subtitlePrefix": "使用 ClamAV 特征库和内置 webshell 启发式规则进行扫描。",
+  "subtitlePrefix": "由面板自有引擎扫描：加权规则链和内置 webshell 启发式规则。",
   "toast": {
     "quarantineAllPartial": "已隔离 {{done}} 个文件，{{failed}} 个未能隔离，仍留在原处。",
     "startScanFailed": "无法启动扫描",
-    "quarantineFailed": "无法隔离文件",
-    "updateSignatureFailed": "无法更新特征库"
+    "quarantineFailed": "无法隔离文件"
   },
   "confirmQuarantine": "隔离此文件？\n{{file}}\n\n（该文件将被移至 ~/.quarantined 下并变为不可访问。）",
   "status": {
     "enginePrefix": "引擎：",
-    "engineFull": "ClamAV + 启发式",
-    "engineHeuristics": "仅启发式",
-    "signatureDatabase": "特征库：{{date}}",
     "latestScan": "最近扫描：{{date}}。{{scanned}} 个文件。{{infected}} 项发现",
-    "updating": "更新中...",
-    "updateSignatures": "更新特征库",
     "scanning": "扫描中...",
     "scanNow": "立即扫描",
     "inProgress": "扫描进行中。大型站点可能需要几分钟。",
-    "resourceWarning": "扫描在运行期间会持续提高 CPU 占用，因此文档根目录较大时整台服务器可能会变慢几分钟。"
+    "resourceWarning": "扫描在运行期间会持续提高 CPU 占用，因此文档根目录较大时整台服务器可能会变慢几分钟。",
+    "engineName": "规则引擎 + 启发式"
   },
   "findings": {
     "quarantineAll": "全部隔离 ({{count}})",

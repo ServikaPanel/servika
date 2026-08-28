@@ -31,26 +31,21 @@
     "antivirus": "Antivírus"
   },
   "title": "Análise de Malware Antivírus",
-  "subtitlePrefix": "é analisado com assinaturas ClamAV e heurísticas de webshell integradas.",
+  "subtitlePrefix": "é analisado pelo motor do próprio painel: uma cadeia de regras ponderada e heurísticas de webshell integradas.",
   "toast": {
     "quarantineAllPartial": "{{done}} ficheiro(s) em quarentena, {{failed}} não: esses continuam no lugar.",
     "startScanFailed": "Não foi possível iniciar a análise",
-    "quarantineFailed": "Não foi possível colocar o ficheiro em quarentena",
-    "updateSignatureFailed": "Não foi possível atualizar as assinaturas"
+    "quarantineFailed": "Não foi possível colocar o ficheiro em quarentena"
   },
   "confirmQuarantine": "Colocar este ficheiro em quarentena?\n{{file}}\n\n(O ficheiro será movido para ~/.quarantined e ficará inacessível.)",
   "status": {
     "enginePrefix": "Motor:",
-    "engineFull": "ClamAV + Heurísticas",
-    "engineHeuristics": "Apenas Heurísticas",
-    "signatureDatabase": "Base de dados de assinaturas: {{date}}",
     "latestScan": "Última análise: {{date}}. {{scanned}} ficheiros. {{infected}} resultados",
-    "updating": "A atualizar...",
-    "updateSignatures": "Atualizar Assinaturas",
     "scanning": "A analisar...",
     "scanNow": "Analisar Agora",
     "inProgress": "Análise em curso. Sites grandes podem demorar vários minutos.",
-    "resourceWarning": "Uma análise aumenta o uso de CPU enquanto decorre, pelo que uma raiz de documentos grande pode tornar todo o servidor lento durante alguns minutos."
+    "resourceWarning": "Uma análise aumenta o uso de CPU enquanto decorre, pelo que uma raiz de documentos grande pode tornar todo o servidor lento durante alguns minutos.",
+    "engineName": "Motor de regras + heurística"
   },
   "findings": {
     "quarantineAll": "Colocar tudo em quarentena ({{count}})",

@@ -31,26 +31,21 @@
     "antivirus": "アンチウイルス"
   },
   "title": "アンチウイルスマルウェアスキャン",
-  "subtitlePrefix": "は ClamAV シグネチャと組み込みのウェブシェルヒューリスティックを使用してスキャンされます。",
+  "subtitlePrefix": "はパネル独自のエンジンでスキャンされます: 重み付けされたルールチェーンと組み込みのウェブシェルヒューリスティック。",
   "toast": {
     "quarantineAllPartial": "{{done}} 件を隔離しました。{{failed}} 件は隔離できず、そのまま残っています。",
     "startScanFailed": "スキャンを開始できませんでした",
-    "quarantineFailed": "ファイルを隔離できませんでした",
-    "updateSignatureFailed": "シグネチャを更新できませんでした"
+    "quarantineFailed": "ファイルを隔離できませんでした"
   },
   "confirmQuarantine": "このファイルを隔離しますか?\n{{file}}\n\n(ファイルは ~/.quarantined 配下へ移動され、アクセスできなくなります。)",
   "status": {
     "enginePrefix": "エンジン:",
-    "engineFull": "ClamAV + ヒューリスティック",
-    "engineHeuristics": "ヒューリスティックのみ",
-    "signatureDatabase": "シグネチャデータベース: {{date}}",
     "latestScan": "最新のスキャン: {{date}}。{{scanned}} ファイル。{{infected}} 件の検出",
-    "updating": "更新中...",
-    "updateSignatures": "シグネチャを更新",
     "scanning": "スキャン中...",
     "scanNow": "今すぐスキャン",
     "inProgress": "スキャンを実行中です。大規模なサイトでは数分かかる場合があります。",
-    "resourceWarning": "スキャンは実行中ずっと CPU 使用率を上げるため、ドキュメントルートが大きいとサーバー全体が数分間遅くなることがあります。"
+    "resourceWarning": "スキャンは実行中ずっと CPU 使用率を上げるため、ドキュメントルートが大きいとサーバー全体が数分間遅くなることがあります。",
+    "engineName": "ルールエンジン + ヒューリスティック"
   },
   "findings": {
     "quarantineAll": "すべて隔離 ({{count}})",

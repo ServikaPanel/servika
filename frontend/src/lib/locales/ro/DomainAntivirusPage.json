@@ -31,26 +31,21 @@
     "antivirus": "Antivirus"
   },
   "title": "Scanare antivirus malware",
-  "subtitlePrefix": "este scanat folosind semnături ClamAV și euristici webshell integrate.",
+  "subtitlePrefix": "este scanat de motorul propriu al panoului: un lanț de reguli ponderat și euristici webshell integrate.",
   "toast": {
     "quarantineAllPartial": "{{done}} fișier(e) în carantină, {{failed}} nu: acelea rămân la locul lor.",
     "startScanFailed": "Nu s-a putut porni scanarea",
-    "quarantineFailed": "Nu s-a putut pune în carantină fișierul",
-    "updateSignatureFailed": "Nu s-au putut actualiza semnăturile"
+    "quarantineFailed": "Nu s-a putut pune în carantină fișierul"
   },
   "confirmQuarantine": "Puneți acest fișier în carantină?\n{{file}}\n\n(Fișierul va fi mutat în ~/.quarantined și va deveni inaccesibil.)",
   "status": {
     "enginePrefix": "Motor:",
-    "engineFull": "ClamAV + Euristici",
-    "engineHeuristics": "Numai euristici",
-    "signatureDatabase": "Baza de date de semnături: {{date}}",
     "latestScan": "Ultima scanare: {{date}}. {{scanned}} fișiere. {{infected}} rezultate",
-    "updating": "Se actualizează...",
-    "updateSignatures": "Actualizați semnăturile",
     "scanning": "Scanare în curs...",
     "scanNow": "Scanați acum",
     "inProgress": "Scanare în curs. Site-urile mari pot dura câteva minute.",
-    "resourceWarning": "O scanare crește utilizarea CPU cât timp rulează, așa că o rădăcină de documente mare poate încetini întregul server câteva minute."
+    "resourceWarning": "O scanare crește utilizarea CPU cât timp rulează, așa că o rădăcină de documente mare poate încetini întregul server câteva minute.",
+    "engineName": "Motor de reguli + euristică"
   },
   "findings": {
     "quarantineAll": "Pune totul în carantină ({{count}})",

@@ -31,26 +31,21 @@
     "antivirus": "Antivirus"
   },
   "title": "Antivirová kontrola malwaru",
-  "subtitlePrefix": "je kontrolována pomocí signatur ClamAV a vestavěné heuristiky webshellů.",
+  "subtitlePrefix": "je kontrolována vlastním enginem panelu: vážený řetězec pravidel a vestavěná heuristika webshellů.",
   "toast": {
     "quarantineAllPartial": "{{done}} soubor(ů) v karanténě, {{failed}} se nepodařilo: ty zůstávají na místě.",
     "startScanFailed": "Kontrolu nelze spustit",
-    "quarantineFailed": "Soubor nelze umístit do karantény",
-    "updateSignatureFailed": "Signatury nelze aktualizovat"
+    "quarantineFailed": "Soubor nelze umístit do karantény"
   },
   "confirmQuarantine": "Umístit tento soubor do karantény?\n{{file}}\n\n(Soubor bude přesunut do ~/.quarantined a stane se nedostupným.)",
   "status": {
     "enginePrefix": "Jádro:",
-    "engineFull": "ClamAV + heuristika",
-    "engineHeuristics": "Pouze heuristika",
-    "signatureDatabase": "Databáze signatur: {{date}}",
     "latestScan": "Poslední kontrola: {{date}}. {{scanned}} souborů. {{infected}} nálezů",
-    "updating": "Aktualizace...",
-    "updateSignatures": "Aktualizovat signatury",
     "scanning": "Kontrola...",
     "scanNow": "Zkontrolovat nyní",
     "inProgress": "Kontrola probíhá. U velkých webů to může trvat několik minut.",
-    "resourceWarning": "Kontrola po celou dobu běhu zvyšuje využití CPU, takže velký kořen dokumentů může na několik minut zpomalit celý server."
+    "resourceWarning": "Kontrola po celou dobu běhu zvyšuje využití CPU, takže velký kořen dokumentů může na několik minut zpomalit celý server.",
+    "engineName": "Pravidlový engine + heuristika"
   },
   "findings": {
     "quarantineAll": "Přesunout vše do karantény ({{count}})",

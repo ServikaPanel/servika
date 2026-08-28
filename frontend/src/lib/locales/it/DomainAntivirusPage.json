@@ -31,26 +31,21 @@
     "antivirus": "Antivirus"
   },
   "title": "Scansione antivirus malware",
-  "subtitlePrefix": "viene analizzato usando le firme ClamAV e le euristiche webshell integrate.",
+  "subtitlePrefix": "viene analizzato dal motore del pannello: una catena di regole pesata e le euristiche webshell integrate.",
   "toast": {
     "quarantineAllPartial": "{{done}} file in quarantena, {{failed}} no: questi restano al loro posto.",
     "startScanFailed": "Impossibile avviare la scansione",
-    "quarantineFailed": "Impossibile mettere il file in quarantena",
-    "updateSignatureFailed": "Impossibile aggiornare le firme"
+    "quarantineFailed": "Impossibile mettere il file in quarantena"
   },
   "confirmQuarantine": "Mettere in quarantena questo file?\n{{file}}\n\n(Il file verrà spostato in ~/.quarantined e diventerà inaccessibile.)",
   "status": {
     "enginePrefix": "Motore:",
-    "engineFull": "ClamAV + Euristiche",
-    "engineHeuristics": "Solo euristiche",
-    "signatureDatabase": "Database firme: {{date}}",
     "latestScan": "Ultima scansione: {{date}}. {{scanned}} file. {{infected}} risultati",
-    "updating": "Aggiornamento...",
-    "updateSignatures": "Aggiorna firme",
     "scanning": "Scansione...",
     "scanNow": "Scansiona ora",
     "inProgress": "Scansione in corso. I siti di grandi dimensioni possono richiedere diversi minuti.",
-    "resourceWarning": "Una scansione aumenta l'uso della CPU per tutta la sua durata, quindi una document root grande può rallentare l'intero server per qualche minuto."
+    "resourceWarning": "Una scansione aumenta l'uso della CPU per tutta la sua durata, quindi una document root grande può rallentare l'intero server per qualche minuto.",
+    "engineName": "Motore di regole + euristica"
   },
   "findings": {
     "quarantineAll": "Metti tutto in quarantena ({{count}})",

@@ -31,26 +31,21 @@
     "antivirus": "Antivirüs"
   },
   "title": "Antivirüs Kötü Amaçlı Yazılım Taraması",
-  "subtitlePrefix": "dizini ClamAV imzaları ve yerleşik webshell sezgisel yöntemleriyle taranır.",
+  "subtitlePrefix": "dizini panelin kendi motoruyla taranır: ağırlıklı kural zinciri ve yerleşik webshell sezgisel yöntemleri.",
   "toast": {
     "quarantineAllPartial": "{{done}} dosya karantinaya alındı, {{failed}} tanesi alınamadı: onlar hâlâ yerinde.",
     "startScanFailed": "Tarama başlatılamadı",
-    "quarantineFailed": "Dosya karantinaya alınamadı",
-    "updateSignatureFailed": "İmzalar güncellenemedi"
+    "quarantineFailed": "Dosya karantinaya alınamadı"
   },
   "confirmQuarantine": "Bu dosya karantinaya alınsın mı?\n{{file}}\n\n(Dosya ~/.quarantined altına taşınacak ve erişilemez hale gelecek.)",
   "status": {
     "enginePrefix": "Motor:",
-    "engineFull": "ClamAV + Sezgisel",
-    "engineHeuristics": "Yalnızca Sezgisel",
-    "signatureDatabase": "İmza veritabanı: {{date}}",
     "latestScan": "Son tarama: {{date}}. {{scanned}} dosya. {{infected}} bulgu",
-    "updating": "Güncelleniyor...",
-    "updateSignatures": "İmzaları Güncelle",
     "scanning": "Taranıyor...",
     "scanNow": "Şimdi Tara",
     "inProgress": "Tarama sürüyor. Büyük siteler birkaç dakika sürebilir.",
-    "resourceWarning": "Tarama, sürdüğü süre boyunca CPU kullanımını yükseltir; büyük bir belge kökünde sunucunun tamamı birkaç dakika yavaşlayabilir."
+    "resourceWarning": "Tarama, sürdüğü süre boyunca CPU kullanımını yükseltir; büyük bir belge kökünde sunucunun tamamı birkaç dakika yavaşlayabilir.",
+    "engineName": "Kural motoru + sezgisel"
   },
   "findings": {
     "quarantineAll": "Hepsini karantinaya al ({{count}})",

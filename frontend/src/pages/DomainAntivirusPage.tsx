@@ -207,11 +207,13 @@ export default function DomainAntivirusPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [startingScan, setStartingScan] = useState(false)
+  // The panel's own weighed-evidence engine is what this page reports on. ClamAV
+  // stays a backend fallback, but its signature freshness is not surfaced here,
+  // so there is no signature-update state.
   // The scan being followed: set either by a scan the user just started or by a
   // status load that found one already running. Null means nothing to poll.
   const [pollScanID, setPollScanID] = useState<number | null>(null)
   const scanning = startingScan || pollScanID !== null
-  const [signatureLoading, setSignatureLoading] = useState(false)
   const [held, setHeld] = useState<Quarantined[]>([])
   // Which quarantined file is being looked at, and what is in it. Restoring was
   // a blind decision before this: the screen listed a path and offered to put
@@ -322,13 +324,6 @@ export default function DomainAntivirusPage() {
     finally { setBusy(false) }
   }
 
-  async function updateSignature() {
-    setSignatureLoading(true); setError(null)
-    try { await api.post(`/domains/${id}/antivirus/update-signature`, {}); load() }
-    catch (e) { setError(apiError(e, t('toast.updateSignatureFailed'))) }
-    finally { setSignatureLoading(false) }
-  }
-
   if (loading) return <div className="px-4 py-4 text-slate-400 sm:px-6 sm:py-5">{t('loading')}</div>
   if (!d) return <div className="px-4 py-4 sm:px-6 sm:py-5"><div className="text-sm text-red-600">{error || t('notFound')}</div></div>
 
@@ -358,18 +353,16 @@ export default function DomainAntivirusPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm space-y-0.5">
               <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${d.clamav ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <span className="text-slate-700 dark:text-slate-200">{t('status.enginePrefix')} <span className="font-medium">{d.clamav ? t('status.engineFull') : t('status.engineHeuristics')}</span></span>
+                {/* The own engine always runs, so the dot is always green. ClamAV
+                    is a backend fallback and its presence is no longer surfaced. */}
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="text-slate-700 dark:text-slate-200">{t('status.enginePrefix')} <span className="font-medium">{t('status.engineName')}</span></span>
               </div>
-              {d.clamav && <div className="text-xs text-slate-400 ml-4">{t('status.signatureDatabase', { date: d.signature_date || '-' })}</div>}
               {d.last_scan && <div className="text-xs text-slate-400 ml-4">
                 {t('status.latestScan', { date: d.last_scan.finished_at || d.last_scan.started_at, scanned: d.last_scan.scanned, infected: d.last_scan.infected })}
               </div>}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {d.clamav && <button onClick={updateSignature} disabled={signatureLoading || scanning}
-                className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
-                {signatureLoading ? t('status.updating') : t('status.updateSignatures')}</button>}
               <button onClick={scan} disabled={scanning}
                 className="px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-lg disabled:opacity-50">
                 {scanning ? t('status.scanning') : t('status.scanNow')}</button>

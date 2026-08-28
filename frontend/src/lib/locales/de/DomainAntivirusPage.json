@@ -31,26 +31,21 @@
     "antivirus": "Antivirus"
   },
   "title": "Antivirus-Malware-Scan",
-  "subtitlePrefix": "wird mit ClamAV-Signaturen und integrierten Webshell-Heuristiken gescannt.",
+  "subtitlePrefix": "wird mit der eigenen Engine des Panels gescannt: eine gewichtete Regelkette und integrierte Webshell-Heuristiken.",
   "toast": {
     "quarantineAllPartial": "{{done}} Datei(en) in Quarantäne, {{failed}} nicht: diese liegen weiterhin an ihrem Platz.",
     "startScanFailed": "Scan konnte nicht gestartet werden",
-    "quarantineFailed": "Datei konnte nicht in Quarantäne verschoben werden",
-    "updateSignatureFailed": "Signaturen konnten nicht aktualisiert werden"
+    "quarantineFailed": "Datei konnte nicht in Quarantäne verschoben werden"
   },
   "confirmQuarantine": "Diese Datei in Quarantäne verschieben?\n{{file}}\n\n(Die Datei wird nach ~/.quarantined verschoben und wird unzugänglich.)",
   "status": {
     "enginePrefix": "Engine:",
-    "engineFull": "ClamAV + Heuristiken",
-    "engineHeuristics": "Nur Heuristiken",
-    "signatureDatabase": "Signaturdatenbank: {{date}}",
     "latestScan": "Letzter Scan: {{date}}. {{scanned}} Dateien. {{infected}} Funde",
-    "updating": "Wird aktualisiert...",
-    "updateSignatures": "Signaturen aktualisieren",
     "scanning": "Scannen...",
     "scanNow": "Jetzt scannen",
     "inProgress": "Scan läuft. Bei großen Websites kann dies mehrere Minuten dauern.",
-    "resourceWarning": "Ein Scan erhöht die CPU-Last, solange er läuft, sodass ein großes Dokumentenverzeichnis den gesamten Server einige Minuten lang verlangsamen kann."
+    "resourceWarning": "Ein Scan erhöht die CPU-Last, solange er läuft, sodass ein großes Dokumentenverzeichnis den gesamten Server einige Minuten lang verlangsamen kann.",
+    "engineName": "Regel-Engine + Heuristik"
   },
   "findings": {
     "quarantineAll": "Alle in Quarantäne ({{count}})",

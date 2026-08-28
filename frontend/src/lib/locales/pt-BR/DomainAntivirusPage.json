@@ -31,26 +31,21 @@
     "antivirus": "Antivírus"
   },
   "title": "Verificação de malware",
-  "subtitlePrefix": "é verificado usando assinaturas ClamAV e heurísticas integradas de webshell.",
+  "subtitlePrefix": "é verificado pelo motor do próprio painel: uma cadeia de regras ponderada e heurísticas integradas de webshell.",
   "toast": {
     "quarantineAllPartial": "{{done}} arquivo(s) em quarentena, {{failed}} não: esses continuam no lugar.",
     "startScanFailed": "Não foi possível iniciar a verificação",
-    "quarantineFailed": "Não foi possível colocar o arquivo em quarentena",
-    "updateSignatureFailed": "Não foi possível atualizar as assinaturas"
+    "quarantineFailed": "Não foi possível colocar o arquivo em quarentena"
   },
   "confirmQuarantine": "Colocar este arquivo em quarentena?\n{{file}}\n\n(O arquivo será movido para ~/.quarantined e ficará inacessível.)",
   "status": {
     "enginePrefix": "Motor:",
-    "engineFull": "ClamAV + Heurísticas",
-    "engineHeuristics": "Somente heurísticas",
-    "signatureDatabase": "Base de assinaturas: {{date}}",
     "latestScan": "Última verificação: {{date}}. {{scanned}} arquivos. {{infected}} ocorrências",
-    "updating": "Atualizando...",
-    "updateSignatures": "Atualizar assinaturas",
     "scanning": "Verificando...",
     "scanNow": "Verificar agora",
     "inProgress": "Verificação em andamento. Sites grandes podem levar vários minutos.",
-    "resourceWarning": "Uma varredura aumenta o uso de CPU enquanto dura, então uma raiz de documentos grande pode deixar o servidor inteiro lento por alguns minutos."
+    "resourceWarning": "Uma varredura aumenta o uso de CPU enquanto dura, então uma raiz de documentos grande pode deixar o servidor inteiro lento por alguns minutos.",
+    "engineName": "Motor de regras + heurística"
   },
   "findings": {
     "quarantineAll": "Colocar tudo em quarentena ({{count}})",
