@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "Observação"
     },
-    "waitingForLog": "Aguardando o log..."
+    "waitingForLog": "Aguardando o log...",
+    "retryPopover": {
+      "title": "O que remigrar?",
+      "mail": "Mail",
+      "mailSoon": "em breve",
+      "migrate": "Migrar seleção"
+    }
   },
   "status": {
     "pending": "Pendente",

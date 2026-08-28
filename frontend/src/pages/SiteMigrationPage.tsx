@@ -100,6 +100,8 @@ const ICON = {
   key: 'M2.6 17.4A2 2 0 0 0 2 18.8V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 0 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 0 1-1h.2a2 2 0 0 0 1.4-.6l.8-.8a6.5 6.5 0 1 0-4-4z',
   eye: 'M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   eyeOff: 'M9.9 9.9a3 3 0 1 0 4.2 4.2M10.7 5.1A11 11 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7M6.6 6.6A13 13 0 0 0 2 12s3 7 10 7a11 11 0 0 0 5.4-1.4M2 2l20 20',
+  refresh: 'M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5',
+  mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 7l-10 6L2 7',
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -107,6 +109,40 @@ function Card({ children }: { children: ReactNode }) {
     <section className="rounded-2xl border border-slate-200/70 bg-white p-5 sm:p-6 dark:border-slate-700/60 dark:bg-slate-800/40">
       {children}
     </section>
+  )
+}
+
+// One selectable component row inside the retry popover.
+function RetryOption(
+  { icon, label, active, disabled, note, onToggle }:
+  { icon: string; label: string; active: boolean; disabled?: boolean; note?: string; onToggle: () => void },
+) {
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onToggle}
+      disabled={disabled}
+      className={
+        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition ' +
+        (disabled
+          ? 'cursor-not-allowed text-slate-400 dark:text-slate-600'
+          : 'text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800')
+      }
+    >
+      <span
+        className={
+          'flex h-4 w-4 shrink-0 items-center justify-center rounded border ' +
+          (active && !disabled
+            ? 'border-brand-500 bg-brand-500 text-white'
+            : 'border-slate-300 dark:border-slate-600')
+        }
+      >
+        {active && !disabled && <Icon d={ICON.check} />}
+      </span>
+      <Icon d={icon} />
+      <span className="flex-1">{label}</span>
+      {note && <span className="text-[11px] text-slate-400 dark:text-slate-500">{note}</span>}
+    </button>
   )
 }
 
@@ -141,6 +177,7 @@ export default function SiteMigrationPage() {
   const [sessionID, setSessionID] = useState(0)
   const [credsStored, setCredsStored] = useState(false)
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([])
+  const [retryOpen, setRetryOpen] = useState(false)
 
   // --- settings ---
   const [withFiles, setWithFiles] = useState(true)
@@ -725,7 +762,35 @@ export default function SiteMigrationPage() {
                   </button>
                 : <div className="flex items-center gap-2">
                     {accounts && accounts.length > 0 && (
-                      <button type="button" onClick={retry} className={btnSmall}>{t('step3.retry')}</button>
+                      <div className="relative">
+                        <button type="button" onClick={() => setRetryOpen(v => !v)} className={btnSmall}>
+                          <Icon d={ICON.refresh} />{t('step3.retry')}
+                        </button>
+                        {retryOpen && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={() => setRetryOpen(false)} />
+                            <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                              <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                                {t('step3.retryPopover.title')}
+                              </div>
+                              <RetryOption icon={ICON.files} label={t('toggles.files.label')} active={withFiles} onToggle={() => setWithFiles(v => !v)} />
+                              <RetryOption icon={ICON.db} label={t('toggles.databases.label')} active={withDatabases} onToggle={() => setWithDatabases(v => !v)} />
+                              <RetryOption icon={ICON.dns} label={t('toggles.dns.label')} active={withDNS} onToggle={() => setWithDNS(v => !v)} />
+                              <RetryOption icon={ICON.ssl} label={t('toggles.ssl.label')} active={withSSL} onToggle={() => setWithSSL(v => !v)} />
+                              <RetryOption icon={ICON.mail} label={t('step3.retryPopover.mail')} active={false} disabled note={t('step3.retryPopover.mailSoon')} onToggle={() => {}} />
+                              <div className="my-2 border-t border-slate-100 dark:border-slate-700" />
+                              <RetryOption icon={ICON.overwrite} label={t('toggles.overwrite.label')} active={overwrite} onToggle={() => setOverwrite(v => !v)} />
+                              <button
+                                type="button"
+                                onClick={() => { setRetryOpen(false); retry() }}
+                                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-brand-700"
+                              >
+                                <Icon d={ICON.forward} />{t('step3.retryPopover.migrate')}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     )}
                     <button type="button" onClick={newMigration} className={btnSmall}>{t('step3.newMigration')}</button>
                   </div>}

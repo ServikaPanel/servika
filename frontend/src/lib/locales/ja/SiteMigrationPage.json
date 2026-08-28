@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "備考"
     },
-    "waitingForLog": "ログを待機しています..."
+    "waitingForLog": "ログを待機しています...",
+    "retryPopover": {
+      "title": "再移行する対象は？",
+      "mail": "メール",
+      "mailSoon": "近日対応",
+      "migrate": "選択項目を移行"
+    }
   },
   "status": {
     "pending": "待機中",

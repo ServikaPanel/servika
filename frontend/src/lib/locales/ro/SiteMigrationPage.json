@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "Notă"
     },
-    "waitingForLog": "Se așteaptă jurnalul..."
+    "waitingForLog": "Se așteaptă jurnalul...",
+    "retryPopover": {
+      "title": "Ce se remigrează?",
+      "mail": "Mail",
+      "mailSoon": "în curând",
+      "migrate": "Migrează selecția"
+    }
   },
   "status": {
     "pending": "În așteptare",

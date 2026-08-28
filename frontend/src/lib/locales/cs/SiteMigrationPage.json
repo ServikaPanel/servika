@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "Poznámka"
     },
-    "waitingForLog": "Čeká se na protokol..."
+    "waitingForLog": "Čeká se na protokol...",
+    "retryPopover": {
+      "title": "Co znovu migrovat?",
+      "mail": "Mail",
+      "mailSoon": "již brzy",
+      "migrate": "Migrovat výběr"
+    }
   },
   "status": {
     "pending": "Čeká",

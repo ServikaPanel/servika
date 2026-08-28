@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "Nota"
     },
-    "waitingForLog": "In attesa del registro..."
+    "waitingForLog": "In attesa del registro...",
+    "retryPopover": {
+      "title": "Cosa rimigrare?",
+      "mail": "Mail",
+      "mailSoon": "prossimamente",
+      "migrate": "Migra selezione"
+    }
   },
   "status": {
     "pending": "In attesa",

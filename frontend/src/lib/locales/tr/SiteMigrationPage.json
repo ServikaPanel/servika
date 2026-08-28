@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "Not"
     },
-    "waitingForLog": "Kayıt bekleniyor..."
+    "waitingForLog": "Kayıt bekleniyor...",
+    "retryPopover": {
+      "title": "Neyi yeniden taşımalı?",
+      "mail": "Mail",
+      "mailSoon": "yakında",
+      "migrate": "Seçileni taşı"
+    }
   },
   "status": {
     "pending": "Bekliyor",

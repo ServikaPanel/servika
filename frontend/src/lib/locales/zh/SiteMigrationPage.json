@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "备注"
     },
-    "waitingForLog": "正在等待日志..."
+    "waitingForLog": "正在等待日志...",
+    "retryPopover": {
+      "title": "重新迁移哪些内容？",
+      "mail": "邮件",
+      "mailSoon": "即将推出",
+      "migrate": "迁移所选项"
+    }
   },
   "status": {
     "pending": "等待中",

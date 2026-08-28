@@ -114,7 +114,13 @@
       "dns": "DNS",
       "note": "Hinweis"
     },
-    "waitingForLog": "Warten auf Protokollausgabe..."
+    "waitingForLog": "Warten auf Protokollausgabe...",
+    "retryPopover": {
+      "title": "Was erneut migrieren?",
+      "mail": "Mail",
+      "mailSoon": "demnächst",
+      "migrate": "Auswahl migrieren"
+    }
   },
   "status": {
     "pending": "Ausstehend",
