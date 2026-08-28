@@ -293,9 +293,9 @@
     "newCount": "{{n}} 条新通知",
     "showAll": "查看全部 →",
     "procwatch": {
-      "webShell": "{{domain}} 上的 Web 进程启动了 shell：{{parent}} → {{child}}。",
-      "webDownloader": "{{domain}} 上的 Web 进程启动了下载器：{{parent}} → {{child}}。",
-      "worldWritable": "{{domain}} 上的进程从全局可写目录 ({{dir}}) 运行。"
+      "untrustedOrigin": "一个进程在 {{domain}} 上从不受信任的位置（{{location}}）运行。",
+      "webShellCmd": "一个 web 进程在 {{domain}} 上运行了可疑命令。",
+      "webDownloader": "一个 web 进程在 {{domain}} 上启动了远程下载。"
     }
   }
 }

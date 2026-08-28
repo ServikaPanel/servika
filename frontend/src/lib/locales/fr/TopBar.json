@@ -293,9 +293,9 @@
     "newCount": "{{n}} nouveau(x)",
     "showAll": "Tout afficher →",
     "procwatch": {
-      "webShell": "Un processus web a démarré un shell sur {{domain}} : {{parent}} → {{child}}.",
-      "webDownloader": "Un processus web a démarré un téléchargeur sur {{domain}} : {{parent}} → {{child}}.",
-      "worldWritable": "Un processus s'est exécuté depuis un répertoire accessible en écriture par tous ({{dir}}) sur {{domain}}."
+      "untrustedOrigin": "Un processus s'est exécuté depuis un emplacement non fiable ({{location}}) sur {{domain}}.",
+      "webShellCmd": "Un processus web a exécuté une commande suspecte sur {{domain}}.",
+      "webDownloader": "Un processus web a démarré un téléchargement distant sur {{domain}}."
     }
   }
 }

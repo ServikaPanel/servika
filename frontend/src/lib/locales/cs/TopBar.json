@@ -293,9 +293,9 @@
     "newCount": "{{n}} nových",
     "showAll": "Zobrazit vše →",
     "procwatch": {
-      "webShell": "Webový proces spustil shell na {{domain}}: {{parent}} → {{child}}.",
-      "webDownloader": "Webový proces spustil nástroj pro stahování na {{domain}}: {{parent}} → {{child}}.",
-      "worldWritable": "Proces byl spuštěn z veřejně zapisovatelného adresáře ({{dir}}) na {{domain}}."
+      "untrustedOrigin": "Proces byl spuštěn z nedůvěryhodného umístění ({{location}}) na {{domain}}.",
+      "webShellCmd": "Webový proces spustil podezřelý příkaz na {{domain}}.",
+      "webDownloader": "Webový proces zahájil vzdálené stahování na {{domain}}."
     }
   }
 }

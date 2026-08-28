@@ -293,9 +293,9 @@
     "newCount": "{{n}} yeni",
     "showAll": "Tümünü göster →",
     "procwatch": {
-      "webShell": "{{domain}} alanında bir web süreci kabuk başlattı: {{parent}} → {{child}}.",
-      "webDownloader": "{{domain}} alanında bir web süreci indirici başlattı: {{parent}} → {{child}}.",
-      "worldWritable": "{{domain}} alanında bir süreç dünya-yazılabilir bir dizinden ({{dir}}) çalıştı."
+      "untrustedOrigin": "Bir süreç {{domain}} üzerinde güvenilmez bir konumdan ({{location}}) çalıştı.",
+      "webShellCmd": "Bir web süreci {{domain}} üzerinde şüpheli bir komut çalıştırdı.",
+      "webDownloader": "Bir web süreci {{domain}} üzerinde uzak bir indirme başlattı."
     }
   }
 }

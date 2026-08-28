@@ -293,9 +293,9 @@
     "newCount": "{{n}} noi",
     "showAll": "Afișează tot →",
     "procwatch": {
-      "webShell": "Un proces web a pornit un shell pe {{domain}}: {{parent}} → {{child}}.",
-      "webDownloader": "Un proces web a pornit un downloader pe {{domain}}: {{parent}} → {{child}}.",
-      "worldWritable": "Un proces a rulat dintr-un director cu scriere publică ({{dir}}) pe {{domain}}."
+      "untrustedOrigin": "Un proces a rulat dintr-o locație de neîncredere ({{location}}) pe {{domain}}.",
+      "webShellCmd": "Un proces web a rulat o comandă suspectă pe {{domain}}.",
+      "webDownloader": "Un proces web a inițiat o descărcare la distanță pe {{domain}}."
     }
   }
 }
