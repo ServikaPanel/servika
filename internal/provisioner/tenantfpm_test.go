@@ -192,3 +192,13 @@ func containsFunction(csv, fn string) bool {
 	}
 	return false
 }
+
+// A tenant's own pool must RENDER opcache.enable, because before this it was
+// never written and a panel "off" left PHP's global default (on) in effect. With
+// no database the default is on, so the rendered pool carries the flag as on.
+func TestTheTenantPoolRendersOpcacheEnable(t *testing.T) {
+	pool := renderTenantPoolScoped(nil, "c_test", 1, 0, "")
+	if !strings.Contains(pool, "php_admin_flag[opcache.enable] = on") {
+		t.Errorf("rendered pool does not carry opcache.enable = on:\n%s", pool)
+	}
+}

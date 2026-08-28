@@ -2822,7 +2822,12 @@ const (
 	// RenderPool now merges it, so writePoolValidated below re-renders the pool with
 	// the LPE primitives blocked. Own-master tenants already receive it through
 	// EnsureTenantFPMOnStartup's repairTenantPoolDrift, which is not sentinel-gated.
-	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v4_done"
+	//
+	// v5 delivers the per-tenant opcache.enable flag to shared-master tenants:
+	// RenderPool now writes php_admin_flag[opcache.enable] from the stored setting,
+	// so an operator turning OPcache off in the panel reaches the pool. Own-master
+	// tenants again receive it through repairTenantPoolDrift.
+	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v5_done"
 	panelVhostPath      = "/etc/nginx/conf.d/_panel.conf"
 	panelSecSentinel    = "# SERVIKA-PANEL-SEC v2"
 )

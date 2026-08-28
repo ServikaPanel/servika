@@ -284,6 +284,10 @@ type tenantPoolSettings struct {
 	DisableFunctions  string
 	PMStrategy        string
 	PMMaxRequests     int
+	// OpcacheEnable: some applications (WHMCS) ask for OPcache OFF because of cache
+	// inconsistency. Turning it off in the panel must reach the pool; before this it
+	// was never rendered, so the tenant ran PHP's global default (on).
+	OpcacheEnable bool
 	// Logging / Debug Mode (php_settings) -- robust fatal error visibility.
 	DisplayErrors  bool
 	LogErrors      bool
@@ -303,6 +307,7 @@ func tenantReadPoolSettings(db *sql.DB, domainID, subdomainID int64) tenantPoolS
 		DisableFunctions:  hardenedDisableFunctions,
 		PMStrategy:        "ondemand",
 		PMMaxRequests:     500,
+		OpcacheEnable:     true,
 		DisplayErrors:     false,
 		LogErrors:         true,
 		ErrorReporting:    "E_ALL & ~E_DEPRECATED & ~E_STRICT",
@@ -345,14 +350,15 @@ func tenantReadPoolSettings(db *sql.DB, domainID, subdomainID int64) tenantPoolS
 	// display_errors/log_errors/error_reporting/debug_mode are read separately
 	// (backward-compatible: if debug_mode column is absent, the query errors out
 	// and defaults are preserved, main settings remain unaffected).
-	var de, le, dm int
+	var de, le, dm, oce int
 	var er string
 	if derr := db.QueryRow(`SELECT COALESCE(display_errors,0), COALESCE(log_errors,1),
-	        COALESCE(error_reporting,''), COALESCE(debug_mode,0)
-	        FROM php_settings WHERE domain_id=? AND subdomain_id=?`, domainID, subdomainID).Scan(&de, &le, &er, &dm); derr == nil {
+	        COALESCE(error_reporting,''), COALESCE(debug_mode,0), COALESCE(opcache_enable,1)
+	        FROM php_settings WHERE domain_id=? AND subdomain_id=?`, domainID, subdomainID).Scan(&de, &le, &er, &dm, &oce); derr == nil {
 		settings.DisplayErrors = de != 0
 		settings.LogErrors = le != 0
 		settings.DebugMode = dm != 0
+		settings.OpcacheEnable = oce != 0
 		if strings.TrimSpace(er) != "" {
 			settings.ErrorReporting = tenantSanitizeScalar(er, settings.ErrorReporting)
 		}
@@ -409,6 +415,15 @@ func renderTenantPoolScoped(db *sql.DB, systemUser string, domainID, subdomainID
 	body.WriteString("; Security settings cannot be overridden by tenant code.\n")
 	fmt.Fprintf(&body, "php_admin_value[open_basedir] = %s\n", openBasedir)
 	fmt.Fprintf(&body, "php_admin_value[disable_functions] = %s\n", settings.DisableFunctions)
+	// OPcache: some applications (WHMCS) ask for it OFF because of cache
+	// inconsistency. php_admin_flag so a tenant cannot re-enable it with ini_set;
+	// before this it was never rendered, so a panel "off" left PHP's global
+	// default (on) in effect.
+	opcacheFlag := "off"
+	if settings.OpcacheEnable {
+		opcacheFlag = "on"
+	}
+	fmt.Fprintf(&body, "php_admin_flag[opcache.enable] = %s\n", opcacheFlag)
 	fmt.Fprintf(&body, "php_admin_value[upload_tmp_dir] = /home/%s/tmp\n", systemUser)
 	fmt.Fprintf(&body, "php_admin_value[sys_temp_dir] = /home/%s/tmp\n", systemUser)
 	fmt.Fprintf(&body, "php_admin_value[session.save_path] = /home/%s/tmp\n", systemUser)

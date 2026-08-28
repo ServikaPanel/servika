@@ -356,6 +356,11 @@ php_admin_value[post_max_size] = {{.S.PostMaxSize}}
 php_admin_value[upload_max_filesize] = {{.S.UploadMaxFilesize}}
 php_admin_value[max_input_vars] = 10000
 php_admin_value[disable_functions] = {{.S.DisableFunctions}}
+; OPcache: some applications (WHMCS) ask for it OFF because of cache
+; inconsistency. php_admin_flag so a tenant cannot re-enable it with ini_set;
+; without this line the panel could read "off" while PHP's global default (on)
+; still applied.
+php_admin_flag[opcache.enable] = {{onoff .S.OpcacheEnable}}
 
 ; ---- Common ----
 php_admin_flag[log_errors] = {{onoff .S.LogErrors}}
