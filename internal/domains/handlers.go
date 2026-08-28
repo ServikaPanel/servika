@@ -1403,6 +1403,54 @@ func (h *Handlers) DeleteDatabase(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": dbName})
 }
 
+// OptimizeDatabase runs OPTIMIZE TABLE across one schema and reports the on-disk
+// size before and after, so the operator sees how much space was reclaimed.
+//
+// The size is measured on both sides with SchemaSizes rather than trusted from
+// OPTIMIZE's own output, which is a per-table status table, not a byte count.
+// reclaimed is clamped at zero: OPTIMIZE rebuilds an InnoDB table and can leave
+// it marginally larger, which is not a loss to report as a negative saving.
+func (h *Handlers) OptimizeDatabase(w http.ResponseWriter, r *http.Request) {
+	dbid, _ := strconv.ParseInt(chi.URLParam(r, "dbid"), 10, 64)
+	var dbName string
+	err := h.DB.QueryRowContext(r.Context(),
+		`SELECT db.db_name FROM db_accounts db WHERE db.id=?`, dbid).Scan(&dbName)
+	if errors.Is(err, sql.ErrNoRows) {
+		httpx.WriteError(w, http.StatusNotFound, "database record not found")
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
+	if dbName == "" {
+		httpx.WriteError(w, http.StatusInternalServerError, "database record is incomplete")
+		return
+	}
+	before, err := credentials.SchemaSizes(r.Context(), []string{dbName})
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "size read failed")
+		return
+	}
+	if err := credentials.OptimizeDatabase(r.Context(), dbName); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "optimize failed")
+		return
+	}
+	after, err := credentials.SchemaSizes(r.Context(), []string{dbName})
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "size read failed")
+		return
+	}
+	beforeBytes, afterBytes := before[dbName], after[dbName]
+	reclaimed := max(beforeBytes-afterBytes, 0)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"ok":              true,
+		"before_bytes":    beforeBytes,
+		"after_bytes":     afterBytes,
+		"reclaimed_bytes": reclaimed,
+	})
+}
+
 // BulkOwner updates customer_id for multiple domains.
 type bulkOwnerReq struct {
 	IDs        []int64 `json:"ids"`

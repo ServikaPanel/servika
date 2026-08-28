@@ -1000,6 +1000,7 @@ func main() {
 				r.With(middleware.CustomerScope).Post("/domains/{id}/databases", domainsH.CreateDatabase)
 				r.With(middleware.AdminOnly).Delete("/databases/{dbid}", domainsH.DeleteDatabase)
 				r.With(middleware.AdminOnly).Put("/databases/{dbid}/password", domainsH.SetDatabasePassword)
+				r.With(middleware.AdminOnly).Post("/databases/{dbid}/optimize", domainsH.OptimizeDatabase)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/files", filesH.List)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/files/read", filesH.Read)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/files/download", filesH.Download)
