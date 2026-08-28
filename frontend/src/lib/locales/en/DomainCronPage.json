@@ -31,12 +31,16 @@
     "action": "Action"
   },
   "row": {
-    "delete": "Delete"
+    "delete": "Delete",
+    "run": "Run",
+    "running": "Running...",
+    "runTitle": "Run this task now"
   },
   "confirmDelete": "Delete the task \"{{command}}...\"?",
   "errors": {
     "deleteFailed": "Deletion failed",
-    "addFailed": "Could not add item"
+    "addFailed": "Could not add item",
+    "runFailed": "Run failed"
   },
   "modal": {
     "title": "New Scheduled Task",
@@ -60,5 +64,11 @@
     "cancel": "Cancel",
     "adding": "Adding...",
     "addTask": "Add Task"
+  },
+  "run": {
+    "noOutput": "(no output)",
+    "errorLabel": "Error",
+    "success": "✓ Task ran",
+    "failed": "⚠ Task failed"
   }
 }

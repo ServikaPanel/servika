@@ -4,6 +4,7 @@ package cron
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -13,11 +14,19 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// runTimeout bounds a manual cron run so a wedged command cannot hold the request.
+const runTimeout = 120 * time.Second
+
+// runOutputLimit is how much combined output a manual run returns; the tail is
+// kept because a failing command's error is usually at the end.
+const runOutputLimit = 8192
 
 const (
 	maxTasks         = 100
@@ -259,4 +268,54 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": deleted})
+}
+
+// Run triggers one cron task by hand (a test/verification run). The task's command
+// runs as the tenant user, with a clean environment carrying no panel secrets, a
+// 120-second timeout, and the tail of the combined output returned.
+//
+// Security: the command is read from the tenant's OWN crontab (they wrote it) and
+// was already going to run under their own identity, so this only brings the time
+// forward. runuser drops to the tenant; no privilege is added. lookup enforces the
+// demo and scope checks.
+func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
+	systemUser, err := h.lookup(r)
+	if err != nil {
+		httpx.WriteError(w, statusFromErr(err), "operation failed")
+		return
+	}
+	idx, _ := strconv.Atoi(chi.URLParam(r, "idx"))
+	list, err := read(systemUser)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
+	if idx < 0 || idx >= len(list) {
+		httpx.WriteError(w, http.StatusNotFound, "index out of range")
+		return
+	}
+	command := list[idx].Command
+
+	ctx, cancel := context.WithTimeout(r.Context(), runTimeout)
+	defer cancel()
+	// #nosec G204 G702 -- runuser drops to the validated tenant account (systemUser ^c_[A-Za-z0-9_]+$); the command is the tenant's own crontab entry, already destined to run under this identity by cron, so no new capability is granted and this only brings the run forward.
+	cmd := exec.CommandContext(ctx, "runuser", "-u", systemUser, "--", "/bin/sh", "-c", command)
+	cmd.Env = []string{
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"HOME=/home/" + systemUser,
+	}
+	out, runErr := cmd.CombinedOutput()
+	output := string(out)
+	if len(output) > runOutputLimit {
+		output = "...(truncated)\n" + output[len(output)-runOutputLimit:]
+	}
+	resp := map[string]any{"ok": runErr == nil, "output": output, "command": command}
+	if runErr != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			resp["error"] = "timed out (120s); the task may still be running in the background"
+		} else {
+			resp["error"] = runErr.Error()
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }

@@ -31,12 +31,16 @@
     "action": "操作"
   },
   "row": {
-    "delete": "削除"
+    "delete": "削除",
+    "run": "実行",
+    "running": "実行中...",
+    "runTitle": "このタスクを今すぐ実行"
   },
   "confirmDelete": "タスク「{{command}}...」を削除しますか?",
   "errors": {
     "deleteFailed": "削除に失敗しました",
-    "addFailed": "項目を追加できませんでした"
+    "addFailed": "項目を追加できませんでした",
+    "runFailed": "実行に失敗しました"
   },
   "modal": {
     "title": "新規スケジュールタスク",
@@ -60,5 +64,11 @@
     "cancel": "キャンセル",
     "adding": "追加中...",
     "addTask": "タスクを追加"
+  },
+  "run": {
+    "noOutput": "(出力なし)",
+    "errorLabel": "エラー",
+    "success": "✓ タスクが実行されました",
+    "failed": "⚠ タスクが失敗しました"
   }
 }

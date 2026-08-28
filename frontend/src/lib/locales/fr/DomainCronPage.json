@@ -31,12 +31,16 @@
     "action": "Action"
   },
   "row": {
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "run": "Exécuter",
+    "running": "En cours...",
+    "runTitle": "Exécuter cette tâche maintenant"
   },
   "confirmDelete": "Supprimer la tâche « {{command}}... » ?",
   "errors": {
     "deleteFailed": "Échec de la suppression",
-    "addFailed": "Impossible d'ajouter l'élément"
+    "addFailed": "Impossible d'ajouter l'élément",
+    "runFailed": "Échec de l'exécution"
   },
   "modal": {
     "title": "Nouvelle tâche planifiée",
@@ -60,5 +64,11 @@
     "cancel": "Annuler",
     "adding": "Ajout...",
     "addTask": "Ajouter une tâche"
+  },
+  "run": {
+    "noOutput": "(aucune sortie)",
+    "errorLabel": "Erreur",
+    "success": "✓ Tâche exécutée",
+    "failed": "⚠ Échec de la tâche"
   }
 }

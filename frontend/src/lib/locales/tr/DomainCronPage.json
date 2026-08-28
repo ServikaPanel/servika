@@ -31,12 +31,16 @@
     "action": "İşlem"
   },
   "row": {
-    "delete": "Sil"
+    "delete": "Sil",
+    "run": "Çalıştır",
+    "running": "Çalışıyor...",
+    "runTitle": "Görevi şimdi elle çalıştır"
   },
   "confirmDelete": "\"{{command}}...\" görevi silinsin mi?",
   "errors": {
     "deleteFailed": "Silme başarısız oldu",
-    "addFailed": "Öğe eklenemedi"
+    "addFailed": "Öğe eklenemedi",
+    "runFailed": "Çalıştırma başarısız"
   },
   "modal": {
     "title": "Yeni Zamanlanmış Görev",
@@ -60,5 +64,11 @@
     "cancel": "İptal",
     "adding": "Ekleniyor...",
     "addTask": "Görev Ekle"
+  },
+  "run": {
+    "noOutput": "(çıktı yok)",
+    "errorLabel": "Hata",
+    "success": "✓ Görev çalıştı",
+    "failed": "⚠ Görev hata verdi"
   }
 }

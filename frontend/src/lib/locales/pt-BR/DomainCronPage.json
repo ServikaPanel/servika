@@ -31,12 +31,16 @@
     "action": "Ação"
   },
   "row": {
-    "delete": "Excluir"
+    "delete": "Excluir",
+    "run": "Executar",
+    "running": "Executando...",
+    "runTitle": "Executar esta tarefa agora"
   },
   "confirmDelete": "Excluir a tarefa \"{{command}}...\"?",
   "errors": {
     "deleteFailed": "Falha ao excluir",
-    "addFailed": "Não foi possível adicionar o item"
+    "addFailed": "Não foi possível adicionar o item",
+    "runFailed": "Falha na execução"
   },
   "modal": {
     "title": "Nova tarefa agendada",
@@ -60,5 +64,11 @@
     "cancel": "Cancelar",
     "adding": "Adicionando...",
     "addTask": "Adicionar tarefa"
+  },
+  "run": {
+    "noOutput": "(sem saída)",
+    "errorLabel": "Erro",
+    "success": "✓ Tarefa executada",
+    "failed": "⚠ A tarefa falhou"
   }
 }

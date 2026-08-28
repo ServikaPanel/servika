@@ -31,12 +31,16 @@
     "action": "Akce"
   },
   "row": {
-    "delete": "Smazat"
+    "delete": "Smazat",
+    "run": "Spustit",
+    "running": "Probíhá...",
+    "runTitle": "Spustit úlohu nyní ručně"
   },
   "confirmDelete": "Smazat úlohu „{{command}}...“?",
   "errors": {
     "deleteFailed": "Smazání se nezdařilo",
-    "addFailed": "Položku nelze přidat"
+    "addFailed": "Položku nelze přidat",
+    "runFailed": "Spuštění selhalo"
   },
   "modal": {
     "title": "Nová naplánovaná úloha",
@@ -60,5 +64,11 @@
     "cancel": "Zrušit",
     "adding": "Přidávání...",
     "addTask": "Přidat úlohu"
+  },
+  "run": {
+    "noOutput": "(žádný výstup)",
+    "errorLabel": "Chyba",
+    "success": "✓ Úloha proběhla",
+    "failed": "⚠ Úloha selhala"
   }
 }

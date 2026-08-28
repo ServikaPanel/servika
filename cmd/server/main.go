@@ -1029,6 +1029,7 @@ func main() {
 				r.With(middleware.CustomerScope).Get("/domains/{id}/cron", cronH.List)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/cron", cronH.Create)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/cron/{idx}", cronH.Delete)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/cron/{idx}/run", cronH.Run)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/logs", logsH.List)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/logs/read", logsH.Read)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/logs/live", logsH.Tail)

@@ -31,12 +31,16 @@
     "action": "Aktion"
   },
   "row": {
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "run": "Ausführen",
+    "running": "Läuft...",
+    "runTitle": "Aufgabe jetzt manuell ausführen"
   },
   "confirmDelete": "Die Aufgabe \"{{command}}...\" löschen?",
   "errors": {
     "deleteFailed": "Löschen fehlgeschlagen",
-    "addFailed": "Element konnte nicht hinzugefügt werden"
+    "addFailed": "Element konnte nicht hinzugefügt werden",
+    "runFailed": "Ausführung fehlgeschlagen"
   },
   "modal": {
     "title": "Neue geplante Aufgabe",
@@ -60,5 +64,11 @@
     "cancel": "Abbrechen",
     "adding": "Wird hinzugefügt...",
     "addTask": "Aufgabe hinzufügen"
+  },
+  "run": {
+    "noOutput": "(keine Ausgabe)",
+    "errorLabel": "Fehler",
+    "success": "✓ Aufgabe ausgeführt",
+    "failed": "⚠ Aufgabe fehlgeschlagen"
   }
 }

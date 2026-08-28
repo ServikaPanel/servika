@@ -31,12 +31,16 @@
     "action": "Azione"
   },
   "row": {
-    "delete": "Elimina"
+    "delete": "Elimina",
+    "run": "Esegui",
+    "running": "In corso...",
+    "runTitle": "Esegui questa attività ora"
   },
   "confirmDelete": "Eliminare l'attività \"{{command}}...\"?",
   "errors": {
     "deleteFailed": "Eliminazione non riuscita",
-    "addFailed": "Impossibile aggiungere l'elemento"
+    "addFailed": "Impossibile aggiungere l'elemento",
+    "runFailed": "Esecuzione non riuscita"
   },
   "modal": {
     "title": "Nuova attività pianificata",
@@ -60,5 +64,11 @@
     "cancel": "Annulla",
     "adding": "Aggiunta...",
     "addTask": "Aggiungi attività"
+  },
+  "run": {
+    "noOutput": "(nessun output)",
+    "errorLabel": "Errore",
+    "success": "✓ Attività eseguita",
+    "failed": "⚠ Attività non riuscita"
   }
 }

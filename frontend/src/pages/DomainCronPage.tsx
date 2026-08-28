@@ -63,6 +63,7 @@ export default function DomainCronPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState(false)
+  const [running, setRunning] = useState<number | null>(null)
 
   // Split so the mount effect never writes state synchronously: fetchTasks
   // settles only through promise callbacks, and load() adds the spinner for the
@@ -94,6 +95,21 @@ export default function DomainCronPage() {
     if (id) api.get<Domain>(`/domains/${id}`).then(r => setDomain(r.data)).catch(report('subscription'))
     fetchTasks()
   }, [id, fetchTasks, report])
+
+  async function run(task: Task) {
+    setRunning(task.idx)
+    try {
+      const { data } = await api.post(`/domains/${id}/cron/${task.idx}/run`)
+      const output = (data.output || '').trim() || t('run.noOutput')
+      const errorLine = data.error ? `\n\n${t('run.errorLabel')}: ${data.error}` : ''
+      const heading = data.ok ? t('run.success') : t('run.failed')
+      await notify({ message: `${heading}\n\n$ ${data.command}\n\n${output}${errorLine}`, tone: data.ok ? 'info' : 'error' })
+    } catch (e) {
+      await notify({ message: apiError(e, t('errors.runFailed')), tone: 'error' })
+    } finally {
+      setRunning(null)
+    }
+  }
 
   async function remove(task: Task) {
     if (!(await confirm({ message: t('confirmDelete', { command: task.command.slice(0, 60) }), dangerous: true }))) return
@@ -178,7 +194,8 @@ export default function DomainCronPage() {
                       {task.comment && <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{task.comment}</div>}
                     </div>
                   </td>
-                  <td className={responsiveTableActionCellClass}>
+                  <td className={`${responsiveTableActionCellClass} space-x-1`}>
+                    <button onClick={() => run(task)} disabled={running === task.idx} title={t('row.runTitle')} className="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 px-2 py-1 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition disabled:opacity-50">{running === task.idx ? t('row.running') : t('row.run')}</button>
                     <button onClick={() => remove(task)} className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:text-red-300 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 transition">{t('row.delete')}</button>
                   </td>
                 </tr>

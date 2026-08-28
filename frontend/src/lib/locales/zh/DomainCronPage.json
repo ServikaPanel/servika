@@ -31,12 +31,16 @@
     "action": "操作"
   },
   "row": {
-    "delete": "删除"
+    "delete": "删除",
+    "run": "运行",
+    "running": "运行中...",
+    "runTitle": "立即手动运行此任务"
   },
   "confirmDelete": "删除任务“{{command}}...”？",
   "errors": {
     "deleteFailed": "删除失败",
-    "addFailed": "无法添加项目"
+    "addFailed": "无法添加项目",
+    "runFailed": "运行失败"
   },
   "modal": {
     "title": "新建计划任务",
@@ -60,5 +64,11 @@
     "cancel": "取消",
     "adding": "添加中...",
     "addTask": "添加任务"
+  },
+  "run": {
+    "noOutput": "(无输出)",
+    "errorLabel": "错误",
+    "success": "✓ 任务已运行",
+    "failed": "⚠ 任务失败"
   }
 }

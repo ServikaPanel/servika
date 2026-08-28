@@ -31,12 +31,16 @@
     "action": "Acțiune"
   },
   "row": {
-    "delete": "Ștergere"
+    "delete": "Ștergere",
+    "run": "Rulează",
+    "running": "În curs...",
+    "runTitle": "Rulează sarcina acum manual"
   },
   "confirmDelete": "Ștergeți sarcina „{{command}}...”?",
   "errors": {
     "deleteFailed": "Ștergerea a eșuat",
-    "addFailed": "Nu s-a putut adăuga elementul"
+    "addFailed": "Nu s-a putut adăuga elementul",
+    "runFailed": "Rularea a eșuat"
   },
   "modal": {
     "title": "Sarcină programată nouă",
@@ -60,5 +64,11 @@
     "cancel": "Anulare",
     "adding": "Se adaugă...",
     "addTask": "Adăugare sarcină"
+  },
+  "run": {
+    "noOutput": "(fără ieșire)",
+    "errorLabel": "Eroare",
+    "success": "✓ Sarcina a rulat",
+    "failed": "⚠ Sarcina a eșuat"
   }
 }
