@@ -28,19 +28,22 @@
     "month": "Mês",
     "weekday": "Dia da semana",
     "command": "Comando / Descrição",
-    "action": "Ação"
+    "action": "Ação",
+    "schedule": "Agendamento"
   },
   "row": {
     "delete": "Excluir",
     "run": "Executar",
     "running": "Executando...",
-    "runTitle": "Executar esta tarefa agora"
+    "runTitle": "Executar esta tarefa agora",
+    "edit": "Editar"
   },
   "confirmDelete": "Excluir a tarefa \"{{command}}...\"?",
   "errors": {
     "deleteFailed": "Falha ao excluir",
     "addFailed": "Não foi possível adicionar o item",
-    "runFailed": "Falha na execução"
+    "runFailed": "Falha na execução",
+    "saveFailed": "Não foi possível salvar a tarefa"
   },
   "modal": {
     "title": "Nova tarefa agendada",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "ex.: script de backup noturno",
     "cancel": "Cancelar",
     "adding": "Adicionando...",
-    "addTask": "Adicionar tarefa"
+    "addTask": "Adicionar tarefa",
+    "editTitle": "Editar tarefa agendada",
+    "enabledLabel": "Ativado",
+    "enabledHint": "(tarefas desativadas são mantidas mas não executadas)",
+    "typeLabel": "Tipo de tarefa",
+    "typeCommand": "Comando",
+    "typeUrl": "URL",
+    "typePhp": "Script PHP",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "A URL é buscada com curl no horário agendado.",
+    "scriptLabel": "Caminho do script",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "Versão do PHP",
+    "argsLabel": "Argumentos",
+    "argsOptional": "(opcional)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Agendamento",
+    "save": "Salvar",
+    "saving": "Salvando..."
   },
   "run": {
     "noOutput": "(sem saída)",
     "errorLabel": "Erro",
     "success": "✓ Tarefa executada",
     "failed": "⚠ A tarefa falhou"
+  },
+  "badges": {
+    "disabled": "Desativado"
   }
 }

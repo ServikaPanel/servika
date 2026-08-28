@@ -28,19 +28,22 @@
     "month": "月",
     "weekday": "曜日",
     "command": "コマンド / 説明",
-    "action": "操作"
+    "action": "操作",
+    "schedule": "スケジュール"
   },
   "row": {
     "delete": "削除",
     "run": "実行",
     "running": "実行中...",
-    "runTitle": "このタスクを今すぐ実行"
+    "runTitle": "このタスクを今すぐ実行",
+    "edit": "編集"
   },
   "confirmDelete": "タスク「{{command}}...」を削除しますか?",
   "errors": {
     "deleteFailed": "削除に失敗しました",
     "addFailed": "項目を追加できませんでした",
-    "runFailed": "実行に失敗しました"
+    "runFailed": "実行に失敗しました",
+    "saveFailed": "タスクを保存できませんでした"
   },
   "modal": {
     "title": "新規スケジュールタスク",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "例: 夜間バックアップスクリプト",
     "cancel": "キャンセル",
     "adding": "追加中...",
-    "addTask": "タスクを追加"
+    "addTask": "タスクを追加",
+    "editTitle": "スケジュールされたタスクを編集",
+    "enabledLabel": "有効",
+    "enabledHint": "(無効なタスクは保持されますが実行されません)",
+    "typeLabel": "タスクの種類",
+    "typeCommand": "コマンド",
+    "typeUrl": "URL",
+    "typePhp": "PHPスクリプト",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "URLはスケジュールに従ってcurlで取得されます。",
+    "scriptLabel": "スクリプトのパス",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "PHPバージョン",
+    "argsLabel": "引数",
+    "argsOptional": "(任意)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "スケジュール",
+    "save": "保存",
+    "saving": "保存中..."
   },
   "run": {
     "noOutput": "(出力なし)",
     "errorLabel": "エラー",
     "success": "✓ タスクが実行されました",
     "failed": "⚠ タスクが失敗しました"
+  },
+  "badges": {
+    "disabled": "無効"
   }
 }

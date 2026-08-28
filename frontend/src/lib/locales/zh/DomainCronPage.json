@@ -28,19 +28,22 @@
     "month": "月",
     "weekday": "星期",
     "command": "命令 / 描述",
-    "action": "操作"
+    "action": "操作",
+    "schedule": "计划"
   },
   "row": {
     "delete": "删除",
     "run": "运行",
     "running": "运行中...",
-    "runTitle": "立即手动运行此任务"
+    "runTitle": "立即手动运行此任务",
+    "edit": "编辑"
   },
   "confirmDelete": "删除任务“{{command}}...”？",
   "errors": {
     "deleteFailed": "删除失败",
     "addFailed": "无法添加项目",
-    "runFailed": "运行失败"
+    "runFailed": "运行失败",
+    "saveFailed": "无法保存任务"
   },
   "modal": {
     "title": "新建计划任务",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "例如 每晚备份脚本",
     "cancel": "取消",
     "adding": "添加中...",
-    "addTask": "添加任务"
+    "addTask": "添加任务",
+    "editTitle": "编辑计划任务",
+    "enabledLabel": "已启用",
+    "enabledHint": "(已禁用的任务会保留但不运行)",
+    "typeLabel": "任务类型",
+    "typeCommand": "命令",
+    "typeUrl": "URL",
+    "typePhp": "PHP 脚本",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "URL 会按计划通过 curl 获取。",
+    "scriptLabel": "脚本路径",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "PHP 版本",
+    "argsLabel": "参数",
+    "argsOptional": "(可选)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "计划",
+    "save": "保存",
+    "saving": "保存中..."
   },
   "run": {
     "noOutput": "(无输出)",
     "errorLabel": "错误",
     "success": "✓ 任务已运行",
     "failed": "⚠ 任务失败"
+  },
+  "badges": {
+    "disabled": "已禁用"
   }
 }

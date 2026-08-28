@@ -28,19 +28,22 @@
     "month": "Mese",
     "weekday": "Giorno sett.",
     "command": "Comando / Descrizione",
-    "action": "Azione"
+    "action": "Azione",
+    "schedule": "Pianificazione"
   },
   "row": {
     "delete": "Elimina",
     "run": "Esegui",
     "running": "In corso...",
-    "runTitle": "Esegui questa attività ora"
+    "runTitle": "Esegui questa attività ora",
+    "edit": "Modifica"
   },
   "confirmDelete": "Eliminare l'attività \"{{command}}...\"?",
   "errors": {
     "deleteFailed": "Eliminazione non riuscita",
     "addFailed": "Impossibile aggiungere l'elemento",
-    "runFailed": "Esecuzione non riuscita"
+    "runFailed": "Esecuzione non riuscita",
+    "saveFailed": "Impossibile salvare l'attività"
   },
   "modal": {
     "title": "Nuova attività pianificata",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "es. script di backup notturno",
     "cancel": "Annulla",
     "adding": "Aggiunta...",
-    "addTask": "Aggiungi attività"
+    "addTask": "Aggiungi attività",
+    "editTitle": "Modifica attività pianificata",
+    "enabledLabel": "Attivo",
+    "enabledHint": "(le attività disattivate vengono mantenute ma non eseguite)",
+    "typeLabel": "Tipo di attività",
+    "typeCommand": "Comando",
+    "typeUrl": "URL",
+    "typePhp": "Script PHP",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "L'URL viene richiamato con curl secondo la pianificazione.",
+    "scriptLabel": "Percorso dello script",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "Versione PHP",
+    "argsLabel": "Argomenti",
+    "argsOptional": "(facoltativo)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Pianificazione",
+    "save": "Salva",
+    "saving": "Salvataggio..."
   },
   "run": {
     "noOutput": "(nessun output)",
     "errorLabel": "Errore",
     "success": "✓ Attività eseguita",
     "failed": "⚠ Attività non riuscita"
+  },
+  "badges": {
+    "disabled": "Disattivato"
   }
 }

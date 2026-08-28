@@ -28,19 +28,22 @@
     "month": "Měsíc",
     "weekday": "Den v týdnu",
     "command": "Příkaz / popis",
-    "action": "Akce"
+    "action": "Akce",
+    "schedule": "Plán"
   },
   "row": {
     "delete": "Smazat",
     "run": "Spustit",
     "running": "Probíhá...",
-    "runTitle": "Spustit úlohu nyní ručně"
+    "runTitle": "Spustit úlohu nyní ručně",
+    "edit": "Upravit"
   },
   "confirmDelete": "Smazat úlohu „{{command}}...“?",
   "errors": {
     "deleteFailed": "Smazání se nezdařilo",
     "addFailed": "Položku nelze přidat",
-    "runFailed": "Spuštění selhalo"
+    "runFailed": "Spuštění selhalo",
+    "saveFailed": "Úlohu se nepodařilo uložit"
   },
   "modal": {
     "title": "Nová naplánovaná úloha",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "např. noční zálohovací skript",
     "cancel": "Zrušit",
     "adding": "Přidávání...",
-    "addTask": "Přidat úlohu"
+    "addTask": "Přidat úlohu",
+    "editTitle": "Upravit naplánovanou úlohu",
+    "enabledLabel": "Povoleno",
+    "enabledHint": "(zakázané úlohy se zachovají, ale nespouštějí)",
+    "typeLabel": "Typ úlohy",
+    "typeCommand": "Příkaz",
+    "typeUrl": "URL",
+    "typePhp": "PHP skript",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "URL se načte pomocí curl podle plánu.",
+    "scriptLabel": "Cesta ke skriptu",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "Verze PHP",
+    "argsLabel": "Argumenty",
+    "argsOptional": "(volitelné)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Plán",
+    "save": "Uložit",
+    "saving": "Ukládání..."
   },
   "run": {
     "noOutput": "(žádný výstup)",
     "errorLabel": "Chyba",
     "success": "✓ Úloha proběhla",
     "failed": "⚠ Úloha selhala"
+  },
+  "badges": {
+    "disabled": "Zakázáno"
   }
 }

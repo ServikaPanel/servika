@@ -28,19 +28,22 @@
     "month": "Mois",
     "weekday": "Jour de la semaine",
     "command": "Commande / description",
-    "action": "Action"
+    "action": "Action",
+    "schedule": "Planification"
   },
   "row": {
     "delete": "Supprimer",
     "run": "Exécuter",
     "running": "En cours...",
-    "runTitle": "Exécuter cette tâche maintenant"
+    "runTitle": "Exécuter cette tâche maintenant",
+    "edit": "Modifier"
   },
   "confirmDelete": "Supprimer la tâche « {{command}}... » ?",
   "errors": {
     "deleteFailed": "Échec de la suppression",
     "addFailed": "Impossible d'ajouter l'élément",
-    "runFailed": "Échec de l'exécution"
+    "runFailed": "Échec de l'exécution",
+    "saveFailed": "Impossible d'enregistrer la tâche"
   },
   "modal": {
     "title": "Nouvelle tâche planifiée",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "par ex. script de sauvegarde nocturne",
     "cancel": "Annuler",
     "adding": "Ajout...",
-    "addTask": "Ajouter une tâche"
+    "addTask": "Ajouter une tâche",
+    "editTitle": "Modifier la tâche planifiée",
+    "enabledLabel": "Activé",
+    "enabledHint": "(les tâches désactivées sont conservées mais non exécutées)",
+    "typeLabel": "Type de tâche",
+    "typeCommand": "Commande",
+    "typeUrl": "URL",
+    "typePhp": "Script PHP",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "L'URL est récupérée avec curl selon la planification.",
+    "scriptLabel": "Chemin du script",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "Version de PHP",
+    "argsLabel": "Arguments",
+    "argsOptional": "(facultatif)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Planification",
+    "save": "Enregistrer",
+    "saving": "Enregistrement..."
   },
   "run": {
     "noOutput": "(aucune sortie)",
     "errorLabel": "Erreur",
     "success": "✓ Tâche exécutée",
     "failed": "⚠ Échec de la tâche"
+  },
+  "badges": {
+    "disabled": "Désactivé"
   }
 }

@@ -28,19 +28,22 @@
     "month": "Mes",
     "weekday": "Día de semana",
     "command": "Comando / Descripción",
-    "action": "Acción"
+    "action": "Acción",
+    "schedule": "Programación"
   },
   "row": {
     "delete": "Eliminar",
     "run": "Ejecutar",
     "running": "Ejecutando...",
-    "runTitle": "Ejecutar esta tarea ahora"
+    "runTitle": "Ejecutar esta tarea ahora",
+    "edit": "Editar"
   },
   "confirmDelete": "¿Eliminar la tarea «{{command}}...»?",
   "errors": {
     "deleteFailed": "La eliminación falló",
     "addFailed": "No se pudo añadir el elemento",
-    "runFailed": "Error al ejecutar"
+    "runFailed": "Error al ejecutar",
+    "saveFailed": "No se pudo guardar la tarea"
   },
   "modal": {
     "title": "Nueva tarea programada",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "p.ej. script de copia de seguridad nocturna",
     "cancel": "Cancelar",
     "adding": "Añadiendo...",
-    "addTask": "Añadir tarea"
+    "addTask": "Añadir tarea",
+    "editTitle": "Editar tarea programada",
+    "enabledLabel": "Activado",
+    "enabledHint": "(las tareas desactivadas se conservan pero no se ejecutan)",
+    "typeLabel": "Tipo de tarea",
+    "typeCommand": "Comando",
+    "typeUrl": "URL",
+    "typePhp": "Script PHP",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "La URL se obtiene con curl según la programación.",
+    "scriptLabel": "Ruta del script",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "Versión de PHP",
+    "argsLabel": "Argumentos",
+    "argsOptional": "(opcional)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Programación",
+    "save": "Guardar",
+    "saving": "Guardando..."
   },
   "run": {
     "noOutput": "(sin salida)",
     "errorLabel": "Error",
     "success": "✓ Tarea ejecutada",
     "failed": "⚠ La tarea falló"
+  },
+  "badges": {
+    "disabled": "Desactivado"
   }
 }

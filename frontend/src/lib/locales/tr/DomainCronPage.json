@@ -28,19 +28,22 @@
     "month": "Ay",
     "weekday": "Hafta günü",
     "command": "Komut / Açıklama",
-    "action": "İşlem"
+    "action": "İşlem",
+    "schedule": "Zamanlama"
   },
   "row": {
     "delete": "Sil",
     "run": "Çalıştır",
     "running": "Çalışıyor...",
-    "runTitle": "Görevi şimdi elle çalıştır"
+    "runTitle": "Görevi şimdi elle çalıştır",
+    "edit": "Düzenle"
   },
   "confirmDelete": "\"{{command}}...\" görevi silinsin mi?",
   "errors": {
     "deleteFailed": "Silme başarısız oldu",
     "addFailed": "Öğe eklenemedi",
-    "runFailed": "Çalıştırma başarısız"
+    "runFailed": "Çalıştırma başarısız",
+    "saveFailed": "Görev kaydedilemedi"
   },
   "modal": {
     "title": "Yeni Zamanlanmış Görev",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "örn. gece yedekleme betiği",
     "cancel": "İptal",
     "adding": "Ekleniyor...",
-    "addTask": "Görev Ekle"
+    "addTask": "Görev Ekle",
+    "editTitle": "Zamanlanmış Görevi Düzenle",
+    "enabledLabel": "Etkin",
+    "enabledHint": "(pasif görevler saklanır ama çalıştırılmaz)",
+    "typeLabel": "Görev türü",
+    "typeCommand": "Komut",
+    "typeUrl": "URL",
+    "typePhp": "PHP script'i",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "URL zamanı gelince curl ile çağrılır.",
+    "scriptLabel": "Script yolu",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "PHP sürümü",
+    "argsLabel": "Argümanlar",
+    "argsOptional": "(isteğe bağlı)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Zamanlama",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor..."
   },
   "run": {
     "noOutput": "(çıktı yok)",
     "errorLabel": "Hata",
     "success": "✓ Görev çalıştı",
     "failed": "⚠ Görev hata verdi"
+  },
+  "badges": {
+    "disabled": "Pasif"
   }
 }

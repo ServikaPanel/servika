@@ -28,19 +28,22 @@
     "month": "Monat",
     "weekday": "Wochentag",
     "command": "Befehl / Beschreibung",
-    "action": "Aktion"
+    "action": "Aktion",
+    "schedule": "Zeitplan"
   },
   "row": {
     "delete": "Löschen",
     "run": "Ausführen",
     "running": "Läuft...",
-    "runTitle": "Aufgabe jetzt manuell ausführen"
+    "runTitle": "Aufgabe jetzt manuell ausführen",
+    "edit": "Bearbeiten"
   },
   "confirmDelete": "Die Aufgabe \"{{command}}...\" löschen?",
   "errors": {
     "deleteFailed": "Löschen fehlgeschlagen",
     "addFailed": "Element konnte nicht hinzugefügt werden",
-    "runFailed": "Ausführung fehlgeschlagen"
+    "runFailed": "Ausführung fehlgeschlagen",
+    "saveFailed": "Aufgabe konnte nicht gespeichert werden"
   },
   "modal": {
     "title": "Neue geplante Aufgabe",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "z. B. nächtliches Backup-Skript",
     "cancel": "Abbrechen",
     "adding": "Wird hinzugefügt...",
-    "addTask": "Aufgabe hinzufügen"
+    "addTask": "Aufgabe hinzufügen",
+    "editTitle": "Geplante Aufgabe bearbeiten",
+    "enabledLabel": "Aktiviert",
+    "enabledHint": "(deaktivierte Aufgaben bleiben erhalten, werden aber nicht ausgeführt)",
+    "typeLabel": "Aufgabentyp",
+    "typeCommand": "Befehl",
+    "typeUrl": "URL",
+    "typePhp": "PHP-Skript",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "Die URL wird planmäßig mit curl abgerufen.",
+    "scriptLabel": "Skriptpfad",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "PHP-Version",
+    "argsLabel": "Argumente",
+    "argsOptional": "(optional)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Zeitplan",
+    "save": "Speichern",
+    "saving": "Wird gespeichert..."
   },
   "run": {
     "noOutput": "(keine Ausgabe)",
     "errorLabel": "Fehler",
     "success": "✓ Aufgabe ausgeführt",
     "failed": "⚠ Aufgabe fehlgeschlagen"
+  },
+  "badges": {
+    "disabled": "Deaktiviert"
   }
 }

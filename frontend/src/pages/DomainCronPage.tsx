@@ -26,6 +26,9 @@ type Task = {
   weekday: string
   command: string
   comment?: string
+  enabled: boolean
+  type?: string          // "command" | "url" | "php"
+  php_version?: string
 }
 
 type TaskResponse = {
@@ -37,13 +40,16 @@ type TaskResponse = {
   week: string
   command: string
   comment?: string
+  enabled: boolean
+  type?: string
+  php_version?: string
 }
 
 type Domain = { id: number; domain_name: string; system_user: string }
 
-type ListResponse = { system_user: string; total: number; tasks: TaskResponse[] }
+type ListResponse = { system_user: string; total: number; tasks: TaskResponse[]; php_versions: string[] }
 
-const PRESETS: Array<{ labelKey: string; selection: Omit<Task, 'idx' | 'command' | 'comment'> }> = [
+const PRESETS: Array<{ labelKey: string; selection: { minute: string; hour: string; day: string; month: string; weekday: string } }> = [
   { labelKey: 'everyMinute', selection: { minute: '*', hour: '*', day: '*', month: '*', weekday: '*' } },
   { labelKey: 'everyHour', selection: { minute: '0', hour: '*', day: '*', month: '*', weekday: '*' } },
   { labelKey: 'dailyAt3', selection: { minute: '0', hour: '3', day: '*', month: '*', weekday: '*' } },
@@ -60,9 +66,11 @@ export default function DomainCronPage() {
   const { id } = useParams()
   const [domain, setDomain] = useState<Domain | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
+  const [phpVersions, setPhpVersions] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [modal, setModal] = useState(false)
+  // null = closed, 'new' = add, Task = edit.
+  const [modalTask, setModalTask] = useState<Task | 'new' | null>(null)
   const [running, setRunning] = useState<number | null>(null)
 
   // Split so the mount effect never writes state synchronously: fetchTasks
@@ -71,16 +79,22 @@ export default function DomainCronPage() {
   const fetchTasks = useCallback(() => {
     if (!id) return
     api.get<ListResponse>(`/domains/${id}/cron`)
-      .then(r => setTasks(r.data.tasks.map(task => ({
-        idx: task.idx,
-        minute: task.minute,
-        hour: task.hour,
-        day: task.day,
-        month: task.month,
-        weekday: task.week,
-        command: task.command,
-        comment: task.comment,
-      }))))
+      .then(r => {
+        setPhpVersions(r.data.php_versions || [])
+        setTasks(r.data.tasks.map(task => ({
+          idx: task.idx,
+          minute: task.minute,
+          hour: task.hour,
+          day: task.day,
+          month: task.month,
+          weekday: task.week,
+          command: task.command,
+          comment: task.comment,
+          enabled: task.enabled,
+          type: task.type,
+          php_version: task.php_version,
+        })))
+      })
       .catch(e => setError(apiError(e)))
       .finally(() => setLoading(false))
   }, [id])
@@ -141,7 +155,7 @@ export default function DomainCronPage() {
 
       <div className="grid grid-cols-2 gap-2 mb-4 sm:flex sm:items-center">
         <button
-          onClick={() => setModal(true)}
+          onClick={() => setModalTask('new')}
           className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-md shadow-sm transition"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
@@ -171,31 +185,30 @@ export default function DomainCronPage() {
           <table className={responsiveTableClass}>
             <thead className={responsiveTableHeadClass}>
               <tr>
-                <th className="text-left px-4 py-2.5">{t('columns.min')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.hour')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.day')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.month')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.weekday')}</th>
+                <th className="text-left px-4 py-2.5">{t('columns.schedule')}</th>
                 <th className="text-left px-4 py-2.5">{t('columns.command')}</th>
                 <th className="text-right px-4 py-2.5">{t('columns.action')}</th>
               </tr>
             </thead>
             <tbody className={responsiveTableBodyClass}>
               {tasks.map((task) => (
-                <tr key={task.idx} className={responsiveTableRowClass}>
-                  <td data-label={t('columns.min')} className={responsiveTableCodeCellClass}>{task.minute}</td>
-                  <td data-label={t('columns.hour')} className={responsiveTableCodeCellClass}>{task.hour}</td>
-                  <td data-label={t('columns.day')} className={responsiveTableCodeCellClass}>{task.day}</td>
-                  <td data-label={t('columns.month')} className={responsiveTableCodeCellClass}>{task.month}</td>
-                  <td data-label={t('columns.weekday')} className={responsiveTableCodeCellClass}>{task.weekday}</td>
+                <tr key={task.idx} className={`${responsiveTableRowClass} ${!task.enabled ? 'opacity-60' : ''}`}>
+                  <td data-label={t('columns.schedule')} className={responsiveTableCodeCellClass}>
+                    <span className="whitespace-nowrap">{task.minute} {task.hour} {task.day} {task.month} {task.weekday}</span>
+                  </td>
                   <td data-label={t('columns.command')} className={responsiveTableCellClass}>
                     <div className="min-w-0 flex-1 text-right lg:text-left">
-                      <div className="font-mono text-slate-800 dark:text-slate-200 break-all lg:truncate lg:max-w-md" title={task.command}>{task.command}</div>
+                      <div className="flex flex-wrap items-center justify-end lg:justify-start gap-2">
+                        {!task.enabled && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{t('badges.disabled')}</span>}
+                        {task.type && task.type !== 'command' && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300">{task.type === 'php' ? `PHP ${task.php_version || ''}` : task.type}</span>}
+                        <span className="font-mono text-slate-800 dark:text-slate-200 break-all lg:truncate lg:max-w-md" title={task.command}>{task.command}</span>
+                      </div>
                       {task.comment && <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{task.comment}</div>}
                     </div>
                   </td>
                   <td className={`${responsiveTableActionCellClass} space-x-1`}>
                     <button onClick={() => run(task)} disabled={running === task.idx} title={t('row.runTitle')} className="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 px-2 py-1 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition disabled:opacity-50">{running === task.idx ? t('row.running') : t('row.run')}</button>
+                    <button onClick={() => setModalTask(task)} className="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 px-2 py-1 rounded hover:bg-brand-50 dark:hover:bg-brand-900/30 transition">{t('row.edit')}</button>
                     <button onClick={() => remove(task)} className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:text-red-300 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 transition">{t('row.delete')}</button>
                   </td>
                 </tr>
@@ -205,105 +218,172 @@ export default function DomainCronPage() {
         )}
       </div>
 
-      <CronTaskModal open={modal} onClose={() => setModal(false)} onSaved={load} domainId={Number(id)} />
+      {modalTask !== null && (
+        <CronTaskModal
+          task={modalTask}
+          phpVersions={phpVersions}
+          domainId={Number(id)}
+          onClose={() => setModalTask(null)}
+          onSaved={() => { setModalTask(null); load() }}
+        />
+      )}
     </div>
   )
 }
 
-function CronTaskModal({ open, onClose, onSaved, domainId }: {
-  open: boolean; onClose: () => void; onSaved: () => void; domainId: number
+// parseCommand best-effort extracts the raw url/script/args from a generated
+// command so an existing typed task can be edited in the same fields it was
+// created with.
+function parseCommand(task: Task): { url: string; script: string; args: string } {
+  if (task.type === 'url') {
+    const m = task.command.match(/'([^']+)'/)
+    return { url: m ? m[1] : '', script: '', args: '' }
+  }
+  if (task.type === 'php') {
+    const m = task.command.match(/-q '([^']+)'(.*)$/)
+    return { url: '', script: m ? m[1] : '', args: m ? m[2].trim() : '' }
+  }
+  return { url: '', script: '', args: '' }
+}
+
+function CronTaskModal({ task, phpVersions, domainId, onClose, onSaved }: {
+  task: Task | 'new'; phpVersions: string[]; domainId: number; onClose: () => void; onSaved: () => void
 }) {
   const { t } = useTranslation('DomainCronPage')
-  const [minute, setMinute] = useState('0')
-  const [hour, setHour] = useState('3')
-  const [day, setDay] = useState('*')
-  const [month, setMonth] = useState('*')
-  const [weekday, setWeekday] = useState('*')
-  const [command, setCommand] = useState('')
-  const [comment, setComment] = useState('')
+  const isNew = task === 'new'
+  const existing = isNew ? null : (task as Task)
+  const parsed = existing ? parseCommand(existing) : { url: '', script: '', args: '' }
+  const versions = phpVersions.length ? phpVersions : ['8.3']
+
+  const [enabled, setEnabled] = useState(existing ? existing.enabled : true)
+  const [type, setType] = useState(existing?.type || 'command')
+  const [minute, setMinute] = useState(existing?.minute || '0')
+  const [hour, setHour] = useState(existing?.hour || '3')
+  const [day, setDay] = useState(existing?.day || '*')
+  const [month, setMonth] = useState(existing?.month || '*')
+  const [weekday, setWeekday] = useState(existing?.weekday || '*')
+  const [command, setCommand] = useState(existing && (existing.type || 'command') === 'command' ? existing.command : '')
+  const [url, setUrl] = useState(parsed.url)
+  const [script, setScript] = useState(parsed.script)
+  const [args, setArgs] = useState(parsed.args)
+  const [phpVersion, setPhpVersion] = useState(existing?.php_version || versions[0])
+  const [comment, setComment] = useState(existing?.comment || '')
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function applyPreset(preset: typeof PRESETS[number]['selection']) {
-    setMinute(preset.minute)
-    setHour(preset.hour)
-    setDay(preset.day)
-    setMonth(preset.month)
-    setWeekday(preset.weekday)
+    setMinute(preset.minute); setHour(preset.hour); setDay(preset.day); setMonth(preset.month); setWeekday(preset.weekday)
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setProcessing(true); setError(null)
     try {
-      await api.post(`/domains/${domainId}/cron`, { minute, hour, day, month, week: weekday, command: command.trim(), comment: comment.trim() })
+      const body: Record<string, unknown> = {
+        minute, hour, day, month, week: weekday, enabled, type, comment: comment.trim(),
+      }
+      if (type === 'command') body.command = command.trim()
+      else if (type === 'url') body.url = url.trim()
+      else if (type === 'php') { body.script = script.trim(); body.args = args.trim(); body.php_version = phpVersion }
+
+      if (isNew) await api.post(`/domains/${domainId}/cron`, body)
+      else await api.put(`/domains/${domainId}/cron/${(task as Task).idx}`, body)
       onSaved()
-      setCommand(''); setComment('')
-      onClose()
     } catch (e) {
-      setError(apiError(e, t('errors.addFailed')))
+      setError(apiError(e, t('errors.saveFailed')))
     } finally {
       setProcessing(false)
     }
   }
 
+  const inputCls = 'w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-md text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none'
+
   return (
-    <Modal open={open} title={t('modal.title')} onClose={onClose} width="lg">
+    <Modal open={true} title={isNew ? t('modal.title') : t('modal.editTitle')} onClose={onClose} width="lg">
       <form onSubmit={submit} className="space-y-4">
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="h-4 w-4 accent-brand-600" />
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('modal.enabledLabel')} <span className="font-normal text-slate-400 dark:text-slate-500">{t('modal.enabledHint')}</span></span>
+        </label>
+
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.presetsLabel')}</label>
-          <div className="flex flex-wrap gap-1.5">
-            {PRESETS.map(p => (
-              <button
-                key={p.labelKey}
-                type="button"
-                onClick={() => applyPreset(p.selection)}
-                className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-brand-100 dark:hover:bg-brand-900/40 hover:text-brand-700 dark:hover:text-brand-300 hover:border-brand-300 dark:hover:border-brand-700 rounded-md transition"
-              >
-                {t(`presets.${p.labelKey}`)}
-              </button>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.typeLabel')}</label>
+          <div className="flex flex-wrap gap-4">
+            {[['command', t('modal.typeCommand')], ['url', t('modal.typeUrl')], ['php', t('modal.typePhp')]].map(([v, l]) => (
+              <label key={v} className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input type="radio" name="cronType" checked={type === v} onChange={() => setType(v)} className="accent-brand-600" />
+                {l}
+              </label>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-2">
-          <Field label={t('modal.fields.minute')}   value={minute} onChange={setMinute} />
-          <Field label={t('modal.fields.hour')}     value={hour}   onChange={setHour} />
-          <Field label={t('modal.fields.day')}      value={day}    onChange={setDay} />
-          <Field label={t('modal.fields.month')}       value={month}     onChange={setMonth} />
-          <Field label={t('modal.fields.weekday')}    value={weekday}  onChange={setWeekday} />
-        </div>
-        <p className="text-xs text-slate-500 dark:text-slate-500">{t('modal.cronHint')} <code className="font-mono">*</code>{t('modal.cronHintPost')} <code className="font-mono">*/5</code>{t('modal.cronEvery')} <code className="font-mono">0,15,30</code>{t('modal.cronList')} <code className="font-mono">9-17</code>{t('modal.cronRange')}</p>
+        {type === 'command' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.commandLabel')}</label>
+            <input value={command} onChange={e => setCommand(e.target.value)} required placeholder={t('modal.commandPlaceholder')} className={inputCls} />
+          </div>
+        )}
+        {type === 'url' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.urlLabel')}</label>
+            <input value={url} onChange={e => setUrl(e.target.value)} required placeholder={t('modal.urlPlaceholder')} className={inputCls} />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">{t('modal.urlHint')}</p>
+          </div>
+        )}
+        {type === 'php' && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.scriptLabel')}</label>
+                <input value={script} onChange={e => setScript(e.target.value)} required placeholder={t('modal.scriptPlaceholder')} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.phpVersionLabel')}</label>
+                <select value={phpVersion} onChange={e => setPhpVersion(e.target.value)} className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-md text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none">
+                  {versions.map(s => <option key={s} value={s}>PHP {s}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.argsLabel')} <span className="font-normal text-slate-400 dark:text-slate-500">{t('modal.argsOptional')}</span></label>
+              <input value={args} onChange={e => setArgs(e.target.value)} placeholder={t('modal.argsPlaceholder')} className={inputCls} />
+            </div>
+          </div>
+        )}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.commandLabel')}</label>
-          <input
-            type="text"
-            value={command}
-            onChange={e => setCommand(e.target.value)}
-            placeholder={t('modal.commandPlaceholder')}
-            required
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm font-mono"
-          />
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.scheduleLabel')}</label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {PRESETS.map(p => (
+              <button key={p.labelKey} type="button" onClick={() => applyPreset(p.selection)}
+                className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-brand-100 dark:hover:bg-brand-900/40 hover:text-brand-700 dark:hover:text-brand-300 hover:border-brand-300 dark:hover:border-brand-700 rounded-md transition">
+                {t(`presets.${p.labelKey}`)}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            <Field label={t('modal.fields.minute')} value={minute} onChange={setMinute} />
+            <Field label={t('modal.fields.hour')} value={hour} onChange={setHour} />
+            <Field label={t('modal.fields.day')} value={day} onChange={setDay} />
+            <Field label={t('modal.fields.month')} value={month} onChange={setMonth} />
+            <Field label={t('modal.fields.weekday')} value={weekday} onChange={setWeekday} />
+          </div>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">{t('modal.cronHint')} <code className="font-mono">*</code>{t('modal.cronHintPost')} <code className="font-mono">*/5</code>{t('modal.cronEvery')} <code className="font-mono">0,15,30</code>{t('modal.cronList')} <code className="font-mono">9-17</code>{t('modal.cronRange')}</p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('modal.descriptionLabel')}</label>
-          <input
-            type="text"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            placeholder={t('modal.descriptionPlaceholder')}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm"
-          />
+          <input value={comment} onChange={e => setComment(e.target.value)} placeholder={t('modal.descriptionPlaceholder')}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm" />
         </div>
 
         {error && <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} disabled={processing} className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 rounded-md text-sm">{t('modal.cancel')}</button>
-          <button type="submit" disabled={processing || !command.trim()} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
-            {processing ? t('modal.adding') : t('modal.addTask')}
+          <button type="submit" disabled={processing} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
+            {processing ? t('modal.saving') : t('modal.save')}
           </button>
         </div>
       </form>

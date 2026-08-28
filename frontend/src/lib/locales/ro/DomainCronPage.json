@@ -28,19 +28,22 @@
     "month": "Lună",
     "weekday": "Zi din săptămână",
     "command": "Comandă / Descriere",
-    "action": "Acțiune"
+    "action": "Acțiune",
+    "schedule": "Planificare"
   },
   "row": {
     "delete": "Ștergere",
     "run": "Rulează",
     "running": "În curs...",
-    "runTitle": "Rulează sarcina acum manual"
+    "runTitle": "Rulează sarcina acum manual",
+    "edit": "Editează"
   },
   "confirmDelete": "Ștergeți sarcina „{{command}}...”?",
   "errors": {
     "deleteFailed": "Ștergerea a eșuat",
     "addFailed": "Nu s-a putut adăuga elementul",
-    "runFailed": "Rularea a eșuat"
+    "runFailed": "Rularea a eșuat",
+    "saveFailed": "Sarcina nu a putut fi salvată"
   },
   "modal": {
     "title": "Sarcină programată nouă",
@@ -63,12 +66,34 @@
     "descriptionPlaceholder": "de ex. script de copie de rezervă nocturnă",
     "cancel": "Anulare",
     "adding": "Se adaugă...",
-    "addTask": "Adăugare sarcină"
+    "addTask": "Adăugare sarcină",
+    "editTitle": "Editează sarcina planificată",
+    "enabledLabel": "Activat",
+    "enabledHint": "(sarcinile dezactivate sunt păstrate, dar nu se execută)",
+    "typeLabel": "Tip de sarcină",
+    "typeCommand": "Comandă",
+    "typeUrl": "URL",
+    "typePhp": "Script PHP",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "URL-ul este preluat cu curl conform planificării.",
+    "scriptLabel": "Calea scriptului",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "Versiune PHP",
+    "argsLabel": "Argumente",
+    "argsOptional": "(opțional)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Planificare",
+    "save": "Salvează",
+    "saving": "Se salvează..."
   },
   "run": {
     "noOutput": "(fără ieșire)",
     "errorLabel": "Eroare",
     "success": "✓ Sarcina a rulat",
     "failed": "⚠ Sarcina a eșuat"
+  },
+  "badges": {
+    "disabled": "Dezactivat"
   }
 }

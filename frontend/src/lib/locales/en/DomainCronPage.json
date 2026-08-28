@@ -27,11 +27,16 @@
     "day": "Day",
     "month": "Month",
     "weekday": "Weekday",
+    "schedule": "Schedule",
     "command": "Command / Description",
     "action": "Action"
   },
+  "badges": {
+    "disabled": "Disabled"
+  },
   "row": {
     "delete": "Delete",
+    "edit": "Edit",
     "run": "Run",
     "running": "Running...",
     "runTitle": "Run this task now"
@@ -40,11 +45,29 @@
   "errors": {
     "deleteFailed": "Deletion failed",
     "addFailed": "Could not add item",
+    "saveFailed": "Could not save the task",
     "runFailed": "Run failed"
   },
   "modal": {
     "title": "New Scheduled Task",
+    "editTitle": "Edit Scheduled Task",
     "presetsLabel": "Presets",
+    "enabledLabel": "Enabled",
+    "enabledHint": "(disabled tasks are kept but not run)",
+    "typeLabel": "Task type",
+    "typeCommand": "Command",
+    "typeUrl": "URL",
+    "typePhp": "PHP script",
+    "urlLabel": "URL",
+    "urlPlaceholder": "https://example.com/cron.php",
+    "urlHint": "The URL is fetched with curl on schedule.",
+    "scriptLabel": "Script path",
+    "scriptPlaceholder": "/home/c_user/public_html/cron.php",
+    "phpVersionLabel": "PHP version",
+    "argsLabel": "Arguments",
+    "argsOptional": "(optional)",
+    "argsPlaceholder": "--flag value",
+    "scheduleLabel": "Schedule",
     "fields": {
       "minute": "Minute",
       "hour": "Hour",
@@ -63,7 +86,9 @@
     "descriptionPlaceholder": "e.g. nightly backup script",
     "cancel": "Cancel",
     "adding": "Adding...",
-    "addTask": "Add Task"
+    "addTask": "Add Task",
+    "save": "Save",
+    "saving": "Saving..."
   },
   "run": {
     "noOutput": "(no output)",
