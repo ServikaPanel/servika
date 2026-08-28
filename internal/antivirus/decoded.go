@@ -350,7 +350,7 @@ func dedupeMatches(in []match) []match {
 func clearRuleNames(matches []match) map[string]bool {
 	names := make(map[string]bool, len(matches))
 	for _, m := range matches {
-		if !m.remote && !m.decoded {
+		if !m.remote && !m.decoded && !m.informational {
 			names[m.name] = true
 		}
 	}

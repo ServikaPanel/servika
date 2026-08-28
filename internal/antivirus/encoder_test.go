@@ -63,6 +63,36 @@ func TestAStampWithoutAnEncodedBodyIsScannedInFull(t *testing.T) {
 	}
 }
 
+// TestAPackedFindingNamesTheEncoder checks the informational tag: a finding on a
+// packed file carries the encoder name, so an operator sees the body was skipped
+// rather than that the file is clean, and the tag never becomes the signature or
+// the reason for conviction.
+func TestAPackedFindingNamesTheEncoder(t *testing.T) {
+	file := append(ionCubeFile("padding"), []byte("\n<?php eval($_POST['x']);")...)
+
+	_, signature, names, level := verdict(evaluate(".php", file), scoreCritical)
+	if level != LevelCritical {
+		t.Fatalf("the injected webshell was not caught (level=%q)", level)
+	}
+	found := false
+	for _, n := range names {
+		if n == "PHP.Encoder.ionCube" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the finding does not name the encoder: %v", names)
+	}
+	if signature == "PHP.Encoder.ionCube" {
+		t.Error("the informational tag became the signature; it carries no weight")
+	}
+
+	// A clean packed file writes no row, so the tag stays invisible.
+	if _, _, _, l := verdict(evaluate(".php", ionCubeFile("filesman")), scoreCritical); l != "" {
+		t.Errorf("a clean encoded file produced a finding (level=%q)", l)
+	}
+}
+
 // TestAPlainFileIsNotTreatedAsEncoded is the regression: an ordinary PHP file
 // carries no stamp, so the extract leaves it untouched.
 func TestAPlainFileIsNotTreatedAsEncoded(t *testing.T) {

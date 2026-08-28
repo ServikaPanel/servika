@@ -286,6 +286,11 @@ type match struct {
 	// measured against, so a match there can raise a file to suspicious but not,
 	// on its own, drive the containment that MOVES a customer's file.
 	decoded bool
+	// informational marks a tag that carries context but no evidence, such as
+	// the name of the commercial encoder that packed the file. It is weightless
+	// and both verdict and clearRuleNames skip it, so it never convicts, never
+	// becomes the signature, and never stands in for an in-clear shipped rule.
+	informational bool
 }
 
 // evaluate weighs one file's content against the rule set and the signals that
@@ -294,10 +299,14 @@ func evaluate(ext string, content []byte) []match {
 	// A commercial encoder's encrypted body is opaque: it cannot be decoded here
 	// and its ~random bytes random-match a signature, so it is removed from what
 	// every pass below sees. The plaintext preamble and any injected code stay.
-	if stripped, _, packed := commercialEncoderExtract(ext, content); packed {
+	// The encoder name is recorded as an informational tag, so a finding on a
+	// packed file says the body was skipped rather than that the file is clean.
+	var out []match
+	if stripped, name, packed := commercialEncoderExtract(ext, content); packed {
 		content = stripped
+		out = append(out, match{name: "PHP.Encoder." + name, informational: true})
 	}
-	out := evaluateWith(heuristics, ext, content)
+	out = append(out, evaluateWith(heuristics, ext, content)...)
 	out = append(out, entropyMatches(ext, content)...)
 	out = append(out, taintMatches(ext, content)...)
 	out = append(out, concealedMatches(ext, content)...)
@@ -354,8 +363,14 @@ func verdict(matches []match, critical int) (score int, signature string, names 
 	clearBehavioural := false // such a rule that is also weightModerate or above
 	hasRemote, hasDecoded := false, false
 	for _, m := range matches {
-		score += m.score
 		names = append(names, m.name)
+		// An informational tag carries context but no evidence. It is skipped
+		// before the score is even summed, so it cannot convict, cannot become
+		// the signature, and cannot stand in for an in-clear shipped rule.
+		if m.informational {
+			continue
+		}
+		score += m.score
 		switch {
 		case m.remote:
 			hasRemote = true
