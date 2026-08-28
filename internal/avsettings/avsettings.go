@@ -63,6 +63,11 @@ type Settings struct {
 	Realtime       bool `json:"realtime"`
 	ScanWorkers    int  `json:"scan_workers"`
 	FileRatePerSec int  `json:"file_rate_per_sec"`
+	// ProcessMonitor turns the process-behaviour watcher on, a SEPARATE feature
+	// from Realtime: that watches files as they are written (fanotify), this
+	// watches the exec chain (php-fpm starting a shell) via the netlink proc
+	// connector, in its own unit. It defaults off like every new layer.
+	ProcessMonitor bool `json:"process_monitor"`
 }
 
 // Capacity is what this server actually has, and what the panel proposes when a
@@ -377,12 +382,12 @@ func Read(ctx context.Context, db *sql.DB) (Settings, error) {
 	err := db.QueryRowContext(ctx, `SELECT rule_engine, location_heuristics, wp_integrity,
 		critical_threshold, auto_quarantine, scope, excluded_paths,
 		cpu_percent, ram_mb, io_weight, cpu_weight, scheduled_scan, scheduled_hour,
-		realtime, scan_workers, file_rate_per_sec
+		realtime, scan_workers, file_rate_per_sec, process_monitor
 		FROM av_settings WHERE id=1`).
 		Scan(&s.RuleEngine, &s.LocationHeuristics, &s.WPIntegrity,
 			&s.CriticalThreshold, &s.AutoQuarantine, &s.Scope, &s.ExcludedPaths,
 			&s.CPUPercent, &s.RAMMB, &s.IOWeight, &s.CPUWeight, &s.ScheduledScan, &s.ScheduledHour,
-			&s.Realtime, &s.ScanWorkers, &s.FileRatePerSec)
+			&s.Realtime, &s.ScanWorkers, &s.FileRatePerSec, &s.ProcessMonitor)
 	return s, err
 }
 
@@ -472,12 +477,12 @@ func writeRow(ctx context.Context, db *sql.DB, s Settings) error {
 		rule_engine=?, location_heuristics=?, wp_integrity=?,
 		critical_threshold=?, auto_quarantine=?, scope=?, excluded_paths=?,
 		cpu_percent=?, ram_mb=?, io_weight=?, cpu_weight=?, scheduled_scan=?, scheduled_hour=?,
-		realtime=?, scan_workers=?, file_rate_per_sec=?
+		realtime=?, scan_workers=?, file_rate_per_sec=?, process_monitor=?
 		WHERE id=1`,
 		s.RuleEngine, s.LocationHeuristics, s.WPIntegrity,
 		s.CriticalThreshold, s.AutoQuarantine, s.Scope, s.ExcludedPaths,
 		s.CPUPercent, s.RAMMB, s.IOWeight, s.CPUWeight, s.ScheduledScan, s.ScheduledHour,
-		s.Realtime, s.ScanWorkers, s.FileRatePerSec)
+		s.Realtime, s.ScanWorkers, s.FileRatePerSec, s.ProcessMonitor)
 	return err
 }
 
@@ -500,6 +505,12 @@ func Write(ctx context.Context, db *sql.DB, s Settings) error {
 	// starts into a slice that already carries the values just saved. The other
 	// order gives it the previous limits until something else rewrites them.
 	if err := ApplyWatcher(s); err != nil {
+		return err
+	}
+	// The process watcher is its own unit and reads nothing from the slice, so
+	// its order relative to the limits does not matter; it sits beside the file
+	// watcher because it is the same kind of live-monitor switch.
+	if err := ApplyProcessMonitor(s); err != nil {
 		return err
 	}
 	// The sweep timer is last, for the same reason and one more: a sweep the

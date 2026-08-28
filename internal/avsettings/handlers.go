@@ -35,6 +35,9 @@ type Response struct {
 	// asked for, this says whether it is running. They disagree exactly when
 	// the watcher failed to start, which is the case nothing else would show.
 	WatchState string `json:"watch_state"`
+	// ProcWatchState is the same claim for the process-behaviour watcher: what
+	// systemd reports right now, not what the process_monitor setting asked for.
+	ProcWatchState string `json:"proc_watch_state"`
 	// RuleSet is which malware rule set the scanner is running on, in the same
 	// spirit as WatchState: not what was configured, but what is in force. A
 	// signed rule package that went stale is refused and the built-in set takes
@@ -103,12 +106,13 @@ func (h *Handlers) Put(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) respond(w http.ResponseWriter, settings Settings) {
 	capacity := ServerCapacity()
 	response := Response{
-		Settings:   settings,
-		Capacity:   capacity,
-		Effective:  settings.Resolve(capacity),
-		Kernel:     ReadKernelLimits(),
-		ScanRoots:  settings.ScanRoots(),
-		WatchState: WatchState(),
+		Settings:       settings,
+		Capacity:       capacity,
+		Effective:      settings.Resolve(capacity),
+		Kernel:         ReadKernelLimits(),
+		ScanRoots:      settings.ScanRoots(),
+		WatchState:     WatchState(),
+		ProcWatchState: ProcWatchState(),
 	}
 	if RuleSetInUse != nil {
 		response.RuleSet = RuleSetInUse()

@@ -194,6 +194,12 @@ func main() {
 	if antivirus.RunSweepIfAsked() {
 		return
 	}
+	// The process-behaviour watcher, its own unit and gate. It opens the database
+	// like the file watcher, because it too is long-running with no parent, and
+	// it answers here so it does not need the JWT secret.
+	if antivirus.RunProcWatcherIfAsked() {
+		return
+	}
 	pinTempDir()
 
 	cfg, err := config.Load()

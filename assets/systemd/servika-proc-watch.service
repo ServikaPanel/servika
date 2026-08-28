@@ -1,0 +1,42 @@
+[Unit]
+Description=Servika antivirus process-behaviour watcher
+After=network-online.target mariadb.service servika.service
+Wants=network-online.target
+# The StartLimit keys belong in [Unit] and nowhere else: systemd answers
+# `Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.` while
+# silently accepting StartLimitBurst there. With RestartSec=10 only one start
+# fits the default ten-second window, the burst is never reached, and a watcher
+# that cannot start restarts for good instead of reaching `failed`, which is the
+# one state a screen reads as broken.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/servika/env
+ExecStart=/opt/servika/bin/servika-server -proc-watch
+# It is NOT in servika-av.slice: this watcher is not the scan, it does almost no
+# work per event, and charging it to the scan's CPU quota would be wrong. It
+# runs as root, which is required to read /proc/<pid>/exe of tenant processes.
+User=root
+NoNewPrivileges=yes
+ProtectSystem=strict
+# The watcher reads /proc, never /home, and writes nothing to the filesystem
+# (its findings go to the database). read-only is enough and there is no
+# ReadWritePaths, because it never quarantines.
+ProtectHome=read-only
+# Three capabilities, and each is needed. CAP_NET_ADMIN opens the netlink
+# connector socket. CAP_SYS_PTRACE reads /proc/<pid>/exe of a process owned by
+# another user (the tenant), which is exactly what the world-writable-exec check
+# needs. CAP_DAC_READ_SEARCH reads /proc/<pid>/status of another user. Without
+# CAP_SYS_PTRACE the exe path is empty and the world-writable rule cannot fire,
+# but the parent->child chain (from world-readable /proc/<pid>/stat) still works.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=servika-proc-watch
+
+[Install]
+WantedBy=multi-user.target
