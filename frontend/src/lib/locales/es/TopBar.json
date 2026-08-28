@@ -291,6 +291,11 @@
       "realtimeContained": "Un archivo escrito en {{domain}} está infectado y se movió a cuarentena."
     },
     "newCount": "{{n}} nuevo(s)",
-    "showAll": "Mostrar todo →"
+    "showAll": "Mostrar todo →",
+    "procwatch": {
+      "webShell": "Un proceso web inició un shell en {{domain}}: {{parent}} → {{child}}.",
+      "webDownloader": "Un proceso web inició un descargador en {{domain}}: {{parent}} → {{child}}.",
+      "worldWritable": "Un proceso se ejecutó desde un directorio de escritura pública ({{dir}}) en {{domain}}."
+    }
   }
 }

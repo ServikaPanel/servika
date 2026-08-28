@@ -291,6 +291,11 @@
       "realtimeContained": "A file written on {{domain}} was found infected and moved to quarantine."
     },
     "newCount": "{{n}} new",
-    "showAll": "Show all →"
+    "showAll": "Show all →",
+    "procwatch": {
+      "webShell": "A web process started a shell on {{domain}}: {{parent}} → {{child}}.",
+      "webDownloader": "A web process started a downloader on {{domain}}: {{parent}} → {{child}}.",
+      "worldWritable": "A process ran from a world-writable directory ({{dir}}) on {{domain}}."
+    }
   }
 }

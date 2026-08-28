@@ -291,6 +291,11 @@
       "realtimeContained": "Soubor zapsaný na {{domain}} je infikovaný a byl přesunut do karantény."
     },
     "newCount": "{{n}} nových",
-    "showAll": "Zobrazit vše →"
+    "showAll": "Zobrazit vše →",
+    "procwatch": {
+      "webShell": "Webový proces spustil shell na {{domain}}: {{parent}} → {{child}}.",
+      "webDownloader": "Webový proces spustil nástroj pro stahování na {{domain}}: {{parent}} → {{child}}.",
+      "worldWritable": "Proces byl spuštěn z veřejně zapisovatelného adresáře ({{dir}}) na {{domain}}."
+    }
   }
 }

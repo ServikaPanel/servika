@@ -291,6 +291,11 @@
       "realtimeContained": "Un fișier scris pe {{domain}} este infectat și a fost mutat în carantină."
     },
     "newCount": "{{n}} noi",
-    "showAll": "Afișează tot →"
+    "showAll": "Afișează tot →",
+    "procwatch": {
+      "webShell": "Un proces web a pornit un shell pe {{domain}}: {{parent}} → {{child}}.",
+      "webDownloader": "Un proces web a pornit un downloader pe {{domain}}: {{parent}} → {{child}}.",
+      "worldWritable": "Un proces a rulat dintr-un director cu scriere publică ({{dir}}) pe {{domain}}."
+    }
   }
 }

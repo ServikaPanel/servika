@@ -291,6 +291,11 @@
       "realtimeContained": "Eine auf {{domain}} geschriebene Datei ist infiziert und wurde in Quarantäne verschoben."
     },
     "newCount": "{{n}} neu",
-    "showAll": "Alle anzeigen →"
+    "showAll": "Alle anzeigen →",
+    "procwatch": {
+      "webShell": "Ein Web-Prozess startete eine Shell auf {{domain}}: {{parent}} → {{child}}.",
+      "webDownloader": "Ein Web-Prozess startete einen Downloader auf {{domain}}: {{parent}} → {{child}}.",
+      "worldWritable": "Ein Prozess lief aus einem welt-beschreibbaren Verzeichnis ({{dir}}) auf {{domain}}."
+    }
   }
 }

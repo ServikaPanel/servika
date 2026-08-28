@@ -291,6 +291,11 @@
       "realtimeContained": "{{domain}} üzerine yazılan bir dosyada zararlı yazılım bulundu, dosya karantinaya alındı."
     },
     "newCount": "{{n}} yeni",
-    "showAll": "Tümünü göster →"
+    "showAll": "Tümünü göster →",
+    "procwatch": {
+      "webShell": "{{domain}} alanında bir web süreci kabuk başlattı: {{parent}} → {{child}}.",
+      "webDownloader": "{{domain}} alanında bir web süreci indirici başlattı: {{parent}} → {{child}}.",
+      "worldWritable": "{{domain}} alanında bir süreç dünya-yazılabilir bir dizinden ({{dir}}) çalıştı."
+    }
   }
 }

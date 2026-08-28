@@ -291,6 +291,11 @@
       "realtimeContained": "写入 {{domain}} 的一个文件被发现受感染，已移入隔离区。"
     },
     "newCount": "{{n}} 条新通知",
-    "showAll": "查看全部 →"
+    "showAll": "查看全部 →",
+    "procwatch": {
+      "webShell": "{{domain}} 上的 Web 进程启动了 shell：{{parent}} → {{child}}。",
+      "webDownloader": "{{domain}} 上的 Web 进程启动了下载器：{{parent}} → {{child}}。",
+      "worldWritable": "{{domain}} 上的进程从全局可写目录 ({{dir}}) 运行。"
+    }
   }
 }

@@ -291,6 +291,11 @@
       "realtimeContained": "{{domain}} に書き込まれたファイルが感染していたため、隔離しました。"
     },
     "newCount": "新着 {{n}} 件",
-    "showAll": "すべて表示 →"
+    "showAll": "すべて表示 →",
+    "procwatch": {
+      "webShell": "{{domain}} でWebプロセスがシェルを起動しました: {{parent}} → {{child}}。",
+      "webDownloader": "{{domain}} でWebプロセスがダウンローダーを起動しました: {{parent}} → {{child}}。",
+      "worldWritable": "{{domain}} でプロセスが誰でも書き込み可能なディレクトリ ({{dir}}) から実行されました。"
+    }
   }
 }

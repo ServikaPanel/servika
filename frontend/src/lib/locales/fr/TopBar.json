@@ -291,6 +291,11 @@
       "realtimeContained": "Un fichier écrit sur {{domain}} est infecté et a été mis en quarantaine."
     },
     "newCount": "{{n}} nouveau(x)",
-    "showAll": "Tout afficher →"
+    "showAll": "Tout afficher →",
+    "procwatch": {
+      "webShell": "Un processus web a démarré un shell sur {{domain}} : {{parent}} → {{child}}.",
+      "webDownloader": "Un processus web a démarré un téléchargeur sur {{domain}} : {{parent}} → {{child}}.",
+      "worldWritable": "Un processus s'est exécuté depuis un répertoire accessible en écriture par tous ({{dir}}) sur {{domain}}."
+    }
   }
 }
