@@ -32,6 +32,29 @@ ProtectHome=read-only
 # CAP_SYS_PTRACE the exe path is empty and the world-writable rule cannot fire,
 # but the parent->child chain (from world-readable /proc/<pid>/stat) still works.
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+# CAP_SYS_PTRACE is held ONLY to pass the kernel's ptrace_may_access check when
+# readlink'ing /proc/<pid>/exe of another user; the watcher NEVER calls ptrace().
+# Left armed, that capability plus the ptrace syscall is a memory-injection
+# primitive into any process, PID 1 included, which would defeat
+# NoNewPrivileges. @system-service is an allow-list that EXCLUDES @ptrace
+# (ptrace, process_vm_readv/writev, kcmp), so the injection primitives are
+# blocked while readlinkat (inside @system-service) keeps working.
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+# The watcher opens a netlink connector socket (AF_NETLINK) and a database
+# connection (AF_UNIX for the default unix socket, AF_INET/AF_INET6 when the DSN
+# is TCP; the panel is dual-stack). Nothing else.
+RestrictAddressFamilies=AF_NETLINK AF_UNIX AF_INET AF_INET6
+# Standard sandbox for a privileged root unit. MemoryDenyWriteExecute is safe
+# because the release binary is built CGO_ENABLED=0 and never needs a W+X page.
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
