@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"servika/internal/avsettings"
+	"servika/internal/chains"
 	"servika/internal/config"
 	"servika/internal/db"
 )
@@ -293,4 +294,11 @@ func (w *watcher) record(ctx context.Context, settings avsettings.Settings, find
 	// The alert says whether the file was taken away, because "we found it" and
 	// "we found it and it is gone" ask different things of the reader.
 	notifyRealtime(ctx, w.db, sid, domainID, contained)
+
+	// Attack-chain event: a malicious file written now is the File Write stage.
+	// The correlator joins it with a live process detection into a chain.
+	if domainID.Valid && domainID.Int64 > 0 {
+		chains.WriteEvent(w.db, domainID.Int64, "file", "file_write", "critical",
+			filepath.Base(finding.File), "av_scan", sid)
+	}
 }

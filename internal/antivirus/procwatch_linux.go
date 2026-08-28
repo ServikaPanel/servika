@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"servika/internal/avsettings"
+	"servika/internal/chains"
 	"servika/internal/db"
 	"servika/internal/notifications"
 
@@ -235,6 +236,23 @@ func (w *procWatcher) evaluate(pid int) {
 	log.Printf("process watcher: %s on domain %d (uid %d) exe=%q cmd=%q",
 		finding.code, domainID, uid, exe, cmdline)
 	w.notify(domainID, finding)
+
+	// Attack-chain event: a process detection is the Execution stage, or C2 for a
+	// downloader reaching out. The correlator joins it with a File Write.
+	level := notifications.LevelWarning
+	if finding.score >= procScoreCritical {
+		level = notifications.LevelCritical
+	}
+	chains.WriteEvent(w.db, domainID, "process", stageForCode(finding.code), level, "", "av_proc", 0)
+}
+
+// stageForCode maps a process reason code to its kill-chain stage: a downloader
+// reaching a remote URL is C2, everything else is Execution.
+func stageForCode(code string) string {
+	if code == reasonWebDownloader {
+		return "c2"
+	}
+	return "execution"
 }
 
 // notify writes one alert. It carries the domain and, for an untrusted-origin

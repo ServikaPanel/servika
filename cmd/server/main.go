@@ -26,6 +26,7 @@ import (
 	"servika/internal/autoconfig"
 	"servika/internal/avsettings"
 	"servika/internal/backups"
+	"servika/internal/chains"
 	"servika/internal/composer"
 	"servika/internal/config"
 	"servika/internal/credentials"
@@ -1280,6 +1281,7 @@ func main() {
 	}
 
 	monitor.StartLoadSampler(d, 60*time.Second) // dashboard load-history sampler
+	go chains.Start(d)                          // attack-chain correlator (EDR Phase 2)
 	stats.StartTrafficAggregator(d, 5*time.Minute)
 	slowquery.HealConfig(d)                    // ask MariaDB for the slow log, without restarting it
 	slowquery.StartCollector(d)                // per-tenant slow query shapes, drained from the MariaDB slow log

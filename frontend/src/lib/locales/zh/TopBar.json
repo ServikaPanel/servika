@@ -296,6 +296,9 @@
       "untrustedOrigin": "一个进程在 {{domain}} 上从不受信任的位置（{{location}}）运行。",
       "webShellCmd": "一个 web 进程在 {{domain}} 上运行了可疑命令。",
       "webDownloader": "一个 web 进程在 {{domain}} 上启动了远程下载。"
+    },
+    "chain": {
+      "detected": "在 {{domain}} 上检测到攻击链：{{stages}} — 置信度 {{confidence}}%。"
     }
   }
 }

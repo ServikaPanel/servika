@@ -296,6 +296,9 @@
       "untrustedOrigin": "あるプロセスが {{domain}} 上で信頼できない場所（{{location}}）から実行されました。",
       "webShellCmd": "web プロセスが {{domain}} 上で疑わしいコマンドを実行しました。",
       "webDownloader": "web プロセスが {{domain}} 上でリモートダウンロードを開始しました。"
+    },
+    "chain": {
+      "detected": "{{domain}} で攻撃チェーンを検出しました：{{stages}} — 信頼度 {{confidence}}%。"
     }
   }
 }

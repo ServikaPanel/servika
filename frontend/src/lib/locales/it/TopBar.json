@@ -296,6 +296,9 @@
       "untrustedOrigin": "Un processo è stato eseguito da una posizione non attendibile ({{location}}) su {{domain}}.",
       "webShellCmd": "Un processo web ha eseguito un comando sospetto su {{domain}}.",
       "webDownloader": "Un processo web ha avviato un download remoto su {{domain}}."
+    },
+    "chain": {
+      "detected": "Catena di attacco rilevata su {{domain}}: {{stages}} — confidenza {{confidence}}%."
     }
   }
 }

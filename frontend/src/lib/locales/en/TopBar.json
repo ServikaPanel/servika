@@ -296,6 +296,9 @@
       "untrustedOrigin": "A process ran from an untrusted location ({{location}}) on {{domain}}.",
       "webShellCmd": "A web process ran a suspicious command on {{domain}}.",
       "webDownloader": "A web process started a remote download on {{domain}}."
+    },
+    "chain": {
+      "detected": "Attack chain detected on {{domain}}: {{stages}} — confidence {{confidence}}%."
     }
   }
 }

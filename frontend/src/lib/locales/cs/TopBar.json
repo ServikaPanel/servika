@@ -296,6 +296,9 @@
       "untrustedOrigin": "Proces byl spuštěn z nedůvěryhodného umístění ({{location}}) na {{domain}}.",
       "webShellCmd": "Webový proces spustil podezřelý příkaz na {{domain}}.",
       "webDownloader": "Webový proces zahájil vzdálené stahování na {{domain}}."
+    },
+    "chain": {
+      "detected": "Na {{domain}} zjištěn řetězec útoku: {{stages}} — jistota {{confidence}} %."
     }
   }
 }

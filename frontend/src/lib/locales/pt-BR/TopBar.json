@@ -296,6 +296,9 @@
       "untrustedOrigin": "Um processo foi executado a partir de um local não confiável ({{location}}) em {{domain}}.",
       "webShellCmd": "Um processo web executou um comando suspeito em {{domain}}.",
       "webDownloader": "Um processo web iniciou um download remoto em {{domain}}."
+    },
+    "chain": {
+      "detected": "Cadeia de ataque detectada em {{domain}}: {{stages}} — confiança {{confidence}}%."
     }
   }
 }

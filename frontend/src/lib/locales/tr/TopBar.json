@@ -296,6 +296,9 @@
       "untrustedOrigin": "Bir süreç {{domain}} üzerinde güvenilmez bir konumdan ({{location}}) çalıştı.",
       "webShellCmd": "Bir web süreci {{domain}} üzerinde şüpheli bir komut çalıştırdı.",
       "webDownloader": "Bir web süreci {{domain}} üzerinde uzak bir indirme başlattı."
+    },
+    "chain": {
+      "detected": "{{domain}} üzerinde saldırı zinciri tespit edildi: {{stages}} — güven %{{confidence}}."
     }
   }
 }
