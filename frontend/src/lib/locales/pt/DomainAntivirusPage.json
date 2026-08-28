@@ -72,5 +72,9 @@
     "quarantine": "Quarentena",
     "notAFile": "Não é um ficheiro"
   },
-  "backToSubscription": "← Voltar à Subscrição"
+  "backToSubscription": "← Voltar à Subscrição",
+  "tabs": {
+    "findings": "Resultados",
+    "quarantine": "Quarentena"
+  }
 }

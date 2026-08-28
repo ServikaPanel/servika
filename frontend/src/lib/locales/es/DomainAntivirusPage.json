@@ -72,5 +72,9 @@
     "quarantine": "Poner en cuarentena",
     "notAFile": "No es un archivo"
   },
-  "backToSubscription": "← Volver a la suscripción"
+  "backToSubscription": "← Volver a la suscripción",
+  "tabs": {
+    "findings": "Hallazgos",
+    "quarantine": "Cuarentena"
+  }
 }

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { containable } from '@/lib/antivirus'
+import { getCookie, setCookie } from '@/lib/cookies'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import ResourceNotice from '@/components/ResourceNotice'
@@ -54,6 +55,96 @@ type Quarantined = {
 type Scan = { id: number; status: string; engine: string; scanned: number; infected: number; started_at: string; finished_at: string }
 type Status = { clamav: boolean; signature_date: string; username: string; last_scan: Scan | null; findings: Finding[] }
 
+// The two things this screen holds: what the last scan found, and what is being
+// held after being contained. They are opposite outcomes, so they get separate
+// tabs rather than one long scroll, the same split the admin console uses.
+type Tab = 'findings' | 'quarantine'
+const TABS: Tab[] = ['findings', 'quarantine']
+
+// Which tab was open last, so a reload does not lose the owner's place. A
+// cookie, never localStorage, which is barred here. Thirty days matches the
+// panel's other page-scoped preference; which tab you last looked at is a
+// weaker preference than the theme or the language.
+const TAB_COOKIE = 'servika.av.domain.tab'
+const TAB_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+
+// storedTab validates what it read before returning it. The cookie is text the
+// reader can edit, and a value matching no tab would hide both sections at once,
+// so the page would open blank with nothing saying why.
+function storedTab(): Tab {
+  const stored = getCookie(TAB_COOKIE)
+  return TABS.includes(stored as Tab) ? (stored as Tab) : 'findings'
+}
+
+// TabButton keeps the shape MalwareScanPage.tsx already ships, so this screen
+// looks like the rest of the panel. The count is drawn ONLY when there is
+// something to count: a badge reading 0 takes up room to say there is nothing
+// to look at.
+function TabButton({ enabled, count, onClick, children }: {
+  enabled: boolean
+  count?: number
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={enabled}
+      onClick={onClick}
+      className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+        enabled
+          ? 'border-brand-600 text-brand-700 dark:text-brand-300'
+          : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+      }`}
+    >
+      {children}
+      {count ? (
+        <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+          {count}
+        </span>
+      ) : null}
+    </button>
+  )
+}
+
+// Shield draws the panel's own antivirus mark, filled rather than a single line,
+// and moves only while a scan is running: the sweep cone is ABSENT from the DOM
+// while the server is idle, so motion here is a fact rather than a decoration.
+// It reuses the keyframes MalwareScanPage.tsx defines in styles.css, which also
+// carries the reduced-motion switch. It carries no third-party or foreign
+// branding: this is Servika's own engine.
+function Shield({ scanning, className }: { scanning: boolean; className?: string }) {
+  const tone = '#34d399'
+  return (
+    <svg viewBox="0 0 120 120" className={className} fill="none" role="presentation" aria-hidden="true">
+      <defs>
+        <linearGradient id="svkAvDomShield" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={tone} stopOpacity="0.28" />
+          <stop offset="1" stopColor={tone} stopOpacity="0.06" />
+        </linearGradient>
+        <radialGradient id="svkAvDomSweep" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor={tone} stopOpacity="0.55" />
+          <stop offset="1" stopColor={tone} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <path
+        d="M60 15 L96 28 V59 C96 81 79 98 60 105 C41 98 24 81 24 59 V28 Z"
+        fill="url(#svkAvDomShield)"
+        stroke={tone}
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      {scanning && (
+        <g className="svk-av-sweep">
+          <path d="M60 60 L60 22 A38 38 0 0 1 93 46 Z" fill="url(#svkAvDomSweep)" />
+        </g>
+      )}
+      <path d="M45 61 l10 10 l21 -24" stroke={tone} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function DomainAntivirusPage() {
   const { t } = useTranslation('DomainAntivirusPage')
 
@@ -86,6 +177,15 @@ export default function DomainAntivirusPage() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [heldFailed, setHeldFailed] = useState(false)
   const [busy, setBusy] = useState(false)
+  // The open tab is read in a lazy initializer, not an effect: an effect would
+  // draw the default for one frame before correcting it, and set-state-in-effect
+  // is a hard ESLint gate here.
+  const [tab, setTab] = useState<Tab>(storedTab)
+
+  function selectTab(next: Tab) {
+    setTab(next)
+    setCookie(TAB_COOKIE, next, TAB_COOKIE_MAX_AGE)
+  }
 
   const load = useCallback(() => {
     if (!id) return
@@ -199,7 +299,10 @@ export default function DomainAntivirusPage() {
           { label: t('breadcrumb.domains'), href: '/domains' },
           { label: t('breadcrumb.antivirus') },
         ]} />
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+        <div className="flex items-center gap-3 mb-1">
+          <Shield scanning={scanning} className="h-10 w-10 flex-shrink-0" />
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
+        </div>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
           <span className="font-mono">public_html</span> {t('subtitlePrefix')}
         </p>
@@ -242,7 +345,17 @@ export default function DomainAntivirusPage() {
           )}
         </div>
 
+        {/* The status and action bar stays above the tabs, because the scan
+            button and the engine line belong to both sections. The two lists
+            below both loaded on mount, so their badges are correct whichever
+            tab is open. */}
+        <div role="tablist" className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+          <TabButton enabled={tab === 'findings'} count={activeFindings.length} onClick={() => selectTab('findings')}>{t('tabs.findings')}</TabButton>
+          <TabButton enabled={tab === 'quarantine'} count={held.length} onClick={() => selectTab('quarantine')}>{t('tabs.quarantine')}</TabButton>
+        </div>
+
         {/* Findings */}
+        {tab === 'findings' && (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -262,7 +375,7 @@ export default function DomainAntivirusPage() {
             <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">{t('findings.noScans')}</div>
           ) : activeFindings.length === 0 && d.findings.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-3xl mb-2">✅</div>
+              <Shield scanning={false} className="mx-auto mb-2 h-14 w-14" />
               <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{t('findings.clean')}</p>
             </div>
           ) : (
@@ -314,10 +427,12 @@ export default function DomainAntivirusPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Held files. Listed even when no scan has run, because they outlive the
             scan that produced them and a false positive has to be reachable. */}
-        <div className="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+        {tab === 'quarantine' && (
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('held.title')}</h3>
           <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('held.subtitle')}</p>
           {heldFailed ? (
@@ -390,6 +505,7 @@ export default function DomainAntivirusPage() {
             </div>
           )}
         </div>
+        )}
 
         <div className="mt-4"><Link to={`/subscriptions/${id}`} className="text-sm text-brand-600 dark:text-brand-400">{t('backToSubscription')}</Link></div>
       </div>

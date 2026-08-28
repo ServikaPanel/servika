@@ -72,5 +72,9 @@
     "quarantine": "Quarantine",
     "notAFile": "Not a file"
   },
-  "backToSubscription": "← Back to Subscription"
+  "backToSubscription": "← Back to Subscription",
+  "tabs": {
+    "findings": "Findings",
+    "quarantine": "Quarantine"
+  }
 }

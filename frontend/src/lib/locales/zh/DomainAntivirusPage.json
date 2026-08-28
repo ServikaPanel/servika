@@ -72,5 +72,9 @@
     "quarantine": "隔离",
     "notAFile": "不是文件"
   },
-  "backToSubscription": "← 返回订阅"
+  "backToSubscription": "← 返回订阅",
+  "tabs": {
+    "findings": "发现结果",
+    "quarantine": "隔离"
+  }
 }

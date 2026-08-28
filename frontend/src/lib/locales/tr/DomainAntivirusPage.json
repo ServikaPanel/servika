@@ -72,5 +72,9 @@
     "quarantine": "Karantinaya Al",
     "notAFile": "Dosya değil"
   },
-  "backToSubscription": "← Aboneliğe Geri Dön"
+  "backToSubscription": "← Aboneliğe Geri Dön",
+  "tabs": {
+    "findings": "Bulgular",
+    "quarantine": "Karantina"
+  }
 }

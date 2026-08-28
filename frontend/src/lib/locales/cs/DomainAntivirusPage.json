@@ -72,5 +72,9 @@
     "quarantine": "Karanténa",
     "notAFile": "Není soubor"
   },
-  "backToSubscription": "← Zpět na předplatné"
+  "backToSubscription": "← Zpět na předplatné",
+  "tabs": {
+    "findings": "Nálezy",
+    "quarantine": "Karanténa"
+  }
 }

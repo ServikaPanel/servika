@@ -72,5 +72,9 @@
     "quarantine": "Quarentena",
     "notAFile": "Não é um arquivo"
   },
-  "backToSubscription": "← Voltar à assinatura"
+  "backToSubscription": "← Voltar à assinatura",
+  "tabs": {
+    "findings": "Ocorrências",
+    "quarantine": "Quarentena"
+  }
 }

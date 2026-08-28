@@ -72,5 +72,9 @@
     "quarantine": "Quarantäne",
     "notAFile": "Keine Datei"
   },
-  "backToSubscription": "← Zurück zum Abonnement"
+  "backToSubscription": "← Zurück zum Abonnement",
+  "tabs": {
+    "findings": "Funde",
+    "quarantine": "Quarantäne"
+  }
 }

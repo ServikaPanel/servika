@@ -72,5 +72,9 @@
     "quarantine": "隔離",
     "notAFile": "ファイルではありません"
   },
-  "backToSubscription": "← サブスクリプションに戻る"
+  "backToSubscription": "← サブスクリプションに戻る",
+  "tabs": {
+    "findings": "検出結果",
+    "quarantine": "隔離"
+  }
 }
