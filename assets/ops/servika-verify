@@ -306,6 +306,23 @@ else
   pass "antivirus watcher" "off (real-time watching is not enabled)"
 fi
 
+# The process watcher is the same kind of optional live-monitor switch as the
+# file watcher above: off by default, and the only thing worth reporting is a
+# unit the operator ENABLED which is not running. It has no slice, so there is no
+# confinement to measure. Every finding here is a WARNING for the same reason.
+if [ ! -f /etc/systemd/system/servika-proc-watch.service ]; then
+  warn "process watcher" "the unit is not installed, so process monitoring cannot be turned on"
+elif systemctl is-enabled --quiet servika-proc-watch.service 2>/dev/null; then
+  pw_state=$(svc servika-proc-watch)
+  if [ "$pw_state" = "active" ]; then
+    pass "process watcher" "active"
+  else
+    warn "process watcher" "$pw_state, but process monitoring is enabled (nothing is being watched)"
+  fi
+else
+  pass "process watcher" "off (process monitoring is not enabled)"
+fi
+
 # The scheduled sweep timer is optional and normally absent: the panel's own Go
 # scheduler owns the hour by default, and the timer only takes over when an
 # operator enables it. So "not enabled" is not a finding either.
