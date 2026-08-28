@@ -6,12 +6,18 @@ import (
 	"testing"
 )
 
-// ionCubeFile builds a file shaped like a commercially encoded one: an ionCube
-// stamp, then a long base64 body. The body carries the argument verbatim, so a
-// test can plant a signature word inside the encrypted region.
+// ionCubeFile builds a file shaped like a commercially encoded one: the ionCube
+// stamp, the loader-missing fallback prose every encoded file carries, then a
+// long base64 body. The prose is full of spaces and punctuation, so the
+// base64-density heuristic locates the body rather than mistaking the preamble
+// for it, which is how a real file looks. The body carries the argument
+// verbatim, so a test can plant a signature word inside the encrypted region.
 func ionCubeFile(inBody string) []byte {
-	preamble := "<?php //ICB0 82:0 83:e7bc\n"
-	body := strings.Repeat("A", 250) + inBody + strings.Repeat("B", 250)
+	preamble := "<?php //ICB0 82:0 83:e7bc\n" +
+		"if(!extension_loaded('ionCube Loader')){$__oc=strtolower(substr(php_uname(),0,3));" +
+		"$__ln='ioncube_loader_'.$__oc.'_'.substr(phpversion(),0,3).'.so';" +
+		"die('The file '.__FILE__.' requires the ionCube PHP Loader '.$__ln.' to be installed.');}\n"
+	body := strings.Repeat("A", 400) + inBody + strings.Repeat("B", 400)
 	return []byte(preamble + body)
 }
 
@@ -90,6 +96,32 @@ func TestAPackedFindingNamesTheEncoder(t *testing.T) {
 	// A clean packed file writes no row, so the tag stays invisible.
 	if _, _, _, l := verdict(evaluate(".php", ionCubeFile("filesman")), scoreCritical); l != "" {
 		t.Errorf("a clean encoded file produced a finding (level=%q)", l)
+	}
+}
+
+// TestASameContextSinkAfterTheBlobIsCaught is the escape-guard bypass. A
+// webshell reads the base64 body into a variable and evaluates it in the SAME
+// PHP context, opening no new <?php tag: `$c='<base64>'; eval(base64_decode($c));`.
+// The eval sits right after the base64 body ends, so the tail after the blob
+// must be scanned or the file scores zero.
+func TestASameContextSinkAfterTheBlobIsCaught(t *testing.T) {
+	blob := strings.Repeat("QUJD", 200) // 800 base64 characters
+	file := []byte("<?php //ICB0 82:0 83:e7bc\n$c='" + blob + "'; eval(base64_decode($c));")
+
+	if _, _, _, level := verdict(evaluate(".php", file), scoreCritical); level != LevelCritical {
+		t.Errorf("a same-context eval after the encoded body was not caught (level=%q)", level)
+	}
+}
+
+// TestARealEncodedFileWithABenignTailStaysClean protects the false-positive
+// side: a genuine encoded file whose base64 body is followed by a harmless tag
+// must not be reported.
+func TestARealEncodedFileWithABenignTailStaysClean(t *testing.T) {
+	blob := strings.Repeat("QUJD", 200)
+	file := []byte("<?php //ICB0 82:0 83:e7bc\n$data='" + blob + "';\n?>\n")
+
+	if _, _, _, level := verdict(evaluate(".php", file), scoreCritical); level == LevelCritical {
+		t.Errorf("a genuinely encoded file with a benign tail was reported critical (level=%q)", level)
 	}
 }
 

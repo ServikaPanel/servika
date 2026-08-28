@@ -44,6 +44,8 @@ const (
 	encoderB64Ratio   = 96   // this percent of base64 characters in a window → encoded body
 	encoderInjectHint = 5    // PHP-syntax characters required in an injected-code window
 	encoderInjectSpan = 160  // bytes examined after a `<?php` in the body
+	encoderNonB64Run  = 2    // this many consecutive non-base64 bytes in a base64 body → plain code began
+	encoderB64MinRun  = 64   // a base64 run must reach this length to count as the body, not a preamble word
 )
 
 // nonTextByte reports whether a byte is "not text". Printable ASCII and ordinary
@@ -71,17 +73,19 @@ var phpSyntaxBytes = []byte{0x20, 0x24, 0x28, 0x29, 0x3b, 0x27, 0x22, 0x0a, 0x09
 func phpSyntaxByte(c byte) bool { return bytes.IndexByte(phpSyntaxBytes, c) >= 0 }
 
 // encoderBlobStart returns the offset at which the encrypted body begins when the
-// file is packed by a commercial encoder: (name, offset, true), else ("", 0,
-// false). The body start is the first run of encoderBinaryRun binary bytes, or
-// the first window whose base64 density crosses encoderB64Ratio (ionCube's own
-// form, where the body is fully printable). The plaintext preamble before that
-// point stays inside the scan.
-func encoderBlobStart(content []byte) (string, int, bool) {
+// file is packed by a commercial encoder: (name, offset, true, isBase64), else
+// ("", 0, false, false). isBase64 reports the body kind: a base64 body (true) is
+// a printable base64 run whose END is readable, so the tail after it can be
+// scanned; a raw-binary body (false) is opaque to its end, because a random
+// binary tail would produce signature-collision false positives. The body start
+// is the first run of encoderBinaryRun binary bytes, or the first window whose
+// base64 density crosses encoderB64Ratio (ionCube's own form, where the body is
+// fully printable). The plaintext preamble before that point stays inside the scan.
+func encoderBlobStart(content []byte) (name string, offset int, ok, isBase64 bool) {
 	head := content
 	if len(head) > encoderHeadWindow {
 		head = head[:encoderHeadWindow]
 	}
-	name := ""
 	for _, s := range encoderStamps {
 		if bytes.Contains(head, s.stamp) {
 			name = s.name
@@ -89,7 +93,7 @@ func encoderBlobStart(content []byte) (string, int, bool) {
 		}
 	}
 	if name == "" {
-		return "", 0, false
+		return "", 0, false, false
 	}
 	// (a) A binary body (some packers write raw binary).
 	run := 0
@@ -97,7 +101,7 @@ func encoderBlobStart(content []byte) (string, int, bool) {
 		if nonTextByte(content[i]) {
 			run++
 			if run >= encoderBinaryRun {
-				return name, i - run + 1, true
+				return name, i - run + 1, true, false
 			}
 			continue
 		}
@@ -119,12 +123,54 @@ func encoderBlobStart(content []byte) (string, int, bool) {
 			for start > 0 && base64Byte(content[start-1]) {
 				start--
 			}
-			return name, start, true
+			return name, start, true, true
 		}
 	}
 	// A stamp but no encoded body → not actually packed (a plain PHP file that
 	// MENTIONS ionCube, or a webshell imitating a stamp). Scan it in full.
-	return "", 0, false
+	return "", 0, false, false
+}
+
+// blobEndBase64 returns the offset at which a base64 body ends, i.e. where plain
+// code begins. It is called only for a base64 body: a raw-binary body has no
+// readable tail, and scanning random binary would produce the signature-collision
+// false positives that are the whole reason such a body is treated as opaque.
+//
+// The body is a LONG base64 run, so a short base64-alphabet word in the preamble
+// tail (a die() message word such as "installed") must NOT be mistaken for it: the
+// base64-density heuristic in encoderBlobStart can place blobStart up to one window
+// early, inside such a word, and a naive "first non-base64 run ends the blob" walk
+// would then declare the blob finished at the preamble's next punctuation and
+// expose the REAL body as a scannable tail. So the scan only accepts an end once it
+// has consumed a base64 run of at least encoderB64MinRun characters (line-wrapping
+// whitespace tolerated, not counted): a short run followed by non-base64 is a
+// preamble word, and the scan resets and keeps looking for the real body.
+func blobEndBase64(content []byte, blobStart int) int {
+	b64 := 0 // base64 characters in the current run (whitespace does not grow it)
+	nonRun := 0
+	seenLong := false
+	for i := blobStart; i < len(content); i++ {
+		c := content[i]
+		switch {
+		case base64Byte(c):
+			b64++
+			nonRun = 0
+			if b64 >= encoderB64MinRun {
+				seenLong = true
+			}
+		case c == '\n' || c == '\r' || c == ' ' || c == '\t':
+			nonRun = 0 // line wrapping neither ends the blob nor grows its run
+		default:
+			nonRun++
+			if nonRun >= encoderNonB64Run {
+				if seenLong {
+					return i - nonRun + 1
+				}
+				b64 = 0 // a preamble word, not the body: keep looking
+			}
+		}
+	}
+	return len(content)
 }
 
 // injectedCodeAfterBlob is the escape guard. It returns real PHP code appended
@@ -165,17 +211,29 @@ func commercialEncoderExtract(ext string, content []byte) (scanned []byte, name 
 	if !phpish(ext) {
 		return nil, "", false
 	}
-	name, blobStart, packed := encoderBlobStart(content)
+	name, blobStart, packed, isBase64 := encoderBlobStart(content)
 	if !packed {
 		return nil, "", false
 	}
-	out := content[:blobStart]
-	if injected := injectedCodeAfterBlob(content[blobStart:]); injected != nil {
-		merged := make([]byte, 0, len(out)+len(injected)+1)
-		merged = append(merged, out...)
-		merged = append(merged, '\n')
-		merged = append(merged, injected...)
-		out = merged
+	blobEnd := len(content) // a raw-binary body is opaque to its end
+	if isBase64 {
+		blobEnd = blobEndBase64(content, blobStart)
+	}
+	out := make([]byte, 0, len(content))
+	out = append(out, content[:blobStart]...) // the plaintext preamble
+	// The tail AFTER a base64 body carries a same-context sink such as
+	// eval(base64_decode($c)), which opens no new <?php tag, so it must be
+	// scanned or that webshell scores zero. A raw-binary body has blobEnd ==
+	// len(content), so there is no tail.
+	if blobEnd < len(content) {
+		out = append(out, '\n')
+		out = append(out, content[blobEnd:]...)
+	}
+	// Code injected INTO the blob with its own <?php (rare) is kept too; a real
+	// encoded file has none, so injectedCodeAfterBlob returns nil and adds nothing.
+	if injected := injectedCodeAfterBlob(content[blobStart:blobEnd]); injected != nil {
+		out = append(out, '\n')
+		out = append(out, injected...)
 	}
 	return out, name, true
 }
