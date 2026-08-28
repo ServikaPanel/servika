@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
+import { getCookie, setCookie } from '@/lib/cookies'
 import Breadcrumb from '@/components/Breadcrumb'
 import DomainResourceCard from '@/components/DomainResourceCard'
 import DomainDashboard from "@/components/DomainDashboard"
@@ -11,6 +12,13 @@ import ToolCard from '@/components/ToolCard'
 import type { Domain } from '@/components/DomainList'
 
 type Tab = 'dashboard' | 'hosting'
+
+// The open tab is remembered in a cookie (never localStorage), so a reload or a
+// return to this page reopens the last tab. It is a page-scoped preference, so the
+// Max-Age matches servika.migration.source's 30 days. The stored value is validated
+// before use: a value matching no tab would hide every section at once.
+const TAB_COOKIE = 'servika.subscription.tab'
+const TAB_MAX_AGE = 60 * 60 * 24 * 30
 
 const ICONS = {
   connection:  'M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656-5.656m.172-5.172a4 4 0 00-5.656 5.656l-3 3a4 4 0 005.656 5.656',
@@ -42,7 +50,16 @@ export default function SubscriptionDetailPage() {
   const navigate = useNavigate()
   const [domain, setDomain] = useState<Domain | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('dashboard')
+  // Read the remembered tab in a lazy initializer, not a mount effect
+  // (react-hooks/set-state-in-effect), and accept it only when it names a real tab.
+  const [tab, setTabState] = useState<Tab>(() => {
+    const saved = getCookie(TAB_COOKIE)
+    return saved === 'dashboard' || saved === 'hosting' ? saved : 'dashboard'
+  })
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next)
+    setCookie(TAB_COOKIE, next, TAB_MAX_AGE)
+  }, [])
   const [diskMB, setDiskMB] = useState<number | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [processing, setProcessing] = useState(false)
