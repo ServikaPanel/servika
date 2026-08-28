@@ -45,7 +45,7 @@
     "warning": "Režim údržby je zapnutý"
   },
   "accessControl": { "label": "Řízení přístupu", "desc": "Ochrana proti hotlinkingu · povolení/blokování IP" },
-  "imunify": { "label": "Imunify", "desc": "Antivirus" },
+  "imunify": { "label": "Servika AV", "desc": "Antivirus" },
   "siteSecurity": { "label": "Zabezpečení webu", "desc": "Známé zranitelnosti v závislostech" },
   "appInstaller": { "label": "Aplikace", "desc": "Instalace aplikací jedním kliknutím" },
   "ssh": {

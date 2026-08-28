@@ -86,7 +86,7 @@
     "passwordProtect": "Directoare protejate cu parolă",
     "statistics": "Statistici",
     "statisticsDesc": "Analiză trafic",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "Antivirus",
     "waf": "WAF (Web Application Firewall)",
     "wafDesc": "ModSecurity + OWASP CRS",

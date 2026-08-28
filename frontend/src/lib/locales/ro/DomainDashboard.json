@@ -45,7 +45,7 @@
     "warning": "Modul mentenanță este pornit"
   },
   "accessControl": { "label": "Control acces", "desc": "Protecție hotlink · permitere/blocare IP" },
-  "imunify": { "label": "Imunify", "desc": "Antivirus" },
+  "imunify": { "label": "Servika AV", "desc": "Antivirus" },
   "siteSecurity": { "label": "Securitatea site-ului", "desc": "Vulnerabilități cunoscute în dependențe" },
   "appInstaller": { "label": "Aplicații", "desc": "Instalare de aplicații cu un clic" },
   "ssh": {

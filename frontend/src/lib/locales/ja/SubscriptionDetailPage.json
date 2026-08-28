@@ -86,7 +86,7 @@
     "passwordProtect": "パスワード保護ディレクトリ",
     "statistics": "統計",
     "statisticsDesc": "トラフィック分析",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "アンチウイルス",
     "waf": "WAF (Web アプリケーションファイアウォール)",
     "wafDesc": "ModSecurity + OWASP CRS",

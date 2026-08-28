@@ -78,7 +78,7 @@
       "description": "磁盘、流量和访客报告。"
     },
     "imunify": {
-      "label": "Imunify",
+      "label": "Servika AV",
       "description": "防病毒和 WAF 集成。"
     }
   }

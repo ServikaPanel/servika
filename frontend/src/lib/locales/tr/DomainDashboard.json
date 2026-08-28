@@ -45,7 +45,7 @@
     "warning": "Bakım modu açık"
   },
   "accessControl": { "label": "Erişim Denetimi", "desc": "Hotlink koruması · IP izin/engelleme" },
-  "imunify": { "label": "Imunify", "desc": "Antivirüs" },
+  "imunify": { "label": "Servika AV", "desc": "Antivirüs" },
   "siteSecurity": { "label": "Site Güvenliği", "desc": "Site bağımlılıklarındaki bilinen açıklar" },
   "appInstaller": { "label": "Uygulamalar", "desc": "Tek tıkla uygulama kurucu" },
   "ssh": {

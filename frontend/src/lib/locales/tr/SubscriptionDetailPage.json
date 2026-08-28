@@ -86,7 +86,7 @@
     "passwordProtect": "Parola Korumalı Dizinler",
     "statistics": "İstatistikler",
     "statisticsDesc": "Trafik analizi",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "Antivirüs",
     "waf": "WAF (Web Uygulama Güvenlik Duvarı)",
     "wafDesc": "ModSecurity + OWASP CRS",

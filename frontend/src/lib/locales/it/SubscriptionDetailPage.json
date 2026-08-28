@@ -86,7 +86,7 @@
     "passwordProtect": "Directory Protette da Password",
     "statistics": "Statistiche",
     "statisticsDesc": "Analisi del traffico",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "Antivirus",
     "waf": "WAF (Web Application Firewall)",
     "wafDesc": "ModSecurity + OWASP CRS",

@@ -45,7 +45,7 @@
     "warning": "O modo de manutenção está ligado"
   },
   "accessControl": { "label": "Controle de acesso", "desc": "Proteção contra hotlinks · permitir/bloquear IP" },
-  "imunify": { "label": "Imunify", "desc": "Antivírus" },
+  "imunify": { "label": "Servika AV", "desc": "Antivírus" },
   "siteSecurity": { "label": "Segurança do site", "desc": "Vulnerabilidades conhecidas nas dependências" },
   "appInstaller": { "label": "Aplicativos", "desc": "Instalador de aplicativos com um clique" },
   "ssh": {

@@ -86,7 +86,7 @@
     "passwordProtect": "密码保护目录",
     "statistics": "统计",
     "statisticsDesc": "流量分析",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "防病毒",
     "waf": "WAF (Web 应用防火墙)",
     "wafDesc": "ModSecurity + OWASP CRS",

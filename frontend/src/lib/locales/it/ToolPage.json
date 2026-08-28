@@ -78,7 +78,7 @@
       "description": "Report su disco, traffico e visitatori."
     },
     "imunify": {
-      "label": "Imunify",
+      "label": "Servika AV",
       "description": "Integrazione antivirus e WAF."
     }
   }

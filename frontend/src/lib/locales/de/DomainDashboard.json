@@ -45,7 +45,7 @@
     "warning": "Wartungsmodus ist an"
   },
   "accessControl": { "label": "Zugriffssteuerung", "desc": "Hotlink-Schutz · IP zulassen/blockieren" },
-  "imunify": { "label": "Imunify", "desc": "Antivirus" },
+  "imunify": { "label": "Servika AV", "desc": "Antivirus" },
   "siteSecurity": { "label": "Website-Sicherheit", "desc": "Bekannte Schwachstellen in Abhängigkeiten" },
   "appInstaller": { "label": "Anwendungen", "desc": "Anwendungsinstallation mit einem Klick" },
   "ssh": {

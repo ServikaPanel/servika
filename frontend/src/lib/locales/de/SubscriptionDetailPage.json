@@ -86,7 +86,7 @@
     "passwordProtect": "Passwortgeschützte Verzeichnisse",
     "statistics": "Statistiken",
     "statisticsDesc": "Traffic-Analyse",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "Antivirus",
     "waf": "WAF (Web Application Firewall)",
     "wafDesc": "ModSecurity + OWASP CRS",

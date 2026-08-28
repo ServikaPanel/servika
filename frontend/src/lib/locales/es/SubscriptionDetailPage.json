@@ -35,7 +35,7 @@
     "ssl": "Certificados SSL/TLS", "sslExpires": "Vence: {{expiry}}", "sslLetsEncrypt": "Let's Encrypt", "sslNotProtected": "El dominio no está protegido",
     "passwordProtect": "Directorios con contraseña",
     "statistics": "Estadísticas", "statisticsDesc": "Análisis de tráfico",
-    "imunify": "Imunify", "imunifyDesc": "Antivirus",
+    "imunify": "Servika AV", "imunifyDesc": "Antivirus",
     "waf": "WAF (Cortafuegos de aplicaciones web)", "wafDesc": "ModSecurity + OWASP CRS",
     "hostingSettings": "Configuración de alojamiento", "hostingSettingsDesc": "Directorio raíz y opciones",
     "apacheNginx": "Apache y nginx", "apacheNginxDesc": "Cabeceras de seguridad y directivas adicionales",

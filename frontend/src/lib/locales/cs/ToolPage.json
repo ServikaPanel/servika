@@ -78,7 +78,7 @@
       "description": "Reporty disku, provozu a návštěvníků."
     },
     "imunify": {
-      "label": "Imunify",
+      "label": "Servika AV",
       "description": "Integrace antiviru a WAF."
     }
   }

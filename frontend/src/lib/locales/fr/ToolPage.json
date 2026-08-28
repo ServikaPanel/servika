@@ -32,6 +32,6 @@
     "ssl": { "label": "Certificat SSL/TLS", "description": "Installation et renouvellement automatiques de Let's Encrypt." },
     "password-protection": { "label": "Répertoires protégés par mot de passe", "description": "Protéger les répertoires avec .htpasswd." },
     "stats": { "label": "Statistiques", "description": "Rapports de disque, trafic et visiteurs." },
-    "imunify": { "label": "Imunify", "description": "Intégration antivirus et WAF." }
+    "imunify": { "label": "Servika AV", "description": "Intégration antivirus et WAF." }
   }
 }

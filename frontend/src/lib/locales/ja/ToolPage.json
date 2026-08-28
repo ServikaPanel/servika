@@ -78,7 +78,7 @@
       "description": "ディスク、トラフィック、訪問者のレポート。"
     },
     "imunify": {
-      "label": "Imunify",
+      "label": "Servika AV",
       "description": "アンチウイルスと WAF の連携。"
     }
   }

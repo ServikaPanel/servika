@@ -86,7 +86,7 @@
     "passwordProtect": "Heslem chráněné adresáře",
     "statistics": "Statistiky",
     "statisticsDesc": "Analýza provozu",
-    "imunify": "Imunify",
+    "imunify": "Servika AV",
     "imunifyDesc": "Antivirus",
     "waf": "WAF (firewall webových aplikací)",
     "wafDesc": "ModSecurity + OWASP CRS",
