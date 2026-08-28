@@ -56,6 +56,11 @@ const (
 	insertDedupeSec = 30
 	// queryTimeout bounds every correlation query.
 	queryTimeout = 5 * time.Second
+	// entryRededupMin is the window in which a second entry event for the same
+	// account is suppressed. It is SMALLER than windowMin, so during a sustained
+	// attack the entry event is re-emitted before the previous one leaves the
+	// correlation window, leaving no blind gap in which a chain would miss it.
+	entryRededupMin = 10
 )
 
 var (
@@ -254,6 +259,7 @@ func Start(db *sql.DB) {
 					log.Printf("attack chain correlation panicked (recovered): %v", r)
 				}
 			}()
+			apiScan(db) // detect a panel brute-force success and record the entry stage
 			if err := Run(db); err != nil {
 				log.Printf("attack chain correlation: %v", err)
 			}
@@ -313,12 +319,42 @@ func windowedDomains(ctx context.Context, db *sql.DB) ([]int64, error) {
 
 // domainEvents reads one tenant's windowed events, bounded by eventLimit and a
 // timeout so a flood cannot exhaust memory or hang the round.
+// domainOwners resolves a domain to the two accounts that own it: the reseller
+// (customers.owner_user_id) and the customer user (customers.user_id). Either
+// may be absent. A missing or unreadable owner is returned as the sentinel -1,
+// which matches no account, so a failed lookup links no entry event rather than
+// falling back to a real account.
+func domainOwners(ctx context.Context, db *sql.DB, domainID int64) (reseller, user int64) {
+	reseller, user = -1, -1
+	var r, u sql.NullInt64
+	err := db.QueryRowContext(ctx,
+		`SELECT c.owner_user_id, c.user_id FROM domains d
+		 JOIN customers c ON c.id = d.customer_id WHERE d.id = ?`, domainID).Scan(&r, &u)
+	if err != nil {
+		return -1, -1
+	}
+	if r.Valid && r.Int64 > 0 {
+		reseller = r.Int64
+	}
+	if u.Valid && u.Int64 > 0 {
+		user = u.Int64
+	}
+	return reseller, user
+}
+
 func domainEvents(db *sql.DB, domainID int64) ([]Event, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	defer cancel()
+	// An entry (Initial Access) event has a NULL domain_id and is keyed to the
+	// brute-forced account. Pull it into this domain's chain when its account
+	// OWNS the domain, resolved live from the ownership chain. A failed lookup
+	// yields a sentinel that matches no account, never a fallback that would link
+	// an unrelated login (the isolation rule).
+	reseller, user := domainOwners(ctx, db, domainID)
 	rows, err := db.QueryContext(ctx, `SELECT stage, level, path, pid, created_at FROM av_events
-		WHERE domain_id=? AND created_at >= (NOW() - INTERVAL ? MINUTE)
-		ORDER BY created_at LIMIT ?`, domainID, windowMin, eventLimit)
+		WHERE (domain_id=? OR (domain_id IS NULL AND stage='entry' AND actor_user_id IN (?,?)))
+		  AND created_at >= (NOW() - INTERVAL ? MINUTE)
+		ORDER BY created_at LIMIT ?`, domainID, reseller, user, windowMin, eventLimit)
 	if err != nil {
 		return nil, err
 	}

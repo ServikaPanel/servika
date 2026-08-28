@@ -169,14 +169,14 @@ func TestChainEventsIsScopedIndependently(t *testing.T) {
 	// The owner sees the event.
 	rOwn := reqAs(middleware.RoleReseller, resellerA)
 	condA, argsA, _ := middleware.ScopeCondition(rOwn, "d")
-	if ev := h.chainEvents(rOwn.Context(), domainA, now, condA, argsA); len(ev) != 1 {
+	if ev := h.chainEvents(rOwn.Context(), domainA, now, condA, argsA, -1, -1); len(ev) != 1 {
 		t.Fatalf("the owner saw %d events, want 1", len(ev))
 	}
 	// A different reseller, scoped to their own domains, sees none of domainA's
 	// events even when asking for domainA directly.
 	rOther := reqAs(middleware.RoleReseller, resellerB)
 	condB, argsB, _ := middleware.ScopeCondition(rOther, "d")
-	if ev := h.chainEvents(rOther.Context(), domainA, now, condB, argsB); len(ev) != 0 {
+	if ev := h.chainEvents(rOther.Context(), domainA, now, condB, argsB, -1, -1); len(ev) != 0 {
 		t.Fatalf("a non-owner saw %d of domainA's events, want 0", len(ev))
 	}
 }

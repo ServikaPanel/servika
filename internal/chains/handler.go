@@ -55,6 +55,15 @@ const chainListLimit = 50
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	cond, args, _ := middleware.ScopeCondition(r, "d")
 
+	// An entry (Initial Access) event is a login attack on an ACCOUNT, so a
+	// customer never sees it, only an admin or the owning reseller. A customer
+	// caller resolves no entry owners, so the entry branch of the timeline query
+	// matches nothing for them.
+	entryVisible := false
+	if c := middleware.ClaimsFrom(r); c != nil && c.Role != middleware.RoleUser {
+		entryVisible = true
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), queryTimeout)
 	defer cancel()
 	// #nosec G202 G701 -- cond is a constant scope fragment from ScopeCondition with a literal alias; every user value is bound through args.
@@ -88,7 +97,11 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			c.StageNames = append(c.StageNames, StageName(s))
 		}
 		if dom.Valid {
-			c.Events = h.chainEvents(ctx, dom.Int64, c.Time, cond, args)
+			reseller, user := int64(-1), int64(-1)
+			if entryVisible {
+				reseller, user = domainOwners(ctx, h.DB, dom.Int64)
+			}
+			c.Events = h.chainEvents(ctx, dom.Int64, c.Time, cond, args, reseller, user)
 		}
 		out = append(out, c)
 	}
@@ -102,22 +115,27 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // chainEvents reads the timeline for one chain's domain: the events in the
-// correlation window ending at the chain's time. The events query is scoped by
+// correlation window ending at the chain's time. The domain events are scoped by
 // the CALLER's own condition, not only by the chain's stored domain_id, so it
 // cannot be trusted to leak: the outer query already hides a chain whose domain
 // the caller no longer owns (scope is resolved live from the ownership chain),
 // but scoping the events query too keeps it self-securing if the outer query is
-// ever changed. It is best-effort: a read error leaves the chain without a
+// ever changed. The entry (Initial Access) event has its OWN scope, the actor
+// match: it is a NULL-domain login event that the domain-branch cond can never
+// pass, and the entryReseller/entryUser owners (already -1 for a customer caller)
+// decide who sees it. It is best-effort: a read error leaves the chain without a
 // timeline rather than failing the whole list.
-func (h *Handlers) chainEvents(ctx context.Context, domID int64, at, cond string, condArgs []any) []EventDTO {
+func (h *Handlers) chainEvents(ctx context.Context, domID int64, at, cond string, condArgs []any, entryReseller, entryUser int64) []EventDTO {
 	args := []any{domID}
 	args = append(args, condArgs...)
-	args = append(args, at, at, windowMin, eventLimit)
+	args = append(args, entryReseller, entryUser, at, at, windowMin, eventLimit)
 	// #nosec G202 G701 -- cond is a constant scope fragment from ScopeCondition with a literal alias; every user value is bound through args.
 	rows, err := h.DB.QueryContext(ctx,
 		`SELECT e.source, e.stage, e.level, e.summary, DATE_FORMAT(e.created_at,'%Y-%m-%d %H:%i:%s')
 		 FROM av_events e LEFT JOIN domains d ON d.id = e.domain_id
-		 WHERE e.domain_id = ? AND `+cond+` AND e.created_at <= ? AND e.created_at >= (? - INTERVAL ? MINUTE)
+		 WHERE ((e.domain_id = ? AND `+cond+`)
+		        OR (e.domain_id IS NULL AND e.stage='entry' AND e.actor_user_id IN (?,?)))
+		   AND e.created_at <= ? AND e.created_at >= (? - INTERVAL ? MINUTE)
 		 ORDER BY e.created_at LIMIT ?`, args...)
 	if err != nil {
 		return nil
