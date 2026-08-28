@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import type { AxiosProgressEvent } from 'axios'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Inventory = {
   provider: string
@@ -116,7 +118,7 @@ export default function AccountTransferPage() {
         { label: t('breadcrumbTitle') },
       ]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">🚚</span>
+        <span><Icon d={ICON.move} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">

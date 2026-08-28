@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import { useResourceScope } from '@/lib/scope'
 
 type Protection = { id: number; path: string; username: string; created_at: string }
@@ -111,7 +113,7 @@ export default function DomainPasswordProtectPage() {
             <div className="text-sm text-slate-400">{t('list.loading')}</div>
           ) : protections.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-3xl mb-2">🔒</div>
+              <div className="mb-2 flex justify-center text-slate-400"><Icon d={ICON.lock} className="h-8 w-8" /></div>
               <p className="text-sm text-slate-500 dark:text-slate-400">{t('list.empty')}</p>
             </div>
           ) : (
@@ -119,7 +121,7 @@ export default function DomainPasswordProtectPage() {
               {Object.entries(groups).map(([g, ks]) => (
                 <div key={g} className="border border-slate-100 dark:border-slate-700 rounded-lg overflow-hidden">
                   <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-900/40">
-                    <span className="text-sm">🔒</span>
+                    <span className="text-slate-500 dark:text-slate-400"><Icon d={ICON.lock} className="h-4 w-4" /></span>
                     <span className="font-mono text-sm text-slate-700 dark:text-slate-200">{g}</span>
                     <span className="text-xs text-slate-400">{t('list.userCount', { count: ks.length })}</span>
                   </div>

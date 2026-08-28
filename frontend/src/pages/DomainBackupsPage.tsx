@@ -7,6 +7,8 @@ import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import RestoreDialog, { type RestorePayload } from '@/components/RestoreDialog'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -251,9 +253,9 @@ export default function DomainBackupsPage() {
           {(['none','daily','weekly'] as const).map(f => {
             const isSelected = sched.freq === f
             const meta: Record<string,{name:string;icon:string;description:string;color:string}> = {
-              none: { name:t('schedule.options.none.name'), icon:'⏸', description:t('schedule.options.none.description'), color:'slate' },
-              daily: { name:t('schedule.options.daily.name'), icon:'🌙', description:t('schedule.options.daily.description'), color:'emerald' },
-              weekly: { name:t('schedule.options.weekly.name'), icon:'📅', description:t('schedule.options.weekly.description'), color:'indigo' },
+              none: { name:t('schedule.options.none.name'), icon:ICON.pause, description:t('schedule.options.none.description'), color:'slate' },
+              daily: { name:t('schedule.options.daily.name'), icon:ICON.moon, description:t('schedule.options.daily.description'), color:'emerald' },
+              weekly: { name:t('schedule.options.weekly.name'), icon:ICON.calendar, description:t('schedule.options.weekly.description'), color:'indigo' },
             }
             const m = meta[f]
             const color: Record<string,string> = {
@@ -266,7 +268,7 @@ export default function DomainBackupsPage() {
                 onClick={() => saveSchedule({ ...sched, freq: f })}
                 className={`text-left p-3 border rounded-lg transition disabled:cursor-default ${color[m.color]}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-base leading-none">{m.icon}</span>
+                  <span className="text-slate-600 dark:text-slate-300"><Icon d={m.icon} className="h-5 w-5" /></span>
                   {isSelected && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-300">{t('schedule.active')}</span>}
                 </div>
                 <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.name}</div>

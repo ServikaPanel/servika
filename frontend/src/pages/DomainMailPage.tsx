@@ -7,6 +7,8 @@ import { useReportError } from '@/lib/errors'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import ResourceNotice from '@/components/ResourceNotice'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Domain = { id: number; domain_name: string; ssl: boolean }
 type Mailbox = { id: number; local_part: string; email: string; status: string; created_at: string }
@@ -520,7 +522,7 @@ export default function DomainMailPage() {
           <div className="text-sm text-slate-400">{t('loading')}</div>
         ) : !status?.enabled ? (
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 text-center">
-            <div className="text-3xl mb-2">📧</div>
+            <div className="mb-2"><Icon d={ICON.mail} className="h-8 w-8" /></div>
             <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('enable.notEnabled')}</p>
             <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">{t('enable.info')}</p>
             {/* Enabling mail starts a whole stack on the server, not a setting on

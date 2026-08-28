@@ -2,7 +2,7 @@
 // Databases). All four do the same thing: fetch one read-only endpoint,
 // search, show a table, link each row to the matching domain page. Only the
 // column definitions differ, so the shell is shared.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from './Breadcrumb'
@@ -30,7 +30,7 @@ export default function OverviewList<T>({
   headerExtra, body,
 }: {
   title: string
-  icon: string
+  icon: ReactNode
   description: string
   endpoint: string
   columns: Column<T>[]

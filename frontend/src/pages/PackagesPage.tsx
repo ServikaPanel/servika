@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Package = {
   name: string; version?: string; description?: string;
@@ -324,7 +326,7 @@ export default function PackagesPage() {
           <div className="flex max-h-[80vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{outputModal.title}</h3>
-              <button onClick={() => setOutputModal(null)} className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300">✕</button>
+              <button onClick={() => setOutputModal(null)} className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"><Icon d={ICON.close} className="h-4 w-4" /></button>
             </div>
             <pre className="flex-1 overflow-auto bg-slate-900 p-3 font-mono text-xs text-slate-100 whitespace-pre-wrap">{outputModal.output}</pre>
             <div className="border-t border-slate-200 px-4 py-2 text-right dark:border-slate-700">

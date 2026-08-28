@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
 import ResourceNotice from '@/components/ResourceNotice'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Mode = 'inherit' | 'off' | 'block' | 'detect'
 type Settings = { mode: Mode; paranoia: number }
@@ -20,9 +22,9 @@ type Response = {
 
 const MODES: { key: Mode; icon: string; color: string }[] = [
   { key: 'inherit', icon: '↩︎', color: 'slate' },
-  { key: 'block', icon: '🛡️', color: 'emerald' },
-  { key: 'detect', icon: '👁️', color: 'indigo' },
-  { key: 'off', icon: '⛔', color: 'rose' },
+  { key: 'block', icon: ICON.shield, color: 'emerald' },
+  { key: 'detect', icon: ICON.eye, color: 'indigo' },
+  { key: 'off', icon: ICON.ban, color: 'rose' },
 ]
 
 export default function DomainWafPage() {
@@ -146,7 +148,7 @@ export default function DomainWafPage() {
                   <button key={m.key} type="button" onClick={() => setSettings({ ...settings, mode: m.key })}
                     className={`text-left p-4 border rounded-xl transition ${colors[m.color]}`}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.icon} {t(`modes.${m.key}.name`)}</span>
+                      <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100"><Icon d={m.icon} className="h-4 w-4" /> {t(`modes.${m.key}.name`)}</span>
                       {active && <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{'●'} {t('modeCard.selected')}</span>}
                     </div>
                     <div className="text-[11px] text-slate-600 dark:text-slate-400 leading-snug">{t(`modes.${m.key}.description`)}</div>

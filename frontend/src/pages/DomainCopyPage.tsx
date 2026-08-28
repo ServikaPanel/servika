@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Copy = { name: string; size_mb: number; date: string }
 
@@ -74,7 +76,7 @@ export default function DomainCopyPage() {
             <div className="text-sm text-slate-400">{t('loading')}</div>
           ) : list.length === 0 ? (
             <div className="text-center py-8">
-              <div className="text-3xl mb-2">📁</div>
+              <div className="mb-2 flex justify-center text-slate-400"><Icon d={ICON.folder} className="h-8 w-8" /></div>
               <p className="text-sm text-slate-500 dark:text-slate-400">{t('empty')}</p>
             </div>
           ) : (

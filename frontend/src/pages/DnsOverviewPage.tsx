@@ -3,6 +3,8 @@
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import OverviewList, { type Column, type Badge } from '@/components/OverviewList'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Row = {
   domain_id: number
@@ -47,7 +49,7 @@ export default function DnsOverviewPage() {
   return (
     <OverviewList<Row>
       title={t('title')}
-      icon="🌐"
+      icon={<Icon d={ICON.globe} className="h-6 w-6" />}
       description={t('description')}
       endpoint="/overview/dns"
       columns={columns}

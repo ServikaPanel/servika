@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -149,7 +151,7 @@ export default function PackageDetailPage() {
         {success && <div className="mb-4 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
         {/* General settings */}
-        <Card title={t('general.title')} icon="⚙️">
+        <Card title={t('general.title')} icon={<Icon d={ICON.settings} className="h-4 w-4" />}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label={t('general.planName')}>
               <input value={plan.name} onChange={e => updatePlan('name', e.target.value)} className={inputClass} />
@@ -167,7 +169,7 @@ export default function PackageDetailPage() {
         </Card>
 
         {/* Defaults inherited by new domains */}
-        <Card title={t('defaults.title')} icon="🧩" subtitle={t('defaults.subtitle')}>
+        <Card title={t('defaults.title')} icon={<Icon d={ICON.puzzle} className="h-4 w-4" />} subtitle={t('defaults.subtitle')}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label={t('defaults.phpVersion')} hint={t('defaults.phpHint')}>
               <select value={plan.php_version} onChange={e => updatePlan('php_version', e.target.value)} className={inputClass}>
@@ -178,7 +180,7 @@ export default function PackageDetailPage() {
         </Card>
 
         {/* Resource limits */}
-        <Card title={t('resources.title')} icon="📊" subtitle={t('resources.subtitle')}>
+        <Card title={t('resources.title')} icon={<Icon d={ICON.chart} className="h-4 w-4" />} subtitle={t('resources.subtitle')}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Field label={t('resources.cpu')} hint={t('resources.cpuHint')}>
               <input type="number" min={10} max={2000} value={plan.cpu_percent} onChange={e => updatePlan('cpu_percent', Number(e.target.value) || 0)} className={numberInputClass} />
@@ -238,7 +240,7 @@ export default function PackageDetailPage() {
         </Card>
 
         {/* Numeric limits, excluding email */}
-        <Card title={t('numeric.title')} icon="🔢" subtitle={t('numeric.subtitle')}>
+        <Card title={t('numeric.title')} icon={<Icon d={ICON.hash} className="h-4 w-4" />} subtitle={t('numeric.subtitle')}>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Field label={t('numeric.domains')}>
               <input type="number" min={0} value={plan.max_domain} onChange={e => updatePlan('max_domain', Number(e.target.value) || 0)} className={numberInputClass} />
@@ -256,7 +258,7 @@ export default function PackageDetailPage() {
         </Card>
 
         {/* Web server settings for nginx */}
-        <Card title={t('nginx.title')} icon="🛠️" subtitle={t('nginx.subtitle')}>
+        <Card title={t('nginx.title')} icon={<Icon d={ICON.wrench} className="h-4 w-4" />} subtitle={t('nginx.subtitle')}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <Field label={t('nginx.fastcgiCache')} hint={t('nginx.fastcgiCacheHint')}>
               <label className="flex items-center gap-2 h-[38px] px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50/60 dark:bg-slate-900/40 cursor-pointer">
@@ -284,7 +286,7 @@ export default function PackageDetailPage() {
         </Card>
 
         {/* Assigned domains */}
-        <Card title={t('assigned.title', { count: domains.length })} icon="🌐" subtitle={t('assigned.subtitle')}>
+        <Card title={t('assigned.title', { count: domains.length })} icon={<Icon d={ICON.globe} className="h-4 w-4" />} subtitle={t('assigned.subtitle')}>
           {domains.length === 0 ? (
             <div className="text-sm text-slate-400 py-6 text-center">{t('assigned.empty')}</div>
           ) : (
@@ -336,11 +338,11 @@ export default function PackageDetailPage() {
 const inputClass = 'w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 rounded-lg text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none'
 const numberInputClass = inputClass + ' font-mono'
 
-function Card({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon?: string; children: React.ReactNode }) {
+function Card({ title, subtitle, icon, children }: { title: string; subtitle?: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-4 shadow-sm">
       <div className="flex items-center gap-2 mb-1">
-        {icon && <span className="text-base leading-none" aria-hidden>{icon}</span>}
+        {icon && <span className="text-slate-500 dark:text-slate-400" aria-hidden>{icon}</span>}
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
       </div>
       {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 max-w-2xl">{subtitle}</p>}

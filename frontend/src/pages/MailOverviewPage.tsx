@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Link } from 'react-router'
 import OverviewList, { type Column, type Badge } from '@/components/OverviewList'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import { api, apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
 import { useDialog } from '@/lib/dialog'
@@ -286,7 +288,7 @@ export default function MailOverviewPage() {
     <>
       <OverviewList<Row>
         title={t('overview.title')}
-        icon="✉️"
+        icon={<Icon d={ICON.mail} className="h-6 w-6" />}
         description={t('overview.description')}
         endpoint="/overview/mail"
         columns={columns}

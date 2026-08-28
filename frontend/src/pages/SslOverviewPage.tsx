@@ -3,6 +3,8 @@
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import OverviewList, { type Column, type Badge } from '@/components/OverviewList'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import { sslState } from '@/lib/ssl'
 
 type Row = {
@@ -68,7 +70,7 @@ export default function SslOverviewPage() {
   return (
     <OverviewList<Row>
       title={t('title')}
-      icon="🔒"
+      icon={<Icon d={ICON.lock} className="h-6 w-6" />}
       description={t('description')}
       endpoint="/overview/ssl"
       columns={columns}

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { apiError as apiError } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import axios from 'axios'
 
 export default function CustomerLoginPage() {
@@ -42,7 +44,7 @@ export default function CustomerLoginPage() {
       </div>
       <div className="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-7">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-2xl mb-3">🌐</div>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 mb-3"><Icon d={ICON.globe} className="h-6 w-6" /></div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{t('heading')}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">{t('subtitle')}</p>
         </div>

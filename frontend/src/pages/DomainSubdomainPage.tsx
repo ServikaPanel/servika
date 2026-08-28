@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
 import ToolCard from '@/components/ToolCard'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Detail = {
   id: number; subdomain: string; fqdn: string; php_version: string; docroot: string
@@ -110,7 +112,7 @@ export default function DomainSubdomainPage() {
           : (
             <>
               <div className="flex items-center gap-3 mb-1">
-                <span className="text-2xl">🌐</span>
+                <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.globe} className="h-6 w-6" /></span>
                 <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 font-mono">{detail.fqdn}</h1>
                 {sslActive !== null && (
                   <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${sslActive

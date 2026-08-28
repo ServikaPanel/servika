@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Service = {
   unit: string
@@ -19,11 +21,11 @@ const STATUS_STYLES: Record<string, string> = {
 }
 
 const GROUP_ICONS: Record<string, string> = {
-  'Web Server': '🌐',
-  'Database & Cache': '🗄️',
-  DNS: '📡',
-  'PHP-FPM': '🐘',
-  Other: '⚙️',
+  'Web Server': ICON.globe,
+  'Database & Cache': ICON.database,
+  DNS: ICON.antenna,
+  'PHP-FPM': ICON.code,
+  Other: ICON.settings,
 }
 
 export default function ServicesPage() {
@@ -93,7 +95,7 @@ export default function ServicesPage() {
           {groups.map(group => (
             <section key={group.name}>
               <div className="flex items-center gap-2 mb-2 px-1">
-                <span className="text-lg">{GROUP_ICONS[group.name] || '⚙️'}</span>
+                <span className="text-slate-500 dark:text-slate-400"><Icon d={GROUP_ICONS[group.name] || ICON.settings} className="h-5 w-5" /></span>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{group.name}</h2>
               </div>
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">

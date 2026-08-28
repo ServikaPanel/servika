@@ -20,6 +20,8 @@ import SlowQuerySettings from '@/components/SlowQuerySettings'
 import SlowQueryTable from '@/components/SlowQueryTable'
 import DBRemoteAccess from '@/components/DBRemoteAccess'
 import DBRemoteServerSwitch from '@/components/DBRemoteServerSwitch'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Row = {
   id: number
@@ -174,7 +176,7 @@ export default function DatabasesOverviewPage() {
     <>
       <OverviewList<Row>
         title={t('title')}
-        icon="🗄️"
+        icon={<Icon d={ICON.database} className="h-6 w-6" />}
         description={t('description')}
         endpoint="/overview/databases"
         columns={columns}

@@ -5,6 +5,8 @@ import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import { useResourceScope } from '@/lib/scope'
 
 type Install = { dir: string; site_url: string; admin_url: string; version: string }
@@ -95,7 +97,7 @@ export default function DomainWordPressPage() {
         <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 p-10 text-center text-sm text-slate-400">{t('loading')}</div>
       ) : emptyState ? (
         <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-12 text-center mb-5">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center text-2xl mb-3">📝</div>
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-3"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
           <p className="text-base font-medium text-slate-800 dark:text-slate-100">{t('empty.title')}</p>
           <p className="text-sm text-slate-400 mt-1">{t('empty.subtitle')}</p>
         </div>
@@ -255,7 +257,7 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
       {/* Header strip */}
       <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center text-lg shrink-0">📝</div>
+          <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center shrink-0"><Icon d={ICON.pencil} className="h-5 w-5" /></div>
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">WordPress <span className="text-slate-400 font-normal font-mono text-xs">· {dir}</span></div>
             <div className="text-xs text-slate-400 mt-0.5 truncate">{installation.site_url}</div>
@@ -496,7 +498,7 @@ function InstallResult({ s, close }: { s: Result; close: () => void }) {
     <div className="mb-5 rounded-2xl border border-emerald-100 dark:border-emerald-800/60 bg-emerald-50/60 dark:bg-emerald-900/15 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{t('result.installed', { version: s.version })}</div>
-        <button onClick={close} className="text-xs text-emerald-600/70 hover:text-emerald-700">✕</button>
+        <button onClick={close} className="text-emerald-600/70 hover:text-emerald-700"><Icon d={ICON.close} className="h-4 w-4" /></button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
         <ResultRow label={t('result.site')} value={s.site_url} link />

@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Job = {
   id: number; type: string; operation: string; status: string
@@ -57,7 +59,7 @@ export default function BackupJobDetailPage() {
       {job && (
         <>
           <div className="flex items-center gap-3 mb-1">
-            <span className="text-2xl">{job.operation === 'restore' ? '♻️' : '💾'}</span>
+            <span><Icon d={job.operation === 'restore' ? ICON.refresh : ICON.save} className="h-6 w-6" /></span>
             <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
               {t(job.operation === 'restore' ? 'jobs.opRestore' : 'jobs.opBackup')} #{job.id}
             </h1>

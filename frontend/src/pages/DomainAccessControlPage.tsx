@@ -5,6 +5,8 @@ import { api, apiError, apiReason } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import CountryPicker from '@/components/CountryPicker'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type HotlinkSettings = {
   active: boolean
@@ -199,7 +201,7 @@ export default function DomainAccessControlPage() {
         { label: t('breadcrumb.accessControl') },
       ]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">🚫</span>
+        <span><Icon d={ICON.ban} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${MODE_BADGE[mode]}`}>{t(`modes.${mode}.label`)}</span>
       </div>
@@ -273,7 +275,7 @@ export default function DomainAccessControlPage() {
             <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('rules.title')}</h3>
             {rules.length === 0 ? (
               <div className="text-center py-6">
-                <div className="text-2xl mb-1">🧱</div>
+                <div className="mb-1"><Icon d={ICON.ban} className="h-6 w-6" /></div>
                 <p className="text-sm text-slate-500 dark:text-slate-400">{t('rules.empty')}</p>
               </div>
             ) : (

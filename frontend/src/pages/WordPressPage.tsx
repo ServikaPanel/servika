@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -108,7 +110,7 @@ export default function WordPressPage() {
     <div className="px-4 py-4 sm:px-6 sm:py-5">
       <Breadcrumb items={[{ label: t('breadcrumbHome'), href: '/' }, { label: t('breadcrumbTitle') }]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">📝</span>
+        <span><Icon d={ICON.pencil} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{t('subtitle')}</p>
@@ -118,7 +120,7 @@ export default function WordPressPage() {
       {/* Security warning banner */}
       {!loadingInstallations && outdatedInstallations.length > 0 && (
         <div className="mb-4 px-4 py-3 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 flex items-start gap-3">
-          <span className="text-lg leading-none">⚠️</span>
+          <span className="leading-none"><Icon d={ICON.warning} className="h-5 w-5" /></span>
           <div className="text-sm text-amber-800 dark:text-amber-200">
             <strong>{t('outdated.banner', { count: outdatedInstallations.length })}</strong> {t('outdated.warning')}
             <div className="mt-1 text-xs text-amber-700 dark:text-amber-300 font-mono">
@@ -132,7 +134,7 @@ export default function WordPressPage() {
       {result && (
         <div className="mb-4 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/15 p-4">
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300 mb-2">
-            ✅ {t('result.installed', { version: result.version })}
+            <Icon d={ICON.check} className="inline h-4 w-4 mr-1" />{t('result.installed', { version: result.version })}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
             <Info label={t('result.site')} value={result.site_url} link />
@@ -167,7 +169,7 @@ export default function WordPressPage() {
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{t('scanning')}</td></tr>
               ) : installations.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center">
-                  <div className="text-2xl mb-1">📝</div>
+                  <div className="mb-1"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{t('emptyTitle')}</p>
                   <p className="text-xs text-slate-400 mt-1">{t('emptyHint')}</p>
                 </td></tr>

@@ -6,6 +6,8 @@ import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Domain = { id: number; domain_name: string; system_user: string; ipv4: string }
 type Repo = {
@@ -278,7 +280,7 @@ export default function DomainGitPage() {
                       <option value="">{t('github.selectPlaceholder')}</option>
                       {ghRepos.map(r => (
                         <option key={r.full_name} value={r.full_name}>
-                          {r.private ? '🔒 ' : ''}{r.full_name}
+                          {r.private && <Icon d={ICON.lock} className="inline h-3.5 w-3.5 mr-1" />}{r.full_name}
                         </option>
                       ))}
                     </select>

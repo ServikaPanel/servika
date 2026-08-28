@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { html } from '@codemirror/lang-html'
 import { css } from '@codemirror/lang-css'
@@ -162,7 +164,7 @@ export default function CodeEditor({ path, content, onChange, onSave, onClose }:
               className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded"
               title={fullscreen ? t('exitFullscreen') : t('fullscreen')}
             >
-              {fullscreen ? '⛶' : '⛶'}
+              <Icon d={fullscreen ? ICON.close : ICON.fullscreen} className="h-4 w-4" />
             </button>
             <button
               onClick={save}

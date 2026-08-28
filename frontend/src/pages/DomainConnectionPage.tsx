@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { useCopyOrOffer } from '@/lib/useCopyOrOffer'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 
 
@@ -234,7 +236,7 @@ function PasswordResetModal({ type, domainId, ftpUser, dbUser, onClose }:
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={ev => ev.stopPropagation()}>
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-2xl">🔑</span>
+          <span><Icon d={ICON.key} className="h-6 w-6" /></span>
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{typeName} {t('modal.titleSuffix')}</h3>
         </div>
         <div className="text-xs text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-4 bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded">

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError, apiReason } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import { countryFlag, countryNamer, sortByName } from '@/lib/countries'
 import {
   responsiveTableActionCellClass,
@@ -36,17 +38,17 @@ type GeoResponse = { countries: string[]; database: DatabaseStatus }
 
 // Presets for closing commonly exposed ports with one click. Text is resolved via i18n.
 const TEMPLATES = [
-  { key: 'close_mysql', icon: '🗄️', ports: '3306' },
-  { key: 'close_ftp', icon: '📁', ports: '21' },
-  { key: 'close_mail', icon: '📧', ports: '25, 465, 587, 110, 143' },
-  { key: 'close_rpc', icon: '🔗', ports: '111, 2049' },
+  { key: 'close_mysql', icon: ICON.database, ports: '3306' },
+  { key: 'close_ftp', icon: ICON.folder, ports: '21' },
+  { key: 'close_mail', icon: ICON.mail, ports: '25, 465, 587, 110, 143' },
+  { key: 'close_rpc', icon: ICON.link, ports: '111, 2049' },
 ] as const
 
 // Manual rule modes; icons and colors are structural, text is resolved via i18n.
 const MODES = {
-  ban: { icon: '🚫', activeColor: 'bg-red-600 border-red-600' },
-  whitelist: { icon: '✅', activeColor: 'bg-emerald-600 border-emerald-600' },
-  close: { icon: '🔒', activeColor: 'bg-amber-600 border-amber-600' },
+  ban: { icon: ICON.ban, activeColor: 'bg-red-600 border-red-600' },
+  whitelist: { icon: ICON.check, activeColor: 'bg-emerald-600 border-emerald-600' },
+  close: { icon: ICON.lock, activeColor: 'bg-amber-600 border-amber-600' },
 } as const
 
 export default function FirewallPage() {
@@ -223,7 +225,7 @@ export default function FirewallPage() {
     <div className="px-4 py-4 sm:px-6 sm:py-5">
       <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.firewall') }]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">🛡️</span>
+        <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.shield} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -233,16 +235,16 @@ export default function FirewallPage() {
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
-      <div className="mb-5 px-4 py-2.5 rounded-lg bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 text-xs text-sky-800 dark:text-sky-200">
-        ℹ️ {t('info.pre')}<strong>{t('info.bold')}</strong>{t('info.mid')}<span className="font-mono">{protectedPortsText || t('protectedPortsFallback')}</span>{t('info.post')}
+      <div className="mb-5 flex items-start gap-1.5 px-4 py-2.5 rounded-lg bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 text-xs text-sky-800 dark:text-sky-200">
+        <Icon d={ICON.info} className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{t('info.pre')}<strong>{t('info.bold')}</strong>{t('info.mid')}<span className="font-mono">{protectedPortsText || t('protectedPortsFallback')}</span>{t('info.post')}</span>
       </div>
 
       {/* ---------- PRESETS ---------- */}
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2">⚡ {t('templates.sectionTitle')} <span className="text-xs font-normal text-slate-400">{t('templates.sectionHint')}</span></h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.bolt} className="h-4 w-4" /> {t('templates.sectionTitle')} <span className="text-xs font-normal text-slate-400">{t('templates.sectionHint')}</span></h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
         {TEMPLATES.map(s => (
           <div key={s.key} className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xl shrink-0">{s.icon}</div>
+            <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 shrink-0"><Icon d={s.icon} className="h-5 w-5" /></div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t(`templates.${s.key}.name`)}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t(`templates.${s.key}.description`)}</div>
@@ -257,7 +259,7 @@ export default function FirewallPage() {
       </div>
 
       {/* ---------- MANUAL RULE ---------- */}
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">✍️ {t('form.sectionTitle')}</h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.pencil} className="h-4 w-4" /> {t('form.sectionTitle')}</h2>
       <form onSubmit={add} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-6">
         {/* Step 1: choose an action. */}
         <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">{t('form.step1')}</div>
@@ -268,7 +270,7 @@ export default function FirewallPage() {
                 type === mode ? MODES[mode].activeColor + ' text-white'
                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
               }`}>
-              <div className="text-lg leading-none mb-1">{MODES[mode].icon}</div>
+              <div className="mb-1 flex justify-center"><Icon d={MODES[mode].icon} className="h-5 w-5" /></div>
               {t(`modes.${mode}.name`)}
             </button>
           ))}
@@ -315,8 +317,8 @@ export default function FirewallPage() {
 
         {/* Dynamic IP warning for an active allowlist restriction */}
         {restrictionWarning && (
-          <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
-            ⚠️ {t('warning.pre')}<strong>{t('warning.bold')}</strong>{t('warning.mid')}<strong>{t('warning.boldDynamic')}</strong>{t('warning.post')}
+          <div className="mt-2 flex items-start gap-1.5 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+            <Icon d={ICON.warning} className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{t('warning.pre')}<strong>{t('warning.bold')}</strong>{t('warning.mid')}<strong>{t('warning.boldDynamic')}</strong>{t('warning.post')}</span>
           </div>
         )}
 
@@ -326,7 +328,7 @@ export default function FirewallPage() {
       </form>
 
       {/* ---------- COUNTRY BLOCKING ---------- */}
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">🌍 {t('geo.sectionTitle')}</h2>
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.globe} className="h-4 w-4" /> {t('geo.sectionTitle')}</h2>
       <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-6">
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('geo.sectionHint')}</p>
 
@@ -444,7 +446,7 @@ export default function FirewallPage() {
                 <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{t('rules.loading')}</td></tr>
               ) : rules.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-10 text-center">
-                  <div className="text-2xl mb-1">🛡️</div>
+                  <div className="mb-1 flex justify-center text-slate-400"><Icon d={ICON.shield} className="h-6 w-6" /></div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{t('rules.emptyTitle')}</p>
                   <p className="text-xs text-slate-400 mt-1">{t('rules.emptyHint')}</p>
                 </td></tr>

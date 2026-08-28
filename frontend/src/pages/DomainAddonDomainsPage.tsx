@@ -5,6 +5,8 @@ import { api, apiError } from '@/lib/api'
 import { useDomainRefusal } from '@/lib/domainRefusal'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type AddonDomain = {
   id: number
@@ -147,7 +149,7 @@ export default function DomainAddonDomainsPage() {
         { label: t('breadcrumb.addonDomains') },
       ]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">🌐</span>
+        <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.globe} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{t('subtitle')}</p>
@@ -228,7 +230,7 @@ export default function DomainAddonDomainsPage() {
         {loading ? <div className="text-sm text-slate-400 py-2">{t('list.loading')}</div>
           : addons.length === 0 ? (
             <div className="text-center py-6">
-              <div className="text-2xl mb-1">🌐</div>
+              <div className="mb-1 flex justify-center text-slate-400"><Icon d={ICON.globe} className="h-6 w-6" /></div>
               <p className="text-sm text-slate-500 dark:text-slate-400">{t('list.empty')}</p>
             </div>
           ) : (

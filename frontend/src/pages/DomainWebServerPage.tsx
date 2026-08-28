@@ -7,6 +7,8 @@ import { useDialog } from '@/lib/dialog'
 import { useAuth } from '@/store/auth'
 import { useResourceScope } from '@/lib/scope'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import CodeMirror from '@uiw/react-codemirror'
 import { oneDark } from '@codemirror/theme-one-dark'
 
@@ -34,19 +36,19 @@ type CustomVhostResponse = { enabled: boolean; content: string; domain_name: str
 const BACKEND_INFO: Record<string, { name: string; icon: string; description: string; color: string }> = {
   'php-fpm': {
     name: 'nginx + PHP-FPM',
-    icon: '⚡',
+    icon: ICON.bolt,
     description: 'Default. nginx calls PHP-FPM directly through FastCGI. Ideal for WordPress, Laravel, and dynamic PHP sites with the lowest latency.',
     color: 'emerald',
   },
   'apache': {
     name: 'nginx + Apache',
-    icon: '🪶',
+    icon: ICON.feather,
     description: 'nginx terminates TLS at the edge, while Apache (10080) serves the vhost behind it. Full .htaccess support for Joomla, older WordPress sites, and legacy CMSs.',
     color: 'indigo',
   },
   'static': {
     name: 'Static (no PHP)',
-    icon: '📄',
+    icon: ICON.file,
     description: 'Serves files only. Intended for React, Vue, or Angular SPAs, static site generators such as Hugo and Jekyll, and CDN content. PHP requests return 404.',
     color: 'slate',
   },
@@ -265,7 +267,7 @@ export default function DomainWebServerPage() {
                 className={`text-left p-4 border rounded-lg transition disabled:cursor-default ${colorClasses[b.color]}`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-lg leading-none">{b.icon}</span>
+                  <span className="text-slate-600 dark:text-slate-300"><Icon d={b.icon} className="h-5 w-5" /></span>
                   {enabled && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-300">{t('stack.active')}</span>}
                 </div>
                 <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(`backend.${k}.name`, { defaultValue: b.name })}</div>
@@ -317,8 +319,8 @@ export default function DomainWebServerPage() {
       {loading || !settings ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
         <>
           {!isSubdomain && customVhost?.enabled && (
-            <div className="mb-5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
-              ⚠️ <strong>{t('customVhostActive.boldPre')}</strong>{t('customVhostActive.post')}<strong>{t('customVhostActive.boldNot')}</strong>{t('customVhostActive.tail')}
+            <div className="mb-5 flex items-start gap-1.5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
+              <Icon d={ICON.warning} className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span><strong>{t('customVhostActive.boldPre')}</strong>{t('customVhostActive.post')}<strong>{t('customVhostActive.boldNot')}</strong>{t('customVhostActive.tail')}</span>
             </div>
           )}
 

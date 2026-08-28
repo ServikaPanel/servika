@@ -5,6 +5,8 @@ import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import ResourceNotice from '@/components/ResourceNotice'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 
 type Status = {
   enabled: boolean
@@ -77,7 +79,7 @@ export default function RedisPage() {
     <div className="px-6 py-5">
       <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' }, { label: t('breadcrumb.redisCache') }]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">⚡</span>
+        <span className="text-amber-500 dark:text-amber-400"><Icon d={ICON.bolt} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
         {status && (
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.enabled
@@ -98,7 +100,7 @@ export default function RedisPage() {
         <div className="py-12 text-center text-sm text-slate-400">{t('loading')}</div>
       ) : !status?.enabled ? (
         <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 text-center">
-          <div className="text-3xl mb-2">⚡</div>
+          <div className="mb-2 flex justify-center text-amber-500 dark:text-amber-400"><Icon d={ICON.bolt} className="h-8 w-8" /></div>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('empty.message')}</p>
           <p className="text-xs text-slate-400 mb-4">{t('empty.hint')}</p>
           {/* The cache process is shared by the whole server, so its cost is not

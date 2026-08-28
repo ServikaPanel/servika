@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -115,7 +117,7 @@ export default function BackupManagementPage() {
         { label: t('breadcrumb.backupManager') },
       ]} />
       <div className="flex items-center gap-3 mb-1">
-        <span className="text-2xl">💾</span>
+        <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.save} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{t('subtitle')}</p>
@@ -125,10 +127,10 @@ export default function BackupManagementPage() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <Kpi label={t('kpi.totalSize')} value={o ? formatBytes(o.total_size_bytes) : '-'} color="sky" icon="💽" />
-        <Kpi label={t('kpi.totalBackups')} value={o ? String(o.total_backups) : '-'} color="violet" icon="📦" />
-        <Kpi label={t('kpi.domainCount')} value={o ? String(o.domains.length) : '-'} color="teal" icon="🌐" />
-        <Kpi label={t('kpi.remoteDestinations')} value={o ? String(o.destination_count) : '-'} color="emerald" icon="☁️" subtitle={t('kpi.remoteSubtitle')} />
+        <Kpi label={t('kpi.totalSize')} value={o ? formatBytes(o.total_size_bytes) : '-'} color="sky" icon={<Icon d={ICON.save} className="h-4 w-4" />} />
+        <Kpi label={t('kpi.totalBackups')} value={o ? String(o.total_backups) : '-'} color="violet" icon={<Icon d={ICON.box} className="h-4 w-4" />} />
+        <Kpi label={t('kpi.domainCount')} value={o ? String(o.domains.length) : '-'} color="teal" icon={<Icon d={ICON.globe} className="h-4 w-4" />} />
+        <Kpi label={t('kpi.remoteDestinations')} value={o ? String(o.destination_count) : '-'} color="emerald" icon={<Icon d={ICON.cloud} className="h-4 w-4" />} subtitle={t('kpi.remoteSubtitle')} />
       </div>
 
       {/* Schedule and action */}
@@ -235,7 +237,7 @@ export default function BackupManagementPage() {
   )
 }
 
-function Kpi({ label, value, color, icon, subtitle }: { label: string; value: string; color: string; icon: string; subtitle?: string }) {
+function Kpi({ label, value, color, icon, subtitle }: { label: string; value: string; color: string; icon: ReactNode; subtitle?: string }) {
   const c: Record<string, string> = {
     sky: 'text-sky-600 dark:text-sky-400', violet: 'text-violet-600 dark:text-violet-400',
     teal: 'text-teal-600 dark:text-teal-400', emerald: 'text-emerald-600 dark:text-emerald-400',
