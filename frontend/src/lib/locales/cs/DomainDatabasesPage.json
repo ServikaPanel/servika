@@ -21,8 +21,7 @@
     "host": "Host",
     "password": "Heslo",
     "created": "Vytvořeno",
-    "size": "Velikost",
-    "actions": "Akce"
+    "size": "Velikost"
   },
   "password": {
     "show": "Zobrazit",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Vzdálený přístup",
-    "remoteAccessTitle": "Které adresy se k tomuto účtu dostanou zvenčí",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "Otevřít phpMyAdmin v nové kartě",
     "resetPassword": "🔑 Obnovit heslo",
-    "delete": "Smazat"
+    "delete": "Smazat",
+    "manage": "Spravovat",
+    "optimize": "⚡ Optimalizovat",
+    "optimizing": "Optimalizuji…"
   },
   "errors": {
     "pmaToken": "Token phpMyAdmin nelze získat",
-    "deleteFailed": "Smazání se nezdařilo"
+    "deleteFailed": "Smazání se nezdařilo",
+    "optimizeFailed": "Optimalizace selhala"
   },
   "delete": {
     "title": "Smazat databázi",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Kopírovat"
+  },
+  "detail": {
+    "back": "Zpět na seznam",
+    "notFound": "Databáze nenalezena",
+    "connectionInfo": "Údaje připojení",
+    "operations": "Akce",
+    "optimizeConfirm": "Všechny tabulky v \"{{name}}\" budou optimalizovány (odstraní se fragmentace a uvolní se nevyužité místo). U velkých tabulek to může trvat několik sekund. Pokračovat?",
+    "optimizeConfirmButton": "Optimalizovat",
+    "optimizeReclaimed": "Optimalizováno. Uvolněno {{reclaimed}} ({{before}} → {{after}}).",
+    "optimizeTidy": "\"{{name}}\" optimalizováno. Tabulky již byly kompaktní; nebylo co uvolnit."
   }
 }

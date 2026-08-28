@@ -21,8 +21,7 @@
     "host": "Gazdă",
     "password": "Parolă",
     "created": "Creat",
-    "size": "Dimensiune",
-    "actions": "Acțiuni"
+    "size": "Dimensiune"
   },
   "password": {
     "show": "Afișare",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Acces la distanță",
-    "remoteAccessTitle": "Ce adrese ajung la acest cont din exterior",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "Deschideți phpMyAdmin într-o filă nouă",
     "resetPassword": "🔑 Resetare parolă",
-    "delete": "Ștergere"
+    "delete": "Ștergere",
+    "manage": "Gestionează",
+    "optimize": "⚡ Optimizează",
+    "optimizing": "Se optimizează…"
   },
   "errors": {
     "pmaToken": "Nu s-a putut obține tokenul phpMyAdmin",
-    "deleteFailed": "Ștergerea a eșuat"
+    "deleteFailed": "Ștergerea a eșuat",
+    "optimizeFailed": "Optimizarea a eșuat"
   },
   "delete": {
     "title": "Ștergere bază de date",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Copiere"
+  },
+  "detail": {
+    "back": "Înapoi la listă",
+    "notFound": "Baza de date nu a fost găsită",
+    "connectionInfo": "Detalii conexiune",
+    "operations": "Acțiuni",
+    "optimizeConfirm": "Toate tabelele din \"{{name}}\" vor fi optimizate (fragmentarea este eliminată și spațiul nefolosit recuperat). La tabele mari poate dura câteva secunde. Continuați?",
+    "optimizeConfirmButton": "Optimizează",
+    "optimizeReclaimed": "Optimizat. {{reclaimed}} recuperați ({{before}} → {{after}}).",
+    "optimizeTidy": "\"{{name}}\" optimizat. Tabelele erau deja compacte; nu era spațiu semnificativ de recuperat."
   }
 }

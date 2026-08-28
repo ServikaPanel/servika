@@ -21,8 +21,7 @@
     "host": "Hôte",
     "password": "Mot de passe",
     "created": "Créé le",
-    "size": "Taille",
-    "actions": "Actions"
+    "size": "Taille"
   },
   "password": {
     "show": "Afficher",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Accès distant",
-    "remoteAccessTitle": "Quelles adresses atteignent ce compte depuis l'extérieur",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "Ouvrir phpMyAdmin dans un nouvel onglet",
     "resetPassword": "🔑 Réinitialiser le mot de passe",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "manage": "Gérer",
+    "optimize": "⚡ Optimiser",
+    "optimizing": "Optimisation…"
   },
   "errors": {
     "pmaToken": "Impossible d'obtenir le jeton phpMyAdmin",
-    "deleteFailed": "Échec de la suppression"
+    "deleteFailed": "Échec de la suppression",
+    "optimizeFailed": "Échec de l’optimisation"
   },
   "delete": {
     "title": "Supprimer la base de données",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Copier"
+  },
+  "detail": {
+    "back": "Retour à la liste",
+    "notFound": "Base de données introuvable",
+    "connectionInfo": "Informations de connexion",
+    "operations": "Actions",
+    "optimizeConfirm": "Toutes les tables de « {{name}} » seront optimisées (la fragmentation est supprimée et l’espace inutilisé récupéré). Sur de grandes tables, cela peut prendre quelques secondes. Continuer ?",
+    "optimizeConfirmButton": "Optimiser",
+    "optimizeReclaimed": "Optimisé. {{reclaimed}} récupéré ({{before}} → {{after}}).",
+    "optimizeTidy": "« {{name}} » optimisé. Les tables étaient déjà compactes ; aucun espace notable à récupérer."
   }
 }

@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router'
+import { useParams, useNavigate, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError as apiError } from '@/lib/api'
-import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
+import { type DB, formatBytes } from '@/lib/database'
 import Breadcrumb from '@/components/Breadcrumb'
-import { Icon } from '@/components/Icon'
-import { ICON } from '@/components/iconPaths'
-import ConfirmDialog from '@/components/ConfirmDialog'
 import Modal from '@/components/Modal'
-import DBPasswordResetModal from '@/components/DBPasswordResetModal'
-import DBRemoteAccess from '@/components/DBRemoteAccess'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -23,36 +18,17 @@ import {
 } from '@/lib/table'
 
 type Domain = { id: number; domain_name: string; system_user: string }
-type DB = {
-  id: number; domain_id: number; db_name: string; db_user: string;
-  db_host: string; db_pass: string; created_at: string; size: number
-}
-
-// Human-readable byte size. An unknown size (0, or a size query that failed on
-// the server) renders as a dash rather than "0 B".
-function formatBytes(b: number): string {
-  if (!b || b <= 0) return '—'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0, v = b
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
-  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`
-}
 
 export default function DomainDatabasesPage() {
   const { t } = useTranslation('DomainDatabasesPage')
-  const { notify } = useDialog()
   const report = useReportError()
   const { id } = useParams()
+  const navigate = useNavigate()
   const [domain, setDomain] = useState<Domain | null>(null)
   const [databases, setDatabases] = useState<DB[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [databaseToDelete, setDatabaseToDelete] = useState<DB | null>(null)
-  const [pwResetFor, setPwResetFor] = useState<DB | null>(null)
-  const [remoteFor, setRemoteFor] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
-  const [passwordVisibility, setPasswordVisibility] = useState<Record<number, boolean>>({})
-  const [copiedValue, setCopiedValue] = useState<number | null>(null)
 
   // Split so the mount effect never writes state synchronously: fetchDatabases
   // settles only through promise callbacks, and load() adds the spinner for the
@@ -70,44 +46,10 @@ export default function DomainDatabasesPage() {
     fetchDatabases()
   }, [fetchDatabases])
 
-  async function openPma(d: DB) {
-    try {
-      const { data } = await api.post<{ token: string }>(`/databases/${d.id}/pma-token`)
-      // Deliver the one-time token in a POST body (never a URL) so it cannot leak
-      // through browser history, proxy logs, or Referer headers.
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = '/pma-signon.php'
-      form.target = '_blank'
-      const input = document.createElement('input')
-      input.type = 'hidden'
-      input.name = 't'
-      input.value = data.token
-      form.appendChild(input)
-      document.body.appendChild(form)
-      form.submit()
-      form.remove()
-    } catch (e) {
-      await notify({ message: apiError(e, t('errors.pmaToken')), tone: 'error' })
-    }
-  }
-
   useEffect(() => {
     if (id) api.get<Domain>(`/domains/${id}`).then(r => setDomain(r.data)).catch(report('subscription'))
     fetchDatabases()
   }, [id, fetchDatabases, report])
-
-  async function remove() {
-    if (!databaseToDelete) return
-    try { await api.delete(`/databases/${databaseToDelete.id}`); setDatabaseToDelete(null); load() }
-    catch (e) { await notify({ message: apiError(e, t('errors.deleteFailed')), tone: 'error' }) }
-  }
-
-  function copy(d: DB) {
-    navigator.clipboard.writeText(d.db_pass)
-    setCopiedValue(d.id)
-    setTimeout(() => setCopiedValue(null), 1500)
-  }
 
   // Unique existing DB users for this domain (used for the existing-user selector).
   const existingUsers = useMemo(
@@ -141,45 +83,30 @@ export default function DomainDatabasesPage() {
           <thead className={responsiveTableHeadClass}>
             <tr>
               <th className="text-left px-4 py-2.5">{t('columns.database')}</th>
-              <th className="text-left px-4 py-2.5">{t('columns.username')}</th>
-              <th className="text-left px-4 py-2.5">{t('columns.host')}</th>
-              <th className="text-left px-4 py-2.5">{t('columns.password')}</th>
               <th className="text-left px-4 py-2.5">{t('columns.created')}</th>
               <th className="text-right px-4 py-2.5">{t('columns.size')}</th>
-              <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
+              <th className="text-right px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className={responsiveTableBodyClass}>
             {databases.map(d => (
-              <tr key={d.id} className={responsiveTableRowClass}>
-                <td data-label={t('columns.database')} className={responsiveTableCodeCellClass}>{d.db_name}</td>
-                <td data-label={t('columns.username')} className={responsiveTableCodeCellClass}>{d.db_user}</td>
-                <td data-label={t('columns.host')} className={responsiveTableCodeCellClass}>{d.db_host}:3306</td>
-                <td data-label={t('columns.password')} className={responsiveTableCellClass}>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setPasswordVisibility({ ...passwordVisibility, [d.id]: !passwordVisibility[d.id] })}
-                      className="font-mono text-xs px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded"
-                      title={passwordVisibility[d.id] ? t('password.hide') : t('password.show')}
-                    >
-                      {passwordVisibility[d.id] ? d.db_pass : '••••••••'}
-                    </button>
-                    {passwordVisibility[d.id] && (
-                      <button onClick={() => copy(d)} className="text-xs px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-brand-100 dark:bg-brand-900/30 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 rounded" title={t('password.copy')}>
-                        {copiedValue === d.id ? '✓' : '⧉'}
-                      </button>
-                    )}
-                  </div>
+              <tr
+                key={d.id}
+                onClick={() => navigate(`/subscriptions/${id}/databases/${d.id}`)}
+                className={`${responsiveTableRowClass} cursor-pointer`}
+              >
+                <td data-label={t('columns.database')} className={responsiveTableCodeCellClass}>
+                  <span className="text-brand-700 dark:text-brand-300">{d.db_name}</span>
                 </td>
                 <td data-label={t('columns.created')} className={responsiveTableCellClass}>{d.created_at}</td>
                 <td data-label={t('columns.size')} className={`${responsiveTableCellClass} text-right`}>
                   <span className="font-mono tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{formatBytes(d.size)}</span>
                 </td>
                 <td className={responsiveTableActionCellClass}>
-                  <button onClick={() => openPma(d)} className="group inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded" title={t('row.pmaTitle')}><Icon d={ICON.lockOpen} className="h-4 w-4 transition-transform group-hover:scale-110" />{t('row.pma')}</button>
-                  <button onClick={() => setPwResetFor(d)} className="group inline-flex items-center gap-1.5 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded"><Icon d={ICON.key} className="h-4 w-4 transition-transform group-hover:rotate-12" />{t('row.resetPassword')}</button>
-                  <button onClick={() => setRemoteFor(d.db_user)} className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded" title={t('row.remoteAccessTitle')}><Icon d={ICON.globe} className="h-4 w-4" />{t('row.remoteAccess')}</button>
-                  <button onClick={() => setDatabaseToDelete(d)} className="group inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 px-2 py-1 rounded"><Icon d={ICON.trash} className="h-4 w-4 transition-transform group-hover:scale-110" />{t('row.delete')}</button>
+                  <span className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+                    {t('row.manage')}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                  </span>
                 </td>
               </tr>
             ))}
@@ -196,35 +123,6 @@ export default function DomainDatabasesPage() {
           onDone={() => { setAddOpen(false); load() }}
         />
       )}
-
-      {pwResetFor && (
-        <DBPasswordResetModal
-          db={pwResetFor}
-          onClose={() => setPwResetFor(null)}
-          onDone={() => { setPwResetFor(null); load() }}
-        />
-      )}
-
-      {/* Keyed by the database USER, not by the row: one user can own several
-          databases and a remote account is granted all of them at once. */}
-      <Modal
-        open={!!remoteFor}
-        title={t('remote.title', { user: remoteFor })}
-        width="lg"
-        onClose={() => setRemoteFor(null)}
-      >
-        {remoteFor && <DBRemoteAccess domainId={Number(id)} dbUser={remoteFor} />}
-      </Modal>
-
-      <ConfirmDialog
-        open={!!databaseToDelete}
-        title={t('delete.title')}
-        message={t('delete.message', { name: databaseToDelete?.db_name })}
-        dangerous
-        confirmText={t('delete.confirm')}
-        onConfirm={remove}
-        onCancel={() => setDatabaseToDelete(null)}
-      />
     </div>
   )
 }

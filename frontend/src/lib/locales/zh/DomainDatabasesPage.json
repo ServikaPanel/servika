@@ -21,8 +21,7 @@
     "host": "主机",
     "password": "密码",
     "created": "创建时间",
-    "size": "大小",
-    "actions": "操作"
+    "size": "大小"
   },
   "password": {
     "show": "显示",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "远程访问",
-    "remoteAccessTitle": "哪些地址可以从外部访问此账号",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "在新标签页中打开 phpMyAdmin",
     "resetPassword": "🔑 重置密码",
-    "delete": "删除"
+    "delete": "删除",
+    "manage": "管理",
+    "optimize": "⚡ 优化",
+    "optimizing": "正在优化…"
   },
   "errors": {
     "pmaToken": "无法获取 phpMyAdmin 令牌",
-    "deleteFailed": "删除失败"
+    "deleteFailed": "删除失败",
+    "optimizeFailed": "优化失败"
   },
   "delete": {
     "title": "删除数据库",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "复制"
+  },
+  "detail": {
+    "back": "返回列表",
+    "notFound": "未找到数据库",
+    "connectionInfo": "连接信息",
+    "operations": "操作",
+    "optimizeConfirm": "将优化 \"{{name}}\" 中的所有表（消除碎片并回收未使用的空间）。对于大表可能需要几秒钟。是否继续？",
+    "optimizeConfirmButton": "优化",
+    "optimizeReclaimed": "已优化。回收了 {{reclaimed}}（{{before}} → {{after}}）。",
+    "optimizeTidy": "\"{{name}}\" 已优化。表已经很紧凑，没有可回收的明显空间。"
   }
 }

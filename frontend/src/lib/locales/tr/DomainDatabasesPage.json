@@ -21,8 +21,7 @@
     "host": "Sunucu",
     "password": "Parola",
     "created": "Oluşturulma",
-    "size": "Boyut",
-    "actions": "İşlemler"
+    "size": "Boyut"
   },
   "password": {
     "show": "Göster",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Uzak erişim",
-    "remoteAccessTitle": "Bu hesaba dışarıdan hangi adresler erişebilir",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "phpMyAdmin'i yeni sekmede aç",
     "resetPassword": "🔑 Parola Sıfırla",
-    "delete": "Sil"
+    "delete": "Sil",
+    "manage": "Yönet",
+    "optimize": "⚡ Optimize Et",
+    "optimizing": "Optimize ediliyor…"
   },
   "errors": {
     "pmaToken": "phpMyAdmin belirteci alınamadı",
-    "deleteFailed": "Silme başarısız oldu"
+    "deleteFailed": "Silme başarısız oldu",
+    "optimizeFailed": "Optimize başarısız"
   },
   "delete": {
     "title": "Veritabanını sil",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Kopyala"
+  },
+  "detail": {
+    "back": "Listeye dön",
+    "notFound": "Veritabanı bulunamadı",
+    "connectionInfo": "Bağlantı Bilgileri",
+    "operations": "İşlemler",
+    "optimizeConfirm": "\"{{name}}\" içindeki tüm tablolar optimize edilecek (fragmentasyon giderilir, kullanılmayan alan geri kazanılır). Büyük tablolarda işlem birkaç saniye sürebilir. Devam edilsin mi?",
+    "optimizeConfirmButton": "Optimize Et",
+    "optimizeReclaimed": "Optimize edildi. {{reclaimed}} alan geri kazanıldı ({{before}} → {{after}}).",
+    "optimizeTidy": "\"{{name}}\" optimize edildi. Tablolar zaten derli topluydu, geri kazanılacak belirgin alan yoktu."
   }
 }

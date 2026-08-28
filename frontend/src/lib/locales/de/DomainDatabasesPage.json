@@ -21,8 +21,7 @@
     "host": "Host",
     "password": "Passwort",
     "created": "Erstellt",
-    "size": "Größe",
-    "actions": "Aktionen"
+    "size": "Größe"
   },
   "password": {
     "show": "Anzeigen",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Fernzugriff",
-    "remoteAccessTitle": "Welche Adressen dieses Konto von außen erreichen",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "phpMyAdmin in einem neuen Tab öffnen",
     "resetPassword": "🔑 Passwort zurücksetzen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "manage": "Verwalten",
+    "optimize": "⚡ Optimieren",
+    "optimizing": "Wird optimiert…"
   },
   "errors": {
     "pmaToken": "phpMyAdmin-Token konnte nicht abgerufen werden",
-    "deleteFailed": "Löschen fehlgeschlagen"
+    "deleteFailed": "Löschen fehlgeschlagen",
+    "optimizeFailed": "Optimierung fehlgeschlagen"
   },
   "delete": {
     "title": "Datenbank löschen",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Kopieren"
+  },
+  "detail": {
+    "back": "Zurück zur Liste",
+    "notFound": "Datenbank nicht gefunden",
+    "connectionInfo": "Verbindungsdaten",
+    "operations": "Aktionen",
+    "optimizeConfirm": "Alle Tabellen in „{{name}}\" werden optimiert (Fragmentierung wird beseitigt, ungenutzter Speicher zurückgewonnen). Bei großen Tabellen kann dies einige Sekunden dauern. Fortfahren?",
+    "optimizeConfirmButton": "Optimieren",
+    "optimizeReclaimed": "Optimiert. {{reclaimed}} zurückgewonnen ({{before}} → {{after}}).",
+    "optimizeTidy": "„{{name}}\" optimiert. Die Tabellen waren bereits aufgeräumt; es gab keinen nennenswerten Speicher zurückzugewinnen."
   }
 }

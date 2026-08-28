@@ -21,8 +21,7 @@
     "host": "Host",
     "password": "Password",
     "created": "Creato",
-    "size": "Dimensione",
-    "actions": "Azioni"
+    "size": "Dimensione"
   },
   "password": {
     "show": "Mostra",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Accesso remoto",
-    "remoteAccessTitle": "Quali indirizzi raggiungono questo account dall'esterno",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "Apri phpMyAdmin in una nuova scheda",
     "resetPassword": "🔑 Reimposta password",
-    "delete": "Elimina"
+    "delete": "Elimina",
+    "manage": "Gestisci",
+    "optimize": "⚡ Ottimizza",
+    "optimizing": "Ottimizzazione…"
   },
   "errors": {
     "pmaToken": "Impossibile ottenere il token phpMyAdmin",
-    "deleteFailed": "Eliminazione non riuscita"
+    "deleteFailed": "Eliminazione non riuscita",
+    "optimizeFailed": "Ottimizzazione non riuscita"
   },
   "delete": {
     "title": "Elimina database",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Copia"
+  },
+  "detail": {
+    "back": "Torna all’elenco",
+    "notFound": "Database non trovato",
+    "connectionInfo": "Dati di connessione",
+    "operations": "Azioni",
+    "optimizeConfirm": "Tutte le tabelle di \"{{name}}\" saranno ottimizzate (la frammentazione viene rimossa e lo spazio inutilizzato recuperato). Su tabelle grandi può richiedere alcuni secondi. Continuare?",
+    "optimizeConfirmButton": "Ottimizza",
+    "optimizeReclaimed": "Ottimizzato. {{reclaimed}} recuperati ({{before}} → {{after}}).",
+    "optimizeTidy": "\"{{name}}\" ottimizzato. Le tabelle erano già compatte; non c’era spazio significativo da recuperare."
   }
 }

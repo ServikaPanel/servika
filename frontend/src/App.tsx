@@ -32,6 +32,7 @@ const DomainDNSPage = lazy(() => import('@/pages/DomainDNSPage'))
 const RedisPage = lazy(() => import('@/pages/RedisPage'))
 const DomainConnectionPage = lazy(() => import('@/pages/DomainConnectionPage'))
 const DomainDatabasesPage = lazy(() => import('@/pages/DomainDatabasesPage'))
+const DomainDatabaseDetailPage = lazy(() => import('@/pages/DomainDatabaseDetailPage'))
 const DomainFTPPage = lazy(() => import('@/pages/DomainFTPPage'))
 const DomainMailPage = lazy(() => import('@/pages/DomainMailPage'))
 const DomainMailboxPage = lazy(() => import('@/pages/DomainMailboxPage'))
@@ -127,6 +128,7 @@ export default function App() {
         <Route path="subscriptions/:id/connection"      element={<DomainConnectionPage />} />
         <Route path="subscriptions/:id/files"      element={<DomainFilesPage />} />
         <Route path="subscriptions/:id/databases" element={<DomainDatabasesPage />} />
+        <Route path="subscriptions/:id/databases/:dbid" element={<DomainDatabaseDetailPage />} />
         <Route path="subscriptions/:id/ftp"           element={<DomainFTPPage />} />
         <Route path="subscriptions/:id/php"           element={<DomainPHPPage />} />
         <Route path="subscriptions/:id/ssl"           element={<DomainSSLPage />} />

@@ -21,8 +21,7 @@
     "host": "Host",
     "password": "Password",
     "created": "Created",
-    "size": "Size",
-    "actions": "Actions"
+    "size": "Size"
   },
   "password": {
     "show": "Show",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "Remote access",
-    "remoteAccessTitle": "Which addresses may reach this account from outside",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "Open phpMyAdmin in a new tab",
     "resetPassword": "🔑 Reset Password",
-    "delete": "Delete"
+    "delete": "Delete",
+    "manage": "Manage",
+    "optimize": "⚡ Optimize",
+    "optimizing": "Optimizing…"
   },
   "errors": {
     "pmaToken": "Could not obtain phpMyAdmin token",
-    "deleteFailed": "Deletion failed"
+    "deleteFailed": "Deletion failed",
+    "optimizeFailed": "Optimize failed"
   },
   "delete": {
     "title": "Delete database",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "Copy"
+  },
+  "detail": {
+    "back": "Back to list",
+    "notFound": "Database not found",
+    "connectionInfo": "Connection details",
+    "operations": "Actions",
+    "optimizeConfirm": "All tables in \"{{name}}\" will be optimized (fragmentation is removed and unused space is reclaimed). On large tables this can take a few seconds. Continue?",
+    "optimizeConfirmButton": "Optimize",
+    "optimizeReclaimed": "Optimized. {{reclaimed}} reclaimed ({{before}} → {{after}}).",
+    "optimizeTidy": "\"{{name}}\" optimized. The tables were already tidy; there was no significant space to reclaim."
   }
 }

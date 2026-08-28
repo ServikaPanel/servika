@@ -21,8 +21,7 @@
     "host": "ホスト",
     "password": "パスワード",
     "created": "作成日",
-    "size": "サイズ",
-    "actions": "操作"
+    "size": "サイズ"
   },
   "password": {
     "show": "表示",
@@ -31,15 +30,17 @@
   },
   "row": {
     "remoteAccess": "リモート接続",
-    "remoteAccessTitle": "外部からこのアカウントに到達できるアドレス",
     "pma": "🔓 phpMyAdmin",
-    "pmaTitle": "新しいタブで phpMyAdmin を開く",
     "resetPassword": "🔑 パスワードをリセット",
-    "delete": "削除"
+    "delete": "削除",
+    "manage": "管理",
+    "optimize": "⚡ 最適化",
+    "optimizing": "最適化しています…"
   },
   "errors": {
     "pmaToken": "phpMyAdmin のトークンを取得できませんでした",
-    "deleteFailed": "削除に失敗しました"
+    "deleteFailed": "削除に失敗しました",
+    "optimizeFailed": "最適化に失敗しました"
   },
   "delete": {
     "title": "データベースを削除",
@@ -83,5 +84,15 @@
   "resultRow": {
     "copied": "✓",
     "copy": "コピー"
+  },
+  "detail": {
+    "back": "一覧に戻る",
+    "notFound": "データベースが見つかりません",
+    "connectionInfo": "接続情報",
+    "operations": "操作",
+    "optimizeConfirm": "\"{{name}}\" 内のすべてのテーブルを最適化します（フラグメンテーションを解消し、未使用領域を回収します）。大きなテーブルでは数秒かかることがあります。続行しますか？",
+    "optimizeConfirmButton": "最適化",
+    "optimizeReclaimed": "最適化しました。{{reclaimed}} を回収しました（{{before}} → {{after}}）。",
+    "optimizeTidy": "\"{{name}}\" を最適化しました。テーブルはすでに整理されており、回収できる領域はありませんでした。"
   }
 }
