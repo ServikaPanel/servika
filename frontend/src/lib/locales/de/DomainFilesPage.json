@@ -149,5 +149,6 @@
     "hint": "Eine leere Datei wird erstellt und dann im Code-Editor geöffnet.",
     "cancel": "Abbrechen",
     "create": "Erstellen und bearbeiten"
-  }
+  },
+  "extractProgress": "Wird entpackt…"
 }

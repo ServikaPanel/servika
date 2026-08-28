@@ -149,5 +149,6 @@
     "hint": "Um arquivo vazio é criado e depois aberto no editor de código.",
     "cancel": "Cancelar",
     "create": "Criar e editar"
-  }
+  },
+  "extractProgress": "Extraindo…"
 }

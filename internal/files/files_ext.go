@@ -278,18 +278,29 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	defer func() { _ = targetFd.Close() }()
 	targetPinned := "/proc/self/fd/" + strconv.Itoa(int(targetFd.Fd()))
 
 	// Resolve the archive through a symlink-safe fd and use its pinned path so the
 	// external decompressors read the validated inode, not a raced one.
 	archiveFd, err := openReadBeneath(home, req.Path)
 	if err != nil {
+		_ = targetFd.Close()
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	defer func() { _ = archiveFd.Close() }()
 	archivePinned := "/proc/self/fd/" + strconv.Itoa(int(archiveFd.Fd()))
+
+	// The two pinned descriptors are closed here on every synchronous path and on
+	// every error. The asynchronous archive branch sets handedOff and its goroutine
+	// closes them instead, because the pinned paths must stay valid until the
+	// extractor it starts has read them.
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			_ = archiveFd.Close()
+			_ = targetFd.Close()
+		}
+	}()
 
 	lowerPath := strings.ToLower(req.Path)
 	if strings.HasSuffix(lowerPath, ".gz") && archivex.DetectType(lowerPath) == archivex.TypeUnknown {
@@ -323,18 +334,34 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		// under the tenant uid, so it cannot escalate; the pinned target prevents a
 		// raced symlink from redirecting the destination the panel selected. Limits
 		// reject a decompression bomb before the extractor runs.
+		//
+		// A large archive extracts for longer than the router's 300-second request
+		// timeout, so this runs in a goroutine that OWNS the pinned descriptors and
+		// the page polls the progress endpoint. The goroutine uses a background
+		// context, never the request's, which is cancelled the moment this handler
+		// returns.
 		limits := archivex.Limits{MaxTotalBytes: maxExtractBytes, MaxMembers: maxExtractMembers}
-		if _, err := archivex.Extract(r.Context(), archivePinned, targetPinned, systemUser, limits); err != nil {
-			if errors.Is(err, archivex.ErrArchiveTooLarge) || errors.Is(err, archivex.ErrTooManyMembers) {
-				httpx.WriteError(w, http.StatusBadRequest, "archive is too large to extract")
-				return
-			}
-			httpx.WriteError(w, http.StatusBadRequest, "invalid archive")
+		jobID, err := newExtractJobID()
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 			return
 		}
+		job := &extractJob{systemUser: systemUser, state: extractRunning}
+		extractJobs.Store(jobID, job)
+		handedOff = true
+		// #nosec G118 -- the request context is cancelled when this handler returns the job id, which would kill the extraction; runExtractJob deliberately uses a background context with its own timeout.
+		go runExtractJob(job, archiveFd, targetFd, archivePinned, targetPinned, systemUser, limits)
+		httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
+			"ok":     true,
+			"job_id": jobID,
+			"path":   req.Path,
+			"target": target,
+		})
+		return
 	}
 
-	// Relabel SELinux contexts on the pinned target path (kernel-resolved, under home).
+	// The gzip branch above is quick and stays synchronous, so it relabels and
+	// answers here. The asynchronous archive branch relabels in its goroutine.
 	if _, err := newFileCommand(r.Context(), "restorecon", "-R", targetPinned).CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
@@ -344,6 +371,38 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"path":   req.Path,
 		"target": target,
+	})
+}
+
+// ExtractProgress reports the state of an asynchronous extraction started by
+// Extract. It is scoped to the tenant that owns the job, so one domain's owner
+// cannot read another's progress even with a guessed id.
+func (h *Handlers) ExtractProgress(w http.ResponseWriter, r *http.Request) {
+	_, systemUser, err := h.home(r)
+	if err != nil {
+		httpx.WriteError(w, statusFromErr(err), "operation failed")
+		return
+	}
+	value, ok := extractJobs.Load(r.URL.Query().Get("job"))
+	if !ok {
+		httpx.WriteError(w, http.StatusNotFound, "unknown extraction job")
+		return
+	}
+	job, _ := value.(*extractJob)
+	if job == nil || job.systemUser != systemUser {
+		httpx.WriteError(w, http.StatusNotFound, "unknown extraction job")
+		return
+	}
+	total, done, state, code := job.snapshot()
+	// A finished job is pruned by the first poll that reads its terminal state.
+	if state != extractRunning {
+		extractJobs.Delete(r.URL.Query().Get("job"))
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"state": string(state),
+		"total": total,
+		"done":  done,
+		"error": code,
 	})
 }
 

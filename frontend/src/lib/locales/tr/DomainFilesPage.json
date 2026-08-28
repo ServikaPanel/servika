@@ -149,5 +149,6 @@
     "hint": "Boş bir dosya oluşturulur, sonra kod düzenleyicide açılır.",
     "cancel": "İptal",
     "create": "Oluştur ve Düzenle"
-  }
+  },
+  "extractProgress": "Çıkarılıyor…"
 }

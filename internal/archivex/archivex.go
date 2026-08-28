@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var (
@@ -400,6 +401,53 @@ func Extract(ctx context.Context, archivePath, destination, systemUser string, l
 	return ExtractStrip(ctx, archivePath, destination, systemUser, 0, limits)
 }
 
+// Count returns the number of members in the archive, for a progress total. It
+// walks the whole archive through the same validation scan as Extract (tar
+// headers are interleaved with the compressed body, so counting is a full
+// streaming pass), so it inherits the rejection of unsafe members and can take a
+// few seconds on a large archive; callers run it off the request path.
+func Count(ctx context.Context, archivePath string, archiveType Type, limits Limits) (int, error) {
+	total := 0
+	if err := scan(ctx, archivePath, archiveType, limits, func(string, int64) { total++ }); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+// progressCounter counts newline-delimited members from a verbose extractor and
+// reports each batch through onLine, keeping the tail of the output for the
+// error message. Extractors print one line per member in verbose mode, so the
+// line count tracks progress in real time. The output lands on stdout for some
+// tools (unzip, unar) and on stderr for others (tar, bsdtar), so both are wired
+// to one counter.
+type progressCounter struct {
+	mu     sync.Mutex
+	tail   []byte
+	onLine func(delta int)
+}
+
+const progressTailMax = 8192
+
+func (p *progressCounter) Write(b []byte) (int, error) {
+	lines := bytes.Count(b, []byte{'\n'})
+	p.mu.Lock()
+	p.tail = append(p.tail, b...)
+	if len(p.tail) > progressTailMax {
+		p.tail = p.tail[len(p.tail)-progressTailMax:]
+	}
+	p.mu.Unlock()
+	if p.onLine != nil && lines > 0 {
+		p.onLine(lines)
+	}
+	return len(b), nil
+}
+
+func (p *progressCounter) tailString() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return string(p.tail)
+}
+
 // ExtractStrip is Extract with strip leading path components removed from every
 // member, which is how a site backup wrapped in one container directory lands
 // as the site rather than as public_html/backup/public_html.
@@ -409,6 +457,23 @@ func Extract(ctx context.Context, archivePath, destination, systemUser string, l
 // tenant through runuser, so the kernel's own permission check is the last line
 // even if a member slips past the pre-scan.
 func ExtractStrip(ctx context.Context, archivePath, destination, systemUser string, strip int, limits Limits) (string, error) {
+	return extractStrip(ctx, archivePath, destination, systemUser, strip, limits, nil, nil)
+}
+
+// ExtractProgress extracts like Extract and reports progress. onTotal is called
+// once with the member count before extraction begins, and onLine with the
+// number of members extracted since the previous call. Both may be nil, and with
+// both nil it behaves exactly like Extract. The extractor is run verbose so each
+// member emits one line, which is what onLine counts.
+func ExtractProgress(ctx context.Context, archivePath, destination, systemUser string, limits Limits, onTotal func(int), onLine func(delta int)) (string, error) {
+	var prog *progressCounter
+	if onLine != nil {
+		prog = &progressCounter{onLine: onLine}
+	}
+	return extractStrip(ctx, archivePath, destination, systemUser, 0, limits, prog, onTotal)
+}
+
+func extractStrip(ctx context.Context, archivePath, destination, systemUser string, strip int, limits Limits, prog *progressCounter, onTotal func(int)) (string, error) {
 	if strip < 0 {
 		return "", ErrUnsupported
 	}
@@ -424,10 +489,17 @@ func ExtractStrip(ctx context.Context, archivePath, destination, systemUser stri
 			return "", ErrInvalidTenant
 		}
 	}
-	if err := Scan(ctx, archivePath, archiveType, limits); err != nil {
+	total := 0
+	if err := scan(ctx, archivePath, archiveType, limits, func(string, int64) { total++ }); err != nil {
 		return "", err
 	}
+	if onTotal != nil {
+		onTotal(total)
+	}
 
+	// In verbose mode each extractor prints one line per member, which the
+	// progress counter turns into a running total.
+	verbose := prog != nil
 	var command *exec.Cmd
 	switch archiveType {
 	case TypeZIP:
@@ -435,8 +507,17 @@ func ExtractStrip(ctx context.Context, archivePath, destination, systemUser stri
 			if _, err := exec.LookPath("bsdtar"); err != nil {
 				return "", ErrStripUnsupported
 			}
-			command = tenantCommand(ctx, systemUser, "bsdtar", "-x", stripFlag(strip),
+			bsdX := "-x"
+			if verbose {
+				bsdX = "-xv"
+			}
+			command = tenantCommand(ctx, systemUser, "bsdtar", bsdX, stripFlag(strip),
 				"-f", archivePath, "-C", destination)
+			break
+		}
+		// verbose drops -q so unzip prints one " extracting: ..." line per member.
+		if verbose {
+			command = tenantCommand(ctx, systemUser, "unzip", "-o", archivePath, "-d", destination)
 			break
 		}
 		command = tenantCommand(ctx, systemUser, "unzip", "-o", "-q", archivePath, "-d", destination)
@@ -446,7 +527,11 @@ func ExtractStrip(ctx context.Context, archivePath, destination, systemUser stri
 			return "", ErrRARUnavailable
 		}
 		if tool == "bsdtar" {
-			arguments := []string{"bsdtar", "-x"}
+			bsdX := "-x"
+			if verbose {
+				bsdX = "-xv"
+			}
+			arguments := []string{"bsdtar", bsdX}
 			if strip > 0 {
 				arguments = append(arguments, stripFlag(strip))
 			}
@@ -475,6 +560,9 @@ func ExtractStrip(ctx context.Context, archivePath, destination, systemUser stri
 		case TypeTARXz:
 			flag = "-xJ"
 		}
+		if verbose {
+			flag += "v" // GNU tar prints one line per member to stderr.
+		}
 		arguments := []string{"tar", flag}
 		if strip > 0 {
 			arguments = append(arguments, stripFlag(strip))
@@ -483,6 +571,14 @@ func ExtractStrip(ctx context.Context, archivePath, destination, systemUser stri
 		command.Stdin = file
 	}
 
+	if prog != nil {
+		command.Stdout = prog
+		command.Stderr = prog
+		if err := command.Run(); err != nil {
+			return prog.tailString(), fmt.Errorf("extract archive as tenant: %w", err)
+		}
+		return prog.tailString(), nil
+	}
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return string(output), fmt.Errorf("extract archive as tenant: %w", err)

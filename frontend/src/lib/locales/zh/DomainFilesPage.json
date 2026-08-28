@@ -1,1 +1,154 @@
-{"breadcrumb":{"home":"主页","domains":"域名","files":"文件"},"title":"文件管理器","loading":"加载中...","dropZone":{"title":"将文件拖到此处","targetDir":"目标目录："},"selection":{"count":"已选择 {{count}} 项","rightClick":"右键查看操作","delete":"删除（{{count}}）","clear":"清除选择"},"upload":{"uploading":"上传中...","remaining":"剩余：{{eta}}"},"menu":{"uploadFiles":"📤 上传文件","newFolder":"📁 新建文件夹","newFile":"📄 新建文件"},"toolbar":{"refresh":"↻ 刷新","delete":"删除（{{count}}）","searchPlaceholder":"🔍 搜索文件...","itemCount":"{{count}} 项"},"columns":{"select":"选择","name":"名称","size":"大小","permissions":"权限","modified":"修改时间","actions":"操作"},"parentFolder":"↑ 上级文件夹","empty":"此文件夹为空","actionsTitle":"操作","context":{"open":"打开","browse":"在浏览器中打开","edit":"编辑","download":"下载","rename":"重命名","permissions":"权限","calculateSize":"计算大小","extract":"解压归档","copy":"复制","move":"移动","delete":"删除"},"prompt":{"deleteConfirm":"删除“{{name}}”？此操作无法撤销。","newFolderName":"新文件夹名称："},"sizeModal":{"title":"📏 大小信息","bytes":"{{bytes}} 字节","done":"完成"},"bulkDelete":{"title":"⚠ 批量删除","messageBold":"{{count}}","messagePost":" 项将被永久删除。文件夹及其所有内容都将被移除。","moreItems":"+ 另外 {{count}} 项...","cancel":"取消","confirm":"是，删除"},"renameModal":{"title":"重命名","cancel":"取消","rename":"重命名"},"chmodModal":{"title":"权限","owner":"所有者","group":"组","other":"其他","read":"读","write":"写","execute":"执行","octal":"八进制：","cancel":"取消","apply":"应用"},"copyMoveModal":{"titleCopy":"复制","titleMove":"移动","heading":"{{title}}（{{count}} 项）","moreItems":"+ 另外 {{count}} 项...","targetLabel":"目标目录（home 目录下）","targetPlaceholder":"/public_html/backups","hintPre":"目标必须已存在。","hintCopy":"文件夹将连同其内容一起复制。","hintMove":"同一磁盘上的移动会立即完成。","cancel":"取消"},"archiveModal":{"title":"📦 添加到归档（{{count}} 项）","fileName":"文件名","format":"格式","output":"输出：","cancel":"取消","archive":"归档"},"newFileModal":{"title":"📄 新建文件","fileNameLabel":"文件名（含扩展名）","hint":"将创建一个空文件，然后在代码编辑器中打开。","cancel":"取消","createAndEdit":"创建并编辑"},"eta":{"lessThanSec":"<1 秒","sec":"{{count}} 秒","minSec":"{{min}} 分 {{sec}} 秒","hrMin":"{{hr}} 小时 {{min}} 分"},"toast":{"uploadPartial":"已上传 {{success}}/{{total}} 个文件，部分失败。","deletePartial":"已删除 {{success}}/{{total}} 项。","someErrors":"部分错误：{{errors}}","downloadFailed":"下载失败：{{message}}"},"errors":{"deleteFailed":"删除失败","createFolderFailed":"无法创建文件夹","openFailed":"无法打开","saveFailed":"无法保存","renameFailed":"无法重命名","chmodFailed":"无法更改权限","extractFailed":"无法打开归档。支持 ZIP、RAR 和 TAR 归档。","searchFailed":"搜索失败","copyFailed":"复制失败","moveFailed":"移动失败","archiveFailed":"归档失败","createFailed":"创建失败","sizeFailed":"大小计算失败"},"newFile":{"title":"📄 新建文件","label":"文件名（含扩展名）","hint":"将创建一个空文件，然后在代码编辑器中打开。","cancel":"取消","create":"创建并编辑"}}
+{
+  "breadcrumb": {
+    "home": "主页",
+    "domains": "域名",
+    "files": "文件"
+  },
+  "title": "文件管理器",
+  "loading": "加载中...",
+  "dropZone": {
+    "title": "将文件拖到此处",
+    "targetDir": "目标目录："
+  },
+  "selection": {
+    "count": "已选择 {{count}} 项",
+    "rightClick": "右键查看操作",
+    "delete": "删除（{{count}}）",
+    "clear": "清除选择"
+  },
+  "upload": {
+    "uploading": "上传中...",
+    "remaining": "剩余：{{eta}}"
+  },
+  "menu": {
+    "uploadFiles": "📤 上传文件",
+    "newFolder": "📁 新建文件夹",
+    "newFile": "📄 新建文件"
+  },
+  "toolbar": {
+    "refresh": "↻ 刷新",
+    "delete": "删除（{{count}}）",
+    "searchPlaceholder": "🔍 搜索文件...",
+    "itemCount": "{{count}} 项"
+  },
+  "columns": {
+    "select": "选择",
+    "name": "名称",
+    "size": "大小",
+    "permissions": "权限",
+    "modified": "修改时间",
+    "actions": "操作"
+  },
+  "parentFolder": "↑ 上级文件夹",
+  "empty": "此文件夹为空",
+  "actionsTitle": "操作",
+  "context": {
+    "open": "打开",
+    "browse": "在浏览器中打开",
+    "edit": "编辑",
+    "download": "下载",
+    "rename": "重命名",
+    "permissions": "权限",
+    "calculateSize": "计算大小",
+    "extract": "解压归档",
+    "copy": "复制",
+    "move": "移动",
+    "delete": "删除"
+  },
+  "prompt": {
+    "deleteConfirm": "删除“{{name}}”？此操作无法撤销。",
+    "newFolderName": "新文件夹名称："
+  },
+  "sizeModal": {
+    "title": "📏 大小信息",
+    "bytes": "{{bytes}} 字节",
+    "done": "完成"
+  },
+  "bulkDelete": {
+    "title": "⚠ 批量删除",
+    "messageBold": "{{count}}",
+    "messagePost": " 项将被永久删除。文件夹及其所有内容都将被移除。",
+    "moreItems": "+ 另外 {{count}} 项...",
+    "cancel": "取消",
+    "confirm": "是，删除"
+  },
+  "renameModal": {
+    "title": "重命名",
+    "cancel": "取消",
+    "rename": "重命名"
+  },
+  "chmodModal": {
+    "title": "权限",
+    "owner": "所有者",
+    "group": "组",
+    "other": "其他",
+    "read": "读",
+    "write": "写",
+    "execute": "执行",
+    "octal": "八进制：",
+    "cancel": "取消",
+    "apply": "应用"
+  },
+  "copyMoveModal": {
+    "titleCopy": "复制",
+    "titleMove": "移动",
+    "heading": "{{title}}（{{count}} 项）",
+    "moreItems": "+ 另外 {{count}} 项...",
+    "targetLabel": "目标目录（home 目录下）",
+    "targetPlaceholder": "/public_html/backups",
+    "hintPre": "目标必须已存在。",
+    "hintCopy": "文件夹将连同其内容一起复制。",
+    "hintMove": "同一磁盘上的移动会立即完成。",
+    "cancel": "取消"
+  },
+  "archiveModal": {
+    "title": "📦 添加到归档（{{count}} 项）",
+    "fileName": "文件名",
+    "format": "格式",
+    "output": "输出：",
+    "cancel": "取消",
+    "archive": "归档"
+  },
+  "newFileModal": {
+    "title": "📄 新建文件",
+    "fileNameLabel": "文件名（含扩展名）",
+    "hint": "将创建一个空文件，然后在代码编辑器中打开。",
+    "cancel": "取消",
+    "createAndEdit": "创建并编辑"
+  },
+  "eta": {
+    "lessThanSec": "<1 秒",
+    "sec": "{{count}} 秒",
+    "minSec": "{{min}} 分 {{sec}} 秒",
+    "hrMin": "{{hr}} 小时 {{min}} 分"
+  },
+  "toast": {
+    "uploadPartial": "已上传 {{success}}/{{total}} 个文件，部分失败。",
+    "deletePartial": "已删除 {{success}}/{{total}} 项。",
+    "someErrors": "部分错误：{{errors}}",
+    "downloadFailed": "下载失败：{{message}}"
+  },
+  "errors": {
+    "deleteFailed": "删除失败",
+    "createFolderFailed": "无法创建文件夹",
+    "openFailed": "无法打开",
+    "saveFailed": "无法保存",
+    "renameFailed": "无法重命名",
+    "chmodFailed": "无法更改权限",
+    "extractFailed": "无法打开归档。支持 ZIP、RAR 和 TAR 归档。",
+    "searchFailed": "搜索失败",
+    "copyFailed": "复制失败",
+    "moveFailed": "移动失败",
+    "archiveFailed": "归档失败",
+    "createFailed": "创建失败",
+    "sizeFailed": "大小计算失败"
+  },
+  "newFile": {
+    "title": "📄 新建文件",
+    "label": "文件名（含扩展名）",
+    "hint": "将创建一个空文件，然后在代码编辑器中打开。",
+    "cancel": "取消",
+    "create": "创建并编辑"
+  },
+  "extractProgress": "正在解压…"
+}

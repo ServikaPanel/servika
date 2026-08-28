@@ -149,5 +149,6 @@
     "hint": "Un fichier vide est créé, puis ouvert dans l'éditeur de code.",
     "cancel": "Annuler",
     "create": "Créer et modifier"
-  }
+  },
+  "extractProgress": "Extraction…"
 }

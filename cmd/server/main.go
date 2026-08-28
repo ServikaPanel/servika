@@ -1015,6 +1015,7 @@ func main() {
 				// by launching them in a tight loop. new-file stays unthrottled (cheap).
 				fileHeavy := middleware.RateLimit("files-heavy", 60, time.Minute)
 				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/files/extract", filesH.Extract)
+				r.With(middleware.CustomerScope).Get("/domains/{id}/files/extract-progress", filesH.ExtractProgress)
 				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/files/copy", filesH.Copy)
 				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/files/move", filesH.Move)
 				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/files/archive", filesH.Archive)

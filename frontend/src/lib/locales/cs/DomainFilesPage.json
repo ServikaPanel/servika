@@ -149,5 +149,6 @@
     "hint": "Vytvoří se prázdný soubor, který se poté otevře v editoru kódu.",
     "cancel": "Zrušit",
     "create": "Vytvořit a upravit"
-  }
+  },
+  "extractProgress": "Rozbaluje se…"
 }

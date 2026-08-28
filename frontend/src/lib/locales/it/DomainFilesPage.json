@@ -149,5 +149,6 @@
     "hint": "Viene creato un file vuoto, poi aperto nell'editor di codice.",
     "cancel": "Annulla",
     "create": "Crea e modifica"
-  }
+  },
+  "extractProgress": "Estrazione…"
 }

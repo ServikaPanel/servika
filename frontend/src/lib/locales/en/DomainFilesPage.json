@@ -149,5 +149,6 @@
     "hint": "An empty file is created, then opened in the code editor.",
     "cancel": "Cancel",
     "create": "Create and Edit"
-  }
+  },
+  "extractProgress": "Extracting…"
 }

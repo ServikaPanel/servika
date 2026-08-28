@@ -149,5 +149,6 @@
     "hint": "Se creează un fișier gol, apoi se deschide în editorul de cod.",
     "cancel": "Anulare",
     "create": "Creare și editare"
-  }
+  },
+  "extractProgress": "Se extrage…"
 }

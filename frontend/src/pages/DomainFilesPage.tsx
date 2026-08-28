@@ -72,6 +72,7 @@ export default function DomainFilesPage() {
   const [searchResults, setSearchResults] = useState<Entry[] | null>(null)
   const [copyMoveModal, setCopyModal] = useState<{ type: 'copy' | 'move'; paths: string[] } | null>(null)
   const [archiveModal, setArchiveModal] = useState(false)
+  const [extractJob, setExtractJob] = useState<{ done: number; total: number } | null>(null)
   const [newFileModal, setNewFileModal] = useState(false)
   const [sizeResult, setSizeResult] = useState<{ path: string; size: number } | null>(null)
   const [bulkUpload, setBulkUpload] = useState<{
@@ -301,9 +302,37 @@ export default function DomainFilesPage() {
     }
   }
 
+  async function pollExtract(jobId: string) {
+    try {
+      const { data } = await api.get(`/domains/${id}/files/extract-progress`, { params: { job: jobId } })
+      if (data.state === 'running') {
+        setExtractJob({ done: data.done || 0, total: data.total || 0 })
+        setTimeout(() => { pollExtract(jobId) }, 1000)
+        return
+      }
+      setExtractJob(null)
+      if (data.state === 'failed') {
+        await notify({ message: t('errors.extractFailed'), tone: 'error' })
+        return
+      }
+      setTreeRefreshKey(x => x + 1)
+      scan()
+    } catch (err) {
+      setExtractJob(null)
+      await notify({ message: apiError(err, t('errors.extractFailed')), tone: 'error' })
+    }
+  }
+
   async function extract(e: Entry) {
     try {
-      await api.post(`/domains/${id}/files/extract`, { path: e.path })
+      const { data } = await api.post(`/domains/${id}/files/extract`, { path: e.path })
+      // A multi-member archive extracts asynchronously and returns a job id to
+      // poll; a single gzip file finishes synchronously with no job id.
+      if (data?.job_id) {
+        setExtractJob({ done: 0, total: 0 })
+        pollExtract(data.job_id)
+        return
+      }
       setTreeRefreshKey(x => x + 1)
       scan()
     } catch (err) {
@@ -574,6 +603,26 @@ export default function DomainFilesPage() {
           <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-sky-700/80">
             <span>{bulkUpload.speedBps > 0 ? formatSpeed(bulkUpload.speedBps) : '-'}</span>
             <span>{bulkUpload.etaSeconds > 0 ? t('upload.remaining', { eta: formatEta(bulkUpload.etaSeconds, t) }) : ''}</span>
+          </div>
+        </div>
+      )}
+      {extractJob && (
+        <div className="mb-3 px-3 py-2.5 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 rounded-md text-sm text-sky-800">
+          <div className="flex items-center gap-3 mb-1.5">
+            <svg className="w-4 h-4 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <div className="flex-1 min-w-0 font-medium text-sm">
+              {t('extractProgress')}
+              {extractJob.total > 0 && <span className="font-mono"> {extractJob.done} / {extractJob.total}</span>}
+            </div>
+          </div>
+          <div className="h-1.5 bg-sky-100 rounded overflow-hidden">
+            <div
+              className={`h-full bg-gradient-to-r from-sky-500 to-sky-600 ${extractJob.total > 0 ? 'transition-all duration-300' : 'animate-pulse w-1/3'}`}
+              style={extractJob.total > 0 ? { width: `${Math.min(100, Math.round((extractJob.done / extractJob.total) * 100))}%` } : undefined}
+            />
           </div>
         </div>
       )}
