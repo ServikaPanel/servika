@@ -8,13 +8,15 @@
     "database": "Veritabanı",
     "ftpAccount": "FTP Hesabı",
     "emailMailbox": "E-posta Kutusu",
-    "subdomain": "Alt Alan Adı"
+    "subdomain": "Alt Alan Adı",
+    "inode": "Inode (dosya)"
   },
   "units": {
     "db": "VT",
     "account": "hesap",
     "mailbox": "kutu",
-    "domain": "alan adı"
+    "domain": "alan adı",
+    "file": "dosya"
   },
   "configuration": "Yapılandırma",
   "ipAddress": "IP Adresi",

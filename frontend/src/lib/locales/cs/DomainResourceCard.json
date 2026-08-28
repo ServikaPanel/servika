@@ -8,13 +8,15 @@
     "database": "Databáze",
     "ftpAccount": "Účet FTP",
     "emailMailbox": "E-mailová schránka",
-    "subdomain": "Subdoména"
+    "subdomain": "Subdoména",
+    "inode": "Inode (soubory)"
   },
   "units": {
     "db": "DB",
     "account": "účet",
     "mailbox": "schránka",
-    "domain": "doména"
+    "domain": "doména",
+    "file": "soubory"
   },
   "configuration": "Konfigurace",
   "ipAddress": "IP adresa",

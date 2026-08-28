@@ -8,13 +8,15 @@
     "database": "Database",
     "ftpAccount": "Account FTP",
     "emailMailbox": "Casella email",
-    "subdomain": "Sottodominio"
+    "subdomain": "Sottodominio",
+    "inode": "Inode (file)"
   },
   "units": {
     "db": "DB",
     "account": "account",
     "mailbox": "casella",
-    "domain": "dominio"
+    "domain": "dominio",
+    "file": "file"
   },
   "configuration": "Configurazione",
   "ipAddress": "Indirizzo IP",

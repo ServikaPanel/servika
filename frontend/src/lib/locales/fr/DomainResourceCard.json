@@ -8,13 +8,15 @@
     "database": "Base de données",
     "ftpAccount": "Compte FTP",
     "emailMailbox": "Boîte aux lettres e-mail",
-    "subdomain": "Sous-domaine"
+    "subdomain": "Sous-domaine",
+    "inode": "Inode (fichiers)"
   },
   "units": {
     "db": "BDD",
     "account": "compte",
     "mailbox": "boîte aux lettres",
-    "domain": "domaine"
+    "domain": "domaine",
+    "file": "fichiers"
   },
   "configuration": "Configuration",
   "ipAddress": "Adresse IP",

@@ -8,13 +8,15 @@
     "database": "Datenbank",
     "ftpAccount": "FTP-Konto",
     "emailMailbox": "E-Mail-Postfach",
-    "subdomain": "Subdomain"
+    "subdomain": "Subdomain",
+    "inode": "Inode (Dateien)"
   },
   "units": {
     "db": "DB",
     "account": "Konto",
     "mailbox": "Postfach",
-    "domain": "Domain"
+    "domain": "Domain",
+    "file": "Dateien"
   },
   "configuration": "Konfiguration",
   "ipAddress": "IP-Adresse",

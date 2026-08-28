@@ -8,13 +8,15 @@
     "database": "Base de Dados",
     "ftpAccount": "Conta FTP",
     "emailMailbox": "Caixa de Correio",
-    "subdomain": "Subdomínio"
+    "subdomain": "Subdomínio",
+    "inode": "Inode (ficheiros)"
   },
   "units": {
     "db": "BD",
     "account": "conta",
     "mailbox": "caixa",
-    "domain": "domínio"
+    "domain": "domínio",
+    "file": "ficheiros"
   },
   "configuration": "Configuração",
   "ipAddress": "Endereço IP",

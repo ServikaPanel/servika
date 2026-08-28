@@ -8,13 +8,15 @@
     "database": "データベース",
     "ftpAccount": "FTP アカウント",
     "emailMailbox": "メールボックス",
-    "subdomain": "サブドメイン"
+    "subdomain": "サブドメイン",
+    "inode": "Inode (ファイル)"
   },
   "units": {
     "db": "DB",
     "account": "アカウント",
     "mailbox": "メールボックス",
-    "domain": "ドメイン"
+    "domain": "ドメイン",
+    "file": "ファイル"
   },
   "configuration": "設定",
   "ipAddress": "IP アドレス",

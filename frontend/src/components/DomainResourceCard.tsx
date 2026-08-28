@@ -7,6 +7,7 @@ export type Summary = {
   domain_name: string; sk: string; plan_name: string; php_version: string
   ipv4: string; ssl_enabled: boolean; ssl_expiry?: string
   disk_mb: Limit; traffic_mb: Limit
+  inode_usage: number; inode_limit: number
   db_count: Limit; ftp_count: Limit; email_count: Limit; domain_count: Limit
   dns_record: number; cron_job: number
   backup_count: number; backup_mb: number
@@ -67,6 +68,12 @@ export default function DomainResourceCard({ domainId }: { domainId: number | st
         </div>
 
         <Bar label={t('bars.disk')} usage={summary.disk_mb.usage} limit={summary.disk_mb.limit} unit="MB" color="indigo" />
+        {/* Inode (file-count) quota, shown only when XFS quota is active (limit>0).
+            This is why a tenant can hit EDQUOT with disk MB not full; seeing only MB,
+            the cause was unclear. */}
+        {summary.inode_limit > 0 && (
+          <Bar label={t('bars.inode')} usage={summary.inode_usage} limit={summary.inode_limit} unit={t('units.file')} color="teal" />
+        )}
         <Bar label={t('bars.trafficMonthly')} usage={summary.traffic_mb.usage} limit={summary.traffic_mb.limit} unit="MB" color="sky" />
         <Bar label={t('bars.database')} usage={summary.db_count.usage} limit={summary.db_count.limit} unit={t('units.db')} color="emerald" />
         <Bar label={t('bars.ftpAccount')} usage={summary.ftp_count.usage} limit={summary.ftp_count.limit} unit={t('units.account')} color="amber" />
@@ -125,6 +132,7 @@ function Bar({ label, usage, limit, unit, color }: { label: string; usage: numbe
     amber:   'from-amber-400 to-amber-600',
     rose:    'from-rose-400 to-rose-600',
     violet:  'from-violet-400 to-violet-600',
+    teal:    'from-teal-400 to-teal-600',
   }
   const fill = percentage >= 90 ? 'from-red-400 to-red-600' : (percentage >= 75 ? 'from-amber-400 to-amber-600' : (grad[color] || 'from-slate-400 to-slate-600'))
   const fade = 'linear-gradient(to right, black 0%, black 35%, transparent 96%)'

@@ -8,13 +8,15 @@
     "database": "Bază de date",
     "ftpAccount": "Cont FTP",
     "emailMailbox": "Cutie poștală email",
-    "subdomain": "Subdomeniu"
+    "subdomain": "Subdomeniu",
+    "inode": "Inode (fișiere)"
   },
   "units": {
     "db": "BD",
     "account": "cont",
     "mailbox": "cutie poștală",
-    "domain": "domeniu"
+    "domain": "domeniu",
+    "file": "fișiere"
   },
   "configuration": "Configurare",
   "ipAddress": "Adresă IP",

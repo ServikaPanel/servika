@@ -8,13 +8,15 @@
     "database": "数据库",
     "ftpAccount": "FTP 账户",
     "emailMailbox": "电子邮件邮箱",
-    "subdomain": "子域名"
+    "subdomain": "子域名",
+    "inode": "Inode (文件)"
   },
   "units": {
     "db": "个数据库",
     "account": "个账户",
     "mailbox": "个邮箱",
-    "domain": "个域名"
+    "domain": "个域名",
+    "file": "个文件"
   },
   "configuration": "配置",
   "ipAddress": "IP 地址",
