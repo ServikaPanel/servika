@@ -184,7 +184,20 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	}
 
 	// --- 3. Databases ------------------------------------------------------
-	if settings.Databases && len(account.Databases) > 0 {
+	// Backup discovery: the source enumeration assigns an account's databases to
+	// the MAIN domain only (see discovery.go), and a Plesk query can come back
+	// empty, so an addon or subdomain reaches here with no database at all. The
+	// real name is written in the COPIED configuration and is the same on the
+	// source, so read it from there and dump it. Without this the item is marked
+	// done with the SQL silently missing.
+	if settings.Databases && settings.Files && len(account.Databases) == 0 {
+		if found := configDBNames(webRoot); len(found) > 0 {
+			logf("discovery found no database; %d name(s) read from configuration: %v", len(found), found)
+			account.Databases = found
+		}
+	}
+	switch {
+	case settings.Databases && len(account.Databases) > 0:
 		mapping, dbPass, dbErr := h.migrateDatabases(ctx, source, account, systemUser, result, logf)
 		if dbErr != nil {
 			// A silent success here would publish the customer's site with an
@@ -194,6 +207,12 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 		if n := rewriteSiteConfigs(webRoot, mapping, dbPass, logf); n > 0 {
 			logf("%d configuration file(s) updated (database connection)", n)
 		}
+	case settings.Databases:
+		// A database was requested but none was found, even in the config. Say
+		// so, or the item reads as a success with the SQL silently missing.
+		logf("warning: no database was found on the source for this site; SQL was not migrated")
+		result.Warnings = append(result.Warnings,
+			"no database migrated: the source has no database for this site (an addon/subdomain's database migrates with the main domain, or discovery could not see it)")
 	}
 
 	// --- 4. DNS ------------------------------------------------------------
@@ -663,6 +682,55 @@ func extractConfigValue(rest string) (string, string) {
 		rest = rest[:end]
 	}
 	return strings.TrimSpace(rest), ""
+}
+
+// configDBNames reads database NAMES out of a copied site's configuration.
+//
+// It is the backup path for the empty-discovery case: the real database name is
+// written in wp-config.php/.env and is the same on the source, so it can be
+// dumped from there. Only a value that matches the remote-database name shape
+// and is not a system database is returned, because the name becomes a
+// mysqldump argument.
+func configDBNames(webRoot string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, rel := range configCandidates {
+		path := filepath.Join(webRoot, rel)
+		st, err := os.Lstat(path)
+		if err != nil || !st.Mode().IsRegular() || st.Size() > 4<<20 {
+			continue
+		}
+		// #nosec G304 -- path is a fixed configuration path joined onto the migration's own web root; tenant file reads go through safeio (openat2), not this call.
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for line := range strings.SplitSeq(string(raw), "\n") {
+			m := reConfigKeyLine.FindStringSubmatch(line)
+			if m == nil || !isDBNameKey(m[2]) {
+				continue
+			}
+			value, _ := extractConfigValue(m[3])
+			value = strings.TrimSpace(value)
+			if value == "" || seen[value] || !reRemoteDBName.MatchString(value) ||
+				remoteSystemDBs[strings.ToLower(value)] {
+				continue
+			}
+			seen[value] = true
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+// isDBNameKey reports whether a configuration key holds a database name.
+func isDBNameKey(key string) bool {
+	for _, k := range dbNameKeys {
+		if strings.EqualFold(key, k) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------
