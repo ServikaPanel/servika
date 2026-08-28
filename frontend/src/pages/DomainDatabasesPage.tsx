@@ -5,6 +5,8 @@ import { api, apiError as apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import Modal from '@/components/Modal'
 import DBPasswordResetModal from '@/components/DBPasswordResetModal'
@@ -174,11 +176,10 @@ export default function DomainDatabasesPage() {
                   <span className="font-mono tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">{formatBytes(d.size)}</span>
                 </td>
                 <td className={responsiveTableActionCellClass}>
-                  <button onClick={() => openPma(d)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded" title={t('row.pmaTitle')}>{t('row.pma')}</button>
-                  <button onClick={() => setPwResetFor(d)} className="text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded">{t('row.resetPassword')}</button>
-                  <button onClick={() => setRemoteFor(d.db_user)} className="text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded" title={t('row.remoteAccessTitle')}>{t('row.remoteAccess')}</button>
-                  <button onClick={() => setRemoteFor(d.db_user)} className="text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded">{t('row.remoteAccess')}</button>
-                  <button onClick={() => setDatabaseToDelete(d)} className="text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 px-2 py-1 rounded">{t('row.delete')}</button>
+                  <button onClick={() => openPma(d)} className="group inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded" title={t('row.pmaTitle')}><Icon d={ICON.lockOpen} className="h-4 w-4 transition-transform group-hover:scale-110" />{t('row.pma')}</button>
+                  <button onClick={() => setPwResetFor(d)} className="group inline-flex items-center gap-1.5 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded"><Icon d={ICON.key} className="h-4 w-4 transition-transform group-hover:rotate-12" />{t('row.resetPassword')}</button>
+                  <button onClick={() => setRemoteFor(d.db_user)} className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded" title={t('row.remoteAccessTitle')}><Icon d={ICON.globe} className="h-4 w-4" />{t('row.remoteAccess')}</button>
+                  <button onClick={() => setDatabaseToDelete(d)} className="group inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 px-2 py-1 rounded"><Icon d={ICON.trash} className="h-4 w-4 transition-transform group-hover:scale-110" />{t('row.delete')}</button>
                 </td>
               </tr>
             ))}

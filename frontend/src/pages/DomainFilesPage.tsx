@@ -8,6 +8,8 @@ import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import DirTree from '@/components/DirTree'
 import CodeEditor from '@/components/CodeEditor'
+import { Icon } from '@/components/Icon'
+import { ICON } from '@/components/iconPaths'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -359,35 +361,35 @@ export default function DomainFilesPage() {
 
     if (!multi) {
       if (e.type === 'folder') {
-        items.push({ key: 'open', label: t('context.open'), icon: '📂', onClick: closeAfter(() => navigateTo(e.path)) })
+        items.push({ key: 'open', label: t('context.open'), icon: ICON.folderOpen, onClick: closeAfter(() => navigateTo(e.path)) })
       } else {
         if (docrootRelativePath(e.path) !== null)
-          items.push({ key: 'browse', label: t('context.browse'), icon: '🌐', onClick: closeAfter(() => openInBrowser(e)) })
-        items.push({ key: 'edit', label: t('context.edit'), icon: '✏️', onClick: closeAfter(() => openEditor(e)) })
+          items.push({ key: 'browse', label: t('context.browse'), icon: ICON.globe, onClick: closeAfter(() => openInBrowser(e)) })
+        items.push({ key: 'edit', label: t('context.edit'), icon: ICON.pencil, onClick: closeAfter(() => openEditor(e)) })
       }
     }
 
-    items.push({ key: 'download', label: t('context.download'), icon: '⬇️', onClick: closeAfter(() => download(e)) })
+    items.push({ key: 'download', label: t('context.download'), icon: ICON.download, onClick: closeAfter(() => download(e)) })
     items.push({ separator: true, key: 's1' })
-    items.push({ key: 'rename', label: t('context.rename'), icon: '✏️', onClick: closeAfter(() => setRenameFor(e)) })
-    items.push({ key: 'perms', label: t('context.permissions'), icon: '🔒', onClick: closeAfter(() => setChmodFor(e)) })
-    items.push({ key: 'size', label: t('context.calculateSize'), icon: '📏', onClick: closeAfter(() => calculateSize(e.path)) })
+    items.push({ key: 'rename', label: t('context.rename'), icon: ICON.text, onClick: closeAfter(() => setRenameFor(e)) })
+    items.push({ key: 'perms', label: t('context.permissions'), icon: ICON.lock, onClick: closeAfter(() => setChmodFor(e)) })
+    items.push({ key: 'size', label: t('context.calculateSize'), icon: ICON.ruler, onClick: closeAfter(() => calculateSize(e.path)) })
 
     if (e.type !== 'folder' && ARCHIVE_RX.test(e.name)) {
-      items.push({ key: 'extract', label: t('context.extract'), icon: '📦', onClick: closeAfter(() => extract(e)) })
+      items.push({ key: 'extract', label: t('context.extract'), icon: ICON.box, onClick: closeAfter(() => extract(e)) })
     }
 
     items.push({ separator: true, key: 's2' })
-    items.push({ key: 'copy', label: t('context.copy'), icon: '📋', onClick: closeAfter(() => {
+    items.push({ key: 'copy', label: t('context.copy'), icon: ICON.clipboard, onClick: closeAfter(() => {
       const paths = multi ? Array.from(selectedPaths) : [e.path]
       setCopyModal({ type: 'copy', paths })
     })})
-    items.push({ key: 'move', label: t('context.move'), icon: '📂', onClick: closeAfter(() => {
+    items.push({ key: 'move', label: t('context.move'), icon: ICON.move, onClick: closeAfter(() => {
       const paths = multi ? Array.from(selectedPaths) : [e.path]
       setCopyModal({ type: 'move', paths })
     })})
     items.push({ separator: true, key: 's3' })
-    items.push({ key: 'delete', label: t('context.delete'), icon: '🗑️', onClick: closeAfter(() => remove(e)), danger: true })
+    items.push({ key: 'delete', label: t('context.delete'), icon: ICON.trash, onClick: closeAfter(() => remove(e)), danger: true })
 
     return items
   }
@@ -900,7 +902,7 @@ function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: Ct
           onClick={item.onClick}
           className={`w-full text-left px-3 py-1.5 flex items-center gap-2 transition ${item.danger ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           role="menuitem">
-          <span className="flex-shrink-0">{item.icon}</span>
+          <span className="flex w-4 flex-shrink-0 items-center justify-center"><Icon d={item.icon} /></span>
           <span>{item.label}</span>
         </button>
       ))}
