@@ -94,7 +94,8 @@
   },
   "step3": {
     "title": "迁移 #{{id}}",
-    "cancel": "取消",
+    "stop": "停止",
+    "retry": "重试",
     "newMigration": "+ 新建迁移",
     "nowMigrating": "正在迁移",
     "preparing": "正在准备...",

@@ -94,7 +94,8 @@
   },
   "step3": {
     "title": "Migrarea #{{id}}",
-    "cancel": "Anulează",
+    "stop": "Oprește",
+    "retry": "Reîncearcă",
     "newMigration": "+ Migrare nouă",
     "nowMigrating": "Se migrează acum",
     "preparing": "se pregătește...",

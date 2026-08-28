@@ -364,6 +364,23 @@ export default function SiteMigrationPage() {
     setStep(accounts && accounts.length > 0 ? 2 : 1)
   }
 
+  // Retry — restart the same selection. The session was CONSUMED at the first
+  // start (deleted server-side), so retry reuses the credentials still held in
+  // this page's state. With no selection, or no credentials to send (a resumed
+  // session whose password was never typed here), fall back to the form.
+  async function retry() {
+    const hasCreds = authMode === 'password' ? !!password : !!privateKey
+    const hasSelection = !!(accounts && accounts.length) && selectedCount > 0
+    if (!hasSelection || !hasCreds) {
+      setStep(hasCreds && accounts && accounts.length ? 2 : 1)
+      return
+    }
+    setJobID(null); setRunning(false); setItems([]); setLogText('')
+    setSummary({ total: 0, completed: 0, failed: 0, status: '' })
+    setStartedAt(null)
+    await start()
+  }
+
   const selectedCount = (accounts || []).filter(a => selected[a.domain_name]).length
   const finishedCount = summary.completed + summary.failed
   const percent = summary.total > 0 ? Math.round((finishedCount / summary.total) * 100) : 0
@@ -704,9 +721,14 @@ export default function SiteMigrationPage() {
               {running
                 ? <button type="button" onClick={cancel}
                     className="inline-flex items-center gap-1.5 rounded-full border border-red-200 px-3.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 dark:border-red-800/60 dark:text-red-300 dark:hover:bg-red-900/20">
-                    {t('step3.cancel')}
+                    {t('step3.stop')}
                   </button>
-                : <button type="button" onClick={newMigration} className={btnSmall}>{t('step3.newMigration')}</button>}
+                : <div className="flex items-center gap-2">
+                    {accounts && accounts.length > 0 && (
+                      <button type="button" onClick={retry} className={btnSmall}>{t('step3.retry')}</button>
+                    )}
+                    <button type="button" onClick={newMigration} className={btnSmall}>{t('step3.newMigration')}</button>
+                  </div>}
             </div>
 
             {running && (

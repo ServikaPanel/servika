@@ -94,7 +94,8 @@
   },
   "step3": {
     "title": "Taşıma #{{id}}",
-    "cancel": "İptal et",
+    "stop": "Durdur",
+    "retry": "Tekrar dene",
     "newMigration": "+ Yeni taşıma",
     "nowMigrating": "Şu an taşınıyor",
     "preparing": "hazırlanıyor...",

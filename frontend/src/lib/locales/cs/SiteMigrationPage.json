@@ -94,7 +94,8 @@
   },
   "step3": {
     "title": "Migrace č. {{id}}",
-    "cancel": "Zrušit",
+    "stop": "Zastavit",
+    "retry": "Zkusit znovu",
     "newMigration": "+ Nová migrace",
     "nowMigrating": "Právě se migruje",
     "preparing": "probíhá příprava...",

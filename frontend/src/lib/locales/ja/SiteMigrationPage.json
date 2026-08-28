@@ -94,7 +94,8 @@
   },
   "step3": {
     "title": "移行 #{{id}}",
-    "cancel": "キャンセル",
+    "stop": "停止",
+    "retry": "再試行",
     "newMigration": "+ 新しい移行",
     "nowMigrating": "移行中",
     "preparing": "準備中...",

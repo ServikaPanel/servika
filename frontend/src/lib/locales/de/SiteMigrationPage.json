@@ -94,7 +94,8 @@
   },
   "step3": {
     "title": "Migration #{{id}}",
-    "cancel": "Abbrechen",
+    "stop": "Anhalten",
+    "retry": "Erneut versuchen",
     "newMigration": "+ Neue Migration",
     "nowMigrating": "Wird gerade migriert",
     "preparing": "Vorbereitung...",
