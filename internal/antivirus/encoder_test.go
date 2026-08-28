@@ -125,6 +125,29 @@ func TestARealEncodedFileWithABenignTailStaysClean(t *testing.T) {
 	}
 }
 
+// TestAnImpureBodyWithASignatureWordStaysClean is the false-positive regression.
+// A real ionCube body is NOT pure base64: it carries stray non-base64 bytes. The
+// abandoned tail-scan cut the body at the first such run and scanned the remainder,
+// so a signature word later in the body convicted the file (the measured 259/3316
+// false positives). The body is now never scanned, and none of these stray bytes
+// form an encoderSinks pattern, so the file stays clean.
+func TestAnImpureBodyWithASignatureWordStaysClean(t *testing.T) {
+	var body []byte
+	for range 20 {
+		body = append(body, strings.Repeat("QUJD", 40)...) // a base64 run
+		body = append(body, '.', '-', '.', '-')            // stray non-base64, not a sink
+	}
+	body = append(body, "c99shell"...) // a signature word sitting inside the body
+	file := append([]byte("<?php //ICB0 82:0 83:e7bc\n"), body...)
+	if !bytes.Contains(file, []byte("c99shell")) {
+		t.Fatal("the fixture must carry the signature word in its body")
+	}
+
+	if _, _, _, level := verdict(evaluate(".php", file), scoreCritical); level == LevelCritical {
+		t.Errorf("an impure encoded body with a signature word was reported critical (level=%q)", level)
+	}
+}
+
 // TestAPlainFileIsNotTreatedAsEncoded is the regression: an ordinary PHP file
 // carries no stamp, so the extract leaves it untouched.
 func TestAPlainFileIsNotTreatedAsEncoded(t *testing.T) {
