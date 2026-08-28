@@ -234,7 +234,10 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	}
 
 	// --- 5. SSL ------------------------------------------------------------
-	if settings.SSL {
+	if settings.SSL && h.importSourceSSL(ctx, source, account, result.DomainID, domainName, logf, result) {
+		// The source's own certificate was copied; HTTPS is ready without waiting
+		// for the DNS cutover. importSourceSSL logged the outcome and any warning.
+	} else if settings.SSL {
 		logf("requesting an SSL certificate...")
 		certPath, keyPath, sslOutcome, sslErr := provisioner.EnableLetsEncrypt(
 			domainName, systemUser, installedPHPOrClosest(php), "php-fpm")
