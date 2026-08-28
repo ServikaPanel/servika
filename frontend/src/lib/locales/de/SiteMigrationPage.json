@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} fehlgeschlagen"
   },
+  "resume": {
+    "title": "Eine zuvor begonnene Migration fortsetzen",
+    "credentialsStored": "Zugangsdaten gespeichert",
+    "continue": "Fortsetzen",
+    "forget": "Verwerfen",
+    "usingStored": "Die gespeicherten Zugangsdaten werden verwendet; Sie müssen das Passwort nicht erneut eingeben."
+  },
   "errors": {
     "testFailed": "Der Verbindungstest ist fehlgeschlagen",
     "discoveryFailed": "Die Suche ist fehlgeschlagen",
     "noSitesFound": "Auf dem Quellserver wurde keine migrierbare Website gefunden.",
     "selectAtLeastOne": "Wählen Sie mindestens eine Website aus.",
     "startFailed": "Die Migration konnte nicht gestartet werden",
-    "cancelFailed": "Der Auftrag konnte nicht abgebrochen werden"
+    "cancelFailed": "Der Auftrag konnte nicht abgebrochen werden",
+    "resumeFailed": "Die Migration konnte nicht fortgesetzt werden.",
+    "forgetFailed": "Die gespeicherte Migration konnte nicht entfernt werden."
   }
 }

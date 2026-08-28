@@ -140,12 +140,21 @@
     },
     "failedSuffix": "chyby: {{n}}"
   },
+  "resume": {
+    "title": "Pokračovat v dříve zahájené migraci",
+    "credentialsStored": "přihlašovací údaje uloženy",
+    "continue": "Pokračovat",
+    "forget": "Zapomenout",
+    "usingStored": "Použijí se uložené přihlašovací údaje; heslo nemusíte zadávat znovu."
+  },
   "errors": {
     "testFailed": "Test připojení selhal",
     "discoveryFailed": "Hledání selhalo",
     "noSitesFound": "Na zdrojovém serveru nebyl nalezen žádný web k migraci.",
     "selectAtLeastOne": "Vyberte alespoň jeden web.",
     "startFailed": "Migraci se nepodařilo spustit",
-    "cancelFailed": "Úlohu se nepodařilo zrušit"
+    "cancelFailed": "Úlohu se nepodařilo zrušit",
+    "resumeFailed": "Migraci se nepodařilo obnovit.",
+    "forgetFailed": "Uloženou migraci se nepodařilo odstranit."
   }
 }

@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} hata"
   },
+  "resume": {
+    "title": "Daha önce başlattığınız bir taşımaya devam edin",
+    "credentialsStored": "kimlik bilgileri saklandı",
+    "continue": "Devam et",
+    "forget": "Unut",
+    "usingStored": "Saklanan kimlik bilgileri kullanılacak; parolayı yeniden girmenize gerek yok."
+  },
   "errors": {
     "testFailed": "Bağlantı testi başarısız",
     "discoveryFailed": "Keşif başarısız",
     "noSitesFound": "Kaynak sunucuda taşınabilir site bulunamadı.",
     "selectAtLeastOne": "En az bir site seçin.",
     "startFailed": "Taşıma başlatılamadı",
-    "cancelFailed": "İş iptal edilemedi"
+    "cancelFailed": "İş iptal edilemedi",
+    "resumeFailed": "Taşımaya devam edilemedi.",
+    "forgetFailed": "Saklanan taşıma kaldırılamadı."
   }
 }

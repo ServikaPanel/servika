@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} falliti"
   },
+  "resume": {
+    "title": "Riprendi una migrazione avviata in precedenza",
+    "credentialsStored": "credenziali salvate",
+    "continue": "Continua",
+    "forget": "Dimentica",
+    "usingStored": "Verranno usate le credenziali salvate; non è necessario reinserire la password."
+  },
   "errors": {
     "testFailed": "Il test di connessione non è riuscito",
     "discoveryFailed": "Il rilevamento non è riuscito",
     "noSitesFound": "Nessun sito migrabile trovato sul server di origine.",
     "selectAtLeastOne": "Seleziona almeno un sito.",
     "startFailed": "Impossibile avviare la migrazione",
-    "cancelFailed": "Impossibile annullare l'operazione"
+    "cancelFailed": "Impossibile annullare l'operazione",
+    "resumeFailed": "Impossibile riprendere la migrazione.",
+    "forgetFailed": "Impossibile rimuovere la migrazione salvata."
   }
 }

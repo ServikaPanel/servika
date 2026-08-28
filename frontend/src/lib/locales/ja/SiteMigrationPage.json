@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} 件失敗"
   },
+  "resume": {
+    "title": "以前開始した移行を再開する",
+    "credentialsStored": "認証情報を保存済み",
+    "continue": "続行",
+    "forget": "破棄",
+    "usingStored": "保存された認証情報が使用されます。パスワードを再入力する必要はありません。"
+  },
   "errors": {
     "testFailed": "接続テストに失敗しました",
     "discoveryFailed": "検出に失敗しました",
     "noSitesFound": "移行元サーバーに移行できるサイトが見つかりませんでした。",
     "selectAtLeastOne": "サイトを 1 つ以上選択してください。",
     "startFailed": "移行を開始できませんでした",
-    "cancelFailed": "処理をキャンセルできませんでした"
+    "cancelFailed": "処理をキャンセルできませんでした",
+    "resumeFailed": "移行を再開できませんでした。",
+    "forgetFailed": "保存された移行を削除できませんでした。"
   }
 }

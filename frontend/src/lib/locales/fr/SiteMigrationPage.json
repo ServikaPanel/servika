@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} en échec"
   },
+  "resume": {
+    "title": "Reprendre une migration commencée précédemment",
+    "credentialsStored": "identifiants enregistrés",
+    "continue": "Continuer",
+    "forget": "Oublier",
+    "usingStored": "Les identifiants enregistrés seront utilisés ; vous n'avez pas besoin de saisir à nouveau le mot de passe."
+  },
   "errors": {
     "testFailed": "Le test de connexion a échoué",
     "discoveryFailed": "La découverte a échoué",
     "noSitesFound": "Aucun site migrable n'a été trouvé sur le serveur source.",
     "selectAtLeastOne": "Sélectionnez au moins un site.",
     "startFailed": "La migration n'a pas pu démarrer",
-    "cancelFailed": "La tâche n'a pas pu être annulée"
+    "cancelFailed": "La tâche n'a pas pu être annulée",
+    "resumeFailed": "La migration n'a pas pu être reprise.",
+    "forgetFailed": "La migration enregistrée n'a pas pu être supprimée."
   }
 }

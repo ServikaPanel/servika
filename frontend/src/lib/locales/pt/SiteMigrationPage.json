@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} com erro"
   },
+  "resume": {
+    "title": "Retomar uma migração iniciada anteriormente",
+    "credentialsStored": "credenciais guardadas",
+    "continue": "Continuar",
+    "forget": "Esquecer",
+    "usingStored": "As credenciais guardadas serão utilizadas; não precisa de introduzir a palavra-passe novamente."
+  },
   "errors": {
     "testFailed": "O teste de ligação falhou",
     "discoveryFailed": "A deteção falhou",
     "noSitesFound": "Não foi encontrado nenhum site migrável no servidor de origem.",
     "selectAtLeastOne": "Selecione pelo menos um site.",
     "startFailed": "Não foi possível iniciar a migração",
-    "cancelFailed": "Não foi possível cancelar a tarefa"
+    "cancelFailed": "Não foi possível cancelar a tarefa",
+    "resumeFailed": "Não foi possível retomar a migração.",
+    "forgetFailed": "Não foi possível remover a migração guardada."
   }
 }

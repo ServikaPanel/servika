@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} eșuate"
   },
+  "resume": {
+    "title": "Reia o migrare începută anterior",
+    "credentialsStored": "credențiale salvate",
+    "continue": "Continuă",
+    "forget": "Uită",
+    "usingStored": "Vor fi folosite credențialele salvate; nu trebuie să introduceți din nou parola."
+  },
   "errors": {
     "testFailed": "Testul de conexiune a eșuat",
     "discoveryFailed": "Descoperirea a eșuat",
     "noSitesFound": "Nu a fost găsit niciun site care poate fi migrat pe serverul sursă.",
     "selectAtLeastOne": "Selectați cel puțin un site.",
     "startFailed": "Migrarea nu a putut fi pornită",
-    "cancelFailed": "Sarcina nu a putut fi anulată"
+    "cancelFailed": "Sarcina nu a putut fi anulată",
+    "resumeFailed": "Migrarea nu a putut fi reluată.",
+    "forgetFailed": "Migrarea salvată nu a putut fi eliminată."
   }
 }

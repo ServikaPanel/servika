@@ -115,7 +115,18 @@ func (h *Handlers) MigrationDiscover(w http.ResponseWriter, r *http.Request) {
 		_ = h.DB.QueryRow(`SELECT COUNT(*) FROM domains WHERE domain_name=?`, account.DomainName).Scan(&n)
 		out = append(out, entry{RemoteAccount: account, Exists: n > 0})
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"accounts": out, "total": len(out)})
+	// Persist the session so a reload resumes without re-entering the server
+	// details, the credentials, or re-running discovery. Best-effort: a failure
+	// returns id 0 and discovery still answers.
+	discoveryJSON, _ := json.Marshal(out)
+	startedBy := ""
+	if claims := middleware.ClaimsFrom(r); claims != nil {
+		startedBy = claims.Username
+	}
+	sessionID := h.saveSession(source, discoveryJSON, startedBy)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"accounts": out, "total": len(out), "session_id": sessionID,
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -124,9 +135,10 @@ func (h *Handlers) MigrationDiscover(w http.ResponseWriter, r *http.Request) {
 
 type startInput struct {
 	sourceInput
-	Mode     string            `json:"mode"` // single | bulk
-	Settings MigrationSettings `json:"settings"`
-	Selected []RemoteAccount   `json:"selected"` // accounts the operator picked after discovery
+	SessionID int64             `json:"session_id"` // resume a saved session's stored credentials
+	Mode      string            `json:"mode"`       // single | bulk
+	Settings  MigrationSettings `json:"settings"`
+	Selected  []RemoteAccount   `json:"selected"` // accounts the operator picked after discovery
 }
 
 // MigrationStart handles POST /admin/migrations.
@@ -164,6 +176,17 @@ func (h *Handlers) MigrationStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	source := in.source()
+	// Resume a saved session: when the operator did not re-type the credentials,
+	// decrypt the stored ones SERVER-SIDE. The password never travelled back to
+	// the browser, so this is the only place it re-enters the flow.
+	if source.Password == "" && source.Key == "" && in.SessionID > 0 {
+		pass, key, err := h.loadSessionCredentials(r.Context(), in.SessionID, source.Host)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "the saved credentials could not be used: "+err.Error())
+			return
+		}
+		source.Password, source.Key = pass, key
+	}
 	if err := source.Validate(); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
@@ -252,6 +275,12 @@ func (h *Handlers) MigrationStart(w http.ResponseWriter, r *http.Request) {
 	activeJobID, activeJobCancel = jobID, cancel
 	migrationMu.Unlock()
 	reserved = false // a real job id holds the slot now; the deferred release must not clear it
+
+	// The session is consumed: the job now holds the credentials in migration_jobs
+	// (encrypted, host-bound), so the resumable session is no longer needed.
+	if in.SessionID > 0 {
+		_, _ = h.DB.Exec(`DELETE FROM migration_sessions WHERE id=?`, in.SessionID)
+	}
 
 	go h.runMigrationJob(ctx, jobID, source, valid, in.Settings)
 
@@ -528,6 +557,9 @@ func (h *Handlers) HealMigrationsOnStartup() {
 	_, _ = h.DB.Exec(
 		`UPDATE migration_jobs SET source_password=NULL, source_key=NULL, credentials_cleared=1
 		 WHERE status IN ('done','failed','cancelled','interrupted') AND credentials_cleared=0`)
+	// Drop the migration sessions whose TTL has passed. Their credentials are
+	// sealed, but an expired session is dead weight and must not be resumable.
+	_, _ = h.DB.Exec(`DELETE FROM migration_sessions WHERE expires_at <= NOW()`)
 }
 
 // tailFile safely reads the last n bytes of a file (symlinks and special files

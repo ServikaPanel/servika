@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} failed"
   },
+  "resume": {
+    "title": "Resume a migration you started earlier",
+    "credentialsStored": "credentials stored",
+    "continue": "Continue",
+    "forget": "Forget",
+    "usingStored": "The saved credentials will be used; you do not need to enter the password again."
+  },
   "errors": {
     "testFailed": "The connection test failed",
     "discoveryFailed": "Discovery failed",
     "noSitesFound": "No migratable site was found on the source server.",
     "selectAtLeastOne": "Select at least one site.",
     "startFailed": "The migration could not be started",
-    "cancelFailed": "The job could not be cancelled"
+    "cancelFailed": "The job could not be cancelled",
+    "resumeFailed": "The migration could not be resumed.",
+    "forgetFailed": "The saved migration could not be removed."
   }
 }

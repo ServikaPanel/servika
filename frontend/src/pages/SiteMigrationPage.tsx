@@ -34,6 +34,10 @@ type MigrationJob = {
 }
 type Plan = { id: number; name: string }
 type Customer = { id: number; name: string }
+type SavedSession = {
+  id: number; type: string; host: string; port: number; user: string
+  credentials_stored: boolean; last_used: string
+}
 
 const PANELS = ['plesk', 'cpanel', 'directadmin']
 const PHP_VERSIONS = ['', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
@@ -130,6 +134,14 @@ export default function SiteMigrationPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
 
+  // --- resumable session ---
+  // A discovery result is saved on the server (2 h TTL) so a reload resumes it
+  // without re-entering the credentials. sessionID carries the current one;
+  // credsStored means the stored password can start the job with no re-typing.
+  const [sessionID, setSessionID] = useState(0)
+  const [credsStored, setCredsStored] = useState(false)
+  const [savedSessions, setSavedSessions] = useState<SavedSession[]>([])
+
   // --- settings ---
   const [withFiles, setWithFiles] = useState(true)
   const [withDatabases, setWithDatabases] = useState(true)
@@ -180,6 +192,45 @@ export default function SiteMigrationPage() {
   [])
 
   useEffect(() => { loadJobs() }, [loadJobs])
+
+  // Promise callback, not await: this runs from a mount effect, so it must
+  // settle only through the promise so it is not a synchronous setState.
+  const loadSessions = useCallback(() =>
+    api.get<SavedSession[]>('/admin/migrations/sessions')
+      .then(({ data }) => setSavedSessions(data || []))
+      .catch(() => { /* no resumable sessions is a normal state */ }),
+  [])
+
+  useEffect(() => { loadSessions() }, [loadSessions])
+
+  // Continue a saved session: restore the form and the discovered sites without
+  // re-entering the credentials. The password stays empty; the server decrypts
+  // the stored one at start when session_id is sent.
+  function resumeSession(id: number) {
+    setError(null)
+    api.get<{
+      type: string; host: string; port: number; user: string
+      credentials_stored: boolean; accounts: RemoteAccount[]
+    }>(`/admin/migrations/sessions/${id}`)
+      .then(({ data }) => {
+        if (PANELS.includes(data.type)) setType(data.type)
+        setHost(data.host); setPort(data.port); setUser(data.user)
+        setPassword(''); setPrivateKey('')
+        const list = data.accounts || []
+        setAccounts(list)
+        setSelected(Object.fromEntries(list.map(a => [a.domain_name, !a.exists])))
+        setSessionID(id)
+        setCredsStored(data.credentials_stored)
+        setStep(list.length > 0 ? 2 : 1)
+      })
+      .catch(e => setError(apiError(e, t('errors.resumeFailed'))))
+  }
+
+  function forgetSession(id: number) {
+    api.delete(`/admin/migrations/sessions/${id}`)
+      .then(() => loadSessions())
+      .catch(e => setError(apiError(e, t('errors.forgetFailed'))))
+  }
 
   // Advance the clock only while a job runs, so a finished job's elapsed time
   // and ETA stop where they ended instead of creeping up on unrelated renders.
@@ -263,10 +314,14 @@ export default function SiteMigrationPage() {
   async function discover() {
     setDiscovering(true); setError(null); setAccounts(null)
     try {
-      const { data } = await api.post<{ accounts: RemoteAccount[] }>('/admin/migrations/discover', sourceBody())
+      const { data } = await api.post<{ accounts: RemoteAccount[]; session_id: number }>('/admin/migrations/discover', sourceBody())
       const list = data.accounts || []
       setAccounts(list)
       setSelected(Object.fromEntries(list.map(a => [a.domain_name, !a.exists])))
+      // Fresh credentials were just typed; the new session holds them.
+      setSessionID(data.session_id || 0)
+      setCredsStored(false)
+      loadSessions()
       if (list.length === 0) setError(t('errors.noSitesFound'))
       else setStep(2)
     } catch (e) { setError(apiError(e, t('errors.discoveryFailed'))) } finally { setDiscovering(false) }
@@ -279,6 +334,7 @@ export default function SiteMigrationPage() {
     try {
       const { data } = await api.post<{ job_id: number }>('/admin/migrations', {
         ...sourceBody(),
+        session_id: sessionID,
         mode: picked.length === 1 ? 'single' : 'bulk',
         settings: {
           files: withFiles, databases: withDatabases, dns: withDNS, ssl: withSSL,
@@ -289,6 +345,8 @@ export default function SiteMigrationPage() {
       const startNow = Date.now()
       setStartedAt(startNow); setNowMS(startNow)
       setJobID(data.job_id); setRunning(true); setLogText(''); setItems([]); setStep(3)
+      // The server consumed the session at start; drop it from the resume list.
+      setSessionID(0); setCredsStored(false); loadSessions()
     } catch (e) { setError(apiError(e, t('errors.startFailed'))) }
   }
 
@@ -302,6 +360,7 @@ export default function SiteMigrationPage() {
     setJobID(null); setRunning(false); setItems([]); setLogText('')
     setSummary({ total: 0, completed: 0, failed: 0, status: '' })
     setStartedAt(null)
+    setSessionID(0); setCredsStored(false); loadSessions()
     setStep(accounts && accounts.length > 0 ? 2 : 1)
   }
 
@@ -365,6 +424,35 @@ export default function SiteMigrationPage() {
         <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-300">
           <span className="mt-0.5 shrink-0"><Icon d={ICON.warning} /></span>
           <span className="min-w-0 break-words">{error}</span>
+        </div>
+      )}
+
+      {/* Resume banner — a saved discovery can be continued without re-typing. */}
+      {step === 1 && !jobID && savedSessions.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 dark:border-brand-800/60 dark:bg-brand-900/20">
+          <div className="flex items-center gap-2 text-sm font-medium text-brand-800 dark:text-brand-200">
+            <Icon d={ICON.clock} />
+            <span>{t('resume.title')}</span>
+          </div>
+          <ul className="mt-2.5 space-y-2">
+            {savedSessions.map(s => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/70 px-3 py-2 dark:bg-slate-800/50">
+                <span className="min-w-0 break-words text-sm text-slate-700 dark:text-slate-200">
+                  <span className="font-medium">{t(`panels.${s.type}`, { defaultValue: s.type })}</span>
+                  {' · '}{s.user}@{s.host}
+                  {s.credentials_stored && (
+                    <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{t('resume.credentialsStored')}</span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => resumeSession(s.id)} className={btnSmall}>
+                    <Icon d={ICON.forward} />{t('resume.continue')}
+                  </button>
+                  <button type="button" onClick={() => forgetSession(s.id)} className={btnSmall}>{t('resume.forget')}</button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -582,6 +670,13 @@ export default function SiteMigrationPage() {
               <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-300">
                 <span className="mt-0.5 shrink-0"><Icon d={ICON.warning} /></span>
                 <span>{t('step2.overwriteWarning')}</span>
+              </div>
+            )}
+
+            {credsStored && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300">
+                <span className="mt-0.5 shrink-0"><Icon d={ICON.lock} /></span>
+                <span>{t('resume.usingStored')}</span>
               </div>
             )}
 

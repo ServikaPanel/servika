@@ -140,12 +140,21 @@
     },
     "failedSuffix": "{{n}} 个失败"
   },
+  "resume": {
+    "title": "继续之前开始的迁移",
+    "credentialsStored": "已保存凭据",
+    "continue": "继续",
+    "forget": "忘记",
+    "usingStored": "将使用已保存的凭据；您无需再次输入密码。"
+  },
   "errors": {
     "testFailed": "连接测试失败",
     "discoveryFailed": "发现失败",
     "noSitesFound": "在源服务器上没有找到可迁移的站点。",
     "selectAtLeastOne": "请至少选择一个站点。",
     "startFailed": "无法开始迁移",
-    "cancelFailed": "无法取消任务"
+    "cancelFailed": "无法取消任务",
+    "resumeFailed": "无法继续迁移。",
+    "forgetFailed": "无法删除已保存的迁移。"
   }
 }
