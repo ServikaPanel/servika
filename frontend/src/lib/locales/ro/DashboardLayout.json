@@ -54,7 +54,8 @@
     "logs": "Jurnale",
     "backups": "Backup-uri",
     "siteImport": "Import site",
-    "malwareScan": "Scanare malware"
+    "malwareScan": "Scanare malware",
+    "attackChains": "Lanțuri de atac"
   },
   "mobile": {
     "overview": "Prezentare",

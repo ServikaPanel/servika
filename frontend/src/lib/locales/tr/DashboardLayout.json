@@ -54,7 +54,8 @@
     "logs": "Günlükler",
     "backups": "Yedekler",
     "siteImport": "Site İçe Aktarma",
-    "malwareScan": "Zararlı Yazılım Taraması"
+    "malwareScan": "Zararlı Yazılım Taraması",
+    "attackChains": "Saldırı Zincirleri"
   },
   "mobile": {
     "overview": "Genel Bakış",

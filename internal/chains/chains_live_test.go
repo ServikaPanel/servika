@@ -74,10 +74,10 @@ func TestRunCorrelatesCausalChain(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	var stages string
+	var stages, level string
 	var confidence int
-	if err := db.QueryRow(`SELECT stages, confidence FROM av_chains WHERE domain_id=?`, testDomainID).
-		Scan(&stages, &confidence); err != nil {
+	if err := db.QueryRow(`SELECT stages, confidence, level FROM av_chains WHERE domain_id=?`, testDomainID).
+		Scan(&stages, &confidence, &level); err != nil {
 		t.Fatalf("no chain written: %v", err)
 	}
 	if stages != "file_write>execution" {
@@ -86,8 +86,10 @@ func TestRunCorrelatesCausalChain(t *testing.T) {
 	if confidence != 85 {
 		t.Fatalf("confidence = %d, want 85 (55 + 25 causal + 5 ordered)", confidence)
 	}
+	if level != "critical" {
+		t.Fatalf("stored level = %q, want critical (the causal chain's decided level)", level)
+	}
 
-	var level string
 	var notes int
 	if err := db.QueryRow(
 		`SELECT level, COUNT(*) FROM notifications WHERE domain_id=? AND ref_type='av_chain'`, testDomainID).
@@ -118,6 +120,13 @@ func TestRunIndependentSignalsStayWarning(t *testing.T) {
 	}
 	if level != "warning" {
 		t.Fatalf("independent signals should be a warning, got %q", level)
+	}
+	var chainLevel string
+	if err := db.QueryRow(`SELECT level FROM av_chains WHERE domain_id=?`, testDomainID).Scan(&chainLevel); err != nil {
+		t.Fatalf("no chain written: %v", err)
+	}
+	if chainLevel != "warning" {
+		t.Fatalf("stored chain level = %q, want warning", chainLevel)
 	}
 }
 

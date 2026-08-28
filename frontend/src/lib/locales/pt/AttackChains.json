@@ -1,0 +1,17 @@
+{
+  "home": "Início",
+  "title": "Cadeias de ataque",
+  "subtitle": "Eventos de ficheiro, processo e API de um inquilino numa janela de tempo são reunidos numa única cadeia de ataque. Uma ligação causal (o mesmo ficheiro ou processo) aumenta a confiança.",
+  "activeCritical": "Cadeias de ataque críticas ativas: {{count}}",
+  "risk": "Risco",
+  "activeAttack": "Ataque ativo",
+  "suspiciousChain": "Cadeia suspeita",
+  "loading": "A carregar…",
+  "empty": {
+    "title": "Sem cadeias de ataque ativas.",
+    "hint": "Os motores de deteção (ficheiro + processo) estão a monitorizar; uma cadeia aparece aqui se se formar."
+  },
+  "errors": {
+    "load": "Não foi possível carregar as cadeias de ataque."
+  }
+}

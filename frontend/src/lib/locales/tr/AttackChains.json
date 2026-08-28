@@ -1,0 +1,17 @@
+{
+  "home": "Anasayfa",
+  "title": "Saldırı Zincirleri",
+  "subtitle": "Bir kiracıdaki dosya, süreç ve API olayları zaman penceresinde tek bir saldırı zincirine dizilir. Nedensel bağ (aynı dosya veya süreç) güveni yükseltir.",
+  "activeCritical": "Etkin kritik saldırı zincirleri: {{count}}",
+  "risk": "Risk",
+  "activeAttack": "Etkin saldırı",
+  "suspiciousChain": "Şüpheli zincir",
+  "loading": "Yükleniyor…",
+  "empty": {
+    "title": "Etkin saldırı zinciri yok.",
+    "hint": "Tespit motorları (dosya + süreç) izliyor; bir zincir oluşursa burada görünür."
+  },
+  "errors": {
+    "load": "Saldırı zincirleri yüklenemedi."
+  }
+}

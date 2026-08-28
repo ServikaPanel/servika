@@ -188,6 +188,17 @@ func ChainSignature(domainID int64, stages []string) string {
 	return hex.EncodeToString(h[:])[:32]
 }
 
+// StageName is the display name of one kill-chain stage ("File Write"), or the
+// raw stage when it is unknown. The names are technical kill-chain terms and
+// stay in English; the list endpoint sends them so the frontend does not carry a
+// second copy of the mapping.
+func StageName(stage string) string {
+	if n := stageName[stage]; n != "" {
+		return n
+	}
+	return stage
+}
+
 // StageSummary is the human-readable chain ("File Write → Execution").
 func StageSummary(stages []string) string {
 	names := make([]string, 0, len(stages))
@@ -356,8 +367,8 @@ func domainSaturated(db *sql.DB, domainID int64) bool {
 // writeChain records the chain and sends one scoped notification.
 func writeChain(db *sql.DB, domainID int64, r Result, eventCount int, signature string) {
 	res, err := db.Exec(`INSERT INTO av_chains
-		(domain_id, stages, confidence, event_count, signature)
-		VALUES (?,?,?,?,?)`, domainID, strings.Join(r.Stages, ">"), r.Confidence, eventCount, signature)
+		(domain_id, stages, confidence, level, event_count, signature)
+		VALUES (?,?,?,?,?,?)`, domainID, strings.Join(r.Stages, ">"), r.Confidence, r.Level, eventCount, signature)
 	if err != nil {
 		log.Printf("attack chain: the chain could not be recorded: %v", err)
 		return

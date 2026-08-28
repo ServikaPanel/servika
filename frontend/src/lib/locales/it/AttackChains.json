@@ -1,0 +1,17 @@
+{
+  "home": "Home",
+  "title": "Catene di attacco",
+  "subtitle": "Gli eventi di file, processo e API di un tenant entro una finestra temporale vengono uniti in una singola catena di attacco. Un legame causale (lo stesso file o processo) aumenta la confidenza.",
+  "activeCritical": "Catene di attacco critiche attive: {{count}}",
+  "risk": "Rischio",
+  "activeAttack": "Attacco attivo",
+  "suspiciousChain": "Catena sospetta",
+  "loading": "Caricamento…",
+  "empty": {
+    "title": "Nessuna catena di attacco attiva.",
+    "hint": "I motori di rilevamento (file + processo) sono in ascolto; una catena appare qui se se ne forma una."
+  },
+  "errors": {
+    "load": "Impossibile caricare le catene di attacco."
+  }
+}

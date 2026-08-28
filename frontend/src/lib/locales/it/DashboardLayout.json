@@ -54,7 +54,8 @@
     "logs": "Log",
     "backups": "Backup",
     "siteImport": "Importazione sito",
-    "malwareScan": "Scansione malware"
+    "malwareScan": "Scansione malware",
+    "attackChains": "Catene di attacco"
   },
   "mobile": {
     "overview": "Panoramica",

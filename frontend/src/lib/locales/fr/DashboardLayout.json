@@ -54,7 +54,8 @@
     "logs": "Journaux",
     "backups": "Sauvegardes",
     "siteImport": "Import de site",
-    "malwareScan": "Analyse de logiciels malveillants"
+    "malwareScan": "Analyse de logiciels malveillants",
+    "attackChains": "Chaînes d'attaque"
   },
   "mobile": {
     "overview": "Aperçu",

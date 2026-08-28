@@ -1,0 +1,17 @@
+{
+  "home": "Domů",
+  "title": "Řetězce útoků",
+  "subtitle": "Události souborů, procesů a API jednoho nájemce v časovém okně se spojí do jednoho řetězce útoku. Kauzální vazba (stejný soubor nebo proces) zvyšuje důvěru.",
+  "activeCritical": "Aktivní kritické řetězce útoků: {{count}}",
+  "risk": "Riziko",
+  "activeAttack": "Aktivní útok",
+  "suspiciousChain": "Podezřelý řetězec",
+  "loading": "Načítání…",
+  "empty": {
+    "title": "Žádné aktivní řetězce útoků.",
+    "hint": "Detekční enginy (soubor + proces) sledují; řetězec se zde objeví, pokud vznikne."
+  },
+  "errors": {
+    "load": "Řetězce útoků se nepodařilo načíst."
+  }
+}

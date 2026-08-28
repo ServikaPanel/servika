@@ -63,6 +63,11 @@ const (
 	reasonWebShellCmd = "webShellCmd"
 	// reasonWebDownloader: a web process ran a downloader against a remote URL.
 	reasonWebDownloader = "webDownloader"
+	// reasonWebPersistence: a web process touched a persistence surface (cron, a
+	// shell startup file, an SSH authorized_keys, a service enable). Legitimate
+	// persistence is set up over SSH or from the panel as root, never from a
+	// php-fpm child, so this is a strong signal in a web context.
+	reasonWebPersistence = "webPersistence"
 )
 
 // netlink proc connector constants (linux/connector.h, linux/cn_proc.h).
@@ -103,6 +108,16 @@ var (
 		"chmod +x", "chmod 777", "wget -o", "curl -o",
 		"setsid", "0<&", ">&/dev/tcp", "eval(", "$(curl", "$(wget", "`curl", "`wget",
 	}
+	// procPersistenceTokens are the surfaces a persistence attempt writes to: a
+	// cron entry, a shell startup file, an SSH authorized_keys, a service enable.
+	// A php-fpm child never sets these up legitimately (that is done over SSH or
+	// from the panel as root), so a web-ancestored process touching one is a
+	// strong compromise signal.
+	procPersistenceTokens = []string{
+		"crontab", "/etc/cron", "/var/spool/cron", "/etc/cron.d", "/etc/rc.local",
+		".bashrc", ".bash_profile", ".profile", "authorized_keys", "systemctl enable",
+		"chkconfig", "update-rc.d", "/etc/systemd/system",
+	}
 )
 
 // procFinding is one weighed exec. An empty code means nothing fired. category
@@ -135,6 +150,9 @@ func scoreProcess(web bool, exe, cmdline string, uid int) procFinding {
 	}
 	if isDownloader(clean) && cmdlineRemoteURL(cmdline) {
 		return procFinding{score: procScoreDownloader, code: reasonWebDownloader}
+	}
+	if cmdlinePersistence(cmdline) {
+		return procFinding{score: procScoreCritical, code: reasonWebPersistence}
 	}
 	return procFinding{}
 }
@@ -195,6 +213,20 @@ func cmdlineRemoteURL(cmdline string) bool {
 	l := strings.ToLower(cmdline)
 	return strings.Contains(l, "http://") || strings.Contains(l, "https://") ||
 		strings.Contains(l, "ftp://")
+}
+
+// cmdlinePersistence reports whether the command line touches a persistence
+// surface (cron, a shell startup file, authorized_keys, a service enable). A
+// web-ancestored process is the caller's guard: a tenant editing their own cron
+// over SSH is their own business, but a php-fpm child doing it is not.
+func cmdlinePersistence(cmdline string) bool {
+	l := strings.ToLower(cmdline)
+	for _, t := range procPersistenceTokens {
+		if strings.Contains(l, t) {
+			return true
+		}
+	}
+	return false
 }
 
 // exeClean strips the " (deleted)" suffix the kernel appends to a removed

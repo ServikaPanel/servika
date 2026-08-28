@@ -54,7 +54,8 @@
     "logs": "ログ",
     "backups": "バックアップ",
     "siteImport": "サイトインポート",
-    "malwareScan": "マルウェアスキャン"
+    "malwareScan": "マルウェアスキャン",
+    "attackChains": "攻撃チェーン"
   },
   "mobile": {
     "overview": "概要",

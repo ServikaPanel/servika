@@ -421,6 +421,7 @@ func main() {
 	protectionH := &passwordprotect.Handlers{DB: d}
 	avH := &antivirus.Handlers{DB: d}
 	avSettingsH := &avsettings.Handlers{DB: d}
+	chainsH := &chains.Handlers{DB: d}
 	notificationsH := &notifications.Handlers{DB: d}
 	// Write the antivirus resource slice from the stored settings at every
 	// start.
@@ -612,6 +613,9 @@ func main() {
 			r.Get("/notifications", notificationsH.List)
 			r.Post("/notifications/read-all", notificationsH.MarkRead)
 			r.Post("/notifications/{id}/read", notificationsH.MarkRead)
+			// Attack chains are role-scoped inside the handler (admin=panel-wide,
+			// reseller/customer=own domains), so no middleware tier here.
+			r.Get("/antivirus/chains", chainsH.List)
 			// NOTE: /domains can be opened to resellers only after the scope filter
 			// (Phase 5D) lands — opening it unfiltered would show every domain.
 			r.With(middleware.ResellerOrAbove).Get("/domains", domainsH.List)

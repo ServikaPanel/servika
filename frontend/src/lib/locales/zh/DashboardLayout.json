@@ -54,7 +54,8 @@
     "logs": "日志",
     "backups": "备份",
     "siteImport": "站点导入",
-    "malwareScan": "恶意软件扫描"
+    "malwareScan": "恶意软件扫描",
+    "attackChains": "攻击链"
   },
   "mobile": {
     "overview": "概览",

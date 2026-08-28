@@ -249,10 +249,14 @@ func (w *procWatcher) evaluate(pid int) {
 }
 
 // stageForCode maps a process reason code to its kill-chain stage: a downloader
-// reaching a remote URL is C2, everything else is Execution.
+// reaching a remote URL is C2, a persistence attempt is Persistence, everything
+// else is Execution.
 func stageForCode(code string) string {
-	if code == reasonWebDownloader {
+	switch code {
+	case reasonWebDownloader:
 		return "c2"
+	case reasonWebPersistence:
+		return "persistence"
 	}
 	return "execution"
 }
@@ -282,6 +286,9 @@ func (w *procWatcher) notify(domainID int64, f procFinding) {
 		event.Params = map[string]any{"domain": name, "location": f.category}
 	case reasonWebDownloader:
 		event.Message = fmt.Sprintf("A web process started a remote download on %s.", name)
+		event.Params = map[string]any{"domain": name}
+	case reasonWebPersistence:
+		event.Message = fmt.Sprintf("A web process attempted a persistence change on %s.", name)
 		event.Params = map[string]any{"domain": name}
 	default:
 		event.Message = fmt.Sprintf("A web process ran a suspicious command on %s.", name)

@@ -41,6 +41,7 @@ const ICONS = {
   // A bug rather than the firewall's shield: the shield is already this menu's
   // firewall entry, and two identical icons in one group name nothing.
   malware:     'M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5l-1.4 1.4M7.9 16.1l-1.4 1.4m11.6 0l-1.4-1.4M7.9 7.9L6.5 6.5M16 12a4 4 0 11-8 0 4 4 0 018 0z',
+  chains:      'M13.19 8.69a4.5 4.5 0 011.24 7.24l-4.5 4.5a4.5 4.5 0 01-6.36-6.36l1.76-1.76m13.35-.62l1.76-1.76a4.5 4.5 0 00-6.36-6.36l-4.5 4.5a4.5 4.5 0 001.24 7.24',
 }
 
 const NAV: NavGroup[] = [
@@ -72,6 +73,7 @@ const NAV: NavGroup[] = [
     // page reads for its settings and sweeps is AdminOnly, so a reseller
     // following this link would meet a screen that 403s on load.
     { to: '/malware-scan',        labelKey: 'malwareScan', icon: ICONS.malware },
+    { to: '/attack-chains',       labelKey: 'attackChains', icon: ICONS.chains },
     { to: '/monitoring',              labelKey: 'monitoring',             icon: ICONS.monitoring },
     { to: '/users',                   labelKey: 'users',                  icon: ICONS.reseller },
     { to: '/audit-log',               labelKey: 'auditLog',           icon: ICONS.audit },
@@ -103,6 +105,7 @@ const RESELLER_NAV: NavGroup[] = [
   ]},
   { titleKey: 'server', items: [
     { to: '/server-status',  labelKey: 'serverStatus',  icon: ICONS.monitoring },
+    { to: '/attack-chains',  labelKey: 'attackChains',  icon: ICONS.chains },
     { to: '/service-plans',  labelKey: 'servicePlans',  icon: ICONS.plan },
   ]},
 ]
@@ -295,6 +298,7 @@ export default function DashboardLayout() {
       { to: `/subscriptions/${customerDomainID}/laravel`, labelKey: 'laravel', icon: ICONS.extensions },
       { to: `/subscriptions/${customerDomainID}/logs`, labelKey: 'logs', icon: ICONS.stats },
       { to: `/subscriptions/${customerDomainID}/backups`, labelKey: 'backups', icon: ICONS.tools },
+      { to: '/attack-chains', labelKey: 'attackChains', icon: ICONS.chains },
     ]},
   ]
 

@@ -54,7 +54,8 @@
     "logs": "Logs",
     "backups": "Backups",
     "siteImport": "Site Import",
-    "malwareScan": "Malware Scan"
+    "malwareScan": "Malware Scan",
+    "attackChains": "Attack Chains"
   },
   "mobile": {
     "overview": "Overview",

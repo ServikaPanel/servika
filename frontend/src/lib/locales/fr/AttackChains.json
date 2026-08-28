@@ -1,0 +1,17 @@
+{
+  "home": "Accueil",
+  "title": "Chaînes d'attaque",
+  "subtitle": "Les événements de fichier, de processus et d'API d'un locataire dans une fenêtre temporelle sont assemblés en une seule chaîne d'attaque. Un lien causal (le même fichier ou processus) augmente la confiance.",
+  "activeCritical": "Chaînes d'attaque critiques actives : {{count}}",
+  "risk": "Risque",
+  "activeAttack": "Attaque active",
+  "suspiciousChain": "Chaîne suspecte",
+  "loading": "Chargement…",
+  "empty": {
+    "title": "Aucune chaîne d'attaque active.",
+    "hint": "Les moteurs de détection (fichier + processus) surveillent ; une chaîne apparaît ici si elle se forme."
+  },
+  "errors": {
+    "load": "Impossible de charger les chaînes d'attaque."
+  }
+}

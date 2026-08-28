@@ -1,0 +1,17 @@
+{
+  "home": "Startseite",
+  "title": "Angriffsketten",
+  "subtitle": "Datei-, Prozess- und API-Ereignisse eines Mandanten innerhalb eines Zeitfensters werden zu einer einzigen Angriffskette verkettet. Ein kausaler Zusammenhang (dieselbe Datei oder derselbe Prozess) erhöht die Konfidenz.",
+  "activeCritical": "Aktive kritische Angriffsketten: {{count}}",
+  "risk": "Risiko",
+  "activeAttack": "Aktiver Angriff",
+  "suspiciousChain": "Verdächtige Kette",
+  "loading": "Wird geladen…",
+  "empty": {
+    "title": "Keine aktiven Angriffsketten.",
+    "hint": "Die Erkennungs-Engines (Datei + Prozess) überwachen; eine Kette erscheint hier, sobald eine entsteht."
+  },
+  "errors": {
+    "load": "Angriffsketten konnten nicht geladen werden."
+  }
+}

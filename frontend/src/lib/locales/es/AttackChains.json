@@ -1,0 +1,17 @@
+{
+  "home": "Inicio",
+  "title": "Cadenas de ataque",
+  "subtitle": "Los eventos de archivo, proceso y API de un inquilino dentro de una ventana de tiempo se enlazan en una sola cadena de ataque. Un vínculo causal (el mismo archivo o proceso) aumenta la confianza.",
+  "activeCritical": "Cadenas de ataque críticas activas: {{count}}",
+  "risk": "Riesgo",
+  "activeAttack": "Ataque activo",
+  "suspiciousChain": "Cadena sospechosa",
+  "loading": "Cargando…",
+  "empty": {
+    "title": "No hay cadenas de ataque activas.",
+    "hint": "Los motores de detección (archivo + proceso) están vigilando; una cadena aparece aquí si se forma."
+  },
+  "errors": {
+    "load": "No se pudieron cargar las cadenas de ataque."
+  }
+}

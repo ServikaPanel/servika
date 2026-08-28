@@ -1,0 +1,17 @@
+{
+  "home": "Home",
+  "title": "Attack Chains",
+  "subtitle": "File, process and API events on one tenant within a time window are strung into a single attack chain. A causal link (the same file or process) raises the confidence.",
+  "activeCritical": "Active critical attack chains: {{count}}",
+  "risk": "Risk",
+  "activeAttack": "Active attack",
+  "suspiciousChain": "Suspicious chain",
+  "loading": "Loading…",
+  "empty": {
+    "title": "No active attack chains.",
+    "hint": "The detection engines (file + process) are watching; a chain appears here if one forms."
+  },
+  "errors": {
+    "load": "Attack chains could not be loaded."
+  }
+}

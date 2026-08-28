@@ -1,0 +1,17 @@
+{
+  "home": "Acasă",
+  "title": "Lanțuri de atac",
+  "subtitle": "Evenimentele de fișier, proces și API ale unui chiriaș într-o fereastră de timp sunt înlănțuite într-un singur lanț de atac. O legătură cauzală (același fișier sau proces) crește încrederea.",
+  "activeCritical": "Lanțuri de atac critice active: {{count}}",
+  "risk": "Risc",
+  "activeAttack": "Atac activ",
+  "suspiciousChain": "Lanț suspect",
+  "loading": "Se încarcă…",
+  "empty": {
+    "title": "Niciun lanț de atac activ.",
+    "hint": "Motoarele de detecție (fișier + proces) monitorizează; un lanț apare aici dacă se formează unul."
+  },
+  "errors": {
+    "load": "Lanțurile de atac nu au putut fi încărcate."
+  }
+}

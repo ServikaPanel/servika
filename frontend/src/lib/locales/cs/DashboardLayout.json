@@ -54,7 +54,8 @@
     "logs": "Protokoly",
     "backups": "Zálohy",
     "siteImport": "Import webu",
-    "malwareScan": "Kontrola malwaru"
+    "malwareScan": "Kontrola malwaru",
+    "attackChains": "Řetězce útoků"
   },
   "mobile": {
     "overview": "Přehled",
