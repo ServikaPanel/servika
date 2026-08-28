@@ -64,7 +64,7 @@
     "unscanned": "Jamais inspecté",
     "unscannedNote": "Ces domaines n'ont aucune installation inspectée. C'est normal pour un site statique sans WordPress, npm ni Composer, et c'est un avertissement pour tout le reste."
   },
-  "filterPlaceholder": "Filtrer par domaine, paquet ou CVE",
+  "filterPlaceholder": "Filtrer par domaine",
   "shown": "Affichés",
   "advisoryNote": "Ces résultats sont indicatifs. La correspondance de version avec une source publique n'est pas exacte, vérifiez donc un avis avant d'agir. Rien ici ne suspend un compte ni ne modifie un fichier.",
   "scheduleNote": "Le serveur analyse toutes les six heures. Un administrateur peut aussi lancer une analyse.",
@@ -73,5 +73,25 @@
     "scan": "L'analyse n'a pas pu être lancée",
     "alreadyRunning": "Une analyse est déjà en cours.",
     "inventory": "L'inventaire n'a pas pu être chargé"
+  },
+  "domainTable": {
+    "domain": "Domaine",
+    "app": "Application",
+    "findings": "Résultats",
+    "lastScanned": "Dernière analyse",
+    "status": "Statut",
+    "actions": "Actions",
+    "scan": "Analyser",
+    "scanning": "Analyse…",
+    "none": "—",
+    "empty": "Aucun domaine à afficher.",
+    "note": "Chaque domaine du serveur, avec le statut de sa dernière analyse. Cliquez sur un domaine pour voir ses résultats."
+  },
+  "badge": {
+    "scanning": "Analyse",
+    "open": "{{n}} ouvert(s)",
+    "clean": "Sain",
+    "no_app": "Aucune app",
+    "pending": "Non analysé"
   }
 }

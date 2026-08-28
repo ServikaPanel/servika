@@ -64,7 +64,7 @@
     "unscanned": "Never inspected",
     "unscannedNote": "These domains have no inspected installation at all. That is expected for a static site with no WordPress, npm or Composer installation, and it is a warning for anything else."
   },
-  "filterPlaceholder": "Filter by domain, package or CVE",
+  "filterPlaceholder": "Filter by domain",
   "shown": "Shown",
   "advisoryNote": "These findings are advisory. Version matching against a public feed is not exact, so check an advisory before acting on it. Nothing here suspends an account or changes a file.",
   "scheduleNote": "The server scans every six hours. An administrator can also start a scan.",
@@ -73,5 +73,25 @@
     "scan": "The scan could not be started",
     "alreadyRunning": "A scan is already running.",
     "inventory": "The inventory could not be loaded"
+  },
+  "domainTable": {
+    "domain": "Domain",
+    "app": "Application",
+    "findings": "Findings",
+    "lastScanned": "Last scan",
+    "status": "Status",
+    "actions": "Actions",
+    "scan": "Scan",
+    "scanning": "Scanning…",
+    "none": "—",
+    "empty": "No domains to show.",
+    "note": "Every domain on the server, with the status of its last scan. Click a domain to see its findings."
+  },
+  "badge": {
+    "scanning": "Scanning",
+    "open": "{{n}} open",
+    "clean": "Clean",
+    "no_app": "No app",
+    "pending": "Not scanned"
   }
 }

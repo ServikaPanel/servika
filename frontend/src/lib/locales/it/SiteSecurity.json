@@ -64,7 +64,7 @@
     "unscanned": "Mai ispezionato",
     "unscannedNote": "Questi domini non hanno alcuna installazione ispezionata. È normale per un sito statico senza WordPress, npm o Composer, ed è un avviso per tutto il resto."
   },
-  "filterPlaceholder": "Filtra per dominio, pacchetto o CVE",
+  "filterPlaceholder": "Filtra per dominio",
   "shown": "Mostrate",
   "advisoryNote": "Queste rilevazioni sono indicative. La corrispondenza di versione con una fonte pubblica non è esatta, quindi verifica l'avviso prima di agire. Nulla qui sospende un account o modifica un file.",
   "scheduleNote": "Il server esegue una scansione ogni sei ore. Un amministratore può anche avviarne una.",
@@ -73,5 +73,25 @@
     "scan": "Non è stato possibile avviare la scansione",
     "alreadyRunning": "Una scansione è già in corso.",
     "inventory": "Non è stato possibile caricare l'inventario"
+  },
+  "domainTable": {
+    "domain": "Dominio",
+    "app": "Applicazione",
+    "findings": "Rilevamenti",
+    "lastScanned": "Ultima scansione",
+    "status": "Stato",
+    "actions": "Azioni",
+    "scan": "Scansiona",
+    "scanning": "Scansione…",
+    "none": "—",
+    "empty": "Nessun dominio da mostrare.",
+    "note": "Ogni dominio sul server, con lo stato della sua ultima scansione. Fai clic su un dominio per vedere i rilevamenti."
+  },
+  "badge": {
+    "scanning": "Scansione",
+    "open": "{{n}} aperti",
+    "clean": "Pulito",
+    "no_app": "Nessuna app",
+    "pending": "Non analizzato"
   }
 }

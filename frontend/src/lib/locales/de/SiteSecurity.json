@@ -64,7 +64,7 @@
     "unscanned": "Nie geprüft",
     "unscannedNote": "Für diese Domains gibt es überhaupt keine geprüfte Installation. Bei einer statischen Seite ohne WordPress, npm oder Composer ist das zu erwarten, bei allem anderen ist es eine Warnung."
   },
-  "filterPlaceholder": "Nach Domain, Paket oder CVE filtern",
+  "filterPlaceholder": "Nach Domain filtern",
   "shown": "Angezeigt",
   "advisoryNote": "Diese Funde sind Hinweise. Der Versionsabgleich mit einer öffentlichen Quelle ist nicht exakt, prüfen Sie einen Hinweis also vor dem Handeln. Nichts hier sperrt ein Konto oder ändert eine Datei.",
   "scheduleNote": "Der Server scannt alle sechs Stunden. Ein Administrator kann zusätzlich einen Scan starten.",
@@ -73,5 +73,25 @@
     "scan": "Der Scan konnte nicht gestartet werden",
     "alreadyRunning": "Es läuft bereits ein Scan.",
     "inventory": "Die Bestandsliste konnte nicht geladen werden"
+  },
+  "domainTable": {
+    "domain": "Domain",
+    "app": "Anwendung",
+    "findings": "Funde",
+    "lastScanned": "Letzter Scan",
+    "status": "Status",
+    "actions": "Aktionen",
+    "scan": "Scannen",
+    "scanning": "Wird gescannt…",
+    "none": "—",
+    "empty": "Keine Domains anzuzeigen.",
+    "note": "Jede Domain auf dem Server mit dem Status ihres letzten Scans. Klicken Sie auf eine Domain, um ihre Funde zu sehen."
+  },
+  "badge": {
+    "scanning": "Wird gescannt",
+    "open": "{{n}} offen",
+    "clean": "Sauber",
+    "no_app": "Keine App",
+    "pending": "Nicht gescannt"
   }
 }

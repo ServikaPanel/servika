@@ -1162,8 +1162,10 @@ func main() {
 				// against every site on the server whatever scope the caller has.
 				r.With(middleware.ResellerOrAbove).Get("/admin/site-security", siteSecurityH.List)
 				r.With(middleware.ResellerOrAbove).Get("/admin/site-security/apps", siteSecurityH.Apps)
+				r.With(middleware.ResellerOrAbove).Get("/admin/site-security/domains", siteSecurityH.Domains)
 				r.With(middleware.ResellerOrAbove).Get("/admin/site-security/status", siteSecurityH.Status)
 				r.With(middleware.AdminOnly).Post("/admin/site-security/scan", siteSecurityH.Scan)
+				r.With(middleware.CustomerScopeParam("id")).Post("/admin/site-security/domain/{id}/scan", siteSecurityH.ScanDomain)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/site-security", siteSecurityH.DomainList)
 				// One-click application installation. The catalog a customer sees is
 				// filtered to entries the panel can actually verify; editing it is

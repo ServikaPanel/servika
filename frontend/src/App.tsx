@@ -60,6 +60,7 @@ const MalwareScanPage = lazy(() => import('@/pages/MalwareScanPage'))
 const AttackChainsPage = lazy(() => import('@/pages/AttackChainsPage'))
 const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const DomainSiteSecurityPage = lazy(() => import('@/pages/DomainSiteSecurityPage'))
+const AdminDomainSecurityPage = lazy(() => import('@/pages/AdminDomainSecurityPage'))
 const DomainAppInstallerPage = lazy(() => import('@/pages/DomainAppInstallerPage'))
 const AppCatalogPage = lazy(() => import('@/pages/AppCatalogPage'))
 const WordPressPage = lazy(() => import('@/pages/WordPressPage'))
@@ -176,6 +177,7 @@ export default function App() {
         <Route path="tools/dns-template"           element={<DNSTemplatePage />} />
         <Route path="tools/banned-domains"           element={<BannedDomainsPage />} />
         <Route path="site-security"                  element={<WebsiteSecurityPage />} />
+        <Route path="site-security/domain/:id"        element={<AdminDomainSecurityPage />} />
         <Route path="malware-scan"                   element={<MalwareScanPage />} />
         <Route path="attack-chains"                  element={<AttackChainsPage />} />
         <Route path="notifications"                  element={<NotificationsPage />} />

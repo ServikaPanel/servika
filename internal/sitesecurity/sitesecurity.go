@@ -66,6 +66,10 @@ const (
 // ErrScanRunning is what a second request gets while a sweep is in progress.
 var ErrScanRunning = errors.New("a scan is already running")
 
+// ErrDomainNotFound is what a single-domain scan gets for an id that is not a
+// top-level tenant domain (an addon, a subdomain, a non-tenant, or nothing).
+var ErrDomainNotFound = errors.New("no such top-level tenant domain")
+
 // Collector owns one panel's scanning.
 type Collector struct {
 	DB     *sql.DB
@@ -81,8 +85,13 @@ type Collector struct {
 	// running is the in-process half of the single-scan rule. The database
 	// half survives a restart; this one stops two requests in the same process
 	// from both passing the database check before either wrote it.
-	mu      sync.Mutex
-	running bool
+	//
+	// scanning names the domains the current run covers, so the monitor can draw
+	// a live "scanning" badge per domain. An empty set with running true means
+	// the whole server is being swept; a populated set is a single-domain scan.
+	mu       sync.Mutex
+	running  bool
+	scanning map[int64]bool
 }
 
 // New builds a Collector.
@@ -162,15 +171,44 @@ func (c *Collector) ScanAll(ctx context.Context) error {
 	return scanErr
 }
 
-// begin takes both halves of the single-scan lock.
-func (c *Collector) begin(ctx context.Context) error {
+// acquireSlot takes the in-memory half of the single-scan lock and records
+// which domains the run covers. An empty list is a whole-server sweep; a
+// non-empty one is a single-domain scan. It is shared by both so a sweep and a
+// single-domain scan in the same process can never overlap.
+func (c *Collector) acquireSlot(domainIDs []int64) error {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.running {
-		c.mu.Unlock()
 		return ErrScanRunning
 	}
 	c.running = true
-	c.mu.Unlock()
+	c.scanning = make(map[int64]bool, len(domainIDs))
+	for _, id := range domainIDs {
+		if id > 0 {
+			c.scanning[id] = true
+		}
+	}
+	return nil
+}
+
+// ScanStatus reports whether a scan is running and which domains it covers. An
+// empty set with running true means the whole server is being swept. The map is
+// a copy, so the caller cannot mutate the collector's state.
+func (c *Collector) ScanStatus() (bool, map[int64]bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[int64]bool, len(c.scanning))
+	for id := range c.scanning {
+		out[id] = true
+	}
+	return c.running, out
+}
+
+// begin takes both halves of the single-scan lock for a whole-server sweep.
+func (c *Collector) begin(ctx context.Context) error {
+	if err := c.acquireSlot(nil); err != nil {
+		return err
+	}
 
 	// The database half is a conditional update, so two panels pointed at one
 	// database cannot both start. RowsAffected of 0 means somebody else won.
@@ -198,6 +236,7 @@ func (c *Collector) begin(ctx context.Context) error {
 func (c *Collector) release() {
 	c.mu.Lock()
 	c.running = false
+	c.scanning = nil
 	c.mu.Unlock()
 }
 
@@ -217,12 +256,19 @@ func (c *Collector) finish(counts tally, scanErr error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	// last_success is stamped only on a whole-server sweep that finished
+	// cleanly, and finish runs only for such a sweep (a single-domain scan
+	// releases the slot without touching this row). It is what separates "no
+	// supported app was found" from "this domain has never been scanned", so a
+	// failed sweep must leave it exactly as the last good sweep left it.
 	if _, err := c.DB.ExecContext(ctx,
 		`UPDATE security_scan_status
-		    SET state=?, finished_at=NOW(), last_error=?,
+		    SET state=?, finished_at=NOW(), last_success=IF(?, NOW(), last_success),
+		        last_error=?,
 		        scanned_domains=?, scanned_packages=?, unparsed_packages=?, finding_count=?
 		  WHERE id=1`,
-		state, message, counts.domains, counts.packages, counts.unparsed, counts.findings); err != nil {
+		state, scanErr == nil, message,
+		counts.domains, counts.packages, counts.unparsed, counts.findings); err != nil {
 		log.Printf("site security: could not record the scan outcome: %v", err)
 	}
 }
@@ -232,6 +278,46 @@ type target struct {
 	id         int64
 	name       string
 	systemUser string
+}
+
+// lookupTarget reads one top-level tenant domain by id, using the same WHERE the
+// sweep uses so a single-domain scan can never walk an addon's parent tree or a
+// non-tenant row. A missing row answers ErrDomainNotFound.
+func (c *Collector) lookupTarget(ctx context.Context, domainID int64) (target, error) {
+	var item target
+	err := c.DB.QueryRowContext(ctx,
+		`SELECT id, domain_name, system_user FROM domains
+		  WHERE id=? AND parent_domain_id IS NULL AND system_user LIKE 'c\_%'`,
+		domainID).Scan(&item.id, &item.name, &item.systemUser)
+	if errors.Is(err, sql.ErrNoRows) {
+		return target{}, ErrDomainNotFound
+	}
+	return item, err
+}
+
+// BeginOne resolves one domain and takes the scan slot for it, synchronously, so
+// a refusal is answered as a refusal rather than reported as a start that did
+// nothing. On success the caller MUST run RunOne (in a goroutine) to release the
+// slot. It does NOT touch security_scan_status: a single-domain scan is not a
+// sweep, so it must not overwrite the sweep summary or its last_success stamp.
+func (c *Collector) BeginOne(ctx context.Context, domainID int64) (target, error) {
+	item, err := c.lookupTarget(ctx, domainID)
+	if err != nil {
+		return target{}, err
+	}
+	if err := c.acquireSlot([]int64{domainID}); err != nil {
+		return target{}, err
+	}
+	return item, nil
+}
+
+// RunOne inspects the one domain BeginOne resolved and releases the slot. Call
+// it in a goroutine on its OWN context: a single-domain scan still reaches the
+// feeds and can take longer than the request that asked for it.
+func (c *Collector) RunOne(ctx context.Context, item target) error {
+	defer c.release()
+	_, err := c.scanDomain(ctx, item)
+	return err
 }
 
 // scan does the work. It returns what it counted even when it fails, so a

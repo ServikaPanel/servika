@@ -64,7 +64,7 @@
     "unscanned": "Nunca inspeccionado",
     "unscannedNote": "Estos dominios no tienen ninguna instalación inspeccionada. Es lo esperable en un sitio estático sin WordPress, npm ni Composer, y es una advertencia para todo lo demás."
   },
-  "filterPlaceholder": "Filtrar por dominio, paquete o CVE",
+  "filterPlaceholder": "Filtrar por dominio",
   "shown": "Mostrados",
   "advisoryNote": "Estos hallazgos son informativos. La correspondencia de versiones con una fuente pública no es exacta, así que compruebe el aviso antes de actuar. Nada de esto suspende una cuenta ni modifica un archivo.",
   "scheduleNote": "El servidor analiza cada seis horas. Un administrador también puede iniciar un análisis.",
@@ -73,5 +73,25 @@
     "scan": "No se pudo iniciar el análisis",
     "alreadyRunning": "Ya hay un análisis en curso.",
     "inventory": "No se pudo cargar el inventario"
+  },
+  "domainTable": {
+    "domain": "Dominio",
+    "app": "Aplicación",
+    "findings": "Hallazgos",
+    "lastScanned": "Último análisis",
+    "status": "Estado",
+    "actions": "Acciones",
+    "scan": "Analizar",
+    "scanning": "Analizando…",
+    "none": "—",
+    "empty": "No hay dominios para mostrar.",
+    "note": "Cada dominio del servidor, con el estado de su último análisis. Haz clic en un dominio para ver sus hallazgos."
+  },
+  "badge": {
+    "scanning": "Analizando",
+    "open": "{{n}} abiertos",
+    "clean": "Limpio",
+    "no_app": "Sin aplicación",
+    "pending": "Sin analizar"
   }
 }

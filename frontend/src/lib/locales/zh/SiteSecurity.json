@@ -64,7 +64,7 @@
     "unscanned": "从未检查",
     "unscannedNote": "这些域名没有任何已检查的安装。对于不含 WordPress、npm 或 Composer 的静态站点，这是正常的；其他情况则是一个警告。"
   },
-  "filterPlaceholder": "按域名、软件包或 CVE 筛选",
+  "filterPlaceholder": "按域名筛选",
   "shown": "显示",
   "advisoryNote": "这些结果仅供参考。与公开数据源的版本比对并不精确，处理前请先核对公告。此处的任何内容都不会暂停账户或修改文件。",
   "scheduleNote": "服务器每六小时扫描一次。管理员也可以手动发起扫描。",
@@ -73,5 +73,25 @@
     "scan": "无法启动扫描",
     "alreadyRunning": "已有扫描在进行中。",
     "inventory": "无法加载清单"
+  },
+  "domainTable": {
+    "domain": "域名",
+    "app": "应用",
+    "findings": "发现",
+    "lastScanned": "上次扫描",
+    "status": "状态",
+    "actions": "操作",
+    "scan": "扫描",
+    "scanning": "扫描中…",
+    "none": "—",
+    "empty": "没有可显示的域名。",
+    "note": "服务器上的每个域名及其上次扫描的状态。点击域名可查看其发现的问题。"
+  },
+  "badge": {
+    "scanning": "扫描中",
+    "open": "{{n}} 个漏洞",
+    "clean": "无漏洞",
+    "no_app": "无应用",
+    "pending": "未扫描"
   }
 }

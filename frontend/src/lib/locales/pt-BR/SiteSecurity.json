@@ -64,7 +64,7 @@
     "unscanned": "Nunca inspecionado",
     "unscannedNote": "Estes domínios não têm nenhuma instalação inspecionada. Isso é esperado em um site estático sem WordPress, npm ou Composer, e é um aviso para todo o resto."
   },
-  "filterPlaceholder": "Filtrar por domínio, pacote ou CVE",
+  "filterPlaceholder": "Filtrar por domínio",
   "shown": "Exibidas",
   "advisoryNote": "Estas ocorrências são informativas. A correspondência de versões com uma fonte pública não é exata, então confirme o aviso antes de agir. Nada aqui suspende uma conta nem altera um arquivo.",
   "scheduleNote": "O servidor verifica a cada seis horas. Um administrador também pode iniciar uma varredura.",
@@ -73,5 +73,25 @@
     "scan": "Não foi possível iniciar a varredura",
     "alreadyRunning": "Já existe uma varredura em andamento.",
     "inventory": "Não foi possível carregar o inventário"
+  },
+  "domainTable": {
+    "domain": "Domínio",
+    "app": "Aplicativo",
+    "findings": "Detecções",
+    "lastScanned": "Última varredura",
+    "status": "Status",
+    "actions": "Ações",
+    "scan": "Escanear",
+    "scanning": "Escaneando…",
+    "none": "—",
+    "empty": "Nenhum domínio para mostrar.",
+    "note": "Cada domínio no servidor, com o status da sua última varredura. Clique em um domínio para ver as detecções."
+  },
+  "badge": {
+    "scanning": "Escaneando",
+    "open": "{{n}} em aberto",
+    "clean": "Limpo",
+    "no_app": "Sem aplicativo",
+    "pending": "Não escaneado"
   }
 }

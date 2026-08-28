@@ -64,7 +64,7 @@
     "unscanned": "Nikdy neprohlédnuto",
     "unscannedNote": "Tyto domény nemají žádnou prohlédnutou instalaci. U statického webu bez WordPressu, npm nebo Composeru je to očekávané, u všeho ostatního je to varování."
   },
-  "filterPlaceholder": "Filtrovat podle domény, balíčku nebo CVE",
+  "filterPlaceholder": "Filtrovat podle domény",
   "shown": "Zobrazeno",
   "advisoryNote": "Tyto nálezy jsou informativní. Porovnání verzí s veřejným zdrojem není přesné, proto si upozornění před zásahem ověřte. Nic zde nepozastaví účet ani nezmění soubor.",
   "scheduleNote": "Server kontroluje každých šest hodin. Administrátor může kontrolu spustit i ručně.",
@@ -73,5 +73,25 @@
     "scan": "Kontrolu se nepodařilo spustit",
     "alreadyRunning": "Kontrola už probíhá.",
     "inventory": "Inventář se nepodařilo načíst"
+  },
+  "domainTable": {
+    "domain": "Doména",
+    "app": "Aplikace",
+    "findings": "Nálezy",
+    "lastScanned": "Poslední kontrola",
+    "status": "Stav",
+    "actions": "Akce",
+    "scan": "Zkontrolovat",
+    "scanning": "Probíhá…",
+    "none": "—",
+    "empty": "Žádné domény k zobrazení.",
+    "note": "Každá doména na serveru se stavem její poslední kontroly. Kliknutím na doménu zobrazíte její nálezy."
+  },
+  "badge": {
+    "scanning": "Probíhá",
+    "open": "{{n}} otevřených",
+    "clean": "Čisté",
+    "no_app": "Bez aplikace",
+    "pending": "Nezkontrolováno"
   }
 }

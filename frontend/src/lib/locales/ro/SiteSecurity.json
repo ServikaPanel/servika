@@ -64,7 +64,7 @@
     "unscanned": "Niciodată inspectat",
     "unscannedNote": "Aceste domenii nu au nicio instalare inspectată. Este de așteptat pentru un site static fără WordPress, npm sau Composer și este un avertisment pentru orice altceva."
   },
-  "filterPlaceholder": "Filtrează după domeniu, pachet sau CVE",
+  "filterPlaceholder": "Filtrează după domeniu",
   "shown": "Afișate",
   "advisoryNote": "Aceste rezultate sunt informative. Potrivirea versiunilor cu o sursă publică nu este exactă, așa că verificați avertizarea înainte de a acționa. Nimic de aici nu suspendă un cont și nu modifică un fișier.",
   "scheduleNote": "Serverul scanează la fiecare șase ore. Un administrator poate porni și el o scanare.",
@@ -73,5 +73,25 @@
     "scan": "Scanarea nu a putut fi pornită",
     "alreadyRunning": "O scanare este deja în curs.",
     "inventory": "Inventarul nu a putut fi încărcat"
+  },
+  "domainTable": {
+    "domain": "Domeniu",
+    "app": "Aplicație",
+    "findings": "Constatări",
+    "lastScanned": "Ultima scanare",
+    "status": "Stare",
+    "actions": "Acțiuni",
+    "scan": "Scanează",
+    "scanning": "Se scanează…",
+    "none": "—",
+    "empty": "Niciun domeniu de afișat.",
+    "note": "Fiecare domeniu de pe server, cu starea ultimei scanări. Faceți clic pe un domeniu pentru a-i vedea constatările."
+  },
+  "badge": {
+    "scanning": "Se scanează",
+    "open": "{{n}} deschise",
+    "clean": "Curat",
+    "no_app": "Fără aplicație",
+    "pending": "Nescanat"
   }
 }

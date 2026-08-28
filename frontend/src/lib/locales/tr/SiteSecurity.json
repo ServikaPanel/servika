@@ -64,7 +64,7 @@
     "unscanned": "Hiç incelenmedi",
     "unscannedNote": "Bu alan adlarında incelenmiş hiçbir kurulum yok. WordPress, npm veya Composer kurulumu olmayan statik bir site için bu beklenen durumdur; diğer her şey için bir uyarıdır."
   },
-  "filterPlaceholder": "Alan adı, paket veya CVE ile süz",
+  "filterPlaceholder": "Alan adı ile süz",
   "shown": "Gösterilen",
   "advisoryNote": "Bu bulgular bilgilendirmedir. Açık kaynaklı bir beslemeye göre sürüm eşleştirme kesin değildir; işlem yapmadan önce kaydı doğrulayın. Buradaki hiçbir şey hesabı askıya almaz veya dosya değiştirmez.",
   "scheduleNote": "Sunucu altı saatte bir tarar. Yönetici ayrıca elle tarama başlatabilir.",
@@ -73,5 +73,25 @@
     "scan": "Tarama başlatılamadı",
     "alreadyRunning": "Zaten bir tarama sürüyor.",
     "inventory": "Envanter yüklenemedi"
+  },
+  "domainTable": {
+    "domain": "Alan adı",
+    "app": "Uygulama",
+    "findings": "Bulgular",
+    "lastScanned": "Son tarama",
+    "status": "Durum",
+    "actions": "İşlemler",
+    "scan": "Tara",
+    "scanning": "Taranıyor…",
+    "none": "—",
+    "empty": "Gösterilecek alan adı yok.",
+    "note": "Sunucudaki her alan adı, son taramasının durumuyla. Bulgularını görmek için bir alan adına tıklayın."
+  },
+  "badge": {
+    "scanning": "Taranıyor",
+    "open": "{{n}} açık",
+    "clean": "Temiz",
+    "no_app": "Uygulama yok",
+    "pending": "Taranmadı"
   }
 }

@@ -100,11 +100,26 @@ func scanRows(rows *sql.Rows) ([]Row, error) {
 // the rows a reseller may not see would already have been read and counted.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	condition, args := middleware.ScopeSQL(r, "d")
-	// #nosec G701 G202 -- condition is a constant scope fragment from ScopeSQL with a literal alias; every user value is bound through args.
+	// domain_id narrows the admin list to one domain, which is what the
+	// per-domain detail page fetches. It is ADDED to the scope condition, never
+	// instead of it, so a reseller passing another tenant's id still sees
+	// nothing: ownership is enforced by ScopeSQL, the filter only trims.
+	domainFilter := ""
+	if raw := r.URL.Query().Get("domain_id"); raw != "" {
+		if id, err := strconv.ParseInt(raw, 10, 64); err == nil && id > 0 {
+			if condition == "" {
+				domainFilter = " WHERE f.domain_id = ?"
+			} else {
+				domainFilter = " AND f.domain_id = ?"
+			}
+			args = append(args, id)
+		}
+	}
+	// #nosec G701 G202 -- condition and domainFilter are constant scope/filter fragments with literal aliases; every user value is bound through args.
 	rows, err := h.DB.QueryContext(r.Context(),
 		`SELECT `+rowColumns+`
 		   FROM security_findings f JOIN domains d ON d.id = f.domain_id`+
-			condition+` ORDER BY `+severityRank+`, f.cvss DESC, f.id DESC LIMIT `+
+			condition+domainFilter+` ORDER BY `+severityRank+`, f.cvss DESC, f.id DESC LIMIT `+
 			strconv.Itoa(maxRows), args...)
 	if err != nil {
 		log.Printf("site security list: %v", err)
@@ -255,6 +270,143 @@ func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// DomainRow is one domain as the monitor's single table sees it. A domain with
+// several installations produces one row per installation; a domain with none
+// produces one row with an empty app_type and a status of no_app or pending.
+type DomainRow struct {
+	DomainID     int64  `json:"domain_id"`
+	DomainName   string `json:"domain_name"`
+	AppType      string `json:"app_type"`
+	Install      string `json:"install_path"`
+	AppVersion   string `json:"app_version"`
+	PackageCount int    `json:"package_count"`
+	FindingCount int    `json:"finding_count"`
+	LastScanned  string `json:"last_scanned"`
+	Status       string `json:"status"`
+}
+
+// deriveStatus turns a domain row into the one word the badge draws. The order
+// matters: a domain being scanned right now reads "scanning" whatever its stored
+// counts say, and "no_app" is told apart from "pending" ONLY by everScanned (a
+// whole-server sweep has finished at least once), which is the clean-versus-
+// never-looked-at distinction this screen exists to keep.
+func deriveStatus(running bool, scanning map[int64]bool, domainID int64,
+	hasApp bool, findingCount int, everScanned bool) string {
+	switch {
+	case running && (len(scanning) == 0 || scanning[domainID]):
+		return "scanning"
+	case hasApp && findingCount > 0:
+		return "open"
+	case hasApp:
+		return "clean"
+	case everScanned:
+		return "no_app"
+	default:
+		return "pending"
+	}
+}
+
+// Domains — GET /admin/site-security/domains (ResellerOrAbove).
+//
+// The DRIVER is the domains table, LEFT JOINed onto security_apps, so every
+// top-level tenant domain gets a row even when no app was found on it. The query
+// is narrowed by ScopeSQL exactly like List, or a reseller would read their
+// neighbours' domain names off a screen built to reassure them about their own.
+func (h *Handlers) Domains(w http.ResponseWriter, r *http.Request) {
+	everScanned, err := h.everScanned(r.Context())
+	if err != nil {
+		log.Printf("site security domains status: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
+	running, scanning := h.Collector.ScanStatus()
+
+	condition, args := middleware.ScopeSQL(r, "d")
+	where := " WHERE "
+	if condition != "" {
+		where = condition + " AND "
+	}
+	// #nosec G701 G202 -- where is either a literal or the constant ScopeSQL fragment with a literal alias, and the limit is a strconv of a constant; every user value is bound through args.
+	rows, err := h.DB.QueryContext(r.Context(),
+		`SELECT d.id, d.domain_name, COALESCE(a.app_type,''), COALESCE(a.install_path,''),
+		        COALESCE(a.app_version,''), COALESCE(a.package_count,0), COALESCE(a.finding_count,0),
+		        COALESCE(DATE_FORMAT(a.last_scanned,'%Y-%m-%d %H:%i'),'')
+		   FROM domains d LEFT JOIN security_apps a ON a.domain_id = d.id`+where+
+			`d.parent_domain_id IS NULL AND d.system_user LIKE 'c\\_%'
+		  ORDER BY (a.app_type IS NULL) ASC, a.finding_count DESC, d.domain_name ASC,
+		           a.app_type ASC, a.install_path ASC LIMIT `+strconv.Itoa(maxRows), args...)
+	if err != nil {
+		log.Printf("site security domains: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	out := make([]DomainRow, 0)
+	for rows.Next() {
+		var row DomainRow
+		if err := rows.Scan(&row.DomainID, &row.DomainName, &row.AppType, &row.Install,
+			&row.AppVersion, &row.PackageCount, &row.FindingCount, &row.LastScanned); err != nil {
+			log.Printf("site security domains scan: %v", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+			return
+		}
+		row.Status = deriveStatus(running, scanning, row.DomainID,
+			row.AppType != "", row.FindingCount, everScanned)
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("site security domains rows: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// everScanned reports whether a whole-server sweep has ever finished cleanly,
+// which is what separates a domain with no supported app from one that has never
+// been looked at.
+func (h *Handlers) everScanned(ctx context.Context) (bool, error) {
+	var ever bool
+	err := h.DB.QueryRowContext(ctx,
+		`SELECT last_success IS NOT NULL FROM security_scan_status WHERE id=1`).Scan(&ever)
+	return ever, err
+}
+
+// ScanDomain — POST /admin/site-security/domain/{id}/scan (ResellerOrAbove +
+// ownership). It scans one tenant site, so it is scoped by CustomerScopeParam:
+// an admin passes, a reseller or customer must own the domain. The slot is the
+// same one the whole-server sweep holds, so the two cannot overlap.
+func (h *Handlers) ScanDomain(w http.ResponseWriter, r *http.Request) {
+	domainID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || domainID <= 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid domain")
+		return
+	}
+	item, err := h.Collector.BeginOne(r.Context(), domainID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrScanRunning):
+			httpx.WriteError(w, http.StatusConflict, reasonScanRunning)
+		case errors.Is(err, ErrDomainNotFound):
+			httpx.WriteError(w, http.StatusNotFound, "invalid domain")
+		default:
+			log.Printf("site security domain scan start: %v", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "the scan could not be started")
+		}
+		return
+	}
+	// #nosec G118 -- detaching from the request context is the point: a single-domain scan still reaches the feeds and outlives the request that asked for it; the slot is released by RunOne.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
+		defer cancel()
+		if e := h.Collector.RunOne(ctx, item); e != nil {
+			log.Printf("site security domain scan: %v", e)
+		}
+	}()
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"started": true})
 }
 
 // Status — GET /admin/site-security/status (ResellerOrAbove).

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Breadcrumb from '@/components/Breadcrumb'
-import SecurityFindingsTable, { type SecurityFinding } from '@/components/SecurityFindingsTable'
-import SecurityInventoryTable, { type SecurityApp } from '@/components/SecurityInventoryTable'
 import { api, apiError } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 
@@ -17,21 +16,36 @@ type ScanStatus = {
   last_error: string
 }
 
-type Inventory = {
-  total: number
-  items: SecurityApp[]
-  unscanned_domains: string[]
+type DomainRow = {
+  domain_id: number
+  domain_name: string
+  app_type: string
+  install_path: string
+  app_version: string
+  package_count: number
+  finding_count: number
+  last_scanned: string
+  status: 'scanning' | 'open' | 'clean' | 'no_app' | 'pending'
 }
 
-/** Renders known vulnerabilities across every site this account can see. */
+const badgeClass: Record<DomainRow['status'], string> = {
+  scanning: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse',
+  open: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  clean: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  no_app: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+}
+
+/** Renders every domain on the server with the status of its last security scan. */
 export default function WebsiteSecurityPage() {
   const { t } = useTranslation('SiteSecurity')
+  const navigate = useNavigate()
   const role = useAuth(state => state.username?.role)
-  const [findings, setFindings] = useState<SecurityFinding[]>([])
+  const [domains, setDomains] = useState<DomainRow[]>([])
   const [status, setStatus] = useState<ScanStatus | null>(null)
-  const [inventory, setInventory] = useState<Inventory | null>(null)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [scanningRow, setScanningRow] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const poll = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -41,22 +55,20 @@ export default function WebsiteSecurityPage() {
   // Writes only from the promise callbacks, so the mount effect never sets
   // state synchronously.
   const load = useCallback(() => {
-    api.get<SecurityFinding[]>('/admin/site-security')
-      .then(response => setFindings(response.data || []))
+    api.get<DomainRow[]>('/admin/site-security/domains')
+      .then(response => setDomains(response.data || []))
       .catch(cause => setError(apiError(cause, t('errors.load'))))
       .finally(() => setLoading(false))
     api.get<ScanStatus>('/admin/site-security/status')
       .then(response => setStatus(response.data))
       .catch(() => setStatus(null))
-    api.get<Inventory>('/admin/site-security/apps')
-      .then(response => setInventory(response.data))
-      .catch(cause => setError(apiError(cause, t('errors.inventory'))))
   }, [t])
 
   useEffect(() => { load() }, [load])
 
   // One effect owns the polling, so it starts and stops with the running state
-  // rather than being restarted by every loader call.
+  // rather than being restarted by every loader call. It refreshes the domain
+  // rows too, so a "scanning" badge clears when the scan finishes.
   useEffect(() => {
     if (status?.state !== 'running') {
       if (poll.current) {
@@ -75,6 +87,8 @@ export default function WebsiteSecurityPage() {
     }
   }, [status?.state, load])
 
+  const running = status?.state === 'running'
+
   async function startScan() {
     setError(null)
     setStarting(true)
@@ -90,15 +104,36 @@ export default function WebsiteSecurityPage() {
     }
   }
 
+  async function scanRow(domainID: number) {
+    setError(null)
+    setScanningRow(domainID)
+    try {
+      await api.post(`/admin/site-security/domain/${domainID}/scan`)
+      load()
+    } catch (cause) {
+      setError(apiError(cause, '') === 'security_scan_already_running'
+        ? t('errors.alreadyRunning')
+        : apiError(cause, t('errors.scan')))
+    } finally {
+      setScanningRow(null)
+    }
+  }
+
   const needle = filter.trim().toLowerCase()
   const visible = needle
-    ? findings.filter(finding =>
-      finding.domain_name.toLowerCase().includes(needle) ||
-      finding.package_name.toLowerCase().includes(needle) ||
-      finding.cve_id.toLowerCase().includes(needle))
-    : findings
+    ? domains.filter(row => row.domain_name.toLowerCase().includes(needle))
+    : domains
 
-  const running = status?.state === 'running'
+  const appLabel = (row: DomainRow) => {
+    if (!row.app_type) return t('domainTable.none')
+    const type = t(`appType.${row.app_type}`, { defaultValue: row.app_type })
+    return row.app_version ? `${type} ${row.app_version}` : type
+  }
+
+  const badgeLabel = (row: DomainRow) =>
+    row.status === 'open'
+      ? t('badge.open', { n: row.finding_count })
+      : t(`badge.${row.status}`)
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
@@ -141,8 +176,6 @@ export default function WebsiteSecurityPage() {
           </div>
         )}
 
-        {/* A sweep that could not judge some versions is not a clean one, so the
-            screen says so instead of leaving the number in a corner. */}
         {status && status.unparsed_packages > 0 && (
           <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">{t('status.unparsedNote')}</p>
         )}
@@ -164,34 +197,60 @@ export default function WebsiteSecurityPage() {
         <span className="text-xs text-slate-500 dark:text-slate-500">{t('shown')}: {visible.length}</span>
       </div>
 
-      <SecurityFindingsTable findings={visible} loading={loading} showDomain />
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-500">{t('domainTable.note')}</p>
+
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-slate-600 dark:bg-slate-900/60 dark:text-slate-400">
+            <tr>
+              <th className="px-3 py-2 text-left">{t('domainTable.domain')}</th>
+              <th className="px-3 py-2 text-left">{t('domainTable.app')}</th>
+              <th className="px-3 py-2 text-left">{t('domainTable.findings')}</th>
+              <th className="px-3 py-2 text-left">{t('domainTable.lastScanned')}</th>
+              <th className="px-3 py-2 text-left">{t('domainTable.status')}</th>
+              <th className="px-3 py-2 text-right">{t('domainTable.actions')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {loading && (
+              <tr><td className="px-3 py-6 text-center text-slate-500 dark:text-slate-500" colSpan={6}>{t('table.loading')}</td></tr>
+            )}
+            {!loading && visible.length === 0 && (
+              <tr><td className="px-3 py-6 text-center text-slate-500 dark:text-slate-500" colSpan={6}>{t('domainTable.empty')}</td></tr>
+            )}
+            {!loading && visible.map(row => (
+              <tr
+                key={`${row.domain_id}-${row.install_path}`}
+                onClick={() => navigate(`/site-security/domain/${row.domain_id}`)}
+                className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/40"
+              >
+                <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{row.domain_name}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{appLabel(row)}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{row.app_type ? row.finding_count : t('domainTable.none')}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{row.last_scanned || t('domainTable.none')}</td>
+                <td className="px-3 py-2">
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass[row.status]}`}>
+                    {badgeLabel(row)}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={event => { event.stopPropagation(); scanRow(row.domain_id) }}
+                    disabled={running || scanningRow !== null || row.status === 'scanning'}
+                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    {scanningRow === row.domain_id || row.status === 'scanning' ? t('domainTable.scanning') : t('domainTable.scan')}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <p className="mt-4 text-xs text-slate-500 dark:text-slate-500">{t('advisoryNote')}</p>
-
-      {/* An empty findings list above says nothing on its own: it reads the same
-          whether every site is clean or nothing was ever looked at. This section
-          is what tells the two apart, so it is drawn even when the list is
-          empty, never only when something was found. */}
-      <div className="mt-8">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{t('inventory.title')}</h2>
-          <span className="text-xs text-slate-500 dark:text-slate-500">{t('shown')}: {inventory?.total ?? 0}</span>
-        </div>
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-500">{t('inventory.note')}</p>
-        <SecurityInventoryTable apps={inventory?.items || []} loading={loading} />
-
-        {inventory && inventory.unscanned_domains.length > 0 && (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-            <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-              {t('inventory.unscanned')} ({inventory.unscanned_domains.length})
-            </h3>
-            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t('inventory.unscannedNote')}</p>
-            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-amber-900 dark:text-amber-100">
-              {inventory.unscanned_domains.map(name => <li key={name} className="font-mono">{name}</li>)}
-            </ul>
-          </div>
-        )}
-      </div>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">{t('scheduleNote')}</p>
     </div>
   )
 }
