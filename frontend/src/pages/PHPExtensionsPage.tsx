@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import { getCookie, setCookie } from '@/lib/cookies'
 import Breadcrumb from '@/components/Breadcrumb'
 
 type Version = { version: string; ini_dir: string; service: string }
@@ -12,11 +13,29 @@ const REQUIRED_EXTENSIONS = new Set([
   'session', 'pcre', 'tokenizer', 'json', 'hash', 'random', 'libxml',
 ])
 
+// The selected PHP version is remembered in a cookie (never localStorage), so a
+// return to this page reopens the version last worked on. It is a page-scoped
+// preference, so the Max-Age matches servika.migration.source's 30 days rather
+// than the year the theme and language get.
+const PHP_VERSION_COOKIE = 'servika.php.version'
+const PHP_VERSION_MAX_AGE = 60 * 60 * 24 * 30
+const DEFAULT_PHP_VERSION = '8.3'
+
 export default function PHPExtensionsPage() {
   const { t } = useTranslation('PHPExtensionsPage')
   const { confirm, notify } = useDialog()
   const [versions, setVersions] = useState<Version[]>([])
-  const [activeVersion, setActiveVersion] = useState('8.3')
+  // Read the remembered version in a lazy initializer, not a mount effect
+  // (react-hooks/set-state-in-effect), and accept it only when it is well
+  // formed; the fetch below drops it to the default when it is not installed.
+  const [activeVersion, setActiveVersionState] = useState(() => {
+    const saved = getCookie(PHP_VERSION_COOKIE)
+    return saved && /^\d+\.\d+$/.test(saved) ? saved : DEFAULT_PHP_VERSION
+  })
+  const setActiveVersion = useCallback((version: string) => {
+    setActiveVersionState(version)
+    setCookie(PHP_VERSION_COOKIE, version, PHP_VERSION_MAX_AGE)
+  }, [])
   const [extensions, setExtensions] = useState<Extension[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -31,11 +50,27 @@ export default function PHPExtensionsPage() {
     api.get(`/php-extensions?version=${activeVersion}`)
       .then(response => {
         setExtensions(response.data.content || [])
-        setVersions(response.data.versions || [])
+        const list: Version[] = response.data.versions || []
+        setVersions(list)
+        // A remembered version that is no longer installed drops to the first
+        // one, so an uninstall does not leave the page on a version that is gone.
+        if (list.length > 0 && !list.some(v => v.version === activeVersion)) {
+          setActiveVersion(list[0].version)
+        }
       })
-      .catch(error => setError(apiError(error)))
+      .catch(error => {
+        // The backend refuses a version it does not have, so a stale cookie
+        // would otherwise strand the page on an error; drop to the default and
+        // let the effect refetch. Only a 400 triggers this, so a network blip
+        // does not silently change the selected version.
+        if (activeVersion !== DEFAULT_PHP_VERSION && error?.response?.status === 400) {
+          setActiveVersion(DEFAULT_PHP_VERSION)
+          return
+        }
+        setError(apiError(error))
+      })
       .finally(() => setLoading(false))
-  }, [activeVersion])
+  }, [activeVersion, setActiveVersion])
 
   const load = useCallback(() => {
     setLoading(true)
