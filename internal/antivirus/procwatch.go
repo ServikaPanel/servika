@@ -108,15 +108,17 @@ var (
 		"chmod +x", "chmod 777", "wget -o", "curl -o",
 		"setsid", "0<&", ">&/dev/tcp", "eval(", "$(curl", "$(wget", "`curl", "`wget",
 	}
-	// procPersistenceTokens are the surfaces a persistence attempt writes to: a
-	// cron entry, a shell startup file, an SSH authorized_keys, a service enable.
-	// A php-fpm child never sets these up legitimately (that is done over SSH or
-	// from the panel as root), so a web-ancestored process touching one is a
-	// strong compromise signal.
-	procPersistenceTokens = []string{
-		"crontab", "/etc/cron", "/var/spool/cron", "/etc/cron.d", "/etc/rc.local",
-		".bashrc", ".bash_profile", ".profile", "authorized_keys", "systemctl enable",
-		"chkconfig", "update-rc.d", "/etc/systemd/system",
+	// procPersistencePaths are the FILES a persistence attempt writes to: a cron
+	// spool, a shell startup file, an SSH authorized_keys, a systemd unit, a PHP
+	// auto-prepend surface. crontab is NOT here, because it is a verb handled
+	// separately. A php-fpm child never sets these up legitimately (that is done
+	// over SSH or from the panel as root), so a web-ancestored process WRITING
+	// one is a strong compromise signal. Reading one (cat, grep, tar) is not, so
+	// a write operator before the path is required, see cmdlinePersistence.
+	procPersistencePaths = []string{
+		"/etc/cron", "/var/spool/cron", "/etc/rc.local", ".bashrc",
+		".bash_profile", ".profile", "authorized_keys", "/etc/systemd/system",
+		"/etc/ld.so.preload", ".user.ini", ".htaccess", "auto_prepend",
 	}
 )
 
@@ -215,14 +217,32 @@ func cmdlineRemoteURL(cmdline string) bool {
 		strings.Contains(l, "ftp://")
 }
 
-// cmdlinePersistence reports whether the command line touches a persistence
-// surface (cron, a shell startup file, authorized_keys, a service enable). A
-// web-ancestored process is the caller's guard: a tenant editing their own cron
-// over SSH is their own business, but a php-fpm child doing it is not.
+// cmdlinePersistence reports whether the command line ESTABLISHES persistence,
+// not merely reads a persistence surface. A pure read (crontab -l, cat .bashrc,
+// grep /etc/cron, tar of /var/spool/cron) is a false positive, so a WRITE is
+// required: a direct persistence verb, or a write operator standing BEFORE the
+// target path. A web ancestor is the caller's guard, so a tenant editing their
+// own cron over SSH is their own business, but a php-fpm child is not.
 func cmdlinePersistence(cmdline string) bool {
 	l := strings.ToLower(cmdline)
-	for _, t := range procPersistenceTokens {
-		if strings.Contains(l, t) {
+	// Direct persistence verbs. crontab -l (list) and crontab -e (editor) are
+	// reads or interactive, so they are excluded; crontab <file> and crontab -
+	// install a table and are not.
+	if strings.Contains(l, "systemctl enable") || strings.Contains(l, "chkconfig ") ||
+		strings.Contains(l, "update-rc.d") ||
+		(strings.Contains(l, "crontab") && !strings.Contains(l, "crontab -l") && !strings.Contains(l, "crontab -e")) {
+		return true
+	}
+	// Writing a persistence file: a write operator must stand BEFORE the path, so
+	// an unrelated redirect after it (`>/dev/null 2>&1`) is not counted, and a
+	// read that merely names the path (cat, grep, tar) is not either.
+	for _, path := range procPersistencePaths {
+		before, _, found := strings.Cut(l, path)
+		if !found {
+			continue
+		}
+		if strings.Contains(before, ">>") || strings.Contains(before, ">") ||
+			strings.Contains(before, "tee ") || strings.Contains(before, "install -") {
 			return true
 		}
 	}

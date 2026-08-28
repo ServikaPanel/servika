@@ -88,7 +88,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			c.StageNames = append(c.StageNames, StageName(s))
 		}
 		if dom.Valid {
-			c.Events = h.chainEvents(ctx, dom.Int64, c.Time)
+			c.Events = h.chainEvents(ctx, dom.Int64, c.Time, cond, args)
 		}
 		out = append(out, c)
 	}
@@ -102,16 +102,23 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // chainEvents reads the timeline for one chain's domain: the events in the
-// correlation window ending at the chain's time. The domain_id was already
-// authorized by the scoped outer query, so this is transitively safe. It is
-// best-effort: a read error leaves the chain without a timeline rather than
-// failing the whole list.
-func (h *Handlers) chainEvents(ctx context.Context, domID int64, at string) []EventDTO {
+// correlation window ending at the chain's time. The events query is scoped by
+// the CALLER's own condition, not only by the chain's stored domain_id, so it
+// cannot be trusted to leak: the outer query already hides a chain whose domain
+// the caller no longer owns (scope is resolved live from the ownership chain),
+// but scoping the events query too keeps it self-securing if the outer query is
+// ever changed. It is best-effort: a read error leaves the chain without a
+// timeline rather than failing the whole list.
+func (h *Handlers) chainEvents(ctx context.Context, domID int64, at, cond string, condArgs []any) []EventDTO {
+	args := []any{domID}
+	args = append(args, condArgs...)
+	args = append(args, at, at, windowMin, eventLimit)
+	// #nosec G202 G701 -- cond is a constant scope fragment from ScopeCondition with a literal alias; every user value is bound through args.
 	rows, err := h.DB.QueryContext(ctx,
-		`SELECT source, stage, level, summary, DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s')
-		 FROM av_events
-		 WHERE domain_id = ? AND created_at <= ? AND created_at >= (? - INTERVAL ? MINUTE)
-		 ORDER BY created_at LIMIT ?`, domID, at, at, windowMin, eventLimit)
+		`SELECT e.source, e.stage, e.level, e.summary, DATE_FORMAT(e.created_at,'%Y-%m-%d %H:%i:%s')
+		 FROM av_events e LEFT JOIN domains d ON d.id = e.domain_id
+		 WHERE e.domain_id = ? AND `+cond+` AND e.created_at <= ? AND e.created_at >= (? - INTERVAL ? MINUTE)
+		 ORDER BY e.created_at LIMIT ?`, args...)
 	if err != nil {
 		return nil
 	}
