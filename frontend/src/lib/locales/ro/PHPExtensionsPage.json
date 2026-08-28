@@ -58,5 +58,27 @@
     "inputPlaceholder": "de ex. mongodb",
     "cancel": "Anulare",
     "install": "Instalare"
+  },
+  "pecl": {
+    "step": {
+      "starting": "Se pornește…",
+      "probing": "Se caută un package precompilat…",
+      "installing_dnf": "Se instalează packageul precompilat…",
+      "installing_pear": "Se instalează PEAR…",
+      "toolchain": "Se instalează toolchainul de compilare…",
+      "compiling": "Se compilează extension…",
+      "writing_ini": "Se scrie fișierul INI…",
+      "restarting": "Se repornește PHP-FPM…",
+      "done": "Finalizat"
+    },
+    "error": {
+      "dnf_install_failed": "Packageul precompilat nu a putut fi instalat",
+      "pear_failed": "PEAR nu a putut fi instalat",
+      "pear_missing": "PEAR a fost instalat, dar pecl lipsește în continuare",
+      "toolchain_failed": "Toolchainul de compilare nu a putut fi instalat",
+      "build_failed": "Compilarea extension a eșuat",
+      "ini_failed": "Fișierul INI nu a putut fi scris",
+      "internal": "A apărut o eroare internă"
+    }
   }
 }

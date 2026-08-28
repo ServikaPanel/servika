@@ -1251,6 +1251,7 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Get("/php-extensions", phpExtH.List)
 				r.With(middleware.AdminOnly).Put("/php-extensions/toggle", phpExtH.Toggle)
 				r.With(middleware.AdminOnly).Post("/php-extensions/pecl-install", phpExtH.PECLInstall)
+				r.With(middleware.AdminOnly).Get("/php-extensions/pecl-status", phpExtH.PECLStatus)
 				r.With(middleware.AdminOnly).Post("/php-extensions/pecl-uninstall", phpExtH.PECLRemove)
 				r.With(middleware.AdminOnly).Post("/php-extensions/ioncube-install", phpExtH.IonCubeInstall)
 				r.With(middleware.AdminOnly).Post("/php-extensions/ioncube-remove", phpExtH.IonCubeRemove)

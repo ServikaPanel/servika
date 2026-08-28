@@ -2,10 +2,8 @@
 package phpext
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -233,6 +231,9 @@ type peclReq struct {
 	Package string `json:"package"`
 }
 
+// PECLInstall starts an asynchronous install and returns a job id at once, because
+// a PECL build first installs PEAR and the toolchain and then compiles, which runs
+// past the request timeout. The page polls PECLStatus for the live step and output.
 func (h *Handlers) PECLInstall(w http.ResponseWriter, r *http.Request) {
 	var req peclReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -249,105 +250,41 @@ func (h *Handlers) PECLInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Try prebuilt DNF packages. Remi uses variants with im7, 6, or 5 suffixes.
-	prefix := "php"
-	if strings.HasPrefix(s.Service, "php") && strings.Contains(s.Service, "-php-fpm") && s.Service != "php-fpm" {
-		prefix = strings.Split(s.Service, "-")[0] // "php82"
-	}
-
-	// Candidate package name variants.
-	candidates := []string{
-		prefix + "-php-pecl-" + req.Package,          // Base name.
-		prefix + "-php-pecl-" + req.Package + "-im7", // im7 suffix for imagick.
-		prefix + "-php-pecl-" + req.Package + "6",    // Version suffix for packages such as redis6 or mongodb1.
-		prefix + "-php-pecl-" + req.Package + "5",    // redis5 legacy version.
-		prefix + "-php-pecl-" + req.Package + "3",    // xdebug3.
-	}
-	if prefix == "php" {
-		// Try additional AppStream variants.
-		candidates = []string{
-			"php-pecl-" + req.Package,
-			"php-pecl-" + req.Package + "6",
-			"php-pecl-" + req.Package + "5",
-			"php-pecl-" + req.Package + "3",
-		}
-	}
-
-	dnfPkg := ""
-	for _, name := range candidates {
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		if exec.Command("dnf", "info", "--quiet", name).Run() == nil {
-			dnfPkg = name
-			break
-		}
-	}
-
-	if dnfPkg != "" {
-		// Install the available prebuilt package with DNF.
-		ctx, cancel := context.WithTimeout(context.Background(), extensionInstallTimeout)
-		defer cancel()
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		cmd := exec.CommandContext(ctx, "dnf", "install", "-y", dnfPkg)
-		_, err := cmd.CombinedOutput()
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError,
-				"failed to install extension package with DNF")
-			return
-		}
-		// FPM reload
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_, _ = exec.Command("systemctl", "reload-or-restart", s.Service).CombinedOutput()
-		httpx.WriteJSON(w, http.StatusCreated, map[string]any{
-			"ok":      true,
-			"package": req.Package,
-			"version": req.Version,
-			"method":  "dnf",
-			"dnf_pkg": dnfPkg})
-		return
-	}
-
-	// 2. Fall back to a PECL build, which may require development packages.
-	if _, err := os.Stat(s.PECLBin); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError,
-			"no prebuilt DNF package is available and PECL is not installed")
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), extensionInstallTimeout)
-	defer cancel()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	cmd := exec.CommandContext(ctx, s.PECLBin, "install", "-f", req.Package)
-	cmd.Env = peclEnvironment(s.PHPBin)
-	_, err := cmd.CombinedOutput()
+	prunePECLJobs()
+	jobID, err := newPECLJobID()
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError,
-			"failed to install extension with PECL")
+		httpx.WriteError(w, http.StatusInternalServerError, "could not start the install job")
 		return
 	}
+	job := &peclJob{state: peclRunning, step: "starting", percent: 2}
+	peclJobs.Store(jobID, job)
+	go runPECLInstall(job, s, req.Package)
 
-	// Create the ini file. A swallowed write error would report a successful
-	// install while the extension never loads, so surface it.
-	iniPath := filepath.Join(s.IniDir, "50-"+req.Package+".ini")
-	if _, err := os.Stat(iniPath); err != nil {
-		// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-		if werr := os.WriteFile(iniPath, []byte("extension="+req.Package+".so\n"), 0644); werr != nil {
-			httpx.WriteError(w, http.StatusInternalServerError,
-				"extension built but its configuration could not be written")
-			return
-		}
-	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if out, err := exec.Command("systemctl", "reload-or-restart", s.Service).CombinedOutput(); err != nil {
-		log.Printf("php-fpm reload after PECL install %s: %v: %s", req.Package, err, strings.TrimSpace(string(out)))
-		httpx.WriteError(w, http.StatusInternalServerError,
-			"extension installed but PHP-FPM reload failed; it will load after the next restart")
-		return
-	}
-
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 		"ok":      true,
+		"job_id":  jobID,
 		"package": req.Package,
 		"version": req.Version,
-		"method":  "pecl",
+	})
+}
+
+// PECLStatus reports the state of an asynchronous PECL install started by PECLInstall.
+func (h *Handlers) PECLStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	value, ok := peclJobs.Load(id)
+	if !ok {
+		httpx.WriteError(w, http.StatusNotFound, "job not found (it may have finished)")
+		return
+	}
+	job := value.(*peclJob)
+	state, step, percent, method, errMsg, logs := job.snapshot()
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"state":   string(state),
+		"step":    step,
+		"percent": percent,
+		"method":  method,
+		"error":   errMsg,
+		"log":     logs,
 	})
 }
 

@@ -58,5 +58,27 @@
     "inputPlaceholder": "例如 mongodb",
     "cancel": "取消",
     "install": "安装"
+  },
+  "pecl": {
+    "step": {
+      "starting": "正在启动…",
+      "probing": "正在查找预编译 package…",
+      "installing_dnf": "正在安装预编译 package…",
+      "installing_pear": "正在安装 PEAR…",
+      "toolchain": "正在安装构建 toolchain…",
+      "compiling": "正在编译 extension…",
+      "writing_ini": "正在写入 INI 文件…",
+      "restarting": "正在重启 PHP-FPM…",
+      "done": "完成"
+    },
+    "error": {
+      "dnf_install_failed": "无法安装预编译 package",
+      "pear_failed": "无法安装 PEAR",
+      "pear_missing": "PEAR 已安装但仍缺少 pecl",
+      "toolchain_failed": "无法安装构建 toolchain",
+      "build_failed": "extension 编译失败",
+      "ini_failed": "无法写入 INI 文件",
+      "internal": "发生内部错误"
+    }
   }
 }

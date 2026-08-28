@@ -58,5 +58,27 @@
     "inputPlaceholder": "např. mongodb",
     "cancel": "Zrušit",
     "install": "Nainstalovat"
+  },
+  "pecl": {
+    "step": {
+      "starting": "Spouští se…",
+      "probing": "Hledá se předpřipravený package…",
+      "installing_dnf": "Instaluje se předpřipravený package…",
+      "installing_pear": "Instaluje se PEAR…",
+      "toolchain": "Instaluje se build toolchain…",
+      "compiling": "Extension se kompiluje…",
+      "writing_ini": "Zapisuje se soubor INI…",
+      "restarting": "Restartuje se PHP-FPM…",
+      "done": "Hotovo"
+    },
+    "error": {
+      "dnf_install_failed": "Předpřipravený package nelze nainstalovat",
+      "pear_failed": "PEAR nelze nainstalovat",
+      "pear_missing": "PEAR byl nainstalován, ale pecl stále chybí",
+      "toolchain_failed": "Build toolchain nelze nainstalovat",
+      "build_failed": "Kompilace extension selhala",
+      "ini_failed": "Soubor INI nelze zapsat",
+      "internal": "Došlo k interní chybě"
+    }
   }
 }

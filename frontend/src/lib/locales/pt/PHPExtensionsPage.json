@@ -58,5 +58,27 @@
     "inputPlaceholder": "ex.: mongodb",
     "cancel": "Cancelar",
     "install": "Instalar"
+  },
+  "pecl": {
+    "step": {
+      "starting": "A iniciar…",
+      "probing": "A procurar um package pré-compilado…",
+      "installing_dnf": "A instalar o package pré-compilado…",
+      "installing_pear": "A instalar o PEAR…",
+      "toolchain": "A instalar a toolchain de compilação…",
+      "compiling": "A compilar a extension…",
+      "writing_ini": "A escrever o ficheiro INI…",
+      "restarting": "A reiniciar o PHP-FPM…",
+      "done": "Concluído"
+    },
+    "error": {
+      "dnf_install_failed": "Não foi possível instalar o package pré-compilado",
+      "pear_failed": "Não foi possível instalar o PEAR",
+      "pear_missing": "O PEAR foi instalado mas o pecl continua em falta",
+      "toolchain_failed": "Não foi possível instalar a toolchain de compilação",
+      "build_failed": "A compilação da extension falhou",
+      "ini_failed": "Não foi possível escrever o ficheiro INI",
+      "internal": "Ocorreu um erro interno"
+    }
   }
 }

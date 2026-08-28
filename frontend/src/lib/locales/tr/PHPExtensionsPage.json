@@ -58,5 +58,27 @@
     "inputPlaceholder": "örn. mongodb",
     "cancel": "İptal",
     "install": "Kur"
+  },
+  "pecl": {
+    "step": {
+      "starting": "Başlatılıyor…",
+      "probing": "Hazır package aranıyor…",
+      "installing_dnf": "Hazır package kuruluyor…",
+      "installing_pear": "PEAR kuruluyor…",
+      "toolchain": "Derleme toolchain kuruluyor…",
+      "compiling": "Extension derleniyor…",
+      "writing_ini": "INI dosyası yazılıyor…",
+      "restarting": "PHP-FPM yeniden başlatılıyor…",
+      "done": "Tamamlandı"
+    },
+    "error": {
+      "dnf_install_failed": "Hazır package kurulamadı",
+      "pear_failed": "PEAR kurulamadı",
+      "pear_missing": "PEAR kuruldu ama pecl hâlâ yok",
+      "toolchain_failed": "Derleme toolchain kurulamadı",
+      "build_failed": "Extension derlenemedi",
+      "ini_failed": "INI dosyası yazılamadı",
+      "internal": "İç hata oluştu"
+    }
   }
 }

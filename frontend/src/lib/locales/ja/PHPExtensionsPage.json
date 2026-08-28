@@ -58,5 +58,27 @@
     "inputPlaceholder": "例: mongodb",
     "cancel": "キャンセル",
     "install": "インストール"
+  },
+  "pecl": {
+    "step": {
+      "starting": "開始しています…",
+      "probing": "ビルド済み package を探しています…",
+      "installing_dnf": "ビルド済み package をインストールしています…",
+      "installing_pear": "PEAR をインストールしています…",
+      "toolchain": "ビルド toolchain をインストールしています…",
+      "compiling": "extension をコンパイルしています…",
+      "writing_ini": "INI ファイルを書き込んでいます…",
+      "restarting": "PHP-FPM を再起動しています…",
+      "done": "完了"
+    },
+    "error": {
+      "dnf_install_failed": "ビルド済み package をインストールできませんでした",
+      "pear_failed": "PEAR をインストールできませんでした",
+      "pear_missing": "PEAR はインストールされましたが pecl がまだありません",
+      "toolchain_failed": "ビルド toolchain をインストールできませんでした",
+      "build_failed": "extension のコンパイルに失敗しました",
+      "ini_failed": "INI ファイルを書き込めませんでした",
+      "internal": "内部エラーが発生しました"
+    }
   }
 }

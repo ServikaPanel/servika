@@ -42,6 +42,7 @@ export default function PHPExtensionsPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [peclModalOpen, setPeclModalOpen] = useState(false)
+  const [peclProgress, setPeclProgress] = useState<{ step: string; percent: number } | null>(null)
 
   // Split so the version effect never writes state synchronously: fetchExtensions
   // settles only through promise callbacks, and load() adds the spinner for the
@@ -136,16 +137,47 @@ export default function PHPExtensionsPage() {
       await notify({ message: t('alerts.invalidPackage'), tone: 'error' }); return
     }
     if (!(await confirm({ message: t('confirm.peclInstall', { package: packageName, version: activeVersion }) }))) return
-    setPeclModalOpen(false); setLoading(true)
+    setPeclModalOpen(false)
+    setError(null)
+    setPeclProgress({ step: 'starting', percent: 2 })
     try {
-      const response = await api.post('/php-extensions/pecl-install', { version: activeVersion, package: packageName })
-      setSuccess(t('success.peclInstalled', { package: packageName }))
-      console.log('PECL install output:', response.data.output)
-      load()
+      const { data } = await api.post('/php-extensions/pecl-install', { version: activeVersion, package: packageName })
+      pollPecl(data.job_id, packageName)
     } catch (error) {
+      setPeclProgress(null)
       setError(apiError(error, t('errors.peclInstallFailed')))
-      setLoading(false)
     }
+  }
+
+  // pollPecl follows the async install job and settles only through promise
+  // callbacks (never a mount effect), so it does not trip set-state-in-effect. The
+  // step and error come back as CODES the frontend localizes; the raw build log is
+  // shown separately.
+  function pollPecl(jobId: string, packageName: string) {
+    const tick = () => {
+      api.get('/php-extensions/pecl-status', { params: { id: jobId } })
+        .then(({ data }) => {
+          if (data.state === 'done') {
+            setPeclProgress(null)
+            setSuccess(t('success.peclInstalled', { package: packageName }))
+            setTimeout(() => setSuccess(null), 5000)
+            load()
+            return
+          }
+          if (data.state === 'failed') {
+            setPeclProgress(null)
+            setError(t(`pecl.error.${data.error}`, { defaultValue: t('errors.peclInstallFailed') }))
+            return
+          }
+          setPeclProgress({ step: data.step, percent: data.percent })
+          setTimeout(tick, 1500)
+        })
+        .catch(() => {
+          setPeclProgress(null)
+          setError(t('errors.peclInstallFailed'))
+        })
+    }
+    tick()
   }
 
   const filtered = filter ? extensions.filter(extension => extension.name.toLowerCase().includes(filter.toLowerCase())) : extensions
@@ -216,6 +248,18 @@ export default function PHPExtensionsPage() {
 
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+
+      {peclProgress && (
+        <div className="mb-3 px-3 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+          <div className="flex items-center justify-between text-sm text-blue-700 dark:text-blue-300 mb-2">
+            <span>{t(`pecl.step.${peclProgress.step}`, { defaultValue: peclProgress.step })}</span>
+            <span className="font-mono">{peclProgress.percent}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${peclProgress.percent}%` }} />
+          </div>
+        </div>
+      )}
 
       {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
