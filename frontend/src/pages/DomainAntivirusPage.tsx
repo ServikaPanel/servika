@@ -12,7 +12,6 @@ import {
   responsiveTableBodyClass,
   responsiveTableCellClass,
   responsiveTableClass,
-  responsiveTableCodeCellClass,
   responsiveTableContainerClass,
   responsiveTableHeadClass,
   responsiveTableRowClass,
@@ -142,6 +141,27 @@ function Shield({ scanning, className }: { scanning: boolean; className?: string
       )}
       <path d="M45 61 l10 10 l21 -24" stroke={tone} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  )
+}
+
+// homeRelativePath drops the tenant home prefix (/home/<user>/) from a displayed
+// path. Every finding on this page sits under the domain's own public_html, so
+// what is left is the public_html/... path the page's own subtitle already names.
+// It is shorter and does not spell out the server layout; a path that is not
+// under a home is left whole rather than mangled.
+const homeRelativePath = (p: string) => p.replace(/^\/home\/[^/]+\//, '')
+
+// PathBox shows a long file path WITHOUT wrapping the table row onto a second
+// line: the path scrolls horizontally inside its own bordered box. The title
+// carries the full absolute path, so the owner can still read where the file is.
+function PathBox({ path }: { path: string }) {
+  return (
+    <span
+      title={path}
+      className="block min-w-0 max-w-full overflow-x-auto whitespace-nowrap rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
+    >
+      {homeRelativePath(path)}
+    </span>
   )
 }
 
@@ -394,7 +414,7 @@ export default function DomainAntivirusPage() {
                 <tbody className={responsiveTableBodyClass}>
                   {d.findings.map((b, i) => (
                     <tr key={i} className={responsiveTableRowClass}>
-                      <td data-label={t('findings.colFile')} className={`${responsiveTableCodeCellClass} break-all`}>{b.file}</td>
+                      <td data-label={t('findings.colFile')} className={`${responsiveTableCellClass} lg:min-w-[20rem]`}><PathBox path={b.file} /></td>
                       <td data-label={t('findings.colLevel')} className={responsiveTableCellClass}>
                         <span className={`text-xs px-1.5 py-0.5 rounded ${levelClass(b.level)}`}>{levelLabel(b.level)}</span>
                       </td>
@@ -453,7 +473,7 @@ export default function DomainAntivirusPage() {
                 <tbody className={responsiveTableBodyClass}>
                   {held.map(entry => (
                     <tr key={entry.id} className={responsiveTableRowClass}>
-                      <td data-label={t('held.colFile')} className={`${responsiveTableCodeCellClass} break-all`}>{entry.orig_path}</td>
+                      <td data-label={t('held.colFile')} className={`${responsiveTableCellClass} lg:min-w-[20rem]`}><PathBox path={entry.orig_path} /></td>
                       <td data-label={t('held.colSignature')} className={responsiveTableCellClass}>{entry.signature || '-'}</td>
                       <td data-label={t('held.colDate')} className={responsiveTableCellClass}>
                         {entry.restored_at ? t('held.restoredOn', { date: entry.restored_at }) : entry.created_at}
