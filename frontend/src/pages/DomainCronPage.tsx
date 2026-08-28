@@ -258,7 +258,7 @@ function CronTaskModal({ open, onClose, onSaved, domainId }: {
                 key={p.labelKey}
                 type="button"
                 onClick={() => applyPreset(p.selection)}
-                className="px-2 py-1 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-brand-100 dark:bg-brand-900/30 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 rounded transition"
+                className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-brand-100 dark:hover:bg-brand-900/40 hover:text-brand-700 dark:hover:text-brand-300 hover:border-brand-300 dark:hover:border-brand-700 rounded-md transition"
               >
                 {t(`presets.${p.labelKey}`)}
               </button>
