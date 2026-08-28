@@ -441,9 +441,9 @@ func seedPlans(lang string) []seedTier {
 	// number of them.
 	return []seedTier{
 		{tx.starterName, tx.starterDesc, 1024, 5120, 1, 1, 5, 2, 1,
-			50, 256, 30, 25000, 100, 15, 4, 1},
+			50, 256, 30, 100000, 100, 15, 4, 1},
 		{tx.standardName, tx.standardDesc, 10240, 51200, 5, 10, 25, 10, 5,
-			100, 512, 60, 100000, 100, 30, 8, 0},
+			100, 512, 60, 250000, 100, 30, 8, 0},
 		{tx.proName, tx.proDesc, 51200, 204800, 25, 50, 100, 50, 25,
 			200, 2048, 150, 500000, 200, 100, 32, 0},
 	}
