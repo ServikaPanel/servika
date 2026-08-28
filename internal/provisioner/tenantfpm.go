@@ -200,6 +200,21 @@ func tenantSanitizeScalar(value, fallback string) string {
 	return value
 }
 
+// tenantDisableFunctions resolves disable_functions for a tenant's own PHP-FPM
+// master. It is SPECIAL: it is reached only when a php_settings row exists (an
+// absent row returns earlier with the hardened default), so an empty value here
+// is the operator's deliberate choice to allow every function, which is the
+// panel's shell-execution toggle turned on. tenantSanitizeScalar would treat
+// empty as "no value" and re-harden it, leaving the toggle on while PHP stays
+// blocked, a UI-versus-runtime divergence. Only a control-character injection
+// falls back to the hardened default.
+func tenantDisableFunctions(stored string) string {
+	if strings.ContainsAny(stored, "\r\n\x00") {
+		return hardenedDisableFunctions
+	}
+	return strings.TrimSpace(stored)
+}
+
 func resolveTenantPMMaxChildren(pmMaxChildren, ramMB int) int {
 	if pmMaxChildren > 0 {
 		return pmMaxChildren
@@ -271,7 +286,7 @@ func tenantReadPoolSettings(db *sql.DB, domainID, subdomainID int64) tenantPoolS
 	settings.MemoryLimit = tenantSanitizeScalar(memoryLimit, settings.MemoryLimit)
 	settings.PostMaxSize = tenantSanitizeScalar(postMaxSize, settings.PostMaxSize)
 	settings.UploadMaxFilesize = tenantSanitizeScalar(uploadMaxFilesize, settings.UploadMaxFilesize)
-	settings.DisableFunctions = tenantSanitizeScalar(disableFunctions, settings.DisableFunctions)
+	settings.DisableFunctions = tenantDisableFunctions(disableFunctions)
 	settings.PMStrategy = tenantSanitizeScalar(strategy, settings.PMStrategy)
 	if maxExecutionTime > 0 {
 		settings.MaxExecutionTime = maxExecutionTime

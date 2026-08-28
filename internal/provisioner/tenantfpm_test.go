@@ -136,3 +136,22 @@ func valueOf(t *testing.T, unit, key string) int {
 	t.Fatalf("the unit carries no %s", key)
 	return 0
 }
+
+// A php_settings row with an EMPTY disable_functions means the operator allowed
+// every function (the panel's shell-execution toggle is on). It must be kept as
+// empty, not re-hardened, or the tenant's own PHP-FPM master blocks PHP while the
+// panel toggle reads as on. Only a control-character injection falls back.
+func TestAnEmptyDisableFunctionsIsKeptAsAllowAll(t *testing.T) {
+	if got := tenantDisableFunctions(""); got != "" {
+		t.Errorf("empty = %q, want it kept empty (operator allowed all)", got)
+	}
+	if got := tenantDisableFunctions("   "); got != "" {
+		t.Errorf("whitespace-only = %q, want empty", got)
+	}
+	if got := tenantDisableFunctions("exec,system"); got != "exec,system" {
+		t.Errorf("a set value = %q, want it preserved", got)
+	}
+	if got := tenantDisableFunctions("exec\nsystem"); got != hardenedDisableFunctions {
+		t.Errorf("a control-character injection = %q, want the hardened default", got)
+	}
+}
