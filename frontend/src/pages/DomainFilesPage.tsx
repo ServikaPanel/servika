@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useState, useRef } from 'react
 import { useTranslation } from 'react-i18next'
 import { useParams, Link } from 'react-router'
 import { api, apiError as apiError } from '@/lib/api'
+import { getCookie, setCookie } from '@/lib/cookies'
 import { useReportError } from '@/lib/errors'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -53,7 +54,22 @@ export default function DomainFilesPage() {
   const { confirm, ask, notify } = useDialog()
   const { id } = useParams()
   const [domain, setDomain] = useState<Domain | null>(null)
-  const [path, setPath] = useState<string>('/public_html')
+  // The last-browsed directory is remembered per domain in a cookie (localStorage
+  // is barred here), so returning to the file manager opens where the operator
+  // left off. The stored value is validated before use: a cookie is text the
+  // reader can edit, and a path not starting with "/" would send a malformed
+  // `path` to the listing. The Max-Age matches the panel's other page-scoped
+  // preferences (30 days). Read in a lazy initializer, not a mount effect, so no
+  // frame draws the default first and set-state-in-effect never fires.
+  const pathCookie = `servika.files.path.${id ?? ''}`
+  const [path, setPathState] = useState<string>(() => {
+    const saved = getCookie(pathCookie)
+    return saved && saved.startsWith('/') ? saved : '/public_html'
+  })
+  const setPath = useCallback((next: string) => {
+    setPathState(next)
+    setCookie(pathCookie, next, 60 * 60 * 24 * 30)
+  }, [pathCookie])
   const [content, setContent] = useState<Entry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

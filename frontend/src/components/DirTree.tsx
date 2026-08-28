@@ -144,7 +144,12 @@ function TreeNode({
               name={k.name}
               selected={selected}
               onSelect={onSelect}
-              initiallyOpen={false}
+              // A child opens at mount when it is on (or is) the selected branch,
+              // so a deep path restored from the saved cookie is expanded all the
+              // way down on first render. The runtime auto-open above handles a
+              // selection that changes later; this handles the initial one, which
+              // that logic (keyed on a change of `selected`) does not.
+              initiallyOpen={selectedNorm === k.path || selectedNorm.startsWith(k.path + '/')}
               depth={depth + 1}
               refreshKey={refreshKey}
             />
