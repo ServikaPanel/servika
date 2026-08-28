@@ -60,14 +60,15 @@ func clean(t *testing.T, db *sql.DB) {
 	}
 }
 
-// A file_write then an execution in the window correlates into one chain of
-// confidence 70 (60 + 5 critical + 5 write/execute pair) plus one notification.
-func TestRunCorrelatesWriteAndExecute(t *testing.T) {
+// A dropped file executed from the SAME path is a causal chain: critical,
+// confidence 85, plus one notification.
+func TestRunCorrelatesCausalChain(t *testing.T) {
 	db := liveDB(t)
 	setup(t, db)
 
-	WriteEvent(db, testDomainID, "file", "file_write", "critical", "shell.php", "av_scan", 1)
-	WriteEvent(db, testDomainID, "process", "execution", "critical", "", "av_proc", 0)
+	dropped := "/home/c_chaintest/public_html/.x"
+	WriteEvent(db, testDomainID, "file", "file_write", "critical", ".x", dropped, 0, "av_scan", 1)
+	WriteEvent(db, testDomainID, "process", "execution", "critical", "", dropped, 4242, "av_proc", 0)
 
 	if err := Run(db); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -75,26 +76,48 @@ func TestRunCorrelatesWriteAndExecute(t *testing.T) {
 
 	var stages string
 	var confidence int
-	err := db.QueryRow(`SELECT stages, confidence FROM av_chains WHERE domain_id=?`, testDomainID).
-		Scan(&stages, &confidence)
-	if err != nil {
+	if err := db.QueryRow(`SELECT stages, confidence FROM av_chains WHERE domain_id=?`, testDomainID).
+		Scan(&stages, &confidence); err != nil {
 		t.Fatalf("no chain written: %v", err)
 	}
 	if stages != "file_write>execution" {
 		t.Fatalf("stages = %q, want file_write>execution", stages)
 	}
-	if confidence != 70 {
-		t.Fatalf("confidence = %d, want 70", confidence)
+	if confidence != 85 {
+		t.Fatalf("confidence = %d, want 85 (55 + 25 causal + 5 ordered)", confidence)
 	}
 
+	var level string
 	var notes int
 	if err := db.QueryRow(
-		`SELECT COUNT(*) FROM notifications WHERE domain_id=? AND ref_type='av_chain'`, testDomainID).
-		Scan(&notes); err != nil {
+		`SELECT level, COUNT(*) FROM notifications WHERE domain_id=? AND ref_type='av_chain'`, testDomainID).
+		Scan(&level, &notes); err != nil {
 		t.Fatalf("count notifications: %v", err)
 	}
-	if notes != 1 {
-		t.Fatalf("notification count = %d, want 1", notes)
+	if notes != 1 || level != "critical" {
+		t.Fatalf("notifications: count=%d level=%q, want 1 critical", notes, level)
+	}
+}
+
+// Two INDEPENDENT signals (different paths, no shared pid) still form a chain but
+// stay a warning: the FP-laundering gate. This is the whole point of causality.
+func TestRunIndependentSignalsStayWarning(t *testing.T) {
+	db := liveDB(t)
+	setup(t, db)
+
+	WriteEvent(db, testDomainID, "file", "file_write", "critical", "a.php", "/home/c_chaintest/public_html/a.php", 0, "av_scan", 1)
+	WriteEvent(db, testDomainID, "process", "execution", "critical", "", "/usr/sbin/php-fpm", 5, "av_proc", 0)
+	if err := Run(db); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	var level string
+	if err := db.QueryRow(
+		`SELECT level FROM notifications WHERE domain_id=? AND ref_type='av_chain'`, testDomainID).
+		Scan(&level); err != nil {
+		t.Fatalf("no notification written: %v", err)
+	}
+	if level != "warning" {
+		t.Fatalf("independent signals should be a warning, got %q", level)
 	}
 }
 
@@ -103,7 +126,7 @@ func TestRunSingleStageIsNotAChain(t *testing.T) {
 	db := liveDB(t)
 	setup(t, db)
 
-	WriteEvent(db, testDomainID, "file", "file_write", "critical", "shell.php", "av_scan", 1)
+	WriteEvent(db, testDomainID, "file", "file_write", "critical", "shell.php", "/home/c_chaintest/public_html/shell.php", 0, "av_scan", 1)
 	if err := Run(db); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -116,13 +139,32 @@ func TestRunSingleStageIsNotAChain(t *testing.T) {
 	}
 }
 
+// The insert-dedup drops a repeat of the same (domain, stage, path) within the
+// window, so two file_write events for one path count as one event.
+func TestWriteEventInsertDedup(t *testing.T) {
+	db := liveDB(t)
+	setup(t, db)
+
+	path := "/home/c_chaintest/public_html/shell.php"
+	WriteEvent(db, testDomainID, "file", "file_write", "critical", "shell.php", path, 0, "av_scan", 1)
+	WriteEvent(db, testDomainID, "file", "file_write", "critical", "shell.php", path, 0, "av_scan", 1)
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM av_events WHERE domain_id=?`, testDomainID).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("insert-dedup: %d events, want 1", n)
+	}
+}
+
 // The same chain is not reported twice inside the re-dedup window.
 func TestRunDedupsWithinWindow(t *testing.T) {
 	db := liveDB(t)
 	setup(t, db)
 
-	WriteEvent(db, testDomainID, "file", "file_write", "critical", "shell.php", "av_scan", 1)
-	WriteEvent(db, testDomainID, "process", "execution", "critical", "", "av_proc", 0)
+	dropped := "/home/c_chaintest/public_html/.x"
+	WriteEvent(db, testDomainID, "file", "file_write", "critical", ".x", dropped, 0, "av_scan", 1)
+	WriteEvent(db, testDomainID, "process", "execution", "critical", "", dropped, 4242, "av_proc", 0)
 	if err := Run(db); err != nil {
 		t.Fatalf("Run 1: %v", err)
 	}

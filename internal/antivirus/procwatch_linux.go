@@ -238,12 +238,14 @@ func (w *procWatcher) evaluate(pid int) {
 	w.notify(domainID, finding)
 
 	// Attack-chain event: a process detection is the Execution stage, or C2 for a
-	// downloader reaching out. The correlator joins it with a File Write.
+	// downloader reaching out. The exe path and the pid are the causal link: an
+	// execution whose path equals a dropped file's, or sharing a pid, is a chain
+	// rather than two independent signals.
 	level := notifications.LevelWarning
 	if finding.score >= procScoreCritical {
 		level = notifications.LevelCritical
 	}
-	chains.WriteEvent(w.db, domainID, "process", stageForCode(finding.code), level, "", "av_proc", 0)
+	chains.WriteEvent(w.db, domainID, "process", stageForCode(finding.code), level, "", exeClean(exe), pid, "av_proc", 0)
 }
 
 // stageForCode maps a process reason code to its kill-chain stage: a downloader

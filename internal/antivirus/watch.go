@@ -296,9 +296,10 @@ func (w *watcher) record(ctx context.Context, settings avsettings.Settings, find
 	notifyRealtime(ctx, w.db, sid, domainID, contained)
 
 	// Attack-chain event: a malicious file written now is the File Write stage.
-	// The correlator joins it with a live process detection into a chain.
+	// The full path is the causal link: if the same path is later executed, the
+	// correlator sees a dropped-then-run chain rather than two independent signals.
 	if domainID.Valid && domainID.Int64 > 0 {
 		chains.WriteEvent(w.db, domainID.Int64, "file", "file_write", "critical",
-			filepath.Base(finding.File), "av_scan", sid)
+			filepath.Base(finding.File), finding.File, 0, "av_scan", sid)
 	}
 }
