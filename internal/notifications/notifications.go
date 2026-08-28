@@ -58,19 +58,25 @@ type Handlers struct{ DB *sql.DB }
 
 // Notification is one row as the screen reads it.
 type Notification struct {
-	ID        int64  `json:"id"`
-	Level     string `json:"level"`
-	Category  string `json:"category"`
-	Title     string `json:"title"`
-	Message   string `json:"message"`
-	Key       string `json:"key"`
-	Params    string `json:"params"`
-	DomainID  *int64 `json:"domain_id"`
-	Domain    string `json:"domain"`
-	RefType   string `json:"ref_type"`
-	RefID     int64  `json:"ref_id"`
-	Read      bool   `json:"read"`
-	CreatedAt string `json:"created_at"`
+	ID       int64  `json:"id"`
+	Level    string `json:"level"`
+	Category string `json:"category"`
+	Title    string `json:"title"`
+	Message  string `json:"message"`
+	Key      string `json:"key"`
+	Params   string `json:"params"`
+	DomainID *int64 `json:"domain_id"`
+	Domain   string `json:"domain"`
+	RefType  string `json:"ref_type"`
+	RefID    int64  `json:"ref_id"`
+	Read     bool   `json:"read"`
+	// CreatedAt is the server-formatted time for display. CreatedUnix is the
+	// same instant as an epoch, so the browser can compute a relative time
+	// ("3 hours ago") without guessing the timezone: created_at is a session-tz
+	// string and a naive parse of it is wrong by the offset, but UNIX_TIMESTAMP
+	// of a TIMESTAMP column is the true instant whatever the session timezone is.
+	CreatedAt   string `json:"created_at"`
+	CreatedUnix int64  `json:"created_unix"`
 }
 
 // Event is what a module hands in. It is a struct rather than a positional
@@ -168,7 +174,8 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	query := `SELECT n.id, n.level, n.category, n.title, n.message, n.message_key, n.params, n.domain_id,
 	                 COALESCE(d.domain_name, ''), n.ref_type, n.ref_id,
 	                 (nr.user_id IS NOT NULL),
-	                 DATE_FORMAT(n.created_at, '%Y-%m-%d %H:%i:%s')
+	                 DATE_FORMAT(n.created_at, '%Y-%m-%d %H:%i:%s'),
+	                 UNIX_TIMESTAMP(n.created_at)
 	            FROM notifications n
 	            LEFT JOIN domains d ON d.id = n.domain_id
 	            LEFT JOIN notification_reads nr
@@ -190,7 +197,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		var domainID sql.NullInt64
 		if err := rows.Scan(&item.ID, &item.Level, &item.Category, &item.Title, &item.Message,
 			&item.Key, &item.Params, &domainID, &item.Domain, &item.RefType, &item.RefID,
-			&item.Read, &item.CreatedAt); err != nil {
+			&item.Read, &item.CreatedAt, &item.CreatedUnix); err != nil {
 			log.Printf("notifications: a row could not be read: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the notifications could not be read")
 			return

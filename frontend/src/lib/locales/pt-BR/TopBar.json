@@ -289,6 +289,7 @@
       "sweepServer": "A varredura do servidor encontrou {{count}} arquivo(s) infectado(s) em {{sites}} site(s).",
       "realtimeDetected": "Um arquivo gravado em {{domain}} está infectado. Ele continua no lugar.",
       "realtimeContained": "Um arquivo gravado em {{domain}} está infectado e foi movido para a quarentena."
-    }
+    },
+    "newCount": "{{n}} novo(s)"
   }
 }

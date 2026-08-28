@@ -289,6 +289,7 @@
       "sweepServer": "L'analyse du serveur a trouvé {{count}} fichier(s) infecté(s) sur {{sites}} site(s).",
       "realtimeDetected": "Un fichier écrit sur {{domain}} est infecté. Il est toujours en place.",
       "realtimeContained": "Un fichier écrit sur {{domain}} est infecté et a été mis en quarantaine."
-    }
+    },
+    "newCount": "{{n}} nouveau(x)"
   }
 }

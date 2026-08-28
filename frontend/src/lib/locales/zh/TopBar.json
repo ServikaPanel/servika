@@ -289,6 +289,7 @@
       "sweepServer": "服务器扫描在 {{sites}} 个站点上发现 {{count}} 个受感染文件。",
       "realtimeDetected": "写入 {{domain}} 的一个文件被发现受感染，该文件仍在原处。",
       "realtimeContained": "写入 {{domain}} 的一个文件被发现受感染，已移入隔离区。"
-    }
+    },
+    "newCount": "{{n}} 条新通知"
   }
 }

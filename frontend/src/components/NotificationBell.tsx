@@ -23,6 +23,8 @@ type Notification = {
   ref_id: number
   read: boolean
   created_at: string
+  // The same instant as an epoch, so relative time needs no timezone guess.
+  created_unix: number
 }
 
 // How often the badge is refreshed while the panel is open. A notification is
@@ -37,8 +39,51 @@ function tone(level: string): string {
   return 'text-slate-600 dark:text-slate-400'
 }
 
+// The icon box behind each alert is coloured by severity, so the list reads at a
+// glance: a critical alert is not the same weight as an informational one.
+const ICON_BOX: Record<string, string> = {
+  critical: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400',
+  warning: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
+  info: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400',
+}
+function iconBox(level: string): string {
+  return ICON_BOX[level] || ICON_BOX.info
+}
+
+// The category decides the glyph: a shield for antivirus, a bell for the rest.
+function CategoryIcon({ category }: { category: string }) {
+  const shield = 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
+  const bell = 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1'
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d={category === 'antivirus' ? shield : bell} />
+    </svg>
+  )
+}
+
+// A relative time ("3 hours ago") in the reader's language, from Intl rather than
+// twelve hand-translated strings, the same way country names come from
+// Intl.DisplayNames.
+//
+// It takes the epoch the server sends (created_unix), never the created_at
+// string: that string is formatted in the DB session timezone, so parsing it as
+// local browser time is wrong by the offset between them, which for a "3 hours
+// ago" label is hours. The epoch is the true instant whatever the timezone.
+function relativeTime(unix: number, lang: string): string {
+  if (!unix) return ''
+  const then = unix * 1000
+  const seconds = Math.round((then - Date.now()) / 1000)
+  const abs = Math.abs(seconds)
+  const rtf = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' })
+  if (abs < 60) return rtf.format(Math.round(seconds), 'second')
+  if (abs < 3600) return rtf.format(Math.round(seconds / 60), 'minute')
+  if (abs < 86400) return rtf.format(Math.round(seconds / 3600), 'hour')
+  if (abs < 604800) return rtf.format(Math.round(seconds / 86400), 'day')
+  return new Date(then).toLocaleDateString(lang)
+}
+
 export default function NotificationBell() {
-  const { t } = useTranslation('TopBar')
+  const { t, i18n } = useTranslation('TopBar')
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notification[]>([])
@@ -140,9 +185,12 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 z-50">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-700">
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{t('notifications')}</span>
+        <div className="absolute right-0 mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-96 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900 z-50">
+          <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              {t('notifications')}
+              {unread > 0 && <span className="ml-1.5 font-normal text-slate-400">{t('notify.newCount', { n: unread })}</span>}
+            </span>
             {unread > 0 && (
               <button onClick={markAll} className="text-xs text-brand-600 hover:underline dark:text-brand-400">
                 {t('notify.markAll')}
@@ -152,20 +200,34 @@ export default function NotificationBell() {
           {failed ? (
             <p className="px-3 py-4 text-xs text-rose-700 dark:text-rose-300">{t('notify.failed')}</p>
           ) : items.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">{t('notify.empty')}</p>
+            <div className="px-3 py-8 text-center">
+              <svg className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1" />
+              </svg>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('notify.empty')}</p>
+            </div>
           ) : (
             <ul>
               {items.map(item => (
                 <li key={item.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                   <button
                     onClick={() => openItem(item)}
-                    className={`w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 ${item.read ? 'opacity-60' : ''}`}
+                    title={item.created_at}
+                    className={`flex w-full gap-3 px-3 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/60 ${item.read ? 'opacity-60' : 'bg-brand-50/50 dark:bg-brand-900/10'}`}
                   >
-                    <span className={`block text-xs font-semibold ${tone(item.level)}`}>
-                      {item.domain || t('notify.serverWide')}
+                    <span className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${iconBox(item.level)}`}>
+                      <CategoryIcon category={item.category} />
                     </span>
-                    <span className="block text-xs text-slate-700 dark:text-slate-300">{describe(item)}</span>
-                    <span className="block text-[10px] text-slate-400 dark:text-slate-500">{item.created_at}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start gap-1.5">
+                        <span className={`block text-xs truncate ${tone(item.level)} ${item.read ? 'font-medium' : 'font-semibold'}`}>
+                          {item.domain || t('notify.serverWide')}
+                        </span>
+                        {!item.read && <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-500" />}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-slate-700 dark:text-slate-300 line-clamp-2">{describe(item)}</span>
+                      <span className="mt-1 block text-[10px] text-slate-400 dark:text-slate-500">{relativeTime(item.created_unix, i18n.language)}</span>
+                    </span>
                   </button>
                 </li>
               ))}

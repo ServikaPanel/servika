@@ -289,6 +289,7 @@
       "sweepServer": "Der Server-Scan fand {{count}} infizierte Datei(en) auf {{sites}} Website(s).",
       "realtimeDetected": "Eine auf {{domain}} geschriebene Datei ist infiziert. Sie liegt noch dort.",
       "realtimeContained": "Eine auf {{domain}} geschriebene Datei ist infiziert und wurde in Quarantäne verschoben."
-    }
+    },
+    "newCount": "{{n}} neu"
   }
 }
