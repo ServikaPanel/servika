@@ -162,7 +162,15 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	}()
 
 	// --- 2. Files ----------------------------------------------------------
-	if settings.Files {
+	// A hosting-less domain (a redirect-only subdomain) has no web root of its own.
+	// Discovery leaves it empty rather than falling back to the main domain's
+	// document root, so skip the files step with a visible warning here instead of
+	// pulling the wrong tree or aborting the whole account.
+	if settings.Files && strings.TrimSpace(account.WebRoot) == "" {
+		logf("no web root for this domain (redirect or hosting-less); files not migrated")
+		result.Warnings = append(result.Warnings,
+			"files were not migrated: this domain has no web root of its own (it may be a redirect subdomain)")
+	} else if settings.Files {
 		remote := strings.TrimSpace(account.WebRoot)
 		if !validRemotePath(remote) {
 			return nil, fmt.Errorf("the source web root is invalid")
