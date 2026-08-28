@@ -291,9 +291,16 @@ func evaluate(ext string, content []byte) []match {
 	out = append(out, entropyMatches(ext, content)...)
 	out = append(out, taintMatches(ext, content)...)
 	out = append(out, concealedMatches(ext, content)...)
-	// The decode pass rewards only a NEW signal, so it is told which shipped
-	// rules already fired against the file's literal bytes.
-	out = append(out, decodedMatches(ext, content, clearRuleNames(out))...)
+	// The decode pass and the semantic pass both reward only a NEW signal, so
+	// each is told which shipped rules already fired against the file's literal
+	// bytes. The set is taken once, before either adds to out.
+	clear := clearRuleNames(out)
+	out = append(out, decodedMatches(ext, content, clear)...)
+	// The semantic pass folds constant string concatenation and tracks
+	// assignments to catch obfuscated sinks a regex cannot express (see
+	// semantic.go). Its structural detectors are measured-clean built-ins; its
+	// concat rescan is capped below the critical threshold.
+	out = append(out, semanticMatches(ext, content, clear)...)
 
 	// Remote rules are weighed in a separate pass and MARKED, rather than being
 	// merged into the shipped set. Every weight above was measured against a
