@@ -174,6 +174,15 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 		written = append(written, dbName)
 	}
 
+	// Capture the owning MySQL accounts (with their password hash) and grants.
+	// mysqldump does not, because they live in the server's `mysql` schema, so
+	// without this line a restore brought the tables back but not the account the
+	// site connects as, and the site kept returning 500.
+	if n := writeDBUsers(ctx, dbDir, written); n > 0 {
+		// #nosec G706 -- logged values are an integer count and a validated systemUser identifier.
+		log.Printf("backup %s: %d database user(s) added to the archive", systemUser, n)
+	}
+
 	man := archiveManifest{CreatedAt: createdTS, Home: systemUser, MainDB: systemUser + "_main", Databases: written, FailedDatabases: failedDBs}
 	if b, err := json.MarshalIndent(man, "", "  "); err == nil {
 		// #nosec G306 G703 -- root-owned backup staging file under BackupRoot (0700), path derived from a validated systemUser; carries no secret.
@@ -234,7 +243,9 @@ func archiveDBFiles(tmp, systemUser string) map[string]string {
 	if fi, err := os.Stat(dbDir); err == nil && fi.IsDir() {
 		ents, _ := os.ReadDir(dbDir)
 		for _, e := range ents {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			// users.sql is the account/GRANT dump, not a database dump; treating it
+			// as one would try to create a database named "users" and break restore.
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") || e.Name() == dbUsersFileName {
 				continue
 			}
 			out[strings.TrimSuffix(e.Name(), ".sql")] = filepath.Join(dbDir, e.Name())
@@ -282,6 +293,7 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 		owned[n] = true
 	}
 	res := []map[string]string{}
+	restored := []string{}
 	for name, p := range files {
 		if filter != "" && name != filter {
 			continue
@@ -292,8 +304,25 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 		}
 		if err := importDB(ctx, name, p); err != nil {
 			res = append(res, map[string]string{"db": name, "status": "error: " + err.Error()})
-		} else {
-			res = append(res, map[string]string{"db": name, "status": "restored"})
+			continue
+		}
+		res = append(res, map[string]string{"db": name, "status": "restored"})
+		restored = append(restored, name)
+	}
+
+	// Recreate the MySQL accounts and grants for the restored databases from
+	// __db__/users.sql. Restoring schema and data does not bring the site up on its
+	// own: the account it connects as has to exist too. The allowlist is the set of
+	// databases actually restored, so a grant on any other database is refused even
+	// if the file carries one.
+	if len(restored) > 0 {
+		allow := map[string]bool{}
+		for _, n := range restored {
+			allow[n] = true
+		}
+		if n, err := applyDBUsers(ctx, filepath.Join(tmp, "__db__"), allow); err == nil && n > 0 {
+			// #nosec G706 -- logged values are an integer count and a validated systemUser identifier.
+			log.Printf("restore %s: %d user/grant statement(s) applied", systemUser, n)
 		}
 	}
 	return res
