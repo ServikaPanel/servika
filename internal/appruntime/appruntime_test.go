@@ -185,3 +185,48 @@ func TestEachRuntimeGetsItsOwnInstaller(t *testing.T) {
 		t.Error("the Python installer reaches for the Node version manager")
 	}
 }
+
+// The OS interpreter's own versioned name is not offered as a removable runtime.
+// On AlmaLinux 10 /usr/bin/python3 is a symlink to /usr/bin/python3.12, so the
+// base shows up under its version; removing it would run `dnf remove python3.12`
+// and take the interpreter dnf and the panel depend on. A genuinely separate
+// interpreter (python3.13) is still listed. Keyed on os.SameFile, so it holds
+// whatever minor the host's base python happens to be.
+func TestSystemPythonIsNotOfferedUnderItsVersionedName(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "python3.12")
+	if err := os.WriteFile(base, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write base: %v", err)
+	}
+	if err := os.Symlink(base, filepath.Join(dir, "python3")); err != nil {
+		t.Fatalf("symlink python3: %v", err)
+	}
+	extra := filepath.Join(dir, "python3.13")
+	if err := os.WriteFile(extra, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write extra: %v", err)
+	}
+
+	prevBin, prevDir := systemPythonBin, systemBinDir
+	systemPythonBin = filepath.Join(dir, "python3")
+	systemBinDir = dir
+	t.Cleanup(func() { systemPythonBin, systemBinDir = prevBin, prevDir })
+
+	var system bool
+	versions := map[string]bool{}
+	for _, runtime := range Installed(Python) {
+		if runtime.System {
+			system = true
+			continue
+		}
+		versions[runtime.Version] = true
+	}
+	if !system {
+		t.Error("the system Python interpreter was not listed")
+	}
+	if versions["3.12"] {
+		t.Error("the base interpreter was offered as a removable 3.12 runtime")
+	}
+	if !versions["3.13"] {
+		t.Error("the genuinely separate 3.13 interpreter was not listed")
+	}
+}

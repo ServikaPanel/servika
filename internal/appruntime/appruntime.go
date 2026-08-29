@@ -36,8 +36,14 @@ func ValidKind(value string) bool {
 const SystemVersion = "system"
 
 const (
-	systemNodeBin   = "/usr/bin/node"
-	systemNpmBin    = "/usr/bin/npm"
+	systemNodeBin = "/usr/bin/node"
+	systemNpmBin  = "/usr/bin/npm"
+)
+
+// systemPythonBin and systemBinDir are variables, not constants, so a test can
+// point the Python discovery at a temporary directory. Production leaves them at
+// the host paths.
+var (
 	systemPythonBin = "/usr/bin/python3"
 	systemBinDir    = "/usr/bin"
 )
@@ -156,6 +162,10 @@ func installedNode() []Runtime {
 
 func installedPython() []Runtime {
 	out := make([]Runtime, 0, 4)
+	// sysInfo identifies the OS interpreter. On AlmaLinux 10 /usr/bin/python3 is
+	// a symlink to /usr/bin/python3.12, so os.Stat follows it to the same file,
+	// which is how the versioned name below is recognised as the system one.
+	sysInfo, _ := os.Stat(systemPythonBin)
 	if binExists(systemPythonBin) {
 		out = append(out, Runtime{Kind: Python, Version: SystemVersion, Path: systemPythonBin, System: true})
 	}
@@ -178,9 +188,21 @@ func installedPython() []Runtime {
 	sortNewestFirst(names)
 	for _, version := range names {
 		bin := filepath.Join(systemBinDir, "python"+version)
-		if binExists(bin) {
-			out = append(out, Runtime{Kind: Python, Version: version, Path: bin})
+		if !binExists(bin) {
+			continue
 		}
+		// Skip the versioned name of the OS interpreter itself. On AlmaLinux 10
+		// the base python3 IS 3.12, so /usr/bin/python3.12 is the same file as
+		// /usr/bin/python3, already listed above as the system runtime. Offering
+		// it as a separate removable version would let a removal run
+		// `dnf remove python3.12`, which pulls out the interpreter dnf, the
+		// panel's ops scripts and PHP tooling all depend on. Keyed on os.SameFile
+		// rather than a hardcoded "3.12", so it holds whatever minor the host's
+		// base python happens to be.
+		if info, statErr := os.Stat(bin); statErr == nil && sysInfo != nil && os.SameFile(sysInfo, info) {
+			continue
+		}
+		out = append(out, Runtime{Kind: Python, Version: version, Path: bin})
 	}
 	return out
 }

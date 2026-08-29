@@ -172,7 +172,10 @@ type RuntimeEntry = { installed: boolean; name: string; descKey: string } & (
 // The wizard offers a fixed set of Node and Python versions to install; the
 // installed state comes from /app-runtimes, .NET from /app-runtimes/dotnet.
 const NODE_CATALOG = [{ version: '22', name: 'Node.js 22' }]
-const PYTHON_CATALOG = [{ version: '3.12', name: 'Python 3.12' }, { version: '3.13', name: 'Python 3.13' }, { version: '3.14', name: 'Python 3.14' }]
+// 3.12 is the AlmaLinux 10 base python3, so installing it is a no-op and it is
+// never listed as a separate runtime (the backend hides the OS interpreter's own
+// versioned name). Only genuinely additional interpreters are offered.
+const PYTHON_CATALOG = [{ version: '3.13', name: 'Python 3.13' }, { version: '3.14', name: 'Python 3.14' }]
 
 function runtimeSelKey(e: RuntimeEntry): string {
   return e.kind === 'dotnet' ? `dotnet:${e.pkg}` : `${e.kind}:${e.version}`

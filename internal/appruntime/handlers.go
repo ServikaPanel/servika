@@ -109,6 +109,15 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only a version the panel actually lists as installed may be removed.
+	// installedPython hides the OS interpreter's own versioned name (python3.12
+	// on AlmaLinux 10), so this refuses a direct API call to remove it, which
+	// would run `dnf remove python3.12` and take the base interpreter with it.
+	if _, installed := Resolve(kind, version); !installed {
+		httpx.WriteError(w, http.StatusConflict, "that runtime is not installed")
+		return
+	}
+
 	// FAIL-CLOSED: a count error must not let a removal proceed and leave a
 	// running application pointing at an interpreter that no longer exists.
 	var count int
