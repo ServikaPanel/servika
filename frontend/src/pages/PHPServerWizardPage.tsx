@@ -2,10 +2,11 @@
 // loader / web-server screens into one step-by-step surface (EasyApache style).
 // Each step renders an existing management screen embedded, so there is one code
 // path and the same backend endpoints; only the chrome is the wizard's.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
+import { getCookie, setCookie } from '@/lib/cookies'
 import Breadcrumb from '@/components/Breadcrumb'
 import PHPVersionsPage, { type VersionSelection } from './PHPVersionsPage'
 import PHPExtensionsPage, { type Selection } from './PHPExtensionsPage'
@@ -13,9 +14,30 @@ import PHPExtensionsPage, { type Selection } from './PHPExtensionsPage'
 const STEPS = ['versions', 'extensions', 'webserver', 'summary'] as const
 type Step = (typeof STEPS)[number]
 
+// The open step is remembered in a cookie (never localStorage, which is barred
+// here), so a reload reopens the step last worked on. It is a page-scoped
+// preference, so the Max-Age matches servika.migration.source's 30 days rather
+// than the year the theme and language get. The stored value is validated
+// against STEPS before use, because a hand-edited cookie could otherwise select
+// no step and open the wizard blank.
+const STEP_COOKIE = 'servika.php.wizard.step'
+const STEP_MAX_AGE = 60 * 60 * 24 * 30
+function isStep(v: string | null): v is Step {
+  return v != null && (STEPS as readonly string[]).includes(v)
+}
+
 export default function PHPServerWizardPage() {
   const { t } = useTranslation('PHPServerWizardPage')
-  const [active, setActive] = useState<Step>('versions')
+  // Read the remembered step in a lazy initializer, not a mount effect
+  // (react-hooks/set-state-in-effect), and accept it only when it names a step.
+  const [active, setActiveState] = useState<Step>(() => {
+    const saved = getCookie(STEP_COOKIE)
+    return isStep(saved) ? saved : 'versions'
+  })
+  const setActive = useCallback((step: Step) => {
+    setActiveState(step)
+    setCookie(STEP_COOKIE, step, STEP_MAX_AGE)
+  }, [])
   const activeIdx = STEPS.indexOf(active)
   // Versions and extensions picked across the wizard; the Summary step installs
   // them in bulk, versions first so an extension can target a version installed
