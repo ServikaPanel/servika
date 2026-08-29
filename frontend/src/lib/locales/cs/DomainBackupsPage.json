@@ -25,7 +25,8 @@
     "backupCreated": "Záloha vytvořena",
     "createFailed": "Zálohu nelze vytvořit",
     "restored": "Obnoveno: {{domain}}. {{detail}}",
-    "restoreFailed": "Obnovení se nezdařilo"
+    "restoreFailed": "Obnovení se nezdařilo",
+    "restoreDone": "Obnovení dokončeno"
   },
   "schedule": {
     "heading": "Plán automatických záloh",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Poškozený",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "Zálohování…",
+    "restoring": "Obnovování…",
+    "stage": {
+      "preparing": "příprava",
+      "dumping_databases": "export databází",
+      "archiving_files": "archivace souborů",
+      "verifying_integrity": "ověřování integrity",
+      "uploading_offsite": "nahrávání mimo server",
+      "downloading_offsite": "stahování z mimo server",
+      "extracting_archive": "rozbalování archivu",
+      "restoring_files": "obnovování souborů",
+      "importing_database": "import databáze"
+    }
   }
 }

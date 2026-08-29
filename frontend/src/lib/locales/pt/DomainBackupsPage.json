@@ -25,7 +25,8 @@
     "backupCreated": "Cópia de segurança criada",
     "createFailed": "Não foi possível criar a cópia de segurança",
     "restored": "Restaurado: {{domain}}. {{detail}}",
-    "restoreFailed": "Falha no restauro"
+    "restoreFailed": "Falha no restauro",
+    "restoreDone": "Restauro concluído"
   },
   "schedule": {
     "heading": "Agendamento de Cópias Automáticas",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Corrompido",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "A criar backup…",
+    "restoring": "A restaurar…",
+    "stage": {
+      "preparing": "a preparar",
+      "dumping_databases": "a exportar bases de dados",
+      "archiving_files": "a arquivar ficheiros",
+      "verifying_integrity": "a verificar integridade",
+      "uploading_offsite": "a enviar para destino externo",
+      "downloading_offsite": "a transferir do destino externo",
+      "extracting_archive": "a extrair arquivo",
+      "restoring_files": "a restaurar ficheiros",
+      "importing_database": "a importar base de dados"
+    }
   }
 }

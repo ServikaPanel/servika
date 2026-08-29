@@ -25,7 +25,8 @@
     "backupCreated": "Backup creat",
     "createFailed": "Nu s-a putut crea backup-ul",
     "restored": "Restaurat: {{domain}}. {{detail}}",
-    "restoreFailed": "Restaurarea a eșuat"
+    "restoreFailed": "Restaurarea a eșuat",
+    "restoreDone": "Restaurare finalizată"
   },
   "schedule": {
     "heading": "Program backup automat",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Corupt",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "Se creează backup…",
+    "restoring": "Se restaurează…",
+    "stage": {
+      "preparing": "se pregătește",
+      "dumping_databases": "se exportă bazele de date",
+      "archiving_files": "se arhivează fișierele",
+      "verifying_integrity": "se verifică integritatea",
+      "uploading_offsite": "se încarcă în afara serverului",
+      "downloading_offsite": "se descarcă din afara serverului",
+      "extracting_archive": "se extrage arhiva",
+      "restoring_files": "se restaurează fișierele",
+      "importing_database": "se importă baza de date"
+    }
   }
 }

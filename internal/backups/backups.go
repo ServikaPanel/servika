@@ -250,24 +250,45 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject a second concurrent backup for the same domain instead of running
-	// duplicate dump+archive work over the same data.
+	// Reject a second concurrent backup, or a backup while a restore is running,
+	// instead of racing the shared dump directory.
+	if progressActive(id) {
+		httpx.WriteError(w, http.StatusConflict, "an operation is already running for this domain")
+		return
+	}
 	if _, loaded := backupInProgress.LoadOrStore(id, struct{}{}); loaded {
 		httpx.WriteError(w, http.StatusConflict, "a backup is already running for this domain")
 		return
 	}
-	defer backupInProgress.Delete(id)
-
-	// Bound the dump+archive work so a pathological dataset cannot pin mysqldump
-	// or tar (CPU/IO heavy) indefinitely and starve the host.
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Minute)
-	defer cancel()
 
 	stamp := time.Now().UTC().Format("20060102-150405")
 	dir := filepath.Join(backupRoot(), systemUser)
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	_ = os.MkdirAll(dir, 0700)
 	file := fmt.Sprintf("%s-%s.tar.gz", systemUser, stamp)
+
+	// Run asynchronously. A backup takes minutes on a large tenant, and blocking the
+	// request for that long disconnected the client and surfaced an unrelated
+	// "server not responding" error. The request returns now; progress is polled
+	// from GET .../backups/progress. The concurrency lock is released by the task,
+	// not here, or a second backup could start before this one finishes.
+	progressStart(id, "backup", stagePreparing, previousBackupSize(h.DB, id))
+	go h.backupTask(id, domainName, systemUser, dir, file)
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
+		"ok":      true,
+		"started": true,
+		"file":    file,
+	})
+}
+
+// backupTask is Create's background body. It holds the concurrency lock and its
+// own context, and reports its outcome through the progress record.
+func (h *Handlers) backupTask(id int64, domainName, systemUser, dir, file string) {
+	defer backupInProgress.Delete(id)
+	// Bound the dump+archive work so a pathological dataset cannot pin mysqldump or
+	// tar (CPU/IO heavy) indefinitely and starve the host.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	defer cancel()
 	abs := filepath.Join(dir, file)
 
 	// Package the home directory plus EVERY domain-owned database (main + wp_* etc.)
@@ -277,21 +298,22 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	if aerr != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers, or error output; no raw tenant string with CR/LF reaches the log.
 		log.Printf("backup build failed for %s: %v", systemUser, aerr)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not create backup archive")
+		progressFinish(id, "", aerr)
 		return
 	}
 
 	// Store the checksum so the integrity scan can later catch bit-rot; a hash
 	// error is not fatal (the backup exists), so verification stays ''.
+	progressStage(id, stageVerifying, 0)
 	sum, verification := "", ""
 	if s, e := fileSHA256(abs); e == nil {
 		sum, verification = s, "ok"
 	}
-	res, err := h.DB.ExecContext(r.Context(),
+	res, err := h.DB.Exec(
 		`INSERT INTO backups(domain_id, type, file, size_b, notes, sha256, verification) VALUES(?,?,?,?,?,?,?)`,
 		id, "full", file, sizeBytes, "domain: "+domainName, sum, verification)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not save backup record")
+		progressFinish(id, "", fmt.Errorf("could not save backup record: %w", err))
 		return
 	}
 	backupID, _ := res.LastInsertId()
@@ -299,16 +321,25 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// backups, so manual ones accumulated on the root disk (outside the tenant
 	// quota) and could fill it (a slow disk-exhaustion DoS).
 	pruneManualBackups(h.DB, id, systemUser)
-	// If a remote destination exists, upload in the background (do not block the API response)
+	// If a remote destination exists, upload in the background (do not block).
 	pushToDestinationAsync(h.DB, id, backupID, abs, file)
+	if s := readBackupSettings(ctx, h.DB); s.RemoteEnabled {
+		progressStage(id, stageUploading, 0)
+	}
 	// Also copy to the system-wide off-site destination, if one is configured.
 	pushGlobalAsync(h.DB, id, backupID, abs, file)
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
-		"ok":         true,
-		"id":         backupID,
-		"file":       file,
-		"size_bytes": sizeBytes,
-	})
+	progressFinish(id, "", nil)
+}
+
+// Progress handles GET /domains/{id}/backups/progress: the running (or
+// just-finished) backup/restore status the customer page polls every 1.5s.
+func (h *Handlers) Progress(w http.ResponseWriter, r *http.Request) {
+	id, _, _, _, err := h.lookupDomain(r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusNotFound, "domain not found")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, progressRead(id))
 }
 
 // Delete removes a domain backup record and archive.

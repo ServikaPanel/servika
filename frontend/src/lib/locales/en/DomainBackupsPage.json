@@ -25,7 +25,8 @@
     "backupCreated": "Backup created",
     "createFailed": "Could not create backup",
     "restored": "Restored: {{domain}}. {{detail}}",
-    "restoreFailed": "Restore failed"
+    "restoreFailed": "Restore failed",
+    "restoreDone": "Restore complete"
   },
   "schedule": {
     "heading": "Automatic Backup Schedule",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Corrupt",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "Backing up…",
+    "restoring": "Restoring…",
+    "stage": {
+      "preparing": "preparing",
+      "dumping_databases": "dumping databases",
+      "archiving_files": "archiving files",
+      "verifying_integrity": "verifying integrity",
+      "uploading_offsite": "uploading off-site",
+      "downloading_offsite": "downloading from off-site",
+      "extracting_archive": "extracting archive",
+      "restoring_files": "restoring files",
+      "importing_database": "importing database"
+    }
   }
 }

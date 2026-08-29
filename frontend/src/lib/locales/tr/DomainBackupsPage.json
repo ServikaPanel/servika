@@ -25,7 +25,8 @@
     "backupCreated": "Yedek oluşturuldu",
     "createFailed": "Yedek oluşturulamadı",
     "restored": "Geri yüklendi: {{domain}}. {{detail}}",
-    "restoreFailed": "Geri yükleme başarısız oldu"
+    "restoreFailed": "Geri yükleme başarısız oldu",
+    "restoreDone": "Geri yükleme tamamlandı"
   },
   "schedule": {
     "heading": "Otomatik Yedekleme Zamanlaması",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Bozuk",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "Yedekleniyor…",
+    "restoring": "Geri yükleniyor…",
+    "stage": {
+      "preparing": "hazırlanıyor",
+      "dumping_databases": "veritabanları alınıyor",
+      "archiving_files": "dosyalar arşivleniyor",
+      "verifying_integrity": "bütünlük doğrulanıyor",
+      "uploading_offsite": "uzak hedefe yükleniyor",
+      "downloading_offsite": "uzak hedeften indiriliyor",
+      "extracting_archive": "arşiv açılıyor",
+      "restoring_files": "dosyalar geri yükleniyor",
+      "importing_database": "veritabanı içe aktarılıyor"
+    }
   }
 }

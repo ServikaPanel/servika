@@ -140,6 +140,9 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
 	defer func() { _ = os.RemoveAll(dbDir) }()
 
+	// Progress stages are no-ops when no record exists (the scheduler path), so the
+	// same buildArchive serves both the interactive and scheduled backups.
+	progressStage(domainID, stageDumpingDBs, 0)
 	written := []string{}
 	failedDBs := []string{}
 	for _, dbName := range domainDatabases(db, domainID, systemUser) {
@@ -189,6 +192,10 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 		_ = os.WriteFile(filepath.Join(dbDir, "manifest.json"), b, 0600)
 	}
 
+	// Sample the archive file's growth so the customer sees the archiving stage
+	// move; the estimate uses the previous backup's size.
+	progressStage(domainID, stageArchiving, previousBackupSize(db, domainID))
+	progressWatchFile(domainID, abs)
 	args := []string{"czf", abs, "-C", "/home", systemUser, "-C", dir, "__db__"}
 	// #nosec G204 G702 -- fixed binary (tar) with separate args (no shell); systemUser is validSystemUser-checked and paths are internal.
 	if out, err := newRestoreCommand(ctx, "tar", args...).CombinedOutput(); err != nil {
@@ -208,6 +215,7 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 			return 0, fmt.Errorf("tar: %s: %w", strings.TrimSpace(string(out)), err)
 		}
 	}
+	progressStopFile(domainID)
 	var size int64
 	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
 	if st, _ := os.Stat(abs); st != nil {

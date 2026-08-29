@@ -25,7 +25,8 @@
     "backupCreated": "バックアップを作成しました",
     "createFailed": "バックアップを作成できませんでした",
     "restored": "復元しました: {{domain}}。{{detail}}",
-    "restoreFailed": "復元に失敗しました"
+    "restoreFailed": "復元に失敗しました",
+    "restoreDone": "復元が完了しました"
   },
   "schedule": {
     "heading": "自動バックアップスケジュール",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "破損",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "バックアップ中…",
+    "restoring": "復元中…",
+    "stage": {
+      "preparing": "準備中",
+      "dumping_databases": "データベースをエクスポート中",
+      "archiving_files": "ファイルをアーカイブ中",
+      "verifying_integrity": "整合性を検証中",
+      "uploading_offsite": "オフサイトへアップロード中",
+      "downloading_offsite": "オフサイトからダウンロード中",
+      "extracting_archive": "アーカイブを展開中",
+      "restoring_files": "ファイルを復元中",
+      "importing_database": "データベースをインポート中"
+    }
   }
 }

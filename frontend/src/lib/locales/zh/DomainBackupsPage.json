@@ -25,7 +25,8 @@
     "backupCreated": "备份已创建",
     "createFailed": "无法创建备份",
     "restored": "已恢复：{{domain}}。{{detail}}",
-    "restoreFailed": "还原失败"
+    "restoreFailed": "还原失败",
+    "restoreDone": "恢复完成"
   },
   "schedule": {
     "heading": "自动备份计划",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "已损坏",
     "remote": "异地"
+  },
+  "progress": {
+    "backingUp": "备份中…",
+    "restoring": "恢复中…",
+    "stage": {
+      "preparing": "准备中",
+      "dumping_databases": "正在导出数据库",
+      "archiving_files": "正在归档文件",
+      "verifying_integrity": "正在校验完整性",
+      "uploading_offsite": "正在上传到异地",
+      "downloading_offsite": "正在从异地下载",
+      "extracting_archive": "正在解压归档",
+      "restoring_files": "正在恢复文件",
+      "importing_database": "正在导入数据库"
+    }
   }
 }

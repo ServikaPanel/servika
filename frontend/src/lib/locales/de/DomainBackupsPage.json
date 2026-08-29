@@ -25,7 +25,8 @@
     "backupCreated": "Backup erstellt",
     "createFailed": "Backup konnte nicht erstellt werden",
     "restored": "Wiederhergestellt: {{domain}}. {{detail}}",
-    "restoreFailed": "Wiederherstellung fehlgeschlagen"
+    "restoreFailed": "Wiederherstellung fehlgeschlagen",
+    "restoreDone": "Wiederherstellung abgeschlossen"
   },
   "schedule": {
     "heading": "Automatischer Backup-Zeitplan",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Beschädigt",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "Sicherung läuft…",
+    "restoring": "Wiederherstellung läuft…",
+    "stage": {
+      "preparing": "Wird vorbereitet",
+      "dumping_databases": "Datenbanken werden exportiert",
+      "archiving_files": "Dateien werden archiviert",
+      "verifying_integrity": "Integrität wird geprüft",
+      "uploading_offsite": "Upload zum externen Ziel",
+      "downloading_offsite": "Download vom externen Ziel",
+      "extracting_archive": "Archiv wird entpackt",
+      "restoring_files": "Dateien werden wiederhergestellt",
+      "importing_database": "Datenbank wird importiert"
+    }
   }
 }

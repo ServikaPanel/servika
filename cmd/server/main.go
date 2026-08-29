@@ -1108,6 +1108,9 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Put("/customers/{id}", accountsH.UpdateCustomer)
 				r.With(middleware.ResellerOrAbove).Delete("/customers/{id}", accountsH.DeleteCustomer)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/backups", backupsH.List)
+				// The customer page polls this while a backup or restore runs, so it is not
+				// rate-limited like the write actions.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/backups/progress", backupsH.Progress)
 				// Manual backups are CPU/disk/IO heavy; throttle per IP (the handler also
 				// rejects a second concurrent backup for the same domain).
 				r.With(middleware.CustomerScope, middleware.RateLimit("backup-create", 20, time.Hour)).

@@ -25,7 +25,8 @@
     "backupCreated": "Backup creato",
     "createFailed": "Impossibile creare il backup",
     "restored": "Ripristinato: {{domain}}. {{detail}}",
-    "restoreFailed": "Ripristino non riuscito"
+    "restoreFailed": "Ripristino non riuscito",
+    "restoreDone": "Ripristino completato"
   },
   "schedule": {
     "heading": "Pianificazione backup automatici",
@@ -147,5 +148,20 @@
   "verify": {
     "corrupt": "Corrotto",
     "remote": "Off-site"
+  },
+  "progress": {
+    "backingUp": "Backup in corso…",
+    "restoring": "Ripristino in corso…",
+    "stage": {
+      "preparing": "preparazione",
+      "dumping_databases": "esportazione database",
+      "archiving_files": "archiviazione file",
+      "verifying_integrity": "verifica integrità",
+      "uploading_offsite": "caricamento off-site",
+      "downloading_offsite": "download off-site",
+      "extracting_archive": "estrazione archivio",
+      "restoring_files": "ripristino file",
+      "importing_database": "importazione database"
+    }
   }
 }

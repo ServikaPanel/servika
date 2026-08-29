@@ -83,8 +83,23 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid backup file")
 		return
 	}
+	// Reject a restore while another backup/restore runs for this domain, then
+	// track this one so the customer sees its stages. Error paths are closed by the
+	// deferred guard; the success path closes the record explicitly at the end.
+	if progressActive(id) {
+		httpx.WriteError(w, http.StatusConflict, "an operation is already running for this domain")
+		return
+	}
+	progressStart(id, "restore", stagePreparing, 0)
+	defer func() {
+		if progressActive(id) {
+			progressFinish(id, "", fmt.Errorf("the restore did not complete"))
+		}
+	}()
+
 	// Fetch the archive from the off-site destination when the local copy is
 	// gone, so a pruned-but-uploaded backup is still restorable.
+	progressStage(id, stageDownloading, 0)
 	if err := ensureLocalArchive(r.Context(), h.DB, id, backupID, systemUser, file); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err.Error())
 		return
@@ -118,6 +133,7 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
+	progressStage(id, stageExtracting, 0)
 	if _, err := extractMembersRoot(r.Context(), abs, tmpDir, members); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid backup archive")
 		return
@@ -132,10 +148,12 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Mode {
 	case "full":
+		progressStage(id, stageRestoringHome, 0)
 		if err := restoreHome(r.Context(), tmpDir, systemUser, req.Clean); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not restore the home directory")
 			return
 		}
+		progressStage(id, stageImportingDB, 0)
 		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, "")
 		result["databases"] = dbResults
 		restored, skipped, failed, summary := dbSummary(dbResults)
@@ -154,6 +172,7 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		result["warning"] = overwriteWarning(req.Clean)
 
 	case "files":
+		progressStage(id, stageRestoringHome, 0)
 		if err := restoreHome(r.Context(), tmpDir, systemUser, req.Clean); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not restore the home directory")
 			return
@@ -161,6 +180,7 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		result["warning"] = overwriteWarning(req.Clean)
 
 	case "database":
+		progressStage(id, stageImportingDB, 0)
 		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, strings.TrimSpace(req.DB))
 		result["databases"] = dbResults
 		restored, skipped, failed, summary := dbSummary(dbResults)
@@ -217,6 +237,9 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Close the progress record on success (the deferred guard only catches the
+	// error returns above).
+	progressFinish(id, "", nil)
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 

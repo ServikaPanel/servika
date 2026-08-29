@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError as apiError } from '@/lib/api'
+import { formatBytes } from '@/lib/database'
 import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -22,6 +23,11 @@ import {
 
 type Domain = { id: number; domain_name: string; system_user: string }
 type Backup = { id: number; domain_id: number; type: string; file: string; size_b: number; notes: string; created_at: string; verification?: string }
+type Progress = {
+  active: boolean; done: boolean; op: string; stage: string
+  done_bytes: number; total_bytes: number; percent: number; elapsed_s: number
+  result?: string; error?: string
+}
 type Schedule = { freq: 'none' | 'daily' | 'weekly'; hour: number; retention: number; last_backup_at?: string }
 type DestType = 'ftp' | 'sftp' | 's3' | 'b2'
 type Destination = {
@@ -43,6 +49,10 @@ export default function DomainBackupsPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
+  // Long-operation visibility: a backup or restore takes minutes on a large
+  // tenant. A single "Backing up…" line did not say whether it was moving.
+  const [progress, setProgress] = useState<Progress | null>(null)
+  const progressTimer = useRef<number | null>(null)
   const [backupToDelete, setBackupToDelete] = useState<Backup | null>(null)
   const [restoreBackup, setRestoreBackup] = useState<Backup | null>(null)
 
@@ -162,15 +172,49 @@ export default function DomainBackupsPage() {
     }
   }
 
+  function stopProgress() {
+    if (progressTimer.current) {
+      window.clearInterval(progressTimer.current)
+      progressTimer.current = null
+    }
+  }
+
+  // Poll the progress endpoint every 1.5s. handleCompletion is true for the
+  // asynchronous backup (the request returned immediately, so the poll drives the
+  // outcome); it is false for the synchronous restore (its own await drives the
+  // outcome and the poll only animates the stages).
+  function watchProgress(handleCompletion: boolean, op: 'backup' | 'restore') {
+    stopProgress()
+    progressTimer.current = window.setInterval(async () => {
+      try {
+        const { data } = await api.get<Progress>(`/domains/${id}/backups/progress`)
+        setProgress(data.active ? data : null)
+        if (!data.active || data.done) {
+          stopProgress()
+          if (handleCompletion) {
+            setProcessing(false)
+            load()
+            if (data.error) setError(data.error)
+            else setSuccess(op === 'restore' ? t('toast.restoreDone') : t('toast.backupCreated'))
+            window.setTimeout(() => setProgress(null), 6000)
+          }
+        }
+      } catch { /* transient error: the next tick retries */ }
+    }, 1500)
+  }
+
+  // Stop polling when the page unmounts.
+  useEffect(() => () => stopProgress(), [])
+
   async function create() {
     setProcessing(true); setError(null); setSuccess(null)
     try {
+      // The endpoint returns 202: the work runs in the background and the progress
+      // bar takes over.
       await api.post(`/domains/${id}/backups`)
-      setSuccess(t('toast.backupCreated'))
-      load()
+      watchProgress(true, 'backup')
     } catch (e) {
       setError(apiError(e, t('toast.createFailed')))
-    } finally {
       setProcessing(false)
     }
   }
@@ -187,15 +231,22 @@ export default function DomainBackupsPage() {
 
   async function restore(payload: RestorePayload) {
     if (!restoreBackup) return
+    const bid = restoreBackup.id
     setProcessing(true); setError(null); setSuccess(null)
+    setRestoreBackup(null)
+    // The restore request is synchronous; the poll only animates its stages while
+    // it runs, and the await below drives the final result.
+    watchProgress(false, 'restore')
     try {
-      const { data } = await api.post(`/domains/${id}/backups/${restoreBackup.id}/restore`, payload)
+      const { data } = await api.post(`/domains/${id}/backups/${bid}/restore`, payload)
       setSuccess(t('toast.restored', { domain: data.domain_name, detail: data.warning ?? '' }))
-      setRestoreBackup(null)
+      load()
     } catch (e) {
       setError(apiError(e, t('toast.restoreFailed')))
     } finally {
+      stopProgress()
       setProcessing(false)
+      window.setTimeout(() => setProgress(null), 4000)
     }
   }
 
@@ -473,6 +524,30 @@ export default function DomainBackupsPage() {
         <button onClick={load} className="px-3 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded-md">{t('refresh')}</button>
         <span className="text-sm text-slate-500 dark:text-slate-500 sm:ml-auto">{t('backupCount', { count: backups.length })}</span>
       </div>
+
+      {progress && (
+        <div className="mb-4 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <span className={`w-2 h-2 rounded-full ${progress.done ? (progress.error ? 'bg-red-500' : 'bg-emerald-500') : 'bg-amber-500 animate-pulse'}`} />
+            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+              {progress.op === 'restore' ? t('progress.restoring') : t('progress.backingUp')}
+            </span>
+            <span className="text-sm text-slate-500 dark:text-slate-400">· {t(`progress.stage.${progress.stage}`, progress.stage)}</span>
+            <span className="ml-auto text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+              {progress.percent > 0 ? `${progress.percent}%` : ''}
+              {progress.done_bytes > 0 ? ` · ${formatBytes(progress.done_bytes)}${progress.total_bytes > 0 ? ' / ' + formatBytes(progress.total_bytes) : ''}` : ''}
+              {` · ${progress.elapsed_s}s`}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+            {progress.percent > 0 ? (
+              <div className={`h-full rounded-full transition-all duration-700 ${progress.error ? 'bg-red-500' : progress.done ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${progress.percent}%` }} />
+            ) : (
+              <div className="h-full w-1/3 rounded-full bg-amber-400 animate-pulse" />
+            )}
+          </div>
+        </div>
+      )}
 
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
