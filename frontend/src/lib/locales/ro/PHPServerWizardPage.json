@@ -22,6 +22,10 @@
     "summary": {
       "name": "Rezumat",
       "desc": "Verifică configurația"
+    },
+    "runtimes": {
+      "name": "Runtime-uri suplimentare",
+      "desc": ".NET Core, Node.js, Python"
     }
   },
   "nav": {
@@ -69,7 +73,29 @@
     },
     "kind": {
       "version": "versiune",
-      "extension": "extensie"
+      "extension": "extensie",
+      "runtime": "runtime"
+    }
+  },
+  "runtimes": {
+    "heading": "Runtime-uri suplimentare",
+    "intro": "Limbaje în afară de PHP. Activează ce vrei să instalezi — instalarea se face împreună la pasul Rezumat. Dezactivează un runtime instalat pentru a-l elimina.",
+    "selectedBanner": "{{count}} componentă runtime selectată — se instalează la pasul Rezumat.",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "Rulează aplicații web ASP.NET Core",
+    "dotnetSdkDesc": "Dezvoltă cu CLI-ul dotnet",
+    "nodeDesc": "Node.js la nivel de sistem cu npm",
+    "pythonDesc": "Interpretor Python paralel",
+    "confirmRemove": "{{name}} va fi eliminat de pe server. Continuați?",
+    "removeError": "Eliminarea a eșuat",
+    "removeTitle": "Elimină",
+    "selectTitle": {
+      "add": "Adaugă în lista de instalare",
+      "remove": "Elimină din selecție"
     }
   }
 }

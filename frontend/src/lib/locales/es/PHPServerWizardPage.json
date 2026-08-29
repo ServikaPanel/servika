@@ -22,6 +22,10 @@
     "summary": {
       "name": "Resumen",
       "desc": "Revisar la configuración"
+    },
+    "runtimes": {
+      "name": "Runtimes adicionales",
+      "desc": ".NET Core, Node.js, Python"
     }
   },
   "nav": {
@@ -69,7 +73,29 @@
     },
     "kind": {
       "version": "versión",
-      "extension": "extensión"
+      "extension": "extensión",
+      "runtime": "runtime"
+    }
+  },
+  "runtimes": {
+    "heading": "Runtimes adicionales",
+    "intro": "Lenguajes distintos de PHP. Activa lo que quieras instalar — la instalación se hace junta en el paso Resumen. Desactiva un runtime instalado para quitarlo.",
+    "selectedBanner": "{{count}} componente de runtime seleccionado — se instala en el paso Resumen.",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "Ejecuta aplicaciones web ASP.NET Core",
+    "dotnetSdkDesc": "Desarrolla con la CLI dotnet",
+    "nodeDesc": "Node.js para todo el sistema con npm",
+    "pythonDesc": "Intérprete Python paralelo",
+    "confirmRemove": "{{name}} se quitará del servidor. ¿Continuar?",
+    "removeError": "Error al quitar",
+    "removeTitle": "Quitar",
+    "selectTitle": {
+      "add": "Añadir a la lista de instalación",
+      "remove": "Quitar de la selección"
     }
   }
 }

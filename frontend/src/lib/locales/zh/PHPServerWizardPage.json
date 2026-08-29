@@ -22,6 +22,10 @@
     "summary": {
       "name": "摘要",
       "desc": "查看配置"
+    },
+    "runtimes": {
+      "name": "额外运行时",
+      "desc": ".NET Core, Node.js, Python"
     }
   },
   "nav": {
@@ -69,7 +73,29 @@
     },
     "kind": {
       "version": "版本",
-      "extension": "扩展"
+      "extension": "扩展",
+      "runtime": "运行时"
+    }
+  },
+  "runtimes": {
+    "heading": "额外运行时",
+    "intro": "PHP 以外的语言。打开要安装的项 — 将在“摘要”步骤一起安装。关闭已安装项即可移除。",
+    "selectedBanner": "已选择 {{count}} 个运行时组件 — 将在“摘要”步骤安装。",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "运行 ASP.NET Core Web 应用",
+    "dotnetSdkDesc": "使用 dotnet CLI 开发",
+    "nodeDesc": "系统级 Node.js 及 npm",
+    "pythonDesc": "并行 Python 解释器",
+    "confirmRemove": "将从服务器移除 {{name}}。继续？",
+    "removeError": "移除失败",
+    "removeTitle": "移除",
+    "selectTitle": {
+      "add": "加入安装列表",
+      "remove": "从所选中移除"
     }
   }
 }

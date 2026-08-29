@@ -7,12 +7,19 @@ import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { getCookie, setCookie } from '@/lib/cookies'
+import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import PHPVersionsPage, { type VersionSelection } from './PHPVersionsPage'
 import PHPExtensionsPage, { type Selection } from './PHPExtensionsPage'
 
-const STEPS = ['versions', 'extensions', 'webserver', 'summary'] as const
+const STEPS = ['versions', 'extensions', 'runtimes', 'webserver', 'summary'] as const
 type Step = (typeof STEPS)[number]
+
+// RuntimeSelection is a non-PHP runtime the wizard has marked "to install"; the
+// Summary step installs it in bulk. dotnet dispatches by dnf package, node and
+// python by version, so the dispatch fields travel with the selection.
+type RuntimeKind = 'dotnet' | 'node' | 'python'
+type RuntimeSelection = { key: string; name: string; kind: RuntimeKind; pkg?: string; version?: string }
 
 // The open step is remembered in a cookie (never localStorage, which is barred
 // here), so a reload reopens the step last worked on. It is a page-scoped
@@ -44,6 +51,7 @@ export default function PHPServerWizardPage() {
   // in the same run.
   const [selectedVersions, setSelectedVersions] = useState<VersionSelection[]>([])
   const [selected, setSelected] = useState<Selection[]>([])
+  const [selectedRuntimes, setSelectedRuntimes] = useState<RuntimeSelection[]>([])
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
@@ -89,8 +97,9 @@ export default function PHPServerWizardPage() {
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5">
             {active === 'versions' && <PHPVersionsPage embedded selectedVersions={selectedVersions} setSelectedVersions={setSelectedVersions} />}
             {active === 'extensions' && <PHPExtensionsPage embedded selected={selected} setSelected={setSelected} />}
+            {active === 'runtimes' && <RuntimesStep selectedRuntimes={selectedRuntimes} setSelectedRuntimes={setSelectedRuntimes} />}
             {active === 'webserver' && <WebServerStep />}
-            {active === 'summary' && <SummaryStep selected={selected} selectedVersions={selectedVersions} onClear={() => { setSelected([]); setSelectedVersions([]) }} />}
+            {active === 'summary' && <SummaryStep selected={selected} selectedVersions={selectedVersions} selectedRuntimes={selectedRuntimes} onClear={() => { setSelected([]); setSelectedVersions([]); setSelectedRuntimes([]) }} />}
           </div>
 
           <div className="flex items-center justify-between mt-4">
@@ -156,9 +165,149 @@ function StatusCard({ label, value, ok }: { label: string; value: string; ok?: b
   )
 }
 
+type DotnetComponent = { name: string; package: string; description: string; installed: boolean }
+type RuntimeEntry = { installed: boolean; name: string; descKey: string } & (
+  { kind: 'dotnet'; pkg: string } | { kind: 'node' | 'python'; version: string })
+
+// The wizard offers a fixed set of Node and Python versions to install; the
+// installed state comes from /app-runtimes, .NET from /app-runtimes/dotnet.
+const NODE_CATALOG = [{ version: '22', name: 'Node.js 22' }]
+const PYTHON_CATALOG = [{ version: '3.12', name: 'Python 3.12' }, { version: '3.13', name: 'Python 3.13' }, { version: '3.14', name: 'Python 3.14' }]
+
+function runtimeSelKey(e: RuntimeEntry): string {
+  return e.kind === 'dotnet' ? `dotnet:${e.pkg}` : `${e.kind}:${e.version}`
+}
+
+// RuntimesStep offers non-PHP runtimes (.NET / Node.js / Python). An uninstalled
+// one is toggled "to install" and the Summary step installs it in bulk; an
+// installed one is removed immediately when its toggle is turned off. Node and
+// Python reuse the existing /app-runtimes endpoints; .NET uses the new dotnet
+// ones, and all three share one dnf slot so a bulk run cannot race the rpm lock.
+function RuntimesStep({ selectedRuntimes, setSelectedRuntimes }: {
+  selectedRuntimes: RuntimeSelection[]
+  setSelectedRuntimes: (fn: (s: RuntimeSelection[]) => RuntimeSelection[]) => void
+}) {
+  const { t } = useTranslation('PHPServerWizardPage')
+  const { confirm, notify } = useDialog()
+  const [dotnet, setDotnet] = useState<DotnetComponent[]>([])
+  const [nodeInstalled, setNodeInstalled] = useState<Set<string>>(new Set())
+  const [pyInstalled, setPyInstalled] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [removing, setRemoving] = useState<string | null>(null)
+
+  // Settles only through promise callbacks, so the mount effect never writes
+  // state synchronously (react-hooks/set-state-in-effect); loading starts true
+  // from the initializer above.
+  const load = useCallback(() => {
+    Promise.all([api.get('/app-runtimes/dotnet'), api.get('/app-runtimes')])
+      .then(([d, rt]) => {
+        setDotnet(d.data?.components || [])
+        setNodeInstalled(new Set(((rt.data?.node || []) as { version: string }[]).map(x => x.version)))
+        setPyInstalled(new Set(((rt.data?.python || []) as { version: string }[]).map(x => x.version)))
+      })
+      .catch(() => { /* leave empty; the groups render nothing */ })
+      .finally(() => setLoading(false))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const groups: { key: string; label: string; items: RuntimeEntry[] }[] = [
+    { key: 'dotnet', label: t('runtimes.group.dotnet'), items: dotnet.map((c): RuntimeEntry => ({
+      installed: c.installed, name: c.name, kind: 'dotnet', pkg: c.package,
+      descKey: c.package.startsWith('dotnet-sdk') ? 'runtimes.dotnetSdkDesc' : 'runtimes.dotnetRuntimeDesc' })) },
+    { key: 'node', label: t('runtimes.group.node'), items: NODE_CATALOG.map((n): RuntimeEntry => ({
+      installed: nodeInstalled.has(n.version), name: n.name, kind: 'node', version: n.version, descKey: 'runtimes.nodeDesc' })) },
+    { key: 'python', label: t('runtimes.group.python'), items: PYTHON_CATALOG.map((p): RuntimeEntry => ({
+      installed: pyInstalled.has(p.version), name: p.name, kind: 'python', version: p.version, descKey: 'runtimes.pythonDesc' })) },
+  ]
+
+  const isSelected = (e: RuntimeEntry) => selectedRuntimes.some(s => s.key === runtimeSelKey(e))
+  const toggleSelection = (e: RuntimeEntry) => {
+    const key = runtimeSelKey(e)
+    setSelectedRuntimes(prev => prev.some(s => s.key === key)
+      ? prev.filter(s => s.key !== key)
+      : [...prev, {
+        key, name: e.name, kind: e.kind,
+        pkg: e.kind === 'dotnet' ? e.pkg : undefined,
+        version: e.kind !== 'dotnet' ? e.version : undefined,
+      }])
+  }
+
+  async function remove(e: RuntimeEntry) {
+    if (removing) return
+    if (!(await confirm({ message: t('runtimes.confirmRemove', { name: e.name }), dangerous: true }))) return
+    setRemoving(runtimeSelKey(e))
+    try {
+      if (e.kind === 'dotnet') {
+        await api.post('/app-runtimes/dotnet/remove', { package: e.pkg })
+      } else {
+        await api.post('/app-runtimes/remove', { kind: e.kind, version: e.version })
+      }
+      for (;;) {
+        await new Promise(r => setTimeout(r, 2000))
+        const s = await api.get<{ running: boolean }>('/app-runtimes/status')
+        if (!s.data?.running) break
+      }
+      load()
+    } catch (err) {
+      await notify({ message: apiError(err, t('runtimes.removeError')) })
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  if (loading) return <div className="py-10 text-center text-sm text-slate-400 dark:text-slate-500">{t('summary.loading')}</div>
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('runtimes.heading')}</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-500">{t('runtimes.intro')}</p>
+      </div>
+      {selectedRuntimes.length > 0 && (
+        <div className="px-3 py-2 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-md text-sm text-brand-700 dark:text-brand-300">
+          {t('runtimes.selectedBanner', { count: selectedRuntimes.length })}
+        </div>
+      )}
+      {groups.map(g => (
+        <section key={g.key}>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{g.label}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {g.items.map(e => {
+              const key = runtimeSelKey(e)
+              const sel = !e.installed && isSelected(e)
+              const busy = removing === key
+              return (
+                <div key={key}
+                  className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${
+                    e.installed ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
+                      : sel ? 'bg-brand-50 dark:bg-brand-900/15 border-brand-300 dark:border-brand-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                  }`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{e.name}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-500 truncate">{t(e.descKey)}</div>
+                  </div>
+                  <button
+                    onClick={() => { if (e.installed) { remove(e) } else { toggleSelection(e) } }}
+                    disabled={busy}
+                    title={e.installed ? t('runtimes.removeTitle') : sel ? t('runtimes.selectTitle.remove') : t('runtimes.selectTitle.add')}
+                    className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${
+                      busy ? 'bg-sky-400 animate-pulse' : e.installed ? 'bg-emerald-500' : sel ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'
+                    } ${busy ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${(e.installed || sel) ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
 type BulkState = 'pending' | 'installing' | 'done' | 'error'
-type BulkKind = 'version' | 'extension'
-type BulkRow = { kind: BulkKind; version: string; key: string; name: string; resource?: string; state: BulkState; message?: string }
+type BulkKind = 'version' | 'extension' | 'runtime'
+type BulkRow = { kind: BulkKind; version: string; key: string; name: string; resource?: string; runtime?: RuntimeSelection; state: BulkState; message?: string }
 
 // installExtensionJob runs the async PECL job for one extension and resolves when
 // it is done. It rejects with { peclError } for a job failure (a localizable CODE)
@@ -209,10 +358,36 @@ function installVersionJob(sel: VersionSelection, onProgress: (step: string, per
   })
 }
 
+// installRuntimeJob installs one non-PHP runtime through the shared single-slot
+// /app-runtimes machinery: .NET by dnf package, Node and Python by version. The
+// job carries no percent, so progress is coarse and it resolves when the slot is
+// free again, the same shape as installVersionJob.
+function installRuntimeJob(sel: RuntimeSelection, onProgress: (step: string, percent: number) => void): Promise<void> {
+  const start = sel.kind === 'dotnet'
+    ? api.post('/app-runtimes/dotnet/install', { package: sel.pkg })
+    : api.post('/app-runtimes/install', { kind: sel.kind, version: sel.version })
+  return new Promise((resolve, reject) => {
+    start
+      .then(() => {
+        const tick = () => {
+          api.get<{ running: boolean }>('/app-runtimes/status')
+            .then(({ data }) => {
+              if (!data.running) { resolve(); return }
+              onProgress('installing', 55)
+              setTimeout(tick, 2000)
+            })
+            .catch(reject)
+        }
+        setTimeout(tick, 2000)
+      })
+      .catch(reject)
+  })
+}
+
 // SummaryStep lists the installed PHP versions and installs the components the
-// operator picked in the earlier steps, one after another (versions first, then
-// extensions) with a live progress bar and a per-row status badge.
-function SummaryStep({ selected, selectedVersions, onClear }: { selected: Selection[]; selectedVersions: VersionSelection[]; onClear: () => void }) {
+// operator picked in the earlier steps, one after another (versions, then
+// extensions, then runtimes) with a live progress bar and a per-row status badge.
+function SummaryStep({ selected, selectedVersions, selectedRuntimes, onClear }: { selected: Selection[]; selectedVersions: VersionSelection[]; selectedRuntimes: RuntimeSelection[]; onClear: () => void }) {
   const { t } = useTranslation(['PHPServerWizardPage', 'PHPExtensionsPage'])
   const [versions, setVersions] = useState<Version[]>([])
   const [loading, setLoading] = useState(true)
@@ -228,12 +403,14 @@ function SummaryStep({ selected, selectedVersions, onClear }: { selected: Select
       .finally(() => setLoading(false))
   }, [])
 
-  const total = selectedVersions.length + selected.length
+  const total = selectedVersions.length + selected.length + selectedRuntimes.length
 
-  // Versions first so an extension can target a version installed in the same run.
+  // Order: versions (so an extension can target one installed in the same run),
+  // then extensions, then runtimes.
   const preview = (): BulkRow[] => [
     ...selectedVersions.map(v => ({ kind: 'version' as const, version: v.version, key: v.version, name: `PHP ${v.version}`, resource: v.resource, state: 'pending' as const })),
     ...selected.map(s => ({ kind: 'extension' as const, version: s.version, key: s.key, name: s.name, state: 'pending' as const })),
+    ...selectedRuntimes.map(rt => ({ kind: 'runtime' as const, version: '', key: rt.key, name: rt.name, runtime: rt, state: 'pending' as const })),
   ]
 
   // Triggered by the button, never a mount effect, so it does not trip
@@ -251,6 +428,8 @@ function SummaryStep({ selected, selectedVersions, onClear }: { selected: Select
       try {
         if (s.kind === 'version') {
           await installVersionJob({ version: s.version, resource: s.resource || 'remi' }, (step, percent) => setCurrent({ name: s.name, kind: 'version', step, percent }))
+        } else if (s.kind === 'runtime' && s.runtime) {
+          await installRuntimeJob(s.runtime, (step, percent) => setCurrent({ name: s.name, kind: 'runtime', step, percent }))
         } else {
           await installExtensionJob({ version: s.version, key: s.key, name: s.name }, (step, percent) => setCurrent({ name: s.name, kind: 'extension', step, percent }))
         }

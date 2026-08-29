@@ -22,6 +22,10 @@
     "summary": {
       "name": "概要",
       "desc": "構成を確認"
+    },
+    "runtimes": {
+      "name": "追加ランタイム",
+      "desc": ".NET Core, Node.js, Python"
     }
   },
   "nav": {
@@ -69,7 +73,29 @@
     },
     "kind": {
       "version": "バージョン",
-      "extension": "拡張機能"
+      "extension": "拡張機能",
+      "runtime": "ランタイム"
+    }
+  },
+  "runtimes": {
+    "heading": "追加ランタイム",
+    "intro": "PHP 以外の言語。インストールするものをオンにすると、「概要」ステップでまとめてインストールされます。インストール済みをオフにすると削除します。",
+    "selectedBanner": "{{count}} 個のランタイムコンポーネントを選択しました — 「概要」ステップでインストールされます。",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "ASP.NET Core Web アプリを実行",
+    "dotnetSdkDesc": "dotnet CLI で開発",
+    "nodeDesc": "システム全体の Node.js と npm",
+    "pythonDesc": "並列 Python インタプリタ",
+    "confirmRemove": "{{name}} をサーバーから削除します。続行しますか？",
+    "removeError": "削除に失敗しました",
+    "removeTitle": "削除",
+    "selectTitle": {
+      "add": "インストール一覧に追加",
+      "remove": "選択を解除"
     }
   }
 }

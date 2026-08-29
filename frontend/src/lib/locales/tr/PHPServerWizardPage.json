@@ -22,6 +22,10 @@
     "summary": {
       "name": "Özet",
       "desc": "Yapılandırmayı gözden geçir"
+    },
+    "runtimes": {
+      "name": "Ek Runtime'lar",
+      "desc": ".NET Core, Node.js, Python"
     }
   },
   "nav": {
@@ -69,7 +73,29 @@
     },
     "kind": {
       "version": "sürüm",
-      "extension": "eklenti"
+      "extension": "eklenti",
+      "runtime": "runtime"
+    }
+  },
+  "runtimes": {
+    "heading": "Ek Runtime'lar",
+    "intro": "PHP dışı diller. Kurulacakları toggle ile açın — Özet adımında birlikte kurulur. Kurulu olanı kapatınca kaldırılır.",
+    "selectedBanner": "{{count}} runtime bileşeni seçildi — Özet adımında kurulur.",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "ASP.NET Core web uygulamaları çalıştırır",
+    "dotnetSdkDesc": "dotnet CLI ile derleme",
+    "nodeDesc": "Sistem geneli Node.js + npm",
+    "pythonDesc": "Paralel Python yorumlayıcısı",
+    "confirmRemove": "{{name}} sunucudan kaldırılacak. Devam?",
+    "removeError": "Kaldırma başarısız",
+    "removeTitle": "Kaldır",
+    "selectTitle": {
+      "add": "Kurulacaklar listesine ekle",
+      "remove": "Seçimi kaldır"
     }
   }
 }

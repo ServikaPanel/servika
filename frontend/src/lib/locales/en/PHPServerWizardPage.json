@@ -15,6 +15,10 @@
       "name": "PHP Extensions & Loader",
       "desc": "Toggle a module, install PECL, ionCube"
     },
+    "runtimes": {
+      "name": "Extra Runtimes",
+      "desc": ".NET Core, Node.js, Python"
+    },
     "webserver": {
       "name": "Web Server",
       "desc": "nginx / PHP-FPM status"
@@ -43,6 +47,27 @@
     },
     "note": "For a site's security headers, extra directives and Apache/nginx compatibility, use that domain's Apache & nginx screen."
   },
+  "runtimes": {
+    "heading": "Extra Runtimes",
+    "intro": "Languages other than PHP. Toggle on what to install — it installs together in the Summary step. Toggle off an installed one to remove it.",
+    "selectedBanner": "{{count}} runtime component selected — installs in the Summary step.",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "Runs ASP.NET Core web apps",
+    "dotnetSdkDesc": "Build with the dotnet CLI",
+    "nodeDesc": "System-wide Node.js with npm",
+    "pythonDesc": "Parallel Python interpreter",
+    "confirmRemove": "{{name}} will be removed from the server. Continue?",
+    "removeError": "Removal failed",
+    "removeTitle": "Remove",
+    "selectTitle": {
+      "add": "Add to the install list",
+      "remove": "Remove from selection"
+    }
+  },
   "summary": {
     "heading": "Summary",
     "subtitle": "The server's current PHP configuration. Every change takes effect at the step where it is applied.",
@@ -69,7 +94,8 @@
     },
     "kind": {
       "version": "version",
-      "extension": "extension"
+      "extension": "extension",
+      "runtime": "runtime"
     }
   }
 }

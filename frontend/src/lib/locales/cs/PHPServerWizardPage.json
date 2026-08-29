@@ -22,6 +22,10 @@
     "summary": {
       "name": "Souhrn",
       "desc": "Zkontrolovat konfiguraci"
+    },
+    "runtimes": {
+      "name": "Další runtimy",
+      "desc": ".NET Core, Node.js, Python"
     }
   },
   "nav": {
@@ -69,7 +73,29 @@
     },
     "kind": {
       "version": "verze",
-      "extension": "rozšíření"
+      "extension": "rozšíření",
+      "runtime": "runtime"
+    }
+  },
+  "runtimes": {
+    "heading": "Další runtimy",
+    "intro": "Jazyky mimo PHP. Zapněte, co chcete nainstalovat — instalace proběhne společně v kroku Souhrn. Vypnutím nainstalovaného runtimu jej odeberete.",
+    "selectedBanner": "Vybrána runtime komponenta: {{count}} — nainstaluje se v kroku Souhrn.",
+    "group": {
+      "dotnet": ".NET Core",
+      "node": "Node.js",
+      "python": "Python"
+    },
+    "dotnetRuntimeDesc": "Spouští webové aplikace ASP.NET Core",
+    "dotnetSdkDesc": "Vývoj pomocí dotnet CLI",
+    "nodeDesc": "Systémový Node.js s npm",
+    "pythonDesc": "Paralelní interpret Pythonu",
+    "confirmRemove": "{{name}} bude odebrán ze serveru. Pokračovat?",
+    "removeError": "Odebrání selhalo",
+    "removeTitle": "Odebrat",
+    "selectTitle": {
+      "add": "Přidat do seznamu k instalaci",
+      "remove": "Odebrat z výběru"
     }
   }
 }
