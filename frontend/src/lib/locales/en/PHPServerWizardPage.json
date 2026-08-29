@@ -80,6 +80,7 @@
     "installButton": "Install {{count}} component(s)",
     "installing": "Installing…",
     "installingName": "{{name}} installing",
+    "versionInstallFailed": "{{name}} could not be installed. The package may be missing or the build failed; check the log on the Versions step.",
     "bulkDone": "✓ Bulk install complete. The installed versions and extensions now show as active in their steps.",
     "badge": {
       "pending": "Pending",

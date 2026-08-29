@@ -59,6 +59,7 @@
     "installButton": "{{count}} Komponente(n) installieren",
     "installing": "Wird installiert…",
     "installingName": "{{name}} wird installiert",
+    "versionInstallFailed": "{{name}} konnte nicht installiert werden. Das Paket fehlt möglicherweise oder der Build ist fehlgeschlagen; siehe das Log im Schritt PHP-Versionen.",
     "bulkDone": "✓ Sammelinstallation abgeschlossen. Die installierten Versionen und Erweiterungen erscheinen jetzt in ihren Schritten als aktiv.",
     "badge": {
       "pending": "Ausstehend",

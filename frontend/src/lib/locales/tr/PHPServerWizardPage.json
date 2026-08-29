@@ -59,6 +59,7 @@
     "installButton": "{{count}} bileşeni kur",
     "installing": "Kuruluyor…",
     "installingName": "{{name}} kuruluyor",
+    "versionInstallFailed": "{{name}} kurulamadı. Paket eksik olabilir ya da derleme başarısız oldu; Sürümler adımındaki loga bakın.",
     "bulkDone": "✓ Toplu kurulum tamamlandı. Kurulan sürüm ve eklentiler ilgili adımlarında aktif görünür.",
     "badge": {
       "pending": "Bekliyor",

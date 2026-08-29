@@ -123,7 +123,7 @@ export default function PHPServerWizardPage() {
   )
 }
 
-type Version = { version: string; loaded: boolean }
+type Version = { version: string; loaded: boolean; resource?: string }
 
 // WebServerStep states the platform's real architecture: nginx plus an isolated
 // per-tenant PHP-FPM pool. cPanel/EasyApache's Apache-compile model does not
@@ -339,16 +339,33 @@ function installExtensionJob(sel: Selection, onProgress: (step: string, percent:
 // installVersionJob runs the detached PHP-version install (a systemd transient
 // unit) and watches it through the server-wide single-slot status endpoint. The
 // job carries no percent, so progress is coarse: running → 55, finishing → 95.
-// It resolves when the slot is free again, matching the standalone page, which
-// also reports completion on !running rather than reading a failure status.
+//
+// The slot going free (!running) does NOT mean the install SUCCEEDED: a unit
+// that FAILED to install the package also ends and frees the slot. So when the
+// slot frees, the version list is fetched and the version must now be loaded; if
+// it is not, the job rejects with a versionError so the row shows a real failure
+// rather than a false "done".
 function installVersionJob(sel: VersionSelection, onProgress: (step: string, percent: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
+    const verifyInstalled = () => {
+      api.get<{ versions: Version[] }>('/php-versions')
+        .then(({ data }) => {
+          const ok = (data.versions || []).some(v =>
+            v.version === sel.version && v.loaded &&
+            (v.resource === undefined || v.resource === sel.resource))
+          if (ok) { resolve(); return }
+          const err = new Error('version not installed') as Error & { versionError?: boolean }
+          err.versionError = true
+          reject(err)
+        })
+        .catch(reject)
+    }
     api.post('/php-versions/install', { version: sel.version, resource: sel.resource })
       .then(() => {
         const tick = () => {
           api.get<{ running: boolean; version?: string }>('/php-versions/status')
             .then(({ data }) => {
-              if (!data.running) { resolve(); return }
+              if (!data.running) { verifyInstalled(); return }
               const here = data.version === sel.version
               onProgress(here ? 'installing' : 'finishing', here ? 55 : 95)
               setTimeout(tick, 2000)
@@ -439,9 +456,12 @@ function SummaryStep({ selected, selectedVersions, selectedRuntimes, onClear }: 
         setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'done' } : x))
       } catch (e) {
         const code = (e as { peclError?: string })?.peclError
-        const message = code
-          ? t(`pecl.error.${code}`, { ns: 'PHPExtensionsPage', defaultValue: t('PHPExtensionsPage:errors.peclInstallFailed') })
-          : apiError(e, t('PHPExtensionsPage:errors.peclInstallFailed'))
+        const versionFailed = (e as { versionError?: boolean })?.versionError
+        const message = versionFailed
+          ? t('summary.versionInstallFailed', { name: s.name })
+          : code
+            ? t(`pecl.error.${code}`, { ns: 'PHPExtensionsPage', defaultValue: t('PHPExtensionsPage:errors.peclInstallFailed') })
+            : apiError(e, t('PHPExtensionsPage:errors.peclInstallFailed'))
         setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'error', message } : x))
       }
     }

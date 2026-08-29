@@ -59,6 +59,7 @@
     "installButton": "Instalează {{count}} componente",
     "installing": "Se instalează…",
     "installingName": "Se instalează {{name}}",
+    "versionInstallFailed": "{{name}} nu a putut fi instalat. Pachetul poate lipsi sau compilarea a eșuat; verificați logul la pasul Versiuni.",
     "bulkDone": "✓ Instalare în masă finalizată. Versiunile și extensiile instalate apar acum ca active la pașii lor.",
     "badge": {
       "pending": "În așteptare",

@@ -59,6 +59,7 @@
     "installButton": "安装 {{count}} 个组件",
     "installing": "安装中…",
     "installingName": "正在安装 {{name}}",
+    "versionInstallFailed": "无法安装 {{name}}。可能缺少软件包或构建失败；请查看“版本”步骤中的日志。",
     "bulkDone": "✓ 批量安装完成。已安装的版本和扩展现在会在各自步骤中显示为已启用。",
     "badge": {
       "pending": "待处理",

@@ -59,6 +59,7 @@
     "installButton": "Installer {{count}} composant(s)",
     "installing": "Installation…",
     "installingName": "Installation de {{name}}",
+    "versionInstallFailed": "{{name}} n'a pas pu être installé. Le paquet est peut-être manquant ou la compilation a échoué ; consultez le journal à l'étape Versions.",
     "bulkDone": "✓ Installation groupée terminée. Les versions et extensions installées apparaissent maintenant comme actives à leurs étapes.",
     "badge": {
       "pending": "En attente",

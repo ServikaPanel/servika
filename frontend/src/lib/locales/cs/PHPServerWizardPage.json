@@ -59,6 +59,7 @@
     "installButton": "Nainstalovat {{count}} komponent",
     "installing": "Instaluje se…",
     "installingName": "Instaluje se {{name}}",
+    "versionInstallFailed": "{{name}} se nepodařilo nainstalovat. Balíček může chybět nebo selhal build; podívejte se do logu v kroku Verze.",
     "bulkDone": "✓ Hromadná instalace dokončena. Nainstalované verze a rozšíření se nyní ve svých krocích zobrazují jako aktivní.",
     "badge": {
       "pending": "Čeká",

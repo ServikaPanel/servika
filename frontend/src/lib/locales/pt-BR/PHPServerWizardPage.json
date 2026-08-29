@@ -59,6 +59,7 @@
     "installButton": "Instalar {{count}} componente(s)",
     "installing": "Instalando…",
     "installingName": "Instalando {{name}}",
+    "versionInstallFailed": "Não foi possível instalar {{name}}. O pacote pode estar ausente ou a compilação falhou; verifique o log na etapa Versões.",
     "bulkDone": "✓ Instalação em lote concluída. As versões e extensões instaladas agora aparecem como ativas nas respectivas etapas.",
     "badge": {
       "pending": "Pendente",

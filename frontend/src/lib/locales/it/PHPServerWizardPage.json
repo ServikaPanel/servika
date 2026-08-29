@@ -59,6 +59,7 @@
     "installButton": "Installa {{count}} componente/i",
     "installing": "Installazione…",
     "installingName": "Installazione di {{name}}",
+    "versionInstallFailed": "Impossibile installare {{name}}. Il pacchetto potrebbe mancare o la compilazione è fallita; controlla il log nel passaggio Versioni.",
     "bulkDone": "✓ Installazione multipla completata. Le versioni e le estensioni installate ora risultano attive nei rispettivi passaggi.",
     "badge": {
       "pending": "In attesa",
