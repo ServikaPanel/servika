@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# servika-system-backup — disaster-recovery backup of the host state the per-domain
+# panel backup does NOT cover: every MySQL database and its grants, the panel
+# secrets, the systemd units, the DKIM keys, the BIND zones, the mail config, the
+# web and mail SSL plus the ACME account, the nginx and apache vhosts, the
+# per-tenant PHP-FPM pools, the real mailboxes, cron, and the panel application
+# itself. Daily timer, 7-day retention, root-only output.
+#
+# NOT `set -e` on purpose: a disaster-recovery backup captures whatever it can, so
+# one absent or failing component (no /etc/httpd, a mysqldump hiccup) must not
+# abort the rest. Each step logs its own OK / !! and the run continues.
+set -uo pipefail
+
+# Put the sbin dirs back on PATH: sudo rebuilds PATH from secure_path without them.
+case ":$PATH:" in
+  *:/usr/local/bin:*) : ;;
+  *) export PATH="/usr/local/sbin:/usr/local/bin:$PATH" ;;
+esac
+
+# Parse in the C locale. Under tr_TR.UTF-8 the ranges `a-z` and `A-Z` do NOT
+# contain `i` or `I`, so a character-range parse is cut at the first one, and the
+# brand name SERVIKA carries an I.
+export LC_ALL=C
+
+# Secrets (the MySQL dump, the panel environment, the SSL keys) must not be
+# world-readable.
+umask 077
+
+CERT_ROOT=${SERVIKA_CERT_ROOT:-/etc/pki/servika}
+ACME_HOME=${SERVIKA_ACME_HOME:-/root/.acme.sh}
+LOG_DIR=${SERVIKA_LOG_DIR:-/opt/servika/logs}
+
+DEST=/var/backups/servika-system
+STAMP=$(date +%F-%H%M)
+D="$DEST/$STAMP"
+mkdir -p "$D"
+chmod 700 "$DEST" "$D"
+LOG="$D/backup.log"
+: > "$LOG"
+
+log() { echo "[$(date +%T)] $*" | tee -a "$LOG"; }
+
+# arch <name> <paths relative to />... — tar the existing targets, skip when none
+# of them are present.
+arch() {
+  local name="$1"
+  shift
+  local present=() p
+  for p in "$@"; do
+    [ -e "/$p" ] && present+=("$p")
+  done
+  if [ ${#present[@]} -eq 0 ]; then
+    log "-- $name: nothing present, skipped"
+    return
+  fi
+  if tar czf "$D/$name.tar.gz" -C / "${present[@]}" 2>>"$LOG"; then
+    log "OK $name ($(du -h "$D/$name.tar.gz" | cut -f1))"
+  else
+    log "!! $name: tar failed"
+  fi
+}
+
+log "=== servika system backup started: $D ==="
+
+# 1) Every MySQL database (mail + domain + panel + grants). InnoDB is consistent
+#    under --single-transaction; the disaster-recovery purpose accepts that a few
+#    MyISAM tables are not.
+if mysqldump --all-databases --single-transaction --quick --routines --triggers --events 2>>"$LOG" | gzip > "$D/mysql-all.sql.gz"; then
+  log "OK mysql all databases ($(du -h "$D/mysql-all.sql.gz" | cut -f1))"
+else
+  log "!! mysql dump failed"
+fi
+
+# 2) Panel config and secrets: the JWT secret, the DB password, the encryption
+#    key and the proxy secret all live under /etc/servika.
+arch etc-servika etc/servika
+
+# 3) systemd units (the panel units and every per-tenant PHP-FPM master).
+shopt -s nullglob
+units=(/etc/systemd/system/servika*.service /etc/systemd/system/servika*.service.d /etc/systemd/system/php-fpm-c_*.service)
+shopt -u nullglob
+if [ ${#units[@]} -eq 0 ]; then
+  log "-- systemd-units: nothing present, skipped"
+else
+  rel=()
+  for u in "${units[@]}"; do rel+=("${u#/}"); done
+  if tar czf "$D/systemd-units.tar.gz" -C / "${rel[@]}" 2>>"$LOG"; then
+    log "OK systemd-units ($(du -h "$D/systemd-units.tar.gz" | cut -f1))"
+  else
+    log "!! systemd-units: tar failed"
+  fi
+fi
+
+# 4) OpenDKIM keys and config (mail signing).
+arch opendkim etc/opendkim etc/opendkim.conf
+
+# 5) BIND zones and config.
+arch named var/named etc/named.conf etc/named
+
+# 6) Postfix and Dovecot config. The mail SSL certificates live under the cert
+#    root, backed up with the web certificates in step 7.
+arch mail-config etc/postfix etc/dovecot
+
+# 7) Web and mail SSL certificates plus the ACME account, so a rebuild re-issues
+#    without hitting the Let's Encrypt rate limit.
+arch ssl-acme "${CERT_ROOT#/}" "${ACME_HOME#/}"
+
+# 8) nginx and apache vhosts (sites cannot be served without them).
+arch web-vhosts etc/nginx etc/httpd
+
+# 9) per-tenant PHP-FPM pool config (what the per-tenant units read).
+arch php-fpm etc/php-fpm-tenant etc/php-fpm.d
+
+# 10) The real mailboxes (Maildir): the database holds the mailbox definitions,
+#     the messages live here.
+arch vmail var/vmail
+
+# 11) cron (the panel, this backup, and tenant crontabs).
+arch cron etc/cron.d var/spool/cron
+
+# 12) The panel application (binary + frontend + plugins + version), without the logs.
+if tar czf "$D/opt-servika.tar.gz" -C / --exclude="${LOG_DIR#/}" opt/servika 2>>"$LOG"; then
+  log "OK opt-servika ($(du -h "$D/opt-servika.tar.gz" | cut -f1))"
+else
+  log "!! opt-servika: tar failed"
+fi
+
+# Retention: remove backup directories older than 7 days.
+find "$DEST" -mindepth 1 -maxdepth 1 -type d -name "20*" -mtime +7 -exec rm -rf {} + 2>>"$LOG" || true
+
+# Belt and braces: force every output file to 0600.
+chmod 600 "$D"/* 2>/dev/null || true
+
+log "=== servika system backup complete ==="
+ls -la "$D" | tee -a "$LOG"

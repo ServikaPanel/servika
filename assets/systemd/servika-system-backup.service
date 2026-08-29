@@ -1,0 +1,7 @@
+[Unit]
+Description=Servika host disaster-recovery backup
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/servika/env
+ExecStart=/usr/local/bin/servika-system-backup

@@ -407,7 +407,7 @@ fi
   || die "the release does not contain the database backup tool; update was not started"
 install -m 0755 "$A/ops/servika-db-backup" "$DB_BACKUP"
 UNITS_INSTALLED=0
-for unit in servika-db-backup.service servika-db-backup.timer servika-av-watch.service servika-proc-watch.service servika-av-scan.service servika-av-scan.timer; do
+for unit in servika-db-backup.service servika-db-backup.timer servika-system-backup.service servika-system-backup.timer servika-av-watch.service servika-proc-watch.service servika-av-scan.service servika-av-scan.timer; do
   if [ -f "$A/systemd/$unit" ]; then
     install -m 0644 "$A/systemd/$unit" "/etc/systemd/system/$unit"
     UNITS_INSTALLED=1
@@ -420,6 +420,15 @@ if [ "$UNITS_INSTALLED" = 1 ]; then
     ok "daily panel database backup timer active"
   else
     warn "database backup timer could not be started"
+  fi
+  # Host disaster-recovery backup timer (everything the per-domain backup omits).
+  if [ -f /etc/systemd/system/servika-system-backup.timer ]; then
+    systemctl enable --now servika-system-backup.timer >/dev/null 2>&1 || true
+    if systemctl is-active --quiet servika-system-backup.timer; then
+      ok "daily host disaster-recovery backup timer active"
+    else
+      warn "system backup timer could not be started"
+    fi
   fi
 fi
 

@@ -581,7 +581,7 @@ for t in "$A"/ops/*; do
   case "$nm" in servika-*) OPS_INSTALLED="$OPS_INSTALLED $nm" ;; esac
 done
 cp "$A/ops/"* /opt/servika/src/scripts/ 2>/dev/null
-ok "operations tools (/usr/local/bin: update, db-backup, optimize, redis-setup, ftp-setup, mail-setup, repair, restore, verify, jail, wp-redis)"
+ok "operations tools (/usr/local/bin: update, db-backup, system-backup, optimize, redis-setup, ftp-setup, mail-setup, repair, restore, verify, jail, wp-redis)"
 
 # Every later step reaches these tools by bare name through `command -v`, so a
 # tool that is on disk but unresolvable there is skipped and the installation
@@ -722,7 +722,7 @@ install -m 0644 "$A/systemd/servika.service" /etc/systemd/system/servika.service
 # watching defaults to off, and the panel starts the unit when an operator turns
 # the setting on. Enabling it now would start a watcher on every server whose
 # operator never asked for one.
-for unit in servika-db-backup.service servika-db-backup.timer servika-av-watch.service servika-proc-watch.service servika-av-scan.service servika-av-scan.timer; do
+for unit in servika-db-backup.service servika-db-backup.timer servika-system-backup.service servika-system-backup.timer servika-av-watch.service servika-proc-watch.service servika-av-scan.service servika-av-scan.timer; do
   [ -f "$A/systemd/$unit" ] && cp "$A/systemd/$unit" "/etc/systemd/system/$unit"
 done
 systemctl daemon-reload
@@ -731,6 +731,15 @@ if [ -f /etc/systemd/system/servika-db-backup.timer ]; then
   systemctl is-active --quiet servika-db-backup.timer \
     && ok "daily panel database backup active (03:30, 14-day retention)" \
     || warn "database backup timer could not be started"
+fi
+# Host disaster-recovery backup: everything the per-domain backup does not cover
+# (all databases and grants, secrets, systemd units, DKIM, BIND, mail config,
+# SSL/ACME, vhosts, per-tenant PHP-FPM, mailboxes, cron, the panel itself).
+if [ -f /etc/systemd/system/servika-system-backup.timer ]; then
+  systemctl enable --now servika-system-backup.timer >/dev/null 2>&1
+  systemctl is-active --quiet servika-system-backup.timer \
+    && ok "daily host disaster-recovery backup active (04:00, 7-day retention)" \
+    || warn "system backup timer could not be started"
 fi
 systemctl enable --now php-fpm >/dev/null 2>&1
 for v in $PHP_VERS; do systemctl enable --now php$v-php-fpm >/dev/null 2>&1; done
