@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -146,9 +147,96 @@ func sweepOnce() {
 		// checked=false → fresh[pkg] RETAINS previous value (if any); unknown otherwise.
 	}
 
+	// DYNAMIC DISCOVERY: enumerate the phpXX-php-fpm packages Remi actually offers,
+	// so a PHP version added upstream (8.7, 9.0) appears in the panel WITHOUT a code
+	// change. A repoquery listing IS the availability proof, so each discovered
+	// package is marked available here rather than probed a second time. This runs
+	// in the background sweep only, never the request path, keeping AllVersions()
+	// dnf-free the way the availability cache does. On failure discoverRemiVersions
+	// returns nil and the previous discovery is kept (last-known-good).
+	if found := discoverRemiVersions(); found != nil {
+		for _, m := range found {
+			fresh["php"+m.Code+"-php-fpm"] = true
+		}
+		discoveredMu.Lock()
+		discoveredCache = found
+		discoveredMu.Unlock()
+	}
+
 	availabilityMu.Lock()
 	availabilityCache = fresh
 	availabilityMu.Unlock()
+}
+
+// ---- Dynamic Remi version discovery ----
+// SupportedVersions is a fixed list; discovery ADDS to it, so a version that
+// appears in Remi later shows up on its own. It never removes a curated entry.
+
+// reRemiFPM matches a Remi fpm package name "php83-php-fpm" and captures the
+// two-digit code. Remi uses a single-digit major and minor (php74 … php90).
+var reRemiFPM = regexp.MustCompile(`^php([0-9])([0-9])-php-fpm$`)
+
+var (
+	discoveredMu    sync.Mutex
+	discoveredCache []VersionMetadata
+)
+
+// discoverRemiVersions lists the phpXX-php-fpm packages Remi offers. It runs a
+// single dnf repoquery, which is expensive and can hang under a dnf lock, so it
+// is called ONLY from the background sweep. An error returns nil and the caller
+// keeps whatever the last successful discovery found.
+func discoverRemiVersions() []VersionMetadata {
+	ctx, cancel := context.WithTimeout(context.Background(), dnfTimeout)
+	defer cancel()
+	out, err := systemCommandContext(ctx, "dnf", "repoquery", "-q", "--qf", "%{name}\n", "php*-php-fpm").Output()
+	if err != nil {
+		return nil
+	}
+	return parseRemiFPMVersions(string(out))
+}
+
+// parseRemiFPMVersions turns dnf repoquery output into version metadata, deduped
+// by code. It is pure so the parse is tested without a real dnf; a line that is
+// not a phpXX-php-fpm name (php-fpm, php83-php-cli, blank) is ignored.
+func parseRemiFPMVersions(output string) []VersionMetadata {
+	seen := map[string]bool{}
+	var found []VersionMetadata
+	for line := range strings.SplitSeq(output, "\n") {
+		m := reRemiFPM.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil {
+			continue
+		}
+		code := m[1] + m[2]
+		if seen[code] {
+			continue
+		}
+		seen[code] = true
+		found = append(found, VersionMetadata{Version: m[1] + "." + m[2], Code: code, Resource: "remi"})
+	}
+	return found
+}
+
+// mergedMetadata returns the fixed SupportedVersions plus every Remi version the
+// background sweep discovered that the fixed list does not already name. It reads
+// only in-memory state (no dnf), so it is safe on the request path.
+func mergedMetadata() []VersionMetadata {
+	out := append([]VersionMetadata(nil), SupportedVersions...)
+	discoveredMu.Lock()
+	found := discoveredCache
+	discoveredMu.Unlock()
+	for _, m := range found {
+		exists := false
+		for _, d := range out {
+			if d.Code == m.Code && d.Resource == m.Resource {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // dnfProbeCore performs a THREE-STATE dnf probe for a single package. Returns (available, checked):
@@ -314,8 +402,9 @@ var (
 	// often the cache actually recomputes, which is the same shape dnfProbe,
 	// phpOpState and launchPHPOp already use in this package.
 	discoverAll = func() []Version {
-		out := make([]Version, 0, len(SupportedVersions))
-		for _, m := range SupportedVersions {
+		metas := mergedMetadata()
+		out := make([]Version, 0, len(metas))
+		for _, m := range metas {
 			out = append(out, Discover(m))
 		}
 		// Sort installed versions first, then by version descending.
