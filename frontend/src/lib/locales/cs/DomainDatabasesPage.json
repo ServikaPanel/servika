@@ -35,7 +35,8 @@
     "delete": "Smazat",
     "manage": "Spravovat",
     "optimize": "⚡ Optimalizovat",
-    "optimizing": "Optimalizuji…"
+    "optimizing": "Optimalizuji…",
+    "createUser": "🔑 Vytvořit uživatele"
   },
   "errors": {
     "pmaToken": "Token phpMyAdmin nelze získat",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "Všechny tabulky v \"{{name}}\" budou optimalizovány (odstraní se fragmentace a uvolní se nevyužité místo). U velkých tabulek to může trvat několik sekund. Pokračovat?",
     "optimizeConfirmButton": "Optimalizovat",
     "optimizeReclaimed": "Optimalizováno. Uvolněno {{reclaimed}} ({{before}} → {{after}}).",
-    "optimizeTidy": "\"{{name}}\" optimalizováno. Tabulky již byly kompaktní; nebylo co uvolnit."
+    "optimizeTidy": "\"{{name}}\" optimalizováno. Tabulky již byly kompaktní; nebylo co uvolnit.",
+    "userNotDefined": "— nedefinováno"
   }
 }

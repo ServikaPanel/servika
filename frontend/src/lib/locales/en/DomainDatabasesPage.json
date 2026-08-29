@@ -35,7 +35,8 @@
     "delete": "Delete",
     "manage": "Manage",
     "optimize": "⚡ Optimize",
-    "optimizing": "Optimizing…"
+    "optimizing": "Optimizing…",
+    "createUser": "🔑 Create User"
   },
   "errors": {
     "pmaToken": "Could not obtain phpMyAdmin token",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "All tables in \"{{name}}\" will be optimized (fragmentation is removed and unused space is reclaimed). On large tables this can take a few seconds. Continue?",
     "optimizeConfirmButton": "Optimize",
     "optimizeReclaimed": "Optimized. {{reclaimed}} reclaimed ({{before}} → {{after}}).",
-    "optimizeTidy": "\"{{name}}\" optimized. The tables were already tidy; there was no significant space to reclaim."
+    "optimizeTidy": "\"{{name}}\" optimized. The tables were already tidy; there was no significant space to reclaim.",
+    "userNotDefined": "— not defined"
   }
 }

@@ -82,6 +82,14 @@ func DecryptDBPass(dbUser, stored string) (string, error) {
 	return secret.DecryptWith(stored, dbUser)
 }
 
+// EncryptDBPass seals a database password bound to its db_user, for a caller
+// outside this package that writes its own db_accounts row (the create-user path
+// for a database that has none). It mirrors DecryptDBPass, which is already
+// exported, so a row written here reads back through the same reveal path.
+func EncryptDBPass(dbUser, plaintext string) (string, error) {
+	return encryptDBPass(dbUser, plaintext)
+}
+
 // IsEncryptedValue reports whether stored already looks like ciphertext. Used to
 // reject user-supplied passwords that carry the encryption prefix, closing the
 // decryption-oracle path.
@@ -486,6 +494,26 @@ func MySQLCreateScopedUser(dbUser, dbPass, dbName string) error {
 	}
 	return runRootSQL(
 		fmt.Sprintf("CREATE USER '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
+		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
+		"FLUSH PRIVILEGES;",
+	)
+}
+
+// MySQLAddUser creates a MySQL account for an EXISTING database and grants it
+// access, WITHOUT recording a db_accounts row (the caller updates its own row).
+//
+// It is used for a database that has a schema but no user, which happens when a
+// database is deleted from the panel and restored from a backup: the archive
+// carries schema and data, and a fresh account has to be attached so the site can
+// connect. MySQLCreateDB cannot be reused because it INSERTs a db_accounts row,
+// which for an already-registered database violates the unique key.
+func MySQLAddUser(dbName, dbUser, dbPass string) error {
+	if err := validateMySQLCredentials(dbName, dbUser, dbPass); err != nil {
+		return err
+	}
+	return runRootSQL(
+		fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
+		fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
 		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
 		"FLUSH PRIVILEGES;",
 	)

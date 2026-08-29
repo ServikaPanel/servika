@@ -35,7 +35,8 @@
     "delete": "Sil",
     "manage": "Yönet",
     "optimize": "⚡ Optimize Et",
-    "optimizing": "Optimize ediliyor…"
+    "optimizing": "Optimize ediliyor…",
+    "createUser": "🔑 Kullanıcı Oluştur"
   },
   "errors": {
     "pmaToken": "phpMyAdmin belirteci alınamadı",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "\"{{name}}\" içindeki tüm tablolar optimize edilecek (fragmentasyon giderilir, kullanılmayan alan geri kazanılır). Büyük tablolarda işlem birkaç saniye sürebilir. Devam edilsin mi?",
     "optimizeConfirmButton": "Optimize Et",
     "optimizeReclaimed": "Optimize edildi. {{reclaimed}} alan geri kazanıldı ({{before}} → {{after}}).",
-    "optimizeTidy": "\"{{name}}\" optimize edildi. Tablolar zaten derli topluydu, geri kazanılacak belirgin alan yoktu."
+    "optimizeTidy": "\"{{name}}\" optimize edildi. Tablolar zaten derli topluydu, geri kazanılacak belirgin alan yoktu.",
+    "userNotDefined": "— tanımlı değil"
   }
 }

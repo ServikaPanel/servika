@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"servika/internal/credentials"
 	"servika/internal/httpx"
@@ -15,6 +16,10 @@ import (
 
 type setDBPwReq struct {
 	Password string `json:"password"`
+	// User is required ONLY when the database has no db_user yet (a database
+	// restored from a backup, whose archive carries no MySQL account): the account
+	// is created under this name.
+	User string `json:"user"`
 }
 
 // SetDatabasePassword handles PUT /api/v1/databases/:dbid/password.
@@ -60,7 +65,45 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := credentials.MySQLChangePassword(h.DB, dbUser, req.Password); err != nil {
+	if strings.TrimSpace(dbUser) == "" {
+		// The database has no MySQL user. This happens when a database is deleted
+		// from the panel and restored from a backup: the archive holds schema and
+		// data, not the account. The panel assumed every database had a user, so the
+		// site could not connect and there was no way to create one. Create it now.
+		newUser := strings.TrimSpace(req.User)
+		if newUser == "" {
+			httpx.WriteError(w, http.StatusBadRequest, "this database has no user — send a user name to create one")
+			return
+		}
+		if !credentials.ValidDBIdentifier(newUser) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid user name")
+			return
+		}
+		// The new name must not collide with another database's account, which would
+		// hand this database's password to that account's owner.
+		var clash int
+		if e := h.DB.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM db_accounts WHERE db_user=? AND id<>?`, newUser, dbid).Scan(&clash); e != nil || clash > 0 {
+			httpx.WriteError(w, http.StatusConflict, "this user name is already used by another database")
+			return
+		}
+		if err := credentials.MySQLAddUser(dbName, newUser, req.Password); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
+			return
+		}
+		encPass, err := credentials.EncryptDBPass(newUser, req.Password)
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
+			return
+		}
+		if _, err := h.DB.ExecContext(r.Context(),
+			`UPDATE db_accounts SET db_user=?, db_pass_plain=?, db_host='localhost' WHERE id=?`,
+			newUser, encPass, dbid); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "database record could not be updated")
+			return
+		}
+		dbUser = newUser
+	} else if err := credentials.MySQLChangePassword(h.DB, dbUser, req.Password); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "password change failed")
 		return
 	}

@@ -35,7 +35,8 @@
     "delete": "Ștergere",
     "manage": "Gestionează",
     "optimize": "⚡ Optimizează",
-    "optimizing": "Se optimizează…"
+    "optimizing": "Se optimizează…",
+    "createUser": "🔑 Creează utilizator"
   },
   "errors": {
     "pmaToken": "Nu s-a putut obține tokenul phpMyAdmin",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "Toate tabelele din \"{{name}}\" vor fi optimizate (fragmentarea este eliminată și spațiul nefolosit recuperat). La tabele mari poate dura câteva secunde. Continuați?",
     "optimizeConfirmButton": "Optimizează",
     "optimizeReclaimed": "Optimizat. {{reclaimed}} recuperați ({{before}} → {{after}}).",
-    "optimizeTidy": "\"{{name}}\" optimizat. Tabelele erau deja compacte; nu era spațiu semnificativ de recuperat."
+    "optimizeTidy": "\"{{name}}\" optimizat. Tabelele erau deja compacte; nu era spațiu semnificativ de recuperat.",
+    "userNotDefined": "— nedefinit"
   }
 }

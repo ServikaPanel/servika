@@ -22,15 +22,26 @@ export default function DBPasswordResetModal({ db, onClose, onDone }: {
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newPassword, setNewPassword] = useState<string | null>(null)
+  // A database with no user: this happens for a database restored from a backup,
+  // whose archive carries schema and data but no MySQL account. The panel assumed
+  // every database had a user, so there was no way to create one and the site
+  // could not connect. This modal creates it.
+  const noUser = !db.db_user
+  const [newUser, setNewUser] = useState('')
 
   async function reset(random: boolean) {
     if (!random && customPassword.length < 6) {
       setError(t('errors.tooShort'))
       return
     }
+    if (noUser && !newUser.trim()) {
+      setError(t('errors.userRequired'))
+      return
+    }
     setProcessing(true); setError(null)
     try {
-      const body = random ? {} : { password: customPassword }
+      const body: Record<string, string> = random ? {} : { password: customPassword }
+      if (noUser) body.user = newUser.trim()
       const { data } = await api.put(`/databases/${db.id}/password`, body)
       setNewPassword(data.db_pass)
     } catch (e) {
@@ -41,12 +52,32 @@ export default function DBPasswordResetModal({ db, onClose, onDone }: {
   }
 
   return (
-    <Modal open={true} title={t('title', { name: db.db_name })} onClose={newPassword ? onDone : onClose} width="md">
+    <Modal open={true} title={t(noUser ? 'createTitle' : 'title', { name: db.db_name })} onClose={newPassword ? onDone : onClose} width="md">
       {!newPassword ? (
         <div className="space-y-4">
-          <div className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
-            <strong className="font-mono">{db.db_user}</strong>{t('introPre')}
-          </div>
+          {noUser ? (
+            <>
+              <div className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                {t('noUserWarning')}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1" htmlFor="db-new-user">{t('userLabel')}</label>
+                <input
+                  id="db-new-user"
+                  type="text"
+                  value={newUser}
+                  onChange={e => setNewUser(e.target.value)}
+                  placeholder={t('userPlaceholder')}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none dark:bg-slate-900/40 text-slate-900 dark:text-slate-100"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('userHint')}</p>
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
+              <strong className="font-mono">{db.db_user}</strong>{t('introPre')}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('customLabel')}</label>
             <input

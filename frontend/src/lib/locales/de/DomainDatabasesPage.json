@@ -35,7 +35,8 @@
     "delete": "Löschen",
     "manage": "Verwalten",
     "optimize": "⚡ Optimieren",
-    "optimizing": "Wird optimiert…"
+    "optimizing": "Wird optimiert…",
+    "createUser": "🔑 Benutzer erstellen"
   },
   "errors": {
     "pmaToken": "phpMyAdmin-Token konnte nicht abgerufen werden",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "Alle Tabellen in „{{name}}\" werden optimiert (Fragmentierung wird beseitigt, ungenutzter Speicher zurückgewonnen). Bei großen Tabellen kann dies einige Sekunden dauern. Fortfahren?",
     "optimizeConfirmButton": "Optimieren",
     "optimizeReclaimed": "Optimiert. {{reclaimed}} zurückgewonnen ({{before}} → {{after}}).",
-    "optimizeTidy": "„{{name}}\" optimiert. Die Tabellen waren bereits aufgeräumt; es gab keinen nennenswerten Speicher zurückzugewinnen."
+    "optimizeTidy": "„{{name}}\" optimiert. Die Tabellen waren bereits aufgeräumt; es gab keinen nennenswerten Speicher zurückzugewinnen.",
+    "userNotDefined": "— nicht definiert"
   }
 }

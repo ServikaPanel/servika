@@ -35,7 +35,8 @@
     "delete": "Supprimer",
     "manage": "Gérer",
     "optimize": "⚡ Optimiser",
-    "optimizing": "Optimisation…"
+    "optimizing": "Optimisation…",
+    "createUser": "🔑 Créer l'utilisateur"
   },
   "errors": {
     "pmaToken": "Impossible d'obtenir le jeton phpMyAdmin",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "Toutes les tables de « {{name}} » seront optimisées (la fragmentation est supprimée et l’espace inutilisé récupéré). Sur de grandes tables, cela peut prendre quelques secondes. Continuer ?",
     "optimizeConfirmButton": "Optimiser",
     "optimizeReclaimed": "Optimisé. {{reclaimed}} récupéré ({{before}} → {{after}}).",
-    "optimizeTidy": "« {{name}} » optimisé. Les tables étaient déjà compactes ; aucun espace notable à récupérer."
+    "optimizeTidy": "« {{name}} » optimisé. Les tables étaient déjà compactes ; aucun espace notable à récupérer.",
+    "userNotDefined": "— non défini"
   }
 }

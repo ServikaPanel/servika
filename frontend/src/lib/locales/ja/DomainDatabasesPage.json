@@ -35,7 +35,8 @@
     "delete": "削除",
     "manage": "管理",
     "optimize": "⚡ 最適化",
-    "optimizing": "最適化しています…"
+    "optimizing": "最適化しています…",
+    "createUser": "🔑 ユーザーを作成"
   },
   "errors": {
     "pmaToken": "phpMyAdmin のトークンを取得できませんでした",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "\"{{name}}\" 内のすべてのテーブルを最適化します（フラグメンテーションを解消し、未使用領域を回収します）。大きなテーブルでは数秒かかることがあります。続行しますか？",
     "optimizeConfirmButton": "最適化",
     "optimizeReclaimed": "最適化しました。{{reclaimed}} を回収しました（{{before}} → {{after}}）。",
-    "optimizeTidy": "\"{{name}}\" を最適化しました。テーブルはすでに整理されており、回収できる領域はありませんでした。"
+    "optimizeTidy": "\"{{name}}\" を最適化しました。テーブルはすでに整理されており、回収できる領域はありませんでした。",
+    "userNotDefined": "— 未定義"
   }
 }

@@ -35,7 +35,8 @@
     "delete": "删除",
     "manage": "管理",
     "optimize": "⚡ 优化",
-    "optimizing": "正在优化…"
+    "optimizing": "正在优化…",
+    "createUser": "🔑 创建用户"
   },
   "errors": {
     "pmaToken": "无法获取 phpMyAdmin 令牌",
@@ -93,6 +94,7 @@
     "optimizeConfirm": "将优化 \"{{name}}\" 中的所有表（消除碎片并回收未使用的空间）。对于大表可能需要几秒钟。是否继续？",
     "optimizeConfirmButton": "优化",
     "optimizeReclaimed": "已优化。回收了 {{reclaimed}}（{{before}} → {{after}}）。",
-    "optimizeTidy": "\"{{name}}\" 已优化。表已经很紧凑，没有可回收的明显空间。"
+    "optimizeTidy": "\"{{name}}\" 已优化。表已经很紧凑，没有可回收的明显空间。",
+    "userNotDefined": "— 未定义"
   }
 }
