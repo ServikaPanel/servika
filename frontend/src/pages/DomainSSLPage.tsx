@@ -289,8 +289,6 @@ export default function DomainSSLPage() {
           <div className="space-y-2 text-sm">
             <DetailRow label={t('status.sourceLabel')} value={sourceLabel(status.source, t)} />
             {status.expires_at && <DetailRow label={t('status.expiryLabel')} value={new Date(status.expires_at).toLocaleDateString('en-US', { dateStyle: 'long' })} />}
-            <DetailRow label={t('status.certPathLabel')} value={status.cert_path || t('status.empty')} mono />
-            <DetailRow label={t('status.keyPathLabel')} value={status.key_path || t('status.empty')} mono />
             <button
               onClick={disable}
               disabled={isProcessing}
