@@ -82,6 +82,12 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid backup file")
 		return
 	}
+	// Fetch the archive from the off-site destination when the local copy is
+	// gone, so a pruned-but-uploaded backup is still restorable.
+	if err := ensureLocalArchive(r.Context(), h.DB, id, backupID, systemUser, file); err != nil {
+		httpx.WriteError(w, http.StatusNotFound, err.Error())
+		return
+	}
 
 	abs := filepath.Join(backupRoot(), systemUser, file)
 	archiveType := archivex.DetectType(abs)

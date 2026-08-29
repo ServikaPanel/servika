@@ -189,6 +189,7 @@ func downloadS3Object(ctx context.Context, d *Destination, objectName, localPath
 	if err != nil {
 		return err
 	}
+	// #nosec G704 -- URL derives from the destination's own S3 endpoint, validated as HTTPS in s3Endpoint and checked against internal ranges below and at dial time.
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return err

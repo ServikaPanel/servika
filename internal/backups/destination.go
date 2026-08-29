@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -154,9 +155,52 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 	return nil
 }
 
-// downloadFromRemote fetches a single backup file from the destination into localPath.
+// ensureLocalArchive makes sure a backup archive is present on local disk,
+// fetching it from the domain's off-site destination when it is not.
 //
-//nolint:unused // reserved for the remote-restore path (not yet wired to a handler); kept alongside uploadToRemote so the destination round-trip stays complete.
+// A local archive can be gone while the off-site copy is intact: manual
+// retention prunes the newest-N on the root disk, and an operator can remove a
+// local file by hand. Before this, every read path (restore, contents,
+// download) answered "missing on disk" and the off-site copy was unreachable
+// from the panel, so a backup the customer could see listed could not be used.
+//
+// The fetch happens ONLY when the row records a successful upload, so a backup
+// that never went off-site still answers "missing" rather than reaching for a
+// file that was never written.
+func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int64, systemUser, file string) error {
+	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file {
+		return errors.New("invalid backup file")
+	}
+	abs := filepath.Join(backupRoot(), systemUser, file)
+	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
+	if fi, err := os.Lstat(abs); err == nil && fi.Mode().IsRegular() {
+		return nil
+	}
+	var remoteStatus string
+	err := db.QueryRowContext(ctx,
+		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
+		Scan(&remoteStatus)
+	if err != nil || remoteStatus != "successful" {
+		return errors.New("backup file is missing on disk")
+	}
+	d, err := readDestination(ctx, db, domainID)
+	if err != nil || d == nil {
+		return errors.New("backup file is missing on disk")
+	}
+	dir := filepath.Join(backupRoot(), systemUser)
+	// #nosec G703 -- dir derives from backupRoot() and a validSystemUser-checked identifier.
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return errors.New("backup file is missing on disk")
+	}
+	if err := downloadFromRemote(ctx, db, d, file, abs); err != nil {
+		// #nosec G706 -- logged values are integer IDs and error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
+		return errors.New("backup file is missing on disk and could not be fetched from the off-site destination")
+	}
+	return nil
+}
+
+// downloadFromRemote fetches a single backup file from the destination into localPath.
 func downloadFromRemote(ctx context.Context, db *sql.DB, d *Destination, fileName, localPath string) error {
 	if objectStorageType(d.Type) {
 		return downloadS3Object(ctx, d, fileName, localPath)

@@ -110,11 +110,12 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file {
 		return "", fmt.Errorf("invalid backup file")
 	}
-	abs := filepath.Join(backupRoot(), systemUser, file)
-	// #nosec G703 -- path derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
-	if _, err := os.Stat(abs); err != nil {
-		return "", fmt.Errorf("backup file is missing on disk")
+	// Fetch the archive from the off-site destination when the local copy was
+	// pruned or removed, so a backup that uploaded successfully stays restorable.
+	if err := ensureLocalArchive(ctx, db, domainID, backupID, systemUser, file); err != nil {
+		return "", err
 	}
+	abs := filepath.Join(backupRoot(), systemUser, file)
 	allMembers, _ := listArchiveMembers(abs)
 	members := membersForMode(mode, systemUser, allMembers, nil)
 	if len(members) == 0 {

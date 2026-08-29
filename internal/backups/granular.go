@@ -455,6 +455,12 @@ func (h *Handlers) Contents(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid backup file")
 		return
 	}
+	// Fetch the archive from the off-site destination when the local copy is
+	// gone, so the contents of a pruned-but-uploaded backup can still be listed.
+	if err := ensureLocalArchive(r.Context(), h.DB, id, bid, systemUser, file); err != nil {
+		httpx.WriteError(w, http.StatusNotFound, err.Error())
+		return
+	}
 	abs := filepath.Join(backupRoot(), systemUser, file)
 
 	files, dbs, truncated, err := scanArchiveContents(abs, systemUser)

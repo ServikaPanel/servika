@@ -347,6 +347,12 @@ func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "backup not found")
 		return
 	}
+	// Fetch the archive from the off-site destination when the local copy is
+	// gone, so a pruned-but-uploaded backup can still be downloaded.
+	if err := ensureLocalArchive(r.Context(), h.DB, id, backupID, systemUser, file); err != nil {
+		httpx.WriteError(w, http.StatusNotFound, err.Error())
+		return
+	}
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	abs := filepath.Join(backupRoot(), systemUser, file)
 	// #nosec G304 -- fixed system/config path, server-internal temp/archive path, or validated identifier; tenant reads use safeio (openat2).
