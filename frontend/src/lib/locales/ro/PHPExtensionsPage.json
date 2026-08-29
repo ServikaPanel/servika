@@ -119,6 +119,11 @@
       "uuid": "Generare UUID",
       "swoole": "Server coroutine de înaltă performanță",
       "ds": "Structuri de date eficiente"
+    },
+    "selectedBanner": "{{count}} extensie selectată — toate se instalează împreună la pasul Rezumat.",
+    "selectTitle": {
+      "add": "Adaugă în lista de instalare",
+      "remove": "Elimină din selecție"
     }
   }
 }

@@ -98,9 +98,21 @@ const PHP_VERSION_COOKIE = 'servika.php.version'
 const PHP_VERSION_MAX_AGE = 60 * 60 * 24 * 30
 const DEFAULT_PHP_VERSION = '8.3'
 
+// Selection is a catalog extension the wizard has marked "to install"; the actual
+// install runs in bulk from the Summary step. It is threaded as props so the
+// standalone page keeps its immediate-install button (setSelected absent → the
+// install() path below), which is why the toggle never becomes a dead no-op.
+export type Selection = { version: string; key: string; name: string }
+
 // embedded drops the breadcrumb, heading and page padding so the wizard can
 // render this page as one of its steps without a page-within-a-page chrome.
-export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } = {}) {
+// selected/setSelected switch the uninstalled-extension button from immediate
+// install to "pick now, install in bulk from the Summary step".
+export default function PHPExtensionsPage({ embedded, selected, setSelected }: {
+  embedded?: boolean
+  selected?: Selection[]
+  setSelected?: (fn: (s: Selection[]) => Selection[]) => void
+} = {}) {
   const { t } = useTranslation('PHPExtensionsPage')
   const { confirm, notify } = useDialog()
   const [versions, setVersions] = useState<Version[]>([])
@@ -258,6 +270,17 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
     tick()
   }
 
+  // isSelected / toggleSelection drive the wizard's "pick now, install in bulk"
+  // flow. They are no-ops without setSelected, so the standalone page falls back
+  // to the immediate install() button rendered further down.
+  const isSelected = (key: string) => selected?.some(s => s.version === activeVersion && s.key === key) ?? false
+  const toggleSelection = (item: CatalogItem) => {
+    setSelected?.(prev =>
+      isSelected(item.key)
+        ? prev.filter(s => !(s.version === activeVersion && s.key === item.key))
+        : [...prev, { version: activeVersion, key: item.key, name: item.name }])
+  }
+
   const ionCubeInstalled = extensions.some(extension => extension.name.toLowerCase().includes('ioncube'))
   const findInstalled = useCallback(
     (key: string) => extensions.find(extension => matchesKey(extension.name, key)),
@@ -328,6 +351,12 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
+      {(selected?.length ?? 0) > 0 && (
+        <div className="mb-3 px-3 py-2 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-md text-sm text-brand-700 dark:text-brand-300">
+          {t('catalog.selectedBanner', { count: selected!.length })}
+        </div>
+      )}
+
       {peclProgress && (
         <div className="mb-3 px-3 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
           <div className="flex items-center justify-between text-sm text-blue-700 dark:text-blue-300 mb-2">
@@ -353,6 +382,7 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
                       className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${
                         installed?.active ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
                         : installed ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                        : isSelected(item.key) ? 'bg-brand-50 dark:bg-brand-900/15 border-brand-300 dark:border-brand-700'
                         : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                       }`}>
                       <div className="min-w-0 flex-1">
@@ -363,6 +393,13 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
                         <button onClick={() => toggle(installed)} title={installed.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
                           className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${installed.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
                           <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${installed.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                      ) : setSelected ? (
+                        // Wizard mode: toggle marks the extension "to install"; the
+                        // Summary step installs the whole selection in bulk.
+                        <button onClick={() => toggleSelection(item)} title={isSelected(item.key) ? t('catalog.selectTitle.remove') : t('catalog.selectTitle.add')}
+                          className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${isSelected(item.key) ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${isSelected(item.key) ? 'translate-x-5' : 'translate-x-1'}`} />
                         </button>
                       ) : (
                         <button onClick={() => install(item)} disabled={!!peclProgress}

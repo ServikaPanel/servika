@@ -119,6 +119,11 @@
       "uuid": "Generování UUID",
       "swoole": "Vysoce výkonný coroutine server",
       "ds": "Efektivní datové struktury"
+    },
+    "selectedBanner": "Vybráno rozšíření: {{count}} — všechna se nainstalují společně v kroku Souhrn.",
+    "selectTitle": {
+      "add": "Přidat do seznamu k instalaci",
+      "remove": "Odebrat z výběru"
     }
   }
 }

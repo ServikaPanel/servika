@@ -49,6 +49,18 @@
     "installedLabel": "Installierte PHP-Versionen",
     "loading": "Wird geladen…",
     "empty": "Keine installierte Version gefunden. Fügen Sie eine im Schritt „PHP-Versionen“ hinzu.",
-    "done": "✓ Konfiguration abgeschlossen. PHP-Version und Einstellungen einer Domain werden im PHP-Einstellungen-Bildschirm der Domain gewählt."
+    "done": "✓ Konfiguration abgeschlossen. PHP-Version und Einstellungen einer Domain werden im PHP-Einstellungen-Bildschirm der Domain gewählt.",
+    "toInstallLabel": "Zu installierende Erweiterungen ({{count}})",
+    "emptyHint": "Wählen Sie im Schritt \"PHP-Erweiterungen\" die zu installierenden Erweiterungen aus (per Toggle aktivieren) und installieren Sie sie hier gemeinsam.",
+    "installButton": "{{count}} Erweiterung(en) installieren",
+    "installing": "Wird installiert…",
+    "installingName": "{{name}} wird installiert",
+    "bulkDone": "✓ Sammelinstallation abgeschlossen. Die installierten Erweiterungen erscheinen jetzt im Schritt \"PHP-Erweiterungen\" als aktiv.",
+    "badge": {
+      "pending": "Ausstehend",
+      "installing": "Wird installiert…",
+      "done": "✓ Installiert",
+      "error": "✕ Fehler"
+    }
   }
 }

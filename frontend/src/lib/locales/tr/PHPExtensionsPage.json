@@ -119,6 +119,11 @@
       "uuid": "UUID üretimi",
       "swoole": "Yüksek performanslı coroutine sunucu",
       "ds": "Verimli veri yapıları"
+    },
+    "selectedBanner": "{{count}} eklenti seçildi — tümü Özet adımında birlikte kurulur.",
+    "selectTitle": {
+      "add": "Kurulacaklar listesine ekle",
+      "remove": "Seçimi kaldır"
     }
   }
 }

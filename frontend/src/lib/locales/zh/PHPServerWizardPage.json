@@ -49,6 +49,18 @@
     "installedLabel": "已安装的 PHP 版本",
     "loading": "加载中…",
     "empty": "未找到已安装的版本。请在“PHP 版本”步骤中添加。",
-    "done": "✓ 配置完成。域名的 PHP 版本和设置在该域名的 PHP 设置界面中选择。"
+    "done": "✓ 配置完成。域名的 PHP 版本和设置在该域名的 PHP 设置界面中选择。",
+    "toInstallLabel": "待安装的扩展 ({{count}})",
+    "emptyHint": "在“PHP 扩展”步骤中选择要安装的扩展（用开关启用），然后在此一起安装。",
+    "installButton": "安装 {{count}} 个扩展",
+    "installing": "安装中…",
+    "installingName": "正在安装 {{name}}",
+    "bulkDone": "✓ 批量安装完成。已安装的扩展现在会在“PHP 扩展”步骤中显示为已启用。",
+    "badge": {
+      "pending": "待处理",
+      "installing": "安装中…",
+      "done": "✓ 已安装",
+      "error": "✕ 错误"
+    }
   }
 }

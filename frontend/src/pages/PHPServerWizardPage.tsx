@@ -5,10 +5,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { api } from '@/lib/api'
+import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
 import PHPVersionsPage from './PHPVersionsPage'
-import PHPExtensionsPage from './PHPExtensionsPage'
+import PHPExtensionsPage, { type Selection } from './PHPExtensionsPage'
 
 const STEPS = ['versions', 'extensions', 'webserver', 'summary'] as const
 type Step = (typeof STEPS)[number]
@@ -17,6 +17,8 @@ export default function PHPServerWizardPage() {
   const { t } = useTranslation('PHPServerWizardPage')
   const [active, setActive] = useState<Step>('versions')
   const activeIdx = STEPS.indexOf(active)
+  // Extensions picked across the wizard; the Summary step installs them in bulk.
+  const [selected, setSelected] = useState<Selection[]>([])
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
@@ -61,9 +63,9 @@ export default function PHPServerWizardPage() {
         <section className="min-w-0">
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5">
             {active === 'versions' && <PHPVersionsPage embedded />}
-            {active === 'extensions' && <PHPExtensionsPage embedded />}
+            {active === 'extensions' && <PHPExtensionsPage embedded selected={selected} setSelected={setSelected} />}
             {active === 'webserver' && <WebServerStep />}
-            {active === 'summary' && <SummaryStep />}
+            {active === 'summary' && <SummaryStep selected={selected} onClear={() => setSelected([])} />}
           </div>
 
           <div className="flex items-center justify-between mt-4">
@@ -129,17 +131,82 @@ function StatusCard({ label, value, ok }: { label: string; value: string; ok?: b
   )
 }
 
-// SummaryStep lists the installed PHP versions and a quick confirmation.
-function SummaryStep() {
-  const { t } = useTranslation('PHPServerWizardPage')
+type BulkState = 'pending' | 'installing' | 'done' | 'error'
+type BulkRow = Selection & { state: BulkState; message?: string }
+
+// installOne runs the async PECL job for one extension and resolves when it is
+// done. It rejects with { peclError } for a job failure (a localizable CODE) or
+// the raw axios error for a transport failure, so the caller can word both.
+function installOne(sel: Selection, onProgress: (step: string, percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    api.post('/php-extensions/pecl-install', { version: sel.version, package: sel.key })
+      .then(({ data }) => {
+        const jobId = data.job_id
+        const tick = () => {
+          api.get('/php-extensions/pecl-status', { params: { id: jobId } })
+            .then(({ data }) => {
+              if (data.state === 'done') { resolve(); return }
+              if (data.state === 'failed') { reject({ peclError: data.error }); return }
+              onProgress(data.step, data.percent)
+              setTimeout(tick, 1500)
+            })
+            .catch(reject)
+        }
+        tick()
+      })
+      .catch(reject)
+  })
+}
+
+// SummaryStep lists the installed PHP versions and installs the extensions the
+// operator picked in the Extensions step, one after another with a live progress
+// bar and a per-extension status badge (the user asked for pick-then-bulk-apply).
+function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: () => void }) {
+  const { t } = useTranslation(['PHPServerWizardPage', 'PHPExtensionsPage'])
   const [versions, setVersions] = useState<Version[]>([])
   const [loading, setLoading] = useState(true)
+  const [running, setRunning] = useState(false)
+  const [rows, setRows] = useState<BulkRow[]>([])
+  const [current, setCurrent] = useState<{ name: string; step: string; percent: number } | null>(null)
+  const [done, setDone] = useState(false)
+
   useEffect(() => {
     api.get<{ versions: Version[] }>('/php-versions')
       .then(r => setVersions((r.data.versions || []).filter(v => v.loaded)))
       .catch(() => { /* leave the list empty; the message covers it */ })
       .finally(() => setLoading(false))
   }, [])
+
+  // Triggered by the button, never a mount effect, so it does not trip
+  // react-hooks/set-state-in-effect. Each extension installs in turn; a failure
+  // is recorded on its row and does not stop the rest.
+  async function bulkInstall() {
+    if (running || selected.length === 0) return
+    setRunning(true); setDone(false)
+    const list: BulkRow[] = selected.map(s => ({ ...s, state: 'pending' }))
+    setRows(list)
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i]
+      setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'installing' } : x))
+      setCurrent({ name: s.name, step: 'starting', percent: 2 })
+      try {
+        await installOne(s, (step, percent) => setCurrent({ name: s.name, step, percent }))
+        setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'done' } : x))
+      } catch (e) {
+        const code = (e as { peclError?: string })?.peclError
+        const message = code
+          ? t(`pecl.error.${code}`, { ns: 'PHPExtensionsPage', defaultValue: t('PHPExtensionsPage:errors.peclInstallFailed') })
+          : apiError(e, t('PHPExtensionsPage:errors.peclInstallFailed'))
+        setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'error', message } : x))
+      }
+    }
+    setCurrent(null); setRunning(false); setDone(true)
+    onClear() // the installed extensions now show as "installed" in the Extensions step
+  }
+
+  // While running the rows carry live state; before running, preview the selection.
+  const shown: BulkRow[] = rows.length > 0 ? rows : selected.map(s => ({ ...s, state: 'pending' }))
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('summary.heading')}</h2>
@@ -160,9 +227,70 @@ function SummaryStep() {
         )}
       </div>
 
-      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/15 p-4 text-sm text-emerald-800 dark:text-emerald-200">
-        {t('summary.done')}
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('summary.toInstallLabel', { count: selected.length })}</div>
+        {selected.length === 0 && !done ? (
+          <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400">
+            {t('summary.emptyHint')}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {shown.map(s => (
+              <div key={s.version + s.key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
+                  <span className="ml-1.5 font-mono text-[11px] text-slate-400 dark:text-slate-500">{s.key} · PHP {s.version}</span>
+                  {s.message && <div className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">{s.message}</div>}
+                </div>
+                <BulkBadge state={s.state} />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {current && (
+        <div className="rounded-lg border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-950/40 px-4 py-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium text-brand-800 dark:text-brand-200">
+              <span className="inline-block w-3.5 h-3.5 mr-2 align-[-2px] rounded-full border-2 border-brand-400 border-t-transparent animate-spin" />
+              {t('summary.installingName', { name: current.name })}
+            </span>
+            <span className="text-xs tabular-nums text-brand-700 dark:text-brand-300">%{current.percent}</span>
+          </div>
+          <div className="text-xs text-brand-700 dark:text-brand-300 mb-2">{t(`pecl.step.${current.step}`, { ns: 'PHPExtensionsPage', defaultValue: current.step })}</div>
+          <div className="h-2 rounded-full bg-brand-100 dark:bg-brand-900 overflow-hidden">
+            <div className="h-full rounded-full bg-brand-500 transition-all duration-500" style={{ width: `${Math.min(100, current.percent)}%` }} />
+          </div>
+        </div>
+      )}
+
+      {done && <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/15 p-4 text-sm text-emerald-800 dark:text-emerald-200">{t('summary.bulkDone')}</div>}
+
+      {selected.length === 0 && !done && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/15 p-4 text-sm text-emerald-800 dark:text-emerald-200">
+          {t('summary.done')}
+        </div>
+      )}
+
+      {selected.length > 0 && (
+        <button onClick={bulkInstall} disabled={running}
+          className="w-full sm:w-auto px-5 py-2.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-60">
+          {running ? t('summary.installing') : t('summary.installButton', { count: selected.length })}
+        </button>
+      )}
     </div>
   )
+}
+
+function BulkBadge({ state }: { state: BulkState }) {
+  const { t } = useTranslation('PHPServerWizardPage')
+  const map: Record<BulkState, { key: string; c: string }> = {
+    pending: { key: 'summary.badge.pending', c: 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400' },
+    installing: { key: 'summary.badge.installing', c: 'bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300' },
+    done: { key: 'summary.badge.done', c: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' },
+    error: { key: 'summary.badge.error', c: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' },
+  }
+  const m = map[state]
+  return <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium ${m.c}`}>{t(m.key)}</span>
 }

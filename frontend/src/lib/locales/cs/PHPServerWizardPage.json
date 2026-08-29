@@ -49,6 +49,18 @@
     "installedLabel": "Nainstalované verze PHP",
     "loading": "Načítání…",
     "empty": "Nebyla nalezena žádná nainstalovaná verze. Přidejte ji v kroku \"Verze PHP\".",
-    "done": "✓ Konfigurace dokončena. Verze PHP a nastavení domény se volí na obrazovce nastavení PHP dané domény."
+    "done": "✓ Konfigurace dokončena. Verze PHP a nastavení domény se volí na obrazovce nastavení PHP dané domény.",
+    "toInstallLabel": "Rozšíření k instalaci ({{count}})",
+    "emptyHint": "V kroku \"Rozšíření PHP\" vyberte rozšíření k instalaci (zapněte je přepínačem) a poté je zde nainstalujte všechna společně.",
+    "installButton": "Nainstalovat {{count}} rozšíření",
+    "installing": "Instaluje se…",
+    "installingName": "Instaluje se {{name}}",
+    "bulkDone": "✓ Hromadná instalace dokončena. Nainstalovaná rozšíření se nyní v kroku \"Rozšíření PHP\" zobrazují jako aktivní.",
+    "badge": {
+      "pending": "Čeká",
+      "installing": "Instaluje se…",
+      "done": "✓ Nainstalováno",
+      "error": "✕ Chyba"
+    }
   }
 }

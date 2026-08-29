@@ -49,6 +49,18 @@
     "installedLabel": "Versiones de PHP instaladas",
     "loading": "Cargando…",
     "empty": "No se encontró ninguna versión instalada. Añade una desde el paso \"Versiones de PHP\".",
-    "done": "✓ Configuración completada. La versión de PHP y los ajustes de un dominio se eligen en la pantalla de ajustes PHP del dominio."
+    "done": "✓ Configuración completada. La versión de PHP y los ajustes de un dominio se eligen en la pantalla de ajustes PHP del dominio.",
+    "toInstallLabel": "Extensiones a instalar ({{count}})",
+    "emptyHint": "Elige las extensiones a instalar en el paso \"Extensiones PHP\" (actívalas con el toggle) y luego instálalas todas juntas aquí.",
+    "installButton": "Instalar {{count}} extensión(es)",
+    "installing": "Instalando…",
+    "installingName": "Instalando {{name}}",
+    "bulkDone": "✓ Instalación en lote completada. Las extensiones instaladas ahora aparecen como activas en el paso \"Extensiones PHP\".",
+    "badge": {
+      "pending": "Pendiente",
+      "installing": "Instalando…",
+      "done": "✓ Instalada",
+      "error": "✕ Error"
+    }
   }
 }

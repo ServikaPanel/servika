@@ -29,6 +29,11 @@
   },
   "catalog": {
     "install": "Install",
+    "selectedBanner": "{{count}} extension selected — all are installed together in the Summary step.",
+    "selectTitle": {
+      "add": "Add to the install list",
+      "remove": "Remove from selection"
+    },
     "extraInstalled": "Installed (outside the catalog)",
     "footerPre": "If the extension you need is not in the list, contact the ",
     "footerLink": "Tools",

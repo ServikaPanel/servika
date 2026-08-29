@@ -49,6 +49,18 @@
     "installedLabel": "Versiuni PHP instalate",
     "loading": "Se încarcă…",
     "empty": "Nu s-a găsit nicio versiune instalată. Adaugă una din pasul \"Versiuni PHP\".",
-    "done": "✓ Configurare finalizată. Versiunea PHP și setările unui domeniu se aleg din ecranul de setări PHP al domeniului."
+    "done": "✓ Configurare finalizată. Versiunea PHP și setările unui domeniu se aleg din ecranul de setări PHP al domeniului.",
+    "toInstallLabel": "Extensii de instalat ({{count}})",
+    "emptyHint": "Alege extensiile de instalat la pasul „Extensii PHP” (activează-le cu comutatorul), apoi instalează-le pe toate împreună aici.",
+    "installButton": "Instalează {{count}} extensie/extensii",
+    "installing": "Se instalează…",
+    "installingName": "Se instalează {{name}}",
+    "bulkDone": "✓ Instalare în masă finalizată. Extensiile instalate apar acum ca active la pasul „Extensii PHP”.",
+    "badge": {
+      "pending": "În așteptare",
+      "installing": "Se instalează…",
+      "done": "✓ Instalată",
+      "error": "✕ Eroare"
+    }
   }
 }

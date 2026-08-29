@@ -119,6 +119,11 @@
       "uuid": "UUID-Erzeugung",
       "swoole": "Hochleistungs-Coroutine-Server",
       "ds": "Effiziente Datenstrukturen"
+    },
+    "selectedBanner": "{{count}} Erweiterung ausgewählt — alle werden im Schritt Zusammenfassung gemeinsam installiert.",
+    "selectTitle": {
+      "add": "Zur Installationsliste hinzufügen",
+      "remove": "Aus Auswahl entfernen"
     }
   }
 }

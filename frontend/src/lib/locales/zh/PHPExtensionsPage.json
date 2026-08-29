@@ -119,6 +119,11 @@
       "uuid": "UUID 生成",
       "swoole": "高性能协程服务器",
       "ds": "高效数据结构"
+    },
+    "selectedBanner": "已选择 {{count}} 个扩展 — 全部将在“摘要”步骤一起安装。",
+    "selectTitle": {
+      "add": "加入安装列表",
+      "remove": "从所选中移除"
     }
   }
 }

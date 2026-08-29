@@ -119,6 +119,11 @@
       "uuid": "Geração de UUID",
       "swoole": "Servidor de coroutines de alto desempenho",
       "ds": "Estruturas de dados eficientes"
+    },
+    "selectedBanner": "{{count}} extensão selecionada — todas são instaladas juntas no passo Resumo.",
+    "selectTitle": {
+      "add": "Adicionar à lista de instalação",
+      "remove": "Remover da seleção"
     }
   }
 }

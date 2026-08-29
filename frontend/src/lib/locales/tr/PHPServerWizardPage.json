@@ -49,6 +49,18 @@
     "installedLabel": "Kurulu PHP sürümleri",
     "loading": "Yükleniyor…",
     "empty": "Kurulu sürüm bulunamadı. \"PHP Sürümleri\" adımından ekleyin.",
-    "done": "✓ Yapılandırma tamamlandı. Domain bazında PHP sürümü ve ayarları ilgili domainin PHP ayarları ekranından seçilir."
+    "done": "✓ Yapılandırma tamamlandı. Domain bazında PHP sürümü ve ayarları ilgili domainin PHP ayarları ekranından seçilir.",
+    "toInstallLabel": "Kurulacak eklentiler ({{count}})",
+    "emptyHint": "\"PHP Eklentileri\" adımından kurmak istediğiniz eklentileri seçin (toggle ile açın), sonra tümünü buradan birlikte kurun.",
+    "installButton": "{{count}} eklentiyi kur",
+    "installing": "Kuruluyor…",
+    "installingName": "{{name}} kuruluyor",
+    "bulkDone": "✓ Toplu kurulum tamamlandı. Kurulan eklentiler artık \"PHP Eklentileri\" adımında aktif görünür.",
+    "badge": {
+      "pending": "Bekliyor",
+      "installing": "Kuruluyor…",
+      "done": "✓ Kuruldu",
+      "error": "✕ Hata"
+    }
   }
 }
