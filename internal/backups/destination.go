@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,6 +185,62 @@ func downloadFromRemote(ctx context.Context, db *sql.DB, d *Destination, fileNam
 		return fmt.Errorf("lftp: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
+}
+
+// remoteSize returns the uploaded object's size in bytes, or -1 when it cannot
+// be read. The caller compares it to the local file's size to catch an upload
+// the transport reported complete but that arrived truncated. A -1 means "could
+// not verify", never "size mismatch", so a transient read never flags a good
+// upload.
+func remoteSize(ctx context.Context, db *sql.DB, d *Destination, fileName string) int64 {
+	if objectStorageType(d.Type) {
+		return headS3Object(ctx, d, fileName)
+	}
+	if err := netguard.CheckHost(d.Host); err != nil {
+		return -1
+	}
+	if err := credentialSafe(d.Password); err != nil {
+		return -1
+	}
+	hostKey, cleanupHostKey, err := lftpHostKeySettings(ctx, db, d)
+	if err != nil {
+		return -1
+	}
+	defer cleanupHostKey()
+	script := fmt.Sprintf(
+		`set cmd:fail-exit yes; %s`+
+			`set ssl:verify-certificate no; set ftp:ssl-allow no; `+
+			`set net:max-retries 1; set net:timeout 20; `+
+			`%s; cd "%s"; ls "%s"; bye`,
+		hostKey, lftpOpen(d),
+		lftpEscape(d.RemoteDir), lftpEscape(fileName))
+	out, err := lftpCommand(ctx, d, script).CombinedOutput()
+	if err != nil {
+		return -1
+	}
+	return parseRemoteSize(string(out), fileName)
+}
+
+// parseRemoteSize reads a byte count out of an lftp `ls` listing. It finds the
+// line naming the file and returns the LARGEST positive integer field on it, so
+// it does not depend on a fixed column layout across FTP and SFTP servers. The
+// largest field, not the first: a long `ls -l` line begins with the hardlink
+// count (1), and the size is always the dominant integer for a backup archive,
+// which is kilobytes at the smallest. It returns -1 when no such field is found,
+// which the caller reads as "could not verify" rather than a size mismatch.
+func parseRemoteSize(output, fileName string) int64 {
+	best := int64(-1)
+	for line := range strings.SplitSeq(output, "\n") {
+		if !strings.Contains(line, fileName) {
+			continue
+		}
+		for field := range strings.FieldsSeq(line) {
+			if n, err := strconv.ParseInt(field, 10, 64); err == nil && n > best {
+				best = n
+			}
+		}
+	}
+	return best
 }
 
 // deleteFromRemote removes a single backup file from the destination.
@@ -457,6 +514,27 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 				short, backupID)
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup destination upload domain=%d: %v", domainID, err)
+			return
+		}
+		// Verify the object arrived whole. lftp and S3 can report a transfer
+		// complete while the stored object is short (a dropped connection, a full
+		// remote disk). Only a POSITIVE mismatch is a failure: an unreadable
+		// remote size returns -1 and is not treated as corruption, so a transient
+		// read never flags a good upload.
+		localSize := int64(-1)
+		// #nosec G703 -- localPath is an internal backup archive path under BackupRoot derived from a validSystemUser-checked identifier.
+		if fi, e := os.Stat(localPath); e == nil {
+			localSize = fi.Size()
+		}
+		if rs := remoteSize(ctx, db, d, fileName); localSize > 0 && rs > 0 && rs != localSize {
+			short := fmt.Sprintf("remote size mismatch (local=%d remote=%d): the upload was incomplete", localSize, rs)
+			_, _ = db.Exec(`UPDATE backup_destinations
+				SET last_status='failed', last_error=?, last_upload=NOW() WHERE domain_id=?`,
+				short, domainID)
+			_, _ = db.Exec(`UPDATE backups SET remote_status='failed', remote_error=? WHERE id=?`,
+				short, backupID)
+			// #nosec G706 -- logged values are integer IDs and a template-derived size message; no raw tenant string with CR/LF reaches the log.
+			log.Printf("backup destination upload domain=%d: %s", domainID, short)
 			return
 		}
 		_, _ = db.Exec(`UPDATE backup_destinations

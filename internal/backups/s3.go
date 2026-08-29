@@ -150,6 +150,40 @@ func testS3Connection(ctx context.Context, d *Destination) error {
 	return doS3Request(req)
 }
 
+// headS3Object returns the stored object's size in bytes, so an upload can be
+// verified against the local file. A HEAD answers with Content-Length and no
+// body. A read failure returns -1, which the caller treats as "could not
+// verify" rather than "size mismatch", so a transient HEAD error never flags a
+// good upload as corrupt.
+func headS3Object(ctx context.Context, d *Destination, objectName string) int64 {
+	u, err := s3RequestURL(d, objectName)
+	if err != nil {
+		return -1
+	}
+	// #nosec G704 -- URL derives from the destination's own S3 endpoint, validated as HTTPS in s3Endpoint and checked against internal ranges below and at dial time.
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
+	if err != nil {
+		return -1
+	}
+	signS3Request(req, d, emptySHA256, time.Now().UTC())
+	if err := requireExternalEndpoint(req); err != nil {
+		return -1
+	}
+	// #nosec G704 -- request target derives from the destination's own S3 endpoint, validated as HTTPS in s3Endpoint and checked against internal ranges above and at dial time.
+	resp, err := s3HTTPClient.Do(req)
+	if err != nil {
+		return -1
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return -1
+	}
+	if resp.ContentLength < 0 {
+		return -1
+	}
+	return resp.ContentLength
+}
+
 func downloadS3Object(ctx context.Context, d *Destination, objectName, localPath string) error {
 	u, err := s3RequestURL(d, objectName)
 	if err != nil {
