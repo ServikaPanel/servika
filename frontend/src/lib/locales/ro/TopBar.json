@@ -302,6 +302,9 @@
     },
     "system": {
       "noSwap": "Acest server nu are spațiu swap; la epuizarea memoriei MariaDB este oprit și toate site-urile cad. Adăugați un fișier swap."
+    },
+    "backup": {
+      "uploadFailed": "Încărcarea backupului off-site pentru {{domain}} a eșuat: {{reason}}"
     }
   }
 }

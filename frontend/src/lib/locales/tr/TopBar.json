@@ -302,6 +302,9 @@
     },
     "system": {
       "noSwap": "Bu sunucuda swap alanı yok; bellek tükendiğinde MariaDB ölür ve tüm siteler çöker. Bir swap dosyası ekleyin."
+    },
+    "backup": {
+      "uploadFailed": "{{domain}} için off-site backup upload başarısız oldu: {{reason}}"
     }
   }
 }

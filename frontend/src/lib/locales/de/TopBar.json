@@ -302,6 +302,9 @@
     },
     "system": {
       "noSwap": "Dieser Server hat keinen Swap-Speicher; bei Speichermangel wird MariaDB beendet und alle Websites fallen aus. Fügen Sie eine Swap-Datei hinzu."
+    },
+    "backup": {
+      "uploadFailed": "Off-site-Backup-Upload für {{domain}} fehlgeschlagen: {{reason}}"
     }
   }
 }

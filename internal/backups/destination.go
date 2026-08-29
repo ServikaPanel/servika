@@ -558,6 +558,7 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 				short, backupID)
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup destination upload domain=%d: %v", domainID, err)
+			notifyUploadFailed(ctx, db, domainID, backupID, short)
 			return
 		}
 		// Verify the object arrived whole. lftp and S3 can report a transfer
@@ -579,6 +580,7 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 				short, backupID)
 			// #nosec G706 -- logged values are integer IDs and a template-derived size message; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup destination upload domain=%d: %s", domainID, short)
+			notifyUploadFailed(ctx, db, domainID, backupID, short)
 			return
 		}
 		_, _ = db.Exec(`UPDATE backup_destinations

@@ -302,6 +302,9 @@
     },
     "system": {
       "noSwap": "Questo server non ha spazio di swap; in caso di memoria esaurita MariaDB viene terminato e tutti i siti cadono. Aggiungi un file di swap."
+    },
+    "backup": {
+      "uploadFailed": "Upload del backup off-site per {{domain}} non riuscito: {{reason}}"
     }
   }
 }

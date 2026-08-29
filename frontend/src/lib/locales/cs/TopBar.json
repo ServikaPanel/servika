@@ -302,6 +302,9 @@
     },
     "system": {
       "noSwap": "Tento server nemá odkládací prostor (swap); při nedostatku paměti se MariaDB ukončí a všechny weby spadnou. Přidejte swap soubor."
+    },
+    "backup": {
+      "uploadFailed": "Nahrání off-site backupu pro {{domain}} selhalo: {{reason}}"
     }
   }
 }
