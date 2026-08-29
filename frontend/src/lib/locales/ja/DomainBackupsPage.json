@@ -143,5 +143,9 @@
     "submit": "復元",
     "cancel": "キャンセル",
     "processing": "復元しています..."
+  },
+  "verify": {
+    "corrupt": "破損",
+    "remote": "Off-site"
   }
 }

@@ -143,5 +143,9 @@
     "submit": "Geri yükle",
     "cancel": "İptal",
     "processing": "Geri yükleniyor..."
+  },
+  "verify": {
+    "corrupt": "Bozuk",
+    "remote": "Off-site"
   }
 }

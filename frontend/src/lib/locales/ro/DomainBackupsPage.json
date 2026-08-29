@@ -143,5 +143,9 @@
     "submit": "Restaurează",
     "cancel": "Anulează",
     "processing": "Se restaurează..."
+  },
+  "verify": {
+    "corrupt": "Corupt",
+    "remote": "Off-site"
   }
 }

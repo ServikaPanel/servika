@@ -143,5 +143,9 @@
     "submit": "恢复",
     "cancel": "取消",
     "processing": "正在恢复……"
+  },
+  "verify": {
+    "corrupt": "已损坏",
+    "remote": "异地"
   }
 }

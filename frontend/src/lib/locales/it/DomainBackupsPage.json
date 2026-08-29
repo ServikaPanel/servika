@@ -143,5 +143,9 @@
     "submit": "Ripristina",
     "cancel": "Annulla",
     "processing": "Ripristino in corso..."
+  },
+  "verify": {
+    "corrupt": "Corrotto",
+    "remote": "Off-site"
   }
 }

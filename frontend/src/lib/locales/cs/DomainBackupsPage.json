@@ -143,5 +143,9 @@
     "submit": "Obnovit",
     "cancel": "Zrušit",
     "processing": "Obnovování..."
+  },
+  "verify": {
+    "corrupt": "Poškozený",
+    "remote": "Off-site"
   }
 }

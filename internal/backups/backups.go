@@ -55,6 +55,10 @@ type Backup struct {
 	SizeBytes int64  `json:"size_b"`
 	Notes     string `json:"notes"`
 	CreatedAt string `json:"created_at"`
+	// Verification is the last integrity-scan verdict: '' not yet scanned, 'ok'
+	// matches its checksum, 'corrupt' rotted or unreadable, 'remote' the local
+	// copy was deleted after a verified off-site upload.
+	Verification string `json:"verification"`
 }
 
 // Handlers provides backup HTTP handlers.
@@ -81,7 +85,7 @@ func (h *Handlers) lookupDomain(r *http.Request) (id int64, domainName, systemUs
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT id, domain_id, type, file, size_b, notes, DATE_FORMAT(created_at,'%Y-%m-%d %H:%i')
+		`SELECT id, domain_id, type, file, size_b, notes, DATE_FORMAT(created_at,'%Y-%m-%d %H:%i'), verification
 		 FROM backups WHERE domain_id=? ORDER BY id DESC`, id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
@@ -91,7 +95,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	out := make([]Backup, 0)
 	for rows.Next() {
 		var y Backup
-		if err := rows.Scan(&y.ID, &y.DomainID, &y.Type, &y.File, &y.SizeBytes, &y.Notes, &y.CreatedAt); err == nil {
+		if err := rows.Scan(&y.ID, &y.DomainID, &y.Type, &y.File, &y.SizeBytes, &y.Notes, &y.CreatedAt, &y.Verification); err == nil {
 			out = append(out, y)
 		}
 	}

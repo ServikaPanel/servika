@@ -143,5 +143,9 @@
     "submit": "Restaurar",
     "cancel": "Cancelar",
     "processing": "Restaurando..."
+  },
+  "verify": {
+    "corrupt": "Dañado",
+    "remote": "Off-site"
   }
 }

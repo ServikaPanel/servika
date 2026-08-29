@@ -143,5 +143,9 @@
     "submit": "Wiederherstellen",
     "cancel": "Abbrechen",
     "processing": "Wird wiederhergestellt..."
+  },
+  "verify": {
+    "corrupt": "Beschädigt",
+    "remote": "Off-site"
   }
 }

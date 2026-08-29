@@ -21,7 +21,7 @@ import {
 } from '@/lib/table'
 
 type Domain = { id: number; domain_name: string; system_user: string }
-type Backup = { id: number; domain_id: number; type: string; file: string; size_b: number; notes: string; created_at: string }
+type Backup = { id: number; domain_id: number; type: string; file: string; size_b: number; notes: string; created_at: string; verification?: string }
 type Schedule = { freq: 'none' | 'daily' | 'weekly'; hour: number; retention: number; last_backup_at?: string }
 type DestType = 'ftp' | 'sftp' | 's3' | 'b2'
 type Destination = {
@@ -493,7 +493,15 @@ export default function DomainBackupsPage() {
           <tbody className={responsiveTableBodyClass}>
             {backups.map(y => (
               <tr key={y.id} className={responsiveTableRowClass}>
-                <td data-label={t('columns.file')} className={responsiveTableCodeCellClass}>{y.file}</td>
+                <td data-label={t('columns.file')} className={responsiveTableCodeCellClass}>
+                  {y.file}
+                  {y.verification === 'corrupt' && (
+                    <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">{t('verify.corrupt')}</span>
+                  )}
+                  {y.verification === 'remote' && (
+                    <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded font-medium bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300">{t('verify.remote')}</span>
+                  )}
+                </td>
                 <td data-label={t('columns.type')} className={responsiveTableCellClass}>
                   <span className={`text-xs px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold ${
                     y.type === 'scheduled' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 dark:text-slate-500'
