@@ -49,5 +49,11 @@
     "inProgress": "În curs...",
     "remove": "Eliminare",
     "install": "Instalare"
+  },
+  "hint": {
+    "installed": "Instalată — dezactivează pentru a o elimina",
+    "appstream": "Implicită de sistem (fixă)",
+    "install": "Activează pentru a instala",
+    "processing": "Se procesează…"
   }
 }

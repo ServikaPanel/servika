@@ -49,5 +49,11 @@
     "inProgress": "In corso...",
     "remove": "Rimuovi",
     "install": "Installa"
+  },
+  "hint": {
+    "installed": "Installata — disattiva per rimuoverla",
+    "appstream": "Predefinita di sistema (fissa)",
+    "install": "Attiva per installare",
+    "processing": "Elaborazione…"
   }
 }

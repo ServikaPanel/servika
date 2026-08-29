@@ -49,5 +49,11 @@
     "inProgress": "処理中...",
     "remove": "削除",
     "install": "インストール"
+  },
+  "hint": {
+    "installed": "インストール済み — 削除するにはオフに",
+    "appstream": "システム既定（固定）",
+    "install": "インストールするにはオンに",
+    "processing": "処理中…"
   }
 }

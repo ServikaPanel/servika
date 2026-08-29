@@ -49,5 +49,11 @@
     "inProgress": "In progress...",
     "remove": "Remove",
     "install": "Install"
+  },
+  "hint": {
+    "installed": "Installed — toggle off to remove",
+    "appstream": "System default (fixed)",
+    "install": "Toggle on to install",
+    "processing": "Processing…"
   }
 }

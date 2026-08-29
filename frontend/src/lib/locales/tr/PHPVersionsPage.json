@@ -49,5 +49,11 @@
     "inProgress": "Devam ediyor...",
     "remove": "Kaldır",
     "install": "Kur"
+  },
+  "hint": {
+    "installed": "Yüklü — kaldırmak için toggle'ı kapat",
+    "appstream": "Sistem varsayılanı (sabit)",
+    "install": "Kurmak için toggle'ı aç",
+    "processing": "İşleniyor…"
   }
 }

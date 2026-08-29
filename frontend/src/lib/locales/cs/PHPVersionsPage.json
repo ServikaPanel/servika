@@ -49,5 +49,11 @@
     "inProgress": "Probíhá...",
     "remove": "Odebrat",
     "install": "Nainstalovat"
+  },
+  "hint": {
+    "installed": "Nainstalováno — vypnutím odeberete",
+    "appstream": "Výchozí systémová (pevná)",
+    "install": "Zapnutím nainstalujete",
+    "processing": "Zpracovává se…"
   }
 }

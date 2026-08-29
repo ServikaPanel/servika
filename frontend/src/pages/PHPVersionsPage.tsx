@@ -183,15 +183,20 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map(v => {
             const key = v.version + ':' + v.resource
+            // Toggle state: on = installed. An AppStream version is the system
+            // default and cannot be removed, so its toggle stays locked on.
+            const thisOp = activeOp?.version === v.version
+            const fixed = v.resource === 'appstream' && v.loaded
+            const locked = !!activeOp || fixed
             return (
               <div key={key}
                 className={`rounded-2xl border p-4 transition ${
                   v.loaded ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
                     : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60'}`}>
-                <div className="mb-2 flex items-start justify-between">
-                  <div>
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <div className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">PHP {v.version}</div>
-                    <div className="mt-0.5 flex items-center gap-1.5">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
                         v.resource === 'appstream' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
                           : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
@@ -200,6 +205,15 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
                       {parseInt(v.version) < 8 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{t('badges.eol')}</span>}
                     </div>
                   </div>
+                  <button
+                    onClick={() => { if (locked) return; if (v.loaded) { remove(v) } else { install(v) } }}
+                    disabled={locked}
+                    title={fixed ? t('actions.fixed') : v.loaded ? t('actions.remove') : t('actions.install')}
+                    className={`flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                      v.loaded ? (thisOp ? 'bg-sky-400 animate-pulse' : 'bg-emerald-500') : (thisOp ? 'bg-sky-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600')
+                    } ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${v.loaded ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
 
                 {v.description && <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">{v.description}</div>}
@@ -212,23 +226,11 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
                   </div>
                 )}
 
-                {v.loaded ? (
-                  v.resource === 'appstream' ? (
-                    <button disabled className="w-full cursor-not-allowed rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-400 dark:bg-slate-800 dark:text-slate-500">
-                      {t('actions.fixed')}
-                    </button>
-                  ) : (
-                    <button onClick={() => remove(v)} disabled={!!activeOp}
-                      className="w-full rounded-xl bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40">
-                      {activeOp?.version === v.version ? t('actions.inProgress') : t('actions.remove')}
-                    </button>
-                  )
-                ) : (
-                  <button onClick={() => install(v)} disabled={!!activeOp}
-                    className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                    {activeOp?.version === v.version ? t('actions.inProgress') : t('actions.install')}
-                  </button>
-                )}
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {thisOp ? t('hint.processing')
+                    : v.loaded ? (v.resource === 'appstream' ? t('hint.appstream') : t('hint.installed'))
+                      : t('hint.install')}
+                </div>
               </div>
             )
           })}
