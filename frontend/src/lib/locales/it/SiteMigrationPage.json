@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Sovrascrivi il sito esistente",
       "hint": "Sovrascrive un sito che usa già lo stesso dominio"
+    },
+    "mail": {
+      "label": "Caselle di posta",
+      "hint": "Le caselle di posta e i loro messaggi vengono copiati; gli inoltri vengono ricreati"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "File",
       "db": "DB",
       "dns": "DNS",
-      "note": "Nota"
+      "note": "Nota",
+      "mail": "Posta"
     },
     "waitingForLog": "In attesa del registro...",
     "retryPopover": {
       "title": "Cosa rimigrare?",
-      "mail": "Mail",
-      "mailSoon": "prossimamente",
       "migrate": "Migra selezione"
     }
   },

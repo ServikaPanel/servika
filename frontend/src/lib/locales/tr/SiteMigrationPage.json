@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Mevcut siteyi ez",
       "hint": "Aynı alan adını kullanan bir sitenin üzerine yazar"
+    },
+    "mail": {
+      "label": "Posta kutuları",
+      "hint": "Posta kutuları ve mesajları kopyalanır; forward'lar yeniden oluşturulur"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Dosya",
       "db": "DB",
       "dns": "DNS",
-      "note": "Not"
+      "note": "Not",
+      "mail": "Posta"
     },
     "waitingForLog": "Kayıt bekleniyor...",
     "retryPopover": {
       "title": "Neyi yeniden taşımalı?",
-      "mail": "Mail",
-      "mailSoon": "yakında",
       "migrate": "Seçileni taşı"
     }
   },

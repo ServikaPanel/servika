@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Přepsat existující web",
       "hint": "Přepíše web, který již používá stejnou doménu"
+    },
+    "mail": {
+      "label": "Poštovní schránky",
+      "hint": "Poštovní schránky a jejich zprávy se zkopírují; přesměrování se znovu vytvoří"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Soubory",
       "db": "DB",
       "dns": "DNS",
-      "note": "Poznámka"
+      "note": "Poznámka",
+      "mail": "Pošta"
     },
     "waitingForLog": "Čeká se na protokol...",
     "retryPopover": {
       "title": "Co znovu migrovat?",
-      "mail": "Mail",
-      "mailSoon": "již brzy",
       "migrate": "Migrovat výběr"
     }
   },

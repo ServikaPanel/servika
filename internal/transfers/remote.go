@@ -48,6 +48,7 @@ type MigrationSettings struct {
 	Databases  bool   `json:"databases"`
 	DNS        bool   `json:"dns"`
 	SSL        bool   `json:"ssl"`
+	Mail       bool   `json:"mail"`      // mailboxes + Maildir data
 	Overwrite  bool   `json:"overwrite"` // write over an existing target domain
 	TargetPHP  string `json:"target_php"`
 	PlanID     int64  `json:"plan_id"`

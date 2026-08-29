@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "覆盖现有站点",
       "hint": "覆盖已经使用相同域名的站点"
+    },
+    "mail": {
+      "label": "邮箱",
+      "hint": "复制邮箱及其邮件；重新创建转发规则"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "文件",
       "db": "数据库",
       "dns": "DNS",
-      "note": "备注"
+      "note": "备注",
+      "mail": "邮件"
     },
     "waitingForLog": "正在等待日志...",
     "retryPopover": {
       "title": "重新迁移哪些内容？",
-      "mail": "邮件",
-      "mailSoon": "即将推出",
       "migrate": "迁移所选项"
     }
   },

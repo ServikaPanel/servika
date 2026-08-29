@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Sobrescribir el sitio existente",
       "hint": "Escribe encima de un sitio que ya usa el mismo dominio"
+    },
+    "mail": {
+      "label": "Buzones de correo",
+      "hint": "Se copian los buzones y sus mensajes; los reenvíos se vuelven a crear"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Archivos",
       "db": "BD",
       "dns": "DNS",
-      "note": "Nota"
+      "note": "Nota",
+      "mail": "Correo"
     },
     "waitingForLog": "Esperando el registro...",
     "retryPopover": {
       "title": "¿Qué volver a migrar?",
-      "mail": "Mail",
-      "mailSoon": "próximamente",
       "migrate": "Migrar selección"
     }
   },

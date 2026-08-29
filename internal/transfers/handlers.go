@@ -785,14 +785,22 @@ type aliasImport struct {
 // readAliases parses the source valias file and rewrites each forwarder onto the
 // target domain, dropping pipe/include destinations that Servika cannot host.
 func readAliases(extras archiveExtras, sourceDomain, targetDomain string) []aliasImport {
-	out := []aliasImport{}
 	if sourceDomain == "" {
-		return out
+		return []aliasImport{}
 	}
 	body, ok := extras.members[extras.aliasMember]
 	if !ok {
-		return out
+		return []aliasImport{}
 	}
+	return parseAliasBody(body, sourceDomain, targetDomain)
+}
+
+// parseAliasBody parses a source alias file (`local: dest[,dest2]` per line),
+// rewrites each forwarder onto the target domain, and drops pipe/include
+// destinations that Servika cannot host. It is shared by the cpmove archive
+// import and the live SSH migration.
+func parseAliasBody(body []byte, sourceDomain, targetDomain string) []aliasImport {
+	out := []aliasImport{}
 	for line := range strings.SplitSeq(string(body), "\n") {
 		p := strings.SplitN(strings.TrimSpace(line), ":", 2)
 		if len(p) != 2 {

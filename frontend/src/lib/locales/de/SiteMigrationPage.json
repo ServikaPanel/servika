@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Bestehende Website überschreiben",
       "hint": "Überschreibt eine Website, die dieselbe Domain bereits nutzt"
+    },
+    "mail": {
+      "label": "Postfächer",
+      "hint": "Postfächer und ihre Nachrichten werden kopiert; Weiterleitungen werden neu erstellt"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Dateien",
       "db": "DB",
       "dns": "DNS",
-      "note": "Hinweis"
+      "note": "Hinweis",
+      "mail": "E-Mail"
     },
     "waitingForLog": "Warten auf Protokollausgabe...",
     "retryPopover": {
       "title": "Was erneut migrieren?",
-      "mail": "Mail",
-      "mailSoon": "demnächst",
       "migrate": "Auswahl migrieren"
     }
   },

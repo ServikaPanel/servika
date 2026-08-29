@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Suprascrie site-ul existent",
       "hint": "Scrie peste un site care folosește deja același domeniu"
+    },
+    "mail": {
+      "label": "Căsuțe de e-mail",
+      "hint": "Căsuțele de e-mail și mesajele lor sunt copiate; redirecționările sunt recreate"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Fișiere",
       "db": "BD",
       "dns": "DNS",
-      "note": "Notă"
+      "note": "Notă",
+      "mail": "E-mail"
     },
     "waitingForLog": "Se așteaptă jurnalul...",
     "retryPopover": {
       "title": "Ce se remigrează?",
-      "mail": "Mail",
-      "mailSoon": "în curând",
       "migrate": "Migrează selecția"
     }
   },

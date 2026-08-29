@@ -26,7 +26,7 @@ type RemoteAccount = {
 type MigrationItem = {
   id: number; source_account: string; domain_name: string
   status: 'pending' | 'running' | 'done' | 'failed' | 'skipped'
-  domain_id: number; file_bytes: number; db_count: number; dns_count: number; error_text: string
+  domain_id: number; file_bytes: number; db_count: number; dns_count: number; mail_count: number; error_text: string
 }
 type MigrationJob = {
   id: number; type: string; host: string; mode: string; status: string
@@ -184,6 +184,7 @@ export default function SiteMigrationPage() {
   const [withDatabases, setWithDatabases] = useState(true)
   const [withDNS, setWithDNS] = useState(true)
   const [withSSL, setWithSSL] = useState(true)
+  const [withMail, setWithMail] = useState(true)
   const [overwrite, setOverwrite] = useState(false)
   const [targetPHP, setTargetPHP] = useState('')
   const [plans, setPlans] = useState<Plan[]>([])
@@ -374,7 +375,7 @@ export default function SiteMigrationPage() {
         session_id: sessionID,
         mode: picked.length === 1 ? 'single' : 'bulk',
         settings: {
-          files: withFiles, databases: withDatabases, dns: withDNS, ssl: withSSL,
+          files: withFiles, databases: withDatabases, dns: withDNS, ssl: withSSL, mail: withMail,
           overwrite, target_php: targetPHP, plan_id: planID, customer_id: customerID, accounts: [],
         },
         selected: picked,
@@ -433,6 +434,7 @@ export default function SiteMigrationPage() {
     ['databases', withDatabases, setWithDatabases, ICON.db],
     ['dns', withDNS, setWithDNS, ICON.dns],
     ['ssl', withSSL, setWithSSL, ICON.ssl],
+    ['mail', withMail, setWithMail, ICON.mail],
     ['overwrite', overwrite, setOverwrite, ICON.overwrite],
   ]
 
@@ -777,7 +779,7 @@ export default function SiteMigrationPage() {
                               <RetryOption icon={ICON.db} label={t('toggles.databases.label')} active={withDatabases} onToggle={() => setWithDatabases(v => !v)} />
                               <RetryOption icon={ICON.dns} label={t('toggles.dns.label')} active={withDNS} onToggle={() => setWithDNS(v => !v)} />
                               <RetryOption icon={ICON.ssl} label={t('toggles.ssl.label')} active={withSSL} onToggle={() => setWithSSL(v => !v)} />
-                              <RetryOption icon={ICON.mail} label={t('step3.retryPopover.mail')} active={false} disabled note={t('step3.retryPopover.mailSoon')} onToggle={() => {}} />
+                              <RetryOption icon={ICON.mail} label={t('toggles.mail.label')} active={withMail} onToggle={() => setWithMail(v => !v)} />
                               <div className="my-2 border-t border-slate-100 dark:border-slate-700" />
                               <RetryOption icon={ICON.overwrite} label={t('toggles.overwrite.label')} active={overwrite} onToggle={() => setOverwrite(v => !v)} />
                               <button
@@ -841,6 +843,7 @@ export default function SiteMigrationPage() {
                       <th className={tableHeadCellClass}>{t('step3.columns.files')}</th>
                       <th className={tableHeadCellClass}>{t('step3.columns.db')}</th>
                       <th className={tableHeadCellClass}>{t('step3.columns.dns')}</th>
+                      <th className={tableHeadCellClass}>{t('step3.columns.mail')}</th>
                       <th className={tableHeadCellClass}>{t('step3.columns.note')}</th>
                     </tr>
                   </thead>
@@ -856,6 +859,7 @@ export default function SiteMigrationPage() {
                         <td className={responsiveTableCellClass} data-label={t('step3.columns.files')}>{formatBytes(item.file_bytes)}</td>
                         <td className={responsiveTableCellClass} data-label={t('step3.columns.db')}>{item.db_count || '—'}</td>
                         <td className={responsiveTableCellClass} data-label={t('step3.columns.dns')}>{item.dns_count || '—'}</td>
+                        <td className={responsiveTableCellClass} data-label={t('step3.columns.mail')}>{item.mail_count || '—'}</td>
                         <td className={responsiveTableCellClass} data-label={t('step3.columns.note')}>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400">{item.error_text || '—'}</span>
                         </td>

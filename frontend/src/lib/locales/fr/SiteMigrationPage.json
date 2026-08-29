@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Écraser le site existant",
       "hint": "Écrase un site qui utilise déjà le même domaine"
+    },
+    "mail": {
+      "label": "Boîtes mail",
+      "hint": "Les boîtes mail et leurs messages sont copiés ; les redirections sont recréées"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Fichiers",
       "db": "BD",
       "dns": "DNS",
-      "note": "Note"
+      "note": "Note",
+      "mail": "E-mail"
     },
     "waitingForLog": "En attente du journal...",
     "retryPopover": {
       "title": "Que remigrer ?",
-      "mail": "Mail",
-      "mailSoon": "bientôt",
       "migrate": "Migrer la sélection"
     }
   },

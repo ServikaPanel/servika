@@ -372,13 +372,13 @@ func (h *Handlers) runMigrationJob(ctx context.Context, jobID int64, source *Rem
 			if len(result.Warnings) > 0 {
 				warning = " | warning: " + strings.Join(result.Warnings, "; ")
 			}
-			logf("DONE: %s (%.1f MB, %d DB, %d DNS)%s", account.DomainName,
-				float64(result.FileBytes)/(1024*1024), result.DBCount, result.DNSCount, warning)
+			logf("DONE: %s (%.1f MB, %d DB, %d DNS, %d mail)%s", account.DomainName,
+				float64(result.FileBytes)/(1024*1024), result.DBCount, result.DNSCount, result.MailCount, warning)
 			_, _ = h.DB.Exec(
 				`UPDATE migration_items SET status='done', domain_id=?, file_bytes=?, db_count=?,
-				   dns_count=?, error_text=NULLIF(?,''), finished_at=NOW()
+				   dns_count=?, mail_count=?, error_text=NULLIF(?,''), finished_at=NOW()
 				 WHERE job_id=? AND domain_name=?`,
-				result.DomainID, result.FileBytes, result.DBCount, result.DNSCount,
+				result.DomainID, result.FileBytes, result.DBCount, result.DNSCount, result.MailCount,
 				strings.Join(result.Warnings, "; "), jobID, account.DomainName)
 		}
 		_, _ = h.DB.Exec(`UPDATE migration_jobs SET completed=?, failed=? WHERE id=?`, done, failed, jobID)
@@ -448,7 +448,7 @@ func (h *Handlers) MigrationDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := h.DB.Query(
 		`SELECT id, source_account, domain_name, status, COALESCE(domain_id,0),
-		        file_bytes, db_count, dns_count, COALESCE(error_text,''), started_at, finished_at
+		        file_bytes, db_count, dns_count, mail_count, COALESCE(error_text,''), started_at, finished_at
 		 FROM migration_items WHERE job_id=? ORDER BY id`, jobID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "the items could not be read")
@@ -464,6 +464,7 @@ func (h *Handlers) MigrationDetail(w http.ResponseWriter, r *http.Request) {
 		FileBytes     int64      `json:"file_bytes"`
 		DBCount       int        `json:"db_count"`
 		DNSCount      int        `json:"dns_count"`
+		MailCount     int        `json:"mail_count"`
 		Error         string     `json:"error_text"`
 		StartedAt     *time.Time `json:"started_at"`
 		FinishedAt    *time.Time `json:"finished_at"`
@@ -472,7 +473,7 @@ func (h *Handlers) MigrationDetail(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var v item
 		if err := rows.Scan(&v.ID, &v.SourceAccount, &v.DomainName, &v.Status, &v.DomainID,
-			&v.FileBytes, &v.DBCount, &v.DNSCount, &v.Error, &v.StartedAt, &v.FinishedAt); err != nil {
+			&v.FileBytes, &v.DBCount, &v.DNSCount, &v.MailCount, &v.Error, &v.StartedAt, &v.FinishedAt); err != nil {
 			continue
 		}
 		out = append(out, v)

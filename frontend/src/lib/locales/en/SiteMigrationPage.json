@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Overwrite the existing site",
       "hint": "Writes over a site that already uses the same domain"
+    },
+    "mail": {
+      "label": "Mailboxes",
+      "hint": "Mailboxes and their messages are copied; forwarders are recreated"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Files",
       "db": "DB",
       "dns": "DNS",
-      "note": "Note"
+      "note": "Note",
+      "mail": "Mail"
     },
     "waitingForLog": "Waiting for log output...",
     "retryPopover": {
       "title": "What to re-migrate?",
-      "mail": "Mail",
-      "mailSoon": "coming soon",
       "migrate": "Migrate selected"
     }
   },

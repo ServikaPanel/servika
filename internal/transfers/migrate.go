@@ -33,6 +33,7 @@ type MigrationResult struct {
 	FileBytes int64
 	DBCount   int
 	DNSCount  int
+	MailCount int
 	Warnings  []string
 }
 
@@ -260,6 +261,30 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 		} else {
 			logf("warning: SSL could not be obtained: %v", sslErr)
 			result.Warnings = append(result.Warnings, "SSL could not be obtained")
+		}
+	}
+
+	// --- 6. Mail (mailboxes + Maildir data) --------------------------------
+	// After web, database, DNS and SSL so a mail failure does not roll back a
+	// working site: the domain is already provisioned, and a lost mailbox is a
+	// warning, not a reason to undo the whole migration.
+	if settings.Mail {
+		logf("Mail: discovering source mailboxes...")
+		n, creds, warns, mailErr := h.migrateMail(ctx, source, account, result.DomainID, systemUser, logf)
+		result.Warnings = append(result.Warnings, warns...)
+		if mailErr != nil {
+			logf("warning: mail could not be migrated: %v", mailErr)
+			result.Warnings = append(result.Warnings, "mail could not be migrated")
+		} else {
+			result.MailCount = n
+			if n > 0 {
+				logf("Mail: %d mailbox(es) migrated", n)
+			}
+			// Fresh passwords for the operator to hand out; the source password is
+			// never reused. The migration log is admin-only.
+			for _, c := range creds {
+				logf("Mail: new credential %s / %s", c.Email, c.Password)
+			}
 		}
 	}
 

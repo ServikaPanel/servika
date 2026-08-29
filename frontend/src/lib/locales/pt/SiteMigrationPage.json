@@ -90,6 +90,10 @@
     "overwrite": {
       "label": "Substituir o site existente",
       "hint": "Escreve por cima de um site que já usa o mesmo domínio"
+    },
+    "mail": {
+      "label": "Caixas de correio",
+      "hint": "As caixas de correio e as suas mensagens são copiadas; os reencaminhamentos são recriados"
     }
   },
   "step3": {
@@ -112,13 +116,12 @@
       "files": "Ficheiros",
       "db": "BD",
       "dns": "DNS",
-      "note": "Nota"
+      "note": "Nota",
+      "mail": "E-mail"
     },
     "waitingForLog": "À espera do registo...",
     "retryPopover": {
       "title": "O que remigrar?",
-      "mail": "Mail",
-      "mailSoon": "em breve",
       "migrate": "Migrar seleção"
     }
   },
