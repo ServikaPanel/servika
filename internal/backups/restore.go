@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -137,12 +138,20 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		}
 		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, "")
 		result["databases"] = dbResults
-		result["warning"] = overwriteWarning(req.Clean)
-		if failedDBRestore(dbResults) {
+		restored, skipped, failed, summary := dbSummary(dbResults)
+		if failed > 0 {
 			httpx.WriteError(w, http.StatusInternalServerError,
-				"files were restored but a database import failed; the restore is incomplete")
+				"files were restored but a database import failed — "+summary)
 			return
 		}
+		// Zero databases restored while some were skipped is NOT success: the site
+		// files came back but nothing it connects to did.
+		if restored == 0 && skipped > 0 {
+			httpx.WriteError(w, http.StatusInternalServerError,
+				"files were restored but no database was restored — "+summary)
+			return
+		}
+		result["warning"] = overwriteWarning(req.Clean)
 
 	case "files":
 		if err := restoreHome(r.Context(), tmpDir, systemUser, req.Clean); err != nil {
@@ -154,10 +163,23 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	case "database":
 		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, strings.TrimSpace(req.DB))
 		result["databases"] = dbResults
-		if failedDBRestore(dbResults) {
-			httpx.WriteError(w, http.StatusInternalServerError, "a database import failed; the restore is incomplete")
+		restored, skipped, failed, summary := dbSummary(dbResults)
+		if failed > 0 {
+			httpx.WriteError(w, http.StatusInternalServerError, "a database import failed — "+summary)
 			return
 		}
+		// Reporting a database-only restore that restored nothing as success is the
+		// exact failure this guards: the whitelist was empty and every database was
+		// skipped, yet the job read as done.
+		if restored == 0 {
+			if skipped == 0 {
+				httpx.WriteError(w, http.StatusBadRequest, "the backup has no database to restore")
+			} else {
+				httpx.WriteError(w, http.StatusBadRequest, "no database was restored — "+summary)
+			}
+			return
+		}
+		result["warning"] = fmt.Sprintf("%d database(s) restored — %s", restored, summary)
 
 	case "file":
 		if len(req.Paths) == 0 {
@@ -196,17 +218,6 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, result)
-}
-
-// failedDBRestore reports whether any database entry failed to import, so the
-// handler can fail closed instead of reporting a successful but partial restore.
-func failedDBRestore(results []map[string]string) bool {
-	for _, e := range results {
-		if strings.HasPrefix(e["status"], "error:") {
-			return true
-		}
-	}
-	return false
 }
 
 // overwriteWarning describes what the chosen file-restore strategy did.

@@ -176,20 +176,34 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 		if err := restoreHome(ctx, tmpDir, systemUser, clean); err != nil {
 			return "", fmt.Errorf("the home directory could not be restored")
 		}
-		if failedDBRestore(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, "")) {
-			return "", fmt.Errorf("files were restored but a database import failed")
+		restored, skipped, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
+		if failed > 0 {
+			return "", fmt.Errorf("files were restored but %d database import(s) failed — %s", failed, summary)
 		}
-		return "restored files and databases", nil
+		if restored == 0 && skipped > 0 {
+			return "", fmt.Errorf("files were restored but no database was restored — %s", summary)
+		}
+		return fmt.Sprintf("restored files and %d database(s)", restored), nil
 	case "files":
 		if err := restoreHome(ctx, tmpDir, systemUser, clean); err != nil {
 			return "", fmt.Errorf("the home directory could not be restored")
 		}
 		return "restored files", nil
 	case "database":
-		if failedDBRestore(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, "")) {
-			return "", fmt.Errorf("a database import failed")
+		restored, skipped, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
+		if failed > 0 {
+			return "", fmt.Errorf("%d database import(s) failed — %s", failed, summary)
 		}
-		return "restored databases", nil
+		// Zero databases restored is not success. Previously this returned
+		// "restored databases" even when the whitelist was empty and every database
+		// was skipped, so the job read as done with nothing restored.
+		if restored == 0 {
+			if skipped == 0 {
+				return "", fmt.Errorf("the backup has no database to restore")
+			}
+			return "", fmt.Errorf("no database was restored — %s", summary)
+		}
+		return fmt.Sprintf("restored %d database(s)", restored), nil
 	}
 	return "", fmt.Errorf("invalid restore mode")
 }

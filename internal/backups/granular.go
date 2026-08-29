@@ -275,6 +275,13 @@ func archiveDBFiles(tmp, systemUser string) map[string]string {
 // go. sqlimport imports as an account granted on that schema alone, so MariaDB
 // enforces the intent.
 func importDB(ctx context.Context, dbName, sqlPath string) error {
+	// Create the target schema first. sqlimport connects with dbName as the default
+	// schema and its dump has the CREATE DATABASE / USE lines stripped, so a database
+	// that was deleted (exactly when a restore is most needed) would fail with
+	// "Unknown database". The name is a validated, non-system identifier.
+	if err := ensureSchema(ctx, dbName); err != nil {
+		return err
+	}
 	// #nosec G304 G703 -- sqlPath is a server-internal staging path under the panel temp dir, produced by extracting the archive; no tenant path input.
 	dump, err := os.Open(sqlPath)
 	if err != nil {
@@ -282,6 +289,17 @@ func importDB(ctx context.Context, dbName, sqlPath string) error {
 	}
 	defer func() { _ = dump.Close() }()
 	return sqlimport.Import(ctx, dbName, dump)
+}
+
+// ensureSchema creates the target database when it does not exist, so a restore
+// can rebuild a database that was dropped. The name is validated before it is
+// interpolated, and system schemas are refused.
+func ensureSchema(ctx context.Context, dbName string) error {
+	if !credentials.ValidDBIdentifier(dbName) || isSystemDB(dbName) {
+		return fmt.Errorf("invalid database name: %q", dbName)
+	}
+	return mysqlExec(ctx,
+		"CREATE DATABASE IF NOT EXISTS `"+dbName+"` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
 }
 
 // restoreAllDBs imports every domain-owned DB present in the archive (mode full/database).
@@ -298,15 +316,45 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 		if filter != "" && name != filter {
 			continue
 		}
-		if isSystemDB(name) || !owned[name] {
-			res = append(res, map[string]string{"db": name, "status": "skipped (not owned by domain)"})
+		if isSystemDB(name) {
+			res = append(res, map[string]string{"db": name, "status": "rejected (system database)"})
 			continue
+		}
+		reRegister := false
+		if !owned[name] {
+			// Recovery path: a database whose panel record was deleted can still be
+			// restored. Deleting a database from the panel removes its db_accounts
+			// row, which empties the whitelist and made restoring your own database
+			// from your own backup impossible (the job reported success with zero
+			// databases restored). This archive IS this domain's backup, so a
+			// database in it belongs to this domain by definition. The only real
+			// risk is the name being registered to ANOTHER domain, which is refused.
+			if otherDomainOwns(db, name, domainID) {
+				res = append(res, map[string]string{"db": name, "status": "rejected (registered to another domain)"})
+				continue
+			}
+			reRegister = true
 		}
 		if err := importDB(ctx, name, p); err != nil {
 			res = append(res, map[string]string{"db": name, "status": "error: " + err.Error()})
 			continue
 		}
-		res = append(res, map[string]string{"db": name, "status": "restored"})
+		status := "restored"
+		if reRegister {
+			// Re-register in the panel, or this database is never backed up again
+			// (domainDatabases reads db_accounts plus <systemUser>_main). db_user and
+			// db_pass_plain are NOT NULL with no default, so empty strings are given:
+			// the account is recreated from users.sql, or the operator sets it under
+			// Databases.
+			if _, e := db.Exec(
+				`INSERT INTO db_accounts (domain_id, db_name, db_user, db_pass_plain, db_host) VALUES (?,?,'','','localhost')`,
+				domainID, name); e == nil {
+				status = "restored (panel record recreated — set a database user)"
+			} else {
+				status = "restored (not registered in the panel — add it under Databases)"
+			}
+		}
+		res = append(res, map[string]string{"db": name, "status": status})
 		restored = append(restored, name)
 	}
 
@@ -326,6 +374,38 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 		}
 	}
 	return res
+}
+
+// otherDomainOwns reports whether a database name is registered to a DIFFERENT
+// domain, which is the cross-tenant guard for the recovery path. A read failure
+// counts as owned elsewhere (fail closed), so a database hiccup never opens a
+// path to import over another tenant's schema.
+func otherDomainOwns(db *sql.DB, dbName string, domainID int64) bool {
+	var n int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM db_accounts WHERE db_name=? AND domain_id<>?`, dbName, domainID).Scan(&n); err != nil {
+		return true
+	}
+	return n > 0
+}
+
+// dbSummary turns a restoreAllDBs result into counts and a readable message.
+// Without it the caller discarded the result and reported "databases restored"
+// even when ZERO were: a failed restore rendered as confidence.
+func dbSummary(results []map[string]string) (restored, skipped, failed int, message string) {
+	var parts []string
+	for _, r := range results {
+		switch s := r["status"]; {
+		case strings.HasPrefix(s, "restored"):
+			restored++
+		case strings.HasPrefix(s, "error"):
+			failed++
+		default:
+			skipped++
+		}
+		parts = append(parts, r["db"]+": "+r["status"])
+	}
+	return restored, skipped, failed, strings.Join(parts, " | ")
 }
 
 // restoreOneDB restores a single DB either over the original (targetDB empty) or
