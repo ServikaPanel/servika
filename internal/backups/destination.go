@@ -172,9 +172,22 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 		return errors.New("invalid backup file")
 	}
 	abs := filepath.Join(backupRoot(), systemUser, file)
+	// The recorded archive size, used to tell a complete local copy from a
+	// truncated one. 0 means unknown (a legacy row), which skips the size check.
+	expected := expectedBackupSize(ctx, db, backupID, domainID)
 	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
 	if fi, err := os.Lstat(abs); err == nil && fi.Mode().IsRegular() {
-		return nil
+		// Existing is not enough; it must be COMPLETE. A download killed mid-flight
+		// (deploy, crash, OOM) can leave a half file under the final name, and a
+		// restore would trust it and run against a truncated archive. A size
+		// mismatch deletes the leftover and re-fetches.
+		if expected <= 0 || fi.Size() == expected {
+			return nil
+		}
+		// #nosec G706 -- logged values are integer IDs, a validated file name and sizes; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup restore domain=%d: local copy of %s is incomplete (%d/%d bytes), refetching", domainID, file, fi.Size(), expected)
+		// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
+		_ = os.Remove(abs)
 	}
 	dir := filepath.Join(backupRoot(), systemUser)
 	// #nosec G703 -- dir derives from backupRoot() and a validSystemUser-checked identifier.
@@ -186,7 +199,7 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
 		Scan(&remoteStatus); err == nil && remoteStatus == "successful" {
 		if d, e := readDestination(ctx, db, domainID); e == nil && d != nil {
-			if downloadFromRemote(ctx, db, d, file, abs) == nil {
+			if downloadFromRemote(ctx, db, d, file, abs) == nil && verifyDownloaded(abs, expected) == nil {
 				return nil
 			}
 		}
@@ -201,7 +214,11 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 			}
 		}
 		if err := fetchGlobalRemote(ctx, db, s, file, abs); err == nil {
-			return nil
+			if verifyDownloaded(abs, expected) == nil {
+				return nil
+			}
+			// #nosec G706 -- logged values are integer IDs and a validated file name; no raw tenant string with CR/LF reaches the log.
+			log.Printf("backup restore domain=%d: off-site copy of %s downloaded but the size did not match", domainID, file)
 		} else {
 			// #nosec G706 -- logged values are integer IDs and error/command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
@@ -210,8 +227,60 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 	return errors.New("backup file is missing on disk")
 }
 
-// downloadFromRemote fetches a single backup file from the destination into localPath.
+// expectedBackupSize returns the recorded archive size for a backup, or 0 when it
+// is unknown (a legacy row with no size), which disables the size check.
+func expectedBackupSize(ctx context.Context, db *sql.DB, backupID, domainID int64) int64 {
+	var b int64
+	_ = db.QueryRowContext(ctx, `SELECT size_b FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).Scan(&b)
+	return b
+}
+
+// verifyDownloaded reports whether a freshly downloaded archive matches its
+// recorded size. A transport can report success and still deliver a truncated
+// file, so a size mismatch removes the file and returns an error, turning a
+// silent partial download into a loud one. An unknown size (0) passes.
+func verifyDownloaded(abs string, expected int64) error {
+	if expected <= 0 {
+		return nil
+	}
+	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return err
+	}
+	if fi.Size() != expected {
+		// #nosec G703 -- see above.
+		_ = os.Remove(abs)
+		return fmt.Errorf("downloaded archive is incomplete: %d/%d bytes", fi.Size(), expected)
+	}
+	return nil
+}
+
+// downloadFromRemote fetches a single backup file from the destination into
+// localPath ATOMICALLY: it writes to a ".downloading" temp file and renames it
+// into place only after the transfer completes. A killed process (deploy, crash,
+// OOM) then leaves a ".downloading" orphan rather than a half file under the final
+// name, which a later restore would trust and run against a truncated archive.
 func downloadFromRemote(ctx context.Context, db *sql.DB, d *Destination, fileName, localPath string) error {
+	tmp := localPath + ".downloading"
+	// #nosec G703 -- localPath derives from backupRoot() and a validSystemUser-checked identifier; the suffix is a fixed constant.
+	_ = os.Remove(tmp)
+	if err := fetchRemoteInto(ctx, db, d, fileName, tmp); err != nil {
+		// #nosec G703 -- see above; tmp is the same validated path with a fixed suffix.
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, localPath); err != nil {
+		// #nosec G703 -- see above; tmp is the same validated path with a fixed suffix.
+		_ = os.Remove(tmp)
+		return fmt.Errorf("the downloaded file could not be moved into place: %w", err)
+	}
+	return nil
+}
+
+// fetchRemoteInto downloads a single backup file into target (S3 or lftp).
+func fetchRemoteInto(ctx context.Context, db *sql.DB, d *Destination, fileName, target string) error {
+	localPath := target
 	if objectStorageType(d.Type) {
 		return downloadS3Object(ctx, d, fileName, localPath)
 	}
