@@ -54,6 +54,11 @@
     "installed": "Instalada — desactiva para quitarla",
     "appstream": "Predeterminada del sistema (fija)",
     "install": "Activa para instalar",
-    "processing": "Procesando…"
+    "processing": "Procesando…",
+    "selected": "Seleccionada — se instala en el paso Resumen"
+  },
+  "selectTitle": {
+    "add": "Añadir a la lista de instalación",
+    "remove": "Quitar de la selección"
   }
 }

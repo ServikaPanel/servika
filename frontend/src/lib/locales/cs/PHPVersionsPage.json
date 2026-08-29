@@ -54,6 +54,11 @@
     "installed": "Nainstalováno — vypnutím odeberete",
     "appstream": "Výchozí systémová (pevná)",
     "install": "Zapnutím nainstalujete",
-    "processing": "Zpracovává se…"
+    "processing": "Zpracovává se…",
+    "selected": "Vybráno — nainstaluje se v kroku Souhrn"
+  },
+  "selectTitle": {
+    "add": "Přidat do seznamu k instalaci",
+    "remove": "Odebrat z výběru"
   }
 }

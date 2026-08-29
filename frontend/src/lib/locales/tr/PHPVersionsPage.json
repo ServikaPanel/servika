@@ -54,6 +54,11 @@
     "installed": "Yüklü — kaldırmak için toggle'ı kapat",
     "appstream": "Sistem varsayılanı (sabit)",
     "install": "Kurmak için toggle'ı aç",
-    "processing": "İşleniyor…"
+    "processing": "İşleniyor…",
+    "selected": "Seçildi — Özet adımında kurulur"
+  },
+  "selectTitle": {
+    "add": "Kurulacaklar listesine ekle",
+    "remove": "Seçimi kaldır"
   }
 }

@@ -54,6 +54,11 @@
     "installed": "インストール済み — 削除するにはオフに",
     "appstream": "システム既定（固定）",
     "install": "インストールするにはオンに",
-    "processing": "処理中…"
+    "processing": "処理中…",
+    "selected": "選択済み — 「概要」ステップでインストールされます"
+  },
+  "selectTitle": {
+    "add": "インストール一覧に追加",
+    "remove": "選択を解除"
   }
 }

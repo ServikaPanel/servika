@@ -50,17 +50,26 @@
     "loading": "Se încarcă…",
     "empty": "Nu s-a găsit nicio versiune instalată. Adaugă una din pasul \"Versiuni PHP\".",
     "done": "✓ Configurare finalizată. Versiunea PHP și setările unui domeniu se aleg din ecranul de setări PHP al domeniului.",
-    "toInstallLabel": "Extensii de instalat ({{count}})",
-    "emptyHint": "Alege extensiile de instalat la pasul „Extensii PHP” (activează-le cu comutatorul), apoi instalează-le pe toate împreună aici.",
-    "installButton": "Instalează {{count}} extensie/extensii",
+    "toInstallLabel": "Componente de instalat ({{count}})",
+    "emptyHint": "Activează ce dorești la pașii „Versiuni PHP” și „Extensii PHP”, apoi instalează tot împreună aici.",
+    "installButton": "Instalează {{count}} componente",
     "installing": "Se instalează…",
     "installingName": "Se instalează {{name}}",
-    "bulkDone": "✓ Instalare în masă finalizată. Extensiile instalate apar acum ca active la pasul „Extensii PHP”.",
+    "bulkDone": "✓ Instalare în masă finalizată. Versiunile și extensiile instalate apar acum ca active la pașii lor.",
     "badge": {
       "pending": "În așteptare",
       "installing": "Se instalează…",
       "done": "✓ Instalată",
       "error": "✕ Eroare"
+    },
+    "versionStep": {
+      "starting": "Se pornește…",
+      "installing": "Se instalează pachetele…",
+      "finishing": "Se finalizează…"
+    },
+    "kind": {
+      "version": "versiune",
+      "extension": "extensie"
     }
   }
 }

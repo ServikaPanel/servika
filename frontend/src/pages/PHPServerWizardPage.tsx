@@ -7,7 +7,7 @@ import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
-import PHPVersionsPage from './PHPVersionsPage'
+import PHPVersionsPage, { type VersionSelection } from './PHPVersionsPage'
 import PHPExtensionsPage, { type Selection } from './PHPExtensionsPage'
 
 const STEPS = ['versions', 'extensions', 'webserver', 'summary'] as const
@@ -17,7 +17,10 @@ export default function PHPServerWizardPage() {
   const { t } = useTranslation('PHPServerWizardPage')
   const [active, setActive] = useState<Step>('versions')
   const activeIdx = STEPS.indexOf(active)
-  // Extensions picked across the wizard; the Summary step installs them in bulk.
+  // Versions and extensions picked across the wizard; the Summary step installs
+  // them in bulk, versions first so an extension can target a version installed
+  // in the same run.
+  const [selectedVersions, setSelectedVersions] = useState<VersionSelection[]>([])
   const [selected, setSelected] = useState<Selection[]>([])
 
   return (
@@ -62,10 +65,10 @@ export default function PHPServerWizardPage() {
 
         <section className="min-w-0">
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5">
-            {active === 'versions' && <PHPVersionsPage embedded />}
+            {active === 'versions' && <PHPVersionsPage embedded selectedVersions={selectedVersions} setSelectedVersions={setSelectedVersions} />}
             {active === 'extensions' && <PHPExtensionsPage embedded selected={selected} setSelected={setSelected} />}
             {active === 'webserver' && <WebServerStep />}
-            {active === 'summary' && <SummaryStep selected={selected} onClear={() => setSelected([])} />}
+            {active === 'summary' && <SummaryStep selected={selected} selectedVersions={selectedVersions} onClear={() => { setSelected([]); setSelectedVersions([]) }} />}
           </div>
 
           <div className="flex items-center justify-between mt-4">
@@ -132,12 +135,13 @@ function StatusCard({ label, value, ok }: { label: string; value: string; ok?: b
 }
 
 type BulkState = 'pending' | 'installing' | 'done' | 'error'
-type BulkRow = Selection & { state: BulkState; message?: string }
+type BulkKind = 'version' | 'extension'
+type BulkRow = { kind: BulkKind; version: string; key: string; name: string; resource?: string; state: BulkState; message?: string }
 
-// installOne runs the async PECL job for one extension and resolves when it is
-// done. It rejects with { peclError } for a job failure (a localizable CODE) or
-// the raw axios error for a transport failure, so the caller can word both.
-function installOne(sel: Selection, onProgress: (step: string, percent: number) => void): Promise<void> {
+// installExtensionJob runs the async PECL job for one extension and resolves when
+// it is done. It rejects with { peclError } for a job failure (a localizable CODE)
+// or the raw axios error for a transport failure, so the caller can word both.
+function installExtensionJob(sel: Selection, onProgress: (step: string, percent: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     api.post('/php-extensions/pecl-install', { version: sel.version, package: sel.key })
       .then(({ data }) => {
@@ -158,16 +162,41 @@ function installOne(sel: Selection, onProgress: (step: string, percent: number) 
   })
 }
 
-// SummaryStep lists the installed PHP versions and installs the extensions the
-// operator picked in the Extensions step, one after another with a live progress
-// bar and a per-extension status badge (the user asked for pick-then-bulk-apply).
-function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: () => void }) {
+// installVersionJob runs the detached PHP-version install (a systemd transient
+// unit) and watches it through the server-wide single-slot status endpoint. The
+// job carries no percent, so progress is coarse: running → 55, finishing → 95.
+// It resolves when the slot is free again, matching the standalone page, which
+// also reports completion on !running rather than reading a failure status.
+function installVersionJob(sel: VersionSelection, onProgress: (step: string, percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    api.post('/php-versions/install', { version: sel.version, resource: sel.resource })
+      .then(() => {
+        const tick = () => {
+          api.get<{ running: boolean; version?: string }>('/php-versions/status')
+            .then(({ data }) => {
+              if (!data.running) { resolve(); return }
+              const here = data.version === sel.version
+              onProgress(here ? 'installing' : 'finishing', here ? 55 : 95)
+              setTimeout(tick, 2000)
+            })
+            .catch(reject)
+        }
+        setTimeout(tick, 2000)
+      })
+      .catch(reject)
+  })
+}
+
+// SummaryStep lists the installed PHP versions and installs the components the
+// operator picked in the earlier steps, one after another (versions first, then
+// extensions) with a live progress bar and a per-row status badge.
+function SummaryStep({ selected, selectedVersions, onClear }: { selected: Selection[]; selectedVersions: VersionSelection[]; onClear: () => void }) {
   const { t } = useTranslation(['PHPServerWizardPage', 'PHPExtensionsPage'])
   const [versions, setVersions] = useState<Version[]>([])
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [rows, setRows] = useState<BulkRow[]>([])
-  const [current, setCurrent] = useState<{ name: string; step: string; percent: number } | null>(null)
+  const [current, setCurrent] = useState<{ name: string; kind: BulkKind; step: string; percent: number } | null>(null)
   const [done, setDone] = useState(false)
 
   useEffect(() => {
@@ -177,20 +206,32 @@ function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: ()
       .finally(() => setLoading(false))
   }, [])
 
+  const total = selectedVersions.length + selected.length
+
+  // Versions first so an extension can target a version installed in the same run.
+  const preview = (): BulkRow[] => [
+    ...selectedVersions.map(v => ({ kind: 'version' as const, version: v.version, key: v.version, name: `PHP ${v.version}`, resource: v.resource, state: 'pending' as const })),
+    ...selected.map(s => ({ kind: 'extension' as const, version: s.version, key: s.key, name: s.name, state: 'pending' as const })),
+  ]
+
   // Triggered by the button, never a mount effect, so it does not trip
-  // react-hooks/set-state-in-effect. Each extension installs in turn; a failure
-  // is recorded on its row and does not stop the rest.
+  // react-hooks/set-state-in-effect. Each item installs in turn; a failure is
+  // recorded on its row and does not stop the rest.
   async function bulkInstall() {
-    if (running || selected.length === 0) return
+    if (running || total === 0) return
     setRunning(true); setDone(false)
-    const list: BulkRow[] = selected.map(s => ({ ...s, state: 'pending' }))
+    const list = preview()
     setRows(list)
     for (let i = 0; i < list.length; i++) {
       const s = list[i]
       setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'installing' } : x))
-      setCurrent({ name: s.name, step: 'starting', percent: 2 })
+      setCurrent({ name: s.name, kind: s.kind, step: 'starting', percent: 2 })
       try {
-        await installOne(s, (step, percent) => setCurrent({ name: s.name, step, percent }))
+        if (s.kind === 'version') {
+          await installVersionJob({ version: s.version, resource: s.resource || 'remi' }, (step, percent) => setCurrent({ name: s.name, kind: 'version', step, percent }))
+        } else {
+          await installExtensionJob({ version: s.version, key: s.key, name: s.name }, (step, percent) => setCurrent({ name: s.name, kind: 'extension', step, percent }))
+        }
         setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'done' } : x))
       } catch (e) {
         const code = (e as { peclError?: string })?.peclError
@@ -201,11 +242,11 @@ function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: ()
       }
     }
     setCurrent(null); setRunning(false); setDone(true)
-    onClear() // the installed extensions now show as "installed" in the Extensions step
+    onClear() // the installed components now show as active in their steps
   }
 
   // While running the rows carry live state; before running, preview the selection.
-  const shown: BulkRow[] = rows.length > 0 ? rows : selected.map(s => ({ ...s, state: 'pending' }))
+  const shown = rows.length > 0 ? rows : preview()
 
   return (
     <div className="space-y-4">
@@ -228,18 +269,19 @@ function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: ()
       </div>
 
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('summary.toInstallLabel', { count: selected.length })}</div>
-        {selected.length === 0 && !done ? (
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('summary.toInstallLabel', { count: total })}</div>
+        {total === 0 && !done ? (
           <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-sm text-slate-500 dark:text-slate-400">
             {t('summary.emptyHint')}
           </div>
         ) : (
           <div className="space-y-2">
             {shown.map(s => (
-              <div key={s.version + s.key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div key={s.kind + s.version + s.key} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <div className="min-w-0">
+                  <span className="text-[9px] uppercase tracking-wide mr-1.5 px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">{t(`summary.kind.${s.kind}`)}</span>
                   <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
-                  <span className="ml-1.5 font-mono text-[11px] text-slate-400 dark:text-slate-500">{s.key} · PHP {s.version}</span>
+                  {s.kind === 'extension' && <span className="ml-1.5 font-mono text-[11px] text-slate-400 dark:text-slate-500">PHP {s.version}</span>}
                   {s.message && <div className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">{s.message}</div>}
                 </div>
                 <BulkBadge state={s.state} />
@@ -258,7 +300,11 @@ function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: ()
             </span>
             <span className="text-xs tabular-nums text-brand-700 dark:text-brand-300">%{current.percent}</span>
           </div>
-          <div className="text-xs text-brand-700 dark:text-brand-300 mb-2">{t(`pecl.step.${current.step}`, { ns: 'PHPExtensionsPage', defaultValue: current.step })}</div>
+          <div className="text-xs text-brand-700 dark:text-brand-300 mb-2">
+            {current.kind === 'extension'
+              ? t(`pecl.step.${current.step}`, { ns: 'PHPExtensionsPage', defaultValue: current.step })
+              : t(`summary.versionStep.${current.step}`, { defaultValue: current.step })}
+          </div>
           <div className="h-2 rounded-full bg-brand-100 dark:bg-brand-900 overflow-hidden">
             <div className="h-full rounded-full bg-brand-500 transition-all duration-500" style={{ width: `${Math.min(100, current.percent)}%` }} />
           </div>
@@ -267,16 +313,16 @@ function SummaryStep({ selected, onClear }: { selected: Selection[]; onClear: ()
 
       {done && <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/15 p-4 text-sm text-emerald-800 dark:text-emerald-200">{t('summary.bulkDone')}</div>}
 
-      {selected.length === 0 && !done && (
+      {total === 0 && !done && (
         <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/15 p-4 text-sm text-emerald-800 dark:text-emerald-200">
           {t('summary.done')}
         </div>
       )}
 
-      {selected.length > 0 && (
+      {total > 0 && (
         <button onClick={bulkInstall} disabled={running}
           className="w-full sm:w-auto px-5 py-2.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-60">
-          {running ? t('summary.installing') : t('summary.installButton', { count: selected.length })}
+          {running ? t('summary.installing') : t('summary.installButton', { count: total })}
         </button>
       )}
     </div>

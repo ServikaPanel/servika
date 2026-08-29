@@ -54,6 +54,11 @@
     "installed": "Instalată — dezactivează pentru a o elimina",
     "appstream": "Implicită de sistem (fixă)",
     "install": "Activează pentru a instala",
-    "processing": "Se procesează…"
+    "processing": "Se procesează…",
+    "selected": "Selectată — se instalează la pasul Rezumat"
+  },
+  "selectTitle": {
+    "add": "Adaugă în lista de instalare",
+    "remove": "Elimină din selecție"
   }
 }

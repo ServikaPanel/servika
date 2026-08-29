@@ -54,6 +54,11 @@
     "installed": "Instalada — desative para remover",
     "appstream": "Padrão do sistema (fixo)",
     "install": "Ative para instalar",
-    "processing": "Processando…"
+    "processing": "Processando…",
+    "selected": "Selecionada — instala na etapa Resumo"
+  },
+  "selectTitle": {
+    "add": "Adicionar à lista de instalação",
+    "remove": "Remover da seleção"
   }
 }

@@ -50,17 +50,26 @@
     "loading": "Yükleniyor…",
     "empty": "Kurulu sürüm bulunamadı. \"PHP Sürümleri\" adımından ekleyin.",
     "done": "✓ Yapılandırma tamamlandı. Domain bazında PHP sürümü ve ayarları ilgili domainin PHP ayarları ekranından seçilir.",
-    "toInstallLabel": "Kurulacak eklentiler ({{count}})",
-    "emptyHint": "\"PHP Eklentileri\" adımından kurmak istediğiniz eklentileri seçin (toggle ile açın), sonra tümünü buradan birlikte kurun.",
-    "installButton": "{{count}} eklentiyi kur",
+    "toInstallLabel": "Kurulacak bileşenler ({{count}})",
+    "emptyHint": "\"PHP Sürümleri\" ve \"PHP Eklentileri\" adımlarından istediklerinizi toggle ile açın, sonra tümünü buradan birlikte kurun.",
+    "installButton": "{{count}} bileşeni kur",
     "installing": "Kuruluyor…",
     "installingName": "{{name}} kuruluyor",
-    "bulkDone": "✓ Toplu kurulum tamamlandı. Kurulan eklentiler artık \"PHP Eklentileri\" adımında aktif görünür.",
+    "bulkDone": "✓ Toplu kurulum tamamlandı. Kurulan sürüm ve eklentiler ilgili adımlarında aktif görünür.",
     "badge": {
       "pending": "Bekliyor",
       "installing": "Kuruluyor…",
       "done": "✓ Kuruldu",
       "error": "✕ Hata"
+    },
+    "versionStep": {
+      "starting": "Başlatılıyor…",
+      "installing": "Paketler kuruluyor…",
+      "finishing": "Tamamlanıyor…"
+    },
+    "kind": {
+      "version": "sürüm",
+      "extension": "eklenti"
     }
   }
 }

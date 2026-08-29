@@ -50,17 +50,26 @@
     "loading": "Cargando…",
     "empty": "No se encontró ninguna versión instalada. Añade una desde el paso \"Versiones de PHP\".",
     "done": "✓ Configuración completada. La versión de PHP y los ajustes de un dominio se eligen en la pantalla de ajustes PHP del dominio.",
-    "toInstallLabel": "Extensiones a instalar ({{count}})",
-    "emptyHint": "Elige las extensiones a instalar en el paso \"Extensiones PHP\" (actívalas con el toggle) y luego instálalas todas juntas aquí.",
-    "installButton": "Instalar {{count}} extensión(es)",
+    "toInstallLabel": "Componentes a instalar ({{count}})",
+    "emptyHint": "Activa lo que quieras en los pasos \"Versiones PHP\" y \"Extensiones PHP\" y luego instálalo todo junto aquí.",
+    "installButton": "Instalar {{count}} componente(s)",
     "installing": "Instalando…",
     "installingName": "Instalando {{name}}",
-    "bulkDone": "✓ Instalación en lote completada. Las extensiones instaladas ahora aparecen como activas en el paso \"Extensiones PHP\".",
+    "bulkDone": "✓ Instalación en lote completada. Las versiones y extensiones instaladas ahora aparecen como activas en sus pasos.",
     "badge": {
       "pending": "Pendiente",
       "installing": "Instalando…",
       "done": "✓ Instalada",
       "error": "✕ Error"
+    },
+    "versionStep": {
+      "starting": "Iniciando…",
+      "installing": "Instalando paquetes…",
+      "finishing": "Finalizando…"
+    },
+    "kind": {
+      "version": "versión",
+      "extension": "extensión"
     }
   }
 }

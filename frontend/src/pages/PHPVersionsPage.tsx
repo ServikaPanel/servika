@@ -19,9 +19,22 @@ type LogResponse = { log: string; running: boolean; version?: string; resource?:
 
 type Filter = 'all' | 'installed' | 'available'
 
+// VersionSelection is a PHP version the wizard has marked "to install"; the
+// actual install runs in bulk from the Summary step, the same pick-then-apply
+// flow the extensions use. Threaded as props so the standalone page keeps its
+// immediate install() when setSelectedVersions is absent.
+export type VersionSelection = { version: string; resource: string }
+
 // embedded drops the breadcrumb, heading and page padding so the wizard can
 // render this page as one of its steps without a page-within-a-page chrome.
-export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {}) {
+// selectedVersions/setSelectedVersions switch an uninstalled version's toggle
+// from immediate install to "pick now, install in bulk from the Summary step".
+// Removal stays immediate in both modes; only install is deferred.
+export default function PHPVersionsPage({ embedded, selectedVersions, setSelectedVersions }: {
+  embedded?: boolean
+  selectedVersions?: VersionSelection[]
+  setSelectedVersions?: (fn: (s: VersionSelection[]) => VersionSelection[]) => void
+} = {}) {
   const { t } = useTranslation('PHPVersionsPage')
   const { confirm, notify } = useDialog()
   const [versions, setVersions] = useState<Version[]>([])
@@ -120,6 +133,16 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
     } catch (e) { setError(apiError(e, t('errors.startRemoveFailed'))) }
   }
 
+  // toggleVersionSelection marks an uninstalled version "to install" for the
+  // wizard's bulk apply. It is a no-op without setSelectedVersions, so the
+  // standalone page falls back to the immediate install() call.
+  const toggleVersionSelection = (v: Version) => {
+    setSelectedVersions?.(prev =>
+      prev.some(x => x.version === v.version && x.resource === v.resource)
+        ? prev.filter(x => !(x.version === v.version && x.resource === v.resource))
+        : [...prev, { version: v.version, resource: v.resource }])
+  }
+
   const filtered = versions.filter(v => {
     if (filter === 'installed') return v.loaded
     if (filter === 'available') return !v.loaded
@@ -183,11 +206,17 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map(v => {
             const key = v.version + ':' + v.resource
-            // Toggle state: on = installed. An AppStream version is the system
-            // default and cannot be removed, so its toggle stays locked on.
+            // Toggle state: on = installed OR (in the wizard) marked to install.
+            // An AppStream version is the system default and cannot be removed, so
+            // its toggle stays locked on. selecting = wizard bulk mode.
             const thisOp = activeOp?.version === v.version
             const fixed = v.resource === 'appstream' && v.loaded
-            const locked = !!activeOp || fixed
+            const selecting = !!setSelectedVersions
+            const selected = !v.loaded && (selectedVersions?.some(x => x.version === v.version && x.resource === v.resource) ?? false)
+            const on = v.loaded || selected
+            // An uninstalled toggle in wizard mode is pure selection, so a running
+            // op does not lock it; a removal or a standalone immediate install does.
+            const locked = fixed || (!!activeOp && (v.loaded || !selecting))
             return (
               <div key={key}
                 className={`rounded-2xl border p-4 transition ${
@@ -206,13 +235,20 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
                     </div>
                   </div>
                   <button
-                    onClick={() => { if (locked) return; if (v.loaded) { remove(v) } else { install(v) } }}
+                    onClick={() => {
+                      if (fixed) return
+                      if (v.loaded) { if (!activeOp) remove(v); return }
+                      if (selecting) { toggleVersionSelection(v) } else if (!activeOp) { install(v) }
+                    }}
                     disabled={locked}
-                    title={fixed ? t('actions.fixed') : v.loaded ? t('actions.remove') : t('actions.install')}
+                    title={fixed ? t('actions.fixed')
+                      : v.loaded ? t('actions.remove')
+                        : selecting ? (selected ? t('selectTitle.remove') : t('selectTitle.add'))
+                          : t('actions.install')}
                     className={`flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      v.loaded ? (thisOp ? 'bg-sky-400 animate-pulse' : 'bg-emerald-500') : (thisOp ? 'bg-sky-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600')
+                      thisOp ? 'bg-sky-400 animate-pulse' : v.loaded ? 'bg-emerald-500' : selected ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'
                     } ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${v.loaded ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${on ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
 
@@ -229,7 +265,8 @@ export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   {thisOp ? t('hint.processing')
                     : v.loaded ? (v.resource === 'appstream' ? t('hint.appstream') : t('hint.installed'))
-                      : t('hint.install')}
+                      : selected ? <span className="text-brand-600 dark:text-brand-400">{t('hint.selected')}</span>
+                        : t('hint.install')}
                 </div>
               </div>
             )

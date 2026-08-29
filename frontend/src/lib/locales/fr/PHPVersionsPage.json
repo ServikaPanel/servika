@@ -54,6 +54,11 @@
     "installed": "Installée — désactivez pour la retirer",
     "appstream": "Valeur par défaut du système (fixe)",
     "install": "Activez pour installer",
-    "processing": "Traitement…"
+    "processing": "Traitement…",
+    "selected": "Sélectionnée — installée à l'étape Résumé"
+  },
+  "selectTitle": {
+    "add": "Ajouter à la liste d'installation",
+    "remove": "Retirer de la sélection"
   }
 }

@@ -54,6 +54,11 @@
     "installed": "Installed — toggle off to remove",
     "appstream": "System default (fixed)",
     "install": "Toggle on to install",
+    "selected": "Selected — installs in the Summary step",
     "processing": "Processing…"
+  },
+  "selectTitle": {
+    "add": "Add to the install list",
+    "remove": "Remove from selection"
   }
 }

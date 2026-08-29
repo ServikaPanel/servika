@@ -54,6 +54,11 @@
     "installed": "已安装 — 关闭以移除",
     "appstream": "系统默认（固定）",
     "install": "打开以安装",
-    "processing": "处理中…"
+    "processing": "处理中…",
+    "selected": "已选择 — 将在“摘要”步骤安装"
+  },
+  "selectTitle": {
+    "add": "加入安装列表",
+    "remove": "从所选中移除"
   }
 }

@@ -54,6 +54,11 @@
     "installed": "Installiert — zum Entfernen ausschalten",
     "appstream": "Systemstandard (fest)",
     "install": "Zum Installieren einschalten",
-    "processing": "Wird verarbeitet…"
+    "processing": "Wird verarbeitet…",
+    "selected": "Ausgewählt — wird im Schritt Zusammenfassung installiert"
+  },
+  "selectTitle": {
+    "add": "Zur Installationsliste hinzufügen",
+    "remove": "Aus Auswahl entfernen"
   }
 }
