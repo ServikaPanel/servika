@@ -316,6 +316,11 @@ func main() {
 	// so without this repair IPv6 mail would work only on hosts installed after
 	// the change.
 	mail.HealMailIPv6(context.Background())
+	// A forward compiles to a Sieve redirect, and Pigeonhole's default envelope-from
+	// is the original sender, so a forward to Gmail fails SPF at the destination. The
+	// user_email setting reaches a new install through the template; this repairs an
+	// existing one.
+	mail.HealSieveEnvelopeFrom(context.Background())
 	// Mail hostnames are served their own certificate through SNI. The map is
 	// generated from the installed certificates, so this picks up a host that
 	// already had them and drops one whose certificate has expired.

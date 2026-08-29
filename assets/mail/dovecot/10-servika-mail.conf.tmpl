@@ -61,6 +61,12 @@ protocol lmtp {
 plugin {
   quota = maildir:User quota
   sieve = file:~/sieve;active=~/.dovecot.sieve
+  # A forward is a Sieve `redirect`, and Pigeonhole's default envelope-from is the
+  # ORIGINAL sender, so a message forwarded to Gmail is sent from a domain this
+  # server is not authorized for and fails SPF at the destination (spam or reject).
+  # `user_email` makes the forwarding mailbox its own envelope-from, which this
+  # server's SPF authorizes.
+  sieve_redirect_envelope_from = user_email
   sieve_vacation_min_period = 1d
   sieve_vacation_default_period = 7d
   sieve_vacation_max_period = 30d
