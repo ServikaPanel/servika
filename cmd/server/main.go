@@ -1285,6 +1285,9 @@ func main() {
 				r.With(middleware.AdminOnly).Post("/app-runtimes/remove", appRuntimeH.Remove)
 				r.With(middleware.AdminOnly).Get("/app-runtimes/status", appRuntimeH.Status)
 				r.With(middleware.AdminOnly).Get("/app-runtimes/log", appRuntimeH.LogTail)
+				r.With(middleware.ResellerOrAbove).Get("/app-runtimes/dotnet", appRuntimeH.DotnetList)
+				r.With(middleware.AdminOnly).Post("/app-runtimes/dotnet/install", appRuntimeH.DotnetInstall)
+				r.With(middleware.AdminOnly).Post("/app-runtimes/dotnet/remove", appRuntimeH.DotnetRemove)
 				// Per-domain applications. CustomerScope settles the domain; the
 				// {aid} lookup carries the domain in its own WHERE clause, so an
 				// application on another domain is simply not found.
