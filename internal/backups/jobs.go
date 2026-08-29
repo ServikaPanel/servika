@@ -280,6 +280,28 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(domains)})
 }
 
+// HealJobsOnStartup closes any backup_jobs row left 'running' by a panel restart.
+//
+// A bulk backup or restore runs in a detached goroutine, so a restart mid-job
+// leaves its row at 'running' with no goroutine to finish it. The polling UI
+// then shows a job in progress that will never advance, and the started_by
+// operator waits for a result that cannot come. Marking it 'failed' at startup
+// tells the truth: the run was interrupted and did not complete. A partial
+// backup already wrote its per-domain rows, so nothing done is lost; only the
+// job's own status is corrected.
+func (h *Handlers) HealJobsOnStartup() {
+	res, err := h.DB.Exec(
+		`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW()
+		 WHERE status='running'`)
+	if err != nil {
+		log.Printf("backup jobs: startup heal failed: %v", err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("backup jobs: %d unfinished job(s) marked as failed", n)
+	}
+}
+
 // jobScopeFilter narrows a backup_jobs query to the jobs the caller may see. It
 // returns a bare boolean fragment, so the caller supplies its own WHERE or AND.
 //

@@ -404,6 +404,9 @@ func main() {
 	overviewH := &overview.Handlers{DB: d}
 	accountsH := &accounts.Handlers{DB: d}
 	backupsH := &backups.Handlers{DB: d}
+	// A bulk backup or restore job left 'running' by a restart has no goroutine
+	// to finish it; mark it failed so the UI stops showing it in progress.
+	backupsH.HealJobsOnStartup()
 	backups.StartScheduler(d)
 	// The nightly malware sweep. It does nothing at all until an operator
 	// turns it on, and it takes the same single scan slot a hand-started scan
