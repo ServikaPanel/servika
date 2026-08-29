@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -202,16 +203,32 @@ func TenantFPMActive(systemUser string) bool {
 // current extension set, so it does not trip the FPM start-limit guard the way a
 // restart can. Best effort: a stopped unit's reload fails harmlessly and one
 // tenant's failure does not stop the rest.
+//
+// The reloads run in PARALLEL, each under its OWN 15-second deadline. A node can
+// carry dozens of tenants, and this is called from an HTTP handler (a module
+// toggle, a PECL install, the ionCube loader): a serial loop with no timeout
+// would let one hung or failed tenant master block the whole request for as long
+// as systemctl waits, and every reload behind it. A per-call timeout bounds each
+// one, and running them together bounds the whole call to that same 15 seconds
+// rather than the sum.
 func ReloadAllTenantFPM() {
 	units, err := filepath.Glob(filepath.Join(tenantUnitDir, "php-fpm-c_*.service"))
 	if err != nil {
 		return
 	}
+	var wg sync.WaitGroup
 	for _, unitPath := range units {
 		unit := filepath.Base(unitPath)
-		// #nosec G204 -- fixed binary with separate args (no shell); unit is a glob-matched tenant unit file name from /etc/systemd/system, never request input.
-		_ = exec.Command("systemctl", "reload", unit).Run()
+		wg.Add(1)
+		go func(unit string) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			// #nosec G204 -- fixed binary with separate args (no shell); unit is a glob-matched tenant unit file name from /etc/systemd/system, never request input.
+			_ = exec.CommandContext(ctx, "systemctl", "reload", unit).Run()
+		}(unit)
 	}
+	wg.Wait()
 }
 
 func tenantSanitizeScalar(value, fallback string) string {
