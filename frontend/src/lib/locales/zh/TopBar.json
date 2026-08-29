@@ -299,6 +299,9 @@
     "cron": {
       "ran": "{{domain}} 上的计划任务已运行：{{command}}",
       "failed": "{{domain}} 上的计划任务失败（exit {{code}}）：{{command}}"
+    },
+    "system": {
+      "noSwap": "此服务器没有交换空间；内存耗尽时会杀死 MariaDB，导致所有站点宕机。请添加交换文件。"
     }
   }
 }

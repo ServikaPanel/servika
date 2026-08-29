@@ -243,6 +243,12 @@ func main() {
 	// gained encryption (GitHub PATs, remote backup passwords). Idempotent.
 	datamigrate.EncryptStoredCredentials(context.Background(), d)
 	provisioner.Init(d)
+	// swap is the only buffer before the OOM-killer, which on a swapless host
+	// killed MariaDB and took every site down (2026-08-22 incident). The drop-ins
+	// that defend the DB are installed in provisioner.Init; this operator-facing
+	// warning is raised here, because internal/notifications cannot be imported
+	// from provisioner without an import cycle.
+	warnIfNoSwap(context.Background(), d)
 	// Reports only, and only on a panel upgraded from before system user names
 	// were allocated uniquely. Two domains sharing one cannot be separated by
 	// anything but an operator, because their files live in one home directory.
@@ -1481,5 +1487,36 @@ func applyMigration(d *sql.DB, name, body, checksum string) {
 	}
 	if err := tx.Commit(); err != nil {
 		log.Fatalf("migrations: commit %s: %v", name, err)
+	}
+}
+
+// warnIfNoSwap raises a panel-wide CRITICAL notification when the host has no
+// swap, because swap is the only buffer before the OOM-killer. It is deduped to
+// at most one row per week, evaluated by the database clock, so a restart loop
+// does not spam the bell.
+func warnIfNoSwap(ctx context.Context, db *sql.DB) {
+	if db == nil || provisioner.SwapPresent() {
+		return
+	}
+	const key = "system.noSwap"
+	var recent int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM notifications
+		 WHERE message_key = ? AND domain_id IS NULL AND created_at > (NOW() - INTERVAL 7 DAY)`,
+		key).Scan(&recent); err != nil {
+		log.Printf("no-swap warning: the dedup check failed: %v", err)
+		return
+	}
+	if recent > 0 {
+		return
+	}
+	if err := notifications.Write(ctx, db, notifications.Event{
+		Level:    notifications.LevelCritical,
+		Category: "system",
+		Title:    "No swap configured",
+		Message:  "This server has no swap space. If it runs out of memory the kernel kills the largest process, usually MariaDB, and every site goes down. Add a swap file.",
+		Key:      key,
+	}); err != nil {
+		log.Printf("no-swap warning: the notification could not be written: %v", err)
 	}
 }

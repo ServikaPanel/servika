@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Naplánovaná úloha proběhla na {{domain}}: {{command}}",
       "failed": "Naplánovaná úloha selhala na {{domain}} (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Tento server nemá odkládací prostor (swap); při nedostatku paměti se MariaDB ukončí a všechny weby spadnou. Přidejte swap soubor."
     }
   }
 }

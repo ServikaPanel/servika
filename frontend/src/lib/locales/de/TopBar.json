@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Geplante Aufgabe auf {{domain}} ausgeführt: {{command}}",
       "failed": "Geplante Aufgabe auf {{domain}} fehlgeschlagen (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Dieser Server hat keinen Swap-Speicher; bei Speichermangel wird MariaDB beendet und alle Websites fallen aus. Fügen Sie eine Swap-Datei hinzu."
     }
   }
 }

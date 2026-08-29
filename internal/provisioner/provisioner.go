@@ -212,6 +212,7 @@ func Init(db *sql.DB) {
 	healPanelVhostHeadersOnStartup()
 	healPanelLoginRateLimitOnStartup()
 	HealPanelProxyTrustOnStartup() // :8080 proxy secret + pma-redeem deny + slowloris/limit_conn
+	EnsureOOMGuard()               // keep MariaDB off the OOM-killer's first pick (drop-ins only; the no-swap warning is raised in main)
 	healPanelIndexNoCacheOnStartup()
 	ensurePMAStartup()
 	healVhostsOnStartup()

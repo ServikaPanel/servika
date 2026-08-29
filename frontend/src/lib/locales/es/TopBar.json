@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Tarea programada ejecutada en {{domain}}: {{command}}",
       "failed": "La tarea programada falló en {{domain}} (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Este servidor no tiene espacio de swap; si se queda sin memoria, MariaDB se cierra y todos los sitios se caen. Añade un archivo de swap."
     }
   }
 }

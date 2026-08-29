@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Scheduled task ran on {{domain}}: {{command}}",
       "failed": "Scheduled task failed on {{domain}} (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "This server has no swap space, so an out-of-memory event kills MariaDB and takes every site down. Add a swap file."
     }
   }
 }

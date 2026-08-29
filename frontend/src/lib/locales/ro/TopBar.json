@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Sarcina planificată a rulat pe {{domain}}: {{command}}",
       "failed": "Sarcina planificată a eșuat pe {{domain}} (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Acest server nu are spațiu swap; la epuizarea memoriei MariaDB este oprit și toate site-urile cad. Adăugați un fișier swap."
     }
   }
 }

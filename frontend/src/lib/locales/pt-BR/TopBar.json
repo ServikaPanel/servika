@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Tarefa agendada executada em {{domain}}: {{command}}",
       "failed": "Tarefa agendada falhou em {{domain}} (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Este servidor não tem espaço de swap; se ficar sem memória, o MariaDB é encerrado e todos os sites caem. Adicione um arquivo de swap."
     }
   }
 }

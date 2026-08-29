@@ -299,6 +299,9 @@
     "cron": {
       "ran": "{{domain}} üzerinde zamanlanmış görev çalıştı: {{command}}",
       "failed": "{{domain}} üzerinde zamanlanmış görev başarısız oldu (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Bu sunucuda swap alanı yok; bellek tükendiğinde MariaDB ölür ve tüm siteler çöker. Bir swap dosyası ekleyin."
     }
   }
 }

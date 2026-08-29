@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Tâche planifiée exécutée sur {{domain}} : {{command}}",
       "failed": "Échec de la tâche planifiée sur {{domain}} (exit {{code}}) : {{command}}"
+    },
+    "system": {
+      "noSwap": "Ce serveur n'a pas d'espace swap ; en cas de mémoire insuffisante, MariaDB est tué et tous les sites tombent. Ajoutez un fichier swap."
     }
   }
 }

@@ -299,6 +299,9 @@
     "cron": {
       "ran": "Attività pianificata eseguita su {{domain}}: {{command}}",
       "failed": "Attività pianificata non riuscita su {{domain}} (exit {{code}}): {{command}}"
+    },
+    "system": {
+      "noSwap": "Questo server non ha spazio di swap; in caso di memoria esaurita MariaDB viene terminato e tutti i siti cadono. Aggiungi un file di swap."
     }
   }
 }
