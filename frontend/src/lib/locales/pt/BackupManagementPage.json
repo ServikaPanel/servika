@@ -8,7 +8,9 @@
   "subtitle": "Veja as cópias de segurança de todos os domínios num único local. As cópias automáticas diárias são executadas e os destinos S3/SFTP são configurados por domínio.",
   "toast": {
     "jobStarted": "Tarefa de cópia iniciada para {{n}} domínio(s)",
-    "jobFailed": "Não foi possível iniciar a tarefa de cópia"
+    "jobFailed": "Não foi possível iniciar a tarefa de cópia",
+    "confirmStop": "Parar este job em execução? O domain em curso é cancelado e os restantes não são iniciados.",
+    "stopFailed": "Não foi possível parar o job"
   },
   "kpi": {
     "totalSize": "Tamanho Total das Cópias",
@@ -56,8 +58,10 @@
       "running": "Em curso",
       "done": "Concluída",
       "partial": "Parcialmente concluída",
-      "failed": "Falhou"
-    }
+      "failed": "Falhou",
+      "stopped": "Parado"
+    },
+    "stop": "Parar"
   },
   "jobDetail": {
     "breadcrumb": "Tarefa #{{id}}",

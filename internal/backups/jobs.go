@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"servika/internal/httpx"
@@ -19,6 +20,34 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
+
+// runningJobs holds the cancel func of every bulk job in flight (jobID ->
+// context.CancelFunc), so an operator can stop one.
+//
+// A bulk backup or restore can run for hours (dozens of domains, a single tenant
+// tens of gigabytes). The only way to stop one was to restart the panel, which
+// killed the running tar mid-file and left a partial archive, because a killed
+// process never runs its cleanup. A proper stop cancels the context:
+// exec.CommandContext kills tar, and buildArchive removes the partial file.
+var runningJobs sync.Map
+
+func registerJob(jobID int64, cancel context.CancelFunc) { runningJobs.Store(jobID, cancel) }
+func unregisterJob(jobID int64)                          { runningJobs.Delete(jobID) }
+
+// stopJob cancels a registered job and returns whether one was found. A job that
+// is not registered may have been left running by a panel restart; the caller
+// closes that hung row itself so the UI does not show it in progress forever.
+func stopJob(jobID int64) bool {
+	v, ok := runningJobs.Load(jobID)
+	if !ok {
+		return false
+	}
+	if cancel, is := v.(context.CancelFunc); is {
+		cancel()
+	}
+	runningJobs.Delete(jobID)
+	return true
+}
 
 // Job is one bulk backup or restore operation with live progress.
 type Job struct {
@@ -213,9 +242,19 @@ func (h *Handlers) startJob(operation, restoreMode, startedBy string, total int)
 
 // finishJob closes a job with its aggregate status.
 func finishJob(db *sql.DB, jobID int64, succeeded, failed int) {
+	finishJobStopped(db, jobID, succeeded, failed, false)
+}
+
+// finishJobStopped closes a job, recording 'stopped' when the operator stopped it
+// so the UI can tell a stopped run apart from a failed one.
+func finishJobStopped(db *sql.DB, jobID int64, succeeded, failed int, stopped bool) {
+	status := jobStatus(succeeded, failed)
+	if stopped {
+		status = "stopped"
+	}
 	if _, err := db.Exec(
 		`UPDATE backup_jobs SET status=?, active_domain='', finished_at=NOW() WHERE id=?`,
-		jobStatus(succeeded, failed), jobID); err != nil {
+		status, jobID); err != nil {
 		log.Printf("backup job %d: could not close: %v", jobID, err)
 	}
 }
@@ -251,18 +290,36 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	jobCtx, jobCancel := context.WithCancel(context.Background())
+	registerJob(jobID, jobCancel)
 	// #nosec G118 -- intentional detached context: the job outlives the request, which would otherwise cancel it mid-archive.
 	go func() {
+		defer func() {
+			jobCancel()
+			unregisterJob(jobID)
+		}()
 		var totalBytes int64
 		succeeded, failed := 0, 0
+		stopped := false
 		for _, d := range domains {
+			// Check for a stop BETWEEN domains: the domain in flight is killed by
+			// its own context, and the remaining ones are never started.
+			if jobCtx.Err() != nil {
+				stopped = true
+				break
+			}
 			if _, err := h.DB.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, d.DomainName, jobID); err != nil {
 				log.Printf("backup job %d: progress update failed: %v", jobID, err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+			ctx, cancel := context.WithTimeout(jobCtx, 20*time.Minute)
 			size, _, err := backupOneDomain(ctx, h.DB, d.ID, d.SystemUser, "full", "Bulk backup", jobID)
 			cancel()
 			if err != nil {
+				if jobCtx.Err() != nil {
+					// The failure came from the stop, not the backup: do not count it.
+					stopped = true
+					break
+				}
 				failed++
 				log.Printf("backup job %d: domain %d failed: %v", jobID, d.ID, err)
 			} else {
@@ -280,7 +337,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 				log.Printf("backup job %d: progress update failed: %v", jobID, err)
 			}
 		}
-		finishJob(h.DB, jobID, succeeded, failed)
+		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
 	}()
 
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(domains)})
@@ -471,6 +528,48 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
+// StopJob handles POST /admin/backups/jobs/{jid}/stop and stops a running bulk
+// job. The domain in flight is killed by its context, the remaining ones are
+// never started, and the job closes as 'stopped'.
+//
+// The caller must be allowed to see the job, exactly like the list, so a reseller
+// cannot stop a job that is not theirs. A job left running by a panel restart is
+// not registered; the row is closed as 'failed' so the UI stops showing it in
+// progress.
+func (h *Handlers) StopJob(w http.ResponseWriter, r *http.Request) {
+	jobID, _ := strconv.ParseInt(chi.URLParam(r, "jid"), 10, 64)
+	filter, args := jobScopeFilter(r, "j")
+	q := `SELECT status FROM backup_jobs j WHERE j.id=?`
+	scopedArgs := append([]any{jobID}, args...)
+	if filter != "" {
+		q += ` AND` + filter
+	}
+	var status string
+	// #nosec G701 G202 -- filter is a constant fragment built from ScopeSQL with a literal alias; every value is bound.
+	err := h.DB.QueryRowContext(r.Context(), q, scopedArgs...).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		httpx.WriteError(w, http.StatusNotFound, "backup job not found")
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	if status != "running" {
+		httpx.WriteError(w, http.StatusConflict, "the job is not running")
+		return
+	}
+	if !stopJob(jobID) {
+		// Not registered: a restart left it hung. Close the row as failed.
+		if _, err := h.DB.Exec(
+			`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW()
+			 WHERE id=? AND status='running'`, jobID); err != nil {
+			log.Printf("backup job %d: could not close hung job: %v", jobID, err)
+		}
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // StartRestoreJob handles POST /admin/backups/restore and restores several domains in
 // one tracked job. Only coarse modes are accepted here.
 func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
@@ -535,8 +634,14 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	jobCtx, jobCancel := context.WithCancel(context.Background())
+	registerJob(jobID, jobCancel)
 	// #nosec G118 -- intentional detached context: the job outlives the request, which would otherwise cancel it mid-restore.
 	go func() {
+		defer func() {
+			jobCancel()
+			unregisterJob(jobID)
+		}()
 		type result struct {
 			DomainID   int64  `json:"domain_id"`
 			DomainName string `json:"domain_name"`
@@ -545,13 +650,22 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 		}
 		results := []result{}
 		succeeded, failed := 0, 0
+		stopped := false
 		for _, it := range items {
+			if jobCtx.Err() != nil {
+				stopped = true
+				break
+			}
 			if _, err := h.DB.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, it.domainName, jobID); err != nil {
 				log.Printf("restore job %d: progress update failed: %v", jobID, err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			ctx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
 			message, err := restoreCore(ctx, h.DB, it.domainID, it.backupID, req.Mode, req.Clean)
 			cancel()
+			if err != nil && jobCtx.Err() != nil {
+				stopped = true
+				break
+			}
 			entry := result{DomainID: it.domainID, DomainName: it.domainName}
 			if err != nil {
 				failed++
@@ -570,7 +684,7 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 				log.Printf("restore job %d: progress update failed: %v", jobID, err)
 			}
 		}
-		finishJob(h.DB, jobID, succeeded, failed)
+		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
 	}()
 
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(items)})

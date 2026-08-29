@@ -8,7 +8,9 @@
   "subtitle": "View backups for all domains in one place. Daily automatic backups run, and S3/SFTP destinations are configured per domain.",
   "toast": {
     "jobStarted": "Backup job started for {{n}} domain(s)",
-    "jobFailed": "Could not start the backup job"
+    "jobFailed": "Could not start the backup job",
+    "confirmStop": "Stop this running job? The domain in progress is cancelled and the rest are not started.",
+    "stopFailed": "Could not stop the job"
   },
   "kpi": {
     "totalSize": "Total Backup Size",
@@ -56,8 +58,10 @@
       "running": "Running",
       "done": "Completed",
       "partial": "Partly completed",
-      "failed": "Failed"
-    }
+      "failed": "Failed",
+      "stopped": "Stopped"
+    },
+    "stop": "Stop"
   },
   "jobDetail": {
     "breadcrumb": "Job #{{id}}",

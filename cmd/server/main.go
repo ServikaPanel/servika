@@ -1129,6 +1129,7 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Post("/admin/backups/jobs", backupsH.StartBackupJob)
 				r.With(middleware.ResellerOrAbove).Get("/admin/backups/jobs", backupsH.ListJobs)
 				r.With(middleware.ResellerOrAbove).Get("/admin/backups/jobs/{jid}", backupsH.JobDetail)
+				r.With(middleware.ResellerOrAbove).Post("/admin/backups/jobs/{jid}/stop", backupsH.StopJob)
 				r.With(middleware.ResellerOrAbove).Post("/admin/backups/restore", backupsH.StartRestoreJob)
 				// System-wide backup settings: master switch, disk guard, one off-site
 				// destination. Admin only, because they govern every domain's backups.

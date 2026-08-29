@@ -8,7 +8,9 @@
   "subtitle": "Sehen Sie Backups aller Domains an einem Ort. Tägliche automatische Backups laufen, und S3/SFTP-Ziele werden pro Domain konfiguriert.",
   "toast": {
     "jobStarted": "Sicherungsauftrag für {{n}} Domain(s) gestartet",
-    "jobFailed": "Sicherungsauftrag konnte nicht gestartet werden"
+    "jobFailed": "Sicherungsauftrag konnte nicht gestartet werden",
+    "confirmStop": "Diesen laufenden Job stoppen? Die laufende Domain wird abgebrochen und die übrigen werden nicht gestartet.",
+    "stopFailed": "Der Job konnte nicht gestoppt werden"
   },
   "kpi": {
     "totalSize": "Backup-Gesamtgröße",
@@ -56,8 +58,10 @@
       "running": "Läuft",
       "done": "Abgeschlossen",
       "partial": "Teilweise abgeschlossen",
-      "failed": "Fehlgeschlagen"
-    }
+      "failed": "Fehlgeschlagen",
+      "stopped": "Gestoppt"
+    },
+    "stop": "Stoppen"
   },
   "jobDetail": {
     "breadcrumb": "Auftrag #{{id}}",

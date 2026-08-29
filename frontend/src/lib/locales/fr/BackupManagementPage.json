@@ -8,7 +8,9 @@
   "subtitle": "Consultez les sauvegardes de tous les domaines au même endroit. Des sauvegardes automatiques quotidiennes sont effectuées, et les destinations S3/SFTP sont configurées par domaine.",
   "toast": {
     "jobStarted": "Tâche de sauvegarde lancée pour {{n}} domaine(s)",
-    "jobFailed": "Impossible de lancer la tâche de sauvegarde"
+    "jobFailed": "Impossible de lancer la tâche de sauvegarde",
+    "confirmStop": "Arrêter ce job en cours ? Le domaine en cours est annulé et les autres ne sont pas démarrés.",
+    "stopFailed": "Impossible d'arrêter le job"
   },
   "kpi": {
     "totalSize": "Taille totale des sauvegardes",
@@ -56,8 +58,10 @@
       "running": "En cours",
       "done": "Terminée",
       "partial": "Partiellement terminée",
-      "failed": "Échouée"
-    }
+      "failed": "Échouée",
+      "stopped": "Arrêté"
+    },
+    "stop": "Arrêter"
   },
   "jobDetail": {
     "breadcrumb": "Tâche #{{id}}",

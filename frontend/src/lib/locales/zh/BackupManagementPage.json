@@ -8,7 +8,9 @@
   "subtitle": "在一处查看所有域名的备份。每日自动备份运行，S3/SFTP 目标按域名配置。",
   "toast": {
     "jobStarted": "已为 {{n}} 个域名启动备份任务",
-    "jobFailed": "无法启动备份任务"
+    "jobFailed": "无法启动备份任务",
+    "confirmStop": "停止这个正在运行的 job？进行中的 domain 会被取消，其余的不会启动。",
+    "stopFailed": "无法停止该 job"
   },
   "kpi": {
     "totalSize": "备份总大小",
@@ -56,8 +58,10 @@
       "running": "进行中",
       "done": "已完成",
       "partial": "部分完成",
-      "failed": "失败"
-    }
+      "failed": "失败",
+      "stopped": "已停止"
+    },
+    "stop": "停止"
   },
   "jobDetail": {
     "breadcrumb": "任务 #{{id}}",

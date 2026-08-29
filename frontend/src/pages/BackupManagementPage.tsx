@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
+import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import BackupSettings from '@/components/BackupSettings'
 import { Icon } from '@/components/Icon'
@@ -50,6 +51,7 @@ type Job = {
 export default function BackupManagementPage() {
   const { t } = useTranslation('BackupManagementPage')
   const report = useReportError()
+  const { confirm } = useDialog()
   const [o, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -90,6 +92,15 @@ export default function BackupManagementPage() {
 
   function toggle(domainID: number) {
     setSelected(prev => prev.includes(domainID) ? prev.filter(x => x !== domainID) : [...prev, domainID])
+  }
+
+  async function stopJob(jobID: number) {
+    if (!(await confirm({ message: t('toast.confirmStop'), dangerous: true }))) return
+    setError(null); setSuccess(null)
+    try {
+      await api.post(`/admin/backups/jobs/${jobID}/stop`)
+      loadJobs()
+    } catch (e) { setError(apiError(e, t('toast.stopFailed'))) }
   }
 
   async function startBackupJob() {
@@ -220,6 +231,12 @@ export default function BackupManagementPage() {
                     {j.failed > 0 && <span className="text-red-600 dark:text-red-400"> · {t('jobs.failedCount', { n: j.failed })}</span>}
                     {j.size_b > 0 && <span> · {formatBytes(j.size_b)}</span>}
                   </span>
+                  {j.status === 'running' && (
+                    <button type="button" onClick={() => stopJob(j.id)}
+                      className="px-2 py-0.5 text-[11px] rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20">
+                      {t('jobs.stop')}
+                    </button>
+                  )}
                 </div>
                 <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700">
                   <div className={`h-1.5 rounded-full ${j.failed > 0 ? 'bg-amber-500' : 'bg-brand-600'}`}
@@ -266,6 +283,7 @@ function JobStatusBadge({ status, label }: { status: string; label: string }) {
   const tone = status === 'done' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
     : status === 'failed' ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'
     : status === 'partial' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+    : status === 'stopped' ? 'bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300'
     : 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
   return <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${tone}`}>{label}</span>
 }

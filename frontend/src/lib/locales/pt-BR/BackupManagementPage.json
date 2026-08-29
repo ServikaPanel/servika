@@ -8,7 +8,9 @@
   "subtitle": "Visualize backups de todos os domínios em um só lugar. Backups automáticos diários são executados e destinos S3/SFTP são configurados por domínio.",
   "toast": {
     "jobStarted": "Tarefa de backup iniciada para {{n}} domínio(s)",
-    "jobFailed": "Não foi possível iniciar a tarefa de backup"
+    "jobFailed": "Não foi possível iniciar a tarefa de backup",
+    "confirmStop": "Parar este job em execução? O domain em andamento é cancelado e os demais não são iniciados.",
+    "stopFailed": "Não foi possível parar o job"
   },
   "kpi": {
     "totalSize": "Tamanho total dos backups",
@@ -56,8 +58,10 @@
       "running": "Em execução",
       "done": "Concluída",
       "partial": "Parcialmente concluída",
-      "failed": "Falhou"
-    }
+      "failed": "Falhou",
+      "stopped": "Parado"
+    },
+    "stop": "Parar"
   },
   "jobDetail": {
     "breadcrumb": "Tarefa #{{id}}",

@@ -8,7 +8,9 @@
   "subtitle": "Prohlížejte zálohy všech domén na jednom místě. Denní automatické zálohy běží a cíle S3/SFTP se nastavují pro každou doménu.",
   "toast": {
     "jobStarted": "Úloha zálohování spuštěna pro {{n}} domén",
-    "jobFailed": "Úlohu zálohování se nepodařilo spustit"
+    "jobFailed": "Úlohu zálohování se nepodařilo spustit",
+    "confirmStop": "Zastavit tento běžící job? Probíhající domain se zruší a ostatní se nespustí.",
+    "stopFailed": "Job se nepodařilo zastavit"
   },
   "kpi": {
     "totalSize": "Celková velikost záloh",
@@ -56,8 +58,10 @@
       "running": "Probíhá",
       "done": "Dokončeno",
       "partial": "Částečně dokončeno",
-      "failed": "Selhalo"
-    }
+      "failed": "Selhalo",
+      "stopped": "Zastaveno"
+    },
+    "stop": "Zastavit"
   },
   "jobDetail": {
     "breadcrumb": "Úloha #{{id}}",

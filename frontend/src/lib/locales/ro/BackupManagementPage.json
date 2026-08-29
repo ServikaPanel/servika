@@ -8,7 +8,9 @@
   "subtitle": "Vizualizați copiile de rezervă pentru toate domeniile într-un singur loc. Backup-urile automate zilnice rulează, iar destinațiile S3/SFTP sunt configurate per domeniu.",
   "toast": {
     "jobStarted": "Sarcină de copiere pornită pentru {{n}} domeniu/domenii",
-    "jobFailed": "Sarcina de copiere nu a putut fi pornită"
+    "jobFailed": "Sarcina de copiere nu a putut fi pornită",
+    "confirmStop": "Opriți acest job în curs? Domainul în curs este anulat, iar restul nu sunt pornite.",
+    "stopFailed": "Jobul nu a putut fi oprit"
   },
   "kpi": {
     "totalSize": "Dimensiune totală backup",
@@ -56,8 +58,10 @@
       "running": "În curs",
       "done": "Finalizată",
       "partial": "Parțial finalizată",
-      "failed": "Eșuată"
-    }
+      "failed": "Eșuată",
+      "stopped": "Oprit"
+    },
+    "stop": "Oprește"
   },
   "jobDetail": {
     "breadcrumb": "Sarcina #{{id}}",

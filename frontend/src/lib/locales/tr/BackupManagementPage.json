@@ -8,7 +8,9 @@
   "subtitle": "Tüm alan adlarının yedeklerini tek bir yerde görün. Günlük otomatik yedekler çalışır ve S3/SFTP hedefleri alan adı başına yapılandırılır.",
   "toast": {
     "jobStarted": "{{n}} domain için yedek işi başlatıldı",
-    "jobFailed": "Yedek işi başlatılamadı"
+    "jobFailed": "Yedek işi başlatılamadı",
+    "confirmStop": "Bu çalışan job durdurulsun mu? Süren domain iptal edilir ve kalanlara başlanmaz.",
+    "stopFailed": "Job durdurulamadı"
   },
   "kpi": {
     "totalSize": "Toplam Yedek Boyutu",
@@ -56,8 +58,10 @@
       "running": "Çalışıyor",
       "done": "Tamamlandı",
       "partial": "Kısmen tamamlandı",
-      "failed": "Başarısız"
-    }
+      "failed": "Başarısız",
+      "stopped": "Durduruldu"
+    },
+    "stop": "Durdur"
   },
   "jobDetail": {
     "breadcrumb": "İş #{{id}}",
