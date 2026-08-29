@@ -106,7 +106,18 @@ $_SESSION['PMA_single_signon_host'] = 'localhost';
 $_SESSION['PMA_single_signon_only_db'] = [$data['db']];
 session_write_close();
 
-header('Location: /pma/', true, 302);
+// Land the user on their DATABASE, not the server root. With '/pma/' phpMyAdmin
+// opens in SERVER scope, so its Export tab names the file with the server
+// template ($cfg['Export']['file_template_server'] = '@SERVER@'): every export
+// downloads as "localhost.sql" and which database it holds is lost. Opening in
+// database scope makes the template '@DATABASE@' -> "<db>.sql". (only_db already
+// locked to one database; the fault was the OPENING scope, not the privileges.)
+$target = '/pma/';
+if (!empty($data['db'])) {
+    // phpMyAdmin 5.x route form.
+    $target = '/pma/index.php?route=/database/structure&db=' . rawurlencode($data['db']);
+}
+header('Location: ' . $target, true, 302);
 exit;
 `
 
