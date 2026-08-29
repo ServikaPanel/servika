@@ -6,35 +6,26 @@
   },
   "title": "PHP 扩展",
   "subtitle": {
-    "pre": "管理全服务器的 PHP 扩展。使用开关启用或禁用扩展，PHP-FPM 会自动重启。",
-    "bold": "全服务器范围",
-    "post": "，影响所有域名。"
+    "pre": "从现成列表中选择一个 PHP 扩展并安装，已安装的可用开关切换启用/禁用。 ",
+    "bold": "服务器级",
+    "post": " — 影响所有域名；PHP-FPM 会自动重启。"
   },
   "removeIonCube": "⊗ 移除 IonCube",
   "installIonCube": "🔐 安装 IonCube",
-  "installFromPecl": "📦 从 PECL 安装",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} 个已启用",
-    "inactive": "{{count}} 个未激活",
-    "total": "共 {{count}} 个"
-  },
   "searchPlaceholder": "🔍 搜索扩展...",
   "loading": "加载中…",
-  "coreExtension": "核心扩展",
   "toggleTitle": {
-    "core": "核心扩展，无法禁用",
     "disable": "禁用",
     "enable": "启用"
   },
   "alerts": {
-    "coreCannotDisable": "此扩展是 PHP 的核心部分，无法禁用。",
-    "invalidPackage": "无效的软件包名称"
+    "coreCannotDisable": "此扩展是 PHP 的核心部分，无法禁用。"
   },
   "confirm": {
     "ionCubeInstall": "将为 PHP {{version}} 安装 IonCube Loader。\n\n将从 ioncube.com 下载 tar.gz 归档文件，复制 .so 文件，并将其作为 zend_extension 加载。\n是否继续？",
     "ionCubeRemove": "将从 PHP {{version}} 移除 IonCube Loader。是否继续？",
-    "peclInstall": "将为 PHP {{version}} 编译并安装 PECL 软件包“{{package}}”。是否继续？"
+    "catalogInstall": "{{name}}（{{key}}）将为 PHP {{version}} 安装。若没有预构建包，则从源码编译，可能需要几分钟。是否继续？"
   },
   "success": {
     "toggleEnabled": "✓ {{name}} 已启用 · PHP-FPM 已重启",
@@ -49,17 +40,6 @@
     "ionCubeInstallFailed": "IonCube 安装失败",
     "ionCubeRemoveFailed": "IonCube 移除失败",
     "peclInstallFailed": "PECL 安装失败"
-  },
-  "peclModal": {
-    "title": "从 PECL 安装扩展",
-    "descPre": "有可用的预构建包时直接安装（bundled: ",
-    "warnPre": "⚠ 将为 PHP {{version}} 编译该扩展。目标：",
-    "warnMid": " 或 Remi 目录",
-    "inputPlaceholder": "例如 mongodb",
-    "cancel": "取消",
-    "install": "安装",
-    "descMid": " · PECL: ",
-    "descPost": "）；否则从源码编译扩展。"
   },
   "pecl": {
     "step": {
@@ -81,6 +61,64 @@
       "build_failed": "extension 编译失败",
       "ini_failed": "无法写入 INI 文件",
       "internal": "发生内部错误"
+    }
+  },
+  "catalog": {
+    "install": "安装",
+    "extraInstalled": "已安装（目录之外）",
+    "footerPre": "如果你需要的扩展不在列表中，请联系 ",
+    "footerLink": "工具",
+    "footerPost": " 团队；目录可以扩充。",
+    "category": {
+      "database": "数据库",
+      "cache": "缓存与性能",
+      "image": "图像与媒体",
+      "i18n": "国际化",
+      "development": "开发与调试",
+      "network": "网络与服务",
+      "compression": "压缩",
+      "math": "数学与序列化",
+      "other": "其他"
+    },
+    "desc": {
+      "pgsql": "PostgreSQL 连接（含 PDO）",
+      "redis": "Redis 内存数据存储客户端",
+      "mongodb": "MongoDB NoSQL 驱动",
+      "sqlite3": "嵌入式 SQLite 数据库",
+      "oci8": "Oracle 数据库连接",
+      "odbc": "通过 ODBC 访问数据库",
+      "dba": "键值数据库抽象层",
+      "apcu": "用户数据内存缓存",
+      "memcached": "Memcached 分布式缓存客户端",
+      "opcache": "PHP 字节码缓存（通常已安装）",
+      "igbinary": "快速二进制序列化",
+      "imagick": "高级图像处理",
+      "gd": "基础图像生成/处理",
+      "exif": "读取图像元数据",
+      "intl": "Unicode、本地化、音译",
+      "gettext": "GNU gettext 翻译系统",
+      "mbstring": "多字节字符串处理",
+      "xdebug": "单步调试与性能分析",
+      "spx": "简单的性能分析器",
+      "ast": "抽象语法树（静态分析）",
+      "soap": "SOAP Web 服务",
+      "imap": "IMAP/POP3 邮件访问",
+      "ssh2": "SSH / SFTP 客户端",
+      "sockets": "底层套接字访问",
+      "amqp": "RabbitMQ / AMQP 消息队列",
+      "grpc": "gRPC 远程过程调用",
+      "zip": "ZIP 归档读写",
+      "bz2": "bzip2 压缩",
+      "brotli": "Brotli 压缩",
+      "lz4": "LZ4 快速压缩",
+      "gmp": "任意大小整数运算（WHMCS 需要）",
+      "bcmath": "任意精度运算",
+      "msgpack": "MessagePack 序列化",
+      "yaml": "YAML 解析与生成",
+      "ldap": "LDAP 目录访问",
+      "uuid": "UUID 生成",
+      "swoole": "高性能协程服务器",
+      "ds": "高效数据结构"
     }
   }
 }

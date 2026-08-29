@@ -6,35 +6,26 @@
   },
   "title": "PHP 拡張機能",
   "subtitle": {
-    "pre": "サーバー全体の PHP 拡張機能を管理します。トグルで拡張機能を有効または無効にすると、PHP-FPM が自動的に再起動します。",
+    "pre": "一覧からPHP拡張機能を選んでインストールし、インストール済みはトグルで有効/無効を切り替えます。 ",
     "bold": "サーバー全体",
-    "post": " に適用され、すべてのドメインに影響します。"
+    "post": " — すべてのドメインに影響します。PHP-FPMは自動的に再起動します。"
   },
   "removeIonCube": "⊗ IonCube を削除",
   "installIonCube": "🔐 IonCube をインストール",
-  "installFromPecl": "📦 PECL からインストール",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} 有効",
-    "inactive": "{{count}} 無効",
-    "total": "合計 {{count}}"
-  },
   "searchPlaceholder": "🔍 拡張機能を検索...",
   "loading": "読み込み中…",
-  "coreExtension": "コア拡張機能",
   "toggleTitle": {
-    "core": "コア拡張機能のため、無効にできません",
     "disable": "無効化",
     "enable": "有効化"
   },
   "alerts": {
-    "coreCannotDisable": "この拡張機能は PHP のコア部分であり、無効にできません。",
-    "invalidPackage": "無効なパッケージ名です"
+    "coreCannotDisable": "この拡張機能は PHP のコア部分であり、無効にできません。"
   },
   "confirm": {
     "ionCubeInstall": "IonCube Loader が PHP {{version}} 用にインストールされます。\n\nioncube.com から tar.gz アーカイブがダウンロードされ、.so ファイルがコピーされ、zend_extension として読み込まれます。\n続行しますか?",
     "ionCubeRemove": "IonCube Loader が PHP {{version}} から削除されます。続行しますか?",
-    "peclInstall": "PECL パッケージ「{{package}}」が PHP {{version}} 用にコンパイルおよびインストールされます。続行しますか?"
+    "catalogInstall": "{{name}} ({{key}}) を PHP {{version}} 用にインストールします。ビルド済みパッケージがない場合はソースからコンパイルされ、数分かかることがあります。続行しますか？"
   },
   "success": {
     "toggleEnabled": "✓ {{name}} を有効化 · PHP-FPM を再起動しました",
@@ -49,17 +40,6 @@
     "ionCubeInstallFailed": "IonCube のインストールに失敗しました",
     "ionCubeRemoveFailed": "IonCube の削除に失敗しました",
     "peclInstallFailed": "PECL のインストールに失敗しました"
-  },
-  "peclModal": {
-    "title": "PECL から拡張機能をインストール",
-    "descPre": "利用可能な場合はビルド済みパッケージを直接インストールします（bundled: ",
-    "warnPre": "⚠ 拡張機能は PHP {{version}} 用にコンパイルされます。対象: ",
-    "warnMid": " または Remi ディレクトリ",
-    "inputPlaceholder": "例: mongodb",
-    "cancel": "キャンセル",
-    "install": "インストール",
-    "descMid": " · PECL: ",
-    "descPost": "）。それ以外はソースから拡張機能をコンパイルします。"
   },
   "pecl": {
     "step": {
@@ -81,6 +61,64 @@
       "build_failed": "extension のコンパイルに失敗しました",
       "ini_failed": "INI ファイルを書き込めませんでした",
       "internal": "内部エラーが発生しました"
+    }
+  },
+  "catalog": {
+    "install": "インストール",
+    "extraInstalled": "インストール済み（カタログ外）",
+    "footerPre": "必要な拡張機能が一覧にない場合は、",
+    "footerLink": "ツール",
+    "footerPost": " チームに連絡してください。カタログは拡張できます。",
+    "category": {
+      "database": "データベース",
+      "cache": "キャッシュ & パフォーマンス",
+      "image": "画像 & メディア",
+      "i18n": "国際化",
+      "development": "開発 & デバッグ",
+      "network": "ネットワーク & サービス",
+      "compression": "圧縮",
+      "math": "数学 & シリアライズ",
+      "other": "その他"
+    },
+    "desc": {
+      "pgsql": "PostgreSQL接続（PDOを含む）",
+      "redis": "Redisインメモリデータストアのクライアント",
+      "mongodb": "MongoDB NoSQLドライバ",
+      "sqlite3": "組み込みSQLiteデータベース",
+      "oci8": "Oracleデータベース接続",
+      "odbc": "ODBC経由のデータベースアクセス",
+      "dba": "キーバリューのデータベース抽象化層",
+      "apcu": "ユーザーデータのインメモリキャッシュ",
+      "memcached": "Memcached分散キャッシュのクライアント",
+      "opcache": "PHPバイトコードキャッシュ（通常インストール済み）",
+      "igbinary": "高速なバイナリシリアライズ",
+      "imagick": "高度な画像処理",
+      "gd": "基本的な画像生成/処理",
+      "exif": "画像メタデータの読み取り",
+      "intl": "Unicode、ローカライズ、翻字",
+      "gettext": "GNU gettext翻訳システム",
+      "mbstring": "マルチバイト文字列の処理",
+      "xdebug": "ステップデバッグとプロファイリング",
+      "spx": "シンプルな性能プロファイラ",
+      "ast": "抽象構文木（静的解析）",
+      "soap": "SOAP Webサービス",
+      "imap": "IMAP/POP3メールアクセス",
+      "ssh2": "SSH / SFTPクライアント",
+      "sockets": "低レベルのソケットアクセス",
+      "amqp": "RabbitMQ / AMQPメッセージキュー",
+      "grpc": "gRPCリモートプロシージャコール",
+      "zip": "ZIPアーカイブの読み書き",
+      "bz2": "bzip2圧縮",
+      "brotli": "Brotli圧縮",
+      "lz4": "LZ4高速圧縮",
+      "gmp": "任意サイズの整数演算（WHMCSが必要）",
+      "bcmath": "任意精度の演算",
+      "msgpack": "MessagePackシリアライズ",
+      "yaml": "YAMLの解析と生成",
+      "ldap": "LDAPディレクトリアクセス",
+      "uuid": "UUID生成",
+      "swoole": "高性能コルーチンサーバー",
+      "ds": "効率的なデータ構造"
     }
   }
 }

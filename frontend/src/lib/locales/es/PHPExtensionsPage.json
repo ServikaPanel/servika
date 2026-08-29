@@ -6,35 +6,26 @@
   },
   "title": "Extensiones PHP",
   "subtitle": {
-    "pre": "Gestione las extensiones PHP en todo el servidor. Use el interruptor para activar o desactivar una extensión y PHP-FPM se reinicia automáticamente. ",
-    "bold": "Para todo el servidor",
-    "post": ", afecta a todos los dominios."
+    "pre": "Elige una extensión de PHP de la lista e instálala, y activa o desactiva las instaladas. ",
+    "bold": "A nivel de servidor",
+    "post": " — afecta a todos los dominios; PHP-FPM se reinicia automáticamente."
   },
   "removeIonCube": "⊗ Eliminar IonCube",
   "installIonCube": "🔐 Instalar IonCube",
-  "installFromPecl": "📦 Instalar desde PECL",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} activadas",
-    "inactive": "{{count}} inactivas",
-    "total": "Total {{count}}"
-  },
-  "searchPlaceholder": "🔍 Buscar extensiones...",
+  "searchPlaceholder": "🔍 Buscar extensión...",
   "loading": "Cargando…",
-  "coreExtension": "extensión del núcleo",
   "toggleTitle": {
-    "core": "Extensión del núcleo, no se puede desactivar",
     "disable": "Desactivar",
     "enable": "Activar"
   },
   "alerts": {
-    "coreCannotDisable": "Esta extensión es parte del núcleo de PHP y no se puede desactivar.",
-    "invalidPackage": "Nombre de paquete no válido"
+    "coreCannotDisable": "Esta extensión es parte del núcleo de PHP y no se puede desactivar."
   },
   "confirm": {
     "ionCubeInstall": "IonCube Loader se instalará para PHP {{version}}.\n\nSe descargará un archivo tar.gz de ioncube.com, se copiará el archivo .so y se cargará como zend_extension.\n¿Continuar?",
     "ionCubeRemove": "IonCube Loader se eliminará de PHP {{version}}. ¿Continuar?",
-    "peclInstall": "El paquete PECL «{{package}}» se compilará e instalará para PHP {{version}}. ¿Continuar?"
+    "catalogInstall": "{{name}} ({{key}}) se instalará para PHP {{version}}. Si no hay un paquete precompilado, se compila desde el código fuente, lo que puede tardar unos minutos. ¿Continuar?"
   },
   "success": {
     "toggleEnabled": "✓ {{name}} activada · PHP-FPM reiniciado",
@@ -49,17 +40,6 @@
     "ionCubeInstallFailed": "La instalación de IonCube falló",
     "ionCubeRemoveFailed": "La eliminación de IonCube falló",
     "peclInstallFailed": "La instalación PECL falló"
-  },
-  "peclModal": {
-    "title": "Instalar una extensión desde PECL",
-    "descPre": "Instala directamente un paquete precompilado cuando existe (bundled: ",
-    "warnPre": "⚠ La extensión se compilará para PHP {{version}}. Destino: ",
-    "warnMid": " o el directorio Remi",
-    "inputPlaceholder": "p.ej. mongodb",
-    "cancel": "Cancelar",
-    "install": "Instalar",
-    "descMid": " · PECL: ",
-    "descPost": "); de lo contrario, compila la extensión desde el código fuente."
   },
   "pecl": {
     "step": {
@@ -81,6 +61,64 @@
       "build_failed": "La compilación de la extension falló",
       "ini_failed": "No se pudo escribir el archivo INI",
       "internal": "Se produjo un error interno"
+    }
+  },
+  "catalog": {
+    "install": "Instalar",
+    "extraInstalled": "Instaladas (fuera del catálogo)",
+    "footerPre": "Si la extensión que necesitas no está en la lista, contacta con el equipo de ",
+    "footerLink": "Herramientas",
+    "footerPost": "; el catálogo puede ampliarse.",
+    "category": {
+      "database": "Base de datos",
+      "cache": "Caché & Rendimiento",
+      "image": "Imagen & Multimedia",
+      "i18n": "Internacionalización",
+      "development": "Desarrollo & Depuración",
+      "network": "Red & Servicios",
+      "compression": "Compresión",
+      "math": "Matemáticas & Serialización",
+      "other": "Otro"
+    },
+    "desc": {
+      "pgsql": "Conectividad PostgreSQL (incluido PDO)",
+      "redis": "Cliente del almacén de datos en memoria Redis",
+      "mongodb": "Controlador NoSQL de MongoDB",
+      "sqlite3": "Base de datos SQLite integrada",
+      "oci8": "Conectividad a la base de datos Oracle",
+      "odbc": "Acceso a la base de datos por ODBC",
+      "dba": "Capa de abstracción clave-valor",
+      "apcu": "Caché en memoria de datos de usuario",
+      "memcached": "Cliente de caché distribuida Memcached",
+      "opcache": "Caché de bytecode de PHP (normalmente instalada)",
+      "igbinary": "Serialización binaria rápida",
+      "imagick": "Procesamiento avanzado de imágenes",
+      "gd": "Creación/procesamiento básico de imágenes",
+      "exif": "Leer metadatos de imagen",
+      "intl": "Unicode, localización, transliteración",
+      "gettext": "Sistema de traducción GNU gettext",
+      "mbstring": "Manejo de cadenas multibyte",
+      "xdebug": "Depuración paso a paso y perfilado",
+      "spx": "Perfilador de rendimiento sencillo",
+      "ast": "Árbol de sintaxis abstracta (análisis estático)",
+      "soap": "Servicios web SOAP",
+      "imap": "Acceso a correo IMAP/POP3",
+      "ssh2": "Cliente SSH / SFTP",
+      "sockets": "Acceso a sockets de bajo nivel",
+      "amqp": "Cola de mensajes RabbitMQ / AMQP",
+      "grpc": "Llamada a procedimiento remoto gRPC",
+      "zip": "Lectura/escritura de archivos ZIP",
+      "bz2": "Compresión bzip2",
+      "brotli": "Compresión Brotli",
+      "lz4": "Compresión rápida LZ4",
+      "gmp": "Matemática de enteros de gran tamaño (requerida por WHMCS)",
+      "bcmath": "Matemática de precisión arbitraria",
+      "msgpack": "Serialización MessagePack",
+      "yaml": "Análisis y generación de YAML",
+      "ldap": "Acceso al directorio LDAP",
+      "uuid": "Generación de UUID",
+      "swoole": "Servidor de corrutinas de alto rendimiento",
+      "ds": "Estructuras de datos eficientes"
     }
   }
 }

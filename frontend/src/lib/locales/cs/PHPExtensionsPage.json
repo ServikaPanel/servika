@@ -6,35 +6,26 @@
   },
   "title": "Rozšíření PHP",
   "subtitle": {
-    "pre": "Spravujte rozšíření PHP napříč serverem. Přepínačem povolte nebo zakažte rozšíření a PHP-FPM se restartuje automaticky. ",
-    "bold": "Pro celý server",
-    "post": ", ovlivňuje všechny domény."
+    "pre": "Vyberte rozšíření PHP ze seznamu a nainstalujte je, a nainstalovaná přepínejte zapnuto/vypnuto. ",
+    "bold": "Na úrovni serveru",
+    "post": " — týká se všech domén; PHP-FPM se restartuje automaticky."
   },
   "removeIonCube": "⊗ Odebrat IonCube",
   "installIonCube": "🔐 Nainstalovat IonCube",
-  "installFromPecl": "📦 Nainstalovat z PECL",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} povoleno",
-    "inactive": "{{count}} neaktivních",
-    "total": "Celkem {{count}}"
-  },
   "searchPlaceholder": "🔍 Hledat rozšíření...",
   "loading": "Načítání…",
-  "coreExtension": "základní rozšíření",
   "toggleTitle": {
-    "core": "Základní rozšíření, nelze zakázat",
     "disable": "Zakázat",
     "enable": "Povolit"
   },
   "alerts": {
-    "coreCannotDisable": "Toto rozšíření je základní součástí PHP a nelze ho zakázat.",
-    "invalidPackage": "Neplatný název balíčku"
+    "coreCannotDisable": "Toto rozšíření je základní součástí PHP a nelze ho zakázat."
   },
   "confirm": {
     "ionCubeInstall": "IonCube Loader bude nainstalován pro PHP {{version}}.\n\nZ ioncube.com se stáhne archiv tar.gz, zkopíruje se soubor .so a načte se jako zend_extension.\nPokračovat?",
     "ionCubeRemove": "IonCube Loader bude odebrán z PHP {{version}}. Pokračovat?",
-    "peclInstall": "Balíček PECL „{{package}}“ bude zkompilován a nainstalován pro PHP {{version}}. Pokračovat?"
+    "catalogInstall": "{{name}} ({{key}}) bude nainstalováno pro PHP {{version}}. Pokud neexistuje předpřipravený balíček, přeloží se ze zdrojového kódu, což může trvat několik minut. Pokračovat?"
   },
   "success": {
     "toggleEnabled": "✓ {{name}} povoleno · PHP-FPM restartován",
@@ -49,17 +40,6 @@
     "ionCubeInstallFailed": "Instalace IonCube se nezdařila",
     "ionCubeRemoveFailed": "Odebrání IonCube se nezdařilo",
     "peclInstallFailed": "Instalace PECL se nezdařila"
-  },
-  "peclModal": {
-    "title": "Nainstalovat rozšíření z PECL",
-    "descPre": "Nainstaluje předpřipravený balíček přímo, pokud existuje (bundled: ",
-    "warnPre": "⚠ Rozšíření bude zkompilováno pro PHP {{version}}. Cíl: ",
-    "warnMid": " nebo adresář Remi",
-    "inputPlaceholder": "např. mongodb",
-    "cancel": "Zrušit",
-    "install": "Nainstalovat",
-    "descMid": " · PECL: ",
-    "descPost": "); jinak přeloží rozšíření ze zdrojového kódu."
   },
   "pecl": {
     "step": {
@@ -81,6 +61,64 @@
       "build_failed": "Kompilace extension selhala",
       "ini_failed": "Soubor INI nelze zapsat",
       "internal": "Došlo k interní chybě"
+    }
+  },
+  "catalog": {
+    "install": "Instalovat",
+    "extraInstalled": "Nainstalováno (mimo katalog)",
+    "footerPre": "Pokud rozšíření, které potřebujete, není v seznamu, kontaktujte tým ",
+    "footerLink": "Nástroje",
+    "footerPost": "; katalog lze rozšířit.",
+    "category": {
+      "database": "Databáze",
+      "cache": "Cache & Výkon",
+      "image": "Obrázky & Média",
+      "i18n": "Internacionalizace",
+      "development": "Vývoj & Ladění",
+      "network": "Síť & Služby",
+      "compression": "Komprese",
+      "math": "Matematika & Serializace",
+      "other": "Ostatní"
+    },
+    "desc": {
+      "pgsql": "Připojení k PostgreSQL (včetně PDO)",
+      "redis": "Klient in-memory úložiště Redis",
+      "mongodb": "Ovladač NoSQL pro MongoDB",
+      "sqlite3": "Vestavěná databáze SQLite",
+      "oci8": "Připojení k databázi Oracle",
+      "odbc": "Přístup k databázi přes ODBC",
+      "dba": "Abstrakční vrstva klíč-hodnota",
+      "apcu": "In-memory cache uživatelských dat",
+      "memcached": "Klient distribuované cache Memcached",
+      "opcache": "Cache bytecode PHP (obvykle nainstalováno)",
+      "igbinary": "Rychlá binární serializace",
+      "imagick": "Pokročilé zpracování obrázků",
+      "gd": "Základní tvorba/zpracování obrázků",
+      "exif": "Čtení metadat obrázku",
+      "intl": "Unicode, lokalizace, transliterace",
+      "gettext": "Překladový systém GNU gettext",
+      "mbstring": "Práce s vícebajtovými řetězci",
+      "xdebug": "Krokové ladění a profilování",
+      "spx": "Jednoduchý profilovač výkonu",
+      "ast": "Abstraktní syntaktický strom (statická analýza)",
+      "soap": "Webové služby SOAP",
+      "imap": "Přístup k e-mailu IMAP/POP3",
+      "ssh2": "Klient SSH / SFTP",
+      "sockets": "Nízkoúrovňový přístup k socketům",
+      "amqp": "Fronta zpráv RabbitMQ / AMQP",
+      "grpc": "Vzdálené volání procedur gRPC",
+      "zip": "Čtení/zápis archivů ZIP",
+      "bz2": "Komprese bzip2",
+      "brotli": "Komprese Brotli",
+      "lz4": "Rychlá komprese LZ4",
+      "gmp": "Matematika celých čísel libovolné velikosti (vyžaduje WHMCS)",
+      "bcmath": "Matematika s libovolnou přesností",
+      "msgpack": "Serializace MessagePack",
+      "yaml": "Parsování a generování YAML",
+      "ldap": "Přístup k adresáři LDAP",
+      "uuid": "Generování UUID",
+      "swoole": "Vysoce výkonný coroutine server",
+      "ds": "Efektivní datové struktury"
     }
   }
 }

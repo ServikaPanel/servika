@@ -6,35 +6,26 @@
   },
   "title": "PHP Eklentileri",
   "subtitle": {
-    "pre": "Sunucu genelinde PHP eklentilerini yönetin. Bir eklentiyi açmak veya kapatmak için anahtarı kullanın; PHP-FPM otomatik olarak yeniden başlar. ",
-    "bold": "Sunucu geneli",
-    "post": ", tüm alan adlarını etkiler."
+    "pre": "Hazır listeden PHP eklentisi seçip kurun; kurulu olanları toggle ile aç/kapatın. ",
+    "bold": "Sunucu bazında",
+    "post": " — tüm domainleri etkiler; PHP-FPM otomatik yeniden başlatılır."
   },
   "removeIonCube": "⊗ IonCube Kaldır",
   "installIonCube": "🔐 IonCube Kur",
-  "installFromPecl": "📦 PECL'den Kur",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} etkin",
-    "inactive": "{{count}} etkin değil",
-    "total": "Toplam {{count}}"
-  },
   "searchPlaceholder": "🔍 Eklenti ara...",
   "loading": "Yükleniyor…",
-  "coreExtension": "çekirdek eklenti",
   "toggleTitle": {
-    "core": "Çekirdek eklenti, devre dışı bırakılamaz",
     "disable": "Devre dışı bırak",
     "enable": "Etkinleştir"
   },
   "alerts": {
-    "coreCannotDisable": "Bu eklenti PHP'nin çekirdek bir parçasıdır ve devre dışı bırakılamaz.",
-    "invalidPackage": "Geçersiz paket adı"
+    "coreCannotDisable": "Bu eklenti PHP'nin çekirdek bir parçasıdır ve devre dışı bırakılamaz."
   },
   "confirm": {
     "ionCubeInstall": "IonCube Loader, PHP {{version}} için kurulacak.\n\nioncube.com adresinden bir tar.gz arşivi indirilecek, .so dosyası kopyalanacak ve bir zend_extension olarak yüklenecek.\nDevam edilsin mi?",
     "ionCubeRemove": "IonCube Loader, PHP {{version}} sürümünden kaldırılacak. Devam edilsin mi?",
-    "peclInstall": "\"{{package}}\" PECL paketi, PHP {{version}} için derlenip kurulacak. Devam edilsin mi?"
+    "catalogInstall": "{{name}} ({{key}}) PHP {{version}} için kurulacak. Hazır paket yoksa kaynaktan derlenir, bu birkaç dakika sürebilir. Devam?"
   },
   "success": {
     "toggleEnabled": "✓ {{name}} etkinleştirildi · PHP-FPM yeniden başlatıldı",
@@ -49,17 +40,6 @@
     "ionCubeInstallFailed": "IonCube kurulumu başarısız oldu",
     "ionCubeRemoveFailed": "IonCube kaldırma başarısız oldu",
     "peclInstallFailed": "PECL kurulumu başarısız oldu"
-  },
-  "peclModal": {
-    "title": "PECL'den Eklenti Kur",
-    "descPre": "Hazır paket varsa doğrudan kurar (bundled: ",
-    "warnPre": "⚠ Eklenti, PHP {{version}} için derlenecek. Hedef: ",
-    "warnMid": " veya Remi dizini",
-    "inputPlaceholder": "örn. mongodb",
-    "cancel": "İptal",
-    "install": "Kur",
-    "descMid": " · PECL: ",
-    "descPost": "); yoksa eklentiyi kaynaktan derler."
   },
   "pecl": {
     "step": {
@@ -81,6 +61,64 @@
       "build_failed": "Extension derlenemedi",
       "ini_failed": "INI dosyası yazılamadı",
       "internal": "İç hata oluştu"
+    }
+  },
+  "catalog": {
+    "install": "Kur",
+    "extraInstalled": "Kurulu (katalog dışı)",
+    "footerPre": "Aradığınız eklenti listede yoksa ",
+    "footerLink": "Araçlar",
+    "footerPost": " ekibiyle iletişime geçin; katalog genişletilebilir.",
+    "category": {
+      "database": "Veritabanı",
+      "cache": "Önbellek & Performans",
+      "image": "Görüntü & Medya",
+      "i18n": "Uluslararasılaştırma",
+      "development": "Geliştirme & Hata Ayıklama",
+      "network": "Ağ & Servisler",
+      "compression": "Sıkıştırma",
+      "math": "Matematik & Serileştirme",
+      "other": "Diğer"
+    },
+    "desc": {
+      "pgsql": "PostgreSQL bağlantısı (PDO dahil)",
+      "redis": "Redis in-memory veri deposu istemcisi",
+      "mongodb": "MongoDB NoSQL sürücüsü",
+      "sqlite3": "Gömülü SQLite veritabanı",
+      "oci8": "Oracle veritabanı bağlantısı",
+      "odbc": "ODBC üzerinden veritabanı erişimi",
+      "dba": "Anahtar-değer veritabanı katmanı",
+      "apcu": "Kullanıcı verisi in-memory önbelleği",
+      "memcached": "Memcached dağıtık önbellek istemcisi",
+      "opcache": "PHP bytecode önbelleği (genelde kurulu)",
+      "igbinary": "Hızlı ikili serileştirme",
+      "imagick": "Gelişmiş görüntü işleme",
+      "gd": "Temel görüntü oluşturma/işleme",
+      "exif": "Görüntü meta verisi okuma",
+      "intl": "Unicode, yerelleştirme, çeviri",
+      "gettext": "GNU gettext çeviri sistemi",
+      "mbstring": "Çok baytlı dize işleme",
+      "xdebug": "Adım adım hata ayıklama + profil",
+      "spx": "Basit performans profilleyici",
+      "ast": "Soyut sözdizim ağacı (statik analiz)",
+      "soap": "SOAP web servisleri",
+      "imap": "IMAP/POP3 e-posta erişimi",
+      "ssh2": "SSH / SFTP istemcisi",
+      "sockets": "Düşük seviye soket erişimi",
+      "amqp": "RabbitMQ / AMQP mesaj kuyruğu",
+      "grpc": "gRPC uzak yordam çağrısı",
+      "zip": "ZIP arşiv okuma/yazma",
+      "bz2": "bzip2 sıkıştırma",
+      "brotli": "Brotli sıkıştırma",
+      "lz4": "LZ4 hızlı sıkıştırma",
+      "gmp": "Büyük tam sayı matematiği (WHMCS gerektirir)",
+      "bcmath": "Keyfi hassasiyetli matematik",
+      "msgpack": "MessagePack serileştirme",
+      "yaml": "YAML ayrıştırma/üretme",
+      "ldap": "LDAP dizin erişimi",
+      "uuid": "UUID üretimi",
+      "swoole": "Yüksek performanslı coroutine sunucu",
+      "ds": "Verimli veri yapıları"
     }
   }
 }

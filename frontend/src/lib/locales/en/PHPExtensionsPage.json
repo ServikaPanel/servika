@@ -6,35 +6,84 @@
   },
   "title": "PHP Extensions",
   "subtitle": {
-    "pre": "Manage PHP extensions across the server. Use the toggle to enable or disable an extension, and PHP-FPM restarts automatically. ",
+    "pre": "Pick a PHP extension from the ready list and install it, and toggle installed ones on or off. ",
     "bold": "Server-wide",
-    "post": ", affects all domains."
+    "post": ", affects all domains; PHP-FPM restarts automatically."
   },
   "removeIonCube": "⊗ Remove IonCube",
-  "installIonCube": "🔐 Install IonCube",
-  "installFromPecl": "📦 Install from PECL",
+  "installIonCube": "🔐 Install IonCube Loader",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} enabled",
-    "inactive": "{{count}} inactive",
-    "total": "Total {{count}}"
-  },
-  "searchPlaceholder": "🔍 Search extensions...",
+  "searchPlaceholder": "🔍 Search extension...",
   "loading": "Loading…",
-  "coreExtension": "core extension",
   "toggleTitle": {
-    "core": "Core extension, cannot be disabled",
     "disable": "Disable",
     "enable": "Enable"
   },
   "alerts": {
-    "coreCannotDisable": "This extension is a core part of PHP and cannot be disabled.",
-    "invalidPackage": "Invalid package name"
+    "coreCannotDisable": "This extension is a core part of PHP and cannot be disabled."
   },
   "confirm": {
     "ionCubeInstall": "IonCube Loader will be installed for PHP {{version}}.\n\nA tar.gz archive will be downloaded from ioncube.com, the .so file will be copied, and it will be loaded as a zend_extension.\nContinue?",
     "ionCubeRemove": "IonCube Loader will be removed from PHP {{version}}. Continue?",
-    "peclInstall": "The PECL package \"{{package}}\" will be compiled and installed for PHP {{version}}. Continue?"
+    "catalogInstall": "{{name}} ({{key}}) will be installed for PHP {{version}}. If no prebuilt package exists it is compiled from source, which can take a few minutes. Continue?"
+  },
+  "catalog": {
+    "install": "Install",
+    "extraInstalled": "Installed (outside the catalog)",
+    "footerPre": "If the extension you need is not in the list, contact the ",
+    "footerLink": "Tools",
+    "footerPost": " team; the catalog can be extended.",
+    "category": {
+      "database": "Database",
+      "cache": "Cache & Performance",
+      "image": "Image & Media",
+      "i18n": "Internationalization",
+      "development": "Development & Debugging",
+      "network": "Network & Services",
+      "compression": "Compression",
+      "math": "Math & Serialization",
+      "other": "Other"
+    },
+    "desc": {
+      "pgsql": "PostgreSQL connectivity (including PDO)",
+      "redis": "Redis in-memory data store client",
+      "mongodb": "MongoDB NoSQL driver",
+      "sqlite3": "Embedded SQLite database",
+      "oci8": "Oracle database connectivity",
+      "odbc": "Database access over ODBC",
+      "dba": "Key-value database abstraction layer",
+      "apcu": "In-memory user data cache",
+      "memcached": "Memcached distributed cache client",
+      "opcache": "PHP bytecode cache (usually installed)",
+      "igbinary": "Fast binary serialization",
+      "imagick": "Advanced image processing",
+      "gd": "Basic image creation and processing",
+      "exif": "Read image metadata",
+      "intl": "Unicode, localization, transliteration",
+      "gettext": "GNU gettext translation system",
+      "mbstring": "Multibyte string handling",
+      "xdebug": "Step debugging and profiling",
+      "spx": "Simple performance profiler",
+      "ast": "Abstract syntax tree (static analysis)",
+      "soap": "SOAP web services",
+      "imap": "IMAP/POP3 email access",
+      "ssh2": "SSH / SFTP client",
+      "sockets": "Low-level socket access",
+      "amqp": "RabbitMQ / AMQP message queue",
+      "grpc": "gRPC remote procedure call",
+      "zip": "ZIP archive read and write",
+      "bz2": "bzip2 compression",
+      "brotli": "Brotli compression",
+      "lz4": "LZ4 fast compression",
+      "gmp": "Arbitrary-size integer math (required by WHMCS)",
+      "bcmath": "Arbitrary precision math",
+      "msgpack": "MessagePack serialization",
+      "yaml": "YAML parsing and emitting",
+      "ldap": "LDAP directory access",
+      "uuid": "UUID generation",
+      "swoole": "High-performance coroutine server",
+      "ds": "Efficient data structures"
+    }
   },
   "success": {
     "toggleEnabled": "✓ {{name}} enabled · PHP-FPM restarted",
@@ -49,17 +98,6 @@
     "ionCubeInstallFailed": "IonCube installation failed",
     "ionCubeRemoveFailed": "IonCube removal failed",
     "peclInstallFailed": "PECL installation failed"
-  },
-  "peclModal": {
-    "title": "Install an Extension from PECL",
-    "descPre": "Installs a prebuilt package directly when one is available (bundled: ",
-    "descMid": " · PECL: ",
-    "descPost": "), otherwise compiles the extension from source.",
-    "warnPre": "⚠ The extension will be compiled for PHP {{version}}. Target: ",
-    "warnMid": " or the Remi directory",
-    "inputPlaceholder": "e.g. mongodb",
-    "cancel": "Cancel",
-    "install": "Install"
   },
   "pecl": {
     "step": {

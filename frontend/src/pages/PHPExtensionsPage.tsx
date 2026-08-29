@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
@@ -12,6 +13,82 @@ const REQUIRED_EXTENSIONS = new Set([
   'core', 'date', 'standard', 'pdo', 'mysqlnd', 'phar', 'spl', 'reflection',
   'session', 'pcre', 'tokenizer', 'json', 'hash', 'random', 'libxml',
 ])
+
+// CATALOG is the curated select-and-install list that replaced the free-text
+// PECL box. Each item's `key` is the name sent to install; the backend probes
+// its own candidate packages (bundled dnf, pecl dnf, then a source build). The
+// category label and the per-item description are i18n keys, so only the
+// extension name and key stay in the code. Adding an extension here is one line.
+type CatalogItem = { name: string; key: string }
+const CATALOG: { category: string; items: CatalogItem[] }[] = [
+  { category: 'database', items: [
+    { name: 'PostgreSQL', key: 'pgsql' },
+    { name: 'Redis', key: 'redis' },
+    { name: 'MongoDB', key: 'mongodb' },
+    { name: 'SQLite3', key: 'sqlite3' },
+    { name: 'OCI8 (Oracle)', key: 'oci8' },
+    { name: 'ODBC', key: 'odbc' },
+    { name: 'DBA', key: 'dba' },
+  ] },
+  { category: 'cache', items: [
+    { name: 'APCu', key: 'apcu' },
+    { name: 'Memcached', key: 'memcached' },
+    { name: 'OPcache', key: 'opcache' },
+    { name: 'igbinary', key: 'igbinary' },
+  ] },
+  { category: 'image', items: [
+    { name: 'ImageMagick', key: 'imagick' },
+    { name: 'GD', key: 'gd' },
+    { name: 'EXIF', key: 'exif' },
+  ] },
+  { category: 'i18n', items: [
+    { name: 'intl', key: 'intl' },
+    { name: 'gettext', key: 'gettext' },
+    { name: 'mbstring', key: 'mbstring' },
+  ] },
+  { category: 'development', items: [
+    { name: 'Xdebug', key: 'xdebug' },
+    { name: 'SPX', key: 'spx' },
+    { name: 'AST', key: 'ast' },
+  ] },
+  { category: 'network', items: [
+    { name: 'SOAP', key: 'soap' },
+    { name: 'IMAP', key: 'imap' },
+    { name: 'SSH2', key: 'ssh2' },
+    { name: 'Sockets', key: 'sockets' },
+    { name: 'AMQP', key: 'amqp' },
+    { name: 'gRPC', key: 'grpc' },
+  ] },
+  { category: 'compression', items: [
+    { name: 'Zip', key: 'zip' },
+    { name: 'BZ2', key: 'bz2' },
+    { name: 'Brotli', key: 'brotli' },
+    { name: 'LZ4', key: 'lz4' },
+  ] },
+  { category: 'math', items: [
+    { name: 'GMP', key: 'gmp' },
+    { name: 'BCMath', key: 'bcmath' },
+    { name: 'msgpack', key: 'msgpack' },
+    { name: 'YAML', key: 'yaml' },
+  ] },
+  { category: 'other', items: [
+    { name: 'LDAP', key: 'ldap' },
+    { name: 'UUID', key: 'uuid' },
+    { name: 'Swoole', key: 'swoole' },
+    { name: 'Data Structures', key: 'ds' },
+  ] },
+]
+
+const CATALOG_KEYS = new Set(CATALOG.flatMap(group => group.items.map(item => item.key)))
+
+// matchesKey decides whether an installed extension name is the catalog key,
+// loosely: a trailing version digit (redis6 → redis), a pdo_ prefix, or the key
+// as a substring. It is used both to render a catalog item's toggle and to keep
+// a matched extension out of the "outside the catalog" section.
+function matchesKey(extensionName: string, key: string): boolean {
+  const name = extensionName.toLowerCase()
+  return name === key || name.replace(/[0-9]+$/, '') === key || name === 'pdo_' + key || name.includes(key)
+}
 
 // The selected PHP version is remembered in a cookie (never localStorage), so a
 // return to this page reopens the version last worked on. It is a page-scoped
@@ -43,7 +120,6 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
-  const [peclModalOpen, setPeclModalOpen] = useState(false)
   const [peclProgress, setPeclProgress] = useState<{ step: string; percent: number } | null>(null)
 
   // Split so the version effect never writes state synchronously: fetchExtensions
@@ -134,17 +210,17 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
     }
   }
 
-  async function installPecl(packageName: string) {
-    if (!packageName.match(/^[a-zA-Z0-9_-]+$/)) {
-      await notify({ message: t('alerts.invalidPackage'), tone: 'error' }); return
-    }
-    if (!(await confirm({ message: t('confirm.peclInstall', { package: packageName, version: activeVersion }) }))) return
-    setPeclModalOpen(false)
-    setError(null)
+  // install runs the same async job the free-text box used to, but the package
+  // name comes from a catalog item so it is always well formed; the name shown
+  // in every message is the catalog's display name.
+  async function install(item: CatalogItem) {
+    if (peclProgress) return
+    if (!(await confirm({ message: t('confirm.catalogInstall', { name: item.name, key: item.key, version: activeVersion }), confirmLabel: t('catalog.install') }))) return
+    setError(null); setSuccess(null)
     setPeclProgress({ step: 'starting', percent: 2 })
     try {
-      const { data } = await api.post('/php-extensions/pecl-install', { version: activeVersion, package: packageName })
-      pollPecl(data.job_id, packageName)
+      const { data } = await api.post('/php-extensions/pecl-install', { version: activeVersion, package: item.key })
+      pollPecl(data.job_id, item.name)
     } catch (error) {
       setPeclProgress(null)
       setError(apiError(error, t('errors.peclInstallFailed')))
@@ -155,13 +231,13 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
   // callbacks (never a mount effect), so it does not trip set-state-in-effect. The
   // step and error come back as CODES the frontend localizes; the raw build log is
   // shown separately.
-  function pollPecl(jobId: string, packageName: string) {
+  function pollPecl(jobId: string, displayName: string) {
     const tick = () => {
       api.get('/php-extensions/pecl-status', { params: { id: jobId } })
         .then(({ data }) => {
           if (data.state === 'done') {
             setPeclProgress(null)
-            setSuccess(t('success.peclInstalled', { package: packageName }))
+            setSuccess(t('success.peclInstalled', { package: displayName }))
             setTimeout(() => setSuccess(null), 5000)
             load()
             return
@@ -182,9 +258,27 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
     tick()
   }
 
-  const filtered = filter ? extensions.filter(extension => extension.name.toLowerCase().includes(filter.toLowerCase())) : extensions
-  const activeCount = extensions.filter(extension => extension.active).length
-  const inactiveCount = extensions.length - activeCount
+  const ionCubeInstalled = extensions.some(extension => extension.name.toLowerCase().includes('ioncube'))
+  const findInstalled = useCallback(
+    (key: string) => extensions.find(extension => matchesKey(extension.name, key)),
+    [extensions])
+  const f = filter.toLowerCase().trim()
+  const groups = CATALOG
+    .map(group => ({
+      category: group.category,
+      items: f
+        ? group.items.filter(item => item.name.toLowerCase().includes(f) || item.key.includes(f) || t(`catalog.desc.${item.key}`).toLowerCase().includes(f))
+        : group.items,
+    }))
+    .filter(group => group.items.length > 0)
+  // Installed extensions the catalog does not name (the operator added them by
+  // hand), so nothing installed is hidden from this screen.
+  const extraInstalled = extensions.filter(extension => {
+    const name = extension.name.toLowerCase()
+    if (REQUIRED_EXTENSIONS.has(name) || name.includes('ioncube')) return false
+    if ([...CATALOG_KEYS].some(key => matchesKey(name, key))) return false
+    return f ? name.includes(f) : true
+  })
 
   return (
     <div className={embedded ? '' : 'px-6 py-5'}>
@@ -198,19 +292,10 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
 
       <div className="flex items-center justify-between mb-1">
         {!embedded && <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>}
-        <div className="flex gap-2">
-          <button onClick={() => {
-              const ionCubeInstalled = extensions.some(extension => extension.name.toLowerCase().includes('ioncube'))
-              if (ionCubeInstalled) removeIonCube(); else installIonCube()
-            }}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-md">
-            {extensions.some(extension => extension.name.toLowerCase().includes('ioncube')) ? t('removeIonCube') : t('installIonCube')}
-          </button>
-          <button onClick={() => setPeclModalOpen(true)}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm rounded-md">
-            {t('installFromPecl')}
-          </button>
-        </div>
+        <button onClick={() => ionCubeInstalled ? removeIonCube() : installIonCube()}
+          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-md self-start">
+          {ionCubeInstalled ? t('removeIonCube') : t('installIonCube')}
+        </button>
       </div>
       <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
         {t('subtitle.pre')}<strong>{t('subtitle.bold')}</strong>{t('subtitle.post')}
@@ -223,30 +308,20 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
               activeVersion === version.version
                 ? 'border-brand-500 text-brand-700 dark:text-brand-300'
-                : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300'
+                : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}>
             {t('versionTab', { version: version.version })}
           </button>
         ))}
       </div>
 
-      {/* Toolbar with counters and search */}
-      <div className="flex items-center justify-between mb-4 gap-3">
-        <div className="flex items-center gap-3 text-sm">
-          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium text-xs">
-            {t('counters.enabled', { count: activeCount })}
-          </span>
-          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 dark:text-slate-500 font-medium text-xs">
-            {t('counters.inactive', { count: inactiveCount })}
-          </span>
-          <span className="text-slate-400 dark:text-slate-500 text-xs">{t('counters.total', { count: extensions.length })}</span>
-        </div>
+      <div className="flex items-center justify-end mb-4">
         <input
           type="text"
           value={filter}
           onChange={event => setFilter(event.target.value)}
           placeholder={t('searchPlaceholder')}
-          className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm w-64 focus:border-brand-500 outline-none"
+          className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm w-64 focus:border-brand-500 outline-none"
         />
       </div>
 
@@ -266,62 +341,63 @@ export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } =
       )}
 
       {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-          {filtered.map(extension => {
-            const required = REQUIRED_EXTENSIONS.has(extension.name.toLowerCase())
-            return (
-              <div key={extension.ini_file}
-                className={`flex items-center justify-between gap-2 px-3 py-2 rounded-md border ${
-                  extension.active
-                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
-                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
-                }`}>
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{extension.name}</div>
-                  {required && <div className="text-[10px] text-slate-500 dark:text-slate-500">{t('coreExtension')}</div>}
-                </div>
-                <button
-                  onClick={() => toggle(extension)}
-                  disabled={required}
-                  className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                    extension.active ? 'bg-emerald-500' : 'bg-slate-300'
-                  } ${required ? 'opacity-40 cursor-not-allowed' : ''}`}
-                  title={required ? t('toggleTitle.core') : (extension.active ? t('toggleTitle.disable') : t('toggleTitle.enable'))}
-                >
-                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white dark:bg-slate-800 shadow transition ${extension.active ? 'translate-x-5' : 'translate-x-1'}`} />
-                </button>
+        <div className="space-y-6">
+          {groups.map(group => (
+            <section key={group.category}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t(`catalog.category.${group.category}`)}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {group.items.map(item => {
+                  const installed = findInstalled(item.key)
+                  return (
+                    <div key={item.key}
+                      className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${
+                        installed?.active ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
+                        : installed ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                      }`}>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{item.name} <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{item.key}</span></div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-500 truncate">{t(`catalog.desc.${item.key}`)}</div>
+                      </div>
+                      {installed ? (
+                        <button onClick={() => toggle(installed)} title={installed.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
+                          className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${installed.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${installed.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </button>
+                      ) : (
+                        <button onClick={() => install(item)} disabled={!!peclProgress}
+                          className="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50">{t('catalog.install')}</button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            </section>
+          ))}
+
+          {extraInstalled.length > 0 && (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('catalog.extraInstalled')}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {extraInstalled.map(extension => (
+                  <div key={extension.ini_file} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${extension.active ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
+                    <div className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{extension.name}</div>
+                    <button onClick={() => toggle(extension)} title={extension.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
+                      className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${extension.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${extension.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
-      {peclModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPeclModalOpen(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={event => event.stopPropagation()}>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('peclModal.title')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">{t('peclModal.descPre')}<code className="font-mono">gmp, imap, bcmath</code>{t('peclModal.descMid')}<code className="font-mono">redis, mongodb, imagick</code>{t('peclModal.descPost')}</p>
-            <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2 mb-3">
-              {t('peclModal.warnPre', { version: activeVersion })}<code className="font-mono">/etc/php.d/</code>{t('peclModal.warnMid')}
-            </p>
-            <input id="peclPackageName" type="text" autoFocus placeholder={t('peclModal.inputPlaceholder')}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded font-mono text-sm mb-3"
-              onKeyDown={event => {
-                if (event.key === 'Enter') {
-                  const value = (event.target as HTMLInputElement).value.trim()
-                  if (value) installPecl(value)
-                }
-              }} />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPeclModalOpen(false)}
-                className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('peclModal.cancel')}</button>
-              <button onClick={() => {
-                const value = (document.getElementById('peclPackageName') as HTMLInputElement)?.value?.trim()
-                if (value) installPecl(value)
-              }} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded">{t('peclModal.install')}</button>
-            </div>
-          </div>
-        </div>
+      {!embedded && (
+        <p className="mt-6 text-xs text-slate-400 dark:text-slate-500">
+          {t('catalog.footerPre')}<Link to="/tools-settings" className="text-brand-600 dark:text-brand-400 underline">{t('catalog.footerLink')}</Link>{t('catalog.footerPost')}
+        </p>
       )}
     </div>
   )

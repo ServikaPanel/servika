@@ -6,35 +6,26 @@
   },
   "title": "Extensii PHP",
   "subtitle": {
-    "pre": "Gestionați extensiile PHP pe întregul server. Folosiți comutatorul pentru a activa sau dezactiva o extensie, iar PHP-FPM repornește automat. ",
-    "bold": "La nivelul întregului server",
-    "post": ", afectează toate domeniile."
+    "pre": "Alege o extensie PHP din listă și instaleaz-o, iar pe cele instalate comută-le pornit/oprit. ",
+    "bold": "La nivel de server",
+    "post": " — afectează toate domeniile; PHP-FPM repornește automat."
   },
   "removeIonCube": "⊗ Eliminare IonCube",
   "installIonCube": "🔐 Instalare IonCube",
-  "installFromPecl": "📦 Instalare din PECL",
   "versionTab": "PHP {{version}}",
-  "counters": {
-    "enabled": "{{count}} activate",
-    "inactive": "{{count}} inactive",
-    "total": "Total {{count}}"
-  },
-  "searchPlaceholder": "🔍 Căutare extensii...",
+  "searchPlaceholder": "🔍 Caută extensie...",
   "loading": "Se încarcă…",
-  "coreExtension": "extensie de bază",
   "toggleTitle": {
-    "core": "Extensie de bază, nu poate fi dezactivată",
     "disable": "Dezactivare",
     "enable": "Activare"
   },
   "alerts": {
-    "coreCannotDisable": "Această extensie este o parte de bază a PHP și nu poate fi dezactivată.",
-    "invalidPackage": "Nume de pachet invalid"
+    "coreCannotDisable": "Această extensie este o parte de bază a PHP și nu poate fi dezactivată."
   },
   "confirm": {
     "ionCubeInstall": "IonCube Loader va fi instalat pentru PHP {{version}}.\n\nO arhivă tar.gz va fi descărcată de la ioncube.com, fișierul .so va fi copiat și va fi încărcat ca zend_extension.\nContinuați?",
     "ionCubeRemove": "IonCube Loader va fi eliminat din PHP {{version}}. Continuați?",
-    "peclInstall": "Pachetul PECL „{{package}}” va fi compilat și instalat pentru PHP {{version}}. Continuați?"
+    "catalogInstall": "{{name}} ({{key}}) va fi instalat pentru PHP {{version}}. Dacă nu există un pachet precompilat, se compilează din sursă, ceea ce poate dura câteva minute. Continuați?"
   },
   "success": {
     "toggleEnabled": "✓ {{name}} activată · PHP-FPM repornit",
@@ -49,17 +40,6 @@
     "ionCubeInstallFailed": "Instalarea IonCube a eșuat",
     "ionCubeRemoveFailed": "Eliminarea IonCube a eșuat",
     "peclInstallFailed": "Instalarea PECL a eșuat"
-  },
-  "peclModal": {
-    "title": "Instalare extensie din PECL",
-    "descPre": "Instalează direct un pachet precompilat când există (bundled: ",
-    "warnPre": "⚠ Extensia va fi compilată pentru PHP {{version}}. Țintă: ",
-    "warnMid": " sau directorul Remi",
-    "inputPlaceholder": "de ex. mongodb",
-    "cancel": "Anulare",
-    "install": "Instalare",
-    "descMid": " · PECL: ",
-    "descPost": "); altfel compilează extensia din sursă."
   },
   "pecl": {
     "step": {
@@ -81,6 +61,64 @@
       "build_failed": "Compilarea extension a eșuat",
       "ini_failed": "Fișierul INI nu a putut fi scris",
       "internal": "A apărut o eroare internă"
+    }
+  },
+  "catalog": {
+    "install": "Instalează",
+    "extraInstalled": "Instalate (în afara catalogului)",
+    "footerPre": "Dacă extensia de care ai nevoie nu este în listă, contactează echipa ",
+    "footerLink": "Instrumente",
+    "footerPost": "; catalogul poate fi extins.",
+    "category": {
+      "database": "Bază de date",
+      "cache": "Cache & Performanță",
+      "image": "Imagine & Media",
+      "i18n": "Internaționalizare",
+      "development": "Dezvoltare & Depanare",
+      "network": "Rețea & Servicii",
+      "compression": "Compresie",
+      "math": "Matematică & Serializare",
+      "other": "Altele"
+    },
+    "desc": {
+      "pgsql": "Conectivitate PostgreSQL (inclusiv PDO)",
+      "redis": "Client pentru depozitul de date în memorie Redis",
+      "mongodb": "Driver NoSQL MongoDB",
+      "sqlite3": "Bază de date SQLite încorporată",
+      "oci8": "Conectivitate la baza de date Oracle",
+      "odbc": "Acces la baza de date prin ODBC",
+      "dba": "Strat de abstractizare cheie-valoare",
+      "apcu": "Cache în memorie pentru datele utilizatorului",
+      "memcached": "Client de cache distribuit Memcached",
+      "opcache": "Cache de bytecode PHP (de obicei instalat)",
+      "igbinary": "Serializare binară rapidă",
+      "imagick": "Procesare avansată a imaginilor",
+      "gd": "Creare/procesare de bază a imaginilor",
+      "exif": "Citirea metadatelor imaginii",
+      "intl": "Unicode, localizare, transliterare",
+      "gettext": "Sistem de traducere GNU gettext",
+      "mbstring": "Gestionarea șirurilor multi-octet",
+      "xdebug": "Depanare pas cu pas și profilare",
+      "spx": "Profiler de performanță simplu",
+      "ast": "Arbore de sintaxă abstractă (analiză statică)",
+      "soap": "Servicii web SOAP",
+      "imap": "Acces la e-mail IMAP/POP3",
+      "ssh2": "Client SSH / SFTP",
+      "sockets": "Acces la socket-uri de nivel scăzut",
+      "amqp": "Coadă de mesaje RabbitMQ / AMQP",
+      "grpc": "Apel de procedură la distanță gRPC",
+      "zip": "Citire/scriere arhive ZIP",
+      "bz2": "Compresie bzip2",
+      "brotli": "Compresie Brotli",
+      "lz4": "Compresie rapidă LZ4",
+      "gmp": "Matematică cu numere întregi mari (necesară de WHMCS)",
+      "bcmath": "Matematică cu precizie arbitrară",
+      "msgpack": "Serializare MessagePack",
+      "yaml": "Analiză și generare YAML",
+      "ldap": "Acces la directorul LDAP",
+      "uuid": "Generare UUID",
+      "swoole": "Server coroutine de înaltă performanță",
+      "ds": "Structuri de date eficiente"
     }
   }
 }
