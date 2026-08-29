@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -135,9 +137,21 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	args := []string{"czf", abs, "-C", "/home", systemUser, "-C", dir, "__db__"}
 	// #nosec G204 G702 -- fixed binary (tar) with separate args (no shell); systemUser is validSystemUser-checked and paths are internal.
 	if out, err := newRestoreCommand(ctx, "tar", args...).CombinedOutput(); err != nil {
-		// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
-		_ = os.Remove(abs)
-		return 0, fmt.Errorf("tar: %s: %w", strings.TrimSpace(string(out)), err)
+		// tar exit 1 is "file changed as we read it": a live session or cache
+		// directory (Laravel sessions, WordPress cache) was written while tar
+		// read it. The archive is still COMPLETE and restorable, so discarding it
+		// would leave the site with NO backup at all. Keep it and warn. Only a
+		// real failure (exit >= 2) discards the archive.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && tarArchiveUsable(exitErr.ExitCode()) {
+			// #nosec G706 -- the operand is tar's own output, not client-controlled input.
+			log.Printf("backup: tar reported a file changed during read for %s (exit 1); archive kept: %s",
+				systemUser, strings.TrimSpace(string(out)))
+		} else {
+			// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
+			_ = os.Remove(abs)
+			return 0, fmt.Errorf("tar: %s: %w", strings.TrimSpace(string(out)), err)
+		}
 	}
 	var size int64
 	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
@@ -146,6 +160,12 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	}
 	return size, nil
 }
+
+// tarArchiveUsable reports whether a tar exit code leaves a COMPLETE archive.
+// Exit 1 is "file changed as we read it": one file moved mid-read, but every
+// member tar decided to include is written, so the archive still restores. Exit
+// 2 and above is a real failure whose archive must not be trusted.
+func tarArchiveUsable(exitCode int) bool { return exitCode == 1 }
 
 // safeMemberPath validates an archive-relative path (rejects absolute / jail escape).
 func safeMemberPath(p string) (string, bool) {
