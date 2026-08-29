@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next'
 import { api, apiError as apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
+import BackupSettings from '@/components/BackupSettings'
 import { Icon } from '@/components/Icon'
 import { ICON } from '@/components/iconPaths'
 import {
@@ -132,6 +133,9 @@ export default function BackupManagementPage() {
         <Kpi label={t('kpi.domainCount')} value={o ? String(o.domains.length) : '-'} color="teal" icon={<Icon d={ICON.globe} className="h-4 w-4" />} />
         <Kpi label={t('kpi.remoteDestinations')} value={o ? String(o.destination_count) : '-'} color="emerald" icon={<Icon d={ICON.cloud} className="h-4 w-4" />} subtitle={t('kpi.remoteSubtitle')} />
       </div>
+
+      {/* System-wide backup settings (renders only for admins) */}
+      <BackupSettings />
 
       {/* Schedule and action */}
       <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/60 sm:flex-row sm:items-center">
