@@ -326,6 +326,19 @@ func TestLegitimateCodeProducesNoFinding(t *testing.T) {
 		{"autoloader", `<?php require_once __DIR__ . '/vendor/autoload.php';`},
 		{"the words without the shape", `<?php // this file does not use eval, nor base64_decode`},
 		{"preg_replace without the e modifier", `<?php echo preg_replace('/\s+/', ' ', $text);`},
+		// A WebAuthn/passkey verifier is a dense false-positive trap: it
+		// base64_decodes client-supplied data, hashes it, verifies a signature,
+		// and carries a high-entropy base64 public key constant. It must stay
+		// clean, because it is exactly the legitimate code a naive engine flags.
+		{"webauthn assertion verification", `<?php
+$data = json_decode(file_get_contents('php://input'), true);
+$clientDataJSON = base64_decode(strtr($data['response']['clientDataJSON'], '-_', '+/'));
+$authenticatorData = base64_decode(strtr($data['response']['authenticatorData'], '-_', '+/'));
+$signature = base64_decode(strtr($data['response']['signature'], '-_', '+/'));
+$clientDataHash = hash('sha256', $clientDataJSON, true);
+$pem = "-----BEGIN PUBLIC KEY-----\n" . chunk_split('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErfNi2b1IDwgK9OVyXPgNBqj1vQyj1EPTUtn2kwYNxSYcOdUFogD3CgSGJqhY0Mtp3/sizK7CWXhh19t9zY2wig==', 64, "\n") . "-----END PUBLIC KEY-----\n";
+if (openssl_verify($authenticatorData . $clientDataHash, $signature, $pem, OPENSSL_ALGO_SHA256) === 1) { echo 'verified'; }`},
+		{"webauthn challenge generation", `<?php $c = random_bytes(32); $_SESSION['wa'] = $c; echo rtrim(strtr(base64_encode($c), '+/', '-_'), '=');`},
 	}
 	for _, c := range legitimate {
 		t.Run(c.name, func(t *testing.T) {
