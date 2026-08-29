@@ -173,8 +173,11 @@ func sweepOnce() {
 // appears in Remi later shows up on its own. It never removes a curated entry.
 
 // reRemiFPM matches a Remi fpm package name "php83-php-fpm" and captures the
-// two-digit code. Remi uses a single-digit major and minor (php74 … php90).
-var reRemiFPM = regexp.MustCompile(`^php([0-9])([0-9])-php-fpm$`)
+// whole numeric code ("83", "810"). The first digit is the major and the rest
+// is the minor, so a two-digit minor ("php810-php-fpm" = 8.10) is kept. The old
+// `([0-9])([0-9])` form captured exactly two single digits, so it silently
+// dropped any x.10-and-up release the moment Remi published one.
+var reRemiFPM = regexp.MustCompile(`^php([0-9]+)-php-fpm$`)
 
 var (
 	discoveredMu    sync.Mutex
@@ -206,12 +209,17 @@ func parseRemiFPMVersions(output string) []VersionMetadata {
 		if m == nil {
 			continue
 		}
-		code := m[1] + m[2]
+		code := m[1] // "83", "810"
+		if len(code) < 2 {
+			continue // a bare "php8-php-fpm" carries no minor
+		}
 		if seen[code] {
 			continue
 		}
 		seen[code] = true
-		found = append(found, VersionMetadata{Version: m[1] + "." + m[2], Code: code, Resource: "remi"})
+		// First digit is the major, the rest is the minor: "83" -> 8.3, "810" -> 8.10.
+		version := code[:1] + "." + code[1:]
+		found = append(found, VersionMetadata{Version: version, Code: code, Resource: "remi"})
 	}
 	return found
 }

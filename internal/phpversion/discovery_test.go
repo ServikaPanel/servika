@@ -3,16 +3,20 @@ package phpversion
 import "testing"
 
 // TestParseRemiFPMVersions proves the parse keeps only phpXX-php-fpm names,
-// dedupes by code, and rejects noise (a bare php-fpm, a -cli sibling, blanks).
+// dedupes by code, rejects noise (a bare php-fpm, a -cli sibling, blanks), and
+// reads a TWO-DIGIT minor (php810-php-fpm = 8.10) that the old two-single-digit
+// regex dropped silently.
 func TestParseRemiFPMVersions(t *testing.T) {
 	out := "php83-php-fpm\nphp84-php-fpm\nphp90-php-fpm\nphp83-php-fpm\n" + // duplicate
-		"php-fpm\nphp83-php-cli\nphp84-php-common\n\n  php85-php-fpm  \n"
+		"php-fpm\nphp83-php-cli\nphp84-php-common\n\n  php85-php-fpm  \n" +
+		"php810-php-fpm\nphp8-php-fpm\n" // two-digit minor kept; a minorless "php8" dropped
 	got := parseRemiFPMVersions(out)
 	want := []VersionMetadata{
 		{"8.3", "83", "remi"},
 		{"8.4", "84", "remi"},
 		{"9.0", "90", "remi"},
 		{"8.5", "85", "remi"},
+		{"8.10", "810", "remi"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d versions, want %d: %+v", len(got), len(want), got)
