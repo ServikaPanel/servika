@@ -89,6 +89,39 @@ type archiveManifest struct {
 	Home      string   `json:"home"`
 	MainDB    string   `json:"main_db"`
 	Databases []string `json:"databases"`
+	// FailedDatabases lists databases the panel owns whose dump errored or came
+	// out truncated, so a restore knows the archive is missing them rather than
+	// treating their absence as "the site had no such database".
+	FailedDatabases []string `json:"failed_databases,omitempty"`
+}
+
+// dumpCompleteMark is the comment mysqldump writes as the last line of a
+// successful dump. Its absence means the dump was cut short.
+const dumpCompleteMark = "Dump completed"
+
+// dumpComplete reports whether a dump file ends with mysqldump's completion
+// marker. It reads only the tail, because a dump can be gigabytes.
+func dumpComplete(path string) bool {
+	// #nosec G304 G703 -- path is an internal staging file under BackupRoot derived from a validated systemUser and DB name.
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	const tail = 512
+	off := int64(0)
+	if fi.Size() > tail {
+		off = fi.Size() - tail
+	}
+	buf := make([]byte, fi.Size()-off)
+	if _, err := f.ReadAt(buf, off); err != nil && !errors.Is(err, io.EOF) {
+		return false
+	}
+	return strings.Contains(string(buf), dumpCompleteMark)
 }
 
 // buildArchive packages /home/<systemUser> plus every domain DB (__db__/<name>.sql)
@@ -108,27 +141,40 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	defer func() { _ = os.RemoveAll(dbDir) }()
 
 	written := []string{}
+	failedDBs := []string{}
 	for _, dbName := range domainDatabases(db, domainID, systemUser) {
 		target := filepath.Join(dbDir, dbName+".sql")
+		// --routines --events --triggers keep stored procedures, scheduled events
+		// and triggers, which restore would otherwise lose silently; --hex-blob
+		// and --default-character-set=utf8mb4 keep binary and multibyte data
+		// intact. This matches the site-migration and system-backup dumps.
 		// #nosec G204 G702 -- dbName is a credentials.ValidDBIdentifier-checked, non-system name and target is an internal staging path, both shell-quoted; no tenant shell input.
 		cmd := newRestoreCommand(ctx, "bash", "-c",
-			fmt.Sprintf("mysqldump --single-transaction --skip-lock-tables %s > %s 2>/dev/null",
+			fmt.Sprintf("mysqldump --single-transaction --skip-lock-tables --routines --events --triggers --default-character-set=utf8mb4 --hex-blob %s > %s 2>/dev/null",
 				shellQuote(dbName), shellQuote(target)))
 		if err := cmd.Run(); err != nil {
+			// The database comes from the panel's own records, so a dump error is a
+			// real or transient failure, never "no such database". Record it so the
+			// gap is not silently dropped from the manifest.
 			// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
 			_ = os.Remove(target)
+			failedDBs = append(failedDBs, dbName)
 			continue
 		}
+		// A dump that produced bytes can still be truncated (the client was killed,
+		// the disk filled). mysqldump writes its completion marker as the last line,
+		// so its absence means the dump is incomplete and must not be trusted.
 		// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
-		if fi, e := os.Stat(target); e != nil || fi.Size() == 0 {
+		if fi, e := os.Stat(target); e != nil || fi.Size() == 0 || !dumpComplete(target) {
 			// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
 			_ = os.Remove(target)
+			failedDBs = append(failedDBs, dbName)
 			continue
 		}
 		written = append(written, dbName)
 	}
 
-	man := archiveManifest{CreatedAt: createdTS, Home: systemUser, MainDB: systemUser + "_main", Databases: written}
+	man := archiveManifest{CreatedAt: createdTS, Home: systemUser, MainDB: systemUser + "_main", Databases: written, FailedDatabases: failedDBs}
 	if b, err := json.MarshalIndent(man, "", "  "); err == nil {
 		// #nosec G306 G703 -- root-owned backup staging file under BackupRoot (0700), path derived from a validated systemUser; carries no secret.
 		_ = os.WriteFile(filepath.Join(dbDir, "manifest.json"), b, 0600)
