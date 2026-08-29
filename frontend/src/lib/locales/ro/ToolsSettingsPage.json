@@ -15,7 +15,8 @@
   "footer_other": "{{count}} de instrumente · la nivelul întregului server",
   "badges": {
     "dynamic": "Dinamic",
-    "serverWide": "La nivelul întregului server"
+    "serverWide": "La nivelul întregului server",
+    "wizard": "Asistent"
   },
   "groups": {
     "php": "PHP",
@@ -24,14 +25,6 @@
     "security": "Securitate și copii de rezervă"
   },
   "tools": {
-    "phpVersions": {
-      "title": "Versiuni PHP",
-      "description": "Adăugați sau eliminați versiunile de la 7.4 până la 8.6. Fiecare domeniu își selectează versiunea independent."
-    },
-    "phpExtensions": {
-      "title": "Extensii PHP",
-      "description": "Comutați extensiile la nivelul întregului server, căutați pachete PECL și compilați-le."
-    },
     "packages": {
       "title": "Manager de pachete",
       "description": "Pachete DNF — compilatoare și runtime-uri. Grupuri de instalare gata făcute."
@@ -83,6 +76,10 @@
     "monitoring": {
       "title": "Monitorizare și jurnale",
       "description": "Grafice CPU/RAM/disc și jurnale de server din journald (panou/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "Asistent PHP & Server",
+      "description": "Versiuni PHP, extensii, loader și setări server web într-un asistent pas cu pas."
     }
   }
 }

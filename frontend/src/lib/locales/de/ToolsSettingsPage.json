@@ -14,7 +14,8 @@
   "footer_other": "{{count}} Tools · serverweit",
   "badges": {
     "dynamic": "Dynamisch",
-    "serverWide": "Serverweit"
+    "serverWide": "Serverweit",
+    "wizard": "Assistent"
   },
   "groups": {
     "php": "PHP",
@@ -23,14 +24,6 @@
     "security": "Sicherheit und Backups"
   },
   "tools": {
-    "phpVersions": {
-      "title": "PHP-Versionen",
-      "description": "Versionen 7.4 bis 8.6 hinzufügen oder entfernen. Jede Domain wählt ihre Version unabhängig aus."
-    },
-    "phpExtensions": {
-      "title": "PHP-Erweiterungen",
-      "description": "Serverweite Erweiterungen umschalten, PECL-Pakete suchen und kompilieren."
-    },
     "packages": {
       "title": "Paketmanager",
       "description": "DNF-Pakete — Compiler und Laufzeiten. Vorgefertigte Installationsgruppen."
@@ -82,6 +75,10 @@
     "monitoring": {
       "title": "Überwachung und Protokolle",
       "description": "CPU-/RAM-/Festplattendiagramme und Serverprotokolle von journald (Panel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "PHP- & Server-Assistent",
+      "description": "PHP-Versionen, Erweiterungen, Loader und Web-Server-Einstellungen in einem Schritt-für-Schritt-Assistenten."
     }
   }
 }

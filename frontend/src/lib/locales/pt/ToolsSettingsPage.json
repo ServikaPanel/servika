@@ -14,7 +14,8 @@
   "footer_other": "{{count}} ferramentas · em todo o servidor",
   "badges": {
     "dynamic": "Dinâmico",
-    "serverWide": "Todo o servidor"
+    "serverWide": "Todo o servidor",
+    "wizard": "Assistente"
   },
   "groups": {
     "php": "PHP",
@@ -23,14 +24,6 @@
     "security": "Segurança e Cópias"
   },
   "tools": {
-    "phpVersions": {
-      "title": "Versões PHP",
-      "description": "Adicionar ou remover versões 7.4 a 8.6. Cada domínio seleciona a sua versão independentemente."
-    },
-    "phpExtensions": {
-      "title": "Extensões PHP",
-      "description": "Alternar extensões em todo o servidor, pesquisar pacotes PECL e compilá-los."
-    },
     "packages": {
       "title": "Gestor de Pacotes",
       "description": "Pacotes DNF — compiladores e runtimes. Grupos de instalação prontos."
@@ -82,6 +75,10 @@
     "monitoring": {
       "title": "Monitorização e Registos",
       "description": "Gráficos CPU/RAM/disco e registos do servidor do journald (painel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "Assistente PHP & Servidor",
+      "description": "Versões do PHP, extensões, loader e definições do servidor web num assistente passo a passo."
     }
   }
 }

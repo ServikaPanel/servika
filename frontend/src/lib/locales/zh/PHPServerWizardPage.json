@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "首页",
+    "tools": "工具与设置",
+    "current": "PHP 与服务器向导"
+  },
+  "title": "PHP 与服务器设置向导",
+  "subtitle": "在一个地方管理 PHP 版本、扩展、加载器和 Web 服务器设置。每项更改都会在其步骤中立即应用。",
+  "steps": {
+    "versions": {
+      "name": "PHP 版本",
+      "desc": "在服务器上添加或移除 PHP 版本"
+    },
+    "extensions": {
+      "name": "PHP 扩展与加载器",
+      "desc": "切换模块、安装 PECL、ionCube"
+    },
+    "webserver": {
+      "name": "Web 服务器",
+      "desc": "nginx / PHP-FPM 状态"
+    },
+    "summary": {
+      "name": "摘要",
+      "desc": "查看配置"
+    }
+  },
+  "nav": {
+    "back": "上一步",
+    "next": "下一步",
+    "finish": "完成"
+  },
+  "webserver": {
+    "heading": "Web 服务器",
+    "intro": "本平台使用 nginx 加按租户隔离的 PHP-FPM。没有像 cPanel/EasyApache 那样的 Apache 编译或全局 Apache 模块选择；每个域名在各自的 PHP-FPM 池和 nginx vhost 中运行。",
+    "card": {
+      "server": "Web 服务器",
+      "mode": "PHP 运行模式",
+      "modeValue": "PHP-FPM（按租户隔离）",
+      "installed": "已安装的 PHP 版本",
+      "installedValue": "{{count}} 个版本",
+      "apache": "Apache 兼容性",
+      "apacheValue": "按站点（.htaccess → nginx）"
+    },
+    "note": "站点的安全响应头、额外指令以及 Apache/nginx 兼容性，请使用该域名的 Apache 与 nginx 界面。"
+  },
+  "summary": {
+    "heading": "摘要",
+    "subtitle": "服务器当前的 PHP 配置。每项更改会在其应用的步骤中生效。",
+    "installedLabel": "已安装的 PHP 版本",
+    "loading": "加载中…",
+    "empty": "未找到已安装的版本。请在“PHP 版本”步骤中添加。",
+    "done": "✓ 配置完成。域名的 PHP 版本和设置在该域名的 PHP 设置界面中选择。"
+  }
+}

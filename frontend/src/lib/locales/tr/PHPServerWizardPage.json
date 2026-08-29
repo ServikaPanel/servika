@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Ana Sayfa",
+    "tools": "Araçlar ve Ayarlar",
+    "current": "PHP & Sunucu Sihirbazı"
+  },
+  "title": "PHP & Sunucu Kurulum Sihirbazı",
+  "subtitle": "PHP sürümleri, eklentiler, loader'lar ve web sunucu ayarlarını tek yerden yönetin. Her değişiklik adımında anında uygulanır.",
+  "steps": {
+    "versions": {
+      "name": "PHP Sürümleri",
+      "desc": "Sunucuya PHP sürümü ekle/kaldır"
+    },
+    "extensions": {
+      "name": "PHP Eklentileri & Loader",
+      "desc": "Modül aç/kapat, PECL kur, ionCube"
+    },
+    "webserver": {
+      "name": "Web Sunucu",
+      "desc": "nginx / PHP-FPM durumu"
+    },
+    "summary": {
+      "name": "Özet",
+      "desc": "Yapılandırmayı gözden geçir"
+    }
+  },
+  "nav": {
+    "back": "Geri",
+    "next": "İleri",
+    "finish": "Bitir"
+  },
+  "webserver": {
+    "heading": "Web Sunucu",
+    "intro": "Bu platform nginx ve izole per-tenant PHP-FPM mimarisi kullanır. cPanel/EasyApache gibi Apache derlemesi veya global Apache modül seçimi yoktur; her domain kendi PHP-FPM havuzunda ve nginx vhost'unda çalışır.",
+    "card": {
+      "server": "Web sunucu",
+      "mode": "PHP çalışma modu",
+      "modeValue": "PHP-FPM (per-tenant izole)",
+      "installed": "Kurulu PHP sürümleri",
+      "installedValue": "{{count}} sürüm",
+      "apache": "Apache uyumluluğu",
+      "apacheValue": "Site bazında (.htaccess → nginx)"
+    },
+    "note": "Bir sitenin güvenlik başlıkları, ek direktifler ve Apache/nginx uyumluluğu için ilgili domainin Apache & nginx ekranını kullanın."
+  },
+  "summary": {
+    "heading": "Özet",
+    "subtitle": "Sunucunun mevcut PHP yapılandırması. Her değişiklik uygulandığı adımda anında etkinleşir.",
+    "installedLabel": "Kurulu PHP sürümleri",
+    "loading": "Yükleniyor…",
+    "empty": "Kurulu sürüm bulunamadı. \"PHP Sürümleri\" adımından ekleyin.",
+    "done": "✓ Yapılandırma tamamlandı. Domain bazında PHP sürümü ve ayarları ilgili domainin PHP ayarları ekranından seçilir."
+  }
+}

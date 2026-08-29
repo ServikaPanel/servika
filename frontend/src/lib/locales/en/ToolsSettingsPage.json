@@ -14,7 +14,8 @@
   "footer_other": "{{count}} tools · server-wide",
   "badges": {
     "dynamic": "Dynamic",
-    "serverWide": "Server-wide"
+    "serverWide": "Server-wide",
+    "wizard": "Wizard"
   },
   "groups": {
     "php": "PHP",
@@ -23,14 +24,6 @@
     "security": "Security and Backups"
   },
   "tools": {
-    "phpVersions": {
-      "title": "PHP Versions",
-      "description": "Add or remove versions 7.4 through 8.6. Each domain selects its version independently."
-    },
-    "phpExtensions": {
-      "title": "PHP Extensions",
-      "description": "Toggle server-wide extensions, search PECL packages, and compile them."
-    },
     "packages": {
       "title": "Package Manager",
       "description": "DNF packages — compilers and runtimes. Ready-made install groups."
@@ -82,6 +75,10 @@
     "monitoring": {
       "title": "Monitoring and Logs",
       "description": "CPU/RAM/disk charts and server logs from journald (panel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "PHP & Server Wizard",
+      "description": "PHP versions, extensions, loader and web-server settings in one step-by-step wizard."
     }
   }
 }

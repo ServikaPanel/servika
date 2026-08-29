@@ -14,7 +14,8 @@
   "footer_other": "{{count}} strumenti · a livello di server",
   "badges": {
     "dynamic": "Dinamico",
-    "serverWide": "A livello di server"
+    "serverWide": "A livello di server",
+    "wizard": "Procedura"
   },
   "groups": {
     "php": "PHP",
@@ -23,14 +24,6 @@
     "security": "Sicurezza e Backup"
   },
   "tools": {
-    "phpVersions": {
-      "title": "Versioni PHP",
-      "description": "Aggiungi o rimuovi le versioni dalla 7.4 alla 8.6. Ogni dominio seleziona la propria versione in modo indipendente."
-    },
-    "phpExtensions": {
-      "title": "Estensioni PHP",
-      "description": "Abilita o disabilita estensioni a livello di server, cerca pacchetti PECL e compilali."
-    },
     "packages": {
       "title": "Gestione Pacchetti",
       "description": "Pacchetti DNF, compiler e runtime. Gruppi di installazione pronti."
@@ -82,6 +75,10 @@
     "monitoring": {
       "title": "Monitoraggio e Log",
       "description": "Grafici CPU/RAM/disco e log server da journald (pannello/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "Procedura PHP & Server",
+      "description": "Versioni PHP, estensioni, loader e impostazioni del server web in una procedura passo passo."
     }
   }
 }

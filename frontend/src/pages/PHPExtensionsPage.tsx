@@ -21,7 +21,9 @@ const PHP_VERSION_COOKIE = 'servika.php.version'
 const PHP_VERSION_MAX_AGE = 60 * 60 * 24 * 30
 const DEFAULT_PHP_VERSION = '8.3'
 
-export default function PHPExtensionsPage() {
+// embedded drops the breadcrumb, heading and page padding so the wizard can
+// render this page as one of its steps without a page-within-a-page chrome.
+export default function PHPExtensionsPage({ embedded }: { embedded?: boolean } = {}) {
   const { t } = useTranslation('PHPExtensionsPage')
   const { confirm, notify } = useDialog()
   const [versions, setVersions] = useState<Version[]>([])
@@ -185,15 +187,17 @@ export default function PHPExtensionsPage() {
   const inactiveCount = extensions.length - activeCount
 
   return (
-    <div className="px-6 py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.system') },
-        { label: t('breadcrumb.current') },
-      ]} />
+    <div className={embedded ? '' : 'px-6 py-5'}>
+      {!embedded && (
+        <Breadcrumb items={[
+          { label: t('breadcrumb.home'), href: '/' },
+          { label: t('breadcrumb.system') },
+          { label: t('breadcrumb.current') },
+        ]} />
+      )}
 
       <div className="flex items-center justify-between mb-1">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
+        {!embedded && <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>}
         <div className="flex gap-2">
           <button onClick={() => {
               const ionCubeInstalled = extensions.some(extension => extension.name.toLowerCase().includes('ioncube'))

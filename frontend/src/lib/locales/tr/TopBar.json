@@ -108,14 +108,6 @@
       "title": "Servisler",
       "subtitle": "Sistem servisleri"
     },
-    "phpVersions": {
-      "title": "PHP Sürümleri",
-      "subtitle": "PHP sürüm yönetimi"
-    },
-    "phpModules": {
-      "title": "PHP Modülleri",
-      "subtitle": "PHP uzantı yönetimi"
-    },
     "packages": {
       "title": "Paket Yöneticisi",
       "subtitle": "Sistem paketleri"
@@ -143,6 +135,10 @@
     "panelUpdate": {
       "title": "Panel Güncelleme",
       "subtitle": "Panel sürümü ve güncellemeler"
+    },
+    "phpWizard": {
+      "title": "PHP & Sunucu Sihirbazı",
+      "subtitle": "Sürümler, eklentiler, loader ve web sunucu"
     }
   },
   "domain": {

@@ -13,7 +13,8 @@
   "footer_other": "{{count}} 個のツール · サーバー全体",
   "badges": {
     "dynamic": "動的",
-    "serverWide": "サーバー全体"
+    "serverWide": "サーバー全体",
+    "wizard": "ウィザード"
   },
   "groups": {
     "php": "PHP",
@@ -22,14 +23,6 @@
     "security": "セキュリティとバックアップ"
   },
   "tools": {
-    "phpVersions": {
-      "title": "PHP バージョン",
-      "description": "7.4 から 8.6 までのバージョンを追加または削除します。各ドメインが独立してバージョンを選択します。"
-    },
-    "phpExtensions": {
-      "title": "PHP 拡張機能",
-      "description": "サーバー全体の拡張機能を切り替え、PECL パッケージを検索してコンパイルします。"
-    },
     "packages": {
       "title": "パッケージマネージャー",
       "description": "DNF パッケージ — コンパイラとランタイム。既製のインストールグループ。"
@@ -81,6 +74,10 @@
     "monitoring": {
       "title": "モニタリングとログ",
       "description": "CPU/RAM/ディスクのチャートと、journald からのサーバーログ (パネル/nginx/SSH…)。"
+    },
+    "phpWizard": {
+      "title": "PHP & サーバーウィザード",
+      "description": "PHPバージョン、拡張機能、ローダー、Webサーバー設定を1つのステップ式ウィザードで。"
     }
   }
 }

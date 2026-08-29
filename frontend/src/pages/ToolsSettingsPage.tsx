@@ -17,7 +17,7 @@ type Tool = {
   id: string
   href: string
   icon: string
-  badge?: 'dynamic' | 'serverWide'
+  badge?: 'dynamic' | 'serverWide' | 'wizard'
   key?: string
 }
 
@@ -45,10 +45,8 @@ const GROUPS: Group[] = [
     id: 'php',
     icon: ICONS.chip,
     tools: [
-      { id: 'phpVersions', href: '/tools/php-versions', icon: ICONS.chip, badge: 'dynamic',
-        key: 'remi fpm version 7.4 8.0 8.1 8.2 8.3 8.4 8.5 8.6' },
-      { id: 'phpExtensions', href: '/system/php-modules', icon: ICONS.puzzle,
-        key: 'extension pecl compile' },
+      { id: 'phpWizard', href: '/php-server-wizard', icon: ICONS.chip, badge: 'wizard',
+        key: 'remi fpm version 7.4 8.0 8.1 8.2 8.3 8.4 extension pecl compile ioncube loader easyapache web server nginx' },
     ],
   },
   {

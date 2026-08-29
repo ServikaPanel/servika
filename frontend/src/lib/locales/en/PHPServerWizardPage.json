@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "tools": "Tools and Settings",
+    "current": "PHP & Server Wizard"
+  },
+  "title": "PHP & Server Setup Wizard",
+  "subtitle": "Manage PHP versions, extensions, loaders and web-server settings in one place. Every change applies immediately at its step.",
+  "steps": {
+    "versions": {
+      "name": "PHP Versions",
+      "desc": "Add or remove a PHP version on the server"
+    },
+    "extensions": {
+      "name": "PHP Extensions & Loader",
+      "desc": "Toggle a module, install PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Web Server",
+      "desc": "nginx / PHP-FPM status"
+    },
+    "summary": {
+      "name": "Summary",
+      "desc": "Review the configuration"
+    }
+  },
+  "nav": {
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish"
+  },
+  "webserver": {
+    "heading": "Web Server",
+    "intro": "This platform uses nginx with an isolated per-tenant PHP-FPM. There is no Apache compile or global Apache module selection as in cPanel/EasyApache; each domain runs in its own PHP-FPM pool and nginx vhost.",
+    "card": {
+      "server": "Web server",
+      "mode": "PHP run mode",
+      "modeValue": "PHP-FPM (per-tenant isolated)",
+      "installed": "Installed PHP versions",
+      "installedValue": "{{count}} versions",
+      "apache": "Apache compatibility",
+      "apacheValue": "Per-site (.htaccess → nginx)"
+    },
+    "note": "For a site's security headers, extra directives and Apache/nginx compatibility, use that domain's Apache & nginx screen."
+  },
+  "summary": {
+    "heading": "Summary",
+    "subtitle": "The server's current PHP configuration. Every change takes effect at the step where it is applied.",
+    "installedLabel": "Installed PHP versions",
+    "loading": "Loading…",
+    "empty": "No installed version found. Add one from the \"PHP Versions\" step.",
+    "done": "✓ Configuration complete. A domain's PHP version and settings are chosen from that domain's PHP settings screen."
+  }
+}

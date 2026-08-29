@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Accueil",
+    "tools": "Outils et paramètres",
+    "current": "Assistant PHP & Serveur"
+  },
+  "title": "Assistant de configuration PHP & Serveur",
+  "subtitle": "Gérez les versions de PHP, les extensions, les loaders et les paramètres du serveur web au même endroit. Chaque modification est appliquée immédiatement à son étape.",
+  "steps": {
+    "versions": {
+      "name": "Versions PHP",
+      "desc": "Ajouter ou retirer une version de PHP sur le serveur"
+    },
+    "extensions": {
+      "name": "Extensions PHP & Loader",
+      "desc": "Activer un module, installer PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Serveur web",
+      "desc": "État nginx / PHP-FPM"
+    },
+    "summary": {
+      "name": "Résumé",
+      "desc": "Vérifier la configuration"
+    }
+  },
+  "nav": {
+    "back": "Retour",
+    "next": "Suivant",
+    "finish": "Terminer"
+  },
+  "webserver": {
+    "heading": "Serveur web",
+    "intro": "Cette plateforme utilise nginx avec un PHP-FPM isolé par locataire. Il n'y a pas de compilation Apache ni de sélection globale de modules Apache comme dans cPanel/EasyApache ; chaque domaine s'exécute dans son propre pool PHP-FPM et son vhost nginx.",
+    "card": {
+      "server": "Serveur web",
+      "mode": "Mode d'exécution PHP",
+      "modeValue": "PHP-FPM (isolé par locataire)",
+      "installed": "Versions PHP installées",
+      "installedValue": "{{count}} versions",
+      "apache": "Compatibilité Apache",
+      "apacheValue": "Par site (.htaccess → nginx)"
+    },
+    "note": "Pour les en-têtes de sécurité, les directives supplémentaires et la compatibilité Apache/nginx d'un site, utilisez l'écran Apache & nginx du domaine."
+  },
+  "summary": {
+    "heading": "Résumé",
+    "subtitle": "La configuration PHP actuelle du serveur. Chaque modification prend effet à l'étape où elle est appliquée.",
+    "installedLabel": "Versions PHP installées",
+    "loading": "Chargement…",
+    "empty": "Aucune version installée. Ajoutez-en une depuis l'étape « Versions PHP ».",
+    "done": "✓ Configuration terminée. La version de PHP et les paramètres d'un domaine se choisissent depuis l'écran des paramètres PHP du domaine."
+  }
+}

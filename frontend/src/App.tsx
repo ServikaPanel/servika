@@ -43,10 +43,9 @@ const DomainGitPage = lazy(() => import('@/pages/DomainGitPage'))
 const DomainWebServerPage = lazy(() => import('@/pages/DomainWebServerPage'))
 const DomainLaravelPage = lazy(() => import('@/pages/DomainLaravelPage'))
 const DomainWafPage = lazy(() => import('@/pages/DomainWafPage'))
-const PHPExtensionsPage = lazy(() => import('@/pages/PHPExtensionsPage'))
+const PHPServerWizardPage = lazy(() => import('@/pages/PHPServerWizardPage'))
 const PackagesPage = lazy(() => import('@/pages/PackagesPage'))
 const PackageDetailPage = lazy(() => import('@/pages/PackageDetailPage'))
-const PHPVersionsPage = lazy(() => import('@/pages/PHPVersionsPage'))
 const RuntimeVersionsPage = lazy(() => import('@/pages/RuntimeVersionsPage'))
 const ToolsSettingsPage = lazy(() => import('@/pages/ToolsSettingsPage'))
 const PanelUpdatePage = lazy(() => import('@/pages/PanelUpdatePage'))
@@ -170,10 +169,12 @@ export default function App() {
         <Route path="subscriptions/:id/laravel"       element={<DomainLaravelPage />} />
         <Route path="subscriptions/:id/web-server"    element={<DomainWebServerPage />} />
         <Route path="subscriptions/:id/waf"           element={<DomainWafPage />} />
-        <Route path="system/php-modules"           element={<PHPExtensionsPage />} />
+        <Route path="php-server-wizard"            element={<PHPServerWizardPage />} />
+        {/* The scattered PHP screens now live as steps of one wizard; old links redirect. */}
+        <Route path="system/php-modules"           element={<Navigate to="/php-server-wizard" replace />} />
+        <Route path="tools/php-versions"           element={<Navigate to="/php-server-wizard" replace />} />
         <Route path="tools/packages"               element={<PackagesPage />} />
         <Route path="tools/packages/:id"           element={<PackageDetailPage />} />
-        <Route path="tools/php-versions"           element={<PHPVersionsPage />} />
         <Route path="tools/app-runtimes"           element={<RuntimeVersionsPage />} />
         <Route path="tools/services"               element={<ServicesPage />} />
         <Route path="tools/dns-template"           element={<DNSTemplatePage />} />

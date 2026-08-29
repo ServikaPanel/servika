@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Inicio",
+    "tools": "Herramientas y configuración",
+    "current": "Asistente de PHP & Servidor"
+  },
+  "title": "Asistente de configuración de PHP & Servidor",
+  "subtitle": "Gestiona versiones de PHP, extensiones, loaders y ajustes del servidor web en un solo lugar. Cada cambio se aplica de inmediato en su paso.",
+  "steps": {
+    "versions": {
+      "name": "Versiones de PHP",
+      "desc": "Añadir o quitar una versión de PHP en el servidor"
+    },
+    "extensions": {
+      "name": "Extensiones de PHP & Loader",
+      "desc": "Activar un módulo, instalar PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Servidor web",
+      "desc": "Estado de nginx / PHP-FPM"
+    },
+    "summary": {
+      "name": "Resumen",
+      "desc": "Revisar la configuración"
+    }
+  },
+  "nav": {
+    "back": "Atrás",
+    "next": "Siguiente",
+    "finish": "Finalizar"
+  },
+  "webserver": {
+    "heading": "Servidor web",
+    "intro": "Esta plataforma usa nginx con un PHP-FPM aislado por inquilino. No hay compilación de Apache ni selección global de módulos de Apache como en cPanel/EasyApache; cada dominio se ejecuta en su propio pool de PHP-FPM y vhost de nginx.",
+    "card": {
+      "server": "Servidor web",
+      "mode": "Modo de ejecución de PHP",
+      "modeValue": "PHP-FPM (aislado por inquilino)",
+      "installed": "Versiones de PHP instaladas",
+      "installedValue": "{{count}} versiones",
+      "apache": "Compatibilidad con Apache",
+      "apacheValue": "Por sitio (.htaccess → nginx)"
+    },
+    "note": "Para las cabeceras de seguridad, directivas adicionales y la compatibilidad Apache/nginx de un sitio, usa la pantalla Apache & nginx del dominio."
+  },
+  "summary": {
+    "heading": "Resumen",
+    "subtitle": "La configuración PHP actual del servidor. Cada cambio surte efecto en el paso en el que se aplica.",
+    "installedLabel": "Versiones de PHP instaladas",
+    "loading": "Cargando…",
+    "empty": "No se encontró ninguna versión instalada. Añade una desde el paso \"Versiones de PHP\".",
+    "done": "✓ Configuración completada. La versión de PHP y los ajustes de un dominio se eligen en la pantalla de ajustes PHP del dominio."
+  }
+}

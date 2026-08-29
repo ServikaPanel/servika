@@ -108,14 +108,6 @@
       "title": "Služby",
       "subtitle": "Systémové služby"
     },
-    "phpVersions": {
-      "title": "Verze PHP",
-      "subtitle": "Správa verzí PHP"
-    },
-    "phpModules": {
-      "title": "Moduly PHP",
-      "subtitle": "Správa rozšíření PHP"
-    },
     "packages": {
       "title": "Správce balíčků",
       "subtitle": "Systémové balíčky"
@@ -143,6 +135,10 @@
     "panelUpdate": {
       "title": "Aktualizace panelu",
       "subtitle": "Verze a aktualizace panelu"
+    },
+    "phpWizard": {
+      "title": "Průvodce PHP & Server",
+      "subtitle": "Verze, rozšíření, loader a webový server"
     }
   },
   "domain": {

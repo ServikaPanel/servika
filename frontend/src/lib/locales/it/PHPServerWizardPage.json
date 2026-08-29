@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Home",
+    "tools": "Strumenti e Impostazioni",
+    "current": "Procedura PHP & Server"
+  },
+  "title": "Procedura di configurazione PHP & Server",
+  "subtitle": "Gestisci versioni PHP, estensioni, loader e impostazioni del server web in un unico posto. Ogni modifica viene applicata subito nel suo passaggio.",
+  "steps": {
+    "versions": {
+      "name": "Versioni PHP",
+      "desc": "Aggiungi o rimuovi una versione PHP sul server"
+    },
+    "extensions": {
+      "name": "Estensioni PHP & Loader",
+      "desc": "Attiva un modulo, installa PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Server web",
+      "desc": "Stato nginx / PHP-FPM"
+    },
+    "summary": {
+      "name": "Riepilogo",
+      "desc": "Rivedi la configurazione"
+    }
+  },
+  "nav": {
+    "back": "Indietro",
+    "next": "Avanti",
+    "finish": "Fine"
+  },
+  "webserver": {
+    "heading": "Server web",
+    "intro": "Questa piattaforma usa nginx con un PHP-FPM isolato per tenant. Non c'è compilazione di Apache né selezione globale dei moduli Apache come in cPanel/EasyApache; ogni dominio gira nel proprio pool PHP-FPM e vhost nginx.",
+    "card": {
+      "server": "Server web",
+      "mode": "Modalità di esecuzione PHP",
+      "modeValue": "PHP-FPM (isolato per tenant)",
+      "installed": "Versioni PHP installate",
+      "installedValue": "{{count}} versioni",
+      "apache": "Compatibilità Apache",
+      "apacheValue": "Per sito (.htaccess → nginx)"
+    },
+    "note": "Per le intestazioni di sicurezza, le direttive aggiuntive e la compatibilità Apache/nginx di un sito, usa la schermata Apache & nginx del dominio."
+  },
+  "summary": {
+    "heading": "Riepilogo",
+    "subtitle": "La configurazione PHP attuale del server. Ogni modifica ha effetto nel passaggio in cui viene applicata.",
+    "installedLabel": "Versioni PHP installate",
+    "loading": "Caricamento…",
+    "empty": "Nessuna versione installata. Aggiungine una dal passaggio \"Versioni PHP\".",
+    "done": "✓ Configurazione completata. La versione PHP e le impostazioni di un dominio si scelgono dalla schermata delle impostazioni PHP del dominio."
+  }
+}

@@ -108,14 +108,6 @@
       "title": "Serviços",
       "subtitle": "Serviços do sistema"
     },
-    "phpVersions": {
-      "title": "Versões PHP",
-      "subtitle": "Gestão de versões PHP"
-    },
-    "phpModules": {
-      "title": "Módulos PHP",
-      "subtitle": "Gestão de extensões PHP"
-    },
     "packages": {
       "title": "Gestor de Pacotes",
       "subtitle": "Pacotes do sistema"
@@ -143,6 +135,10 @@
     "panelUpdate": {
       "title": "Atualização do Painel",
       "subtitle": "Versão e atualizações do painel"
+    },
+    "phpWizard": {
+      "title": "Assistente PHP & Servidor",
+      "subtitle": "Versões, extensões, loader e servidor web"
     }
   },
   "domain": {

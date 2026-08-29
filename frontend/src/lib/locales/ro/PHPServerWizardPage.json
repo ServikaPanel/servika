@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Acasă",
+    "tools": "Instrumente și setări",
+    "current": "Asistent PHP & Server"
+  },
+  "title": "Asistent de configurare PHP & Server",
+  "subtitle": "Gestionează versiunile PHP, extensiile, loaderele și setările serverului web într-un singur loc. Fiecare modificare se aplică imediat în pasul său.",
+  "steps": {
+    "versions": {
+      "name": "Versiuni PHP",
+      "desc": "Adaugă sau elimină o versiune PHP pe server"
+    },
+    "extensions": {
+      "name": "Extensii PHP & Loader",
+      "desc": "Comută un modul, instalează PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Server web",
+      "desc": "Stare nginx / PHP-FPM"
+    },
+    "summary": {
+      "name": "Rezumat",
+      "desc": "Verifică configurația"
+    }
+  },
+  "nav": {
+    "back": "Înapoi",
+    "next": "Înainte",
+    "finish": "Finalizează"
+  },
+  "webserver": {
+    "heading": "Server web",
+    "intro": "Această platformă folosește nginx cu un PHP-FPM izolat pe chiriaș. Nu există compilare Apache sau selecție globală a modulelor Apache ca în cPanel/EasyApache; fiecare domeniu rulează în propriul pool PHP-FPM și vhost nginx.",
+    "card": {
+      "server": "Server web",
+      "mode": "Mod de rulare PHP",
+      "modeValue": "PHP-FPM (izolat pe chiriaș)",
+      "installed": "Versiuni PHP instalate",
+      "installedValue": "{{count}} versiuni",
+      "apache": "Compatibilitate Apache",
+      "apacheValue": "Per site (.htaccess → nginx)"
+    },
+    "note": "Pentru anteturile de securitate, directivele suplimentare și compatibilitatea Apache/nginx ale unui site, folosește ecranul Apache & nginx al domeniului."
+  },
+  "summary": {
+    "heading": "Rezumat",
+    "subtitle": "Configurația PHP curentă a serverului. Fiecare modificare are efect în pasul în care este aplicată.",
+    "installedLabel": "Versiuni PHP instalate",
+    "loading": "Se încarcă…",
+    "empty": "Nu s-a găsit nicio versiune instalată. Adaugă una din pasul \"Versiuni PHP\".",
+    "done": "✓ Configurare finalizată. Versiunea PHP și setările unui domeniu se aleg din ecranul de setări PHP al domeniului."
+  }
+}

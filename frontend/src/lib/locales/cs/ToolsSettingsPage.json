@@ -15,7 +15,8 @@
   "footer_other": "{{count}} nástrojů · pro celý server",
   "badges": {
     "dynamic": "Dynamické",
-    "serverWide": "Pro celý server"
+    "serverWide": "Pro celý server",
+    "wizard": "Průvodce"
   },
   "groups": {
     "php": "PHP",
@@ -24,14 +25,6 @@
     "security": "Zabezpečení a zálohy"
   },
   "tools": {
-    "phpVersions": {
-      "title": "Verze PHP",
-      "description": "Přidejte nebo odeberte verze 7.4 až 8.6. Každá doména si svou verzi vybírá nezávisle."
-    },
-    "phpExtensions": {
-      "title": "Rozšíření PHP",
-      "description": "Přepínejte rozšíření pro celý server, vyhledávejte balíčky PECL a kompilujte je."
-    },
     "packages": {
       "title": "Správce balíčků",
       "description": "Balíčky DNF — kompilátory a běhová prostředí. Připravené instalační skupiny."
@@ -83,6 +76,10 @@
     "monitoring": {
       "title": "Monitorování a protokoly",
       "description": "Grafy CPU/RAM/disku a protokoly serveru z journald (panel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "Průvodce PHP & Server",
+      "description": "Verze PHP, rozšíření, loader a nastavení webového serveru v jednom průvodci krok za krokem."
     }
   }
 }

@@ -108,14 +108,6 @@
       "title": "服务",
       "subtitle": "系统服务"
     },
-    "phpVersions": {
-      "title": "PHP 版本",
-      "subtitle": "PHP 版本管理"
-    },
-    "phpModules": {
-      "title": "PHP 模块",
-      "subtitle": "PHP 扩展管理"
-    },
     "packages": {
       "title": "软件包管理器",
       "subtitle": "系统软件包"
@@ -143,6 +135,10 @@
     "panelUpdate": {
       "title": "面板更新",
       "subtitle": "面板版本和更新"
+    },
+    "phpWizard": {
+      "title": "PHP 与服务器向导",
+      "subtitle": "版本、扩展、加载器和 Web 服务器"
     }
   },
   "domain": {

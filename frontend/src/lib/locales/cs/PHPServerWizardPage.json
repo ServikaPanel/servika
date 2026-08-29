@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Domů",
+    "tools": "Nástroje a nastavení",
+    "current": "Průvodce PHP & Server"
+  },
+  "title": "Průvodce nastavením PHP & Server",
+  "subtitle": "Spravujte verze PHP, rozšíření, loadery a nastavení webového serveru na jednom místě. Každá změna se okamžitě uplatní ve svém kroku.",
+  "steps": {
+    "versions": {
+      "name": "Verze PHP",
+      "desc": "Přidat nebo odebrat verzi PHP na serveru"
+    },
+    "extensions": {
+      "name": "Rozšíření PHP & Loader",
+      "desc": "Přepnout modul, nainstalovat PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Webový server",
+      "desc": "Stav nginx / PHP-FPM"
+    },
+    "summary": {
+      "name": "Souhrn",
+      "desc": "Zkontrolovat konfiguraci"
+    }
+  },
+  "nav": {
+    "back": "Zpět",
+    "next": "Další",
+    "finish": "Dokončit"
+  },
+  "webserver": {
+    "heading": "Webový server",
+    "intro": "Tato platforma používá nginx s izolovaným PHP-FPM na nájemce. Není zde kompilace Apache ani globální výběr modulů Apache jako v cPanel/EasyApache; každá doména běží ve svém vlastním PHP-FPM poolu a nginx vhostu.",
+    "card": {
+      "server": "Webový server",
+      "mode": "Režim běhu PHP",
+      "modeValue": "PHP-FPM (izolováno na nájemce)",
+      "installed": "Nainstalované verze PHP",
+      "installedValue": "{{count}} verzí",
+      "apache": "Kompatibilita s Apache",
+      "apacheValue": "Podle webu (.htaccess → nginx)"
+    },
+    "note": "Pro bezpečnostní hlavičky, doplňkové direktivy a kompatibilitu Apache/nginx webu použijte obrazovku Apache & nginx dané domény."
+  },
+  "summary": {
+    "heading": "Souhrn",
+    "subtitle": "Aktuální konfigurace PHP na serveru. Každá změna se projeví v kroku, kde je uplatněna.",
+    "installedLabel": "Nainstalované verze PHP",
+    "loading": "Načítání…",
+    "empty": "Nebyla nalezena žádná nainstalovaná verze. Přidejte ji v kroku \"Verze PHP\".",
+    "done": "✓ Konfigurace dokončena. Verze PHP a nastavení domény se volí na obrazovce nastavení PHP dané domény."
+  }
+}

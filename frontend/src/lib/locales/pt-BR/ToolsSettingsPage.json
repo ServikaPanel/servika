@@ -14,7 +14,8 @@
   "footer_other": "{{count}} ferramentas · global",
   "badges": {
     "dynamic": "Dinâmico",
-    "serverWide": "Global"
+    "serverWide": "Global",
+    "wizard": "Assistente"
   },
   "groups": {
     "php": "PHP",
@@ -23,14 +24,6 @@
     "security": "Segurança e backups"
   },
   "tools": {
-    "phpVersions": {
-      "title": "Versões do PHP",
-      "description": "Adicione ou remova as versões 7.4 a 8.6. Cada domínio seleciona sua versão independentemente."
-    },
-    "phpExtensions": {
-      "title": "Extensões PHP",
-      "description": "Ative ou desative extensões globais, pesquise pacotes PECL e compile-os."
-    },
     "packages": {
       "title": "Gerenciador de pacotes",
       "description": "Pacotes DNF — compiladores e runtimes. Grupos de instalação prontos."
@@ -82,6 +75,10 @@
     "monitoring": {
       "title": "Monitoramento e registros",
       "description": "Gráficos de CPU/RAM/disco e registros do servidor via journald (painel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "Assistente PHP & Servidor",
+      "description": "Versões do PHP, extensões, loader e configurações do servidor web em um assistente passo a passo."
     }
   }
 }

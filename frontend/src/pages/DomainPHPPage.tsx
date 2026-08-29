@@ -325,7 +325,7 @@ export default function DomainPHPPage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {t('modules.countPre')}<strong>{response.modules?.length || 0}</strong>{t('modules.countPost', { count: response.modules?.length || 0, version: response.php_version })}
               </p>
-              <Link to="/system/php-modules" className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-medium whitespace-nowrap">
+              <Link to="/php-server-wizard" className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-medium whitespace-nowrap">
                 {t('modules.manageServer')}
               </Link>
             </div>

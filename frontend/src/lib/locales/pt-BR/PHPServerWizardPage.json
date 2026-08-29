@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Início",
+    "tools": "Ferramentas e configurações",
+    "current": "Assistente PHP & Servidor"
+  },
+  "title": "Assistente de configuração PHP & Servidor",
+  "subtitle": "Gerencie versões do PHP, extensões, loaders e configurações do servidor web em um só lugar. Cada alteração é aplicada imediatamente na sua etapa.",
+  "steps": {
+    "versions": {
+      "name": "Versões do PHP",
+      "desc": "Adicionar ou remover uma versão do PHP no servidor"
+    },
+    "extensions": {
+      "name": "Extensões do PHP & Loader",
+      "desc": "Ativar um módulo, instalar PECL, ionCube"
+    },
+    "webserver": {
+      "name": "Servidor web",
+      "desc": "Status nginx / PHP-FPM"
+    },
+    "summary": {
+      "name": "Resumo",
+      "desc": "Revisar a configuração"
+    }
+  },
+  "nav": {
+    "back": "Voltar",
+    "next": "Avançar",
+    "finish": "Concluir"
+  },
+  "webserver": {
+    "heading": "Servidor web",
+    "intro": "Esta plataforma usa nginx com um PHP-FPM isolado por inquilino. Não há compilação de Apache nem seleção global de módulos Apache como no cPanel/EasyApache; cada domínio roda no seu próprio pool PHP-FPM e vhost nginx.",
+    "card": {
+      "server": "Servidor web",
+      "mode": "Modo de execução do PHP",
+      "modeValue": "PHP-FPM (isolado por inquilino)",
+      "installed": "Versões do PHP instaladas",
+      "installedValue": "{{count}} versões",
+      "apache": "Compatibilidade com Apache",
+      "apacheValue": "Por site (.htaccess → nginx)"
+    },
+    "note": "Para os cabeçalhos de segurança, diretivas adicionais e compatibilidade Apache/nginx de um site, use a tela Apache & nginx do domínio."
+  },
+  "summary": {
+    "heading": "Resumo",
+    "subtitle": "A configuração PHP atual do servidor. Cada alteração entra em vigor na etapa em que é aplicada.",
+    "installedLabel": "Versões do PHP instaladas",
+    "loading": "Carregando…",
+    "empty": "Nenhuma versão instalada encontrada. Adicione uma na etapa \"Versões do PHP\".",
+    "done": "✓ Configuração concluída. A versão do PHP e as configurações de um domínio são escolhidas na tela de configurações PHP do domínio."
+  }
+}

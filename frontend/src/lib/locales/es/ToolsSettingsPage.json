@@ -1,5 +1,8 @@
 {
-  "breadcrumb": { "home": "Inicio", "current": "Herramientas y configuración" },
+  "breadcrumb": {
+    "home": "Inicio",
+    "current": "Herramientas y configuración"
+  },
   "title": "Herramientas y configuración",
   "subtitle": "Gestión global del servidor: PHP, paquetes del sistema, red, seguridad y mantenimiento.",
   "searchPlaceholder": "Buscar herramientas…",
@@ -9,23 +12,73 @@
   "noResultsHint": "Cambie o borre el término de búsqueda.",
   "footer_one": "{{count}} herramienta · para todo el servidor",
   "footer_other": "{{count}} herramientas · para todo el servidor",
-  "badges": { "dynamic": "Dinámico", "serverWide": "Todo el servidor" },
-  "groups": { "php": "PHP", "system": "Sistema y servicios", "network": "Red y DNS", "security": "Seguridad y copias de seguridad" },
+  "badges": {
+    "dynamic": "Dinámico",
+    "serverWide": "Todo el servidor",
+    "wizard": "Asistente"
+  },
+  "groups": {
+    "php": "PHP",
+    "system": "Sistema y servicios",
+    "network": "Red y DNS",
+    "security": "Seguridad y copias de seguridad"
+  },
   "tools": {
-    "phpVersions": { "title": "Versiones PHP", "description": "Añada o elimine versiones de 7.4 a 8.6. Cada dominio selecciona su versión de forma independiente." },
-    "phpExtensions": { "title": "Extensiones PHP", "description": "Active extensiones en todo el servidor, busque paquetes PECL y compílelos." },
-    "packages": { "title": "Gestor de paquetes", "description": "Paquetes DNF, compiladores y tiempos de ejecución. Grupos de instalación listos." },
-    "services": { "title": "Servicios", "description": "Estado y reinicio de Nginx / Apache / MariaDB / DNS / PHP-FPM." },
-    "appRuntimes": { "title": "Runtimes de aplicación", "description": "Intérpretes Node.js y Python. Instale o quite versiones para las aplicaciones de dominio." },
-    "appCatalog": { "title": "Catálogo de aplicaciones", "description": "Versiones, direcciones de descarga y sumas de verificación que ofrece el instalador." },
-    "servicePlans": { "title": "Planes de servicio", "description": "Paquetes de alojamiento con cuotas de disco, bases de datos y FTP." },
-    "dnsTemplate": { "title": "Plantilla DNS", "description": "Registros DNS centrales aplicados a nuevos dominios (A/MX/SPF/DMARC/DKIM) con SOA." },
-    "domains": { "title": "Dominios", "description": "Examine, busque y acceda rápidamente a todos los dominios." },
-    "bannedDomains": { "title": "Dominios prohibidos", "description": "Nombres de host que ningún cliente puede añadir a este servidor. Contra el phishing." },
-    "siteSecurity": { "title": "Seguridad del sitio", "description": "CVE conocidas en los plugins de WordPress y las dependencias npm y Composer de un cliente." },
-    "malwareScan": { "title": "Análisis de malware", "description": "Análisis en todo el servidor con límites de recursos impuestos por el núcleo, cuarentena automática y programación." },
-    "firewall": { "title": "Cortafuegos", "description": "Bloqueo de IP/puerto, lista de permitidos, cierre de puertos. Los puertos críticos están protegidos." },
-    "backupManager": { "title": "Gestor de copias de seguridad", "description": "Vea tamaños de copias de todos los dominios, copia con un clic, destinos S3/SFTP." },
-    "monitoring": { "title": "Monitorización y registros", "description": "Gráficos de CPU/RAM/disco y registros del servidor desde journald (panel/nginx/SSH…)." }
+    "packages": {
+      "title": "Gestor de paquetes",
+      "description": "Paquetes DNF, compiladores y tiempos de ejecución. Grupos de instalación listos."
+    },
+    "services": {
+      "title": "Servicios",
+      "description": "Estado y reinicio de Nginx / Apache / MariaDB / DNS / PHP-FPM."
+    },
+    "appRuntimes": {
+      "title": "Runtimes de aplicación",
+      "description": "Intérpretes Node.js y Python. Instale o quite versiones para las aplicaciones de dominio."
+    },
+    "appCatalog": {
+      "title": "Catálogo de aplicaciones",
+      "description": "Versiones, direcciones de descarga y sumas de verificación que ofrece el instalador."
+    },
+    "servicePlans": {
+      "title": "Planes de servicio",
+      "description": "Paquetes de alojamiento con cuotas de disco, bases de datos y FTP."
+    },
+    "dnsTemplate": {
+      "title": "Plantilla DNS",
+      "description": "Registros DNS centrales aplicados a nuevos dominios (A/MX/SPF/DMARC/DKIM) con SOA."
+    },
+    "domains": {
+      "title": "Dominios",
+      "description": "Examine, busque y acceda rápidamente a todos los dominios."
+    },
+    "bannedDomains": {
+      "title": "Dominios prohibidos",
+      "description": "Nombres de host que ningún cliente puede añadir a este servidor. Contra el phishing."
+    },
+    "siteSecurity": {
+      "title": "Seguridad del sitio",
+      "description": "CVE conocidas en los plugins de WordPress y las dependencias npm y Composer de un cliente."
+    },
+    "malwareScan": {
+      "title": "Análisis de malware",
+      "description": "Análisis en todo el servidor con límites de recursos impuestos por el núcleo, cuarentena automática y programación."
+    },
+    "firewall": {
+      "title": "Cortafuegos",
+      "description": "Bloqueo de IP/puerto, lista de permitidos, cierre de puertos. Los puertos críticos están protegidos."
+    },
+    "backupManager": {
+      "title": "Gestor de copias de seguridad",
+      "description": "Vea tamaños de copias de todos los dominios, copia con un clic, destinos S3/SFTP."
+    },
+    "monitoring": {
+      "title": "Monitorización y registros",
+      "description": "Gráficos de CPU/RAM/disco y registros del servidor desde journald (panel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "Asistente de PHP & Servidor",
+      "description": "Versiones de PHP, extensiones, loader y ajustes del servidor web en un asistente paso a paso."
+    }
   }
 }

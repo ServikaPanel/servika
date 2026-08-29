@@ -1,0 +1,54 @@
+{
+  "breadcrumb": {
+    "home": "Startseite",
+    "tools": "Tools und Einstellungen",
+    "current": "PHP- & Server-Assistent"
+  },
+  "title": "PHP- & Server-Einrichtungsassistent",
+  "subtitle": "Verwalten Sie PHP-Versionen, Erweiterungen, Loader und Web-Server-Einstellungen an einem Ort. Jede Änderung wird in ihrem Schritt sofort angewendet.",
+  "steps": {
+    "versions": {
+      "name": "PHP-Versionen",
+      "desc": "Eine PHP-Version auf dem Server hinzufügen oder entfernen"
+    },
+    "extensions": {
+      "name": "PHP-Erweiterungen & Loader",
+      "desc": "Modul umschalten, PECL installieren, ionCube"
+    },
+    "webserver": {
+      "name": "Web-Server",
+      "desc": "nginx / PHP-FPM Status"
+    },
+    "summary": {
+      "name": "Zusammenfassung",
+      "desc": "Konfiguration prüfen"
+    }
+  },
+  "nav": {
+    "back": "Zurück",
+    "next": "Weiter",
+    "finish": "Fertig"
+  },
+  "webserver": {
+    "heading": "Web-Server",
+    "intro": "Diese Plattform nutzt nginx mit einem isolierten PHP-FPM pro Mandant. Es gibt keine Apache-Kompilierung oder globale Apache-Modulauswahl wie in cPanel/EasyApache; jede Domain läuft in ihrem eigenen PHP-FPM-Pool und nginx-vhost.",
+    "card": {
+      "server": "Web-Server",
+      "mode": "PHP-Ausführungsmodus",
+      "modeValue": "PHP-FPM (pro Mandant isoliert)",
+      "installed": "Installierte PHP-Versionen",
+      "installedValue": "{{count}} Versionen",
+      "apache": "Apache-Kompatibilität",
+      "apacheValue": "Pro Site (.htaccess → nginx)"
+    },
+    "note": "Für Sicherheits-Header, zusätzliche Direktiven und Apache/nginx-Kompatibilität einer Site verwenden Sie den Apache & nginx Bildschirm der Domain."
+  },
+  "summary": {
+    "heading": "Zusammenfassung",
+    "subtitle": "Die aktuelle PHP-Konfiguration des Servers. Jede Änderung wird in dem Schritt wirksam, in dem sie angewendet wird.",
+    "installedLabel": "Installierte PHP-Versionen",
+    "loading": "Wird geladen…",
+    "empty": "Keine installierte Version gefunden. Fügen Sie eine im Schritt „PHP-Versionen“ hinzu.",
+    "done": "✓ Konfiguration abgeschlossen. PHP-Version und Einstellungen einer Domain werden im PHP-Einstellungen-Bildschirm der Domain gewählt."
+  }
+}

@@ -19,7 +19,9 @@ type LogResponse = { log: string; running: boolean; version?: string; resource?:
 
 type Filter = 'all' | 'installed' | 'available'
 
-export default function PHPVersionsPage() {
+// embedded drops the breadcrumb, heading and page padding so the wizard can
+// render this page as one of its steps without a page-within-a-page chrome.
+export default function PHPVersionsPage({ embedded }: { embedded?: boolean } = {}) {
   const { t } = useTranslation('PHPVersionsPage')
   const { confirm, notify } = useDialog()
   const [versions, setVersions] = useState<Version[]>([])
@@ -126,19 +128,23 @@ export default function PHPVersionsPage() {
   const installedCount = versions.filter(v => v.loaded).length
 
   return (
-    <div className="px-6 py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.tools'), href: '/tools-settings' },
-        { label: t('breadcrumb.current') },
-      ]} />
+    <div className={embedded ? '' : 'px-6 py-5'}>
+      {!embedded && (
+        <>
+          <Breadcrumb items={[
+            { label: t('breadcrumb.home'), href: '/' },
+            { label: t('breadcrumb.tools'), href: '/tools-settings' },
+            { label: t('breadcrumb.current') },
+          ]} />
 
-      <div className="mb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{t('title')}</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {t('subtitle')}
-        </p>
-      </div>
+          <div className="mb-5">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{t('title')}</h1>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {t('subtitle')}
+            </p>
+          </div>
+        </>
+      )}
 
       {error && <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-900/15 dark:text-red-300">{error}</div>}
       {success && <div className="mb-3 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/15 dark:text-emerald-300">{success}</div>}

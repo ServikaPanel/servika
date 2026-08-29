@@ -108,14 +108,6 @@
       "title": "Servicii",
       "subtitle": "Servicii de sistem"
     },
-    "phpVersions": {
-      "title": "Versiuni PHP",
-      "subtitle": "Gestionare versiuni PHP"
-    },
-    "phpModules": {
-      "title": "Module PHP",
-      "subtitle": "Gestionare extensii PHP"
-    },
     "packages": {
       "title": "Manager de pachete",
       "subtitle": "Pachete de sistem"
@@ -143,6 +135,10 @@
     "panelUpdate": {
       "title": "Actualizare panou",
       "subtitle": "Versiune panou și actualizări"
+    },
+    "phpWizard": {
+      "title": "Asistent PHP & Server",
+      "subtitle": "Versiuni, extensii, loader și server web"
     }
   },
   "domain": {

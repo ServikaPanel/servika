@@ -13,7 +13,8 @@
   "footer_other": "{{count}} araç · sunucu geneli",
   "badges": {
     "dynamic": "Dinamik",
-    "serverWide": "Sunucu geneli"
+    "serverWide": "Sunucu geneli",
+    "wizard": "Sihirbaz"
   },
   "groups": {
     "php": "PHP",
@@ -22,14 +23,6 @@
     "security": "Güvenlik ve Yedekler"
   },
   "tools": {
-    "phpVersions": {
-      "title": "PHP Sürümleri",
-      "description": "7.4 ile 8.6 arası sürümleri ekleyin veya kaldırın. Her alan adı sürümünü bağımsız seçer."
-    },
-    "phpExtensions": {
-      "title": "PHP Eklentileri",
-      "description": "Sunucu geneli eklentileri açıp kapatın, PECL paketlerini arayın ve derleyin."
-    },
     "packages": {
       "title": "Paket Yöneticisi",
       "description": "DNF paketleri — derleyiciler ve çalışma ortamları. Hazır kurulum grupları."
@@ -81,6 +74,10 @@
     "monitoring": {
       "title": "İzleme ve Günlükler",
       "description": "CPU/RAM/disk grafikleri ve journald sunucu günlükleri (panel/nginx/SSH…)."
+    },
+    "phpWizard": {
+      "title": "PHP & Sunucu Sihirbazı",
+      "description": "PHP sürümleri, eklentiler, loader ve web sunucu ayarları tek adım-adım sihirbazda."
     }
   }
 }

@@ -13,7 +13,8 @@
   "footer_other": "{{count}} 个工具 · 全服务器范围",
   "badges": {
     "dynamic": "动态",
-    "serverWide": "全服务器范围"
+    "serverWide": "全服务器范围",
+    "wizard": "向导"
   },
   "groups": {
     "php": "PHP",
@@ -22,14 +23,6 @@
     "security": "安全与备份"
   },
   "tools": {
-    "phpVersions": {
-      "title": "PHP 版本",
-      "description": "添加或移除 7.4 至 8.6 版本。每个域名可独立选择其版本。"
-    },
-    "phpExtensions": {
-      "title": "PHP 扩展",
-      "description": "切换全服务器扩展、搜索 PECL 软件包并编译它们。"
-    },
     "packages": {
       "title": "软件包管理器",
       "description": "DNF 软件包 — 编译器和运行时。现成的安装组。"
@@ -81,6 +74,10 @@
     "monitoring": {
       "title": "监控与日志",
       "description": "CPU/RAM/磁盘图表以及来自 journald 的服务器日志（panel/nginx/SSH…）。"
+    },
+    "phpWizard": {
+      "title": "PHP 与服务器向导",
+      "description": "在一个分步向导中管理 PHP 版本、扩展、加载器和 Web 服务器设置。"
     }
   }
 }
