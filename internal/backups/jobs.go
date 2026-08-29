@@ -84,7 +84,12 @@ func backupOneDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser
 		return size, file, err
 	}
 	backupID, _ := res.LastInsertId()
-	pushToDestinationAsync(db, domainID, backupID, filepath.Join(dir, file), file)
+	abs := filepath.Join(dir, file)
+	pushToDestinationAsync(db, domainID, backupID, abs, file)
+	// Also copy to the system-wide off-site destination, if one is configured.
+	// This is the shared core, so the scheduler, bulk jobs and a manual backup all
+	// reach it; the two uploads are independent.
+	pushGlobalAsync(db, domainID, backupID, abs, file)
 	return size, file, nil
 }
 

@@ -59,6 +59,19 @@ func tickOnce(db *sql.DB) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
+	// Master switch and disk guard, BEFORE any backup is written. Neither existed
+	// before: there was no way to turn every automatic backup off at once, and a
+	// backup was written without checking free space, so backups could fill the
+	// root disk and take the panel and every site down.
+	settings := readBackupSettings(ctx, db)
+	if !settings.Enabled {
+		return
+	}
+	if reason := diskGate(settings); reason != "" {
+		notifyDiskGate(db, reason)
+		return
+	}
+
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, domain_name, system_user,
 		       COALESCE(backup_freq,'none'), COALESCE(backup_hour,3),

@@ -291,6 +291,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	pruneManualBackups(h.DB, id, systemUser)
 	// If a remote destination exists, upload in the background (do not block the API response)
 	pushToDestinationAsync(h.DB, id, backupID, abs, file)
+	// Also copy to the system-wide off-site destination, if one is configured.
+	pushGlobalAsync(h.DB, id, backupID, abs, file)
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
 		"ok":         true,
 		"id":         backupID,

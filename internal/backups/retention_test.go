@@ -91,6 +91,19 @@ func (c *retentionConn) QueryContext(_ context.Context, query string, _ []driver
 				int64(7), int64(0), nil}},
 		}, nil
 	}
+	// The tick reads the system-wide settings before it looks for due domains.
+	// Answer with the master switch on and both disk thresholds at 0, so the disk
+	// guard is disabled and the tick reaches the domains query whatever free space
+	// the test host has.
+	if strings.Contains(query, "FROM backup_settings") {
+		return &retentionRows{
+			columns: []string{"enabled", "min_free_gb", "max_store_gb", "remote_enabled",
+				"remote_type", "remote_host", "remote_port", "remote_username", "remote_password",
+				"remote_dir", "remote_host_key", "delete_local", "last_upload", "last_status", "last_error"},
+			values: [][]driver.Value{{int64(1), int64(0), int64(0), int64(0), "sftp", "", int64(22),
+				"", "", "/", "", int64(0), nil, "", ""}},
+		}, nil
+	}
 	return &retentionRows{}, nil
 }
 

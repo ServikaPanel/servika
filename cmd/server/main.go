@@ -1130,6 +1130,11 @@ func main() {
 				r.With(middleware.ResellerOrAbove).Get("/admin/backups/jobs", backupsH.ListJobs)
 				r.With(middleware.ResellerOrAbove).Get("/admin/backups/jobs/{jid}", backupsH.JobDetail)
 				r.With(middleware.ResellerOrAbove).Post("/admin/backups/restore", backupsH.StartRestoreJob)
+				// System-wide backup settings: master switch, disk guard, one off-site
+				// destination. Admin only, because they govern every domain's backups.
+				r.With(middleware.AdminOnly).Get("/admin/backups/settings", backupsH.BackupSettingsGet)
+				r.With(middleware.AdminOnly).Put("/admin/backups/settings", backupsH.BackupSettingsSet)
+				r.With(middleware.AdminOnly).Post("/admin/backups/settings/test", backupsH.BackupSettingsTest)
 				r.With(middleware.AdminOnly).Post("/admin/transfers/analyze", transfersH.Analyze)
 				r.With(middleware.AdminOnly).Post("/admin/transfers/import", transfersH.Import)
 				// Live site migration from cPanel / Plesk / DirectAdmin. Admin only:

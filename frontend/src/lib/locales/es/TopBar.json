@@ -304,7 +304,8 @@
       "noSwap": "Este servidor no tiene espacio de swap; si se queda sin memoria, MariaDB se cierra y todos los sitios se caen. Añade un archivo de swap."
     },
     "backup": {
-      "uploadFailed": "Error al subir el backup off-site de {{domain}}: {{reason}}"
+      "uploadFailed": "Error al subir el backup off-site de {{domain}}: {{reason}}",
+      "diskGate": "Los backups automáticos se detuvieron por la protección de disco: {{reason}}."
     }
   }
 }

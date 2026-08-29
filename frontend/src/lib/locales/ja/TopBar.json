@@ -304,7 +304,8 @@
       "noSwap": "このサーバーにはスワップ領域がありません。メモリ不足になると MariaDB が強制終了され、すべてのサイトが停止します。スワップファイルを追加してください。"
     },
     "backup": {
-      "uploadFailed": "{{domain}} のオフサイト backup のアップロードに失敗しました: {{reason}}"
+      "uploadFailed": "{{domain}} のオフサイト backup のアップロードに失敗しました: {{reason}}",
+      "diskGate": "ディスク保護により自動 backup が停止されました: {{reason}}。"
     }
   }
 }

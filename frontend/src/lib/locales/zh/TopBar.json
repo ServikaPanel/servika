@@ -304,7 +304,8 @@
       "noSwap": "此服务器没有交换空间；内存耗尽时会杀死 MariaDB，导致所有站点宕机。请添加交换文件。"
     },
     "backup": {
-      "uploadFailed": "{{domain}} 的异地 backup 上传失败：{{reason}}"
+      "uploadFailed": "{{domain}} 的异地 backup 上传失败：{{reason}}",
+      "diskGate": "自动 backup 因磁盘保护被停止：{{reason}}。"
     }
   }
 }

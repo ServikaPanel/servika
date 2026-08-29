@@ -176,28 +176,38 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 	if fi, err := os.Lstat(abs); err == nil && fi.Mode().IsRegular() {
 		return nil
 	}
-	var remoteStatus string
-	err := db.QueryRowContext(ctx,
-		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
-		Scan(&remoteStatus)
-	if err != nil || remoteStatus != "successful" {
-		return errors.New("backup file is missing on disk")
-	}
-	d, err := readDestination(ctx, db, domainID)
-	if err != nil || d == nil {
-		return errors.New("backup file is missing on disk")
-	}
 	dir := filepath.Join(backupRoot(), systemUser)
 	// #nosec G703 -- dir derives from backupRoot() and a validSystemUser-checked identifier.
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return errors.New("backup file is missing on disk")
+	_ = os.MkdirAll(dir, 0700)
+	// First try the domain's OWN destination, when the row records a successful
+	// per-domain upload.
+	var remoteStatus string
+	if err := db.QueryRowContext(ctx,
+		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
+		Scan(&remoteStatus); err == nil && remoteStatus == "successful" {
+		if d, e := readDestination(ctx, db, domainID); e == nil && d != nil {
+			if downloadFromRemote(ctx, db, d, file, abs) == nil {
+				return nil
+			}
+		}
 	}
-	if err := downloadFromRemote(ctx, db, d, file, abs); err != nil {
-		// #nosec G706 -- logged values are integer IDs and error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
-		return errors.New("backup file is missing on disk and could not be fetched from the off-site destination")
+	// Then the SYSTEM-WIDE destination, which is where a delete-local backup lives.
+	s := readBackupSettings(ctx, db)
+	if s.RemoteEnabled && strings.TrimSpace(s.RemoteHost) != "" {
+		// Do not download onto a disk that is already low.
+		if s.MinFreeGB > 0 {
+			if free, e := diskFreeGB(backupRoot()); e == nil && free < float64(s.MinFreeGB) {
+				return errors.New("the backup is off-site but there is not enough disk to fetch it")
+			}
+		}
+		if err := fetchGlobalRemote(ctx, db, s, file, abs); err == nil {
+			return nil
+		} else {
+			// #nosec G706 -- logged values are integer IDs and error/command output; no raw tenant string with CR/LF reaches the log.
+			log.Printf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
+		}
 	}
-	return nil
+	return errors.New("backup file is missing on disk")
 }
 
 // downloadFromRemote fetches a single backup file from the destination into localPath.
