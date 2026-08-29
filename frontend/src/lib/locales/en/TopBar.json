@@ -305,7 +305,9 @@
     },
     "backup": {
       "uploadFailed": "The off-site backup upload for {{domain}} failed: {{reason}}",
-      "diskGate": "Automatic backups were stopped by the disk guard: {{reason}}."
+      "diskGate": "Automatic backups were stopped by the disk guard: {{reason}}.",
+      "corruptMissing": "The newest backup for {{domain}} could not be read ({{file}}); it may be invalid for recovery.",
+      "bitRot": "The newest backup for {{domain}} ({{file}}) no longer matches its checksum from when it was written; restoring from it may fail."
     }
   }
 }

@@ -305,7 +305,9 @@
     },
     "backup": {
       "uploadFailed": "{{domain}} のオフサイト backup のアップロードに失敗しました: {{reason}}",
-      "diskGate": "ディスク保護により自動 backup が停止されました: {{reason}}。"
+      "diskGate": "ディスク保護により自動 backup が停止されました: {{reason}}。",
+      "corruptMissing": "{{domain}} の最新の backup を読み取れませんでした（{{file}}）。復元に使用できない可能性があります。",
+      "bitRot": "{{domain}} の最新の backup（{{file}}）は、書き込み時の checksum と一致しなくなりました。これからの復元は失敗する可能性があります。"
     }
   }
 }

@@ -305,7 +305,9 @@
     },
     "backup": {
       "uploadFailed": "Error al subir el backup off-site de {{domain}}: {{reason}}",
-      "diskGate": "Los backups automáticos se detuvieron por la protección de disco: {{reason}}."
+      "diskGate": "Los backups automáticos se detuvieron por la protección de disco: {{reason}}.",
+      "corruptMissing": "No se pudo leer el backup más reciente de {{domain}} ({{file}}); puede no ser válido para la recuperación.",
+      "bitRot": "El backup más reciente de {{domain}} ({{file}}) ya no coincide con su checksum de cuando se escribió; la restauración puede fallar."
     }
   }
 }

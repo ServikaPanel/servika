@@ -305,7 +305,9 @@
     },
     "backup": {
       "uploadFailed": "{{domain}} için off-site backup upload başarısız oldu: {{reason}}",
-      "diskGate": "Otomatik backup'lar disk koruması nedeniyle durduruldu: {{reason}}."
+      "diskGate": "Otomatik backup'lar disk koruması nedeniyle durduruldu: {{reason}}.",
+      "corruptMissing": "{{domain}} için en yeni backup okunamadı ({{file}}); kurtarma için geçersiz olabilir.",
+      "bitRot": "{{domain}} için en yeni backup ({{file}}) yazıldığı andaki checksum ile artık uyuşmuyor; bundan geri yükleme başarısız olabilir."
     }
   }
 }

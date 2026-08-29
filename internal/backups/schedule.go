@@ -59,6 +59,13 @@ func tickOnce(db *sql.DB) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
+	// Integrity scan of the EXISTING backups, once a day. It runs before the
+	// master switch, so an operator who paused new backups still learns their
+	// stored backups rotted or disappeared.
+	if integrityScanDue() {
+		verifyBackupIntegrity(db)
+	}
+
 	// Master switch and disk guard, BEFORE any backup is written. Neither existed
 	// before: there was no way to turn every automatic backup off at once, and a
 	// backup was written without checking free space, so backups could fill the

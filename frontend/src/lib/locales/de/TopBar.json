@@ -305,7 +305,9 @@
     },
     "backup": {
       "uploadFailed": "Off-site-Backup-Upload für {{domain}} fehlgeschlagen: {{reason}}",
-      "diskGate": "Automatische Backups wurden vom Festplattenschutz gestoppt: {{reason}}."
+      "diskGate": "Automatische Backups wurden vom Festplattenschutz gestoppt: {{reason}}.",
+      "corruptMissing": "Das neueste Backup für {{domain}} konnte nicht gelesen werden ({{file}}); es ist möglicherweise für die Wiederherstellung ungültig.",
+      "bitRot": "Das neueste Backup für {{domain}} ({{file}}) stimmt nicht mehr mit seiner Prüfsumme vom Schreibzeitpunkt überein; eine Wiederherstellung daraus kann fehlschlagen."
     }
   }
 }

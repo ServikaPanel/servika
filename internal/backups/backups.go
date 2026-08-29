@@ -277,9 +277,15 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Store the checksum so the integrity scan can later catch bit-rot; a hash
+	// error is not fatal (the backup exists), so verification stays ''.
+	sum, verification := "", ""
+	if s, e := fileSHA256(abs); e == nil {
+		sum, verification = s, "ok"
+	}
 	res, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO backups(domain_id, type, file, size_b, notes) VALUES(?,?,?,?,?)`,
-		id, "full", file, sizeBytes, "domain: "+domainName)
+		`INSERT INTO backups(domain_id, type, file, size_b, notes, sha256, verification) VALUES(?,?,?,?,?,?,?)`,
+		id, "full", file, sizeBytes, "domain: "+domainName, sum, verification)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save backup record")
 		return

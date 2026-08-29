@@ -305,7 +305,9 @@
     },
     "backup": {
       "uploadFailed": "Échec de l'upload du backup off-site pour {{domain}} : {{reason}}",
-      "diskGate": "Les backups automatiques ont été arrêtés par la protection disque : {{reason}}."
+      "diskGate": "Les backups automatiques ont été arrêtés par la protection disque : {{reason}}.",
+      "corruptMissing": "Le backup le plus récent de {{domain}} n'a pas pu être lu ({{file}}) ; il peut être invalide pour la récupération.",
+      "bitRot": "Le backup le plus récent de {{domain}} ({{file}}) ne correspond plus à sa somme de contrôle d'origine ; la restauration peut échouer."
     }
   }
 }

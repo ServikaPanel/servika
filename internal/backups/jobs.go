@@ -106,14 +106,21 @@ func backupOneDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser
 	if jobID > 0 {
 		job = jobID
 	}
+	abs := filepath.Join(dir, file)
+	// The checksum is stored when the backup is written; the integrity scan
+	// re-computes it later to catch bit-rot. A hash error is not fatal: the
+	// backup exists, it just cannot be integrity-checked, so verification stays ''.
+	sum, verification := "", ""
+	if s, e := fileSHA256(abs); e == nil {
+		sum, verification = s, "ok"
+	}
 	res, err := db.Exec(
-		`INSERT INTO backups(domain_id, type, file, size_b, notes, job_id) VALUES(?,?,?,?,?,?)`,
-		domainID, backupType, file, size, notes, job)
+		`INSERT INTO backups(domain_id, type, file, size_b, notes, job_id, sha256, verification) VALUES(?,?,?,?,?,?,?,?)`,
+		domainID, backupType, file, size, notes, job, sum, verification)
 	if err != nil {
 		return size, file, err
 	}
 	backupID, _ := res.LastInsertId()
-	abs := filepath.Join(dir, file)
 	pushToDestinationAsync(db, domainID, backupID, abs, file)
 	// Also copy to the system-wide off-site destination, if one is configured.
 	// This is the shared core, so the scheduler, bulk jobs and a manual backup all
