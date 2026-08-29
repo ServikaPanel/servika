@@ -52,12 +52,14 @@
   },
   "peclModal": {
     "title": "PECL'den Eklenti Kur",
-    "descPre": "PECL deposundan bir eklenti indirir ve derler. Örnekler: ",
+    "descPre": "Hazır paket varsa doğrudan kurar (bundled: ",
     "warnPre": "⚠ Eklenti, PHP {{version}} için derlenecek. Hedef: ",
     "warnMid": " veya Remi dizini",
     "inputPlaceholder": "örn. mongodb",
     "cancel": "İptal",
-    "install": "Kur"
+    "install": "Kur",
+    "descMid": " · PECL: ",
+    "descPost": "); yoksa eklentiyi kaynaktan derler."
   },
   "pecl": {
     "step": {

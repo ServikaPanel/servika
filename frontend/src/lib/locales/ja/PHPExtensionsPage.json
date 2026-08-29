@@ -52,12 +52,14 @@
   },
   "peclModal": {
     "title": "PECL から拡張機能をインストール",
-    "descPre": "PECL リポジトリから拡張機能をダウンロードしてコンパイルします。例: ",
+    "descPre": "利用可能な場合はビルド済みパッケージを直接インストールします（bundled: ",
     "warnPre": "⚠ 拡張機能は PHP {{version}} 用にコンパイルされます。対象: ",
     "warnMid": " または Remi ディレクトリ",
     "inputPlaceholder": "例: mongodb",
     "cancel": "キャンセル",
-    "install": "インストール"
+    "install": "インストール",
+    "descMid": " · PECL: ",
+    "descPost": "）。それ以外はソースから拡張機能をコンパイルします。"
   },
   "pecl": {
     "step": {

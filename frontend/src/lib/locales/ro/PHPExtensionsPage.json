@@ -52,12 +52,14 @@
   },
   "peclModal": {
     "title": "Instalare extensie din PECL",
-    "descPre": "Descarcă și compilează o extensie din depozitul PECL. Exemple: ",
+    "descPre": "Instalează direct un pachet precompilat când există (bundled: ",
     "warnPre": "⚠ Extensia va fi compilată pentru PHP {{version}}. Țintă: ",
     "warnMid": " sau directorul Remi",
     "inputPlaceholder": "de ex. mongodb",
     "cancel": "Anulare",
-    "install": "Instalare"
+    "install": "Instalare",
+    "descMid": " · PECL: ",
+    "descPost": "); altfel compilează extensia din sursă."
   },
   "pecl": {
     "step": {

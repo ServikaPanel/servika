@@ -52,12 +52,14 @@
   },
   "peclModal": {
     "title": "Instalar uma extensão do PECL",
-    "descPre": "Baixa e compila uma extensão do repositório PECL. Exemplos: ",
+    "descPre": "Instala diretamente um pacote pré-compilado quando disponível (bundled: ",
     "warnPre": "⚠ A extensão será compilada para PHP {{version}}. Destino: ",
     "warnMid": " ou o diretório Remi",
     "inputPlaceholder": "ex.: mongodb",
     "cancel": "Cancelar",
-    "install": "Instalar"
+    "install": "Instalar",
+    "descMid": " · PECL: ",
+    "descPost": "); caso contrário, compila a extensão a partir do código-fonte."
   },
   "pecl": {
     "step": {

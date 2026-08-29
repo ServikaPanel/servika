@@ -52,7 +52,9 @@
   },
   "peclModal": {
     "title": "Install an Extension from PECL",
-    "descPre": "Downloads and compiles an extension from the PECL repository. Examples: ",
+    "descPre": "Installs a prebuilt package directly when one is available (bundled: ",
+    "descMid": " · PECL: ",
+    "descPost": "), otherwise compiles the extension from source.",
     "warnPre": "⚠ The extension will be compiled for PHP {{version}}. Target: ",
     "warnMid": " or the Remi directory",
     "inputPlaceholder": "e.g. mongodb",

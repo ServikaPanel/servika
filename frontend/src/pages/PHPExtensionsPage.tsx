@@ -296,7 +296,7 @@ export default function PHPExtensionsPage() {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPeclModalOpen(false)}>
           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={event => event.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('peclModal.title')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">{t('peclModal.descPre')}<code className="font-mono">mongodb, swoole, geoip, oauth, yaml, msgpack</code></p>
+            <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">{t('peclModal.descPre')}<code className="font-mono">gmp, imap, bcmath</code>{t('peclModal.descMid')}<code className="font-mono">redis, mongodb, imagick</code>{t('peclModal.descPost')}</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2 mb-3">
               {t('peclModal.warnPre', { version: activeVersion })}<code className="font-mono">/etc/php.d/</code>{t('peclModal.warnMid')}
             </p>

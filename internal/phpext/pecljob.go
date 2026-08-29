@@ -130,9 +130,18 @@ func peclPrefix(s Version) string {
 }
 
 // peclCandidates lists the prebuilt DNF package names to probe, most likely first.
+//
+// Two classes of extension ship as a prebuilt package. A BUNDLED extension
+// (gmp, imap, mbstring, gd, intl, bcmath) comes with the PHP source tree and is
+// packaged as "<prefix>-php-<name>" with no "pecl" segment; it is NOT in the
+// PECL repository, so a `pecl install` of it fails. A PECL extension (redis,
+// mongodb, imagick) is packaged as "<prefix>-php-pecl-<name>". The bundled name
+// is probed FIRST, because that is the only way a bundled extension installs
+// without a doomed compile.
 func peclCandidates(prefix, pkg string) []string {
 	if prefix == "php" {
 		return []string{
+			"php-" + pkg, // bundled (AppStream): php-gmp, php-imap
 			"php-pecl-" + pkg,
 			"php-pecl-" + pkg + "6",
 			"php-pecl-" + pkg + "5",
@@ -140,6 +149,7 @@ func peclCandidates(prefix, pkg string) []string {
 		}
 	}
 	return []string{
+		prefix + "-php-" + pkg,               // bundled: php83-php-gmp, php83-php-imap
 		prefix + "-php-pecl-" + pkg,          // base name
 		prefix + "-php-pecl-" + pkg + "-im7", // im7 suffix for imagick
 		prefix + "-php-pecl-" + pkg + "6",    // version suffix (redis6, mongodb1)

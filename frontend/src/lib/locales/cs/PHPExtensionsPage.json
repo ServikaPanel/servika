@@ -52,12 +52,14 @@
   },
   "peclModal": {
     "title": "Nainstalovat rozšíření z PECL",
-    "descPre": "Stáhne a zkompiluje rozšíření z repozitáře PECL. Příklady: ",
+    "descPre": "Nainstaluje předpřipravený balíček přímo, pokud existuje (bundled: ",
     "warnPre": "⚠ Rozšíření bude zkompilováno pro PHP {{version}}. Cíl: ",
     "warnMid": " nebo adresář Remi",
     "inputPlaceholder": "např. mongodb",
     "cancel": "Zrušit",
-    "install": "Nainstalovat"
+    "install": "Nainstalovat",
+    "descMid": " · PECL: ",
+    "descPost": "); jinak přeloží rozšíření ze zdrojového kódu."
   },
   "pecl": {
     "step": {
