@@ -261,11 +261,17 @@ func remoteSize(ctx context.Context, db *sql.DB, d *Destination, fileName string
 		return -1
 	}
 	defer cleanupHostKey()
+	// Use `cls -l "<file>"`, NEVER `ls "<file>"`: on an SFTP target such as a
+	// Hetzner Storage Box, `ls` with a single file argument answers "Access failed:
+	// Not a directory" and the size reads -1 forever, so the verification gate never
+	// passes and delete-local never runs. `cls -l` gives one file's long listing
+	// with the byte size (measured). parseRemoteSize reads the largest integer on
+	// the line, which is the size in both layouts.
 	script := fmt.Sprintf(
 		`set cmd:fail-exit yes; %s`+
 			`set ssl:verify-certificate no; set ftp:ssl-allow no; `+
 			`set net:max-retries 1; set net:timeout 20; `+
-			`%s; cd "%s"; ls "%s"; bye`,
+			`%s; cd "%s"; cls -l "%s"; bye`,
 		hostKey, lftpOpen(d),
 		lftpEscape(d.RemoteDir), lftpEscape(fileName))
 	out, err := lftpCommand(ctx, d, script).CombinedOutput()
