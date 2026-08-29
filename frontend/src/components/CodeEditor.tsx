@@ -169,7 +169,7 @@ export default function CodeEditor({ path, content, onChange, onSave, onClose }:
             <button
               onClick={save}
               disabled={saveStatus === 'saving' || saveStatus === 'clean'}
-              className="text-xs px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 dark:text-slate-500 text-white rounded font-medium"
+              className="text-xs px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded font-medium"
               title="Ctrl+S"
             >
               {t('save')}
