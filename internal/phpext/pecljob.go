@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"servika/internal/provisioner"
 )
 
 // Asynchronous PECL extension installation.
@@ -300,4 +302,8 @@ func reloadFPM(ctx context.Context, job *peclJob, s Version) {
 	if err != nil {
 		log.Printf("phpext: php-fpm reload after PECL install failed: %v: %s", err, strings.TrimSpace(string(out)))
 	}
+	// The extension lives in the global php.d, but each tenant runs its own
+	// isolated master, so reload those too or the new extension stays invisible
+	// to the tenant's running site.
+	provisioner.ReloadAllTenantFPM()
 }

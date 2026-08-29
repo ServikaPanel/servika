@@ -17,6 +17,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/provisioner"
 )
 
 func ionCubeURL() string { return config.IonCubeURL() }
@@ -121,6 +122,9 @@ func installIonCubeForVersion(ctx context.Context, s Version, stageDir string) (
 	if out, rerr := exec.CommandContext(ctx, "systemctl", "reload-or-restart", s.Service).CombinedOutput(); rerr != nil {
 		return "", "", false, fmt.Errorf("reload PHP-FPM: %w: %s", rerr, strings.TrimSpace(string(out)))
 	}
+	// The loader lives in the global php.d, but each tenant runs its own isolated
+	// master, so reload those too or ionCube stays invisible to the tenant's site.
+	provisioner.ReloadAllTenantFPM()
 
 	// 7. Verify that php -m reports IonCube.
 	verifyCtx, vc := context.WithTimeout(ctx, 5*time.Second)
@@ -209,6 +213,7 @@ func (h *Handlers) IonCubeRemove(w http.ResponseWriter, r *http.Request) {
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 	_, _ = exec.Command("systemctl", "reload-or-restart", s.Service).CombinedOutput()
+	provisioner.ReloadAllTenantFPM() // reload the isolated per-tenant masters too
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "version": req.Version})
 }
 

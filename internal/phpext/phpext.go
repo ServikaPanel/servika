@@ -15,6 +15,7 @@ import (
 	"servika/internal/config"
 	"servika/internal/httpx"
 	"servika/internal/phpversion"
+	"servika/internal/provisioner"
 )
 
 type Version struct {
@@ -216,6 +217,9 @@ func (h *Handlers) Toggle(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to reload PHP-FPM")
 		return
 	}
+	// Each tenant runs its own isolated master, so reload those too or the toggle
+	// stays invisible to the tenant's running site.
+	provisioner.ReloadAllTenantFPM()
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
@@ -318,6 +322,7 @@ func (h *Handlers) PECLRemove(w http.ResponseWriter, r *http.Request) {
 
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 	_, _ = exec.Command("systemctl", "reload-or-restart", s.Service).CombinedOutput()
+	provisioner.ReloadAllTenantFPM() // reload the isolated per-tenant masters too
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,

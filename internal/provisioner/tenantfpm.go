@@ -192,6 +192,28 @@ func TenantFPMActive(systemUser string) bool {
 	return err == nil
 }
 
+// ReloadAllTenantFPM gracefully reloads every tenant PHP-FPM master
+// (php-fpm-c_*). A PHP extension, the ionCube loader or a toggled module is
+// written to the global php.d, but each tenant runs its OWN isolated php-fpm
+// master, so reloading only the global "php-fpm" service leaves those masters
+// stale and the change stays invisible to the tenant's running site (measured:
+// gmp installed and shown as installed while the tenant site still reported it
+// missing). The reload is a graceful SIGUSR2 that re-forks workers with the
+// current extension set, so it does not trip the FPM start-limit guard the way a
+// restart can. Best effort: a stopped unit's reload fails harmlessly and one
+// tenant's failure does not stop the rest.
+func ReloadAllTenantFPM() {
+	units, err := filepath.Glob(filepath.Join(tenantUnitDir, "php-fpm-c_*.service"))
+	if err != nil {
+		return
+	}
+	for _, unitPath := range units {
+		unit := filepath.Base(unitPath)
+		// #nosec G204 -- fixed binary with separate args (no shell); unit is a glob-matched tenant unit file name from /etc/systemd/system, never request input.
+		_ = exec.Command("systemctl", "reload", unit).Run()
+	}
+}
+
 func tenantSanitizeScalar(value, fallback string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.ContainsAny(value, "\r\n\x00") {
