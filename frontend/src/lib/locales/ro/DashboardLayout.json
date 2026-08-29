@@ -55,7 +55,8 @@
     "backups": "Backup-uri",
     "siteImport": "Import site",
     "malwareScan": "Scanare malware",
-    "attackChains": "Lanțuri de atac"
+    "attackChains": "Lanțuri de atac",
+    "phpWizard": "Asistent PHP & Server"
   },
   "mobile": {
     "overview": "Prezentare",

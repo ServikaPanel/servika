@@ -42,6 +42,7 @@ const ICONS = {
   // firewall entry, and two identical icons in one group name nothing.
   malware:     'M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5l-1.4 1.4M7.9 16.1l-1.4 1.4m11.6 0l-1.4-1.4M7.9 7.9L6.5 6.5M16 12a4 4 0 11-8 0 4 4 0 018 0z',
   chains:      'M13.19 8.69a4.5 4.5 0 011.24 7.24l-4.5 4.5a4.5 4.5 0 01-6.36-6.36l1.76-1.76m13.35-.62l1.76-1.76a4.5 4.5 0 00-6.36-6.36l-4.5 4.5a4.5 4.5 0 001.24 7.24',
+  cpu:         'M9 3v2M15 3v2M9 19v2M15 19v2M3 9h2M3 15h2M19 9h2M19 15h2M7 7h10v10H7V7zm3 3h4v4h-4v-4z',
 }
 
 const NAV: NavGroup[] = [
@@ -61,6 +62,7 @@ const NAV: NavGroup[] = [
   ]},
   { titleKey: 'serverManagement', items: [
     { to: '/tools-settings',     labelKey: 'toolsSettings', icon: ICONS.tools },
+    { to: '/php-server-wizard',  labelKey: 'phpWizard',     icon: ICONS.cpu },
     { to: '/tools/optimize',   labelKey: 'optimize',      icon: ICONS.optimize },
     { to: '/tools/server-ips', labelKey: 'serverIPs',     icon: ICONS.monitoring },
     { to: '/tools/panel-port', labelKey: 'panelPort',     icon: ICONS.tools },

@@ -55,7 +55,8 @@
     "backups": "Yedekler",
     "siteImport": "Site İçe Aktarma",
     "malwareScan": "Zararlı Yazılım Taraması",
-    "attackChains": "Saldırı Zincirleri"
+    "attackChains": "Saldırı Zincirleri",
+    "phpWizard": "PHP & Sunucu Sihirbazı"
   },
   "mobile": {
     "overview": "Genel Bakış",

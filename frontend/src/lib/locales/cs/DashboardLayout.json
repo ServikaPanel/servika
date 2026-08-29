@@ -55,7 +55,8 @@
     "backups": "Zálohy",
     "siteImport": "Import webu",
     "malwareScan": "Kontrola malwaru",
-    "attackChains": "Řetězce útoků"
+    "attackChains": "Řetězce útoků",
+    "phpWizard": "Průvodce PHP & Server"
   },
   "mobile": {
     "overview": "Přehled",

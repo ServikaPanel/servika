@@ -55,7 +55,8 @@
     "backups": "バックアップ",
     "siteImport": "サイトインポート",
     "malwareScan": "マルウェアスキャン",
-    "attackChains": "攻撃チェーン"
+    "attackChains": "攻撃チェーン",
+    "phpWizard": "PHP & サーバーウィザード"
   },
   "mobile": {
     "overview": "概要",

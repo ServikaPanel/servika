@@ -55,7 +55,8 @@
     "backups": "Backups",
     "siteImport": "Importação de site",
     "malwareScan": "Verificação de malware",
-    "attackChains": "Cadeias de ataque"
+    "attackChains": "Cadeias de ataque",
+    "phpWizard": "Assistente PHP & Servidor"
   },
   "mobile": {
     "overview": "Visão geral",
