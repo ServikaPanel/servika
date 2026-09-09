@@ -79,6 +79,41 @@ func TestMailboxCommandCoversTheSupportedVendors(t *testing.T) {
 	}
 }
 
+// Both builders concatenate the domain, and the cpanel form concatenates the
+// account name too, into a command the SOURCE host runs; the plesk form also
+// puts the domain inside a single-quoted SQL literal. The caller validates them
+// first, so this asserts the builders refuse on their own.
+func TestTheRemoteCommandBuildersRefuseAnUnvalidatedName(t *testing.T) {
+	hostile := []string{
+		"example.com'; DROP DATABASE psa; --",
+		"example.com; id",
+		"example.com`id`",
+		"../../etc/passwd",
+		"example.com\nid",
+	}
+	for _, vendor := range []string{"cpanel", "plesk", "directadmin"} {
+		for _, domain := range hostile {
+			if cmd, ok := mailboxCommand(vendor, "acme", domain); ok {
+				t.Errorf("%s: hostile domain %q produced a command: %s", vendor, domain, cmd)
+			}
+			if cmd := aliasCommand(vendor, domain); cmd != "" {
+				t.Errorf("%s: hostile domain %q produced an alias command: %s", vendor, domain, cmd)
+			}
+		}
+		if cmd, ok := mailboxCommand(vendor, "acme; id", "example.com"); ok {
+			t.Errorf("%s: hostile account produced a command: %s", vendor, cmd)
+		}
+	}
+	// An ordinary pair still builds, so the guard is refusing the name rather
+	// than refusing everything.
+	if _, ok := mailboxCommand("cpanel", "acme", "example.com"); !ok {
+		t.Error("an ordinary domain and account were refused")
+	}
+	if aliasCommand("cpanel", "example.com") == "" {
+		t.Error("an ordinary domain was refused by aliasCommand")
+	}
+}
+
 // The forwarder parser is shared with the cpmove import. In the live migration
 // the source and target domain are the same, so a destination keeps its domain,
 // and a pipe/include destination is dropped because Servika cannot host it.

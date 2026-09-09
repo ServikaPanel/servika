@@ -283,6 +283,15 @@ func archiveDBFiles(tmp, systemUser string) map[string]string {
 // go. sqlimport imports as an account granted on that schema alone, so MariaDB
 // enforces the intent.
 func importDB(ctx context.Context, dbName, sqlPath string) error {
+	// The name can reach this function from a member name inside the archive, and
+	// an archive can arrive from outside the panel through a site migration. The
+	// gate is repeated here rather than left to ensureSchema below, because this
+	// is the function a later caller would reach for and ensureSchema is an
+	// implementation detail of it: a caller that creates the schema some other
+	// way would otherwise hand an unchecked name straight to the importer.
+	if !credentials.ValidDBIdentifier(dbName) || isSystemDB(dbName) {
+		return fmt.Errorf("invalid database name: %q", dbName)
+	}
 	// Create the target schema first. sqlimport connects with dbName as the default
 	// schema and its dump has the CREATE DATABASE / USE lines stripped, so a database
 	// that was deleted (exactly when a restore is most needed) would fail with

@@ -173,6 +173,14 @@ func (h *Handlers) discoverMail(ctx context.Context, source *RemoteSource, accou
 // mailboxCommand returns the remote command that lists a domain's mailbox local
 // parts. The domain and user are already validated by the caller.
 func mailboxCommand(vendor, user, domain string) (string, bool) {
+	// discoverMail validates both values before it gets here, but this is the
+	// function that concatenates them into a command the SOURCE host runs as
+	// whatever account the migration connected with, and the plesk form also
+	// embeds the domain in a single-quoted SQL literal. The check is repeated
+	// where the concatenation happens, so it holds for any caller.
+	if !reRemoteDomain.MatchString(domain) || !reRemoteAccount.MatchString(user) {
+		return "", false
+	}
 	switch vendor {
 	case "cpanel":
 		return "{ cat /home/" + user + "/etc/" + domain + "/shadow 2>/dev/null || cat /home/" + user + "/etc/" + domain + "/passwd 2>/dev/null; } | cut -d: -f1", true
@@ -187,6 +195,11 @@ func mailboxCommand(vendor, user, domain string) (string, bool) {
 // aliasCommand returns the remote command that lists a domain's forwarders, or
 // an empty string when the vendor's layout is not read automatically.
 func aliasCommand(vendor, domain string) string {
+	// Same reason as mailboxCommand: the domain is concatenated into a command
+	// the source host runs, so it is validated where that happens.
+	if !reRemoteDomain.MatchString(domain) {
+		return ""
+	}
 	switch vendor {
 	case "cpanel":
 		return "cat /etc/valias/" + domain + " 2>/dev/null"
