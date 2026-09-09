@@ -442,8 +442,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	// 1) Linux user + nginx + PHP pool
 	if err := quota.CheckDomainAllowed(r.Context(), h.DB, nil); err != nil {
-		var le *quota.LimitError
-		if errors.As(err, &le) {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}
@@ -477,8 +476,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := quota.CheckResellerDomainAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			var le *quota.LimitError
-			if errors.As(err, &le) {
+			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
 			}
@@ -488,8 +486,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		// Disk/traffic quota: when full, no new domain may be opened. Existing
 		// sites are unaffected — these are "new resource" gates, not cuts.
 		if err := quota.CheckResellerDiskAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			var le *quota.LimitError
-			if errors.As(err, &le) {
+			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
 			}
@@ -497,8 +494,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := quota.CheckResellerTrafficAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			var le *quota.LimitError
-			if errors.As(err, &le) {
+			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
 			}
@@ -1240,8 +1236,7 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	unlock := quota.LockCustomerForDomain(r.Context(), h.DB, id)
 	defer unlock()
 	if err := quota.CheckDatabaseAllowed(r.Context(), h.DB, id); err != nil {
-		var le *quota.LimitError
-		if errors.As(err, &le) {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}

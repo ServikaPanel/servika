@@ -181,8 +181,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := quota.CheckAppAllowed(r.Context(), h.DB, s.DomainID); err != nil {
-		var limit *quota.LimitError
-		if errors.As(err, &limit) {
+		if limit, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, limit.Message)
 			return
 		}

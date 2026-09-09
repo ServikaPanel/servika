@@ -51,8 +51,7 @@ func refuse(reason, format string, args ...any) error {
 
 // ReasonOf returns the stable reason code of a refusal, or "" for anything else.
 func ReasonOf(err error) string {
-	var refusal *Refusal
-	if errors.As(err, &refusal) {
+	if refusal, ok := errors.AsType[*Refusal](err); ok {
 		return refusal.Reason
 	}
 	return ""

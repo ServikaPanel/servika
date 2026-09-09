@@ -492,8 +492,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		return credentials.MySQLCreateDB(h.DB, id, dbName, dbUser, dbPass)
 	}()
 	if dbErr != nil {
-		var limitErr *quota.LimitError
-		if errors.As(dbErr, &limitErr) {
+		if limitErr, ok := errors.AsType[*quota.LimitError](dbErr); ok {
 			httpx.WriteError(w, http.StatusForbidden, limitErr.Message)
 			return
 		}

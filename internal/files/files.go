@@ -363,8 +363,7 @@ func parseMultipartUpload(w http.ResponseWriter, r *http.Request, maxBytes int64
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 	// #nosec G120 -- body is bounded by MaxBytesReader above, so parsing cannot exhaust memory.
 	if err := r.ParseMultipartForm(maxMemory); err != nil {
-		var maxBytesError *http.MaxBytesError
-		if errors.As(err, &maxBytesError) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return errUploadTooLarge
 		}
 		return err

@@ -131,8 +131,7 @@ func refuse(code, msg string) error { return &Refusal{Code: code, Message: msg} 
 // not a refusal (a database failure, for example, which is not the operator's
 // input being wrong).
 func ReasonCode(err error) string {
-	var r *Refusal
-	if errors.As(err, &r) {
+	if r, ok := errors.AsType[*Refusal](err); ok {
 		return r.Code
 	}
 	return ""

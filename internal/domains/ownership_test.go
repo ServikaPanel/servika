@@ -156,7 +156,7 @@ func refHarness(t *testing.T, rec *refRecorder) *Handlers {
 	return &Handlers{DB: db}
 }
 
-func id(v int64) *int64 { return &v }
+func id(v int64) *int64 { return new(v) }
 
 // domains.customer_id has no foreign key, so an id matching nothing is written
 // verbatim and the domain hangs off a customer ScopeSQL can never find: an

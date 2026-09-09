@@ -631,8 +631,7 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		// PHP settings" leaves an operator staring at a form with no idea which
 		// box the server refused or why.
 		reason := "invalid PHP settings"
-		var refused settingError
-		if errors.As(err, &refused) {
+		if refused, ok := errors.AsType[settingError](err); ok {
 			reason = refused.Reason
 		}
 		httpx.WriteError(w, http.StatusBadRequest, reason)

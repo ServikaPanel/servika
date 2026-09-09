@@ -231,8 +231,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		// The reseller's customer quota counts customer accounts (role=user), so
 		// it is enforced on the same path that creates one.
 		if err := quota.CheckResellerCustomerAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			var le *quota.LimitError
-			if errors.As(err, &le) {
+			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
 			}

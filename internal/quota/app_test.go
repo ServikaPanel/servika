@@ -108,8 +108,7 @@ func TestAnUnreadableCountDeniesTheApplication(t *testing.T) {
 	if err == nil {
 		t.Fatal("a failed count was treated as permission to create the application")
 	}
-	var limit *LimitError
-	if errors.As(err, &limit) {
+	if _, ok := errors.AsType[*LimitError](err); ok {
 		t.Fatalf("a database failure was reported as a plan limit: %v", err)
 	}
 }

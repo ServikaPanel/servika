@@ -269,8 +269,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := quota.CheckMailboxAllowed(r.Context(), h.DB, id); err != nil {
-		var le *quota.LimitError
-		if errors.As(err, &le) {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}

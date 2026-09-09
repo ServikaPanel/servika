@@ -248,7 +248,7 @@ func TestTheCreatedAccountHasNoUsablePassword(t *testing.T) {
 	}
 }
 
-func owner(v int64) *int64 { return &v }
+func owner(v int64) *int64 { return new(v) }
 
 // The owner is half of the ownership chain middleware.ScopeSQL walks. Written on
 // creation, the reseller sees the domain; dropped, the record is unowned and the

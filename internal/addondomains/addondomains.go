@@ -157,8 +157,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := quota.CheckDomainAllowed(r.Context(), h.DB, parent.CustomerID); err != nil {
-		var le *quota.LimitError
-		if errors.As(err, &le) {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}

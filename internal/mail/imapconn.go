@@ -49,8 +49,7 @@ func (e *ReasonError) Error() string { return e.Code + ": " + e.Err.Error() }
 func (e *ReasonError) Unwrap() error { return e.Err }
 
 func reasonFor(err error) string {
-	var reason *ReasonError
-	if errors.As(err, &reason) {
+	if reason, ok := errors.AsType[*ReasonError](err); ok {
 		return reason.Code
 	}
 	return ReasonUnreachable
