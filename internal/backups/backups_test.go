@@ -1,6 +1,9 @@
 package backups
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidSystemUser(t *testing.T) {
 	tests := []struct {
@@ -88,5 +91,41 @@ func TestLftpURL(t *testing.T) {
 	}
 	if got := lftpURL(&Destination{Type: "ftp", Host: "h", Port: 21}); got != "ftp://h:21" {
 		t.Fatalf("lftpURL(ftp) = %q, want ftp://h:21", got)
+	}
+}
+
+// Every value the lftp script places inside double quotes goes through
+// lftpEscape, so the property that matters is not which characters it rewrites
+// but that the RESULT cannot leave the quoted context. lftp reads a line
+// beginning with "!" as a shell command, so a value that closed its own quote
+// and started a new line would run one.
+func TestLftpEscapeCannotLeaveTheQuotedContext(t *testing.T) {
+	hostile := []string{
+		`"; !id; echo "`,
+		"line\nbreak",
+		"carriage\rreturn",
+		"nul\x00byte",
+		`back\slash"and"quote`,
+		`"`,
+		`\`,
+	}
+	for _, in := range hostile {
+		escaped := lftpEscape(in)
+		if strings.ContainsAny(escaped, "\r\n\x00") {
+			t.Errorf("lftpEscape(%q) = %q still carries a line break or NUL", in, escaped)
+		}
+		// Walk the escaped text the way a quoted-string reader does: a backslash
+		// consumes the next character, so any quote that survives unconsumed would
+		// terminate the string the value sits in.
+		for i := 0; i < len(escaped); i++ {
+			if escaped[i] == '\\' {
+				i++ // the next byte is consumed by this escape
+				continue
+			}
+			if escaped[i] == '"' {
+				t.Errorf("lftpEscape(%q) = %q leaves an unescaped quote at %d", in, escaped, i)
+				break
+			}
+		}
 	}
 }

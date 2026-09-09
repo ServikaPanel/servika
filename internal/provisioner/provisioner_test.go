@@ -650,3 +650,49 @@ func TestTenantCommandContextKillsAHungProcess(t *testing.T) {
 		t.Fatalf("the deadline took %s to take effect", elapsed)
 	}
 }
+
+// ensurePMASignon compares the WHOLE file rather than looking for a marker
+// string. That is what makes a change to the endpoint reach an installation
+// that already has an older copy: a marker check only ever asks "has this run
+// before", which freezes the file at whatever the first run wrote, and the
+// session hardening added to this endpoint would never have reached an existing
+// server.
+//
+// Both directions matter. A drifted file must be rewritten, and an identical
+// one must be left alone, or the repair rewrites it on every single boot.
+func TestPMASignonRepairRewritesADriftedFileAndOnlyADriftedFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SERVIKA_PMA_SIGNON_DIR", dir)
+	path := filepath.Join(dir, "pma-signon.php")
+
+	// An older copy, missing the session hardening the endpoint now carries.
+	drifted := strings.ReplaceAll(pmaSignonPHP(), "session.use_strict_mode", "session.gc_probability")
+	if drifted == pmaSignonPHP() {
+		t.Fatal("the sample did not actually differ from the canonical content")
+	}
+	if err := os.WriteFile(path, []byte(drifted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ensurePMASignon()
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != pmaSignonPHP() {
+		t.Fatal("a drifted signon endpoint was left in place")
+	}
+
+	// Now that it matches, the repair must not touch it again.
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ensurePMASignon()
+	againStat, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !againStat.ModTime().Equal(before.ModTime()) {
+		t.Error("an identical signon endpoint was rewritten, so every boot rewrites it")
+	}
+}
