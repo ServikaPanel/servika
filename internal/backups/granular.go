@@ -158,8 +158,11 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	ownedDBs, err := domainDatabases(db, domainID, systemUser)
 	if err != nil {
 		// Backing up a list that could not be read fully would write an archive
-		// missing databases and report it as successful.
-		return 0, fmt.Errorf("could not list the domain's databases: %w", err)
+		// missing databases and report it as successful. The driver's own text
+		// goes to the log, not into the job record the customer reads.
+		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
+		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
+		return 0, errors.New("could not list the domain's databases")
 	}
 	for _, dbName := range ownedDBs {
 		target := filepath.Join(dbDir, dbName+".sql")
@@ -345,9 +348,11 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 		// The list is the ownership whitelist. A short one would refuse a database
 		// the domain really owns and report it as "not owned", so the failure is
 		// reported as itself instead.
+		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
+		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
 		return append(res, map[string]string{
 			"db": "", "status": "failed",
-			"message": "could not list the domain's databases: " + err.Error(),
+			"message": "could not list the domain's databases",
 		})
 	}
 	owned := map[string]bool{}
@@ -470,7 +475,10 @@ func restoreOneDB(ctx context.Context, db *sql.DB, domainID int64, tmp, systemUs
 	ownedNames, err := domainDatabases(db, domainID, systemUser)
 	if err != nil {
 		// A short list would report a database the domain owns as one it does not.
-		return "", fmt.Errorf("could not list the domain's databases: %w", err)
+		// This error becomes a 400 body, so the driver's text stays in the log.
+		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
+		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
+		return "", errors.New("could not list the domain's databases")
 	}
 	owned := map[string]bool{}
 	for _, n := range ownedNames {
