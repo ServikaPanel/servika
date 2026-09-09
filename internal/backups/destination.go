@@ -168,7 +168,16 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 // that never went off-site still answers "missing" rather than reaching for a
 // file that was never written.
 func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int64, systemUser, file string) error {
-	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file {
+	// Both components are read from the panel's own rows, but this function is
+	// the one gate every read path (restore, contents, download) passes through,
+	// so the check is made here rather than trusted from each caller.
+	//
+	// filepath.Base(file) != file rejects a separator and any deeper path, but it
+	// does NOT reject the exact value ".." or ".", because Base returns those
+	// unchanged. Either one resolves the join back to a directory rather than an
+	// archive, so they are refused by name.
+	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file ||
+		file == ".." || file == "." {
 		return errors.New("invalid backup file")
 	}
 	abs := filepath.Join(backupRoot(), systemUser, file)
