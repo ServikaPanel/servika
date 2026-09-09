@@ -46,6 +46,11 @@ const (
 	metaPrefix = "servika-meta:"
 )
 
+// commentLineReplacer flattens a stored comment onto the single crontab line it
+// is written as. Both line endings are replaced, because crond ends a line on
+// either one.
+var commentLineReplacer = strings.NewReplacer("\n", " ", "\r", " ")
+
 // Task types. An empty type reads as TypeCommand.
 const (
 	TypeCommand = "command"
@@ -304,7 +309,9 @@ func serializeCrontab(systemUser string, domainID int64, secret []byte, list []T
 			fmt.Fprintf(&buf, "# %s %s\n", metaPrefix, strings.Join(meta, " "))
 		}
 		if task.Comment != "" {
-			fmt.Fprintf(&buf, "# %s\n", strings.ReplaceAll(task.Comment, "\n", " "))
+			// \r is replaced beside \n: crond ends the comment on either, so a lone
+			// carriage return would let the rest of the comment become a crontab line.
+			fmt.Fprintf(&buf, "# %s\n", commentLineReplacer.Replace(task.Comment))
 		}
 		// A disabled task's cron line is commented out so crond never runs it,
 		// while read() still parses it back through looksCron.
@@ -354,12 +361,24 @@ func validate(task Task) error {
 		return fmt.Errorf("command is too long (max %d)", maxCommandLength)
 	}
 	for _, field := range []string{task.Minute, task.Hour, task.Day, task.Month, task.Week} {
-		if strings.ContainsAny(field, ";|&`\n") {
+		// \r belongs here beside \n: crond ends a line on either, so a lone
+		// carriage return splits the schedule the same way a newline does.
+		if strings.ContainsAny(field, ";|&`\n\r") {
 			return fmt.Errorf("invalid character in schedule fields")
 		}
 	}
 	if strings.ContainsAny(task.Command, "\n\r") {
 		return fmt.Errorf("command cannot contain line breaks")
+	}
+	// Type, PHPVersion and Notify are written into the "# servika-meta:" comment
+	// line, and Notify is also an argv token on the reporter's cron line. A line
+	// break in any of them ends that line early and puts whatever follows into
+	// the crontab as a line of its own, which is how the command length limit and
+	// every check above get stepped around.
+	for _, field := range []string{task.Type, task.PHPVersion, task.Notify} {
+		if strings.ContainsAny(field, "\n\r") {
+			return fmt.Errorf("metadata fields cannot contain line breaks")
+		}
 	}
 	return nil
 }

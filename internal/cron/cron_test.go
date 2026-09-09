@@ -186,3 +186,88 @@ func TestLooksCron(t *testing.T) {
 		}
 	}
 }
+
+// valid is the task every case below starts from, so a rejection can only come
+// from the one field the case changed.
+func validTask() Task {
+	return Task{
+		Minute: "0", Hour: "3", Day: "*", Month: "*", Week: "*",
+		Command: "/usr/bin/php /home/c_site/cron.php",
+		Enabled: true, Type: TypeCommand,
+	}
+}
+
+// crond ends a line on a carriage return as well as a newline, so a lone \r in
+// a schedule field splits the schedule exactly the way a newline does. The
+// baseline case proves the gate is not simply refusing everything.
+func TestACarriageReturnIsRefusedInAScheduleField(t *testing.T) {
+	if err := validate(validTask()); err != nil {
+		t.Fatalf("the baseline task must pass: %v", err)
+	}
+	for _, field := range []string{"Minute", "Hour", "Day", "Month", "Week"} {
+		task := validTask()
+		switch field {
+		case "Minute":
+			task.Minute = "0\r0 3 * * * /bin/sh -c evil"
+		case "Hour":
+			task.Hour = "3\r"
+		case "Day":
+			task.Day = "*\r"
+		case "Month":
+			task.Month = "*\r"
+		case "Week":
+			task.Week = "*\r"
+		}
+		if err := validate(task); err == nil {
+			t.Errorf("%s carrying a carriage return was accepted", field)
+		}
+	}
+}
+
+// Type, PHPVersion and Notify are written into the metadata comment, and Notify
+// is also an argv token on the reporter's cron line. A line break in any of them
+// ends that line and puts the rest into the crontab as a line of its own.
+func TestALineBreakIsRefusedInAMetadataField(t *testing.T) {
+	for _, breakChar := range []string{"\n", "\r"} {
+		for _, field := range []string{"Type", "PHPVersion", "Notify"} {
+			task := validTask()
+			injected := "x" + breakChar + "0 3 * * * /bin/sh -c evil"
+			switch field {
+			case "Type":
+				task.Type = injected
+			case "PHPVersion":
+				task.PHPVersion = injected
+			case "Notify":
+				task.Notify = injected
+			}
+			if err := validate(task); err == nil {
+				t.Errorf("%s carrying %q was accepted", field, breakChar)
+			}
+		}
+	}
+	// The same fields with ordinary values still pass, so the gate is testing the
+	// line break rather than the field.
+	ok := validTask()
+	ok.Type = TypePHP
+	ok.PHPVersion = "8.3"
+	ok.Notify = "mail@example.com"
+	if err := validate(ok); err != nil {
+		t.Fatalf("ordinary metadata values were refused: %v", err)
+	}
+}
+
+// The comment is flattened onto one crontab line. A carriage return in it used
+// to survive, so the tail of the comment became a line crond would read.
+func TestACommentCarryingACarriageReturnStaysOneLine(t *testing.T) {
+	task := validTask()
+	task.Comment = "nightly\r0 3 * * * /bin/sh -c evil"
+	data := string(serializeCrontab("c_site", 1, testSecret, []Task{task}))
+	for line := range strings.SplitSeq(data, "\n") {
+		if strings.HasPrefix(line, "0 3 * * * /bin/sh -c evil") {
+			t.Fatalf("the comment produced a crontab line of its own:\n%s", data)
+		}
+	}
+	if !strings.Contains(data, "# nightly 0 3 * * * /bin/sh -c evil") {
+		t.Fatalf("the comment was not flattened onto one line:\n%s", data)
+	}
+}
