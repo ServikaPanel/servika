@@ -100,11 +100,15 @@ func (h *Handlers) logSources(r *http.Request, id int64, domainName string) (str
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var fqdn string
-		if rows.Scan(&fqdn) != nil {
+		if err := rows.Scan(&fqdn); err != nil {
+			// A dropped subdomain has its traffic left out of the parent's figure.
+			log.Printf("stats: skipping an unreadable subdomain row for domain %d: %v", id, err)
 			continue
 		}
-		// Re-validate before the value becomes a filesystem path.
+		// Re-validate before the value becomes a filesystem path. A stored name
+		// that fails is refused rather than dropped in silence.
 		if provisioner.ValidateDomain(fqdn) != nil {
+			log.Printf("stats: refusing an invalid stored subdomain name for domain %d", id)
 			continue
 		}
 		names = append(names, accessLogPath(fqdn))

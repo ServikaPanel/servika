@@ -148,6 +148,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		var twoFA, passwordless int
 		if err := rows.Scan(&s.ID, &s.Username, &s.Email, &s.FullName, &s.Role, &s.Status,
 			&s.ResellerID, &twoFA, &s.LastLogin, &s.LastLoginIP, &s.CreatedAt, &passwordless); err != nil {
+			// A dropped row is an account that exists and can sign in while the
+			// screen that manages accounts does not show it.
+			log.Printf("user list: skipping an unreadable row: %v", err)
 			continue
 		}
 		s.TwoFA = twoFA == 1

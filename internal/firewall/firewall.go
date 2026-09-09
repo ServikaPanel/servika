@@ -345,6 +345,9 @@ func (h *Handlers) rebuild() error {
 		var ruleType, ip, proto string
 		var port int
 		if err := rows.Scan(&ruleType, &ip, &port, &proto); err != nil {
+			// A dropped rule is a firewall line that is never emitted: a block that
+			// does not block, or an allowlist entry whose absence locks somebody out.
+			log.Printf("firewall: skipping an unreadable rule: %v", err)
 			continue
 		}
 		switch ruleType {

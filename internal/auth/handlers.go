@@ -475,6 +475,10 @@ func (h *Handlers) AuditList(w http.ResponseWriter, r *http.Request) {
 		var e AuditEntry
 		var okv int
 		if err := rows.Scan(&e.ID, &e.Time, &e.Username, &e.IP, &e.Action, &e.Target, &okv); err != nil {
+			// A dropped row is an audit entry that disappears from the record
+			// somebody is reading precisely to account for what happened.
+			// #nosec G706 -- the logged value is a database error; no request-controlled string reaches the log.
+			log.Printf("audit list: skipping an unreadable entry: %v", err)
 			continue
 		}
 		e.OK = okv == 1

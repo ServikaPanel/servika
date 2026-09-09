@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"regexp"
@@ -116,9 +117,14 @@ func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
 	rules := make([]ipRule, 0)
 	for rows.Next() {
 		var rule ipRule
-		if rows.Scan(&rule.ID, &rule.IPCIDR, &rule.CreatedAt) == nil {
-			rules = append(rules, rule)
+		if err := rows.Scan(&rule.ID, &rule.IPCIDR, &rule.CreatedAt); err != nil {
+			// A dropped rule is one the operator saved and can no longer see, so
+			// they cannot remove it either.
+			// #nosec G706 -- id is an int64; %d cannot carry a line break into the log.
+			log.Printf("ip rules: skipping an unreadable rule for domain %d: %v", id, err)
+			continue
 		}
+		rules = append(rules, rule)
 	}
 	if err := rows.Err(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "ip rules read failed")

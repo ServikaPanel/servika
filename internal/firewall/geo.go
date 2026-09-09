@@ -82,10 +82,14 @@ func blockedCountries(ctx context.Context, db *sql.DB) ([]string, error) {
 	codes := make([]string, 0)
 	for rows.Next() {
 		var code string
-		if rows.Scan(&code) == nil {
-			if normalized := geoip.NormalizeCountry(code); normalized != "" {
-				codes = append(codes, normalized)
-			}
+		if err := rows.Scan(&code); err != nil {
+			// A dropped country never reaches the nftables set, so a country the
+			// operator blocked is quietly let through.
+			log.Printf("firewall: skipping an unreadable country code: %v", err)
+			continue
+		}
+		if normalized := geoip.NormalizeCountry(code); normalized != "" {
+			codes = append(codes, normalized)
 		}
 	}
 	return codes, rows.Err()

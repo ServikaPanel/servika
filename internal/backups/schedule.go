@@ -211,6 +211,8 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 	for rows.Next() {
 		var it item
 		if err := rows.Scan(&it.ID, &it.File, &it.RemoteStatus); err != nil {
+			// A dropped row is an old backup the retention pass never removes.
+			log.Printf("backups: skipping an unreadable retention row: %v", err)
 			continue
 		}
 		all = append(all, it)

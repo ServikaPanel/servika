@@ -143,9 +143,13 @@ func SuspendResellerDomains(ctx context.Context, db *sql.DB, resellerID int64, s
 	var ids []int64
 	for rows.Next() {
 		var id int64
-		if rows.Scan(&id) == nil {
-			ids = append(ids, id)
+		if err := rows.Scan(&id); err != nil {
+			// A dropped id is a domain that is not suspended or not resumed while
+			// the count returned to the caller says it was.
+			log.Printf("suspend: skipping an unreadable domain id: %v", err)
+			continue
 		}
+		ids = append(ids, id)
 	}
 	_ = rows.Close()
 	if err := rows.Err(); err != nil {

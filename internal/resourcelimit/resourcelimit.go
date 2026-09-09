@@ -955,9 +955,13 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 	var ids []int64
 	for rows.Next() {
 		var id int64
-		if rows.Scan(&id) == nil {
-			ids = append(ids, id)
+		if err := rows.Scan(&id); err != nil {
+			// A dropped id is a tenant that keeps its old quota while the summary
+			// below reports a run that covered everybody.
+			log.Printf("quota heal: skipping an unreadable tenant id: %v", err)
+			continue
 		}
+		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
 		// A tenant missing from this list keeps whatever quota it already had, and

@@ -71,6 +71,10 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 	for rows.Next() {
 		var t target
 		if err := rows.Scan(&t.findingID, &t.domainID, &t.systemUser, &t.file, &t.signature); err != nil {
+			// A dropped row is an infected file that is never contained while the
+			// pass reports itself as complete.
+			// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
+			log.Printf("antivirus: automatic containment skipped an unreadable finding of scan %d: %v", scanID, err)
 			continue
 		}
 		targets = append(targets, t)

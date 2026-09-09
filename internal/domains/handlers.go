@@ -686,9 +686,11 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		childIDs := make([]int64, 0)
 		for childRows.Next() {
 			var childID int64
-			if childRows.Scan(&childID) == nil {
-				childIDs = append(childIDs, childID)
+			if err := childRows.Scan(&childID); err != nil {
+				log.Printf("addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
+				continue
 			}
+			childIDs = append(childIDs, childID)
 		}
 		if err := childRows.Err(); err != nil {
 			// A child missed here keeps its vhost, its certificate paths and its DNS
@@ -1154,6 +1156,9 @@ func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d DBAccount
 		if err := rows.Scan(&d.ID, &d.DomainID, &d.DBName, &d.DBUser, &d.DBHost, &d.DBPass, &d.CreatedAt); err != nil {
+			// A dropped row is a database the customer owns and cannot see, so it
+			// can be neither opened, nor reset, nor deleted from this screen.
+			log.Printf("databases: skipping an unreadable account row for domain %d: %v", d.DomainID, err)
 			continue
 		}
 		// db_pass_plain is encrypted at rest (bound to db_user); decrypt for the

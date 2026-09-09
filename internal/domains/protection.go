@@ -2,6 +2,7 @@ package domains
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"servika/internal/geoip"
@@ -57,9 +58,13 @@ func (h *Handlers) GetGeo(w http.ResponseWriter, r *http.Request) {
 	countries := make([]string, 0)
 	for rows.Next() {
 		var code string
-		if rows.Scan(&code) == nil {
-			countries = append(countries, code)
+		if err := rows.Scan(&code); err != nil {
+			// A dropped country is one the operator saved and can no longer see or
+			// remove, while the rule it belongs to keeps being enforced.
+			log.Printf("country rules: skipping an unreadable code: %v", err)
+			continue
 		}
+		countries = append(countries, code)
 	}
 	if err := rows.Err(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "country rules could not be read")

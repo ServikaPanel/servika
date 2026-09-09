@@ -237,9 +237,19 @@ func (h *Handlers) scopedDomains(r *http.Request, ids []int64) ([]jobDomain, err
 	out := []jobDomain{}
 	for rows.Next() {
 		var d jobDomain
-		if rows.Scan(&d.ID, &d.SystemUser, &d.DomainName) == nil && validSystemUser(d.SystemUser) {
-			out = append(out, d)
+		if err := rows.Scan(&d.ID, &d.SystemUser, &d.DomainName); err != nil {
+			// A dropped row is a domain the bulk job never touches while its total
+			// says it did.
+			log.Printf("backups: skipping an unreadable job domain row: %v", err)
+			continue
 		}
+		// A name that fails the identifier rule is refused rather than dropped in
+		// silence, because every path below builds a filesystem path from it.
+		if !validSystemUser(d.SystemUser) {
+			log.Printf("backups: refusing a job domain with an invalid system user: domain %d", d.ID)
+			continue
+		}
+		out = append(out, d)
 	}
 	return out, rows.Err()
 }
@@ -540,11 +550,18 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	items := []JobItem{}
 	for rows.Next() {
 		var it JobItem
-		if rows.Scan(&it.BackupID, &it.DomainID, &it.DomainName, &it.SystemUser, &it.SizeBytes, &it.Type) == nil {
-			items = append(items, it)
+		if err := rows.Scan(&it.BackupID, &it.DomainID, &it.DomainName, &it.SystemUser, &it.SizeBytes, &it.Type); err != nil {
+			log.Printf("backups: skipping an unreadable job item row: %v", err)
+			continue
 		}
+		items = append(items, it)
 	}
-	_ = rows.Err()
+	if err := rows.Err(); err != nil {
+		// A short item list beside the job's own counts reads as a job that
+		// produced fewer archives than it did.
+		httpx.WriteError(w, http.StatusInternalServerError, "job detail read failed")
+		return
+	}
 	resp["domains"] = items
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }

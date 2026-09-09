@@ -249,9 +249,13 @@ func domainProtection(domainName string) (geoBlock, rateLimit string) {
 	var countries []string
 	for rows.Next() {
 		var code string
-		if rows.Scan(&code) == nil {
-			countries = append(countries, code)
+		if err := rows.Scan(&code); err != nil {
+			// A dropped country renders as the opposite of the saved rule: let in on
+			// a deny list, refused on an allow list.
+			log.Printf("geo: skipping an unreadable country code for domain %d: %v", domainID, err)
+			continue
 		}
+		countries = append(countries, code)
 	}
 	if err := rows.Err(); err != nil {
 		// A short list renders a country rule that is not the one the operator
@@ -278,10 +282,15 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 	if err == nil {
 		for rows.Next() {
 			var code string
-			if rows.Scan(&code) == nil {
-				if normalized := geoip.NormalizeCountry(code); normalized != "" {
-					seenCountry[normalized] = true
-				}
+			if err := rows.Scan(&code); err != nil {
+				// A country missing from this set is never declared in the shared
+				// nginx file, so every domain asking for it renders a rule nginx
+				// cannot apply.
+				log.Printf("geo: skipping an unreadable per-domain country code: %v", err)
+				continue
+			}
+			if normalized := geoip.NormalizeCountry(code); normalized != "" {
+				seenCountry[normalized] = true
 			}
 		}
 		if err := rows.Err(); err != nil {
@@ -297,10 +306,12 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 		`SELECT country_code FROM firewall_geo_rules WHERE enabled=1`); err == nil {
 		for firewallRows.Next() {
 			var code string
-			if firewallRows.Scan(&code) == nil {
-				if normalized := geoip.NormalizeCountry(code); normalized != "" {
-					seenCountry[normalized] = true
-				}
+			if err := firewallRows.Scan(&code); err != nil {
+				log.Printf("geo: skipping an unreadable firewall country code: %v", err)
+				continue
+			}
+			if normalized := geoip.NormalizeCountry(code); normalized != "" {
+				seenCountry[normalized] = true
 			}
 		}
 		if err := firewallRows.Err(); err != nil {
@@ -318,7 +329,13 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 		`SELECT DISTINCT rate_limit_rps FROM domains WHERE COALESCE(rate_limit_rps,0) > 0`); err == nil {
 		for rateRows.Next() {
 			var rps int
-			if rateRows.Scan(&rps) == nil && ValidRate(rps) && rps > 0 {
+			if err := rateRows.Scan(&rps); err != nil {
+				// A rate missing here declares no zone, and a vhost naming an
+				// undeclared zone fails nginx -t for the WHOLE server.
+				log.Printf("geo: skipping an unreadable rate limit: %v", err)
+				continue
+			}
+			if ValidRate(rps) && rps > 0 {
 				seenRate[rps] = true
 			}
 		}

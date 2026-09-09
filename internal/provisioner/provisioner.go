@@ -2506,7 +2506,16 @@ func HealHomePerms() {
 	migrationSucceeded := aclAvailable()
 	for rows.Next() {
 		var systemUser string
-		if err := rows.Scan(&systemUser); err != nil || !tenantUserPattern.MatchString(systemUser) {
+		if err := rows.Scan(&systemUser); err != nil {
+			// A dropped row is a tenant whose home permissions are never repaired,
+			// while the count reported at the end says the pass covered everything.
+			log.Printf("home permission heal: skipping an unreadable tenant row: %v", err)
+			continue
+		}
+		// A stored name that fails the identifier rule is refused rather than
+		// dropped in silence, because every path below is built from it.
+		if !tenantUserPattern.MatchString(systemUser) {
+			log.Printf("home permission heal: refusing a tenant with an invalid system user")
 			continue
 		}
 		home := filepath.Join("/home", systemUser)
@@ -2776,6 +2785,9 @@ func buildProtectedBlocks(db *sql.DB, domainID, subdomainID int64, socket string
 	for rows.Next() {
 		var path, file string
 		if err := rows.Scan(&path, &file); err != nil {
+			// A dropped row is a protected directory that renders without its
+			// auth_basic, so a path the operator locked is served to everybody.
+			log.Printf("protected directories: skipping an unreadable row: %v", err)
 			continue
 		}
 		if path == "/" {

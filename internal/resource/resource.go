@@ -152,9 +152,13 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		for rows.Next() {
 			var u string
-			if rows.Scan(&u) == nil {
-				dbUsers = append(dbUsers, u)
+			if err := rows.Scan(&u); err != nil {
+				// The length of this list IS the reported database count, so a
+				// dropped row tells the customer they have room they do not have.
+				log.Printf("resource: skipping an unreadable database account for domain %d: %v", id, err)
+				continue
 			}
+			dbUsers = append(dbUsers, u)
 		}
 		if err := rows.Err(); err != nil {
 			// The length of this list IS the reported database count, so a short

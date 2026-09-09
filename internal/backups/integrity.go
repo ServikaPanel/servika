@@ -127,9 +127,13 @@ func verifyBackupIntegrity(db *sql.DB) {
 	var list []record
 	for rows.Next() {
 		var k record
-		if rows.Scan(&k.id, &k.domainID, &k.user, &k.file, &k.storedSHA) == nil {
-			list = append(list, k)
+		if err := rows.Scan(&k.id, &k.domainID, &k.user, &k.file, &k.storedSHA); err != nil {
+			// A dropped row is an archive that is never integrity-checked, so a
+			// corrupt one keeps reading as verified.
+			log.Printf("backups: skipping an unreadable integrity row: %v", err)
+			continue
 		}
+		list = append(list, k)
 	}
 	if err := rows.Err(); err != nil {
 		// A backup missing from this list is never checked, so a corrupt archive

@@ -69,6 +69,9 @@ func HealSubdomainPHPVersions(db *sql.DB) {
 		var id int64
 		var fqdn, recorded, systemUser, parentVersion string
 		if err := rows.Scan(&id, &fqdn, &recorded, &systemUser, &parentVersion); err != nil {
+			// A dropped row is a subdomain whose recorded PHP version is never
+			// corrected, so the panel keeps showing a version it does not serve.
+			log.Printf("php lock heal: skipping an unreadable subdomain row: %v", err)
 			continue
 		}
 		if parentVersion == "" {

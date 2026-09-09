@@ -429,6 +429,9 @@ func (h *Handlers) MigrationList(w http.ResponseWriter, r *http.Request) {
 		var v job
 		if err := rows.Scan(&v.ID, &v.Type, &v.Host, &v.Mode, &v.Status, &v.Total,
 			&v.Completed, &v.Failed, &v.Error, &v.StartedBy, &v.StartedAt, &v.FinishedAt, &v.CreatedAt); err != nil {
+			// A dropped row hides a migration job from the only screen that lists
+			// them, including one still marked running.
+			log.Printf("migrations: skipping an unreadable job row: %v", err)
 			continue
 		}
 		out = append(out, v)
@@ -478,6 +481,9 @@ func (h *Handlers) MigrationDetail(w http.ResponseWriter, r *http.Request) {
 		var v item
 		if err := rows.Scan(&v.ID, &v.SourceAccount, &v.DomainName, &v.Status, &v.DomainID,
 			&v.FileBytes, &v.DBCount, &v.DNSCount, &v.MailCount, &v.Error, &v.StartedAt, &v.FinishedAt); err != nil {
+			// A dropped item beside the job's own counts reads as a migration that
+			// moved sites it did not, and a failed item disappears with it.
+			log.Printf("migrations: skipping an unreadable item row: %v", err)
 			continue
 		}
 		out = append(out, v)

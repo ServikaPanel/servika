@@ -334,9 +334,13 @@ func (h *Handlers) wafPlanReapply(planID int64) {
 	var ids []int64
 	for rows.Next() {
 		var did int64
-		if rows.Scan(&did) == nil {
-			ids = append(ids, did)
+		if err := rows.Scan(&did); err != nil {
+			// A dropped id leaves that domain on its old WAF settings after the plan
+			// changed, and nothing on the plan screen shows it.
+			log.Printf("waf plan reapply: skipping an unreadable domain id: %v", err)
+			continue
 		}
+		ids = append(ids, did)
 	}
 	if err := rows.Err(); err != nil {
 		// A short list silently leaves some of the plan's domains on their old WAF

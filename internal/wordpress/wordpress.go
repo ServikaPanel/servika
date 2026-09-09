@@ -287,6 +287,9 @@ func (h *Handlers) ListAll(w http.ResponseWriter, r *http.Request) {
 		var id int64
 		var systemUser, domainName, cert string
 		if err := rows.Scan(&id, &systemUser, &domainName, &cert); err != nil {
+			// A dropped row is a tenant whose WordPress installations are never
+			// discovered, so they are absent from every server-wide pass.
+			log.Printf("wordpress: skipping an unreadable domain row: %v", err)
 			continue
 		}
 		root := "/home/" + systemUser + "/public_html"

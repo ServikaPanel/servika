@@ -193,7 +193,10 @@ func buildMaintenanceBlock(domainName string) string {
 	if err == nil {
 		for rows.Next() {
 			var value string
-			if rows.Scan(&value) != nil {
+			if err := rows.Scan(&value); err != nil {
+				// A dropped exception is an address that was told it may reach the
+				// site during maintenance and then gets the 503 like everybody else.
+				log.Printf("maintenance: skipping an unreadable exception address for domain %d: %v", domainID, err)
 				continue
 			}
 			// Re-validated here rather than trusted from the write path: this

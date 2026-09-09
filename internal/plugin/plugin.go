@@ -87,6 +87,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		var plugin Plugin
 		var enabled, ui int
 		if err := rows.Scan(&plugin.Name, &plugin.Label, &plugin.Version, &enabled, &ui, &plugin.Health); err != nil {
+			// A dropped row is an installed plugin the operator cannot see, so they
+			// cannot disable or remove it either.
+			log.Printf("plugin list: skipping an unreadable row: %v", err)
 			continue
 		}
 		plugin.Enabled, plugin.UI = enabled == 1, ui == 1

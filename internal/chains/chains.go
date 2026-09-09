@@ -25,6 +25,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -227,11 +228,19 @@ func WriteEvent(db *sql.DB, domainID int64, source, stage, level, summary, path 
 		return
 	}
 	var seen int
-	if db.QueryRow(
+	switch err := db.QueryRow(
 		`SELECT 1 FROM av_events WHERE domain_id=? AND stage=? AND path=?
 		 AND created_at >= (NOW() - INTERVAL ? SECOND) LIMIT 1`,
-		domainID, stage, truncate(path, 500), insertDedupeSec).Scan(&seen) == nil {
-		return
+		domainID, stage, truncate(path, 500), insertDedupeSec).Scan(&seen); {
+	case err == nil:
+		return // already recorded inside the window
+	case errors.Is(err, sql.ErrNoRows):
+		// Not a duplicate; fall through to the insert.
+	default:
+		// A failed check is not an answer. Writing anyway is the safe direction,
+		// because a duplicate event is harmless while a dropped one loses a stage
+		// of the chain, but the failure is said rather than read as "not seen".
+		log.Printf("chains: duplicate check failed for domain %d stage %s: %v", domainID, stage, err)
 	}
 	_, err := db.Exec(
 		`INSERT INTO av_events (domain_id, source, stage, level, summary, path, pid, ref_type, ref_id)
@@ -310,7 +319,13 @@ func windowedDomains(ctx context.Context, db *sql.DB) ([]int64, error) {
 	var out []int64
 	for rows.Next() {
 		var d int64
-		if rows.Scan(&d) == nil && d > 0 {
+		if err := rows.Scan(&d); err != nil {
+			// A dropped id is a tenant whose events are never correlated, so a real
+			// attack chain on that domain is never formed.
+			log.Printf("chains: skipping an unreadable domain id: %v", err)
+			continue
+		}
+		if d > 0 {
 			out = append(out, d)
 		}
 	}
@@ -365,12 +380,16 @@ func domainEvents(db *sql.DB, domainID int64) ([]Event, error) {
 		var path sql.NullString
 		var pid sql.NullInt64
 		var ts sql.NullTime // parseTime=true makes a TIMESTAMP a time.Time, not a string
-		if rows.Scan(&e.Stage, &e.Level, &path, &pid, &ts) == nil {
-			e.Path = path.String
-			e.Pid = int(pid.Int64)
-			e.Time = ts.Time
-			out = append(out, e)
+		if err := rows.Scan(&e.Stage, &e.Level, &path, &pid, &ts); err != nil {
+			// A dropped event weakens the chain the correlator builds from it, so a
+			// chain can fall below the level its evidence actually supports.
+			log.Printf("chains: skipping an unreadable event: %v", err)
+			continue
 		}
+		e.Path = path.String
+		e.Pid = int(pid.Int64)
+		e.Time = ts.Time
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }

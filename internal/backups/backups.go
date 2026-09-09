@@ -142,6 +142,9 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 		var domainName, systemUser, frequency string
 		var hour, retention int
 		if err := rows.Scan(&id, &domainName, &systemUser, &frequency, &hour, &retention); err != nil {
+			// A dropped row leaves a domain out of the server-wide summary and out
+			// of the schedule figures computed from it.
+			log.Printf("backups: skipping an unreadable summary row: %v", err)
 			continue
 		}
 		schedule.add(frequency, hour, retention)
@@ -442,9 +445,12 @@ func pruneManualBackups(db *sql.DB, domainID int64, systemUser string) {
 	var old []item
 	for rows.Next() {
 		var it item
-		if rows.Scan(&it.id, &it.file, &it.remoteStatus) == nil {
-			old = append(old, it)
+		if err := rows.Scan(&it.id, &it.file, &it.remoteStatus); err != nil {
+			// A dropped row is an old backup the retention pass never removes.
+			log.Printf("backups: skipping an unreadable retention row: %v", err)
+			continue
 		}
+		old = append(old, it)
 	}
 	if err := rows.Err(); err != nil {
 		// A short list under-prunes rather than over-prunes, so nothing is lost,

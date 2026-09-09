@@ -191,7 +191,10 @@ func HealWAFOnStartup() {
 	var activeCount int
 	for rows.Next() {
 		var sk string
-		if rows.Scan(&sk) != nil {
+		if err := rows.Scan(&sk); err != nil {
+			// A dropped row is a tenant whose WAF configuration is never written and
+			// who is missing from the count reported below.
+			log.Printf("waf heal: skipping an unreadable domain row: %v", err)
 			continue
 		}
 		active, engine, paranoia := WAFEffective(packageDB, sk)

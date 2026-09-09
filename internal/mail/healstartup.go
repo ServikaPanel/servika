@@ -30,6 +30,9 @@ func HealMailOnStartup(ctx context.Context, db *sql.DB) {
 		var systemUser, root string
 		var uid, gid int
 		if err := rows.Scan(&systemUser, &uid, &gid, &root); err != nil {
+			// A dropped row is a tenant whose Maildir root is never created, so
+			// delivery for that domain fails with nothing here saying why.
+			log.Printf("mail heal: skipping an unreadable Maildir row: %v", err)
 			continue
 		}
 		if _, err := os.Stat(root); err != nil {

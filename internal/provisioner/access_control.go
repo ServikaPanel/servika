@@ -35,7 +35,16 @@ func buildIPRules(domainName string) string {
 	count := 0
 	for rows.Next() {
 		var ipCIDR string
-		if rows.Scan(&ipCIDR) != nil || !validNginxIPRule(ipCIDR) {
+		if err := rows.Scan(&ipCIDR); err != nil {
+			// A dropped rule renders as the opposite of what the operator saved: a
+			// missing deny lets that address in, a missing allow shuts it out.
+			log.Printf("access control: skipping an unreadable IP rule for domain %d: %v", domainID, err)
+			continue
+		}
+		// A stored value that is not a valid nginx address is refused rather than
+		// dropped in silence, because it would otherwise fail the whole reload.
+		if !validNginxIPRule(ipCIDR) {
+			log.Printf("access control: refusing an invalid stored IP rule for domain %d", domainID)
 			continue
 		}
 		builder.WriteString("    ")

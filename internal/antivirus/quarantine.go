@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -292,9 +293,14 @@ func (h *Handlers) QuarantineAll(w http.ResponseWriter, r *http.Request) {
 	ids := []int64{}
 	for rows.Next() {
 		var findingID int64
-		if rows.Scan(&findingID) == nil {
-			ids = append(ids, findingID)
+		if err := rows.Scan(&findingID); err != nil {
+			// A dropped id is a finding the bulk action silently does not act on,
+			// while the count it reports says it did.
+			// #nosec G706 -- the logged value is a database error; no raw tenant string with CR/LF reaches the log.
+			log.Printf("antivirus: skipping an unreadable finding id: %v", err)
+			continue
 		}
+		ids = append(ids, findingID)
 	}
 	_ = rows.Close()
 	if err := rows.Err(); err != nil {
@@ -339,6 +345,10 @@ func (h *Handlers) QuarantineList(w http.ResponseWriter, r *http.Request) {
 		var restored sql.NullString
 		if err := rows.Scan(&entry.ID, &findingID, &rel, &entry.Size,
 			&entry.Signature, &entry.Engine, &entry.CreatedAt, &restored); err != nil {
+			// A dropped row is a held file the operator is never shown, so it can
+			// neither be restored nor deleted from the screen that owns it.
+			// #nosec G706 -- the logged value is a database error; no raw tenant string with CR/LF reaches the log.
+			log.Printf("antivirus: skipping an unreadable quarantine entry: %v", err)
 			continue
 		}
 		if findingID.Valid {
