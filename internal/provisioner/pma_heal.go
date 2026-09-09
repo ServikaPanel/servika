@@ -43,6 +43,22 @@ declare(strict_types=1);
 
 session_name('pma_signon');
 ini_set('session.cookie_path', '/');
+// Session hardening, applied before the session is started because PHP reads
+// these settings when it opens the session.
+//   use_strict_mode: PHP refuses a session id that is not already in its own
+//     store, so an attacker cannot fixate an id of their choosing on a victim.
+//   cookie_httponly: script cannot read the cookie, so an XSS anywhere on the
+//     host cannot lift the sign-on session.
+//   cookie_samesite=Lax: a cross-site request carries no cookie, while the
+//     top-level redirect Servika itself performs still does.
+//   cookie_secure is conditional: forcing it on a plain-HTTP installation would
+//     make the browser drop the cookie and sign-on would stop working.
+ini_set('session.use_strict_mode', '1');
+ini_set('session.cookie_httponly', '1');
+ini_set('session.cookie_samesite', 'Lax');
+if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+    ini_set('session.cookie_secure', '1');
+}
 session_start();
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
