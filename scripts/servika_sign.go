@@ -159,7 +159,18 @@ func signRules(keyPath, rulesPath, out string, version int) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(out, packaged, 0o644); err != nil { // #nosec G306 -- a signed artefact meant to be published
+	// os.WriteFile is kept rather than OpenFile: it truncates, and a package that
+	// shrank between two runs would otherwise keep the tail of the previous one
+	// and fail its own signature check.
+	if err := os.WriteFile(out, packaged, 0o600); err != nil {
+		return err
+	}
+	// WriteFile applies its mode only when it creates the file, and umask can
+	// widen it further, so an existing artefact keeps whatever mode it had. The
+	// explicit chmod is what actually narrows it. This runs on the maintainer's
+	// own machine before the artefact is uploaded; publishing it is the upload's
+	// job, not the local file's.
+	if err := os.Chmod(out, 0o600); err != nil {
 		return err
 	}
 	fmt.Printf("signed rule package: %s (version %d, %d rules the scanner will use, %d bytes)\n",
@@ -182,7 +193,12 @@ func signDetached(keyPath, target string) error {
 	}
 	signature := ed25519.Sign(key, body)
 	out := target + ".sig"
-	if err := os.WriteFile(out, signature, 0o644); err != nil { // #nosec G306 -- a signature meant to be published
+	if err := os.WriteFile(out, signature, 0o600); err != nil {
+		return err
+	}
+	// Same reason as the package above: the mode only lands on creation, so an
+	// existing .sig keeps its old one until this chmod narrows it.
+	if err := os.Chmod(out, 0o600); err != nil {
 		return err
 	}
 	fmt.Printf("detached signature: %s (%d bytes over %d bytes of %s)\n",
