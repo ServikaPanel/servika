@@ -207,14 +207,19 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	}
 	switch {
 	case settings.Databases && len(account.Databases) > 0:
-		mapping, dbPass, dbErr := h.migrateDatabases(ctx, source, account, systemUser, result, logf)
+		mapping, dbPass, keptOriginal, dbErr := h.migrateDatabases(ctx, source, account, systemUser, webRoot, result, logf)
 		if dbErr != nil {
 			// A silent success here would publish the customer's site with an
 			// EMPTY database, so the whole item must fail.
 			return nil, dbErr
 		}
-		if n := rewriteSiteConfigs(webRoot, mapping, dbPass, logf); n > 0 {
-			logf("%d configuration file(s) updated (database connection)", n)
+		// Nothing to rewrite when the databases kept their own name, user and
+		// password: the configuration already describes the connection that now
+		// exists, and rewriting it would only risk breaking a file that is correct.
+		if !keptOriginal {
+			if n := rewriteSiteConfigs(webRoot, mapping, dbPass, logf); n > 0 {
+				logf("%d configuration file(s) updated (database connection)", n)
+			}
 		}
 	case settings.Databases:
 		// A database was requested but none was found, even in the config. Say
@@ -323,10 +328,21 @@ type dbTarget struct{ Name, User string }
 // value is safe and REQUIRED: otherwise there is no password to write into
 // wp-config and the site answers "Access denied".
 func (h *Handlers) migrateDatabases(ctx context.Context, source *RemoteSource, account RemoteAccount,
-	systemUser string, result *MigrationResult, logf func(string, ...any)) (map[string]dbTarget, string, error) {
+	systemUser, webRoot string, result *MigrationResult, logf func(string, ...any)) (map[string]dbTarget, string, bool, error) {
 
 	targetUser := systemUser + "_db"
 	dbPass := credentials.RandomPassword(24)
+
+	// When the source site's own name, user and password can all be kept, the
+	// configuration never has to be rewritten and the database keeps the name its
+	// owner knows. The decision is taken for the whole migration rather than per
+	// database, because rewriteSiteConfigs writes ONE user and ONE password
+	// across every configuration file it finds.
+	keepOriginal := false
+	if user, password, ok := h.keepOriginalIdentity(ctx, account, webRoot); ok {
+		targetUser, dbPass, keepOriginal = user, password, true
+		logf("keeping the source database name, user and password; the site configuration is left untouched")
+	}
 
 	mapping := map[string]dbTarget{}
 	userCreated := false
@@ -336,11 +352,15 @@ func (h *Handlers) migrateDatabases(ctx context.Context, source *RemoteSource, a
 		if !reRemoteDBName.MatchString(sourceDB) {
 			continue
 		}
-		targetName, err := h.uniqueTargetDB(ctx, systemUser, sourceDB, account.SourceAccount)
-		if err != nil {
-			logf("warning: could not build a target name for %s: %v", sourceDB, err)
-			failed = append(failed, sourceDB)
-			continue
+		targetName := sourceDB
+		if !keepOriginal {
+			var err error
+			targetName, err = h.uniqueTargetDB(ctx, systemUser, sourceDB, account.SourceAccount)
+			if err != nil {
+				logf("warning: could not build a target name for %s: %v", sourceDB, err)
+				failed = append(failed, sourceDB)
+				continue
+			}
 		}
 		logf("database: %s -> %s", sourceDB, targetName)
 
@@ -367,9 +387,152 @@ func (h *Handlers) migrateDatabases(ctx context.Context, source *RemoteSource, a
 	}
 
 	if len(failed) > 0 {
-		return mapping, dbPass, fmt.Errorf("database migration failed: %s", strings.Join(failed, ", "))
+		return mapping, dbPass, keepOriginal, fmt.Errorf("database migration failed: %s", strings.Join(failed, ", "))
 	}
-	return mapping, dbPass, nil
+	return mapping, dbPass, keepOriginal, nil
+}
+
+// keepOriginalIdentity reports the source site's own database user and password
+// when the whole migration can run under them, so no configuration file has to
+// be touched. Every condition must hold; anything in the way returns false and
+// the caller takes the unique-name path it has always taken.
+//
+// The value read here is the password of a LIVE account on the source, so it is
+// used only to create the same account on this server and is never logged.
+func (h *Handlers) keepOriginalIdentity(ctx context.Context, account RemoteAccount, webRoot string) (string, string, bool) {
+	user, password := configDBIdentity(webRoot)
+	// Without both halves there is nothing to keep: creating the account with a
+	// password the site does not use would leave it unable to connect, which is
+	// worse than renaming the database.
+	if user == "" || password == "" {
+		return "", "", false
+	}
+	// The user reaches CREATE USER through credentials, which accepts only
+	// [A-Za-z0-9_]. reRemoteDBName is wider (it also allows $ and -), so the
+	// narrower rule is the one that decides here.
+	if !credentials.ValidDBIdentifier(user) || remoteSystemDBs[strings.ToLower(user)] {
+		return "", "", false
+	}
+	// An account that already exists belongs to somebody else on this server, and
+	// taking it over would hand this site their grants.
+	if h.dbUserExists(ctx, user) {
+		return "", "", false
+	}
+	if len(account.Databases) == 0 {
+		return "", "", false
+	}
+	for _, name := range account.Databases {
+		if !reRemoteDBName.MatchString(name) || !credentials.ValidDBIdentifier(name) ||
+			remoteSystemDBs[strings.ToLower(name)] {
+			return "", "", false
+		}
+		if !h.dbNameAvailable(ctx, name) {
+			return "", "", false
+		}
+	}
+	return user, password, true
+}
+
+// dbUserExists reports whether a local MySQL account of this name is already
+// there. It FAILS CLOSED in both directions that matter: a name the allowlist
+// refuses, and a query that could not be answered, are both reported as
+// existing, so the caller declines to keep the original identity and falls back
+// to the unique-name path rather than acting on an unknown.
+//
+// The name is concatenated into the statement because the mysql CLI takes no
+// placeholders, and the panel's own connection cannot read mysql.user (it is
+// granted on panel.* alone), which is why this goes over the root socket at all.
+// The allowlist is therefore the whole boundary and is checked first.
+func (h *Handlers) dbUserExists(ctx context.Context, user string) bool {
+	if !credentials.ValidDBIdentifier(user) {
+		return true
+	}
+	out, err := newTransferCommand(ctx, "mysql", "-N", "-B", "-e",
+		"SELECT COUNT(*) FROM mysql.user WHERE User='"+user+"' AND Host='localhost'").Output()
+	if err != nil {
+		return true
+	}
+	return strings.TrimSpace(string(out)) != "0"
+}
+
+// dbNameAvailable reports whether the target server has no schema of this name.
+// It fails closed the same way: an unanswerable query reads as taken.
+func (h *Handlers) dbNameAvailable(ctx context.Context, name string) bool {
+	if !credentials.ValidDBIdentifier(name) {
+		return false
+	}
+	out, err := newTransferCommand(ctx, "mysql", "-N", "-B", "-e",
+		"SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='"+name+"'").Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "0"
+}
+
+// configDBIdentity reads the database user and password out of the site's own
+// configuration, which the file step has already copied onto this server. It
+// reuses the same key sets and value reader configDBNames uses, so it covers
+// every configuration shape that function already understands.
+func configDBIdentity(webRoot string) (string, string) {
+	var user, password string
+	for _, rel := range configCandidates {
+		path := filepath.Join(webRoot, rel)
+		st, err := os.Lstat(path)
+		if err != nil || !st.Mode().IsRegular() || st.Size() > 4<<20 {
+			continue
+		}
+		// #nosec G304 -- path is a fixed configuration path joined onto the migration's own web root; tenant file reads go through safeio (openat2), not this call.
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		u, p := configDBIdentityFrom(string(raw))
+		if u != "" && p != "" {
+			return u, p
+		}
+		// A file may carry only one of the two; keep the first of each seen.
+		if user == "" {
+			user = u
+		}
+		if password == "" {
+			password = p
+		}
+	}
+	return user, password
+}
+
+// configDBIdentityFrom pulls the user and password out of one configuration
+// file's text.
+func configDBIdentityFrom(body string) (string, string) {
+	var user, password string
+	for line := range strings.SplitSeq(body, "\n") {
+		m := reConfigKeyLine.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		value, _ := extractConfigValue(m[3])
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		switch {
+		case user == "" && matchesKey(m[2], dbUserKeys):
+			user = value
+		case password == "" && matchesKey(m[2], dbPassKeys):
+			password = value
+		}
+	}
+	return user, password
+}
+
+// matchesKey reports whether a configuration key is one of the given names.
+func matchesKey(key string, names []string) bool {
+	for _, n := range names {
+		if strings.EqualFold(key, n) {
+			return true
+		}
+	}
+	return false
 }
 
 // uniqueTargetDB maps "olduser_wp" to "<systemUser>_wp". Instead of TRUNCATING

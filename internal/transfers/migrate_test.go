@@ -69,3 +69,87 @@ func TestConfigDBNamesRefusesInvalid(t *testing.T) {
 		t.Fatalf("an invalid name was returned: %v", got)
 	}
 }
+
+// The identity reader has to cover the same configuration shapes configDBNames
+// already understands, because the two read the same files.
+func TestConfigDBIdentityReadsTheUserAndPassword(t *testing.T) {
+	cases := map[string]struct{ file, body, user, password string }{
+		"wordpress": {
+			file: "wp-config.php",
+			body: "<?php\ndefine('DB_NAME', 'acme_wp');\ndefine('DB_USER', 'acme_user');\ndefine('DB_PASSWORD', 's3cr3t');\n",
+			user: "acme_user", password: "s3cr3t",
+		},
+		"laravel": {
+			file: ".env",
+			body: "DB_DATABASE=acme_app\nDB_USERNAME=acme_user\nDB_PASSWORD=s3cr3t\n",
+			user: "acme_user", password: "s3cr3t",
+		},
+	}
+	for name, c := range cases {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, c.file), []byte(c.body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		user, password := configDBIdentity(root)
+		if user != c.user || password != c.password {
+			t.Errorf("%s: got (%q, %q), want (%q, %q)", name, user, password, c.user, c.password)
+		}
+	}
+}
+
+// A configuration that names no credentials yields nothing, so the caller
+// declines to keep the original identity rather than creating an account with
+// half of one.
+func TestConfigDBIdentityOnAConfigWithoutCredentials(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "wp-config.php"),
+		[]byte("<?php\ndefine('DB_NAME', 'acme_wp');\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	user, password := configDBIdentity(root)
+	if user != "" || password != "" {
+		t.Fatalf("got (%q, %q), want both empty", user, password)
+	}
+}
+
+// Both guards decide whether the migration may take over a name, and both are
+// asked about values that reach a mysql statement by concatenation. A name the
+// allowlist refuses must read as "taken" rather than being sent to the server,
+// so the migration falls back instead of acting on an unknown.
+func TestTheDatabaseGuardsFailClosedOnAnUnvalidatedName(t *testing.T) {
+	h := &Handlers{}
+	hostile := []string{
+		"acme'; DROP USER 'root'@'localhost'; --",
+		"acme user",
+		"acme-user", // reRemoteDBName allows it, ValidDBIdentifier does not
+		"acme$user", // same
+		"",
+	}
+	for _, name := range hostile {
+		if !h.dbUserExists(t.Context(), name) {
+			t.Errorf("dbUserExists(%q) reported the account as free", name)
+		}
+		if h.dbNameAvailable(t.Context(), name) {
+			t.Errorf("dbNameAvailable(%q) reported the name as available", name)
+		}
+	}
+}
+
+// keepOriginalIdentity must refuse as soon as either half of the credentials is
+// missing, before it asks the server anything.
+func TestKeepOriginalIdentityRefusesAnIncompleteConfiguration(t *testing.T) {
+	h := &Handlers{}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".env"),
+		[]byte("DB_DATABASE=acme_app\nDB_USERNAME=acme_user\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	account := RemoteAccount{Databases: []string{"acme_app"}}
+	if _, _, ok := h.keepOriginalIdentity(t.Context(), account, root); ok {
+		t.Error("a configuration with no password was accepted")
+	}
+	// No configuration at all is the same answer.
+	if _, _, ok := h.keepOriginalIdentity(t.Context(), account, t.TempDir()); ok {
+		t.Error("a web root with no configuration was accepted")
+	}
+}
