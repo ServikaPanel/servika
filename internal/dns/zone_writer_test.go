@@ -155,3 +155,33 @@ func TestZoneTemplateWritesPriorityOnlyForSupportedTypes(t *testing.T) {
 		t.Fatalf("SRV record does not contain its zero priority:\n%s", zone)
 	}
 }
+
+// Both the write and the delete path build a file name under ZoneDir from a
+// value read back out of a row, so each asks zoneLeafName first. The gate is
+// checked in both directions: an ordinary domain passes, and every shape that
+// would place the path outside ZoneDir is refused.
+func TestZoneLeafNameGuardsBothZonePaths(t *testing.T) {
+	for _, name := range []string{"example.com", "sub.example.com", "xn--pta-6la.com"} {
+		if !zoneLeafName(name) {
+			t.Errorf("zoneLeafName(%q) refused an ordinary domain", name)
+		}
+	}
+	for _, name := range []string{
+		"", "..", "../../etc/named.conf", "/etc/named",
+		`sub\..\..\evil`, "example.com/../../../var/named/other.com",
+	} {
+		if zoneLeafName(name) {
+			t.Errorf("zoneLeafName(%q) was accepted", name)
+		}
+	}
+}
+
+// DeleteZone removes a file, so its gate is the one that decides whether an
+// arbitrary path ending in ".zone" can be deleted from a tampered row.
+func TestDeleteZoneRefusesANameThatIsNotALeaf(t *testing.T) {
+	for _, name := range []string{"../../etc/named.conf", "..", "/etc/named", ""} {
+		if err := DeleteZone(t.Context(), nil, name); err == nil {
+			t.Errorf("DeleteZone(%q) was accepted", name)
+		}
+	}
+}

@@ -160,7 +160,7 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 	// the row here and a row outlives the code that wrote it. It becomes the leaf
 	// of the zone path below, and of the .bak and .tmp paths beside it, so a
 	// separator or a ".." would place all three outside ZoneDir.
-	if strings.ContainsAny(domainName, `/\`) || strings.Contains(domainName, "..") {
+	if !zoneLeafName(domainName) {
 		return fmt.Errorf("invalid domain name for a zone file: %q", domainName)
 	}
 	rows, err := db.QueryContext(ctx,
@@ -310,7 +310,24 @@ func HealZoneIncludes(ctx context.Context, db *sql.DB) error {
 }
 
 // DeleteZone removes a domain's BIND zone file and reloads the zone list.
+// zoneLeafName reports whether a domain name may become the leaf of a path
+// under ZoneDir. Both the write and the delete path build a file name from a
+// value read back out of a row, and a row outlives the code that wrote it, so
+// each asks this before it touches the filesystem.
+func zoneLeafName(domainName string) bool {
+	return domainName != "" &&
+		!strings.ContainsAny(domainName, `/\`) &&
+		!strings.Contains(domainName, "..")
+}
+
 func DeleteZone(ctx context.Context, db *sql.DB, domainName string) error {
+	// The same gate WriteZone carries, on the path that REMOVES a file rather
+	// than writing one. The caller reads the name out of a row, so a separator or
+	// a ".." in that column would delete an arbitrary file whose name happens to
+	// end in ".zone".
+	if !zoneLeafName(domainName) {
+		return fmt.Errorf("invalid domain name for a zone file: %q", domainName)
+	}
 	_ = os.Remove(filepath.Join(ZoneDir, domainName+".zone"))
 	_ = updateZoneIncludes(ctx, db)
 	reloadNamed()
