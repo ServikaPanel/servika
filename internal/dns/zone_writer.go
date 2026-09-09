@@ -174,9 +174,16 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 	records := make([]Record, 0)
 	for rows.Next() {
 		record, err := scan(rows)
-		if err == nil {
-			records = append(records, record)
+		if err != nil {
+			// A dropped row is a record that silently disappears from the zone this
+			// function is about to serve, so the write fails instead. Leaving the
+			// previous zone in place is the safe outcome; a short zone is not.
+			return err
 		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 	if len(records) == 0 {
 		return nil
