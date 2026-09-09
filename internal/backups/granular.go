@@ -392,7 +392,15 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 			if _, e := db.Exec(
 				`INSERT INTO db_accounts (domain_id, db_name, db_user, db_pass_plain, db_host) VALUES (?,?,'','','localhost')`,
 				domainID, name); e == nil {
-				status = "restored (panel record recreated — set a database user)"
+				// The row exists but names no account, so the data is back and the
+				// site still cannot connect. Ask MySQL and then the site's own
+				// configuration for the account before telling the operator to
+				// create one by hand.
+				if extra := completeIdentity(ctx, db, domainID, systemUser, name); extra != "" {
+					status = "restored (" + extra + ")"
+				} else {
+					status = "restored (panel record recreated — set a database user)"
+				}
 			} else {
 				status = "restored (not registered in the panel — add it under Databases)"
 			}
