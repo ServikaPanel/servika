@@ -156,6 +156,13 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 	if err := db.QueryRowContext(ctx, `SELECT domain_name FROM domains WHERE id=?`, domainID).Scan(&domainName); err != nil {
 		return err
 	}
+	// The name is validated where a domain is created, but it is read back from
+	// the row here and a row outlives the code that wrote it. It becomes the leaf
+	// of the zone path below, and of the .bak and .tmp paths beside it, so a
+	// separator or a ".." would place all three outside ZoneDir.
+	if strings.ContainsAny(domainName, `/\`) || strings.Contains(domainName, "..") {
+		return fmt.Errorf("invalid domain name for a zone file: %q", domainName)
+	}
 	rows, err := db.QueryContext(ctx,
 		`SELECT id, domain_id, name, type, value, ttl, priority, enabled,
 		   DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') FROM dns_records
