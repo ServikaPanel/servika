@@ -1,0 +1,13 @@
+-- domain_redis.redis_pass moves to at-rest encryption, so the column has to
+-- hold ciphertext rather than the password itself.
+--
+-- secret.EncryptWith writes "enc:v1:" followed by base64 of the nonce, the
+-- ciphertext and the GCM tag. Measured against this tree's own secret package,
+-- the 36-character password genPass produces seals to 95 characters, and a
+-- 64-character one to 131. The column was VARCHAR(64) (migration 0023), which
+-- holds none of them: MariaDB in strict mode answers Error 1406 and the whole
+-- Redis enable path fails rather than degrading.
+--
+-- 255 leaves room for a longer password without a further ALTER. MODIFY is
+-- idempotent, so re-applying the same type is harmless.
+ALTER TABLE domain_redis MODIFY redis_pass VARCHAR(255) NOT NULL;

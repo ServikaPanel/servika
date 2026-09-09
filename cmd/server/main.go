@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -160,6 +162,73 @@ func printPortsIfAsked() bool {
 	return true
 }
 
+// printRedisPasswordIfAsked answers "-redis-pass <domain_id>" and reports
+// whether it did.
+//
+// domain_redis.redis_pass holds ciphertext sealed against the row's own
+// system_user. assets/ops/servika-wp-redis.sh used to read that column with the
+// mysql client and write the value straight into wp-config; with encryption in
+// place it would write the sealed text as though it were the password, and the
+// site's cache would fail to authenticate with nothing saying why. The shell
+// cannot unseal it, so the panel answers instead.
+//
+// The flag is read from os.Args by hand rather than through the flag package,
+// which stops parsing at the first positional and would ignore an option placed
+// after one. The password goes to stdout and nowhere else: it is never an
+// argument, so it never reaches /proc/<pid>/cmdline, which every account on the
+// host can read.
+func printRedisPasswordIfAsked(d *sql.DB) bool {
+	if len(os.Args) < 3 || (os.Args[1] != "-redis-pass" && os.Args[1] != "--redis-pass") {
+		return false
+	}
+	domainID, err := strconv.ParseInt(os.Args[2], 10, 64)
+	if err != nil || domainID <= 0 {
+		fmt.Fprintf(os.Stderr, "invalid domain id: %q\n", os.Args[2])
+		os.Exit(1)
+	}
+	password, err := redis.Password(context.Background(), d, domainID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "the redis password could not be read: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(password)
+	return true
+}
+
+// saveRedisPasswordIfAsked answers "-redis-pass-set <domain_id> <system_user>"
+// and reports whether it did.
+//
+// It is the write half of the reader above, and it exists for two reasons. The
+// value has to be SEALED before it reaches the column, which a shell cannot do;
+// and the statement it replaces was built by interpolating two shell variables
+// into SQL inside assets/ops/servika-wp-redis.sh, so moving it here takes that
+// construction out of the script entirely.
+//
+// The password arrives on STDIN, never as an argument, because
+// /proc/<pid>/cmdline is readable by every account on the host.
+func saveRedisPasswordIfAsked(d *sql.DB) bool {
+	if len(os.Args) < 4 || (os.Args[1] != "-redis-pass-set" && os.Args[1] != "--redis-pass-set") {
+		return false
+	}
+	domainID, err := strconv.ParseInt(os.Args[2], 10, 64)
+	if err != nil || domainID <= 0 {
+		fmt.Fprintf(os.Stderr, "invalid domain id: %q\n", os.Args[2])
+		os.Exit(1)
+	}
+	systemUser := os.Args[3]
+	raw, err := io.ReadAll(io.LimitReader(os.Stdin, 4096))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "the password could not be read from stdin: %v\n", err)
+		os.Exit(1)
+	}
+	if err := redis.SavePassword(context.Background(), d, domainID, systemUser,
+		strings.TrimRight(string(raw), "\r\n")); err != nil {
+		fmt.Fprintf(os.Stderr, "the redis password could not be saved: %v\n", err)
+		os.Exit(1)
+	}
+	return true
+}
+
 func main() {
 	if printPortsIfAsked() {
 		return
@@ -223,6 +292,20 @@ func main() {
 	}
 	defer func() { _ = d.Close() }()
 
+	// The Redis password reader answers here rather than beside the workers
+	// above, because unsealing a value needs BOTH the encryption key and the
+	// database, which is exactly what the lines above have just prepared. It
+	// exists so assets/ops/servika-wp-redis.sh can reuse a tenant's existing
+	// password without holding the key itself: the column is ciphertext now, and
+	// a shell reading it directly would write the sealed text into wp-config as
+	// if it were the password.
+	if printRedisPasswordIfAsked(d) {
+		return
+	}
+	if saveRedisPasswordIfAsked(d) {
+		return
+	}
+
 	// migrations
 	runMigrations(d)
 	// Hash any FTP passwords still stored as legacy cleartext, so the switch to
@@ -242,6 +325,9 @@ func main() {
 	// Encrypt the remaining credentials that were stored before their column
 	// gained encryption (GitHub PATs, remote backup passwords). Idempotent.
 	datamigrate.EncryptStoredCredentials(context.Background(), d)
+	// The Redis ACL passwords get their own pass, because each is sealed against
+	// the row's own system_user rather than with the unbound key. Idempotent.
+	datamigrate.EncryptRedisPasswords(context.Background(), d)
 	provisioner.Init(d)
 	// swap is the only buffer before the OOM-killer, which on a swapless host
 	// killed MariaDB and took every site down (2026-08-22 incident). The drop-ins

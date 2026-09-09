@@ -94,9 +94,17 @@ echo "==== Attaching Redis: $SYSTEM_USER ===="
 [ ${#DIRS[@]} -eq 0 ] && { echo "  WARNING: no WordPress installation found under /home/$SYSTEM_USER/public_html"; }
 
 # Reuse the password from the database record or generate a new one.
+#
+# The column is ciphertext, sealed against the row's own system_user, so reading
+# it with the mysql client would hand back the sealed text and this script would
+# write THAT into wp-config as the password. The panel holds the key and answers
+# with the password itself; this script never sees the key.
+#
+# A failure here is not fatal: the pattern check below falls through to a freshly
+# generated password, which is what happens for a domain with no record anyway.
 PASS=""
 if [ -n "$DID" ]; then
-  PASS=$(mysql -u root panel --batch --raw --skip-column-names -e "SELECT redis_pass FROM domain_redis WHERE domain_id=$DID AND enabled=1;" 2>/dev/null)
+  PASS=$("${SERVIKA_BIN:-/opt/servika/bin/servika-server}" -redis-pass "$DID" 2>/dev/null) || PASS=""
 fi
 [[ "$PASS" =~ ^[a-f0-9]{36}$ ]] || PASS=$(openssl rand -hex 18)
 
@@ -108,11 +116,17 @@ say "ACL user ready: $SYSTEM_USER (~$SYSTEM_USER:*)"
 
 # 2) Panel database record used to report the feature as active
 if [ -n "$DID" ]; then
-  mysql -u root panel 2>/dev/null <<SQL
-INSERT INTO domain_redis (domain_id, system_user, redis_pass, enabled) VALUES ($DID,'$SYSTEM_USER','$PASS',1)
-  ON DUPLICATE KEY UPDATE system_user=VALUES(system_user), redis_pass=VALUES(redis_pass), enabled=1;
-SQL
-  say "panel database record updated (domain #$DID)"
+  # The panel writes this row, for two reasons. The column is ciphertext and a
+  # shell cannot seal a value; and the statement this replaces interpolated two
+  # shell variables straight into SQL, which is now gone from this script.
+  # The password travels on stdin, never as an argument, because every account
+  # on the host can read /proc/<pid>/cmdline.
+  if printf '%s' "$PASS" | "${SERVIKA_BIN:-/opt/servika/bin/servika-server}" \
+       -redis-pass-set "$DID" "$SYSTEM_USER" 2>/dev/null; then
+    say "panel database record updated (domain #$DID)"
+  else
+    say "WARNING: the panel database record could not be updated (domain #$DID)"
+  fi
 fi
 
 # 3) Configure each WordPress installation.

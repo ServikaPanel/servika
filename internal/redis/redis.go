@@ -5,6 +5,7 @@
 package redis
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -21,6 +22,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/secret"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -242,6 +244,55 @@ func wpSnippet(systemUser, password string) string {
 }
 
 // GET /domains/{id}/redis
+// Password returns the tenant's Redis ACL password in the clear.
+//
+// The column holds ciphertext sealed with the row's OWN system_user as the
+// additional authenticated data, so a value copied into another tenant's row
+// does not open. That is why the query reads system_user back rather than
+// taking it from the caller: the AAD has to be the one the value was sealed
+// with, which survives a rename of the column the caller happens to hold.
+//
+// A row written before encryption existed carries no prefix and secret.Decrypt
+// returns it unchanged, so an install that predates this keeps working.
+func Password(ctx context.Context, db *sql.DB, domainID int64) (string, error) {
+	var rowSystemUser, stored string
+	var enabled int
+	err := db.QueryRowContext(ctx,
+		`SELECT enabled, system_user, redis_pass FROM domain_redis WHERE domain_id=?`,
+		domainID).Scan(&enabled, &rowSystemUser, &stored)
+	if err != nil {
+		return "", err
+	}
+	if enabled == 0 {
+		return "", errors.New("redis is not enabled for this domain")
+	}
+	return secret.DecryptWith(stored, rowSystemUser)
+}
+
+// SavePassword seals a tenant's Redis ACL password and writes the row.
+//
+// It is the one place outside the HTTP handler that records this credential, so
+// the sealing cannot be skipped by a caller that builds the statement itself.
+// The system_user is validated first because it is both the AAD the value is
+// sealed against and the name every later read binds to.
+func SavePassword(ctx context.Context, db *sql.DB, domainID int64, systemUser, password string) error {
+	if !systemUserPattern.MatchString(systemUser) {
+		return fmt.Errorf("invalid system user: %q", systemUser)
+	}
+	if password == "" {
+		return errors.New("the password is empty")
+	}
+	sealed, err := secret.EncryptWith(password, systemUser)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO domain_redis (domain_id, system_user, redis_pass, enabled) VALUES (?,?,?,1)
+		 ON DUPLICATE KEY UPDATE system_user=VALUES(system_user), redis_pass=VALUES(redis_pass), enabled=1`,
+		domainID, systemUser, sealed)
+	return err
+}
+
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	id, systemUser, ok := h.domainSystemUser(r)
 	if !ok {
@@ -278,10 +329,21 @@ func (h *Handlers) Open(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "redis ACL could not be created")
 		return
 	}
+	sealed, err := secret.EncryptWith(password, systemUser)
+	if err != nil {
+		if err := disableUser(systemUser); err != nil {
+			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+			log.Printf("redis enable rollback ACL user %s: %v", systemUser, err)
+		}
+		// #nosec G706 -- logged values are a validated identifier and an error; no raw tenant string with CR/LF reaches the log.
+		log.Printf("redis enable: could not seal the password for %s: %v", systemUser, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "redis settings could not be saved")
+		return
+	}
 	if _, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO domain_redis (domain_id, system_user, redis_pass, enabled) VALUES (?,?,?,1)
 		 ON DUPLICATE KEY UPDATE system_user=VALUES(system_user), redis_pass=VALUES(redis_pass), enabled=1`,
-		id, systemUser, password); err != nil {
+		id, systemUser, sealed); err != nil {
 		if err := disableUser(systemUser); err != nil { // Roll back the ACL if the database write fails.
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("redis enable rollback ACL user %s: %v", systemUser, err)
