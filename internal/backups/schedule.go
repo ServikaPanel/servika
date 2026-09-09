@@ -114,6 +114,11 @@ func tickOnce(db *sql.DB) {
 		}
 		due = append(due, d)
 	}
+	if err := rows.Err(); err != nil {
+		// A domain missing from this list is simply not backed up tonight, and the
+		// only sign is a gap in its archive list weeks later.
+		log.Printf("backup scheduler: could not read the due domain list: %v", err)
+	}
 
 	if len(due) == 0 {
 		return
@@ -209,6 +214,11 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 			continue
 		}
 		all = append(all, it)
+	}
+	if err := rows.Err(); err != nil {
+		// A short list under-prunes rather than over-prunes, so nothing is lost,
+		// but the retention the operator set is quietly not the one being applied.
+		log.Printf("backups: could not read the retention list for %s: %v", systemUser, err)
 	}
 	_ = rows.Close()
 	if len(all) <= retention {

@@ -15,6 +15,7 @@ package chains
 import (
 	"context"
 	"database/sql"
+	"log"
 	"net/http"
 	"strings"
 
@@ -149,6 +150,14 @@ func (h *Handlers) chainEvents(ctx context.Context, domID int64, at, cond string
 		}
 		e.StageName = StageName(e.Stage)
 		out = append(out, e)
+	}
+	if err := rows.Err(); err != nil {
+		// No timeline rather than half of one, which is what the read-error
+		// behaviour above already promises: a chain drawn with some of its events
+		// missing reads as a weaker chain than it is, and nothing on the screen
+		// says the list was cut short.
+		log.Printf("chains: could not read the event timeline for domain %d: %v", domID, err)
+		return nil
 	}
 	return out
 }

@@ -162,6 +162,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, d)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
@@ -686,6 +690,11 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 				childIDs = append(childIDs, childID)
 			}
 		}
+		if err := childRows.Err(); err != nil {
+			// A child missed here keeps its vhost, its certificate paths and its DNS
+			// zone after the parent is gone, with no row left to find it from.
+			log.Printf("addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
+		}
 		_ = childRows.Close()
 		for _, childID := range childIDs {
 			if _, err := addondomains.Cleanup(r.Context(), h.DB, childID); err != nil {
@@ -1155,6 +1164,10 @@ func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
 			d.DBPass = ""
 		}
 		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
 	}
 	// Fill each database's on-disk size (data+index). This needs root over the
 	// unix socket, so it is best-effort: a failure leaves the sizes at 0 rather

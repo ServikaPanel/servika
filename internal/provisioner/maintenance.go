@@ -3,6 +3,7 @@ package provisioner
 import (
 	"fmt"
 	"html"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -201,6 +202,11 @@ func buildMaintenanceBlock(domainName string) string {
 			if parsed := net.ParseIP(strings.TrimSpace(value)); parsed != nil {
 				exceptions = append(exceptions, regexp.QuoteMeta(parsed.String()))
 			}
+		}
+		if err := rows.Err(); err != nil {
+			// A missing exception is an address that was told it may reach the site
+			// during maintenance and then gets the 503 like everybody else.
+			log.Printf("maintenance: could not read the exception addresses for domain %d: %v", domainID, err)
 		}
 		_ = rows.Close()
 	}

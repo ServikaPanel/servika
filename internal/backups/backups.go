@@ -99,6 +99,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			out = append(out, y)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "backup list failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
@@ -441,6 +445,12 @@ func pruneManualBackups(db *sql.DB, domainID int64, systemUser string) {
 		if rows.Scan(&it.id, &it.file, &it.remoteStatus) == nil {
 			old = append(old, it)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		// A short list under-prunes rather than over-prunes, so nothing is lost,
+		// but the retention the operator set is quietly not the one being applied.
+		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
+		log.Printf("backups: could not read the retention list for domain %d: %v", domainID, err)
 	}
 	_ = rows.Close()
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.

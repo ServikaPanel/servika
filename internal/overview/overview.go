@@ -81,6 +81,10 @@ ORDER BY d.domain_name`
 		s.DNSSEC = dnssec == 1
 		out = append(out, s)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "dns overview failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
@@ -168,6 +172,10 @@ func (h *Handlers) SSL(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, s)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "ssl overview failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
@@ -217,6 +225,10 @@ ORDER BY d.domain_name`
 		}
 		s.MailEnabled = s.MailStatus != ""
 		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "mail overview failed")
+		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
@@ -331,6 +343,10 @@ ORDER BY d.domain_name, a.db_name`
 		}
 		s.DBPass = revealDBPass(s.DBUser, s.DBPass)
 		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "databases overview failed")
+		return
 	}
 
 	sizes := dbSizes()

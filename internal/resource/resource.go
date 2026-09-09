@@ -4,6 +4,7 @@ package resource
 import (
 	"context"
 	"database/sql"
+	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -154,6 +155,12 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 			if rows.Scan(&u) == nil {
 				dbUsers = append(dbUsers, u)
 			}
+		}
+		if err := rows.Err(); err != nil {
+			// The length of this list IS the reported database count, so a short
+			// read understates usage and the customer is told they have room they
+			// do not have.
+			log.Printf("resource: could not read the database account list for domain %d: %v", id, err)
 		}
 		_ = rows.Close()
 	}

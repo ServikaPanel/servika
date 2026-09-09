@@ -480,6 +480,10 @@ func (h *Handlers) AuditList(w http.ResponseWriter, r *http.Request) {
 		e.OK = okv == 1
 		out = append(out, e)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "audit log read failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
@@ -508,6 +512,10 @@ func (h *Handlers) AuditActions(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&a); err == nil {
 			out = append(out, a)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "audit log read failed")
+		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }

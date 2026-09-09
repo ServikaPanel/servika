@@ -392,6 +392,11 @@ func HealSSLVhost443OnStartup() {
 			list = append(list, x)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A short list leaves some certificates unhealed and makes the summary
+		// below report fewer domains than the server actually has.
+		log.Printf("ssl heal: could not read the domain list: %v", err)
+	}
 	_ = rows.Close()
 	if len(list) == 0 {
 		return

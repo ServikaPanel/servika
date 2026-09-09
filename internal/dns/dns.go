@@ -81,6 +81,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			out = append(out, record)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "dns record read failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 

@@ -131,6 +131,11 @@ func verifyBackupIntegrity(db *sql.DB) {
 			list = append(list, k)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A backup missing from this list is never checked, so a corrupt archive
+		// keeps whatever verification state it already had and reads as fine.
+		log.Printf("backups: could not read the integrity check list: %v", err)
+	}
 	_ = rows.Close()
 
 	corrupt, remote := 0, 0

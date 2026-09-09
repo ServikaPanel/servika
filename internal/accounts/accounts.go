@@ -70,6 +70,10 @@ func (h *Handlers) ListCustomers(w http.ResponseWriter, r *http.Request) {
 			out = append(out, cs)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "customer list failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 

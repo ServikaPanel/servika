@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -252,6 +253,12 @@ func domainProtection(domainName string) (geoBlock, rateLimit string) {
 			countries = append(countries, code)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A short list renders a country rule that is not the one the operator
+		// saved: a missing country is let in on a deny list and refused on an
+		// allow list, and nothing downstream contradicts the rendered file.
+		log.Printf("geo: could not read the country rules for domain %d: %v", domainID, err)
+	}
 	return buildGeoBlock(mode, countries), rateLimit
 }
 
@@ -277,6 +284,11 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 				}
 			}
 		}
+		if err := rows.Err(); err != nil {
+			// A country missing from this set is never declared in the shared nginx
+			// file, so every domain asking for it renders a rule nginx cannot apply.
+			log.Printf("geo: could not read the per-domain country rules: %v", err)
+		}
 		_ = rows.Close()
 	}
 	// The firewall's own country blocks share the database but not the nginx
@@ -290,6 +302,9 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 					seenCountry[normalized] = true
 				}
 			}
+		}
+		if err := firewallRows.Err(); err != nil {
+			log.Printf("geo: could not read the firewall country rules: %v", err)
 		}
 		_ = firewallRows.Close()
 	}
@@ -306,6 +321,11 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 			if rateRows.Scan(&rps) == nil && ValidRate(rps) && rps > 0 {
 				seenRate[rps] = true
 			}
+		}
+		if err := rateRows.Err(); err != nil {
+			// A rate missing here declares no zone, and a vhost naming an undeclared
+			// zone fails nginx -t for the WHOLE server, not just that domain.
+			log.Printf("geo: could not read the per-domain rate limits: %v", err)
 		}
 		_ = rateRows.Close()
 	}

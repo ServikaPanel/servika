@@ -120,6 +120,10 @@ func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
 			rules = append(rules, rule)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "ip rules read failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"mode": mode, "rules": rules})
 }
 

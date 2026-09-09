@@ -959,6 +959,11 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 			ids = append(ids, id)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A tenant missing from this list keeps whatever quota it already had, and
+		// the summary below reports a smaller run than the server needed.
+		log.Printf("quota heal: could not read the tenant list: %v", err)
+	}
 	_ = rows.Close()
 
 	var applied, skipped int

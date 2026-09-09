@@ -44,6 +44,11 @@ func AggregateAll(db *sql.DB) int {
 			domains = append(domains, item)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A domain missing from this pass has its traffic counted on the next one
+		// only if the log has not rotated first, so the figure is lost, not late.
+		log.Printf("traffic aggregator: could not read the domain list: %v", err)
+	}
 	_ = rows.Close()
 
 	processed := 0

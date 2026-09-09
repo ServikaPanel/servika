@@ -433,6 +433,10 @@ func (h *Handlers) MigrationList(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, v)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "migration job list failed")
+		return
+	}
 	migrationMu.Lock()
 	active := activeJobID
 	migrationMu.Unlock()
@@ -477,6 +481,12 @@ func (h *Handlers) MigrationDetail(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		// A short item list beside a "completed" count is the worst shape this
+		// screen can take: the migration reads as having moved sites it did not.
+		httpx.WriteError(w, http.StatusInternalServerError, "migration detail read failed")
+		return
 	}
 	var status string
 	var total, completed, failed int

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"database/sql"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -107,6 +108,12 @@ func (h *Handlers) logSources(r *http.Request, id int64, domainName string) (str
 			continue
 		}
 		names = append(names, accessLogPath(fqdn))
+	}
+	if err := rows.Err(); err != nil {
+		// Same reasoning as the query failure above: a subdomain missing from this
+		// list only understates the parent's traffic, so the parent's own log is
+		// still reported rather than the whole figure being withheld.
+		log.Printf("stats: could not read the subdomain list for domain %d: %v", id, err)
 	}
 	return domainName, names, true
 }

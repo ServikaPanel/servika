@@ -48,6 +48,13 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 			records = append(records, rec)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// This file is what an operator loads into another nameserver. A zone
+		// short of its records would be exported, imported and served, with the
+		// missing names looking like they were never there.
+		httpx.WriteError(w, http.StatusInternalServerError, "dns record read failed")
+		return
+	}
 	zone := renderBindZone(domainName, soa, records)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+domainName+`.zone"`)

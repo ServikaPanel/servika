@@ -206,6 +206,11 @@ func HealWAFOnStartup() {
 			log.Printf("waf heal: %s conf write: %v", sk, err)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A short list leaves some tenants without their WAF configuration and
+		// makes the count reported below understate what is enabled.
+		log.Printf("waf heal: could not read the domain list: %v", err)
+	}
 	if activeCount > 0 && !module {
 		log.Printf("waf heal: %d WAF-enabled domains but ModSecurity module is NOT LOADED — "+
 			"'servika-waf-setup' must be run (WAF is currently PASSIVE, vhosts intact)", activeCount)

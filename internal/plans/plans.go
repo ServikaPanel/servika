@@ -122,6 +122,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, p)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "plan operation failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
@@ -334,6 +338,11 @@ func (h *Handlers) wafPlanReapply(planID int64) {
 			ids = append(ids, did)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A short list silently leaves some of the plan's domains on their old WAF
+		// settings, which is invisible until somebody looks at one of them.
+		log.Printf("waf plan reapply: could not read the plan's domains: %v", err)
+	}
 	_ = rows.Close()
 	for _, did := range ids {
 		if err := provisioner.WAFApply(h.DB, did); err != nil {
@@ -388,6 +397,10 @@ func (h *Handlers) SearchDomains(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&d.ID, &d.DomainName, &d.SK, &d.Status, &d.CreatedAt); err == nil {
 			out = append(out, d)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "plan operation failed")
+		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }

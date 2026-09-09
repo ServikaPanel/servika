@@ -92,6 +92,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		plugin.Enabled, plugin.UI = enabled == 1, ui == 1
 		plugins = append(plugins, plugin)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "plugin list failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, plugins)
 }
 
@@ -191,6 +195,11 @@ func (h *Handlers) CheckHealth(ctx context.Context) {
 		if err := rows.Scan(&plugin.name, &plugin.socket); err == nil {
 			plugins = append(plugins, plugin)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		// A plugin missing from this list keeps whatever health it was last given,
+		// so a dead plugin can go on reading as healthy.
+		log.Printf("plugin health: could not read the plugin list: %v", err)
 	}
 	_ = rows.Close()
 

@@ -154,6 +154,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		s.Passwordless = passwordless == 1
 		out = append(out, s)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "user list failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 

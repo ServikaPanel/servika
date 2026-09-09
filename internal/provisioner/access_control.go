@@ -45,6 +45,12 @@ func buildIPRules(domainName string) string {
 		builder.WriteString(";\n")
 		count++
 	}
+	if err := rows.Err(); err != nil {
+		// A short list renders an access rule that is not the one the operator
+		// saved: a missing entry is let in on a deny list and refused on an allow
+		// list, and the rendered file gives no sign of it.
+		log.Printf("access control: could not read the IP rules for domain %d: %v", domainID, err)
+	}
 	if count == 0 {
 		return ""
 	}

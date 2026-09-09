@@ -59,6 +59,11 @@ func BackfillCustomerAccounts(ctx context.Context, db *sql.DB) {
 			list = append(list, t)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A tenant missing from this list keeps no customer account, and the
+		// backfill runs once at startup, so the gap is not retried.
+		log.Printf("customer account backfill: could not read the tenant list: %v", err)
+	}
 	_ = rows.Close() // read-only query: closing the result set has nothing to flush
 	if len(list) == 0 {
 		return

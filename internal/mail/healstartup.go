@@ -37,6 +37,11 @@ func HealMailOnStartup(ctx context.Context, db *sql.DB) {
 			_ = os.Chown(root, uid, gid)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A tenant missing from this list keeps no Maildir root, and delivery for
+		// that domain fails until the next start happens to read the whole list.
+		log.Printf("mail heal: could not read the Maildir root list: %v", err)
+	}
 }
 
 // EnsureInfra is kept as a boot-time extension point for mail infrastructure checks.

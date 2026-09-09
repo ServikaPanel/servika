@@ -116,6 +116,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, item)
 	}
+	if err := rows.Err(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 

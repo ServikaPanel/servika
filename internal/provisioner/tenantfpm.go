@@ -878,6 +878,11 @@ func EnsureTenantFPMOnStartup() {
 			domains = append(domains, item)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		// A short list silently skips a tenant's PHP-FPM heal, so that tenant keeps
+		// running on whatever unit file it already had.
+		log.Printf("tenant PHP-FPM startup: could not read the domain list: %v", err)
+	}
 	if err := rows.Close(); err != nil {
 		log.Printf("tenant PHP-FPM startup rows: %v", err)
 	}

@@ -357,6 +357,13 @@ if header :contains "X-Spam" "Yes" {
 		}
 		out.WriteString("  stop;\n}\n")
 	}
+	if err := rows.Err(); err != nil {
+		// The scan path above already fails the write. A query that broke half way
+		// is the same defect: the generated script would silently drop a filter the
+		// mailbox owner saved, so it must not be written at all.
+		_ = rows.Close()
+		return err
+	}
 	_ = rows.Close()
 
 	// Forwarding comes after the filters, so a filter that files a message and

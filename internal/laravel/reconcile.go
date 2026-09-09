@@ -56,6 +56,11 @@ func reconcileOnce(db *sql.DB) {
 		}
 		jobs = append(jobs, s)
 	}
+	if err := rows.Err(); err != nil {
+		// A job missing from this list stays marked running for good, because the
+		// reconciler is what closes a row a restart left behind.
+		log.Printf("laravel job reconciler: could not read the stuck job list: %v", err)
+	}
 	_ = rows.Close()
 
 	h := &Handlers{DB: db}
