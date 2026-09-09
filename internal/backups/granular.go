@@ -45,7 +45,11 @@ func isSystemDB(n string) bool {
 // domainDatabases returns every database name owned by a domain (the primary
 // <system_user>_main plus db_accounts rows). Only valid, non-system identifiers
 // pass, so this doubles as the restore whitelist.
-func domainDatabases(db *sql.DB, domainID int64, systemUser string) []string {
+// A read failure is returned rather than swallowed. This list is BOTH what gets
+// dumped into an archive and the ownership whitelist a restore is checked
+// against, so a short list means a database is silently left out of the backup,
+// and the loss only shows up on the day somebody restores it.
+func domainDatabases(db *sql.DB, domainID int64, systemUser string) ([]string, error) {
 	set := map[string]bool{}
 	out := []string{}
 	add := func(n string) {
@@ -56,16 +60,22 @@ func domainDatabases(db *sql.DB, domainID int64, systemUser string) []string {
 		}
 	}
 	add(systemUser + "_main")
-	if rows, err := db.Query(`SELECT db_name FROM db_accounts WHERE domain_id=?`, domainID); err == nil {
-		defer func() { _ = rows.Close() }()
-		for rows.Next() {
-			var n string
-			if rows.Scan(&n) == nil {
-				add(n)
-			}
-		}
+	rows, err := db.Query(`SELECT db_name FROM db_accounts WHERE domain_id=?`, domainID)
+	if err != nil {
+		return nil, err
 	}
-	return out
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		add(n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // tenantPrimaryDBUser returns the domain's main DB user, for granting a
@@ -145,7 +155,13 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	progressStage(domainID, stageDumpingDBs, 0)
 	written := []string{}
 	failedDBs := []string{}
-	for _, dbName := range domainDatabases(db, domainID, systemUser) {
+	ownedDBs, err := domainDatabases(db, domainID, systemUser)
+	if err != nil {
+		// Backing up a list that could not be read fully would write an archive
+		// missing databases and report it as successful.
+		return 0, fmt.Errorf("could not list the domain's databases: %w", err)
+	}
+	for _, dbName := range ownedDBs {
 		target := filepath.Join(dbDir, dbName+".sql")
 		// --routines --events --triggers keep stored procedures, scheduled events
 		// and triggers, which restore would otherwise lose silently; --hex-blob
@@ -323,11 +339,21 @@ func ensureSchema(ctx context.Context, dbName string) error {
 // When filter != "", only that DB. Non-owned / system DBs are skipped.
 func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemUser, filter string) []map[string]string {
 	files := archiveDBFiles(tmp, systemUser)
+	res := []map[string]string{}
+	ownedNames, err := domainDatabases(db, domainID, systemUser)
+	if err != nil {
+		// The list is the ownership whitelist. A short one would refuse a database
+		// the domain really owns and report it as "not owned", so the failure is
+		// reported as itself instead.
+		return append(res, map[string]string{
+			"db": "", "status": "failed",
+			"message": "could not list the domain's databases: " + err.Error(),
+		})
+	}
 	owned := map[string]bool{}
-	for _, n := range domainDatabases(db, domainID, systemUser) {
+	for _, n := range ownedNames {
 		owned[n] = true
 	}
-	res := []map[string]string{}
 	restored := []string{}
 	for name, p := range files {
 		if filter != "" && name != filter {
@@ -433,8 +459,13 @@ func restoreOneDB(ctx context.Context, db *sql.DB, domainID int64, tmp, systemUs
 	if !ok {
 		return "", fmt.Errorf("database %q is not in the backup", srcDB)
 	}
+	ownedNames, err := domainDatabases(db, domainID, systemUser)
+	if err != nil {
+		// A short list would report a database the domain owns as one it does not.
+		return "", fmt.Errorf("could not list the domain's databases: %w", err)
+	}
 	owned := map[string]bool{}
-	for _, n := range domainDatabases(db, domainID, systemUser) {
+	for _, n := range ownedNames {
 		owned[n] = true
 	}
 	if targetDB == "" || targetDB == srcDB {
