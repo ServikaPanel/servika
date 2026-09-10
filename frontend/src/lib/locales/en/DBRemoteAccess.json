@@ -1,6 +1,8 @@
 {
   "loading": "Loading…",
   "add": "Allow",
+    "plaintext": "Not encrypted",
+  "plaintextHint": "This account was created before the panel required TLS, so its traffic crosses the network in the clear. Remove the address and add it again to convert it.",
   "remove": "Remove",
   "empty": "No address may reach this account from outside the server.",
   "addFailed": "The address could not be allowed.",

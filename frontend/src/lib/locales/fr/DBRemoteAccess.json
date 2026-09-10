@@ -1,6 +1,8 @@
 {
   "loading": "Chargement…",
   "add": "Autoriser",
+    "plaintext": "Non chiffré",
+  "plaintextHint": "Ce compte a été créé avant que le panneau n'exige TLS : son trafic circule en clair sur le réseau. Supprimez l'adresse puis rajoutez-la pour la convertir.",
   "remove": "Retirer",
   "empty": "Aucune adresse n'atteint ce compte depuis l'extérieur du serveur.",
   "addFailed": "L'adresse n'a pas pu être autorisée.",

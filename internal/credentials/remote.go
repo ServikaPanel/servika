@@ -45,11 +45,21 @@ func MySQLGrantRemote(dbUser, mysqlHost, dbPass string, dbNames []string) error 
 	if !mysqlPasswordPattern.MatchString(dbPass) {
 		return fmt.Errorf("%w: database password", ErrInvalidMySQLCredentials)
 	}
+	// REQUIRE SSL is what stops the account speaking the plain MySQL protocol
+	// across the public internet. Without it every query, every result set and
+	// everything written through them crossed the network in the clear, with
+	// nothing at the transport layer to detect a modification. internal/dbremote
+	// refuses to open the port at all unless the server has a key pair, so an
+	// account created here always has a link it can use.
+	//
+	// The clause rides on ALTER as well as CREATE. CREATE USER IF NOT EXISTS does
+	// not touch an account that already exists, so removing a host and adding it
+	// back is what converts an account made before this existed.
 	statements := []string{
-		fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s';", dbUser, mysqlHost, escapeSQLString(dbPass)),
+		fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s' REQUIRE SSL;", dbUser, mysqlHost, escapeSQLString(dbPass)),
 		// ALTER as well as CREATE, so re-adding a host the customer removed and
 		// re-added does not leave the account on a password nobody has.
-		fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", dbUser, mysqlHost, escapeSQLString(dbPass)),
+		fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s' REQUIRE SSL;", dbUser, mysqlHost, escapeSQLString(dbPass)),
 	}
 	for _, dbName := range dbNames {
 		if !mysqlIdentifierPattern.MatchString(dbName) {

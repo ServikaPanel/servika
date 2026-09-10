@@ -1,6 +1,8 @@
 {
   "loading": "Cargando…",
   "add": "Permitir",
+    "plaintext": "Sin cifrar",
+  "plaintextHint": "Esta cuenta se creó antes de que el panel exigiera TLS, así que su tráfico viaja en claro por la red. Elimina la dirección y vuelve a añadirla para convertirla.",
   "remove": "Quitar",
   "empty": "Ninguna dirección llega a esta cuenta desde fuera del servidor.",
   "addFailed": "No se pudo permitir la dirección.",

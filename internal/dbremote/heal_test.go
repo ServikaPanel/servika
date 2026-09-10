@@ -22,6 +22,11 @@ func withTempDropIn(t *testing.T) (path string, calls *[]string) {
 	dir := t.TempDir()
 	path = filepath.Join(dir, "zzz-servika-remote-db.cnf")
 
+	// Apply generates the MariaDB key pair before it writes anything, so the
+	// certificate root has to be somewhere a test may write. Without this every
+	// Apply here would fail on /etc/pki rather than on what it is measuring.
+	t.Setenv("SERVIKA_CERT_ROOT", t.TempDir())
+
 	previousPath := dropInPath
 	setDropInPath(path)
 	t.Cleanup(func() { setDropInPath(previousPath) })

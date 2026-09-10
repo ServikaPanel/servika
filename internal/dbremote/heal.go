@@ -47,6 +47,11 @@ var restartTimeout = 90 * time.Second
 // it, so the drop-in was rolled back.
 var ErrBindVerifyFailed = errors.New("the panel could not reach MariaDB after the restart")
 
+// ErrTLSUnavailable means the server key pair could not be produced, so nothing
+// was changed. Opening the port without it would publish the plain MySQL
+// protocol to the internet, which is the state this feature must not create.
+var ErrTLSUnavailable = errors.New("the MariaDB server certificate could not be prepared")
+
 // healCommand is a variable so a test can substitute a stub and inspect what the
 // process actually receives.
 var healCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
@@ -96,6 +101,17 @@ func HealBind(db *sql.DB) {
 // the drop-in goes back to what it was and MariaDB is restarted again, so the
 // server is left in the state the caller found it in rather than half open.
 func Apply(ctx context.Context, db *sql.DB, enable bool) error {
+	// The certificate comes FIRST, and a failure here writes nothing at all. A
+	// server bound to every interface with no key pair cannot offer TLS, and an
+	// account created with REQUIRE SSL against it could never connect: the
+	// customer would be handed working credentials for a link that always
+	// refuses them.
+	if enable {
+		if err := ensureServerCertificate(); err != nil {
+			return fmt.Errorf("%w: %w", ErrTLSUnavailable, err)
+		}
+	}
+
 	previous, hadPrevious := readDropIn()
 
 	if _, err := writeDropIn(enable); err != nil {
@@ -140,8 +156,16 @@ func writeDropIn(enable bool) (changed bool, err error) {
 		"# This file sorts after zz-servika-security.cnf, so this bind-address is the\n" +
 		"# one MariaDB uses. Removing the file restores the loopback bind that file\n" +
 		"# sets. `*` rather than 0.0.0.0 because only `*` listens on IPv4 AND IPv6.\n" +
+		"#\n" +
+		"# The key pair is what lets the server offer TLS at all. MariaDB, unlike\n" +
+		"# MySQL 8, generates none of its own, so without these lines a client asking\n" +
+		"# for an encrypted connection is refused rather than protected, and an\n" +
+		"# account created with REQUIRE SSL could never connect. The same restart that\n" +
+		"# applies the bind applies these.\n" +
 		"[mysqld]\n" +
-		"bind-address = " + bindAllInterfaces + "\n")
+		"bind-address = " + bindAllInterfaces + "\n" +
+		"ssl_cert = " + serverCertPath() + "\n" +
+		"ssl_key = " + serverKeyPath() + "\n")
 	if current, readErr := os.ReadFile(dropInPath); readErr == nil && string(current) == string(body) {
 		return false, nil
 	}

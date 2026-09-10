@@ -30,6 +30,7 @@ const (
 	reasonDuplicate        = "db_remote_duplicate"
 	reasonApplyFailed      = "db_remote_apply_failed"
 	reasonUnknownUser      = "db_remote_unknown_user"
+	reasonTLSUnavailable   = "db_remote_tls_unavailable"
 )
 
 // applyTimeout bounds a switch flip. It is generous because it covers a MariaDB
@@ -54,6 +55,11 @@ type Host struct {
 	Host      string `json:"host"`
 	Label     string `json:"label"`
 	CreatedAt string `json:"created_at"`
+	// RequiresTLS reports whether MariaDB refuses this account an unencrypted
+	// connection. REQUIRE SSL rides on new grants only, so an account created
+	// before it existed still speaks the plain protocol; the screen marks those so
+	// an operator can convert them by removing the host and adding it back.
+	RequiresTLS bool `json:"requires_tls"`
 }
 
 // ServerStatus describes the feature itself, so a screen can explain why adding
@@ -132,6 +138,15 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 
 	if err := Apply(ctx, h.DB, *request.Enabled); err != nil {
 		h.recordError(r.Context(), err.Error())
+		// A missing key pair is its own refusal. Opening the port without one
+		// would publish the plain MySQL protocol to the internet, and the operator
+		// has to be told that rather than reading it as a restart failure.
+		if errors.Is(err, ErrTLSUnavailable) {
+			writeReason(w, http.StatusInternalServerError,
+				"the MariaDB server certificate could not be prepared, so nothing was changed",
+				reasonTLSUnavailable)
+			return
+		}
 		writeReason(w, http.StatusInternalServerError,
 			"MariaDB could not be restarted with the new setting, so nothing was changed",
 			reasonApplyFailed)
@@ -364,7 +379,52 @@ func (h *Handlers) hosts(ctx context.Context, domainID int64) ([]Host, error) {
 		}
 		hosts = append(hosts, host)
 	}
-	return hosts, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	h.markTLSRequirement(ctx, hosts)
+	return hosts, nil
+}
+
+// markTLSRequirement fills in RequiresTLS for each listed account.
+//
+// REQUIRE SSL rides on new grants only, so an account created before it existed
+// still speaks the plain protocol. Nothing on the host says which is which, and
+// an operator cannot convert what they cannot see, so the list carries the answer
+// per row; removing a host and adding it back is what converts it.
+//
+// A failure here leaves every flag false and the list intact. The panel's own
+// account may hold no SELECT on mysql.user, and losing the whole screen over a
+// badge would be the worse outcome; false is also the safe direction to be wrong
+// in, since it reads as "not known to require TLS".
+func (h *Handlers) markTLSRequirement(ctx context.Context, hosts []Host) {
+	if len(hosts) == 0 {
+		return
+	}
+	rows, err := h.DB.QueryContext(ctx,
+		`SELECT user, host FROM mysql.user WHERE ssl_type <> ''`)
+	if err != nil {
+		log.Printf("remote db: could not read which accounts require TLS: %v", err)
+		return
+	}
+	defer func() { _ = rows.Close() }() // read-only: nothing to flush
+	secured := map[string]bool{}
+	for rows.Next() {
+		var account, address string
+		if err := rows.Scan(&account, &address); err != nil {
+			log.Printf("remote db: skipping an unreadable mysql.user row: %v", err)
+			continue
+		}
+		secured[account+"@"+address] = true
+	}
+	if err := rows.Err(); err != nil {
+		// A short list would mark an account as plaintext when it is not, which
+		// only over-warns; saying so keeps that visible.
+		log.Printf("remote db: could not read the whole TLS list: %v", err)
+	}
+	for i := range hosts {
+		hosts[i].RequiresTLS = secured[hosts[i].DBUser+"@"+hosts[i].Host]
+	}
 }
 
 // accountFor returns the account's password and every schema it owns, but only

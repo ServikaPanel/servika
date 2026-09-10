@@ -1,6 +1,8 @@
 {
   "loading": "Yükleniyor…",
   "add": "İzin ver",
+    "plaintext": "Şifreli değil",
+  "plaintextHint": "Bu hesap, panel TLS zorunlu kılmadan önce oluşturuldu; trafiği ağ üzerinde açık geçiyor. Adresi kaldırıp yeniden ekleyerek dönüştürün.",
   "remove": "Kaldır",
   "empty": "Bu hesaba sunucu dışından hiçbir adres erişemiyor.",
   "addFailed": "Adrese izin verilemedi.",

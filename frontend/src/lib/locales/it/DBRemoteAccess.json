@@ -1,6 +1,8 @@
 {
   "loading": "Caricamento…",
   "add": "Consenti",
+    "plaintext": "Non cifrato",
+  "plaintextHint": "Questo account è stato creato prima che il pannello richiedesse TLS, quindi il suo traffico viaggia in chiaro. Rimuovi l’indirizzo e riaggiungilo per convertirlo.",
   "remove": "Rimuovi",
   "empty": "Nessun indirizzo raggiunge questo account dall'esterno del server.",
   "addFailed": "Non è stato possibile consentire l'indirizzo.",

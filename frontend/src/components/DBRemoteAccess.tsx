@@ -22,6 +22,10 @@ export type RemoteHost = {
   host: string
   label: string
   created_at: string
+  // False for an account created before the panel required TLS on remote grants.
+  // Such an account still speaks the plain MySQL protocol across the internet;
+  // removing the host and adding it back converts it.
+  requires_tls: boolean
 }
 
 export type RemoteStatus = {
@@ -181,6 +185,18 @@ export default function DBRemoteAccess({
                   )}
                   <td className={responsiveTableCellClass} data-label={t('column.host')}>
                     <span className="font-mono text-xs">{entry.host}</span>
+                    {/* An account made before the panel required TLS carries no
+                        badge from the server, and its traffic crosses the
+                        internet in the clear. Say so on the row, since that is
+                        where the operator can act on it. */}
+                    {!entry.requires_tls && (
+                      <span
+                        title={t('plaintextHint')}
+                        className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                      >
+                        {t('plaintext')}
+                      </span>
+                    )}
                   </td>
                   <td className={responsiveTableCellClass} data-label={t('column.label')}>
                     {entry.label || <span className="text-slate-400">—</span>}

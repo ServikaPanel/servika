@@ -1,6 +1,8 @@
 {
   "loading": "A carregar…",
   "add": "Permitir",
+    "plaintext": "Sem cifra",
+  "plaintextHint": "Esta conta foi criada antes de o painel exigir TLS, pelo que o seu tráfego circula em claro na rede. Remova o endereço e adicione-o novamente para o converter.",
   "remove": "Remover",
   "empty": "Nenhum endereço alcança esta conta a partir de fora do servidor.",
   "addFailed": "Não foi possível permitir o endereço.",

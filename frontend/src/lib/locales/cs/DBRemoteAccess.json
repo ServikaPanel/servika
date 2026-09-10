@@ -1,6 +1,8 @@
 {
   "loading": "Načítání…",
   "add": "Povolit",
+    "plaintext": "Nešifrováno",
+  "plaintextHint": "Tento účet vznikl dříve, než panel začal vyžadovat TLS, takže jeho provoz jde sítí nešifrovaně. Odeberte adresu a přidejte ji znovu, čímž ji převedete.",
   "remove": "Odebrat",
   "empty": "K tomuto účtu se zvenčí serveru nedostane žádná adresa.",
   "addFailed": "Adresu se nepodařilo povolit.",

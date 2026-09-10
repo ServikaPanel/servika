@@ -1,6 +1,8 @@
 {
   "loading": "Se încarcă…",
   "add": "Permite",
+    "plaintext": "Necriptat",
+  "plaintextHint": "Acest cont a fost creat înainte ca panoul să impună TLS, deci traficul său circulă necriptat prin rețea. Ștergeți adresa și adăugați-o din nou pentru a o converti.",
   "remove": "Elimină",
   "empty": "Nicio adresă nu ajunge la acest cont din afara serverului.",
   "addFailed": "Adresa nu a putut fi permisă.",
