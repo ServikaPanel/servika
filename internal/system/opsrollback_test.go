@@ -73,8 +73,10 @@ func readScript(t *testing.T, path string) string {
 //
 // Measured with a real lftp: with the old form the password appears in the lftp
 // process's own cmdline; with --env-password it does not.
+// The uploader now lives in servika-offsite-lib, which servika-db-backup and
+// servika-system-backup both source, so the assertions follow the code.
 func TestThePanelDatabaseUploadKeepsThePasswordOutOfArgv(t *testing.T) {
-	body := readScript(t, "../../assets/ops/servika-db-backup")
+	body := readScript(t, "../../assets/ops/servika-offsite-lib")
 
 	if strings.Contains(body, `open -u "%s","%s"`) {
 		t.Error("the offsite upload still puts the password in the lftp script")
@@ -89,5 +91,19 @@ func TestThePanelDatabaseUploadKeepsThePasswordOutOfArgv(t *testing.T) {
 	// inherits the destination password.
 	if strings.Contains(body, `export LFTP_PASSWORD`) {
 		t.Error("LFTP_PASSWORD is exported to every subprocess instead of set per command")
+	}
+	// Neither caller may reach lftp on its own, or the guarantee above would hold
+	// for the library while the script beside it kept its own copy.
+	for _, caller := range []string{
+		"../../assets/ops/servika-db-backup",
+		"../../assets/ops/servika-system-backup",
+	} {
+		script := readScript(t, caller)
+		if strings.Contains(script, "lftp -c") {
+			t.Errorf("%s builds its own lftp command instead of using the shared uploader", caller)
+		}
+		if !strings.Contains(script, "servika-offsite-lib") {
+			t.Errorf("%s does not source the shared uploader", caller)
+		}
 	}
 }
