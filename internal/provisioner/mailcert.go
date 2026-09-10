@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -167,6 +168,61 @@ func writeMailChain(chainPath, certPath, keyPath string) error {
 	return nil
 }
 
+// RefreshMailChains rewrites every installed mail chain from its certificate and
+// key, and reports whether any chain's bytes changed.
+//
+// acme.sh renews a certificate and re-copies mail.crt and mail.key, but it knows
+// nothing about mail-chain.pem: that file is assembled here. Without this pass
+// the chain keeps the day-zero certificate for ever, and because postmap -F
+// embeds the chain's CONTENT into the indexed SNI table, so does Postfix.
+//
+// A domain whose files cannot be read is logged and skipped rather than
+// abandoning the whole pass, because one unreadable domain must not stop every
+// other domain from picking up its renewed certificate.
+func RefreshMailChains() (changed bool) {
+	for _, domain := range certificateDomains() {
+		certPath, keyPath, chainPath := MailCertificatePaths(domain)
+		if !fileExists(certPath) || !fileExists(keyPath) {
+			continue
+		}
+		stale, err := mailChainIsStale(chainPath, certPath, keyPath)
+		if err != nil {
+			log.Printf("mail chain: %s could not be compared with its certificate: %v", domain, err)
+			continue
+		}
+		if !stale {
+			continue
+		}
+		if err := writeMailChain(chainPath, certPath, keyPath); err != nil {
+			log.Printf("mail chain: %s could not be rewritten from its renewed certificate: %v", domain, err)
+			continue
+		}
+		changed = true
+	}
+	return changed
+}
+
+// mailChainIsStale reports whether the chain file on disk differs from what the
+// certificate and key now assemble to. A missing chain counts as stale.
+func mailChainIsStale(chainPath, certPath, keyPath string) (bool, error) {
+	key, err := os.ReadFile(keyPath) // #nosec G304 -- a path this package composed from the certificate root and a validated domain.
+	if err != nil {
+		return false, fmt.Errorf("read the mail key: %w", err)
+	}
+	cert, err := os.ReadFile(certPath) // #nosec G304 -- a path this package composed from the certificate root and a validated domain.
+	if err != nil {
+		return false, fmt.Errorf("read the mail certificate: %w", err)
+	}
+	current, err := os.ReadFile(chainPath) // #nosec G304 -- a path this package composed from the certificate root and a validated domain.
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("read the mail chain: %w", err)
+	}
+	return !bytes.Equal(current, mailChainBytes(key, cert)), nil
+}
+
 // readCertificate returns the DNS names a certificate covers and when it
 // expires. The certificate itself is the source of truth for the SNI map, so
 // nothing has to be recorded elsewhere and nothing can drift out of sync.
@@ -214,30 +270,40 @@ func fileExists(path string) bool {
 // generated from this, so the certificate files are the single source of truth.
 func InstalledMailCertificates() map[string][]string {
 	covered := map[string][]string{}
-	entries, err := os.ReadDir(certSystemBaseDir())
-	if err != nil {
-		return covered
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		certPath, _, chainPath := MailCertificatePaths(entry.Name())
+	for _, domain := range certificateDomains() {
+		certPath, _, chainPath := MailCertificatePaths(domain)
 		if !fileExists(chainPath) {
 			continue
 		}
 		names, notAfter, err := readCertificate(certPath)
 		if err != nil {
-			log.Printf("mail sni: %s has a chain but its certificate could not be read: %v", entry.Name(), err)
+			log.Printf("mail sni: %s has a chain but its certificate could not be read: %v", domain, err)
 			continue
 		}
 		if time.Now().After(notAfter) {
-			log.Printf("mail sni: the certificate for %s expired on %s and is left out", entry.Name(), notAfter.Format("2006-01-02"))
+			log.Printf("mail sni: the certificate for %s expired on %s and is left out", domain, notAfter.Format("2006-01-02"))
 			continue
 		}
-		covered[entry.Name()] = names
+		covered[domain] = names
 	}
 	return covered
+}
+
+// certificateDomains returns the domain directories under the certificate root.
+// An unreadable root yields none, so a caller walks nothing rather than acting on
+// a partial list it cannot tell apart from an empty one.
+func certificateDomains() []string {
+	entries, err := os.ReadDir(certSystemBaseDir())
+	if err != nil {
+		return nil
+	}
+	domains := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			domains = append(domains, entry.Name())
+		}
+	}
+	return domains
 }
 
 // MailSNICovers reports whether the mail stack will present a matching

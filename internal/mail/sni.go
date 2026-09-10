@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	"servika/internal/provisioner"
 )
@@ -80,22 +81,62 @@ func sortedKeys(m map[string][]string) []string {
 // Each side is validated before it is kept: a rejected Dovecot configuration is
 // rolled back, because Dovecot refuses to start on a bad file and that takes
 // every mailbox on the server offline, not just the one being changed.
+//
+// The chains are rebuilt first, because acme.sh renews mail.crt and mail.key but
+// never touches the chain file this panel assembles from them. A rebuilt chain
+// also forces the Dovecot reload: Dovecot reads the certificate FILE, so a
+// renewed certificate needs a reload even though the generated configuration is
+// byte-for-byte what it was.
 func ApplySNI() error {
+	changed := provisioner.RefreshMailChains()
 	covered := provisioner.InstalledMailCertificates()
-	if err := applyDovecotSNI(covered); err != nil {
+	if err := applyDovecotSNI(covered, changed); err != nil {
 		return err
 	}
 	return applyPostfixSNI(covered)
 }
 
-func applyDovecotSNI(covered map[string][]string) error {
+// dovecotStep says what has to happen to a rendered Dovecot configuration.
+type dovecotStep int
+
+const (
+	dovecotNothing    dovecotStep = iota // installed file matches and no certificate moved
+	dovecotReloadOnly                    // file matches, but a certificate it names was rebuilt
+	dovecotWrite                         // file differs: write it, validate it, reload
+)
+
+// dovecotStepFor decides between the three.
+//
+// The reload-only case is the one that is easy to miss: Dovecot reads the
+// certificate FILE named in the configuration and holds it in memory, so a
+// renewed certificate needs a reload even though this generated file is
+// byte-for-byte what is already installed. Returning dovecotNothing there leaves
+// Dovecot serving the previous certificate until the next restart, which on a
+// long-uptime host means until it expires.
+func dovecotStepFor(installed []byte, readErr error, body string, forceReload bool) dovecotStep {
+	if readErr != nil || string(installed) != body {
+		return dovecotWrite
+	}
+	if forceReload {
+		return dovecotReloadOnly
+	}
+	return dovecotNothing
+}
+
+func applyDovecotSNI(covered map[string][]string, forceReload bool) error {
 	if _, err := exec.LookPath("doveconf"); err != nil {
 		return nil // Dovecot is not installed on this host; nothing to configure.
 	}
 	body := renderDovecotSNI(covered)
 	previous, hadPrevious := os.ReadFile(dovecotSNIConf) // #nosec G304 -- a fixed configuration path owned by this package.
-	if hadPrevious == nil && string(previous) == body {
+	switch dovecotStepFor(previous, hadPrevious, body, forceReload) {
+	case dovecotNothing:
 		return nil // Unchanged: do not reload a service for nothing.
+	case dovecotReloadOnly:
+		if out, err := sniCommand("systemctl", "reload", "dovecot"); err != nil {
+			return fmt.Errorf("reload Dovecot: %s", strings.TrimSpace(string(out)))
+		}
+		return nil
 	}
 	// #nosec G306 -- a Dovecot drop-in it must read; it names key paths but holds no key material.
 	if err := os.WriteFile(dovecotSNIConf, []byte(body), 0o644); err != nil {
@@ -157,4 +198,38 @@ func HealMailSNI(ctx context.Context) {
 	if err := ApplySNI(); err != nil {
 		log.Printf("mail sni heal: %v", err)
 	}
+}
+
+// mailCertRefreshInterval is how often the installed mail certificates are
+// compared with the chains built from them. acme.sh renews around 30 days before
+// expiry, so a pass twice a day is far inside the margin.
+const mailCertRefreshInterval = 12 * time.Hour
+
+// StartMailCertRefresh reapplies the SNI configuration after acme.sh renews a
+// mail certificate.
+//
+// acme.sh is given no --reloadcmd for the mail hostnames, and adding one would
+// reach only domains issued from now on: acme.sh writes that command into the
+// domain's own configuration at issuance time, so every certificate already on
+// the host would keep renewing with nothing reapplying the table. This pass
+// covers those too.
+//
+// Nothing is reloaded when nothing changed. RefreshMailChains compares bytes, so
+// a host whose certificates are current pays one directory walk and stops.
+func StartMailCertRefresh(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(mailCertRefreshInterval):
+			}
+			if !provisioner.RefreshMailChains() {
+				continue
+			}
+			if err := ApplySNI(); err != nil {
+				log.Printf("mail sni refresh: %v", err)
+			}
+		}
+	}()
 }

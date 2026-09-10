@@ -409,6 +409,12 @@ func main() {
 	// generated from the installed certificates, so this picks up a host that
 	// already had them and drops one whose certificate has expired.
 	mail.HealMailSNI(context.Background())
+	// acme.sh renews those certificates on its own daily timer, and it rewrites
+	// the certificate files without rebuilding the chain Postfix indexes or
+	// telling Dovecot to reread its own. On a host that runs for months without
+	// a restart the renewed certificate would sit unused on disk while the mail
+	// ports serve the expired one, so the panel compares them periodically.
+	mail.StartMailCertRefresh(context.Background())
 	// A mailbox migration runs in a goroutine, so a restart would leave its row
 	// saying "running" for ever. The credential is sealed in the row, so the job
 	// is put back on the queue and finished rather than thrown away; only one

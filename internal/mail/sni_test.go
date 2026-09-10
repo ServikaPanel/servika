@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -79,5 +80,35 @@ func TestSNIRenderingIsStable(t *testing.T) {
 	firstPostfix, secondPostfix := renderPostfixSNI(coveredExample), renderPostfixSNI(coveredExample)
 	if firstPostfix != secondPostfix {
 		t.Errorf("the Postfix rendering is not stable:\n%s\n---\n%s", firstPostfix, secondPostfix)
+	}
+}
+
+// Dovecot reads the certificate FILE its configuration names and holds it in
+// memory, so a renewed certificate needs a reload even when this generated file
+// does not change. Without that reload the mail ports keep serving the previous
+// certificate until the next restart, which on a host that runs for months means
+// until it expires.
+func TestARenewedCertificateReloadsDovecotWithAnUnchangedConfiguration(t *testing.T) {
+	body := renderDovecotSNI(coveredExample)
+
+	if got := dovecotStepFor([]byte(body), nil, body, true); got != dovecotReloadOnly {
+		t.Errorf("step with a rebuilt chain = %d, want dovecotReloadOnly", got)
+	}
+	if got := dovecotStepFor([]byte(body), nil, body, false); got != dovecotNothing {
+		t.Errorf("step with nothing changed = %d, want dovecotNothing", got)
+	}
+}
+
+// A configuration that differs is written, validated and reloaded whether or not
+// a certificate moved, because a new domain gained a block.
+func TestAChangedConfigurationIsAlwaysWritten(t *testing.T) {
+	body := renderDovecotSNI(coveredExample)
+	for _, forceReload := range []bool{false, true} {
+		if got := dovecotStepFor([]byte("stale\n"), nil, body, forceReload); got != dovecotWrite {
+			t.Errorf("step for a differing file (forceReload=%v) = %d, want dovecotWrite", forceReload, got)
+		}
+		if got := dovecotStepFor(nil, os.ErrNotExist, body, forceReload); got != dovecotWrite {
+			t.Errorf("step for a missing file (forceReload=%v) = %d, want dovecotWrite", forceReload, got)
+		}
 	}
 }
