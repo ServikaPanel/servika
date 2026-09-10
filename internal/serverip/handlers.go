@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"servika/internal/httpx"
 	"servika/internal/middleware"
+	"servika/internal/panelport"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -22,13 +22,20 @@ type Handlers struct {
 	DB *sql.DB
 }
 
-// writing serialises every change to this server's addresses.
+// Every change to this server's addresses is serialised with panelport.Lock,
+// NOT with a mutex of this package's own.
 //
-// It is a PACKAGE-level lock rather than a field, because the thing being
-// protected is the host, not a handler instance. Two adds at once would both
-// read the same free label off the host and hand one name to two addresses,
-// which is the state the whole remove path depends on being impossible.
-var writing sync.Mutex
+// Both packages change how this server is reached and share one failure: losing
+// that access entirely. A port move verifies the new port on an address, so an
+// address removed while that verification runs makes the port change look
+// responsible for a failure it did not cause. panelport exports Lock and Unlock
+// for exactly this and says so; this package held a private mutex instead, which
+// left the cross-package guarantee absent and those two functions unreachable.
+//
+// The guarantee the private mutex did give still holds, because the lock is
+// still exclusive: two adds at once would both read the same free label off the
+// host and hand one name to two addresses, which is the state the whole remove
+// path depends on being impossible.
 
 func actorOf(r *http.Request) int64 {
 	if claims := middleware.ClaimsFrom(r); claims != nil {
@@ -159,8 +166,8 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		body.Note = body.Note[:255]
 	}
 
-	writing.Lock()
-	defer writing.Unlock()
+	panelport.Lock()
+	defer panelport.Unlock()
 
 	// The HOST is scanned, not the table. An address somebody added by hand is
 	// absent from the table and present on the server, and adding it again
@@ -249,8 +256,8 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writing.Lock()
-	defer writing.Unlock()
+	panelport.Lock()
+	defer panelport.Unlock()
 
 	var ip, device string
 	var prefix int
