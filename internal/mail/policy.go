@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -259,6 +260,43 @@ func (h *Handlers) SendLimitsGet(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, s)
 }
 
+// isMailLimitOperator reports whether the caller may set a mailbox's send limits
+// freely. The route is mounted under CustomerScope, so an admin and a reseller
+// reach it too, and only they may write a value the plan does not allow.
+func isMailLimitOperator(r *http.Request) bool {
+	c := middleware.ClaimsFrom(r)
+	return c != nil && (c.Role == middleware.RoleAdmin || c.Role == middleware.RoleReseller)
+}
+
+// refuseAbovePlan reads the domain's plan and reports why a customer's send
+// limits are not acceptable, or an empty reason when they are.
+func (h *Handlers) refuseAbovePlan(ctx context.Context, domainID int64, req SendLimits) (string, error) {
+	plan, err := planLimitsFor(ctx, h.DB, domainID)
+	if err != nil {
+		return "", err
+	}
+	return refusalAgainstPlan(plan, req), nil
+}
+
+// refusalAgainstPlan judges the request against the plan's ceiling.
+//
+// 0 is refused outright: the policy server reads a stored 0 as UNLIMITED
+// (`hourLimit > 0 && ...`), so on a mailbox row it is not "no override", it is
+// the removal of the ceiling. A PLAN value of 0 is the opposite: it means the
+// plan sets no override, so it is not a ceiling to hold anybody to.
+func refusalAgainstPlan(plan PlanMailLimits, req SendLimits) string {
+	if req.HourLimit == 0 || req.DayLimit == 0 {
+		return "a send limit of 0 means unlimited and cannot be set on this subscription"
+	}
+	if plan.SendLimitHour > 0 && req.HourLimit > plan.SendLimitHour {
+		return "the hourly send limit exceeds the plan's ceiling"
+	}
+	if plan.SendLimitDay > 0 && req.DayLimit > plan.SendLimitDay {
+		return "the daily send limit exceeds the plan's ceiling"
+	}
+	return ""
+}
+
 // SendLimitsPut saves a mailbox's send limits. PUT /domains/{id}/mail/{mid}/send-limits
 func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
 	id, _, demo, ok := h.domain(r)
@@ -283,12 +321,30 @@ func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "mailbox not found")
 		return
 	}
-	// send_limits_manual is what stops the next plan change from undoing this.
-	// The plan realignment skips a mailbox somebody has tuned by hand, so the
-	// flag has to be set in the same statement as the values it protects.
+	// A customer may lower its own limits, never raise them past the plan and
+	// never to 0, which the policy server reads as unlimited.
+	operator := isMailLimitOperator(r)
+	if !operator {
+		if reason, err := h.refuseAbovePlan(r.Context(), id, req); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "could not read the plan's mail limits")
+			return
+		} else if reason != "" {
+			httpx.WriteError(w, http.StatusForbidden, reason)
+			return
+		}
+	}
+	// send_limits_manual is what stops the next plan change from undoing this,
+	// because the plan realignment skips a mailbox somebody has tuned by hand.
+	// Only an OPERATOR may set it: a customer who could would make their own
+	// value survive every later plan change, which is the whole point of the
+	// ceiling they are being held to.
+	manual := 0
+	if operator {
+		manual = 1
+	}
 	if _, err := h.DB.ExecContext(r.Context(), `UPDATE mailboxes
-		SET send_limit_hour=?,send_limit_day=?,send_limits_manual=1 WHERE id=? AND domain_id=?`,
-		req.HourLimit, req.DayLimit, mid, id); err != nil {
+		SET send_limit_hour=?,send_limit_day=?,send_limits_manual=? WHERE id=? AND domain_id=?`,
+		req.HourLimit, req.DayLimit, manual, mid, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save send limits")
 		return
 	}
