@@ -41,6 +41,7 @@ import (
 	"strings"
 	"time"
 
+	"servika/internal/archivex"
 	"servika/internal/files"
 
 	"github.com/go-chi/chi/v5"
@@ -143,22 +144,55 @@ func newStageID(fileName string) (string, error) {
 	return hex.EncodeToString(raw) + extension, nil
 }
 
-// stagePath validates a staging id and returns its absolute path.
+// stagedArchive is a staged upload held OPEN, plus the two things a reader needs
+// about it.
 //
-// The id pattern is strict (32 hex characters and a known extension), so it
-// cannot carry a path component. The file is then opened through the beneath
-// helpers, which proves it really is in the staging directory and is a regular
-// file rather than a symlink the tenant swapped in.
-func stagePath(home, stageID string) (string, error) {
+// Pinned is the /proc/self/fd path of the descriptor, so every later read
+// resolves to the inode this package proved rather than to whatever the name
+// points at by then. Type comes from the staging id, whose extension was taken
+// from the upload; a pinned path carries no suffix to derive it from.
+type stagedArchive struct {
+	file *os.File
+	// Pinned addresses the open descriptor and is valid only until Close.
+	Pinned string
+	// Type is the archive format, decided from the staging id.
+	Type archivex.Type
+}
+
+// Close releases the descriptor. Pinned is meaningless afterwards.
+func (a *stagedArchive) Close() { _ = a.file.Close() }
+
+// openStagedArchive validates a staging id and opens the file it names.
+//
+// It returns a DESCRIPTOR rather than a path string, which is the whole point.
+// The staging directory and the file inside it are created beneath the home and
+// chowned to the tenant, so the tenant owns both and can unlink the file and put
+// a symlink in its place at any moment. A path string checked once and then
+// resolved again by every reader is not a boundary: between the check and the
+// tar branch's second os.Open as root lie a mkdir, an optional clear, an
+// optional full summary pass and the whole validation scan. Pinning once closes
+// that window, because /proc/self/fd resolves to the inode, not the name.
+func openStagedArchive(home, stageID string) (*stagedArchive, error) {
 	if !reStageID.MatchString(stageID) {
-		return "", errors.New("invalid upload id")
+		return nil, errors.New("invalid upload id")
 	}
-	relative := path.Join(stagingDir, stageID)
-	info, err := files.StatBeneath(home, relative)
+	file, err := files.OpenBeneath(home, path.Join(stagingDir, stageID))
+	if err != nil {
+		return nil, errors.New("the uploaded archive is gone (it may have expired)")
+	}
+	// Asserted on the DESCRIPTOR, as OpenBeneath requires: a named pipe or a
+	// device node under the home opens successfully, and reading one would hang
+	// the request or hand the extractor something that is not an archive.
+	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		return "", errors.New("the uploaded archive is gone (it may have expired)")
+		_ = file.Close()
+		return nil, errors.New("the uploaded archive is gone (it may have expired)")
 	}
-	return path.Join(home, relative), nil
+	return &stagedArchive{
+		file:   file,
+		Pinned: "/proc/self/fd/" + strconv.Itoa(int(file.Fd())),
+		Type:   archivex.DetectType(stageID),
+	}, nil
 }
 
 // sweepStaging removes uploads older than stagingLifetime. It runs on every

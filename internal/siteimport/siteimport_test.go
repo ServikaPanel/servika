@@ -1,9 +1,54 @@
 package siteimport
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
+
+// Every reader of a staged archive must address the PINNED descriptor.
+//
+// The staging directory and the file in it are created beneath the home and
+// chowned to the tenant, so the tenant owns both and can unlink the file and
+// leave a symlink in its place. A path string checked once and resolved again by
+// each reader is not a boundary: between the check and the tar branch's second
+// root-side open lie a mkdir, an optional clear, an optional full summary pass
+// and the whole validation scan, and the tar branch pipes what it opens into an
+// extractor. Any root-readable file on the host was reachable that way.
+func TestEveryArchiveReaderUsesThePinnedDescriptor(t *testing.T) {
+	source, err := os.ReadFile("archive.go")
+	if err != nil {
+		t.Fatalf("read the package source: %v", err)
+	}
+	readers := 0
+	for line := range strings.SplitSeq(string(source), "\n") {
+		if !strings.Contains(line, "archivex.Summarize(") && !strings.Contains(line, "archivex.ExtractStrip(") {
+			continue
+		}
+		readers++
+		if !strings.Contains(line, "archive.Pinned") {
+			t.Errorf("an archive reader resolves a path instead of the pinned descriptor:\n%s", strings.TrimSpace(line))
+		}
+	}
+	if readers < 2 {
+		t.Fatalf("found %d archive readers, want the summary and the extraction: the scan no longer covers them", readers)
+	}
+}
+
+// The pinned path addresses the descriptor, so it must be built from the open
+// file rather than from anything the caller supplied.
+func TestOpenStagedArchiveRefusesAnIDThatIsNotGenerated(t *testing.T) {
+	for _, bad := range []string{
+		"../" + strings.Repeat("a", 32) + ".zip",
+		strings.Repeat("a", 32),
+		"/etc/passwd",
+		"",
+	} {
+		if _, err := openStagedArchive("/home/c_site", bad); err == nil {
+			t.Errorf("openStagedArchive() accepted the staging id %q", bad)
+		}
+	}
+}
 
 // The staging id is generated, never taken from the upload, so a crafted file
 // name reaches the filesystem only as an extension.

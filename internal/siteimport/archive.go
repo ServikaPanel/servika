@@ -109,9 +109,18 @@ func (h *Handlers) UploadArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	absolute := path.Join(home, relative)
-	archiveType := archivex.DetectType(stageID)
-	summary, err := archivex.Summarize(r.Context(), absolute, archiveType, archiveLimits, markerFiles)
+	// Summarized through a pinned descriptor rather than the path just written:
+	// the staged file is owned by the tenant, who can replace it with a symlink
+	// between the write and this read.
+	archive, err := openStagedArchive(home, stageID)
+	if err != nil {
+		_ = files.RemoveAllBeneath(home, relative)
+		httpx.WriteError(w, http.StatusInternalServerError, "the archive could not be stored")
+		return
+	}
+	defer archive.Close()
+	archiveType := archive.Type
+	summary, err := archivex.Summarize(r.Context(), archive.Pinned, archiveType, archiveLimits, markerFiles)
 	if err != nil {
 		_ = files.RemoveAllBeneath(home, relative)
 		httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(err))
@@ -162,11 +171,15 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	archivePath, err := stagePath(home, request.StageID)
+	// Held open for the whole request: every reader below addresses the pinned
+	// descriptor, so a tenant who swaps the staged name mid-request cannot
+	// redirect a root read at a file of their choosing.
+	archive, err := openStagedArchive(home, request.StageID)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, err.Error())
 		return
 	}
+	defer archive.Close()
 	target, err := targetDirectory(request.Target)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
@@ -188,10 +201,9 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	archiveType := archivex.DetectType(archivePath)
 	strip, skipped := 0, ""
 	if request.SkipRoot {
-		summary, summaryErr := archivex.Summarize(r.Context(), archivePath, archiveType, archiveLimits, nil)
+		summary, summaryErr := archivex.Summarize(r.Context(), archive.Pinned, archive.Type, archiveLimits, nil)
 		if summaryErr != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(summaryErr))
 			return
@@ -205,7 +217,7 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	absoluteTarget := path.Join(home, target)
-	if _, err := archivex.ExtractStrip(r.Context(), archivePath, archiveType, absoluteTarget, systemUser, strip, archiveLimits); err != nil {
+	if _, err := archivex.ExtractStrip(r.Context(), archive.Pinned, archive.Type, absoluteTarget, systemUser, strip, archiveLimits); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, archivex.ErrStripUnsupported) {
 			status = http.StatusNotImplemented
