@@ -150,6 +150,10 @@ set_env_value() {
 
 log(){ printf '  %s\n' "$*"; }
 fail(){ log "✗ $*"; exit 1; }
+# verify_sha256 <file> <expected_hex>: succeeds only when the file's sha256
+# matches. The same helper servika-install.sh uses to gate wp-cli and phpMyAdmin;
+# every third-party download must pass it before it is executed or extracted.
+verify_sha256(){ [ "$(sha256sum "$1" 2>/dev/null | awk '{print $1}')" = "$2" ]; }
 
 [ "$(id -u)" = 0 ] || fail "root is required"
 load_servika_env
@@ -379,15 +383,31 @@ dnf install -y php-intl >/dev/null 2>&1 \
 # identifier, so an operator scanning by CVE feed sees a clean result on a server
 # that is two security releases behind.
 RCVER=1.7.4
+# The archive is PHP the panel then serves publicly at /webmail/, so the only
+# thing between a tampered download and arbitrary code in that document root was
+# the TLS certificate of the download host. Pin the bytes.
+#
+# Bump this WITH the version: .github/workflows/pinned-downloads.yml fetches the
+# release and compares, so a version moved without its checksum fails on the
+# commit that moved it rather than on a customer's server.
+RCSHA256="2c6c878f0093f1bf7fb6086781d2dd9269d652c016b86939c157c5f1729139a2"
 mkdir -p /opt/roundcube
 if [ ! -f /opt/roundcube/index.php ]; then
   RCTMP=$(mktemp -d)
-  if curl -fsSL -o "$RCTMP/roundcube.tar.gz" \
-       "https://github.com/roundcube/roundcubemail/releases/download/${RCVER}/roundcubemail-${RCVER}-complete.tar.gz" \
-     && tar xzf "$RCTMP/roundcube.tar.gz" -C /opt/roundcube --strip-components=1; then
-    log "roundcube ${RCVER} downloaded and extracted"
-  else
+  RCARCHIVE="$RCTMP/roundcube.tar.gz"
+  if ! curl -fsSL -o "$RCARCHIVE" \
+       "https://github.com/roundcube/roundcubemail/releases/download/${RCVER}/roundcubemail-${RCVER}-complete.tar.gz"; then
     log "✗ roundcube could not be downloaded; webmail skipped without affecting mail transport"
+  elif ! verify_sha256 "$RCARCHIVE" "$RCSHA256"; then
+    # A mismatch is NOT a download failure and must not be extracted anyway: it
+    # says the bytes are not the release this script pinned.
+    log "✗ roundcube ${RCVER} checksum mismatch; webmail skipped without affecting mail transport"
+    log "  expected $RCSHA256"
+    log "  received $(sha256sum "$RCARCHIVE" 2>/dev/null | awk '{print $1}')"
+  elif tar xzf "$RCARCHIVE" -C /opt/roundcube --strip-components=1; then
+    log "roundcube ${RCVER} verified and extracted"
+  else
+    log "✗ roundcube could not be extracted; webmail skipped without affecting mail transport"
   fi
   rm -rf "$RCTMP"
 fi

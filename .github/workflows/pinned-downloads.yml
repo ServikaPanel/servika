@@ -1,25 +1,27 @@
 name: Pinned downloads
 
-# servika-install.sh fetches wp-cli and phpMyAdmin from their upstream release
-# URLs and refuses them unless they match a checksum pinned in the script. A
-# version bumped without its checksum (or the reverse) therefore fails on a
-# customer's server during installation, where the only symptom is a warning and
-# a missing feature. Verify the pins here instead, so the mismatch surfaces on
-# the change that introduced it.
+# servika-install.sh fetches wp-cli and phpMyAdmin, and servika-mail-setup
+# fetches Roundcube, from their upstream release URLs; each is refused unless it
+# matches a checksum pinned in the script. A version bumped without its checksum
+# (or the reverse) therefore fails on a customer's server during installation,
+# where the only symptom is a warning and a missing feature. Verify the pins
+# here instead, so the mismatch surfaces on the change that introduced it.
 #
-# Scoped to the one file that carries the pins: this job reaches the public
-# internet, so it must not run on unrelated commits.
+# Scoped to the files that carry the pins: this job reaches the public internet,
+# so it must not run on unrelated commits.
 
 on:
   push:
     branches: [main]
     paths:
       - "servika-install.sh"
+      - "assets/ops/servika-mail-setup"
       - ".github/workflows/pinned-downloads.yml"
   pull_request:
     branches: [main]
     paths:
       - "servika-install.sh"
+      - "assets/ops/servika-mail-setup"
       - ".github/workflows/pinned-downloads.yml"
 
 permissions:
@@ -32,14 +34,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Verify wp-cli and phpMyAdmin against their pinned checksums
+      - name: Verify wp-cli, phpMyAdmin and Roundcube against their pinned checksums
         run: |
           set -euo pipefail
 
-          # Read each pin straight out of the installer rather than repeating it
-          # here, so this job cannot drift from the value that actually ships.
+          # Read each pin straight out of the script that ships it rather than
+          # repeating it here, so this job cannot drift from the value that
+          # actually runs on a customer's server.
           pin() {
             sed -n "s/^$1=\"\([^\"]*\)\"$/\1/p" servika-install.sh | head -n 1
+          }
+
+          # servika-mail-setup writes RCVER unquoted and RCSHA256 quoted, so the
+          # two are read with their own patterns rather than one shared one.
+          mail_pin() {
+            sed -n "s/^$1=\"\{0,1\}\([^\"]*\)\"\{0,1\}$/\1/p" assets/ops/servika-mail-setup | head -n 1
           }
 
           check() {
@@ -65,6 +74,8 @@ jobs:
           WP_CLI_SHA256="$(pin WP_CLI_SHA256)"
           PMA_VER="$(pin PMA_VER)"
           PMA_SHA256="$(pin PMA_SHA256)"
+          RCVER="$(mail_pin RCVER)"
+          RCSHA256="$(mail_pin RCSHA256)"
 
           for var in WP_CLI_VER PMA_VER; do
             eval "value=\${$var}"
@@ -73,6 +84,10 @@ jobs:
               exit 1
             fi
           done
+          if [ -z "$RCVER" ]; then
+            echo "::error::RCVER was not found in assets/ops/servika-mail-setup"
+            exit 1
+          fi
 
           check "wp-cli ${WP_CLI_VER}" \
             "https://github.com/wp-cli/wp-cli/releases/download/v${WP_CLI_VER}/wp-cli-${WP_CLI_VER}.phar" \
@@ -81,3 +96,10 @@ jobs:
           check "phpMyAdmin ${PMA_VER}" \
             "https://files.phpmyadmin.net/phpMyAdmin/${PMA_VER}/phpMyAdmin-${PMA_VER}-all-languages.tar.gz" \
             "$PMA_SHA256"
+
+          # Roundcube is the one of the three that is served to end users, at
+          # /webmail/, so a tampered archive is arbitrary PHP in a public
+          # document root.
+          check "Roundcube ${RCVER}" \
+            "https://github.com/roundcube/roundcubemail/releases/download/${RCVER}/roundcubemail-${RCVER}-complete.tar.gz" \
+            "$RCSHA256"
