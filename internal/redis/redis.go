@@ -52,6 +52,47 @@ func cli(args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+// cliInput runs valkey-cli with the command on STDIN rather than argv.
+//
+// /proc/<pid>/cmdline is mode 444 on Linux while /proc/<pid>/environ is 400, so
+// every c_* tenant on the host, each of which has a shell, cron and PHP, can
+// read another tenant's ACL password out of an argument while the command runs.
+// The admin password already travels in REDISCLI_AUTH for the same reason; this
+// closes the tenant credential.
+//
+// valkey-cli exits 0 for a command the SERVER refused, reporting it only in the
+// output, so the text is inspected rather than the exit status.
+func cliInput(command string) (string, error) {
+	// #nosec G204 -- a fixed binary with no arguments; the command travels on stdin.
+	cmd := exec.Command("valkey-cli")
+	cmd.Env = []string{
+		"REDISCLI_AUTH=" + adminPass(),
+		"LANG=C",
+		"LC_ALL=C",
+	}
+	cmd.Stdin = strings.NewReader(command + "\n")
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		return text, err
+	}
+	if strings.Contains(text, "(error)") {
+		return text, fmt.Errorf("valkey refused the command: %s", text)
+	}
+	return text, nil
+}
+
+// aclSafePassword reports whether a password may be written into a valkey-cli
+// command line on stdin. valkey-cli parses that line with its own tokenizer, so
+// whitespace or a quote would split the token and change the rule being set.
+// genPass produces hex, so this is a guard on a value arriving from elsewhere.
+func aclSafePassword(password string) bool {
+	if password == "" {
+		return false
+	}
+	return !strings.ContainsAny(password, " \t\r\n\x00\"'\\")
+}
+
 func genPass() string {
 	b := make([]byte, 18)
 	_, _ = rand.Read(b)
@@ -70,10 +111,17 @@ func genPass() string {
 // denials a tenant could enumerate every key name in the shared cache, including
 // its neighbours'.
 func enableUser(systemUser, password string) error {
-	if _, err := cli("ACL", "SETUSER", systemUser, "on", ">"+password,
-		"resetkeys", "~"+systemUser+":*", "resetchannels", "&"+systemUser+":*",
+	if !aclSafePassword(password) {
+		return fmt.Errorf("the ACL password contains characters valkey-cli cannot carry")
+	}
+	// On STDIN, never argv: the password would otherwise be readable by every
+	// other account on the host (see cliInput).
+	if _, err := cliInput(strings.Join([]string{
+		"ACL", "SETUSER", systemUser, "on", ">" + password,
+		"resetkeys", "~" + systemUser + ":*", "resetchannels", "&" + systemUser + ":*",
 		"+@all", "-@dangerous", "-@admin", "-scan", "-randomkey",
-		"+info", "+dbsize", "+command", "+ping", "+echo", "+client|no-evict"); err != nil {
+		"+info", "+dbsize", "+command", "+ping", "+echo", "+client|no-evict",
+	}, " ")); err != nil {
 		return err
 	}
 	_, err := cli("ACL", "SAVE")
@@ -126,6 +174,42 @@ func disableUser(systemUser string) error {
 
 func wpBin() string { return config.WPCLIBin() }
 
+// setSecretConstant writes a wp-config.php constant whose VALUE is a credential,
+// supplying it on stdin through wp-cli's own --prompt mechanism so it never
+// reaches argv, where /proc/<pid>/cmdline publishes it to every other account.
+//
+// Three measured properties of the pinned wp-cli shape this, the same ones
+// internal/wordpress documents for its own secret path:
+//
+//   - --quiet is REQUIRED, or wp-cli echoes the whole command line it assembled,
+//     the prompted value included, which only moves the secret to another place.
+//   - --quiet is NOT SUFFICIENT: the prompt line itself carries the value on
+//     stdout, so nothing here returns that output.
+//   - The exit code proves nothing, because wp-cli SILENTLY IGNORES a --prompt
+//     name it does not recognise and exits 0 having done nothing. The constant is
+//     read back instead.
+func setSecretConstant(systemUser, dir, key, value string) error {
+	full := []string{"-u", systemUser, "--", "env", "HOME=/home/" + systemUser,
+		"/usr/bin/php", "-d", "memory_limit=512M", wpBin(),
+		"config", "set", key, "--type=constant", "--raw", "--path=" + dir,
+		"--quiet", "--prompt=value"}
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+	cmd := exec.Command("runuser", full...)
+	cmd.Stdin = strings.NewReader(value + "\n")
+	if _, err := cmd.CombinedOutput(); err != nil {
+		// The output is deliberately dropped: the prompt line carries the value.
+		return fmt.Errorf("wp config set %s: %w", key, err)
+	}
+	stored, err := runWPCommand(systemUser, "config", "get", key, "--type=constant", "--path="+dir)
+	if err != nil {
+		return fmt.Errorf("wp config get %s: %w", key, err)
+	}
+	if strings.TrimSpace(string(stored)) != value {
+		return fmt.Errorf("%s was not written", key)
+	}
+	return nil
+}
+
 func runWPCommand(systemUser string, args ...string) ([]byte, error) {
 	full := append([]string{"-u", systemUser, "--", "env", "HOME=/home/" + systemUser,
 		"/usr/bin/php", "-d", "memory_limit=512M", wpBin()}, args...)
@@ -171,8 +255,16 @@ func connectWordPress(systemUser, password string) int {
 		}
 		set("WP_REDIS_HOST", redisHost, false)
 		set("WP_REDIS_PORT", strconv.Itoa(redisPort), true)
-		// The drop-in authenticates ACL users when WP_REDIS_PASSWORD is an array of username and password.
-		set("WP_REDIS_PASSWORD", "array('"+systemUser+"','"+password+"')", true)
+		// The drop-in authenticates ACL users when WP_REDIS_PASSWORD is an array of
+		// username and password. The value carries the credential, so it goes on
+		// stdin through wp-cli's own --prompt mechanism rather than into argv,
+		// where every other account on the host would read it.
+		if err := setSecretConstant(systemUser, dir, "WP_REDIS_PASSWORD",
+			"array('"+systemUser+"','"+password+"')"); err != nil {
+			// #nosec G706 -- logged values are a validated identifier, a path this package composed, and error text.
+			log.Printf("redis: could not write WP_REDIS_PASSWORD for %s in %s: %v", systemUser, dir, err)
+			continue
+		}
 		set("WP_REDIS_PREFIX", systemUser+":", false)
 		set("WP_REDIS_SELECTIVE_FLUSH", "true", true)
 		set("WP_REDIS_CLIENT", "phpredis", false)

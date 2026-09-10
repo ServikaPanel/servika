@@ -59,6 +59,16 @@ esac
 id "$SYSTEM_USER" >/dev/null 2>&1 || { echo "system user not found: $SYSTEM_USER"; exit 1; }
 
 vc(){ REDISCLI_AUTH="$ADMIN" valkey-cli "$@"; }
+# vc_in runs a valkey-cli command on STDIN rather than argv, for a command line
+# that carries the tenant's ACL password: /proc/<pid>/cmdline is mode 444, so an
+# argument is readable by every other account on the host. valkey-cli exits 0 for
+# a command the SERVER refused, so the output is checked instead.
+vc_in(){
+  local out
+  out=$(REDISCLI_AUTH="$ADMIN" valkey-cli 2>&1) <<<"$*"
+  case "$out" in *"(error)"*) printf '%s\n' "$out" >&2; return 1;; esac
+  return 0
+}
 wpc(){ runuser -u "$SYSTEM_USER" -- env HOME="/home/$SYSTEM_USER" /usr/bin/php -d memory_limit=512M "$WPCLI_BIN" "$@"; }
 say(){ printf '  %s\n' "$*"; }
 
@@ -109,8 +119,8 @@ fi
 [[ "$PASS" =~ ^[a-f0-9]{36}$ ]] || PASS=$(openssl rand -hex 18)
 
 # 1) Isolated ACL user with @dangerous disabled and read-only diagnostics enabled
-vc ACL SETUSER "$SYSTEM_USER" on ">$PASS" resetkeys "~$SYSTEM_USER:*" resetchannels "&$SYSTEM_USER:*" \
-   +@all -@dangerous -@admin +info +dbsize +command +ping +echo "+client|no-evict" >/dev/null
+vc_in "ACL SETUSER $SYSTEM_USER on >$PASS resetkeys ~$SYSTEM_USER:* resetchannels &$SYSTEM_USER:* \
+   +@all -@dangerous -@admin -scan -randomkey +info +dbsize +command +ping +echo +client|no-evict"
 vc ACL SAVE >/dev/null
 say "ACL user ready: $SYSTEM_USER (~$SYSTEM_USER:*)"
 
@@ -136,7 +146,13 @@ for dir in "${DIRS[@]}"; do
   set_(){ local a=(config set "$1" "$2" --type=constant --path="$dir"); [ "${3:-}" = raw ] && a+=(--raw); wpc "${a[@]}" >/dev/null 2>&1; }
   set_ WP_REDIS_HOST "$HOST"
   set_ WP_REDIS_PORT "$PORT" raw
-  set_ WP_REDIS_PASSWORD "array('$SYSTEM_USER','$PASS')" raw    # ACL credentials use [username, password].
+  # ACL credentials use [username, password]. The value carries the password, so
+  # it goes on stdin through wp-cli's own --prompt mechanism: an argument would be
+  # readable by every other account through /proc/<pid>/cmdline. --quiet is
+  # required (wp-cli otherwise echoes the assembled command line) and the output
+  # is dropped, because the prompt line itself carries the value.
+  printf '%s\n' "array('$SYSTEM_USER','$PASS')" |
+    wpc config set WP_REDIS_PASSWORD --type=constant --raw --path="$dir" --quiet --prompt=value >/dev/null 2>&1
   set_ WP_REDIS_PREFIX "$SYSTEM_USER:"
   set_ WP_REDIS_SELECTIVE_FLUSH true raw
   set_ WP_REDIS_CLIENT phpredis
