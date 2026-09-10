@@ -118,6 +118,10 @@ func WriteFileBeneath(_, _ string, _ []byte, _ uint32, _ string) error {
 	return errSafeIOLinuxOnly
 }
 
+func RenameBeneath(_, _, _, _ string) error {
+	return errSafeIOLinuxOnly
+}
+
 func StreamIntoBeneath(_, _ string, _ io.Reader, _ string) (int64, error) {
 	return 0, errSafeIOLinuxOnly
 }

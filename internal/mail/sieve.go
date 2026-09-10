@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"servika/internal/files"
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
@@ -316,12 +317,15 @@ func ApplyMailboxSieve(ctx context.Context, db *sql.DB, mailboxID int64) error {
 	if _, err := exec.LookPath("sievec"); err != nil {
 		return fmt.Errorf("dovecot-pigeonhole is not installed")
 	}
-	var home, email string
-	var uid, gid int
+	var maildir, email, systemUser string
 	if err := db.QueryRowContext(ctx, `
-		SELECT TRIM(TRAILING '/' FROM m.maildir), m.email, md.uid_n, md.gid_n
+		SELECT TRIM(TRAILING '/' FROM m.maildir), m.email, md.system_user
 		FROM mailboxes m JOIN mail_domains md ON md.id=m.mail_domain_id WHERE m.id=?`, mailboxID).
-		Scan(&home, &email, &uid, &gid); err != nil {
+		Scan(&maildir, &email, &systemUser); err != nil {
+		return err
+	}
+	home, rel, err := maildirJail(systemUser, maildir)
+	if err != nil {
 		return err
 	}
 	var out bytes.Buffer
@@ -397,39 +401,80 @@ if header :contains "X-Spam" "Yes" {
 		return err
 	}
 
-	return compileSieve(ctx, home, out.Bytes(), uid, gid)
+	return compileSieve(ctx, home, rel, out.Bytes(), systemUser)
 }
 
-// compileSieve writes the script atomically, compiles it with sievec, then swaps
-// both the source and the compiled binary into place owned by the mailbox user.
-func compileSieve(ctx context.Context, home string, script []byte, uid, gid int) error {
-	if err := os.MkdirAll(home, 0o700); err != nil {
+// maildirJail splits a stored mailbox directory into the tenant home that
+// confines it and the path relative to that home.
+//
+// Every write below is made through openat2 relative to the home, so the
+// relative half is what keeps a planted symlink from sending a root write
+// somewhere else. A directory that is not under /home/<system_user>/ is REFUSED
+// rather than written by absolute path, because a row edited outside the panel
+// would otherwise re-open exactly the hole this confinement closes.
+func maildirJail(systemUser, maildir string) (home, rel string, err error) {
+	if systemUser == "" || strings.ContainsRune(systemUser, filepath.Separator) ||
+		systemUser == "." || systemUser == ".." {
+		return "", "", fmt.Errorf("invalid system user %q", systemUser)
+	}
+	home = filepath.Join("/home", systemUser)
+	rel, err = filepath.Rel(home, filepath.Clean(maildir))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("mailbox directory %q is not under %s", maildir, home)
+	}
+	return home, rel, nil
+}
+
+// compileSieve compiles the script in a root-owned staging directory and then
+// publishes the source and the compiled binary into the mailbox through openat2.
+//
+// sievec is never pointed at a path inside the tenant's tree: it runs as root and
+// resolves what it is given, so a symlink standing where the script belongs would
+// make it read and write outside the mailbox. Staging also keeps the compiler's
+// output naming exactly as before, since the staged file carries the same base
+// name the mailbox copy does.
+func compileSieve(ctx context.Context, home, rel string, script []byte, systemUser string) error {
+	stage, err := os.MkdirTemp("", "servika-sieve-")
+	if err != nil {
 		return err
 	}
-	tmp := filepath.Join(home, ".dovecot.sieve.new")
-	active := filepath.Join(home, ".dovecot.sieve")
-	if err := os.WriteFile(tmp, script, 0o600); err != nil {
+	defer func() { _ = os.RemoveAll(stage) }()
+
+	staged := filepath.Join(stage, ".dovecot.sieve.new")
+	if err := os.WriteFile(staged, script, 0o600); err != nil {
 		return err
 	}
-	_ = os.Chown(tmp, uid, gid)
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	cmd := exec.CommandContext(ctx, "sievec", tmp)
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); the argument is a root-owned staging path.
+	cmd := exec.CommandContext(ctx, "sievec", staged)
 	cmd.Env = subprocessEnv
 	if output, err := cmd.CombinedOutput(); err != nil {
-		_ = os.Remove(tmp)
 		return fmt.Errorf("sievec: %s", strings.TrimSpace(string(output)))
 	}
-	if err := os.Rename(tmp, active); err != nil {
+
+	if err := files.MkdirAllBeneath(home, rel, systemUser); err != nil {
 		return err
 	}
-	_ = os.Chown(active, uid, gid)
-	compiledTmp := tmp + ".svbin"
-	compiled := active + ".svbin"
-	if _, err := os.Stat(compiledTmp); err == nil {
-		_ = os.Rename(compiledTmp, compiled)
-		_ = os.Chown(compiled, uid, gid)
+	if err := publishSieveFile(home, rel, ".dovecot.sieve", script, systemUser); err != nil {
+		return err
 	}
-	return nil
+	compiled, err := os.ReadFile(staged + ".svbin")
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	return publishSieveFile(home, rel, ".dovecot.sieve.svbin", compiled, systemUser)
+}
+
+// publishSieveFile stages the bytes beside their target and renames them into
+// place, so Dovecot never reads a half-written script.
+func publishSieveFile(home, rel, name string, data []byte, systemUser string) error {
+	tmpRel := rel + "/" + name + ".new"
+	if err := files.WriteFileBeneath(home, tmpRel, data, 0o600, systemUser); err != nil {
+		return err
+	}
+	return files.RenameBeneath(home, tmpRel, rel+"/"+name, systemUser)
 }
 
 func sieveMultiline(value string) string {

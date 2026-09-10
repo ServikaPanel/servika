@@ -835,6 +835,14 @@ func WriteFileBeneath(home, rel string, data []byte, mode uint32, systemUser str
 	return writeBeneath(home, rel, data, mode, systemUser)
 }
 
+// RenameBeneath moves oldRel to newRel, both beneath home, pinning each parent
+// with openat2. Use it to publish a staged file atomically: a plain os.Rename
+// resolves every directory component by name, so a symlink the tenant planted on
+// the way to the leaf sends the move outside the jail.
+func RenameBeneath(home, oldRel, newRel, systemUser string) error {
+	return renameBeneath(home, oldRel, newRel, systemUser)
+}
+
 // StreamIntoBeneath writes src to a NEW file at rel beneath home, owned by
 // systemUser, and reports how many bytes landed. It fails when rel already
 // exists, so a caller staging an upload cannot be tricked into appending to
