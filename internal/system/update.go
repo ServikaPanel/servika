@@ -1,6 +1,8 @@
 package system
 
 import (
+	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,9 +45,80 @@ func UpdateStatus(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// updateBootstrapKeyHex is the Ed25519 public key the bootstrap signature is
+// checked against, set at build time (-X). It is EMPTY by default, exactly as
+// the release signing key embedded in install.sh is: an installation that has no
+// key configured keeps working, and once a key is set the signature is REQUIRED,
+// including when the .sig is absent. "Verify it if a signature is present" is not
+// a check, because the attacker chooses whether to publish one.
+var updateBootstrapKeyHex = ""
+
+// maxUpdateRedirects bounds the redirect chain. Go's default follows ten.
+const maxUpdateRedirects = 5
+
+// updateToolClient refuses a redirect that leaves TLS.
+//
+// The scheme is compared against the FIRST request, not the previous hop, so a
+// chain cannot step down through an intermediate. A download that STARTED on
+// plain http is left alone, because SERVIKA_UPDATE_BOOTSTRAP_URL accepts one
+// deliberately and refusing there would break an operator's own mirror.
+func updateToolClient() *http.Client {
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= maxUpdateRedirects {
+				return fmt.Errorf("stopped after %d redirects", maxUpdateRedirects)
+			}
+			if via[0].URL.Scheme == "https" && request.URL.Scheme != "https" {
+				return fmt.Errorf("refusing a redirect from https to %s", request.URL.Scheme)
+			}
+			return nil
+		},
+	}
+}
+
+// updateBootstrapKey returns the configured verification key.
+func updateBootstrapKey() (ed25519.PublicKey, bool) {
+	if updateBootstrapKeyHex == "" {
+		return nil, false
+	}
+	raw, err := hex.DecodeString(updateBootstrapKeyHex)
+	if err != nil || len(raw) != ed25519.PublicKeySize {
+		return nil, false
+	}
+	return ed25519.PublicKey(raw), true
+}
+
+// verifyUpdateTool checks the detached signature published beside the bootstrap
+// script. The bytes become a file this panel writes 0755 and runs as root in the
+// next statement, so a `#!` prefix proves nothing: it proves the body is a
+// script, which is exactly what an attacker would supply.
+func verifyUpdateTool(client *http.Client, body []byte) error {
+	key, ok := updateBootstrapKey()
+	if !ok {
+		return nil // No key configured; the redirect refusal above is the only guard.
+	}
+	response, err := client.Get(updateRawURL() + ".sig")
+	if err != nil {
+		return fmt.Errorf("fetch the update tool signature: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("the update tool signature is not published (HTTP %d)", response.StatusCode)
+	}
+	signature, err := io.ReadAll(io.LimitReader(response.Body, 4096))
+	if err != nil {
+		return fmt.Errorf("read the update tool signature: %w", err)
+	}
+	if !ed25519.Verify(key, body, signature) {
+		return fmt.Errorf("the update tool signature does not verify")
+	}
+	return nil
+}
+
 func downloadUpdateTool() error {
 	scriptPath := updateScript()
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := updateToolClient()
 	response, err := client.Get(updateRawURL())
 	if err != nil {
 		return fmt.Errorf("download update tool: %w", err)
@@ -60,6 +133,9 @@ func downloadUpdateTool() error {
 	}
 	if !strings.HasPrefix(string(body), "#!") {
 		return fmt.Errorf("download update tool: unexpected content")
+	}
+	if err := verifyUpdateTool(client, body); err != nil {
+		return fmt.Errorf("download update tool: %w", err)
 	}
 
 	temporaryPath := scriptPath + ".tmp"
