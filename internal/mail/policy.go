@@ -175,11 +175,25 @@ func evaluateSendPolicy(db *sql.DB, attrs map[string]string) string {
 	if status != "active" {
 		return "REJECT 5.7.1 Mail account is not active"
 	}
+	// The per-mailbox counts DEFER on a read failure, for the same reason the
+	// server-settings read below does and ceilingCount does. Discarded, both
+	// totals stayed at 0, the exceeded test could never be true, and the mailbox
+	// was never suspended: the one layer meant to catch a compromised account was
+	// off for as long as mail_send_log could not be read, which is exactly the
+	// state a mass-mailing burst against that table produces.
 	var sentHour, sentDay int
-	_ = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
-		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`, mailboxID).Scan(&sentHour)
-	_ = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
-		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 DAY`, mailboxID).Scan(&sentDay)
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
+		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`, mailboxID).Scan(&sentHour); err != nil {
+		// #nosec G706 -- the logged values are a validated mailbox id and an error string; no raw tenant string with CR/LF reaches the log.
+		log.Printf("mail policy could not read the hourly send count for mailbox %d: %v", mailboxID, err)
+		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
+		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 DAY`, mailboxID).Scan(&sentDay); err != nil {
+		// #nosec G706 -- the logged values are a validated mailbox id and an error string; no raw tenant string with CR/LF reaches the log.
+		log.Printf("mail policy could not read the daily send count for mailbox %d: %v", mailboxID, err)
+		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
+	}
 	// Server-wide ceilings sit above the per-mailbox ones. They are read inside
 	// the same transaction as the counts, so a limit an operator has just lowered
 	// takes effect on the very next message rather than after a restart.
