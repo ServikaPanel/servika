@@ -21,8 +21,13 @@ import (
 // writes: a seed that reaches the column in the clear is the defect. The
 // repository carries no sqlmock dependency.
 type totpScript struct {
-	mu    sync.Mutex
-	rows  map[string][]driver.Value
+	mu   sync.Mutex
+	rows map[string][]driver.Value
+	// empty maps a query fragment to the COLUMN COUNT of an empty result set,
+	// which is how a "no such row" lookup is scripted. A nil entry in rows
+	// would still yield one row of zero columns, and Scan would report a
+	// column-count error instead of sql.ErrNoRows.
+	empty map[string]int
 	execs []totpExec
 }
 
@@ -34,6 +39,13 @@ type totpExec struct {
 func (s *totpScript) answerQuery(query string) (driver.Rows, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for fragment, columns := range s.empty {
+		if strings.Contains(query, fragment) {
+			// An EMPTY result set of the right width, which is what produces
+			// sql.ErrNoRows rather than a scan error.
+			return &totpRows{values: make([]driver.Value, columns), done: true}, nil
+		}
+	}
 	for fragment, values := range s.rows {
 		if strings.Contains(query, fragment) {
 			return &totpRows{values: values}, nil

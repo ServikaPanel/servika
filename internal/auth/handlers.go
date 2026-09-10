@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -212,6 +213,22 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		err := h.DB.QueryRow(
 			`SELECT id, username, password_hash, role, status, full_name FROM users WHERE username=?`,
 			req.Username).Scan(&uid, &username, &hash, &role, &status, &fullName)
+		// A driver failure is a FAULT, not a wrong credential, and merging the two
+		// cost twice during a database incident. It told an operator typing the
+		// right password that their credentials were wrong, sending them to reset a
+		// password instead of to the database; and every 401 records a failure
+		// against the per-account and per-IP lockout counters, so retrying during
+		// the outage locked a healthy account out for the quarter hour AFTER the
+		// database came back.
+		//
+		// Answering 500 here leaks nothing, because it is not conditioned on
+		// whether the account exists: only sql.ErrNoRows folds into the shared 401
+		// below, which is what keeps username existence secret. This is what
+		// internal/customer already does for the same credential check.
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			httpx.WriteError(w, http.StatusInternalServerError, "authentication failed")
+			return
+		}
 		// Always run PasswordMatches (even on a DB miss, where hash is empty) so a
 		// present and an absent username cannot be told apart by timing; do not let
 		// the err check short-circuit it away.
