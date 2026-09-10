@@ -94,6 +94,71 @@ warn() { echo -e "  ${c_y}!${c_0} $*"; }
 die()  { echo -e "${c_r}✗ $*${c_0}" >&2; exit 1; }
 step() { echo -e "${c_b}══ $* ══${c_0}"; }
 
+# The nginx source tree below is compiled AS ROOT into a shared object that nginx
+# loads into its master and every worker: the process that terminates TLS and
+# serves every hosted site. Nothing verified what was downloaded, so the only
+# control was the TLS certificate of nginx.org at download time.
+#
+# NGVER follows whatever nginx the host is running, so a per-version sha256
+# cannot be pinned here. nginx publishes a detached PGP signature for every
+# source release, so that is what is checked.
+#
+# The KEY FINGERPRINTS are pinned. Importing whatever nginx.org serves would add
+# nothing: the same host serves the tarball, the signature and the key, so a
+# swapped key would sign a swapped tarball. Verified against the five key files
+# nginx.org lists at /en/pgp_keys.html.
+#
+# A release signed by a maintainer who is not in this list is REFUSED and the
+# unknown fingerprint is printed, so an operator who meets a new nginx maintainer
+# is told exactly that rather than reading a generic failure. Erring that way
+# costs the WAF, not the site.
+NGINX_KEY_FILES="arut pluknet sb thresh nginx_signing"
+NGINX_KEY_FPRS="43387825DDB1BB97EC36BA5D007C8D7C15D87369
+D6786CE303D9A9022998DC6CC8464D549AF75C0A
+7338973069ED3F443F4D37DFA64FD5B17ADB39A8
+13C82A63B603576156E30A4EA0EA981B66B0D967
+8540A6F18833A80E9C1653A42FD21310B49F6B46
+573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
+9E9BE90EACBCDE69FE9B204CBCDCD8A38D88A2B3"
+
+# nginx_keyring <dir>: build a keyring holding only the pinned keys.
+nginx_keyring() {
+  local home="$1" name fpr
+  mkdir -p "$home" && chmod 700 "$home" || return 1
+  local imported=0
+  for name in $NGINX_KEY_FILES; do
+    curl -fsSL --retry 3 -o "$home/$name.key" "https://nginx.org/keys/$name.key" || continue
+    fpr=$(GNUPGHOME="$home" gpg --show-keys --with-colons "$home/$name.key" 2>/dev/null \
+            | awk -F: '/^fpr:/{print $10; exit}')
+    case "$NGINX_KEY_FPRS" in
+      *"$fpr"*)
+        GNUPGHOME="$home" gpg --batch --quiet --import "$home/$name.key" 2>/dev/null && imported=$((imported+1))
+        ;;
+      *)
+        warn "nginx key $name has an unpinned fingerprint ($fpr); it was not imported"
+        ;;
+    esac
+  done
+  [ "$imported" -gt 0 ]
+}
+
+# verify_nginx_source <tarball> <version>: refuse a source tree that is not the
+# signed upstream release.
+verify_nginx_source() {
+  local tarball="$1" version="$2"
+  command -v gpg >/dev/null 2>&1 || return 1
+  local home
+  home=$(mktemp -d) || return 1
+  local result=1
+  if curl -fsSL --retry 3 -o "$tarball.asc" "https://nginx.org/download/nginx-$version.tar.gz.asc" \
+     && nginx_keyring "$home" \
+     && GNUPGHOME="$home" gpg --batch --verify "$tarball.asc" "$tarball" >/dev/null 2>&1; then
+    result=0
+  fi
+  rm -rf "$home"
+  return "$result"
+}
+
 [ "$(id -u)" = 0 ] || die "root required"
 command -v nginx >/dev/null || die "nginx not found"
 NGVER=$(nginx -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -155,7 +220,7 @@ ldconfig
 # ---- 2) connector (.so) — compiled against the RUNNING nginx ----
 if ! have_module || ! abi_ok || [ "$FORCE" = 1 ]; then
   step "compiling ModSecurity-nginx connector (against nginx $NGVER)"
-  dnf install -y gcc make wget git pcre2-devel zlib-devel openssl-devel >/dev/null 2>&1 || true
+  dnf install -y gcc make wget git gnupg2 pcre2-devel zlib-devel openssl-devel >/dev/null 2>&1 || true
   [ -d "$SRC/ModSecurity-nginx" ] || \
     git clone -b "$CONNECTOR_VER" --depth 1 https://github.com/owasp-modsecurity/ModSecurity-nginx "$SRC/ModSecurity-nginx" \
       || die "could not clone ModSecurity-nginx"
@@ -163,6 +228,15 @@ if ! have_module || ! abi_ok || [ "$FORCE" = 1 ]; then
   if [ ! -d "$SRC/nginx-$NGVER" ]; then
     wget -qO "$SRC/nginx-$NGVER.tar.gz" "https://nginx.org/download/nginx-$NGVER.tar.gz" \
       || die "could not download nginx-$NGVER source"
+    # Between the download and the extraction, because everything after this
+    # point compiles what the tarball contains and loads the result into nginx.
+    # A failure REMOVES the tarball: leaving it behind would let the next run
+    # find it already downloaded and skip straight to the build.
+    if ! verify_nginx_source "$SRC/nginx-$NGVER.tar.gz" "$NGVER"; then
+      rm -f "$SRC/nginx-$NGVER.tar.gz" "$SRC/nginx-$NGVER.tar.gz.asc"
+      die "the nginx-$NGVER source did not verify against its upstream signature; refusing to build a module from it"
+    fi
+    ok "nginx-$NGVER source signature verified"
     tar xzf "$SRC/nginx-$NGVER.tar.gz" -C "$SRC" || die "could not extract nginx source"
   fi
   cd "$SRC/nginx-$NGVER" || exit 1
