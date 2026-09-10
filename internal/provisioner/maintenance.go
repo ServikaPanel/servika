@@ -238,7 +238,11 @@ func assembleMaintenanceBlock(domainID int64, exceptions []string) string {
 	// matched a location, so a server-context `return 503` fires on the ACME
 	// challenge path too. A domain left in maintenance would pass its first
 	// certificate check and then fail every renewal, silently, weeks later.
-	body.WriteString("    if ($request_uri ~ \"^/\\.well-known/\") { set $servika_maint 0; }\n")
+	//
+	// Tested on $uri, never $request_uri: the latter is the raw request line, so
+	// GET /.well-known/../index.php claimed the exemption and served the live
+	// site while the panel reported the domain closed.
+	body.WriteString("    if ($uri ~ \"^/\\.well-known/\") { set $servika_maint 0; }\n")
 	if len(exceptions) > 0 {
 		// $remote_addr is the canonical form of the client address and the
 		// stored values are canonicalised the same way, so the two compare as

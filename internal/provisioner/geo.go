@@ -122,7 +122,14 @@ func buildSharedConf(countries []string, ranges geoip.Ranges, rates []int) strin
 	// The sentinel is what both modes can be written against: "_exempt" matches
 	// no country, so a deny list never contains it, and the renderer always
 	// appends it to an allow list.
-	body.WriteString("map $request_uri $servika_geo_country_eff {\n")
+	//
+	// Keyed on $uri, never $request_uri. nginx does not normalize $request_uri:
+	// it is the raw request line, and percent escapes, `.`/`..` segments and
+	// duplicate slashes are resolved only for $uri and for location matching. A
+	// request line of GET /.well-known/../wp-login.php therefore satisfied this
+	// prefix test and was served as /wp-login.php, claiming the sentinel for
+	// every page of the site.
+	body.WriteString("map $uri $servika_geo_country_eff {\n")
 	body.WriteString("    ~^/\\.well-known/  \"_exempt\";\n")
 	body.WriteString("    default           $servika_geo_country;\n}\n\n")
 

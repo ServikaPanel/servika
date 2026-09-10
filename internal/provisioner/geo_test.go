@@ -79,6 +79,37 @@ func TestRateLimitKeyIsTakenFromTheArgumentFreeURI(t *testing.T) {
 // One zone per distinct RATE, never per domain: limit_req_zone lives in http
 // context, so per-domain zones would multiply shared memory by the number of
 // domains.
+// nginx resolves percent escapes and `..` segments for $uri and for location
+// matching, never for $request_uri. Keyed on the raw request line, a request of
+// GET /.well-known/../wp-login.php claimed the exemption sentinel and the empty
+// rate-limit key while nginx served /wp-login.php, so one prefix defeated both
+// the per-domain country rule and the per-domain rate limit at once.
+func TestBothExemptionsAreMatchedOnTheNormalizedURI(t *testing.T) {
+	shared := buildSharedConf([]string{"TR"}, geoip.Ranges{}, []int{30})
+	if strings.Contains(shared, "$request_uri") {
+		t.Fatalf("a protection map still keys on the un-normalized $request_uri:\n%s", shared)
+	}
+	if !strings.Contains(shared, "map $uri $servika_geo_country_eff {") {
+		t.Errorf("the country rule is not mapped from $uri:\n%s", shared)
+	}
+	if !strings.Contains(shared, "map $uri $servika_rl_key {") {
+		t.Errorf("the rate limit key is not mapped from $uri:\n%s", shared)
+	}
+}
+
+// The maintenance fragment exempts the same prefix through an `if`, and it was
+// tested against the raw request line for the same reason and with the same
+// result: the live site answered instead of the 503.
+func TestTheMaintenanceExemptionIsMatchedOnTheNormalizedURI(t *testing.T) {
+	block := assembleMaintenanceBlock(7, nil)
+	if strings.Contains(block, "$request_uri") {
+		t.Fatalf("the maintenance exemption still tests the un-normalized $request_uri:\n%s", block)
+	}
+	if !strings.Contains(block, `if ($uri ~ "^/\.well-known/")`) {
+		t.Fatalf("the maintenance exemption does not test $uri:\n%s", block)
+	}
+}
+
 func TestZoneCountFollowsTheRateLadderNotTheDomainCount(t *testing.T) {
 	// Two hundred domains using three distinct rates.
 	rates := make([]int, 0, 200)

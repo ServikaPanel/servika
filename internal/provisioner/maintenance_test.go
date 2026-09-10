@@ -29,7 +29,7 @@ func maintenanceFragment(t *testing.T, domainID int64, addresses []string) strin
 func TestMaintenanceDoesNotRefuseTheACMEChallenge(t *testing.T) {
 	fragment := maintenanceFragment(t, 12, nil)
 
-	if !strings.Contains(fragment, `if ($request_uri ~ "^/\.well-known/") { set $servika_maint 0; }`) {
+	if !strings.Contains(fragment, `if ($uri ~ "^/\.well-known/") { set $servika_maint 0; }`) {
 		t.Fatalf("the ACME challenge path is not exempted:\n%s", fragment)
 	}
 	// The exemption has to come BEFORE the refusal, or it sets a variable
