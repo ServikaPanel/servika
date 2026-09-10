@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"servika/internal/bgjob"
@@ -66,11 +65,6 @@ type Backup struct {
 type Handlers struct {
 	DB *sql.DB
 }
-
-// backupInProgress guards against concurrent manual backups for the same domain.
-// A full backup runs mysqldump + tar over the whole tenant tree; two at once for
-// one domain waste CPU/disk/IO and can race the shared dump directory.
-var backupInProgress sync.Map // domainID (int64) -> struct{}
 
 func (h *Handlers) lookupDomain(r *http.Request) (id int64, domainName, systemUser string, demo bool, err error) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -259,13 +253,16 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reject a second concurrent backup, or a backup while a restore is running,
-	// instead of racing the shared dump directory.
-	if progressActive(id) {
-		httpx.WriteError(w, http.StatusConflict, "an operation is already running for this domain")
-		return
-	}
-	if _, loaded := backupInProgress.LoadOrStore(id, struct{}{}); loaded {
-		httpx.WriteError(w, http.StatusConflict, "a backup is already running for this domain")
+	// instead of racing the shared dump directory and the tenant tree.
+	//
+	// ONE claim decides both. The old pair was a progressActive check followed by
+	// a separate LoadOrStore: the first is a check-then-act two callers can both
+	// pass, and the second excluded only another backup, so a backup could start
+	// while a restore was rewriting the same tree with rsync --delete. This
+	// endpoint does not go through backupOneDomain, so it takes the lock itself.
+	release, ok := lockDomain(id)
+	if !ok {
+		httpx.WriteError(w, http.StatusConflict, ErrDomainBusy.Error())
 		return
 	}
 
@@ -288,7 +285,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			// "preparing" for ever.
 			progressFinish(id, "", err)
 		},
-		func() { h.backupTask(id, domainName, systemUser, dir, file) })
+		func() { h.backupTask(id, release, domainName, systemUser, dir, file) })
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 		"ok":      true,
 		"started": true,
@@ -296,10 +293,14 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// backupTask is Create's background body. It holds the concurrency lock and its
-// own context, and reports its outcome through the progress record.
-func (h *Handlers) backupTask(id int64, domainName, systemUser, dir, file string) {
-	defer backupInProgress.Delete(id)
+// backupTask is Create's background body. It holds the domain lock and its own
+// context, and reports its outcome through the progress record.
+//
+// release comes from Create's own claim: the lock is taken while the request is
+// still being answered, so a second request cannot slip in before this goroutine
+// starts, and it is released HERE because the work outlives the request.
+func (h *Handlers) backupTask(id int64, release func(), domainName, systemUser, dir, file string) {
+	defer release()
 	// Bound the dump+archive work so a pathological dataset cannot pin mysqldump or
 	// tar (CPU/IO heavy) indefinitely and starve the host.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)

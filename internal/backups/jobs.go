@@ -86,10 +86,21 @@ func jobStatus(succeeded, failed int) string {
 // backupOneDomain writes one domain archive and its backups row, tagged with the
 // job that produced it. Retention pruning is the caller's job, because manual and
 // scheduled backups keep different counts.
+//
+// The domain lock is taken HERE rather than in each caller, because this is the
+// one place every backup goes through: the manual handler, the bulk job and the
+// scheduler. A backup that ran while a restore was rewriting the same tree
+// captured a half-written document root and recorded it as a normal,
+// checksum-verified archive.
 func backupOneDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser, backupType, notes string, jobID int64) (int64, string, error) {
 	if !validSystemUser(systemUser) {
 		return 0, "", fmt.Errorf("invalid system user")
 	}
+	release, ok := lockDomain(domainID)
+	if !ok {
+		return 0, "", ErrDomainBusy
+	}
+	defer release()
 	dir := filepath.Join(backupRoot(), systemUser)
 	// #nosec G703 -- path derives from backupRoot() and a validSystemUser-checked identifier.
 	_ = os.MkdirAll(dir, 0700)
@@ -138,6 +149,15 @@ func backupOneDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser
 // non-HTTP path used by multi-domain restore jobs; per-file and per-database selection
 // stays on the single-domain restore endpoint.
 func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode string, clean bool) (string, error) {
+	// Held for the whole restore. rsync -a (with --delete on a clean restore)
+	// rewrites the tree a concurrent backup would be reading, and the SQL import
+	// lands in a schema a second restore would be importing into as well.
+	release, ok := lockDomain(domainID)
+	if !ok {
+		return "", ErrDomainBusy
+	}
+	defer release()
+
 	var systemUser, file string
 	var isDemo int
 	err := db.QueryRowContext(ctx,

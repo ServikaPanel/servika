@@ -86,10 +86,17 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	// Reject a restore while another backup/restore runs for this domain, then
 	// track this one so the customer sees its stages. Error paths are closed by the
 	// deferred guard; the success path closes the record explicitly at the end.
-	if progressActive(id) {
-		httpx.WriteError(w, http.StatusConflict, "an operation is already running for this domain")
+	//
+	// The CLAIM is the lock, not the progress record. progressActive is a check
+	// followed by a separate write, so two callers could both find it free, and
+	// the bulk-job and scheduler paths never set it at all. This endpoint does not
+	// go through restoreCore, so it takes the lock itself.
+	release, ok := lockDomain(id)
+	if !ok {
+		httpx.WriteError(w, http.StatusConflict, ErrDomainBusy.Error())
 		return
 	}
+	defer release()
 	progressStart(id, "restore", stagePreparing, 0)
 	defer func() {
 		if progressActive(id) {
