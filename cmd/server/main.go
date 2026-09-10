@@ -503,6 +503,9 @@ func main() {
 	// A bulk backup or restore job left 'running' by a restart has no goroutine
 	// to finish it; mark it failed so the UI stops showing it in progress.
 	backupsH.HealJobsOnStartup()
+	// The same correction for an off-site upload interrupted mid-transfer: its
+	// row would otherwise say "uploading" for ever, with no route that retries it.
+	backupsH.HealRemoteUploads()
 	backups.StartScheduler(d)
 	// The nightly malware sweep. It does nothing at all until an operator
 	// turns it on, and it takes the same single scan slot a hand-started scan

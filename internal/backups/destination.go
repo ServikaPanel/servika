@@ -662,6 +662,32 @@ func removeRemoteCopy(db *sql.DB, domainID int64, fileName, remoteStatus string)
 	}
 }
 
+// HealRemoteUploads closes any backup left at remote_status='uploading' by a
+// panel restart.
+//
+// The upload runs in a detached goroutine with a 30-minute budget, and the only
+// exits from 'uploading' are 'successful' and 'failed'. A restart inside that
+// window leaves the row saying "uploading" for ever: nothing resets it, and no
+// route re-triggers the push, so the backup screen shows a transfer that will
+// never advance for an archive whose off-site copy never landed. This is the
+// same correction HealJobsOnStartup makes for backup_jobs.
+//
+// The local archive is untouched and the next scheduled backup uploads its own
+// new one; only the interrupted row's status is corrected.
+func (h *Handlers) HealRemoteUploads() {
+	res, err := h.DB.Exec(
+		`UPDATE backups SET remote_status='failed',
+		        remote_error='the panel restarted while this upload was running'
+		  WHERE remote_status='uploading'`)
+	if err != nil {
+		log.Printf("backup destinations: startup heal failed: %v", err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("backup destinations: %d interrupted upload(s) marked as failed", n)
+	}
+}
+
 func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fileName string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
