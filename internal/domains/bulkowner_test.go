@@ -38,6 +38,20 @@ func (r *ownerRecorder) record(query string, args []driver.NamedValue) {
 	r.values = append(r.values, plain)
 }
 
+// matching returns every recorded statement containing the fragment, with its
+// bound values.
+func (r *ownerRecorder) matching(fragment string) (statements []string, values [][]driver.Value) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, statement := range r.statements {
+		if strings.Contains(statement, fragment) {
+			statements = append(statements, statement)
+			values = append(values, r.values[i])
+		}
+	}
+	return statements, values
+}
+
 func (r *ownerRecorder) update() (string, []driver.Value) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -90,8 +104,47 @@ func (c *ownerConn) QueryContext(_ context.Context, query string, args []driver.
 		return &countRow{n: boolToInt(c.rec.ownsCustomer)}, nil
 	case strings.Contains(query, "COUNT(*) FROM customers WHERE id=?"):
 		return &countRow{n: 1}, nil // the target customer exists
+	case strings.Contains(query, "SELECT domain_name, system_user, is_demo"):
+		return &staticRows{
+			columns: []string{"domain_name", "system_user", "is_demo"},
+			rows:    [][]driver.Value{{"parent.example", "c_parent", int64(0)}},
+		}, nil
+	case strings.Contains(query, "parent_domain_id=?"):
+		// A parent that is active and an addon that was suspended on its own
+		// earlier. The two differ deliberately: a rollback must put each row back
+		// as it was found.
+		return &staticRows{
+			columns: []string{"id", "suspended", "status"},
+			rows: [][]driver.Value{
+				{int64(7), int64(0), "active"},
+				{int64(8), int64(1), "passive"},
+			},
+		}, nil
+	case strings.Contains(query, "php_version"):
+		// RerenderVhost's own read. Refusing it here fails the render
+		// deterministically, which is the rollback path the suspension tests
+		// measure; it is unreachable from the owner tests.
+		return nil, fmt.Errorf("the vhost render is refused in this test")
 	}
 	return &countRow{n: 0}, nil
+}
+
+// staticRows answers a fixed result set of any width, unlike countRow.
+type staticRows struct {
+	columns []string
+	rows    [][]driver.Value
+	next    int
+}
+
+func (r *staticRows) Columns() []string { return r.columns }
+func (r *staticRows) Close() error      { return nil }
+func (r *staticRows) Next(dest []driver.Value) error {
+	if r.next >= len(r.rows) {
+		return io.EOF
+	}
+	copy(dest, r.rows[r.next])
+	r.next++
+	return nil
 }
 
 func boolToInt(v bool) int64 {

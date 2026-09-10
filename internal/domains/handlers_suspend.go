@@ -54,22 +54,102 @@ func (h *Handlers) setSuspended(w http.ResponseWriter, r *http.Request, suspende
 	})
 }
 
-// ApplyDomainSuspend suspends or resumes one domain: it updates the domains row,
-// re-renders the vhost (rolling the DB row back on failure), cascades the state
-// to FTP accounts, mail domains and mailboxes, and stops/starts the tenant
-// runtime. It is HTTP-independent so both the handler and the reseller-wide
+// ownedByDomainOrItsAddons selects the rows of a domain and of every addon that
+// answers to it. Both placeholders take the same domain id.
+//
+// An addon domain is a full domains row carrying its PARENT's system_user, so it
+// is the same Linux account, the same home directory and the same database
+// namespace. Suspending the parent alone leaves that row active, and every
+// CustomerScope handler resolves the tenant from whichever row the URL names, so
+// the suspended customer keeps the whole surface through the addon's id.
+const ownedByDomainOrItsAddons = `(domain_id=? OR domain_id IN (SELECT id FROM domains WHERE parent_domain_id=?))`
+
+// suspensionRow is one domains row a suspension applies to, with the state to put
+// back when the vhost render fails.
+type suspensionRow struct {
+	id        int64
+	suspended int
+	status    string
+}
+
+// suspensionTargets returns the domain and every addon row that answers to it.
+//
+// Each row's own previous state is kept, never the parent's: an addon can be
+// suspended on its own (the endpoint takes any domain id), and a rollback that
+// levelled it to the parent's state would silently discard that decision.
+func suspensionTargets(ctx context.Context, db *sql.DB, id int64) ([]suspensionRow, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT id, COALESCE(suspended,0), status FROM domains WHERE id=? OR parent_domain_id=? ORDER BY id`, id, id)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var targets []suspensionRow
+	for rows.Next() {
+		var row suspensionRow
+		if err := rows.Scan(&row.id, &row.suspended, &row.status); err != nil {
+			// A dropped row is a domain left active while the caller is told the
+			// whole tenant was suspended, which is the defect this exists to close.
+			return nil, err
+		}
+		targets = append(targets, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(targets) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	return targets, nil
+}
+
+// rerenderTargets re-renders every affected vhost. An addon has its own config
+// file and applyVhostForDomain reads the suspended flag from the row it is given,
+// so a parent-only render leaves the addon site serving.
+func rerenderTargets(db *sql.DB, targets []suspensionRow) error {
+	for _, target := range targets {
+		if err := provisioner.RerenderVhost(db, target.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// restoreSuspensionState puts every row back as it was found and re-renders it.
+func restoreSuspensionState(ctx context.Context, db *sql.DB, targets []suspensionRow) {
+	for _, target := range targets {
+		if _, err := db.ExecContext(ctx,
+			`UPDATE domains SET suspended=?, status=? WHERE id=?`,
+			target.suspended, target.status, target.id); err != nil {
+			log.Printf("rollback domain suspension state for domain %d: %v", target.id, err)
+			continue
+		}
+		if err := provisioner.RerenderVhost(db, target.id); err != nil {
+			log.Printf("restore domain vhost after suspension rollback for domain %d: %v", target.id, err)
+		}
+	}
+}
+
+// ApplyDomainSuspend suspends or resumes one domain AND every addon row that
+// answers to it: it updates the domains rows, re-renders each vhost (rolling
+// every row back on failure), cascades the state to FTP accounts, mail domains
+// and mailboxes, and stops/starts the tenant runtime. It is HTTP-independent so both the handler and the reseller-wide
 // cascade can call it. Returns the domain name, ErrDemoSuspend for a demo
 // subscription, or sql.ErrNoRows when the domain is gone.
 func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended bool) (string, error) {
-	var domainName, systemUser, previousStatus string
-	var isDemo, previousSuspended int
+	var domainName, systemUser string
+	var isDemo int
 	if err := db.QueryRowContext(ctx,
-		`SELECT domain_name, system_user, is_demo, status, COALESCE(suspended,0) FROM domains WHERE id=?`, id).
-		Scan(&domainName, &systemUser, &isDemo, &previousStatus, &previousSuspended); err != nil {
+		`SELECT domain_name, system_user, is_demo FROM domains WHERE id=?`, id).
+		Scan(&domainName, &systemUser, &isDemo); err != nil {
 		return "", err
 	}
 	if isDemo == 1 {
 		return domainName, ErrDemoSuspend
+	}
+	targets, err := suspensionTargets(ctx, db, id)
+	if err != nil {
+		return domainName, err
 	}
 
 	value := 0
@@ -79,28 +159,24 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		status = "passive"
 	}
 	if _, err := db.ExecContext(ctx,
-		`UPDATE domains SET suspended=?, status=? WHERE id=?`, value, status, id); err != nil {
+		`UPDATE domains SET suspended=?, status=? WHERE id=? OR parent_domain_id=?`,
+		value, status, id, id); err != nil {
 		return domainName, err
 	}
-	if err := provisioner.RerenderVhost(db, id); err != nil {
-		if _, rollbackErr := db.ExecContext(ctx,
-			`UPDATE domains SET suspended=?, status=? WHERE id=?`, previousSuspended, previousStatus, id); rollbackErr != nil {
-			log.Printf("rollback domain suspension state: %v", rollbackErr)
-		} else if restoreErr := provisioner.RerenderVhost(db, id); restoreErr != nil {
-			log.Printf("restore domain vhost after suspension rollback: %v", restoreErr)
-		}
+	if err := rerenderTargets(db, targets); err != nil {
+		restoreSuspensionState(ctx, db, targets)
 		return domainName, err
 	}
 
 	ftpStatus := "active"
 	// Suspending bumps token_version so any active customer JWT is revoked at once;
 	// resuming only restores status and leaves the version untouched.
-	ftpQuery := `UPDATE ftp_accounts SET status=? WHERE domain_id=?`
+	ftpQuery := `UPDATE ftp_accounts SET status=? WHERE ` + ownedByDomainOrItsAddons
 	if suspended {
 		ftpStatus = "suspended"
-		ftpQuery = `UPDATE ftp_accounts SET status=?, token_version=token_version+1 WHERE domain_id=?`
+		ftpQuery = `UPDATE ftp_accounts SET status=?, token_version=token_version+1 WHERE ` + ownedByDomainOrItsAddons
 	}
-	if _, err := db.ExecContext(ctx, ftpQuery, ftpStatus, id); err != nil {
+	if _, err := db.ExecContext(ctx, ftpQuery, ftpStatus, id, id); err != nil {
 		log.Printf("update FTP account suspension state for domain %d: %v", id, err)
 	}
 	mailStatus := "active"
@@ -108,11 +184,11 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		mailStatus = "suspended"
 	}
 	if _, err := db.ExecContext(ctx,
-		`UPDATE mail_domains SET status=? WHERE domain_id=?`, mailStatus, id); err != nil {
+		`UPDATE mail_domains SET status=? WHERE `+ownedByDomainOrItsAddons, mailStatus, id, id); err != nil {
 		log.Printf("update mail domain suspension state for domain %d: %v", id, err)
 	}
 	if _, err := db.ExecContext(ctx,
-		`UPDATE mailboxes SET status=? WHERE domain_id=?`, mailStatus, id); err != nil {
+		`UPDATE mailboxes SET status=? WHERE `+ownedByDomainOrItsAddons, mailStatus, id, id); err != nil {
 		log.Printf("update mailbox suspension state for domain %d: %v", id, err)
 	}
 	if systemUser != "" {
