@@ -26,6 +26,17 @@ export LC_ALL=C
 # world-readable.
 umask 077
 
+# The off-site uploader is shared with servika-db-backup. Sourcing is
+# best-effort: a host where the library has not landed still takes its local
+# disaster-recovery backup, which is the part that must never be skipped.
+servika_upload_offsite() { :; }
+for offsite_lib in "${SERVIKA_OPSBIN:-/usr/local/bin}/servika-offsite-lib" /opt/servika/src/scripts/servika-offsite-lib; do
+  if [ -r "$offsite_lib" ]; then
+    # shellcheck source=/dev/null
+    . "$offsite_lib" && break
+  fi
+done
+
 CERT_ROOT=${SERVIKA_CERT_ROOT:-/etc/pki/servika}
 ACME_HOME=${SERVIKA_ACME_HOME:-/root/.acme.sh}
 LOG_DIR=${SERVIKA_LOG_DIR:-/opt/servika/logs}
@@ -144,6 +155,34 @@ find "$DEST" -mindepth 1 -maxdepth 1 -type d -name "20*" -mtime +7 -exec rm -rf 
 
 # Belt and braces: force every output file to 0600.
 chmod 600 "$D"/* 2>/dev/null || true
+
+# Off-site copy. This archive is the ONLY backup carrying the host recovery state
+# the per-domain backups omit: the panel secrets, the DKIM keys, the ACME
+# account, the mail and vhost configuration and the all-databases dump. A host
+# lost with it cannot be rebuilt from the per-domain off-site copies alone.
+#
+# One run is a DIRECTORY and lftp uploads files, so the run is bundled into a
+# single tarball for transport. The bundle is temporary: the local backup is
+# already on disk as the directory, and keeping a second copy of it would double
+# the space this tool uses. Retention default 7, matching the local one.
+#
+# Best-effort throughout, like every other step here: a destination that is
+# unreachable must not cost the local backup that already succeeded.
+if [ -n "${SERVIKA_SYSTEM_OFFSITE_TYPE:-}" ]; then
+  bundle_dir=$(mktemp -d "${TMPDIR:-/tmp}/servika-system-offsite.XXXXXX" 2>>"$LOG")
+  if [ -n "$bundle_dir" ] && [ -d "$bundle_dir" ]; then
+    bundle="$bundle_dir/servika-system-$STAMP.tar.gz"
+    if tar czf "$bundle" -C "$DEST" "$STAMP" 2>>"$LOG"; then
+      servika_upload_offsite SYSTEM "$bundle" 'servika-system-*.tar.gz' servika-system 7 2>>"$LOG"
+      log "OK offsite bundle sent ($(du -h "$bundle" | cut -f1))"
+    else
+      log "!! offsite: the run could not be bundled, nothing was uploaded"
+    fi
+    rm -rf "$bundle_dir"
+  else
+    log "!! offsite: no staging directory, nothing was uploaded"
+  fi
+fi
 
 log "=== servika system backup complete ==="
 ls -la "$D" | tee -a "$LOG"

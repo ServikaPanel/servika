@@ -406,6 +406,12 @@ fi
 [ -f "$A/ops/servika-db-backup" ] \
   || die "the release does not contain the database backup tool; update was not started"
 install -m 0755 "$A/ops/servika-db-backup" "$DB_BACKUP"
+# The uploader the backup tool sources, installed alongside it rather than with
+# the rest of the ops files further down: the pre-update dump runs before that
+# loop, and without the library here its off-site copy would be silently skipped
+# on every update.
+[ -f "$A/ops/servika-offsite-lib" ] \
+  && install -m 0755 "$A/ops/servika-offsite-lib" "$OPSBIN/servika-offsite-lib" 2>/dev/null || true
 UNITS_INSTALLED=0
 for unit in servika-db-backup.service servika-db-backup.timer servika-system-backup.service servika-system-backup.timer servika-av-watch.service servika-proc-watch.service servika-av-scan.service servika-av-scan.timer; do
   if [ -f "$A/systemd/$unit" ]; then

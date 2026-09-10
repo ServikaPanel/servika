@@ -298,6 +298,24 @@ The panel database backup can also push each dump to a remote FTP/SFTP destinati
 
 Panel database backups are separate from customer site and database backups, which the panel's built-in scheduler runs per domain according to each domain's configured frequency, hour, and retention. Customer backup archives are stored under `SERVIKA_BACKUP_ROOT`, default `/var/backups/servika`.
 
+### Offsite host disaster-recovery backups
+
+`servika-system-backup` captures the host state the per-domain backups do not: the panel secrets, the systemd units, the DKIM keys, the BIND zones, the mail configuration, the web and mail SSL plus the ACME account, the per-tenant PHP-FPM pools, the real Maildirs, cron, and a dump of every MySQL database. A host lost with only per-domain offsite backups cannot be rebuilt from them, because those archives contain none of that.
+
+Each run is a directory under `/var/backups/servika-system`. For transport the run is bundled into a single `servika-system-<timestamp>.tar.gz`, uploaded, and the bundle is then discarded locally. It uses the same uploader as the panel database backup and its own settings in `/etc/servika/env`:
+
+| Variable                      | Default                  | Purpose                                                                        |
+|-------------------------------|--------------------------|--------------------------------------------------------------------------------|
+| `SERVIKA_SYSTEM_OFFSITE_TYPE` | empty (disabled)         | `ftp` or `sftp`. A non-empty value enables the offsite upload.                 |
+| `SERVIKA_SYSTEM_OFFSITE_HOST` | empty                    | Destination hostname or IP. Rejected if it contains shell/lftp metacharacters. |
+| `SERVIKA_SYSTEM_OFFSITE_PORT` | `21` (ftp) / `22` (sftp) | Destination port.                                                              |
+| `SERVIKA_SYSTEM_OFFSITE_USER` | empty                    | Destination username.                                                          |
+| `SERVIKA_SYSTEM_OFFSITE_PASS` | empty                    | Destination password.                                                          |
+| `SERVIKA_SYSTEM_OFFSITE_DIR`  | `servika-system`         | Remote target directory.                                                       |
+| `SERVIKA_SYSTEM_OFFSITE_KEEP` | `7`                      | Number of newest remote bundles to retain.                                     |
+
+The timer reads these through the unit's `EnvironmentFile=/etc/servika/env`, so a manual `servika-system-backup` run only uploads when the variables are present in its own environment. As with the panel database backup, the upload is best-effort: an unreachable destination never fails the local backup.
+
 ## Core repair
 
 When core panel files become corrupted (0-byte frontend, missing binary), restore them from the canonical release without touching customer data:

@@ -34,99 +34,19 @@ load_servika_env() {
 
 load_servika_env
 
-# lftp_escape: escape a value placed inside double quotes on the lftp command line
-# (mirrors internal/backups/destination.go lftpEscape).
-lftp_escape() {
-  local s=$1
-  s=${s//\\/\\\\}
-  s=${s//\"/\\\"}
-  printf '%s' "$s"
-}
-
-# upload_offsite: best-effort secondary copy of the just-published dump to an
-# FTP/SFTP destination configured through /etc/servika/env. A failure here never
-# fails the backup: the local dump is already valid, and servika-update/-restore
-# depend on this script succeeding to take a pre-update dump. Diagnostics go to
-# stderr so the stdout final-path contract stays intact.
-upload_offsite() {
-  local dump=$1 name
-  name=$(basename "$dump")
-  local otype="${SERVIKA_DB_OFFSITE_TYPE:-}"
-  [ -n "$otype" ] || return 0 # offsite not configured
-  if [ "$otype" != "ftp" ] && [ "$otype" != "sftp" ]; then
-    echo "offsite: invalid SERVIKA_DB_OFFSITE_TYPE (want ftp|sftp), skipping upload" >&2
-    return 0
+# The off-site uploader lives in servika-offsite-lib so the panel dump and the
+# host disaster-recovery archive share one copy of it. Sourcing is best-effort:
+# this script runs under `set -e` and its stdout is the final-path contract, so a
+# release where the library has not landed yet must still take the dump. That
+# really happens: servika-update installs this tool before the ops loop, to take
+# the pre-update dump.
+servika_upload_offsite() { :; }
+for offsite_lib in "${SERVIKA_OPSBIN:-/usr/local/bin}/servika-offsite-lib" /opt/servika/src/scripts/servika-offsite-lib; do
+  if [ -r "$offsite_lib" ]; then
+    # shellcheck source=/dev/null
+    . "$offsite_lib" && break
   fi
-  local host="${SERVIKA_DB_OFFSITE_HOST:-}"
-  if [ -z "$host" ]; then
-    echo "offsite: SERVIKA_DB_OFFSITE_HOST is empty, skipping upload" >&2
-    return 0
-  fi
-  # Reject hosts carrying lftp/shell metacharacters before embedding in the command line.
-  case "$host" in
-    *[\"\\\ \;\`\$\'*?\<\>\|]*|*'&'*)
-      echo "offsite: SERVIKA_DB_OFFSITE_HOST contains invalid characters, skipping upload" >&2
-      return 0 ;;
-  esac
-  local port="${SERVIKA_DB_OFFSITE_PORT:-}"
-  if [ -z "$port" ]; then
-    if [ "$otype" = "sftp" ]; then port=22; else port=21; fi
-  fi
-  case "$port" in
-    ''|*[!0-9]*) echo "offsite: SERVIKA_DB_OFFSITE_PORT must be numeric, skipping upload" >&2; return 0 ;;
-  esac
-  local dir="${SERVIKA_DB_OFFSITE_DIR:-servika-db}"
-  local user="${SERVIKA_DB_OFFSITE_USER:-}"
-  local pass="${SERVIKA_DB_OFFSITE_PASS:-}"
-  local keep="${SERVIKA_DB_OFFSITE_KEEP:-14}"
-  case "$keep" in
-    ''|*[!0-9]*) keep=14 ;;
-  esac
-  if ! command -v lftp >/dev/null 2>&1; then
-    echo "offsite: lftp not found on PATH, skipping upload" >&2
-    return 0
-  fi
-  local eu ed
-  eu=$(lftp_escape "$user"); ed=$(lftp_escape "$dir")
-  # The password travels in LFTP_PASSWORD, which `open --env-password` reads. The
-  # whole `-c` script is an element of lftp's argv, and /proc/<pid>/cmdline is
-  # mode 444: every c_* tenant on this host has shell and cron, so the older
-  # `open -u user,pass` form handed them the credentials of the destination that
-  # holds the panel's own database dumps. Those dumps carry every tenant's rows,
-  # the users table and the encrypted secret columns.
-  #
-  # It is set per COMMAND rather than exported, so no other subprocess of this
-  # script inherits it.
-  # Upload the new dump, then keep only the newest $keep panel-*.sql.gz remotely.
-  local script
-  script=$(printf 'set cmd:fail-exit yes; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; mkdir -p -f "%s"; cd "%s"; put -O . "%s"; bye' \
-    "$eu" "$otype" "$host" "$port" "$ed" "$ed" "$dump")
-  if ! LFTP_PASSWORD="$pass" lftp -c "$script" >/dev/null 2>&1; then
-    echo "offsite: upload of $name to $otype://$host:$port failed" >&2
-    return 0
-  fi
-  # Remote retention: list newest-first, delete entries beyond $keep. Best-effort.
-  local prune
-  prune=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s"; cls -1 --sort=date -r panel-*.sql.gz; bye' \
-    "$eu" "$otype" "$host" "$port" "$ed")
-  local listing
-  if listing=$(LFTP_PASSWORD="$pass" lftp -c "$prune" 2>/dev/null); then
-    local old
-    old=$(printf '%s\n' "$listing" | grep -E '^panel-.*\.sql\.gz$' | tail -n +$((keep + 1)))
-    if [ -n "$old" ]; then
-      local rm_script line
-      rm_script=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s";' \
-        "$eu" "$otype" "$host" "$port" "$ed")
-      while IFS= read -r line; do
-        [ -n "$line" ] || continue
-        rm_script+=$(printf ' rm -f "%s";' "$(lftp_escape "$line")")
-      done <<< "$old"
-      rm_script+=' bye'
-      LFTP_PASSWORD="$pass" lftp -c "$rm_script" >/dev/null 2>&1 || true
-    fi
-  fi
-  echo "offsite: uploaded $name to $otype://$host:$port/$dir" >&2
-}
+done
 
 BACKUP_DIR="${SERVIKA_DBDIR:-/var/backups/servika/db}"
 case "$BACKUP_DIR" in
@@ -174,6 +94,6 @@ find "$BACKUP_DIR" -maxdepth 1 -type f -name '.panel-*.sql.gz.tmp' \
   -mtime +1 -delete
 
 # Best-effort secondary copy to an offsite destination (no-op unless configured).
-upload_offsite "$final"
+servika_upload_offsite DB "$final" 'panel-*.sql.gz' servika-db 14
 
 echo "$final"

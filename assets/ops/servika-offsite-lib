@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# servika-offsite-lib — the shared best-effort off-site uploader.
+#
+# SOURCE this, do not run it. It is installed 0755 into $OPSBIN like every other
+# ops file because the installer's loop does not distinguish a library from a
+# tool; running it does nothing but say so.
+#
+# It carries one copy of the lftp logic for every artifact that replicates
+# off-site. Each caller passes its own PREFIX, so the panel database dump and the
+# host disaster-recovery archive read separate SERVIKA_<PREFIX>_OFFSITE_*
+# settings and can point at different destinations, or at none.
+#
+# Every failure here is best-effort and returns 0: the LOCAL artifact is already
+# valid and complete, and servika-update depends on the calling script
+# succeeding.
+
+# Refuse to act when executed rather than sourced. BASH_SOURCE[0] equals $0 only
+# in the executed case.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  echo "servika-offsite-lib is a library: source it, do not run it" >&2
+  exit 0
+fi
+
+# lftp_escape: escape a value placed inside double quotes on the lftp command
+# line (mirrors internal/backups/destination.go lftpEscape).
+lftp_escape() {
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  printf '%s' "$s"
+}
+
+# servika_upload_offsite <PREFIX> <local-file> <remote-glob> <default-dir> <default-keep>
+#
+# Uploads one file to the FTP/SFTP destination configured for PREFIX, then prunes
+# the remote directory down to the newest <keep> entries matching <remote-glob>.
+# Diagnostics go to stderr so a caller whose stdout is a contract stays intact.
+servika_upload_offsite() {
+  local prefix=$1 dump=$2 glob=$3 default_dir=$4 default_keep=$5 name
+  name=$(basename "$dump")
+
+  # Indirect expansion, so one function serves every artifact. The names are
+  # spelled out rather than built inline so the diagnostics below can quote the
+  # variable the operator actually has to set. An unset variable reads as empty
+  # rather than tripping `set -u` in the calling script.
+  local prefix_type="SERVIKA_${prefix}_OFFSITE_TYPE"
+  local prefix_host="SERVIKA_${prefix}_OFFSITE_HOST"
+  local prefix_port="SERVIKA_${prefix}_OFFSITE_PORT"
+  local prefix_user="SERVIKA_${prefix}_OFFSITE_USER"
+  local prefix_pass="SERVIKA_${prefix}_OFFSITE_PASS"
+  local prefix_dir="SERVIKA_${prefix}_OFFSITE_DIR"
+  local prefix_keep="SERVIKA_${prefix}_OFFSITE_KEEP"
+  local otype="${!prefix_type:-}"
+
+  [ -n "$otype" ] || return 0 # offsite not configured
+  if [ "$otype" != "ftp" ] && [ "$otype" != "sftp" ]; then
+    echo "offsite: invalid $prefix_type (want ftp|sftp), skipping upload" >&2
+    return 0
+  fi
+  local host="${!prefix_host:-}"
+  if [ -z "$host" ]; then
+    echo "offsite: $prefix_host is empty, skipping upload" >&2
+    return 0
+  fi
+  # Reject hosts carrying lftp/shell metacharacters before embedding in the command line.
+  case "$host" in
+    *[\"\\\ \;\`\$\'*?\<\>\|]*|*'&'*)
+      echo "offsite: $prefix_host contains invalid characters, skipping upload" >&2
+      return 0 ;;
+  esac
+  local port="${!prefix_port:-}"
+  if [ -z "$port" ]; then
+    if [ "$otype" = "sftp" ]; then port=22; else port=21; fi
+  fi
+  case "$port" in
+    ''|*[!0-9]*) echo "offsite: $prefix_port must be numeric, skipping upload" >&2; return 0 ;;
+  esac
+  local dir="${!prefix_dir:-$default_dir}"
+  [ -n "$dir" ] || dir="$default_dir"
+  local user="${!prefix_user:-}"
+  local pass="${!prefix_pass:-}"
+  local keep="${!prefix_keep:-$default_keep}"
+  case "$keep" in
+    ''|*[!0-9]*) keep="$default_keep" ;;
+  esac
+  if ! command -v lftp >/dev/null 2>&1; then
+    echo "offsite: lftp not found on PATH, skipping upload" >&2
+    return 0
+  fi
+  local eu ed
+  eu=$(lftp_escape "$user"); ed=$(lftp_escape "$dir")
+  # The password travels in LFTP_PASSWORD, which `open --env-password` reads. The
+  # whole `-c` script is an element of lftp's argv, and /proc/<pid>/cmdline is
+  # mode 444: every c_* tenant on this host has shell and cron, so the older
+  # `open -u user,pass` form handed them the credentials of the destination that
+  # holds the panel's own backups. Those carry every tenant's rows, the users
+  # table and the encrypted secret columns.
+  #
+  # It is set per COMMAND rather than exported, so no other subprocess of the
+  # calling script inherits it.
+  local script
+  script=$(printf 'set cmd:fail-exit yes; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; mkdir -p -f "%s"; cd "%s"; put -O . "%s"; bye' \
+    "$eu" "$otype" "$host" "$port" "$ed" "$ed" "$dump")
+  if ! LFTP_PASSWORD="$pass" lftp -c "$script" >/dev/null 2>&1; then
+    echo "offsite: upload of $name to $otype://$host:$port failed" >&2
+    return 0
+  fi
+  # Remote retention: list newest-first, delete entries beyond $keep. Best-effort.
+  local prune
+  prune=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s"; cls -1 --sort=date -r %s; bye' \
+    "$eu" "$otype" "$host" "$port" "$ed" "$glob")
+  local listing
+  if listing=$(LFTP_PASSWORD="$pass" lftp -c "$prune" 2>/dev/null); then
+    # The glob is a shell pattern, so the listing is filtered with the same
+    # pattern rather than a second hand-written regular expression.
+    local old line kept=0
+    old=""
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      # shellcheck disable=SC2254 # $glob is a caller-supplied literal pattern, matched on purpose
+      case "$line" in
+        $glob) ;;
+        *) continue ;;
+      esac
+      kept=$((kept + 1))
+      [ "$kept" -gt "$keep" ] && old="$old$line"$'\n'
+    done <<< "$listing"
+    if [ -n "$old" ]; then
+      local rm_script
+      rm_script=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s";' \
+        "$eu" "$otype" "$host" "$port" "$ed")
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        rm_script+=$(printf ' rm -f "%s";' "$(lftp_escape "$line")")
+      done <<< "$old"
+      rm_script+=' bye'
+      LFTP_PASSWORD="$pass" lftp -c "$rm_script" >/dev/null 2>&1 || true
+    fi
+  fi
+  echo "offsite: uploaded $name to $otype://$host:$port/$dir" >&2
+}
