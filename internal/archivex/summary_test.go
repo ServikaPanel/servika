@@ -163,9 +163,49 @@ func TestSummarizeAppliesTheMemberLimit(t *testing.T) {
 
 // A negative count would reach tar as a malformed flag; refuse it here.
 func TestExtractStripRefusesANegativeCount(t *testing.T) {
-	_, err := ExtractStrip(context.Background(), writeTarGz(t, "a"), t.TempDir(), "c_test", -1, Limits{})
+	_, err := ExtractStrip(context.Background(), writeTarGz(t, "a"), TypeTARGzip, t.TempDir(), "c_test", -1, Limits{})
 	if !errors.Is(err, ErrUnsupported) {
 		t.Errorf("ExtractStrip() = %v, want ErrUnsupported", err)
+	}
+}
+
+// The extraction path must take the format from the CALLER, not from the
+// filename.
+//
+// A caller that resolved the archive symlink-safely hands over the
+// /proc/self/fd path of the pinned descriptor, which carries no suffix.
+// Deriving the format here answered TypeUnknown for every such call and refused
+// the archive before opening anything, which broke the file manager's
+// extraction completely for every supported format while telling the customer
+// their archive was corrupt.
+func TestExtractAcceptsAPathWithNoRecognizableSuffix(t *testing.T) {
+	pinned := filepath.Join(t.TempDir(), "12") // the shape of /proc/self/fd/<n>
+	body, err := os.ReadFile(writeTarGz(t, "site/index.php"))
+	if err != nil {
+		t.Fatalf("read the archive: %v", err)
+	}
+	if err := os.WriteFile(pinned, body, 0o600); err != nil {
+		t.Fatalf("stage the suffix-less copy: %v", err)
+	}
+	if DetectType(pinned) != TypeUnknown {
+		t.Fatalf("the staged path %q is classifiable, so it does not exercise the defect", pinned)
+	}
+
+	_, err = ExtractStrip(context.Background(), pinned, TypeTARGzip, t.TempDir(), "c_test", 0, Limits{})
+	// The extractor itself needs runuser and a real tenant account, so it fails
+	// here for its own reasons. What matters is that the format was accepted:
+	// ErrUnsupported means the type was rejected before the archive was read.
+	if errors.Is(err, ErrUnsupported) {
+		t.Fatal("an explicitly typed archive was refused as unsupported because its path has no suffix")
+	}
+}
+
+// An unclassifiable archive whose caller ALSO does not know the format is still
+// refused, so the explicit parameter did not turn the check off.
+func TestExtractStillRefusesAnUnknownType(t *testing.T) {
+	_, err := ExtractStrip(context.Background(), writeTarGz(t, "a"), TypeUnknown, t.TempDir(), "c_test", 0, Limits{})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Errorf("ExtractStrip() with TypeUnknown = %v, want ErrUnsupported", err)
 	}
 }
 

@@ -326,7 +326,11 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if archivex.DetectType(lowerPath) == archivex.TypeUnknown {
+		// Decided from the REAL relative path and carried to the extractor. The
+		// pinned /proc/self/fd path has no filename suffix, and archivex used to
+		// derive the format from one, which refused every archive as unsupported.
+		archiveType := archivex.DetectType(lowerPath)
+		if archiveType == archivex.TypeUnknown {
 			httpx.WriteError(w, http.StatusBadRequest, "unsupported format (zip, rar, tar, tar.gz/tgz, tar.bz2, tar.xz, gz)")
 			return
 		}
@@ -350,7 +354,7 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		extractJobs.Store(jobID, job)
 		handedOff = true
 		// #nosec G118 -- the request context is cancelled when this handler returns the job id, which would kill the extraction; runExtractJob deliberately uses a background context with its own timeout.
-		go runExtractJob(job, archiveFd, targetFd, archivePinned, targetPinned, systemUser, limits)
+		go runExtractJob(job, archiveFd, targetFd, archivePinned, targetPinned, systemUser, archiveType, limits)
 		httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 			"ok":     true,
 			"job_id": jobID,

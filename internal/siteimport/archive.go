@@ -188,9 +188,9 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	archiveType := archivex.DetectType(archivePath)
 	strip, skipped := 0, ""
 	if request.SkipRoot {
-		archiveType := archivex.DetectType(archivePath)
 		summary, summaryErr := archivex.Summarize(r.Context(), archivePath, archiveType, archiveLimits, nil)
 		if summaryErr != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(summaryErr))
@@ -205,7 +205,7 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	absoluteTarget := path.Join(home, target)
-	if _, err := archivex.ExtractStrip(r.Context(), archivePath, absoluteTarget, systemUser, strip, archiveLimits); err != nil {
+	if _, err := archivex.ExtractStrip(r.Context(), archivePath, archiveType, absoluteTarget, systemUser, strip, archiveLimits); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, archivex.ErrStripUnsupported) {
 			status = http.StatusNotImplemented

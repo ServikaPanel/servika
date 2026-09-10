@@ -180,7 +180,9 @@ func unpack(ctx context.Context, entry Entry, archivePath, target, systemUser st
 		_ = tenantCommand(cleanup, systemUser, "rm", "-rf", staging).Run()
 	}()
 
-	if _, err := archivex.Extract(ctx, archivePath, staging, systemUser, limits); err != nil {
+	// archivePath is this function's own download, named after the catalog entry's
+	// URL, so its suffix is the format.
+	if _, err := archivex.Extract(ctx, archivePath, archivex.DetectType(archivePath), staging, systemUser, limits); err != nil {
 		return refuse(ReasonExtract, err)
 	}
 

@@ -397,8 +397,12 @@ func tenantCommand(ctx context.Context, systemUser string, arguments ...string) 
 
 // Extract validates an archive and extracts it as the owning tenant user.
 // limits bounds the declared expansion (zero fields = unbounded) to reject bombs.
-func Extract(ctx context.Context, archivePath, destination, systemUser string, limits Limits) (string, error) {
-	return ExtractStrip(ctx, archivePath, destination, systemUser, 0, limits)
+//
+// archiveType is passed in rather than derived here, for the reason given on
+// extractStrip: the caller may hand over a pinned /proc/self/fd path, which
+// carries no filename suffix to derive it from.
+func Extract(ctx context.Context, archivePath string, archiveType Type, destination, systemUser string, limits Limits) (string, error) {
+	return ExtractStrip(ctx, archivePath, archiveType, destination, systemUser, 0, limits)
 }
 
 // Count returns the number of members in the archive, for a progress total. It
@@ -456,8 +460,8 @@ func (p *progressCounter) tailString() string {
 // report ErrStripUnsupported when it is absent. Extraction still runs as the
 // tenant through runuser, so the kernel's own permission check is the last line
 // even if a member slips past the pre-scan.
-func ExtractStrip(ctx context.Context, archivePath, destination, systemUser string, strip int, limits Limits) (string, error) {
-	return extractStrip(ctx, archivePath, destination, systemUser, strip, limits, nil, nil)
+func ExtractStrip(ctx context.Context, archivePath string, archiveType Type, destination, systemUser string, strip int, limits Limits) (string, error) {
+	return extractStrip(ctx, archivePath, archiveType, destination, systemUser, strip, limits, nil, nil)
 }
 
 // ExtractProgress extracts like Extract and reports progress. onTotal is called
@@ -465,19 +469,28 @@ func ExtractStrip(ctx context.Context, archivePath, destination, systemUser stri
 // number of members extracted since the previous call. Both may be nil, and with
 // both nil it behaves exactly like Extract. The extractor is run verbose so each
 // member emits one line, which is what onLine counts.
-func ExtractProgress(ctx context.Context, archivePath, destination, systemUser string, limits Limits, onTotal func(int), onLine func(delta int)) (string, error) {
+func ExtractProgress(ctx context.Context, archivePath string, archiveType Type, destination, systemUser string, limits Limits, onTotal func(int), onLine func(delta int)) (string, error) {
 	var prog *progressCounter
 	if onLine != nil {
 		prog = &progressCounter{onLine: onLine}
 	}
-	return extractStrip(ctx, archivePath, destination, systemUser, 0, limits, prog, onTotal)
+	return extractStrip(ctx, archivePath, archiveType, destination, systemUser, 0, limits, prog, onTotal)
 }
 
-func extractStrip(ctx context.Context, archivePath, destination, systemUser string, strip int, limits Limits, prog *progressCounter, onTotal func(int)) (string, error) {
+// extractStrip takes the archive type from the caller rather than deriving it
+// from archivePath.
+//
+// DetectType reads a filename SUFFIX, and a caller that resolved the archive
+// symlink-safely passes the /proc/self/fd path of the pinned descriptor, which
+// has no suffix at all. Deriving it here answered TypeUnknown for every such
+// call and refused the archive as unsupported before opening anything, which is
+// what silently broke the whole file manager's extraction. Scan and Count have
+// always taken the type explicitly; this makes the extraction path agree with
+// them.
+func extractStrip(ctx context.Context, archivePath string, archiveType Type, destination, systemUser string, strip int, limits Limits, prog *progressCounter, onTotal func(int)) (string, error) {
 	if strip < 0 {
 		return "", ErrUnsupported
 	}
-	archiveType := DetectType(archivePath)
 	if archiveType == TypeUnknown {
 		return "", ErrUnsupported
 	}

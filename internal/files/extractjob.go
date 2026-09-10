@@ -97,7 +97,11 @@ func newExtractJobID() (string, error) {
 // when it returns, because the /proc/self/fd paths built from them must stay
 // valid until the extractor has read them. It uses a background context, never
 // the request's, which is cancelled when the handler returns the job id.
-func runExtractJob(job *extractJob, archiveFd, targetFd *os.File, archivePinned, targetPinned, systemUser string, limits archivex.Limits) {
+// archiveType travels with archivePinned because the pin is what took the
+// format away: archivePinned is a /proc/self/fd path and archivex used to read
+// the format off the filename suffix. The handler already decided the type from
+// the real relative path, so it is passed down rather than guessed again.
+func runExtractJob(job *extractJob, archiveFd, targetFd *os.File, archivePinned, targetPinned, systemUser string, archiveType archivex.Type, limits archivex.Limits) {
 	// The synchronous extractor ran inside the net/http handler goroutine, which
 	// carries a per-request recover: a panic there fails one request. This runs in
 	// a bare goroutine, where an unrecovered panic takes the WHOLE panel process
@@ -117,7 +121,7 @@ func runExtractJob(job *extractJob, archiveFd, targetFd *os.File, archivePinned,
 	ctx, cancel := context.WithTimeout(context.Background(), extractJobTimeout)
 	defer cancel()
 
-	if _, err := archivex.ExtractProgress(ctx, archivePinned, targetPinned, systemUser, limits,
+	if _, err := archivex.ExtractProgress(ctx, archivePinned, archiveType, targetPinned, systemUser, limits,
 		func(total int) { job.setTotal(total) },
 		func(delta int) { job.addDone(delta) }); err != nil {
 		job.fail(extractFailureCode(err))
