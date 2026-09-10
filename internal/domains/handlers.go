@@ -440,17 +440,6 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1) Linux user + nginx + PHP pool
-	if err := quota.CheckDomainAllowed(r.Context(), h.DB, nil); err != nil {
-		if le, ok := errors.AsType[*quota.LimitError](err); ok {
-			httpx.WriteError(w, http.StatusForbidden, le.Message)
-			return
-		}
-		log.Printf("domain quota check failed: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
-		return
-	}
-
 	// Choosing which reseller a new customer belongs to is an administrator's
 	// decision. A reseller cannot reach the auto-creation path at all, it is
 	// refused just below unless it names one of its own customers, so accepting
@@ -516,6 +505,27 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The customer plan's max_domain ceiling, with the customer the request names.
+	// It used to be called with a literal nil, which returns on the function's
+	// first branch ("administrators have no quota limit") and so never read the
+	// plan at all: a reseller could attach any number of top-level domains to a
+	// customer whose plan allowed one, bounded only by the reseller's own
+	// aggregate ceiling. The addon-domain path has always passed the real id.
+	//
+	// It runs AFTER referencedAccountsExist so an id that names no customer is
+	// answered as a bad request rather than as a failed quota read, and BEFORE
+	// Provision so a refusal leaves no Linux user, vhost or FPM pool behind.
+	if err := quota.CheckDomainAllowed(r.Context(), h.DB, req.CustomerID); err != nil {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
+			httpx.WriteError(w, http.StatusForbidden, le.Message)
+			return
+		}
+		log.Printf("domain quota check failed: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
+		return
+	}
+
+	// 1) Linux user + nginx + PHP pool
 	pr, err := provisioner.Provision(req.DomainName, req.PHPVersion)
 	if err != nil {
 		log.Printf("provision %q failed: %v", req.DomainName, err)
