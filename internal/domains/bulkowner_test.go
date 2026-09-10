@@ -225,8 +225,9 @@ func TestAResellerCanOnlyMoveItsOwnDomains(t *testing.T) {
 	if !strings.Contains(statement, "owner_user_id = ?") {
 		t.Errorf("the statement is not narrowed to the reseller's own domains: %q", statement)
 	}
-	// customer_id, the two ids, then the reseller's own user id for the scope.
-	if len(args) != 4 || args[3] != int64(9) {
+	// customer_id, the two ids for d.id, the same two again for
+	// d.parent_domain_id, then the reseller's own user id for the scope.
+	if len(args) != 6 || args[5] != int64(9) {
 		t.Errorf("bound values = %v, want the reseller id last", args)
 	}
 }
@@ -245,8 +246,33 @@ func TestAnAdministratorsStatementIsNotNarrowed(t *testing.T) {
 	if strings.Contains(statement, "owner_user_id") {
 		t.Errorf("an administrator's statement was narrowed: %q", statement)
 	}
-	if len(args) != 3 {
-		t.Errorf("bound values = %v, want customer id plus the two domain ids", args)
+	if len(args) != 5 {
+		t.Errorf("bound values = %v, want customer id plus the two domain ids twice", args)
+	}
+}
+
+// An addon domain copied its parent's customer_id AND its system_user, and
+// nothing re-derives either afterwards. Moving the parent alone left a row owned
+// by the previous customer whose system_user is the account the new owner now
+// holds, so the old owner reached the new owner's home directory, databases and
+// backups through that row's id.
+func TestATransferTakesTheAddonRowsWithIt(t *testing.T) {
+	handlers, recorder := ownerHarness(t, true)
+	response := httptest.NewRecorder()
+	handlers.BulkOwner(response, ownerRequest(adminActor, `{"ids":[1,2],"customer_id":5}`))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", response.Code, http.StatusOK, response.Body.String())
+	}
+	statement, _ := recorder.update()
+	if !strings.Contains(statement, "d.parent_domain_id IN (?,?)") {
+		t.Fatalf("the transfer does not reach addon rows: %q", statement)
+	}
+	// The two id conditions must be bracketed together, or a scope fragment binds
+	// to the second alternative alone and a reseller moves an addon row of a
+	// domain they do not own.
+	if !strings.Contains(statement, "WHERE (d.id IN (?,?) OR d.parent_domain_id IN (?,?))") {
+		t.Errorf("the two id conditions are not bracketed together: %q", statement)
 	}
 }
 

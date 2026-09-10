@@ -1536,10 +1536,18 @@ func (h *Handlers) BulkOwner(w http.ResponseWriter, r *http.Request) {
 	} else {
 		args = append(args, nil)
 	}
+	idArgs := make([]any, len(req.IDs))
 	for i, id := range req.IDs {
 		placeholders[i] = "?"
-		args = append(args, id)
+		idArgs[i] = id
 	}
+	// Bound TWICE: once for d.id, once for d.parent_domain_id. An addon row
+	// copied the parent's customer_id AND its system_user and nothing re-derives
+	// either, so moving the parent alone leaves a row owned by the PREVIOUS
+	// customer whose system_user is the account the new owner now holds, and
+	// every CustomerScope handler resolves the tenant from the row the URL names.
+	args = append(args, idArgs...)
+	args = append(args, idArgs...)
 	// The SOURCE domains are narrowed by the query itself, not checked row by
 	// row: an id the caller does not own simply matches nothing, so a hand-built
 	// request body cannot move somebody else's domain. ScopeSQL returns a whole
@@ -1548,8 +1556,12 @@ func (h *Handlers) BulkOwner(w http.ResponseWriter, r *http.Request) {
 	scope, scopeArgs := middleware.ScopeSQL(r, "d")
 	scope = strings.Replace(scope, " WHERE ", " AND ", 1)
 	args = append(args, scopeArgs...)
+	// The two id conditions are bracketed together, or the scope fragment would
+	// bind to the second alternative alone and a reseller could move an addon
+	// row of a domain they do not own.
+	idList := strings.Join(placeholders, ",")
 	// #nosec G202 -- only literal "?" placeholders and the constant ScopeSQL fragment are joined; all values are bound via args.
-	sql := `UPDATE domains d SET d.customer_id=? WHERE d.id IN (` + strings.Join(placeholders, ",") + `)` + scope
+	sql := `UPDATE domains d SET d.customer_id=? WHERE (d.id IN (` + idList + `) OR d.parent_domain_id IN (` + idList + `))` + scope
 	// #nosec G701 G202 -- scope is a constant fragment from ScopeSQL with a literal alias and placeholders holds only literal "?"; every user value is bound via args.
 	res, err := h.DB.ExecContext(r.Context(), sql, args...)
 	if err != nil {
