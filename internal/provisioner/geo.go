@@ -135,7 +135,14 @@ func buildSharedConf(countries []string, ranges geoip.Ranges, rates []int) strin
 	}
 	body.WriteString("    default  \"$remote_addr\";\n}\n\n")
 
-	body.WriteString("map $request_uri $servika_rl_key {\n")
+	// Keyed on $uri, never $request_uri. $request_uri is the full original request
+	// line INCLUDING the query string, and the extension test is anchored at the
+	// end of the value, so it would be matched against the end of the query
+	// string: GET /index.php?x=.css produced the empty key and nginx accounts no
+	// request whose limit_req key is empty. Four characters appended to any
+	// dynamic URL disabled the whole limit. $uri is normalized and carries no
+	// arguments, so only a genuinely static path is exempted.
+	body.WriteString("map $uri $servika_rl_key {\n")
 	fmt.Fprintf(&body, "    ~*\\.(%s)$  \"\";\n", staticExtensions)
 	body.WriteString("    ~^/\\.well-known/  \"\";\n")
 	body.WriteString("    default  \"$servika_rl_addr$server_name\";\n}\n\n")

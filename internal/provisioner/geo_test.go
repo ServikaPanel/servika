@@ -62,6 +62,20 @@ func TestStaticAssetsFallToAnEmptyRateLimitKey(t *testing.T) {
 	}
 }
 
+// The extension test is anchored at the END of the mapped value. Keyed on
+// $request_uri that end is the end of the QUERY STRING, so GET /index.php?x=.css
+// took the empty key and nginx accounted nothing: four characters appended to
+// any dynamic URL disabled the whole limit. $uri carries no arguments.
+func TestRateLimitKeyIsTakenFromTheArgumentFreeURI(t *testing.T) {
+	shared := buildSharedConf(nil, geoip.Ranges{}, []int{30})
+	if !strings.Contains(shared, "map $uri $servika_rl_key {") {
+		t.Fatalf("the rate limit key is not mapped from $uri:\n%s", shared)
+	}
+	if strings.Contains(shared, "map $request_uri $servika_rl_key {") {
+		t.Fatal("the rate limit key is mapped from $request_uri, so a query string ending in a static extension exempts every dynamic request")
+	}
+}
+
 // One zone per distinct RATE, never per domain: limit_req_zone lives in http
 // context, so per-domain zones would multiply shared memory by the number of
 // domains.
