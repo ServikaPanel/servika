@@ -65,10 +65,24 @@ log "=== servika system backup started: $D ==="
 # 1) Every MySQL database (mail + domain + panel + grants). InnoDB is consistent
 #    under --single-transaction; the disaster-recovery purpose accepts that a few
 #    MyISAM tables are not.
-if mysqldump --all-databases --single-transaction --quick --routines --triggers --events 2>>"$LOG" | gzip > "$D/mysql-all.sql.gz"; then
+#
+#    Staged and verified before it is published, the way servika-db-backup does
+#    it. Writing the pipe straight to the final name left a TRUNCATED
+#    mysql-all.sql.gz in place whenever mysqldump died partway (a lock-wait
+#    timeout, a large database, a crash): the only signal was a `!!` line in
+#    backup.log, and an operator rebuilding the host from this archive would
+#    restore a partial database with nothing at restore time saying so. This is
+#    the artifact that carries the panel, the mail state and the grants, so a
+#    plausible-looking partial is worse than no dump at all.
+mysql_dump_tmp="$D/.mysql-all.sql.gz.tmp"
+if mysqldump --all-databases --single-transaction --quick --routines --triggers --events 2>>"$LOG" | gzip > "$mysql_dump_tmp" &&
+  gzip -t "$mysql_dump_tmp" 2>>"$LOG" &&
+  [ "$(stat -c%s "$mysql_dump_tmp")" -gt 1000 ]; then
+  mv -f "$mysql_dump_tmp" "$D/mysql-all.sql.gz"
   log "OK mysql all databases ($(du -h "$D/mysql-all.sql.gz" | cut -f1))"
 else
-  log "!! mysql dump failed"
+  rm -f "$mysql_dump_tmp"
+  log "!! mysql dump failed or is incomplete; no dump was published"
 fi
 
 # 2) Panel config and secrets: the JWT secret, the DB password, the encryption
