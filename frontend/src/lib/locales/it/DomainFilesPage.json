@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ cartella superiore",
   "empty": "Questa cartella è vuota",
+  "truncated": "Sono mostrate le prime {{shown}} voci su {{total}} in questa cartella. Usa la ricerca per raggiungere le altre.",
   "actionsTitle": "Azioni",
   "context": {
     "open": "Apri",

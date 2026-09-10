@@ -32,6 +32,16 @@ const (
 	maxMultipartMemory = 32 * 1024 * 1024
 )
 
+// maxListEntries bounds one directory listing.
+//
+// A tenant home is capped by an inode quota, not by an entries-per-directory
+// rule, so one directory can legitimately hold hundreds of thousands of names.
+// The listing rendered every one of them into a JSON array on the panel's heap,
+// which is the root process shared by every customer, and the browser then had
+// to parse it. The cap turns that into a fixed cost; the response reports the
+// real total and a truncated flag so the panel can say what it left out.
+const maxListEntries = 5000
+
 var errUploadTooLarge = errors.New("upload exceeds the size limit")
 
 var managedSystemUserPattern = regexp.MustCompile(`^c_[A-Za-z0-9_]+$`)
@@ -103,21 +113,116 @@ func fileMetadata(info os.FileInfo) (mode, permissions, owner, group string) {
 	return describeMode(info.Mode(), stat.Uid, stat.Gid)
 }
 
+// Owner and group names are memoized, because resolving one costs a full scan of
+// /etc/passwd or /etc/group.
+//
+// Release binaries are built CGO_ENABLED=0, which selects the pure-Go os/user
+// implementation: it opens the file and compares it line by line on EVERY call.
+// A hosting server carries one row per tenant, and a listing called this twice
+// per entry, so the cost of one directory was entries x accounts line
+// comparisons on the request goroutine, charged to the panel process running as
+// root rather than to the tenant's cgroup.
+//
+// A miss is cached too, since a uid with no account resolves no faster the
+// second time. The TTL bounds how long a name survives the account it belongs
+// to, which matters only after a uid is reused, and the name is a display value.
+const nameCacheTTL = 5 * time.Minute
+
+// nameCacheMax bounds the two maps. They are keyed by id, so they are bounded by
+// the number of accounts already; this stops a long-lived process from holding
+// entries for accounts that are gone.
+const nameCacheMax = 4096
+
+type nameEntry struct {
+	name string
+	at   time.Time
+}
+
+var (
+	nameCacheMu sync.Mutex
+	ownerNames  = map[uint32]nameEntry{}
+	groupNames  = map[uint32]nameEntry{}
+
+	// nameCacheNow is a test seam: it lets a test age the cache without sleeping.
+	nameCacheNow = time.Now
+)
+
+// cachedName resolves one id through cache, calling lookup only on a miss.
+func cachedName(cache map[uint32]nameEntry, id uint32, lookup func(string) (string, bool)) string {
+	nameCacheMu.Lock()
+	if found, ok := cache[id]; ok && nameCacheNow().Sub(found.at) < nameCacheTTL {
+		nameCacheMu.Unlock()
+		return found.name
+	}
+	nameCacheMu.Unlock()
+
+	text := strconv.FormatUint(uint64(id), 10)
+	name := text
+	if resolved, ok := lookup(text); ok {
+		name = resolved
+	}
+
+	nameCacheMu.Lock()
+	if len(cache) >= nameCacheMax {
+		clear(cache)
+	}
+	cache[id] = nameEntry{name: name, at: nameCacheNow()}
+	nameCacheMu.Unlock()
+	return name
+}
+
+// ownerName resolves a uid to its account name, or to the number when it has no
+// account.
+func ownerName(uid uint32) string {
+	return cachedName(ownerNames, uid, func(text string) (string, bool) {
+		account, err := user.LookupId(text)
+		if err != nil {
+			return "", false
+		}
+		return account.Username, true
+	})
+}
+
+// groupName resolves a gid to its group name, or to the number when it has none.
+func groupName(gid uint32) string {
+	return cachedName(groupNames, gid, func(text string) (string, bool) {
+		found, err := user.LookupGroupId(text)
+		if err != nil {
+			return "", false
+		}
+		return found.Name, true
+	})
+}
+
 // describeMode renders one entry's mode and resolves its owner and group names.
 // It takes the raw ids rather than an os.FileInfo so a listing can report what
 // was read through the pinned directory fd, with no second, path-based stat.
 func describeMode(fileMode os.FileMode, uid, gid uint32) (mode, permissions, owner, group string) {
 	mode = "0" + strconv.FormatInt(int64(fileMode.Perm()), 8)
 	permissions = fileMode.String()
-	owner = strconv.FormatUint(uint64(uid), 10)
-	if account, err := user.LookupId(owner); err == nil {
-		owner = account.Username
+	return mode, permissions, ownerName(uid), groupName(gid)
+}
+
+// orderAndCapEntries sorts one directory read into the order the file manager
+// renders (folders first, then case-insensitive by name) and keeps at most
+// maxListEntries of it. It sorts dir in place. It reports the directory's real
+// size and whether the cap cut anything.
+//
+// The sort runs BEFORE the cap, so the entries kept are the first page of a
+// stable order rather than whatever order the filesystem handed back, and
+// describeMode never runs on an entry that is about to be dropped.
+func orderAndCapEntries(dir []dirEntry) (kept []dirEntry, total int, truncated bool) {
+	sort.SliceStable(dir, func(i, j int) bool {
+		if dir[i].Mode.IsDir() != dir[j].Mode.IsDir() {
+			return dir[i].Mode.IsDir()
+		}
+		return strings.ToLower(dir[i].Name) < strings.ToLower(dir[j].Name)
+	})
+	total = len(dir)
+	if total > maxListEntries {
+		return dir[:maxListEntries], total, true
 	}
-	group = strconv.FormatUint(uint64(gid), 10)
-	if accountGroup, err := user.LookupGroupId(group); err == nil {
-		group = accountGroup.Name
-	}
-	return mode, permissions, owner, group
+	return dir, total, false
 }
 
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
@@ -137,6 +242,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
+	dir, total, truncated := orderAndCapEntries(dir)
 	out := make([]Entry, 0, len(dir))
 	for _, e := range dir {
 		ftype := "file"
@@ -159,18 +265,13 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			Changed:     e.ModTime.UTC().Format("2006-01-02T15:04:05Z"),
 		})
 	}
-	// Sort folders first, then alphabetically.
-	sort.SliceStable(out, func(i, j int) bool {
-		if (out[i].Type == "folder") != (out[j].Type == "folder") {
-			return out[i].Type == "folder"
-		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"path":    filepath.ToSlash(rel),
-		"content": out,
-		"total":   len(out),
+		"path":      filepath.ToSlash(rel),
+		"content":   out,
+		"total":     total,
+		"shown":     len(out),
+		"truncated": truncated,
 	})
 }
 

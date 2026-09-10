@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ dosar părinte",
   "empty": "Acest dosar este gol",
+  "truncated": "Se afișează primele {{shown}} din {{total}} intrări din acest folder. Folosiți căutarea pentru restul.",
   "actionsTitle": "Acțiuni",
   "context": {
     "open": "Deschidere",

@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ 親フォルダ",
   "empty": "このフォルダは空です",
+  "truncated": "このフォルダーの {{total}} 件のうち先頭 {{shown}} 件を表示しています。残りは検索から参照してください。",
   "actionsTitle": "操作",
   "context": {
     "open": "開く",

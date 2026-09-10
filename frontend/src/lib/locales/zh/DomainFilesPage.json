@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ 上级文件夹",
   "empty": "此文件夹为空",
+  "truncated": "正在显示此文件夹中 {{total}} 项里的前 {{shown}} 项。其余项请使用搜索查找。",
   "actionsTitle": "操作",
   "context": {
     "open": "打开",

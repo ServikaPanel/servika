@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ üst klasör",
   "empty": "Bu klasör boş",
+  "truncated": "Bu klasördeki {{total}} kaydın ilk {{shown}} tanesi gösteriliyor. Kalanına ulaşmak için aramayı kullanın.",
   "actionsTitle": "İşlemler",
   "context": {
     "open": "Aç",

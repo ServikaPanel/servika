@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ übergeordneter Ordner",
   "empty": "Dieser Ordner ist leer",
+  "truncated": "Es werden die ersten {{shown}} von {{total}} Einträgen in diesem Ordner angezeigt. Nutzen Sie die Suche für die übrigen.",
   "actionsTitle": "Aktionen",
   "context": {
     "open": "Öffnen",

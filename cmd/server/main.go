@@ -1133,7 +1133,12 @@ func main() {
 				r.With(middleware.AdminOnly).Delete("/databases/{dbid}", domainsH.DeleteDatabase)
 				r.With(middleware.AdminOnly).Put("/databases/{dbid}/password", domainsH.SetDatabasePassword)
 				r.With(middleware.AdminOnly).Post("/databases/{dbid}/optimize", domainsH.OptimizeDatabase)
-				r.With(middleware.CustomerScope).Get("/domains/{id}/files", filesH.List)
+				// Listing bounds how much it renders, but the readdir underneath it
+				// still walks the whole directory, so the call is still worth a
+				// budget. It is the file manager's most frequent call, so its budget
+				// is well above the heavy operations below.
+				fileList := middleware.RateLimit("files-list", 240, time.Minute)
+				r.With(middleware.CustomerScope, fileList).Get("/domains/{id}/files", filesH.List)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/files/read", filesH.Read)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/files/download", filesH.Download)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/files/mkdir", filesH.Mkdir)

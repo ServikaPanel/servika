@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ dossier parent",
   "empty": "Ce dossier est vide",
+  "truncated": "Affichage des {{shown}} premières entrées sur {{total}} dans ce dossier. Utilisez la recherche pour atteindre les autres.",
   "actionsTitle": "Actions",
   "context": {
     "open": "Ouvrir",

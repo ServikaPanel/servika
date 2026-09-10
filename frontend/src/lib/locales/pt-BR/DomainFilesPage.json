@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ pasta acima",
   "empty": "Esta pasta está vazia",
+  "truncated": "Mostrando as primeiras {{shown}} de {{total}} entradas desta pasta. Use a busca para alcançar as demais.",
   "actionsTitle": "Ações",
   "context": {
     "open": "Abrir",

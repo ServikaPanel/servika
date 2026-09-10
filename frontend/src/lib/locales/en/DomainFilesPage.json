@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ parent folder",
   "empty": "This folder is empty",
+  "truncated": "Showing the first {{shown}} of {{total}} entries in this folder. Use search to reach the rest.",
   "actionsTitle": "Actions",
   "context": {
     "open": "Open",

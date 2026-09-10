@@ -34,7 +34,10 @@ type Entry = {
   changed: string
 }
 
-type ListResp = { path: string; content: Entry[]; total: number }
+// `total` is the directory's real entry count and `content` may be shorter: the
+// listing caps how many entries it renders, and reports the cut through
+// `truncated` so the page can say what it is not showing.
+type ListResp = { path: string; content: Entry[]; total: number; shown: number; truncated: boolean }
 type Domain = { id: number; domain_name: string; system_user: string }
 
 type CtxItem =
@@ -71,6 +74,7 @@ export default function DomainFilesPage() {
     setCookie(pathCookie, next, 60 * 60 * 24 * 30)
   }, [pathCookie])
   const [content, setContent] = useState<Entry[]>([])
+  const [truncated, setTruncated] = useState<{ shown: number; total: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -115,7 +119,10 @@ export default function DomainFilesPage() {
   const fetchEntries = useCallback(() => {
     if (!id) return
     api.get<ListResp>(`/domains/${id}/files`, { params: { path } })
-      .then(r => setContent(r.data.content))
+      .then(r => {
+        setContent(r.data.content)
+        setTruncated(r.data.truncated ? { shown: r.data.shown, total: r.data.total } : null)
+      })
       .catch(e => setError(apiError(e)))
       .finally(() => setLoading(false))
   }, [id, path])
@@ -717,6 +724,14 @@ export default function DomainFilesPage() {
       </div>
 
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
+
+      {/* The listing is capped, so say so rather than letting the table read as
+          the whole directory. Search still reaches the entries left out. */}
+      {truncated && !loading && (
+        <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-300">
+          {t('truncated', { shown: truncated.shown, total: truncated.total })}
+        </div>
+      )}
 
       {/* File table */}
       <div className={responsiveTableContainerClass}>

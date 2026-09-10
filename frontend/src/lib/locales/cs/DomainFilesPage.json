@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ nadřazená složka",
   "empty": "Tato složka je prázdná",
+  "truncated": "Zobrazuje se prvních {{shown}} z {{total}} položek v této složce. Ke zbytku se dostanete přes vyhledávání.",
   "actionsTitle": "Akce",
   "context": {
     "open": "Otevřít",

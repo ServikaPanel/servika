@@ -41,6 +41,7 @@
   },
   "parentFolder": "↑ carpeta superior",
   "empty": "Esta carpeta está vacía",
+  "truncated": "Se muestran las primeras {{shown}} de {{total}} entradas de esta carpeta. Usa la búsqueda para llegar al resto.",
   "actionsTitle": "Acciones",
   "context": {
     "open": "Abrir",
