@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 
@@ -180,6 +181,20 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// The plan gate is a COUNT followed by a separate INSERT, and the unique keys
+	// on apps constrain identity (port, mount) rather than the per-customer count,
+	// so concurrent requests all read the same total and all insert. This is the
+	// lock quota documents for exactly that race; it was wired only into the two
+	// database-creation paths. An application is a resident process on the host,
+	// so exceeding max_app is a host resource-exhaustion vector rather than a
+	// billing discrepancy.
+	//
+	// Released as soon as the row exists, not at the end of the handler: a
+	// concurrent request counting it from then on sees the true total, and the
+	// unit write and systemctl start below must not hold a customer's other
+	// creates.
+	unlock := sync.OnceFunc(quota.LockCustomerForDomain(r.Context(), h.DB, s.DomainID))
+	defer unlock()
 	if err := quota.CheckAppAllowed(r.Context(), h.DB, s.DomainID); err != nil {
 		if limit, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, limit.Message)
@@ -226,6 +241,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
 		return
 	}
+	unlock()
 
 	app, err := Get(r.Context(), h.DB, s.DomainID, appID)
 	if err != nil {

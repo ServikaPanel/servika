@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"servika/internal/credentials"
 	"servika/internal/dns"
@@ -156,6 +157,17 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "addon domain cannot match the parent domain")
 		return
 	}
+	// Both gates below are a COUNT followed by a separate INSERT, and the unique
+	// keys on domains constrain the NAME rather than the per-customer count, so
+	// concurrent requests all read the same total and all insert. This is the lock
+	// quota documents for exactly that race; it was wired only into the two
+	// database-creation paths. The parent's customer is the one both ceilings are
+	// counted against.
+	//
+	// Released as soon as the row exists, not at the end of the handler: a
+	// concurrent request counting it from then on sees the true total.
+	unlock := sync.OnceFunc(quota.LockCustomerForDomain(r.Context(), h.DB, parent.ID))
+	defer unlock()
 	if err := quota.CheckDomainAllowed(r.Context(), h.DB, parent.CustomerID); err != nil {
 		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
@@ -217,6 +229,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "addon domain record creation failed")
 		return
 	}
+	unlock()
 	addonID, _ := res.LastInsertId()
 
 	if err := provisioner.RerenderVhost(h.DB, addonID); err != nil {

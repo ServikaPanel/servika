@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"servika/internal/auth"
 	"servika/internal/credentials"
@@ -264,6 +265,16 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read mail domain")
 		return
 	}
+	// The plan gate is a COUNT followed by a separate INSERT, and the unique key
+	// on mailboxes constrains the address rather than the per-customer count, so
+	// concurrent requests all read the same total and all insert. This is the lock
+	// quota documents for exactly that race; it was wired only into the two
+	// database-creation paths.
+	//
+	// Released as soon as the row exists, not at the end of the handler: a
+	// concurrent request counting it from then on sees the true total.
+	unlock := sync.OnceFunc(quota.LockCustomerForDomain(r.Context(), h.DB, id))
+	defer unlock()
 	if err := quota.CheckMailboxAllowed(r.Context(), h.DB, id); err != nil {
 		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
@@ -310,6 +321,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "mailbox already exists or could not be created")
 		return
 	}
+	unlock()
 	mailboxID, _ := res.LastInsertId()
 	h.audit(r, "mail.create", email, true)
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": mailboxID, "email": email, "password": req.Password})
