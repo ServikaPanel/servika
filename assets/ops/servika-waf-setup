@@ -49,8 +49,18 @@ load_servika_env() {
 load_servika_env
 
 # ---- constants ----
-MODSEC_VER=v3.0.14
-CONNECTOR_VER=v1.0.3
+# libmodsecurity is compiled into libmodsecurity.so.3 and loaded into EVERY
+# nginx worker, so a crash in it takes every site on the server down, not just
+# the domain whose request triggered it. 3.0.15 fixes two such crashes
+# (CVE-2026-30923, a buffer overflow in hex_decode.cc reachable from a
+# one-character query string; CVE-2026-42268, an unhandled std::out_of_range in
+# @verifySSN/@verifyCPF/@verifySVNR) and 3.0.16 fixes CVE-2026-52747, where the
+# multipart parser silently strips embedded line breaks from form-field values
+# and so walks past request-body inspection entirely. That last one is the
+# request shape a webshell upload uses, on a layer sold as protection, with
+# SecRequestBodyAccess On for every domain that has the WAF turned on.
+MODSEC_VER=v3.0.16
+CONNECTOR_VER=v1.0.4
 CRS_VER=v4.28.0
 MODSEC_PREFIX=/usr/local/modsecurity
 SRC=/usr/local/src
