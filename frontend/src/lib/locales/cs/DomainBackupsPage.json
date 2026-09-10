@@ -145,6 +145,11 @@
     "cancel": "Zrušit",
     "processing": "Obnovování..."
   },
+    "restoreCorrupt": {
+    "title": "Obnovit z poškozené zálohy?",
+    "message": "Kontrola integrity označila tento archiv za poškozený: jeho obsah už neodpovídá checksumu pořízenému při vytvoření. Obnova z něj může přepsat živý web poškozenými soubory a naimportovat poškozenou database. Pokračujte jen tehdy, nemáte-li jinou kopii.",
+    "confirm": "Přesto obnovit"
+  },
   "verify": {
     "corrupt": "Poškozený",
     "remote": "Off-site"

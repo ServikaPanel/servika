@@ -240,6 +240,8 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 	// The recorded archive size, used to tell a complete local copy from a
 	// truncated one. 0 means unknown (a legacy row), which skips the size check.
 	expected := expectedBackupSize(ctx, db, backupID, domainID)
+	// The digest is read here, once, and applied to whichever destination answers.
+	digest := expectedBackupDigest(ctx, db, backupID, domainID)
 	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
 	if fi, err := os.Lstat(abs); err == nil && fi.Mode().IsRegular() {
 		// Existing is not enough; it must be COMPLETE. A download killed mid-flight
@@ -264,8 +266,13 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
 		Scan(&remoteStatus); err == nil && remoteStatus == "successful" {
 		if d, e := readDestination(ctx, db, domainID); e == nil && d != nil {
-			if downloadFromRemote(ctx, db, d, file, abs) == nil && verifyDownloaded(abs, expected) == nil {
-				return nil
+			if downloadFromRemote(ctx, db, d, file, abs) == nil {
+				verifyErr := verifyFetched(abs, expected, digest)
+				if verifyErr == nil {
+					return nil
+				}
+				// #nosec G706 -- logged values are integer IDs, a validated file name and error text; no raw tenant string with CR/LF reaches the log.
+				log.Printf("backup restore domain=%d: the copy of %s from the domain destination was refused: %v", domainID, file, verifyErr)
 			}
 		}
 	}
@@ -279,11 +286,12 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 			}
 		}
 		if err := fetchGlobalRemote(ctx, db, s, file, abs); err == nil {
-			if verifyDownloaded(abs, expected) == nil {
+			verifyErr := verifyFetched(abs, expected, digest)
+			if verifyErr == nil {
 				return nil
 			}
-			// #nosec G706 -- logged values are integer IDs and a validated file name; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup restore domain=%d: off-site copy of %s downloaded but the size did not match", domainID, file)
+			// #nosec G706 -- logged values are integer IDs, a validated file name and error text; no raw tenant string with CR/LF reaches the log.
+			log.Printf("backup restore domain=%d: the off-site copy of %s was refused: %v", domainID, file, verifyErr)
 		} else {
 			// #nosec G706 -- logged values are integer IDs and error/command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
@@ -300,10 +308,58 @@ func expectedBackupSize(ctx context.Context, db *sql.DB, backupID, domainID int6
 	return b
 }
 
+// expectedBackupDigest returns the recorded sha256 of an archive, or "" when the
+// row carries none (written before the column existed), which disables the
+// digest check.
+func expectedBackupDigest(ctx context.Context, db *sql.DB, backupID, domainID int64) string {
+	var digest string
+	_ = db.QueryRowContext(ctx,
+		`SELECT COALESCE(sha256,'') FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).Scan(&digest)
+	return digest
+}
+
+// verifyFetched checks a freshly downloaded archive against everything the panel
+// recorded about it: its size first, then its digest.
+//
+// Size alone answered only "did the transfer finish". It is a weak check on this
+// path: the destination is a third-party host the customer or operator
+// configured, an FTP destination runs plaintext and unauthenticated on the wire,
+// and padding a substituted archive to the recorded byte count is trivial. What
+// arrives is then extracted as root, rsynced into the tenant's home and imported
+// as SQL, so this is exactly the moment to ask the stronger question the panel
+// already holds the answer to.
+//
+// The digest is read on the FETCH path rather than only by the periodic
+// integrity scan, because the fetch is when the bytes come from outside the
+// server. A mismatch removes the file and refuses.
+func verifyFetched(abs string, expected int64, digest string) error {
+	if err := verifyDownloaded(abs, expected); err != nil {
+		return err
+	}
+	if digest == "" {
+		return nil
+	}
+	actual, err := fileSHA256(abs)
+	if err != nil {
+		// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
+		_ = os.Remove(abs)
+		return fmt.Errorf("the fetched archive could not be hashed: %w", err)
+	}
+	if actual != digest {
+		// #nosec G703 -- see above.
+		_ = os.Remove(abs)
+		return fmt.Errorf("the fetched archive does not match its recorded sha256")
+	}
+	return nil
+}
+
 // verifyDownloaded reports whether a freshly downloaded archive matches its
 // recorded size. A transport can report success and still deliver a truncated
 // file, so a size mismatch removes the file and returns an error, turning a
 // silent partial download into a loud one. An unknown size (0) passes.
+//
+// It is the cheap FIRST gate; verifyFetched is what callers use, because a
+// complete transfer of the wrong bytes passes this one.
 func verifyDownloaded(abs string, expected int64) error {
 	if expected <= 0 {
 		return nil

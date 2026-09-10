@@ -145,6 +145,11 @@
     "cancel": "Cancelar",
     "processing": "Restaurando..."
   },
+    "restoreCorrupt": {
+    "title": "¿Restaurar desde una copia corrupta?",
+    "message": "El análisis de integridad registró este archivo como corrupto: su contenido ya no coincide con el checksum tomado al crearlo. Restaurar desde él puede escribir archivos dañados sobre el sitio en producción e importar una database dañada. Continúa solo si no tienes otra copia.",
+    "confirm": "Restaurar de todos modos"
+  },
   "verify": {
     "corrupt": "Dañado",
     "remote": "Off-site"

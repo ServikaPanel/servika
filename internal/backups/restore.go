@@ -39,6 +39,11 @@ type restoreRequest struct {
 	Target   string   `json:"target"`    // mode file: "folder" (default) | "in_place"
 	DB       string   `json:"db"`        // mode db (required) / database (optional filter)
 	TargetDB string   `json:"target_db"` // mode db: "" overwrites, set restores into a new name
+	// AllowCorrupt restores from an archive the integrity scan already recorded
+	// as corrupt. It is an explicit override rather than a default, because the
+	// panel's own evidence that the bytes rotted must not be silently ignored on
+	// the one path that writes them over a live site.
+	AllowCorrupt bool `json:"allow_corrupt"`
 }
 
 // Restore handles POST /api/v1/domains/:id/backups/:bid/restore.
@@ -57,18 +62,28 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		req.Mode = "full"
 	}
 
-	var systemUser, file, domainName string
+	var systemUser, file, domainName, verification string
 	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT d.system_user, d.domain_name, d.is_demo, b.file FROM backups b
+		`SELECT d.system_user, d.domain_name, d.is_demo, b.file, COALESCE(b.verification,'') FROM backups b
 		 JOIN domains d ON d.id=b.domain_id
-		 WHERE b.id=? AND b.domain_id=?`, backupID, id).Scan(&systemUser, &domainName, &isDemo, &file)
+		 WHERE b.id=? AND b.domain_id=?`, backupID, id).
+		Scan(&systemUser, &domainName, &isDemo, &file, &verification)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "backup not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	// The integrity scan already hashed this archive and recorded that it does not
+	// match, and raised a critical notification about it. Applying it over a live
+	// site anyway ignores the panel's own evidence, so it takes an explicit
+	// override.
+	if verification == "corrupt" && !req.AllowCorrupt {
+		httpx.WriteError(w, http.StatusConflict,
+			"this backup is recorded as corrupt; restore it only by confirming that explicitly")
 		return
 	}
 	if isDemo == 1 {

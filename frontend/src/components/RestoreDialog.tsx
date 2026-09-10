@@ -16,6 +16,9 @@ export type RestorePayload = {
   target?: string
   db?: string
   target_db?: string
+  // Set only when the operator confirmed a restore from an archive the integrity
+  // scan recorded as corrupt. The server refuses one without it.
+  allow_corrupt?: boolean
 }
 
 // RestoreDialog collects the granular restore options for one backup archive.

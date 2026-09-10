@@ -158,12 +158,12 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	}
 	defer release()
 
-	var systemUser, file string
+	var systemUser, file, verification string
 	var isDemo int
 	err := db.QueryRowContext(ctx,
-		`SELECT d.system_user, d.is_demo, b.file FROM backups b
+		`SELECT d.system_user, d.is_demo, b.file, COALESCE(b.verification,'') FROM backups b
 		 JOIN domains d ON d.id=b.domain_id WHERE b.id=? AND b.domain_id=?`, backupID, domainID).
-		Scan(&systemUser, &isDemo, &file)
+		Scan(&systemUser, &isDemo, &file, &verification)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("backup not found")
 	}
@@ -172,6 +172,12 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	}
 	if isDemo == 1 {
 		return "", fmt.Errorf("restore is unavailable for demo subscriptions")
+	}
+	// A bulk job carries no per-item override, so an archive the integrity scan
+	// recorded as corrupt is refused outright here. The single-domain endpoint is
+	// where an operator confirms one deliberately.
+	if verification == "corrupt" {
+		return "", fmt.Errorf("this backup is recorded as corrupt; restore it from the domain's own backup page to confirm that")
 	}
 	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file {
 		return "", fmt.Errorf("invalid backup file")

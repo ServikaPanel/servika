@@ -145,6 +145,11 @@
     "cancel": "İptal",
     "processing": "Geri yükleniyor..."
   },
+    "restoreCorrupt": {
+    "title": "Bozuk yedekten geri yükleme yapılsın mı?",
+    "message": "Bütünlük taraması bu arşivi bozuk olarak kaydetti: içeriği, oluşturulduğu anda alınan checksum ile artık eşleşmiyor. Buradan geri yüklemek canlı sitenin üzerine hasarlı dosyalar yazabilir ve hasarlı bir database import edebilir. Başka kopyanız yoksa devam edin.",
+    "confirm": "Yine de geri yükle"
+  },
   "verify": {
     "corrupt": "Bozuk",
     "remote": "Off-site"

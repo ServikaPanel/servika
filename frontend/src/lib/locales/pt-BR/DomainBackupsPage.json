@@ -145,6 +145,11 @@
     "cancel": "Cancelar",
     "processing": "Restaurando..."
   },
+    "restoreCorrupt": {
+    "title": "Restaurar a partir de um backup corrompido?",
+    "message": "A verificação de integridade registrou este arquivo como corrompido: seu conteúdo não corresponde mais ao checksum obtido na criação. Restaurar a partir dele pode gravar arquivos danificados sobre o site em produção e importar uma database danificada. Continue apenas se não tiver outra cópia.",
+    "confirm": "Restaurar mesmo assim"
+  },
   "verify": {
     "corrupt": "Corrompido",
     "remote": "Off-site"

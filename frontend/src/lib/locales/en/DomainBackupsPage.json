@@ -145,6 +145,11 @@
     "cancel": "Cancel",
     "processing": "Restoring..."
   },
+    "restoreCorrupt": {
+    "title": "Restore from a corrupt backup?",
+    "message": "The integrity scan recorded this archive as corrupt: its contents no longer match the checksum taken when it was created. Restoring from it can write damaged files over the live site and import a damaged database. Continue only if you have no other copy.",
+    "confirm": "Restore anyway"
+  },
   "verify": {
     "corrupt": "Corrupt",
     "remote": "Off-site"

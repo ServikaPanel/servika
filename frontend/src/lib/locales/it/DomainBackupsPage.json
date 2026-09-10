@@ -145,6 +145,11 @@
     "cancel": "Annulla",
     "processing": "Ripristino in corso..."
   },
+    "restoreCorrupt": {
+    "title": "Ripristinare da un backup corrotto?",
+    "message": "La scansione di integrità ha registrato questo archivio come corrotto: il suo contenuto non corrisponde più al checksum calcolato alla creazione. Ripristinarlo può scrivere file danneggiati sul sito in produzione e importare una database danneggiata. Continua solo se non hai altre copie.",
+    "confirm": "Ripristina comunque"
+  },
   "verify": {
     "corrupt": "Corrotto",
     "remote": "Off-site"

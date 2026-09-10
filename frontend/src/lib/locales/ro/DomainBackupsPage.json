@@ -145,6 +145,11 @@
     "cancel": "Anulează",
     "processing": "Se restaurează..."
   },
+    "restoreCorrupt": {
+    "title": "Restaurați dintr-o copie coruptă?",
+    "message": "Scanarea de integritate a înregistrat această arhivă ca fiind coruptă: conținutul ei nu mai corespunde checksum-ului calculat la creare. Restaurarea poate scrie fișiere deteriorate peste site-ul live și poate importa o database deteriorată. Continuați doar dacă nu aveți altă copie.",
+    "confirm": "Restaurează oricum"
+  },
   "verify": {
     "corrupt": "Corupt",
     "remote": "Off-site"

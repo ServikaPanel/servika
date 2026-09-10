@@ -145,6 +145,11 @@
     "cancel": "Annuler",
     "processing": "Restauration..."
   },
+    "restoreCorrupt": {
+    "title": "Restaurer depuis une sauvegarde corrompue ?",
+    "message": "L'analyse d'intégrité a marqué cette archive comme corrompue : son contenu ne correspond plus au checksum calculé à sa création. Une restauration peut écrire des fichiers endommagés sur le site en production et importer une database endommagée. Ne continuez que si vous n'avez aucune autre copie.",
+    "confirm": "Restaurer quand même"
+  },
   "verify": {
     "corrupt": "Corrompu",
     "remote": "Off-site"

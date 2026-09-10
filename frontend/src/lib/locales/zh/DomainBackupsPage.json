@@ -145,6 +145,11 @@
     "cancel": "取消",
     "processing": "正在恢复……"
   },
+    "restoreCorrupt": {
+    "title": "从损坏的备份恢复？",
+    "message": "完整性扫描已将此存档记录为损坏：其内容不再与创建时取得的 checksum 相符。从中恢复可能会把损坏的文件写到线上站点，并导入损坏的 database。仅在没有其他副本时继续。",
+    "confirm": "仍然恢复"
+  },
   "verify": {
     "corrupt": "已损坏",
     "remote": "异地"

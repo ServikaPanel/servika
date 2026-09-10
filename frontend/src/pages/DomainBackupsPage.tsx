@@ -232,6 +232,20 @@ export default function DomainBackupsPage() {
   async function restore(payload: RestorePayload) {
     if (!restoreBackup) return
     const bid = restoreBackup.id
+    // The integrity scan already hashed this archive and recorded that it does
+    // not match. The server refuses it without an explicit override, so ask for
+    // one here rather than letting the request fail with a message the operator
+    // cannot act on.
+    if (restoreBackup.verification === 'corrupt') {
+      const confirmed = await confirm({
+        title: t('restoreCorrupt.title'),
+        message: t('restoreCorrupt.message'),
+        confirmLabel: t('restoreCorrupt.confirm'),
+        dangerous: true,
+      })
+      if (!confirmed) return
+      payload = { ...payload, allow_corrupt: true }
+    }
     setProcessing(true); setError(null); setSuccess(null)
     setRestoreBackup(null)
     // The restore request is synchronous; the poll only animates its stages while

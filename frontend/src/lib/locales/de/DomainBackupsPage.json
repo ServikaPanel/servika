@@ -145,6 +145,11 @@
     "cancel": "Abbrechen",
     "processing": "Wird wiederhergestellt..."
   },
+    "restoreCorrupt": {
+    "title": "Aus einem beschädigten Backup wiederherstellen?",
+    "message": "Die Integritätsprüfung hat dieses Archiv als beschädigt vermerkt: sein Inhalt stimmt nicht mehr mit der bei der Erstellung ermittelten Prüfsumme überein. Eine Wiederherstellung kann beschädigte Dateien über die Live-Website schreiben und eine beschädigte Database importieren. Fahren Sie nur fort, wenn Sie keine andere Kopie haben.",
+    "confirm": "Trotzdem wiederherstellen"
+  },
   "verify": {
     "corrupt": "Beschädigt",
     "remote": "Off-site"
