@@ -96,10 +96,6 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func deployKeyDir(systemUser string) string {
-	return "/home/" + systemUser + "/.ssh"
-}
-
 var (
 	targetDirPattern = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
 	branchPattern    = regexp.MustCompile(`^[A-Za-z0-9_./-]+$`)
@@ -144,38 +140,70 @@ func clearDirectoryContents(home, targetDir string) error {
 	return files.ClearBeneath(home, targetDir)
 }
 
-// generateDeployKey creates a passphrase-free Ed25519 key under /home/<systemUser>/.ssh/.
-func generateDeployKey(systemUser string) (pubKey string, err error) {
-	dir := deployKeyDir(systemUser)
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	_ = os.MkdirAll(dir, 0700)
-	priv := filepath.Join(dir, "servika_deploy")
-	pub := priv + ".pub"
+// deployKeyMaxBytes bounds a public key read back from the tenant's tree. An
+// Ed25519 public key line is about 100 bytes; this leaves room for a comment
+// while refusing to hold whatever a tenant put there instead.
+const deployKeyMaxBytes = 64 << 10
 
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	if _, err := os.Stat(pub); err == nil {
-		// Reuse the current key.
-		// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-		b, _ := os.ReadFile(pub)
-		return strings.TrimSpace(string(b)), nil
+// generateDeployKey creates a passphrase-free Ed25519 key under
+// /home/<systemUser>/.ssh/.
+//
+// Every step goes through the safeio primitives, because this runs as ROOT
+// against a directory the TENANT owns. Resolving by path was the escape the
+// clone path above already closed: os.MkdirAll accepts an existing symlink,
+// ssh-keygen -f writes through whatever the path resolves to, os.WriteFile
+// follows a symlink at the final component, and `chown` without -h dereferences
+// its operand and hands the tenant ownership of the resolved target. Planting
+// ~/.ssh, or ~/.ssh/config, as a symlink therefore made root write a
+// fixed-content file anywhere and give it to the tenant, which is a root cron
+// drop-in away from code execution as root.
+//
+// ssh-keygen still writes by path, so it writes into a ROOT-OWNED staging
+// directory and the result is published beneath the home afterwards. That is the
+// same staging rule the rest of the tree follows for an external tool.
+func generateDeployKey(systemUser string) (pubKey string, err error) {
+	home := "/home/" + systemUser
+	const (
+		relDir  = ".ssh"
+		relPriv = ".ssh/servika_deploy"
+		relPub  = ".ssh/servika_deploy.pub"
+		relCfg  = ".ssh/config"
+	)
+	if err := files.MkdirAllBeneath(home, relDir, systemUser); err != nil {
+		return "", fmt.Errorf("prepare the deploy key directory: %w", err)
 	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("rm", "-f", priv, pub).CombinedOutput()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-C", "deploy@servika/"+systemUser, "-f", priv).CombinedOutput()
+	if existing, err := files.ReadFileBeneath(home, relPub, deployKeyMaxBytes); err == nil {
+		return strings.TrimSpace(string(existing)), nil // Reuse the current key.
+	}
+
+	stage, err := os.MkdirTemp("", "servika-deploy-key-")
+	if err != nil {
+		return "", fmt.Errorf("stage the deploy key: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(stage) }()
+	stagedPriv := filepath.Join(stage, "servika_deploy")
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); the only variable is a validated system user in a comment, and the path is this process's own temp directory.
+	out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-C", "deploy@servika/"+systemUser, "-f", stagedPriv).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("ssh-keygen: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	// Apply ownership and permissions.
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("chown", "-R", systemUser+":"+systemUser, dir).CombinedOutput()
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	_ = os.Chmod(priv, 0600)
-	// #nosec G302 G703 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
-	_ = os.Chmod(pub, 0644)
+	// #nosec G304 G703 -- a path this function composed from its own os.MkdirTemp directory.
+	privateKey, err := os.ReadFile(stagedPriv)
+	if err != nil {
+		return "", fmt.Errorf("read the staged deploy key: %w", err)
+	}
+	// #nosec G304 G703 -- a path this function composed from its own os.MkdirTemp directory.
+	publicKey, err := os.ReadFile(stagedPriv + ".pub")
+	if err != nil {
+		return "", fmt.Errorf("read the staged deploy key: %w", err)
+	}
 
-	// Configure this key for github.com in the per-user ~/.ssh/config.
-	cfg := filepath.Join(dir, "config")
+	if err := files.WriteFileBeneath(home, relPriv, privateKey, 0o600, systemUser); err != nil {
+		return "", fmt.Errorf("install the deploy key: %w", err)
+	}
+	if err := files.WriteFileBeneath(home, relPub, publicKey, 0o644, systemUser); err != nil {
+		return "", fmt.Errorf("install the deploy key: %w", err)
+	}
 	cfgBody := `Host github.com
     HostName github.com
     User git
@@ -183,16 +211,11 @@ func generateDeployKey(systemUser string) (pubKey string, err error) {
     StrictHostKeyChecking no
     UserKnownHostsFile=/dev/null
 `
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	_ = os.WriteFile(cfg, []byte(cfgBody), 0600)
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("chown", systemUser+":"+systemUser, cfg).CombinedOutput()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("restorecon", "-R", dir).CombinedOutput()
-
-	// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	b, _ := os.ReadFile(pub)
-	return strings.TrimSpace(string(b)), nil
+	if err := files.WriteFileBeneath(home, relCfg, []byte(cfgBody), 0o600, systemUser); err != nil {
+		return "", fmt.Errorf("write the ssh configuration: %w", err)
+	}
+	files.RestoreconBeneath(home, relDir)
+	return strings.TrimSpace(string(publicKey)), nil
 }
 
 // runAsUserArgs executes a command without a shell as the system user.
