@@ -156,15 +156,20 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		progressStage(id, stageImportingDB, 0)
 		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, "")
 		result["databases"] = dbResults
-		restored, skipped, failed, summary := dbSummary(dbResults)
+		restored, _, failed, summary := dbSummary(dbResults)
 		if failed > 0 {
 			httpx.WriteError(w, http.StatusInternalServerError,
 				"files were restored but a database import failed — "+summary)
 			return
 		}
-		// Zero databases restored while some were skipped is NOT success: the site
-		// files came back but nothing it connects to did.
-		if restored == 0 && skipped > 0 {
+		// Zero databases restored is NOT success: the site files came back but
+		// nothing it connects to did. The test is on `restored`, never on
+		// `skipped > 0`, which encodes one SYMPTOM (an empty ownership whitelist
+		// skipping every database) rather than the invariant. An archive that
+		// carried no dump at all reports skipped=0 too, and that is exactly what a
+		// backup whose dumps failed produces, so the old guard passed it as a
+		// successful full recovery.
+		if restored == 0 {
 			httpx.WriteError(w, http.StatusInternalServerError,
 				"files were restored but no database was restored — "+summary)
 			return

@@ -180,11 +180,15 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 		if err := restoreHome(ctx, tmpDir, systemUser, clean); err != nil {
 			return "", fmt.Errorf("the home directory could not be restored")
 		}
-		restored, skipped, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
+		restored, _, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
 		if failed > 0 {
 			return "", fmt.Errorf("files were restored but %d database import(s) failed — %s", failed, summary)
 		}
-		if restored == 0 && skipped > 0 {
+		// The test is on `restored` alone, never on `skipped > 0`: an archive that
+		// carried no dump at all reports skipped=0 too, so that guard passed a
+		// recovery in which nothing the site connects to came back, and the bulk
+		// job counted the domain in `succeeded`.
+		if restored == 0 {
 			return "", fmt.Errorf("files were restored but no database was restored — %s", summary)
 		}
 		return fmt.Sprintf("restored files and %d database(s)", restored), nil
