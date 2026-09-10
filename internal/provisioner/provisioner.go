@@ -396,6 +396,13 @@ var phpMap = map[string]phpConfig{
 	"8.6": {PoolDir: "/etc/opt/remi/php86/php-fpm.d", SockDir: "/var/opt/remi/php86/run/php-fpm", Service: "php86-php-fpm", FPMBin: "/opt/remi/php86/root/usr/sbin/php-fpm"},
 }
 
+// FPMBinaryFor returns the php-fpm binary for a version, or "" when the version
+// is not one this panel knows. It exists so every writer of a shared pool can
+// run `php-fpm -t` against the same binary rather than keeping its own map.
+func FPMBinaryFor(version string) string {
+	return phpMap[normalizePHP(version)].FPMBin
+}
+
 func ValidateDomain(d string) error {
 	d = strings.ToLower(strings.TrimSpace(d))
 	if d == "" {

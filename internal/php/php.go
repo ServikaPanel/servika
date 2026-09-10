@@ -278,6 +278,18 @@ var phpSizePattern = regexp.MustCompile(`^(?:-1|[0-9]+[KkMmGg]?)$`)
 const (
 	reasonControlCharacter = "php_setting_contains_control_character"
 	reasonInvalidSize      = "php_size_value_invalid"
+	reasonInvalidPMMode    = "php_pm_strategy_invalid"
+	reasonPMOutOfRange     = "php_pm_value_out_of_range"
+	reasonPMInconsistent   = "php_pm_values_inconsistent"
+)
+
+// pmLimits bounds the process-manager counters a request body supplies. The
+// ceiling is not a preference: this pool is written into the directory SHARED by
+// every other tenant on that PHP version, and a plan-less domain has no cgroup
+// above it either, because RollbackToSharedFPM also removes its systemd slice.
+const (
+	pmMaxChildrenCeiling = 512
+	pmMaxRequestsCeiling = 1000000
 )
 
 // settingError carries the stable reason code beside a detail for the log. The
@@ -324,12 +336,65 @@ func sanitizeSettings(s Settings) (Settings, error) {
 			return Settings{}, settingError{Reason: reasonControlCharacter, Detail: name + " contains a line break or NUL character"}
 		}
 	}
+	if err := checkProcessManager(s); err != nil {
+		return Settings{}, err
+	}
 	cleaned, err := sanitizeExtraDirectives(s.ExtraDirectives)
 	if err != nil {
 		return Settings{}, err
 	}
 	s.ExtraDirectives = cleaned
 	return s, nil
+}
+
+// checkProcessManager bounds the pm.* group the request body supplies.
+//
+// These six values are rendered verbatim into the pool file and nothing
+// downstream refuses them: php-fpm reports an inconsistent group only when the
+// service starts, and by then the file is already in the directory SHARED by
+// every tenant on that PHP version. Measured and recorded in this project
+// already: min_spare/max_spare above max_children produce `ALERT: [pool www] ...
+// cannot be greater than pm.max_children` followed by `FPM initialization
+// failed`, which fails php-fpm -t for the whole version and blocks creation of
+// every new domain on it.
+//
+// The tenant-own-master renderer does not trust these values either: it clamps
+// the strategy and derives max_children from the PLAN. This is the shared path,
+// which is what a plan-less domain runs on.
+func checkProcessManager(s Settings) error {
+	switch s.PMStrategy {
+	case "static", "dynamic", "ondemand":
+	default:
+		return settingError{Reason: reasonInvalidPMMode, Detail: "pm_strategy must be static, dynamic or ondemand"}
+	}
+	for name, bound := range map[string]struct{ value, ceiling int }{
+		"pm_max_children":      {s.PMMaxChildren, pmMaxChildrenCeiling},
+		"pm_start_servers":     {s.PMStartServers, pmMaxChildrenCeiling},
+		"pm_min_spare_servers": {s.PMMinSpareServers, pmMaxChildrenCeiling},
+		"pm_max_spare_servers": {s.PMMaxSpareServers, pmMaxChildrenCeiling},
+		"pm_max_requests":      {s.PMMaxRequests, pmMaxRequestsCeiling},
+	} {
+		if bound.value < 0 || bound.value > bound.ceiling {
+			return settingError{Reason: reasonPMOutOfRange, Detail: name + " is outside the accepted range"}
+		}
+	}
+	if s.PMMaxChildren < 1 {
+		return settingError{Reason: reasonPMOutOfRange, Detail: "pm_max_children must be at least 1"}
+	}
+	if s.PMStrategy != "dynamic" {
+		return nil
+	}
+	// php-fpm enforces exactly this relation at startup, so it is checked here
+	// rather than discovered when the service refuses to come back.
+	if s.PMMinSpareServers < 1 || s.PMMaxSpareServers < s.PMMinSpareServers ||
+		s.PMMaxChildren < s.PMMaxSpareServers ||
+		s.PMStartServers < s.PMMinSpareServers || s.PMStartServers > s.PMMaxSpareServers {
+		return settingError{
+			Reason: reasonPMInconsistent,
+			Detail: "dynamic requires 1 <= min_spare <= start_servers <= max_spare <= max_children",
+		}
+	}
+	return nil
 }
 
 // poolTmpl contains the complete PHP-FPM pool configuration.
@@ -437,13 +502,38 @@ func ApplyToFilesystem(systemUser, version string, s Settings) (socket string, e
 	}
 	// #nosec G703 -- systemUser is the provisioned tenant account read from the domains row (^c_[A-Za-z0-9_]+$), never raw request input; PoolDir is a fixed system path.
 	poolPath := filepath.Join(sb.PoolDir, systemUser+".conf")
+	// The previous bytes are kept so a rejected pool can be taken back. This file
+	// lands in the directory SHARED by every tenant on this PHP version, and a
+	// pool php-fpm refuses fails `php-fpm -t` for the WHOLE version, which blocks
+	// creation of every new domain on it. The two sibling writers of this same
+	// directory (provisioner.writePoolValidated and EnableTenantFPM) already do
+	// this; this one is the only one fed straight from a request body.
+	// #nosec G304 G703 -- the path is a fixed per-version PoolDir plus the provisioned tenant account.
+	previous, hadPrevious := os.ReadFile(poolPath)
 	// #nosec G306 G703 -- root-owned PHP-FPM pool file its daemon must read; the path is a fixed PoolDir plus the provisioned tenant account, and no secret is stored here.
 	if err := os.WriteFile(poolPath, []byte(body), 0644); err != nil {
 		return "", err
 	}
+	restorePool := func() {
+		if hadPrevious == nil {
+			// #nosec G306 G703 -- restoring the same root-owned pool file, exactly as it was found.
+			_ = os.WriteFile(poolPath, previous, 0644)
+			return
+		}
+		// #nosec G703 -- the same path as the write above.
+		_ = os.Remove(poolPath)
+	}
+	if fpm := provisioner.FPMBinaryFor(version); fpm != "" {
+		// #nosec G204 G702 -- fixed binary with separate args (no shell); the version is looked up in a fixed map.
+		if out, err := exec.Command(fpm, "-t").CombinedOutput(); err != nil {
+			restorePool()
+			return "", fmt.Errorf("php-fpm -t (%s) failed, pool restored: %s: %w", version, strings.TrimSpace(string(out)), err)
+		}
+	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 	if out, err := exec.Command("systemctl", "reload-or-restart", sb.Service).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("php-fpm reload (%s): %s: %w", sb.Service, strings.TrimSpace(string(out)), err)
+		restorePool()
+		return "", fmt.Errorf("php-fpm reload (%s), pool restored: %s: %w", sb.Service, strings.TrimSpace(string(out)), err)
 	}
 	socket = filepath.Join(sb.SockDir, systemUser+".sock")
 	return socket, nil
