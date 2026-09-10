@@ -322,10 +322,25 @@ func ensureCacheLogFormat() bool {
 	return true
 }
 
-// purgeFastCGICache removes all nginx FastCGI cache entries so that
-// cache TTL and enable/disable changes take effect immediately on
-// the next request instead of serving stale cached content.
-func purgeFastCGICache(systemUser string) {
+// purgeFastCGICache removes ONE domain's nginx FastCGI cache entries, so a
+// cache TTL or enable/disable change takes effect on the next request instead of
+// serving stale content.
+//
+// The zone is server-wide: every tenant vhost with FastCGI caching enabled writes
+// into the same directory under the same key. This used to walk that directory
+// and remove every file, taking a system-user argument it only ever used in the
+// log line, so an ordinary settings save by any customer emptied the cached pages
+// of every neighbouring site and made all of them regenerate through PHP-FPM at
+// once.
+func purgeFastCGICache(domainName string) {
+	hosts := purgeHostSet(domainName)
+	if len(hosts) == 0 {
+		// No host to attribute entries to. Sweeping the directory instead is what
+		// this function used to do, and it is the defect: it emptied the cache of
+		// every OTHER tenant on the host.
+		log.Printf("fastcgi cache: no host name to purge for; nothing removed")
+		return
+	}
 	dir := cacheZoneDir()
 	if _, err := os.Stat(dir); err != nil {
 		return
@@ -334,7 +349,7 @@ func purgeFastCGICache(systemUser string) {
 	if err != nil {
 		return
 	}
-	var purged int
+	var purged, unattributed int
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -349,15 +364,128 @@ func purgeFastCGICache(systemUser string) {
 			twoCharDir := filepath.Join(oneCharDir, one.Name())
 			twoLevel, _ := os.ReadDir(twoCharDir)
 			for _, two := range twoLevel {
-				if err := os.Remove(filepath.Join(twoCharDir, two.Name())); err == nil {
+				path := filepath.Join(twoCharDir, two.Name())
+				host, ok := cacheEntryHost(path)
+				if !ok {
+					unattributed++
+					continue
+				}
+				if !hosts[host] {
+					continue
+				}
+				if err := os.Remove(path); err == nil {
 					purged++
 				}
 			}
 		}
 	}
 	if purged > 0 {
-		log.Printf("fastcgi cache: purged %d entries (%s)", purged, systemUser)
+		log.Printf("fastcgi cache: purged %d entries (%s)", purged, domainName)
 	}
+	if unattributed > 0 {
+		// Left in place deliberately. An entry whose key cannot be read is not
+		// evidence that it belongs to this domain, and nginx expires it on its own
+		// (inactive=60m). Removing it would restore the cross-tenant wipe for every
+		// file this reader does not understand.
+		log.Printf("fastcgi cache: %d entries left in place, their cache key could not be read", unattributed)
+	}
+}
+
+// purgeHostSet is the set of host names whose cached pages one domain owns.
+//
+// It is the same list the vhost answers to, so a purge covers exactly what that
+// vhost serves and nothing else. A canonical redirect sends one of the two names
+// straight to the other, and an entry under the redirecting name is this domain's
+// either way.
+func purgeHostSet(domainName string) map[string]bool {
+	name := strings.ToLower(strings.TrimSpace(domainName))
+	if name == "" {
+		return nil
+	}
+	hosts := map[string]bool{}
+	for _, host := range wwwHostNames(name) {
+		hosts[strings.ToLower(host)] = true
+	}
+	return hosts
+}
+
+// cacheKeyHead bounds how much of a cache file is read to find its key. nginx
+// writes a fixed binary header of well under 200 bytes and then the key line, so
+// this is generous even for a long request URI.
+const cacheKeyHead = 8 << 10
+
+// cacheEntryHost reads one cache file's key and returns the host it was stored
+// for.
+//
+// The on-disk NAME is the md5 of the key, so an entry cannot be attributed by
+// file name. nginx writes the key itself in plain text after the binary header,
+// as "\nKEY: <key>\n", which is what makes a per-domain purge possible at all.
+func cacheEntryHost(path string) (string, bool) {
+	// #nosec G304 G703 -- path is composed by the caller from cacheZoneDir() and two directory entries read from it.
+	file, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer func() { _ = file.Close() }() // read-only: nothing to flush
+	head := make([]byte, cacheKeyHead)
+	n, err := file.Read(head)
+	if n <= 0 && err != nil {
+		return "", false
+	}
+	key, ok := cacheKeyFromHead(string(head[:n]))
+	if !ok {
+		return "", false
+	}
+	return cacheKeyHost(key)
+}
+
+// cacheKeyFromHead extracts the key line nginx writes after the binary header.
+func cacheKeyFromHead(head string) (string, bool) {
+	_, rest, found := strings.Cut(head, "\nKEY: ")
+	if !found {
+		return "", false
+	}
+	key, _, found := strings.Cut(rest, "\n")
+	if !found {
+		// The key line is not terminated inside the bytes that were read, so what
+		// is here may be a prefix of the real key. Refusing is the honest answer.
+		return "", false
+	}
+	return key, true
+}
+
+// cacheHTTPMethods are the methods that can reach a cached FastCGI response. The
+// key concatenates scheme, method, host and URI with no separator, so the method
+// has to be recognised to know where the host starts.
+var cacheHTTPMethods = []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+
+// cacheKeyHost splits a "$scheme$request_method$host$request_uri" key into its
+// host.
+//
+// The parse is exact rather than a substring search on purpose: "example.com/"
+// is a suffix of "notexample.com/", so a Contains check would purge a
+// neighbouring tenant's entries, which is the defect this replaces.
+func cacheKeyHost(key string) (string, bool) {
+	// "https" first: "http" is its prefix.
+	for _, scheme := range []string{"https", "http"} {
+		afterScheme, ok := strings.CutPrefix(key, scheme)
+		if !ok {
+			continue
+		}
+		for _, method := range cacheHTTPMethods {
+			afterMethod, ok := strings.CutPrefix(afterScheme, method)
+			if !ok {
+				continue
+			}
+			host, _, found := strings.Cut(afterMethod, "/")
+			if !found || host == "" {
+				return "", false
+			}
+			return strings.ToLower(host), true
+		}
+		return "", false
+	}
+	return "", false
 }
 
 func cacheZoneDefinedElsewhere() bool {
@@ -1819,7 +1947,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	}
 	// Purge stale FastCGI cache entries for this domain so that cache TTL and
 	// enable/disable changes take effect immediately instead of serving old content.
-	purgeFastCGICache(systemUser)
+	purgeFastCGICache(opts.DomainName)
 
 	// Manage the Apache backend idempotently by writing or removing its vhost.
 	if opts.Backend == "apache" && !opts.Suspended {
@@ -1942,7 +2070,7 @@ func DeprovisionAddonDomain(domainName, systemUser string) error {
 		_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
 	}
 	_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
-	purgeFastCGICache(systemUser)
+	purgeFastCGICache(domainName)
 	return nil
 }
 
@@ -2043,7 +2171,7 @@ func Deprovision(domainName, systemUser string) error {
 			_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
 		}
 		_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
-		purgeFastCGICache(systemUser)
+		purgeFastCGICache(domainName)
 		if err == nil {
 			log.Printf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
 				domainName, systemUser, len(siblings))
@@ -2067,7 +2195,7 @@ func Deprovision(domainName, systemUser string) error {
 		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".custom.conf"))
 	}
 	_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
-	purgeFastCGICache(systemUser)
+	purgeFastCGICache(domainName)
 
 	if !strings.HasPrefix(systemUser, "c_") {
 		return fmt.Errorf("security: refusing to delete a user without the c_ prefix")
