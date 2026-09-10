@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"servika/internal/config"
@@ -31,6 +32,40 @@ var rePkg = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]*)/[a-z0-9]([a-z0-9._-]*)(:
 // above the router's own 300-second request timeout because a large install
 // legitimately outlasts the request; the point is that the process ends.
 const composerTimeout = 10 * time.Minute
+
+// concurrentRunsPerUser is how many composer processes one hosting account may
+// hold at a time. The same number internal/laravel's execGate uses for the same
+// class of command.
+//
+// Without it the endpoint had no bound at all: the deadline is detached from the
+// request on purpose, so a customer issuing hundreds of `composer update` calls
+// held that many resolver processes for ten minutes each. They run through
+// runuser inside servika.service's cgroup rather than the tenant's plan-limited
+// slice, and the unit sets no resource limits, so neither the plan nor a cgroup
+// ceiling applied. Composer's resolver is memory-hungry, which made this a CPU,
+// RAM and bandwidth exhaustion vector against every other tenant on the host.
+const concurrentRunsPerUser = 3
+
+// runSlots holds one buffered channel per system user, created on first use.
+var runSlots sync.Map
+
+// acquireRunSlot takes a slot for systemUser WITHOUT blocking, and reports
+// whether it got one.
+//
+// A blocking gate would be wrong on a request path: the caller would wait behind
+// a ten-minute install while holding a panel goroutine, which is most of the
+// resource the gate exists to protect. Refusing tells the customer what is
+// happening instead.
+func acquireRunSlot(systemUser string) (release func(), ok bool) {
+	value, _ := runSlots.LoadOrStore(systemUser, make(chan struct{}, concurrentRunsPerUser))
+	slots := value.(chan struct{})
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, true
+	default:
+		return nil, false
+	}
+}
 
 func composerBin() string { return config.ComposerBin() }
 
@@ -135,6 +170,15 @@ func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 		}
 		args = append(args, pkg)
 	}
+	// Taken AFTER validation so a malformed request cannot burn a slot, and
+	// before the process is started so nothing runs ungated.
+	release, gotSlot := acquireRunSlot(systemUser)
+	if !gotSlot {
+		httpx.WriteError(w, http.StatusConflict,
+			"another composer command is already running for this account, wait for it to finish")
+		return
+	}
+	defer release()
 	// Composer resolves and downloads from packagist, so an unreachable mirror would
 	// otherwise leave the process running for the life of the panel. The deadline is
 	// not tied to the request: a half-written vendor/ directory is worse than one
