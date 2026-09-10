@@ -120,3 +120,21 @@ func TestEveryRevocationPathFlushesTheAuthCache(t *testing.T) {
 		}
 	}
 }
+
+// Roundcube is published at /webmail/, which every mail user of every hosted
+// domain reaches. The floor is 1.7.4: 1.7.3 carries eleven security fixes
+// including an IMAP command injection and 1.7.4 carries further ones. NEITHER
+// release was given a CVE identifier, so nothing keyed to a CVE feed reports a
+// server left behind, and there is no CI gate that re-checks this pin.
+//
+// The exact value is asserted rather than a range, so a bump has to state which
+// release it moves to.
+func TestTheRoundcubePinIsNotBelowItsSecurityFloor(t *testing.T) {
+	body, err := os.ReadFile("../../assets/ops/servika-mail-setup")
+	if err != nil {
+		t.Fatalf("read the mail setup script: %v", err)
+	}
+	if !strings.Contains(string(body), "\nRCVER=1.7.4\n") {
+		t.Error("RCVER is not the pinned version 1.7.4")
+	}
+}

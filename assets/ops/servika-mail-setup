@@ -373,7 +373,12 @@ fi
 echo "════ Roundcube webmail (/webmail/) ════"
 dnf install -y php-intl >/dev/null 2>&1 \
   && log "php-intl installed for Roundcube" || log "php-intl could not be installed; webmail login may fail"
-RCVER=1.7.2
+# Roundcube is published at /webmail/, which every mail user of every hosted
+# domain reaches. 1.7.3 carries eleven security fixes including an IMAP command
+# injection and 1.7.4 carries further ones; neither release was given a CVE
+# identifier, so an operator scanning by CVE feed sees a clean result on a server
+# that is two security releases behind.
+RCVER=1.7.4
 mkdir -p /opt/roundcube
 if [ ! -f /opt/roundcube/index.php ]; then
   RCTMP=$(mktemp -d)
