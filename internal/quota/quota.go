@@ -126,6 +126,44 @@ func CheckResellerTrafficAllowed(ctx context.Context, db *sql.DB, resellerUserID
 	return nil
 }
 
+// CheckResellerAllowedForCustomer applies all three reseller-wide ceilings to the
+// reseller that OWNS customerID.
+//
+// The reseller quotas count every domains row belonging to every customer the
+// reseller owns, and an addon domain IS such a row: none of the three count
+// queries above filters on parent_domain_id. A path that creates one therefore
+// has to pass the same gates the top-level path passes, or the reseller's
+// contracted totals are not a ceiling at all.
+//
+// domains.Create takes the reseller from the caller's own claims, because only a
+// reseller reaches that branch. An addon domain is created by the CUSTOMER, who
+// is not the reseller, so the reseller has to be resolved from the customer here.
+//
+// A customer with no owner belongs to an administrator and has no reseller
+// ceiling. A failed read is refused rather than waved through: the caller cannot
+// tell an absent limit from an unreadable one.
+func CheckResellerAllowedForCustomer(ctx context.Context, db *sql.DB, customerID *int64) error {
+	if customerID == nil {
+		return nil
+	}
+	var ownerUserID *int64
+	if err := db.QueryRowContext(ctx,
+		`SELECT owner_user_id FROM customers WHERE id=?`, *customerID).Scan(&ownerUserID); err != nil {
+		return err // FAIL-CLOSED: never bypass the ceiling on a read error.
+	}
+	if ownerUserID == nil {
+		return nil
+	}
+	for _, check := range []func(context.Context, *sql.DB, int64) error{
+		CheckResellerDomainAllowed, CheckResellerDiskAllowed, CheckResellerTrafficAllowed,
+	} {
+		if err := check(ctx, db, *ownerUserID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // resellerLimit reads a single numeric limit from reseller_limits. Returns 0
 // (unlimited) when the reseller has no row.
 func resellerLimit(ctx context.Context, db *sql.DB, resellerUserID int64, column string) (int, error) {

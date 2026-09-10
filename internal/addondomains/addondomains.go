@@ -165,6 +165,21 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
 		return
 	}
+	// The reseller-wide domain, disk and traffic ceilings, which the top-level
+	// create path applies and this one did not. An addon domain is a real domains
+	// row and every reseller count query above includes it, so it consumed the
+	// reseller's contracted totals while being gated by none of them. The route is
+	// CustomerScope, so a plain customer could push its own reseller past a
+	// ceiling only that reseller's administrator can set.
+	if err := quota.CheckResellerAllowedForCustomer(r.Context(), h.DB, parent.CustomerID); err != nil {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
+			httpx.WriteError(w, http.StatusForbidden, le.Message)
+			return
+		}
+		log.Printf("addon domain reseller quota check failed: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
+		return
+	}
 	var existing int64
 	if err := h.DB.QueryRowContext(r.Context(), `SELECT id FROM domains WHERE domain_name=?`, req.DomainName).Scan(&existing); err == nil {
 		httpx.WriteError(w, http.StatusConflict, "this domain name is already registered")
