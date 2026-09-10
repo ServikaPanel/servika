@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -335,14 +336,63 @@ func runAsUserArgsCtx(ctx context.Context, systemUser, cwd string, extraEnv []st
 // cannot outlive the panel, not that it finishes while the caller is still waiting.
 const gitNetworkTimeout = 10 * time.Minute
 
+// gitResolveArgs vets the remote and, for an HTTPS remote, pins the address git
+// will connect to.
+//
+// netguard.CheckGitURL resolves the host and hands the URL onward unchanged; git
+// then resolves the same name again when it connects. A low-TTL record under the
+// customer's control can answer with a public address for the check and an
+// internal one for the connection, so the panel issues a request to an address
+// it never approved.
+//
+// http.curloptResolve maps the NAME to the vetted address inside libcurl. The
+// URL keeps the hostname, so TLS still validates the certificate against it:
+// rewriting the URL to the address would have traded the rebind for a broken
+// certificate check.
+//
+// An ssh:// or git@ remote gets nothing here. That path currently disables host
+// key verification for github.com, so there is no pin for an alias to preserve;
+// it is pinned once that is fixed.
+func gitResolveArgs(repoURL string) ([]string, error) {
+	if err := netguard.CheckGitURL(repoURL); err != nil {
+		return nil, fmt.Errorf("repository host not permitted: %w", err)
+	}
+	if !strings.HasPrefix(repoURL, "https://") {
+		return nil, nil
+	}
+	parsed, err := url.Parse(repoURL)
+	if err != nil || parsed.Hostname() == "" {
+		return nil, errors.New("invalid repository URL")
+	}
+	// An address literal is already the thing that would be dialed, so there is
+	// no second resolution to pin.
+	if net.ParseIP(parsed.Hostname()) != nil {
+		return nil, nil
+	}
+	address, err := netguard.ResolveAllowed(parsed.Hostname())
+	if err != nil {
+		return nil, fmt.Errorf("repository host not permitted: %w", err)
+	}
+	port := parsed.Port()
+	if port == "" {
+		port = "443"
+	}
+	// curl's RESOLVE syntax brackets an IPv6 address.
+	if strings.Contains(address, ":") {
+		address = "[" + address + "]"
+	}
+	return []string{"-c", "http.curloptResolve=" + parsed.Hostname() + ":" + port + ":" + address}, nil
+}
+
 // gitClone performs the initial clone and replaces an existing target directory.
 // token authenticates a private HTTPS repository (empty => public/deploy-key).
 func gitClone(systemUser, repoURL, branch, targetDir, token string) (sha string, log string, err error) {
 	if !validRepoURL(repoURL) {
 		return "", "", errors.New("invalid repository URL")
 	}
-	if err := netguard.CheckGitURL(repoURL); err != nil {
-		return "", "", fmt.Errorf("repository host not permitted: %w", err)
+	resolveArgs, err := gitResolveArgs(repoURL)
+	if err != nil {
+		return "", "", err
 	}
 	if !validBranch(branch) {
 		return "", "", errors.New("invalid branch")
@@ -370,7 +420,9 @@ func gitClone(systemUser, repoURL, branch, targetDir, token string) (sha string,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), gitNetworkTimeout)
 	defer cancel()
-	out, err := runAsUserArgsCtx(ctx, systemUser, home, authEnv, "git", "clone", "--depth", "1", "--branch", branch, "--", repoURL, dst)
+	cloneArgs := append(append([]string{}, resolveArgs...),
+		"clone", "--depth", "1", "--branch", branch, "--", repoURL, dst)
+	out, err := runAsUserArgsCtx(ctx, systemUser, home, authEnv, "git", cloneArgs...)
 	log = out
 	if err != nil {
 		return "", out, err
@@ -383,12 +435,22 @@ func gitClone(systemUser, repoURL, branch, targetDir, token string) (sha string,
 
 // gitPull updates an existing repository.
 // token authenticates a private HTTPS repository (empty => public/deploy-key).
-func gitPull(systemUser, targetDir, branch, token string) (sha string, log string, err error) {
+func gitPull(systemUser, repoURL, targetDir, branch, token string) (sha string, log string, err error) {
 	if !validTargetDir(targetDir) {
 		return "", "", errors.New("invalid target directory")
 	}
 	if !validBranch(branch) {
 		return "", "", errors.New("invalid branch")
+	}
+	// The fetch reaches the SAME remote the clone did, so it needs the same pin.
+	// The URL comes from the stored row rather than from the repository's own
+	// config, which the tenant owns and can rewrite.
+	if !validRepoURL(repoURL) {
+		return "", "", errors.New("invalid repository URL")
+	}
+	resolveArgs, err := gitResolveArgs(repoURL)
+	if err != nil {
+		return "", "", err
 	}
 	home := "/home/" + systemUser
 	dst := filepath.Join(home, targetDir)
@@ -409,7 +471,9 @@ func gitPull(systemUser, targetDir, branch, token string) (sha string, log strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), gitNetworkTimeout)
 	defer cancel()
-	out, err := runAsUserArgsCtx(ctx, systemUser, dst, authEnv, "git", "-C", dst, "fetch", "origin", branch)
+	fetchArgs := append([]string{"-C", dst}, resolveArgs...)
+	fetchArgs = append(fetchArgs, "fetch", "origin", branch)
+	out, err := runAsUserArgsCtx(ctx, systemUser, dst, authEnv, "git", fetchArgs...)
 	if err == nil {
 		resetOutput, resetErr := runAsUserArgs(systemUser, dst, nil, "git", "-C", dst, "reset", "--hard", "origin/"+branch)
 		out += resetOutput
@@ -555,16 +619,16 @@ func (h *Handlers) Pull(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusForbidden, "permission denied")
 		return
 	}
-	var branch, targetDir string
+	var repoURL, branch, targetDir string
 	var gid int64
 	err = h.DB.QueryRowContext(r.Context(),
-		`SELECT id, branch, target_dir FROM git_repos WHERE domain_id=? LIMIT 1`, id).
-		Scan(&gid, &branch, &targetDir)
+		`SELECT id, repo_url, branch, target_dir FROM git_repos WHERE domain_id=? LIMIT 1`, id).
+		Scan(&gid, &repoURL, &branch, &targetDir)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusBadRequest, "repository not found")
 		return
 	}
-	sha, log, err := gitPull(systemUser, targetDir, branch, githubTokenFor(h.DB, id))
+	sha, log, err := gitPull(systemUser, repoURL, targetDir, branch, githubTokenFor(h.DB, id))
 	status := "successful"
 	if err != nil {
 		status = "error"
@@ -601,11 +665,11 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var gid, domainID int64
-	var systemUser, branch, targetDir, webhookSecret string
+	var systemUser, repoURL, branch, targetDir, webhookSecret string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT g.id, g.domain_id, d.system_user, g.branch, g.target_dir, g.webhook_secret
+		`SELECT g.id, g.domain_id, d.system_user, g.repo_url, g.branch, g.target_dir, g.webhook_secret
 		 FROM git_repos g JOIN domains d ON d.id=g.domain_id
-		 WHERE g.webhook_secret=? LIMIT 1`, secret).Scan(&gid, &domainID, &systemUser, &branch, &targetDir, &webhookSecret)
+		 WHERE g.webhook_secret=? LIMIT 1`, secret).Scan(&gid, &domainID, &systemUser, &repoURL, &branch, &targetDir, &webhookSecret)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "secret did not match")
 		return
@@ -666,7 +730,7 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sha, _, perr := gitPull(systemUser, targetDir, branch, githubTokenFor(h.DB, domainID))
+	sha, _, perr := gitPull(systemUser, repoURL, targetDir, branch, githubTokenFor(h.DB, domainID))
 	status := "successful"
 	if perr != nil {
 		status = "error-webhook"
