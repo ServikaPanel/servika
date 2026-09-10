@@ -126,8 +126,7 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 	script := fmt.Sprintf(
 		`set cmd:fail-exit yes; `+
 			`%s`+
-			`set ssl:verify-certificate no; `+
-			`set ftp:ssl-allow no; `+
+			`%s`+
 			`set net:max-retries 1; `+
 			`set net:timeout 15; `+
 			`set net:reconnect-interval-base 2; `+
@@ -136,7 +135,7 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 			`cd "%s"; `+
 			`put -O . "%s"; `+
 			`bye`,
-		hostKey, lftpOpen(d),
+		hostKey, lftpTransportSettings(d), lftpOpen(d),
 		lftpEscape(d.RemoteDir), lftpEscape(d.RemoteDir), lftpEscape(localPath))
 
 	out, err := lftpCommand(ctx, d, script).CombinedOutput()
@@ -306,10 +305,10 @@ func fetchRemoteInto(ctx context.Context, db *sql.DB, d *Destination, fileName, 
 	defer cleanupHostKey()
 	script := fmt.Sprintf(
 		`set cmd:fail-exit yes; %s`+
-			`set ssl:verify-certificate no; set ftp:ssl-allow no; `+
+			`%s`+
 			`set net:max-retries 1; set net:timeout 15; `+
 			`%s; cd "%s"; get "%s" -o "%s"; bye`,
-		hostKey, lftpOpen(d),
+		hostKey, lftpTransportSettings(d), lftpOpen(d),
 		lftpEscape(d.RemoteDir), lftpEscape(fileName), lftpEscape(localPath))
 	out, err := lftpCommand(ctx, d, script).CombinedOutput()
 	if err != nil {
@@ -347,10 +346,10 @@ func remoteSize(ctx context.Context, db *sql.DB, d *Destination, fileName string
 	// the line, which is the size in both layouts.
 	script := fmt.Sprintf(
 		`set cmd:fail-exit yes; %s`+
-			`set ssl:verify-certificate no; set ftp:ssl-allow no; `+
+			`%s`+
 			`set net:max-retries 1; set net:timeout 20; `+
 			`%s; cd "%s"; cls -l "%s"; bye`,
-		hostKey, lftpOpen(d),
+		hostKey, lftpTransportSettings(d), lftpOpen(d),
 		lftpEscape(d.RemoteDir), lftpEscape(fileName))
 	out, err := lftpCommand(ctx, d, script).CombinedOutput()
 	if err != nil {
@@ -401,16 +400,44 @@ func deleteFromRemote(ctx context.Context, db *sql.DB, d *Destination, fileName 
 	defer cleanupHostKey()
 	script := fmt.Sprintf(
 		`set cmd:fail-exit yes; %s`+
-			`set ssl:verify-certificate no; set ftp:ssl-allow no; `+
+			`%s`+
 			`set net:max-retries 1; set net:timeout 15; `+
 			`%s; cd "%s"; rm "%s"; bye`,
-		hostKey, lftpOpen(d),
+		hostKey, lftpTransportSettings(d), lftpOpen(d),
 		lftpEscape(d.RemoteDir), lftpEscape(fileName))
 	out, err := lftpCommand(ctx, d, script).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("lftp: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
+}
+
+// lftpTransportSettings returns the transport security an lftp script needs for
+// this destination.
+//
+// Every script used to DISABLE the AUTH TLS upgrade and certificate
+// verification. lftp offers that upgrade by default, so turning it off sent the
+// whole archive (document root, mail and the tenant's SQL dump) and the
+// destination's username and password across the public internet in cleartext,
+// on every scheduled upload, every restore fetch and every size check.
+//
+// ssl-force refuses the transfer rather than falling back to plaintext, because
+// a destination that cannot do TLS is exactly the one this must not use.
+// ssl-protect-data covers the DATA channel: without it the login is encrypted
+// and the archive itself still travels in the clear. An operator whose server
+// has no TLS, or a certificate that does not verify, is told by the connection
+// test rather than backed up in the open.
+//
+// SFTP gets nothing: it runs over SSH, and its host key is pinned separately by
+// lftpHostKeySettings.
+func lftpTransportSettings(d *Destination) string {
+	if d.Type != "ftp" {
+		return ""
+	}
+	return `set ftp:ssl-allow yes; ` +
+		`set ftp:ssl-force yes; ` +
+		`set ftp:ssl-protect-data yes; ` +
+		`set ssl:verify-certificate yes; `
 }
 
 // lftpHostKeySettings pins an SFTP destination to the host key recorded on its
@@ -578,6 +605,10 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 		"--max-time", "15",
 		"--config", "-",
 		"--ftp-skip-pasv-ip",
+		// The test must exercise the transport the uploads use, or it reports a
+		// destination as working and every transfer to it then crosses the internet
+		// in cleartext, or fails at 03:00 with nobody watching.
+		"--ssl-reqd",
 		url,
 	}
 	cmd := newRestoreCommand(ctx, "curl", args...)
