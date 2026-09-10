@@ -124,6 +124,64 @@ DBBK="${SERVIKA_DBBK:-/usr/local/bin/servika-db-backup}"  # panel DB dump tool
 DBDIR="${SERVIKA_DBDIR:-/var/backups/servika/db}"         # dump location
 PREDUMP=""                                                  # pre-repair dump (restored on rollback)
 
+# restore_release_assets undoes every pre-restart asset swap from snapshots taken
+# during this run. Each step is existence-guarded and best-effort, so a missing
+# snapshot for one asset never blocks the restore of the others. It is called
+# only on the rollback path, before the previous binary is restarted.
+#
+# servika-update grew this first and it was never carried here, which is the
+# sharper gap: this is the tool an operator reaches for when the installation is
+# ALREADY broken.
+restore_release_assets() {
+  # Frontend: reuse the atomic ${FDIST}.old kept by the verified swap.
+  if [ -d "${FDIST}.old" ]; then
+    rm -rf "${FDIST}.new-failed" 2>/dev/null || true
+    [ -d "$FDIST" ] && mv "$FDIST" "${FDIST}.new-failed" 2>/dev/null || true
+    mv "${FDIST}.old" "$FDIST" 2>/dev/null || true
+    rm -rf "${FDIST}.new-failed" 2>/dev/null || true
+    command -v restorecon >/dev/null && restorecon -R "$FDIST" >/dev/null 2>&1 || true
+    ok "frontend restored to previous release"
+  fi
+  # Migrations: replace the on-disk set with the snapshot so the old binary does
+  # not re-run new migrations against the restored (older) schema. Any object the
+  # failed run already created is still there, and the runner calls log.Fatalf on
+  # the resulting statement error, so the panel would not start at all.
+  if [ -d "$ROLLBACK_DIR/migrations" ]; then
+    if rm -rf "$MIGR" 2>/dev/null && cp -a "$ROLLBACK_DIR/migrations" "$MIGR" 2>/dev/null; then
+      ok "migrations restored to previous release"
+    else
+      warn "migrations restore incomplete"
+    fi
+  fi
+  # Mail templates.
+  if [ -d "$ROLLBACK_DIR/mail-templates" ]; then
+    MAIL_TMPL="$PREFIX/src/mail-templates"
+    rm -rf "$MAIL_TMPL" 2>/dev/null && cp -a "$ROLLBACK_DIR/mail-templates" "$MAIL_TMPL" 2>/dev/null || true
+  fi
+  # Config files.
+  [ -f "$ROLLBACK_DIR/_panel.conf" ] && cp -a "$ROLLBACK_DIR/_panel.conf" /etc/nginx/conf.d/_panel.conf 2>/dev/null || true
+  [ -f "$ROLLBACK_DIR/roundcube.conf" ] && cp -a "$ROLLBACK_DIR/roundcube.conf" /etc/php-fpm.d/roundcube.conf 2>/dev/null || true
+  # Ops tools + scripts.
+  if [ -d "$ROLLBACK_DIR/opsbin" ]; then
+    for t in "$ROLLBACK_DIR"/opsbin/*; do
+      [ -f "$t" ] && install -m 0755 "$t" "$OPSBIN/$(basename "$t")" 2>/dev/null || true
+    done
+  fi
+  if [ -d "$ROLLBACK_DIR/scripts" ]; then
+    rm -rf "$SCRIPTS" 2>/dev/null && cp -a "$ROLLBACK_DIR/scripts" "$SCRIPTS" 2>/dev/null || true
+  fi
+  ok "release-owned assets restored to previous version"
+}
+
+# Snapshots of every release-owned asset this run replaces BEFORE the restart.
+# The rollback below puts them back: without them the previous binary is left
+# running against the NEW frontend, migrations, ops tools and panel config, and
+# the migration half is fatal rather than cosmetic (see restore_release_assets).
+ROLLBACK_DIR="$PREFIX/.restore-rollback.$$"
+mkdir -p "$ROLLBACK_DIR"
+# One trap for both, because a second `trap ... EXIT` REPLACES the first.
+trap 'rm -rf "${TMP:-}" "$ROLLBACK_DIR"' EXIT
+
 # Detect host architecture for binary selection.
 MACHINE=$(uname -m)
 case "$MACHINE" in
@@ -233,7 +291,7 @@ if [ -n "${SERVIKA_ASSETS_OVERRIDE:-}" ]; then
   [ -d "$A" ] || die "SERVIKA_ASSETS_OVERRIDE directory not found: $A"
   warn "TEST/OFFLINE: download skipped, local assets used ($A)"
 else
-  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+  TMP=$(mktemp -d)
   A=""
   if [ "$BRANCH_EXPLICIT" = 0 ]; then
     TAG=$(resolve_release_tag)
@@ -391,6 +449,10 @@ if [ -f "$A/migrations.tar.gz" ]; then
   # Under `set -e` a failed tar aborts here with NO red line, so `die` never runs
   # and the restored binary is left beside an incomplete migration set. The panel
   # then starts against a schema it does not match.
+  # Snapshot the current set so the rollback removes any file this run added;
+  # otherwise the restored old binary re-runs new migrations against the
+  # restored (older) schema.
+  [ -d "$MIGR" ] && cp -a "$MIGR" "$ROLLBACK_DIR/migrations" 2>/dev/null || true
   mkdir -p "$MIGR" || die "the migrations directory could not be created"
   tar xzf "$A/migrations.tar.gz" -C "$MIGR" \
     || die "the migrations archive could not be extracted; the previous binary is at $BIN.bak"
@@ -400,7 +462,16 @@ elif [ -d "$A/migrations" ]; then
   ok "migrations synced (from directory)"
 fi
 if [ -d "$A/ops" ]; then
-  mkdir -p "$OPSBIN" "$SCRIPTS"
+  mkdir -p "$OPSBIN" "$SCRIPTS" "$ROLLBACK_DIR/opsbin"
+  for t in "$A"/ops/*; do
+    bn=$(basename "$t")
+    case "$bn" in
+      *.conf|*.service|*.timer|*.bak|*.bak.*|*.orig|*.rej|*~) continue ;;
+    esac
+    dest="$OPSBIN/${bn%.sh}"
+    [ -f "$dest" ] && cp -a "$dest" "$ROLLBACK_DIR/opsbin/${bn%.sh}" 2>/dev/null || true
+  done
+  [ -d "$SCRIPTS" ] && cp -a "$SCRIPTS" "$ROLLBACK_DIR/scripts" 2>/dev/null || true
   # A configuration file is not a tool, and an editor or patch leftover is stale
   # code that root could run by mistake. Without this, `50-servika-jail.conf`
   # landed in $OPSBIN as an executable. The panel reads that file from $SCRIPTS,
@@ -450,15 +521,18 @@ fi
 if [ -d "$A/mail" ]; then
   MAIL_TMPL="$PREFIX/src/mail-templates"
   mkdir -p "$MAIL_TMPL"
+  [ -d "$MAIL_TMPL" ] && cp -a "$MAIL_TMPL" "$ROLLBACK_DIR/mail-templates" 2>/dev/null || true
   rm -rf "${MAIL_TMPL:?}/"*
   cp -a "$A/mail/." "$MAIL_TMPL/"
   ok "mail templates synced"
 fi
 if [ -f "$A/nginx/_panel.conf" ]; then
+  [ -f /etc/nginx/conf.d/_panel.conf ] && cp -a /etc/nginx/conf.d/_panel.conf "$ROLLBACK_DIR/_panel.conf" 2>/dev/null || true
   cp "$A/nginx/_panel.conf" /etc/nginx/conf.d/_panel.conf
   ok "panel nginx vhost synced"
 fi
 if [ -f "$A/php-fpm/roundcube.conf" ]; then
+  [ -f /etc/php-fpm.d/roundcube.conf ] && cp -a /etc/php-fpm.d/roundcube.conf "$ROLLBACK_DIR/roundcube.conf" 2>/dev/null || true
   cp "$A/php-fpm/roundcube.conf" /etc/php-fpm.d/roundcube.conf
   mkdir -p /var/lib/roundcube/{temp,sessions}
   chown -R apache:apache /var/lib/roundcube 2>/dev/null || true
@@ -527,10 +601,15 @@ else
   [ -f "$BIN.bak" ] && install -m 0755 "$BIN.bak" "$BIN"
   [ -f "$SEED.bak" ] && install -m 0755 "$SEED.bak" "$SEED" 2>/dev/null || true
   command -v restorecon >/dev/null && restorecon "$BIN" >/dev/null 2>&1 || true
+  # Every other release-owned asset goes back too, or the previous binary runs
+  # against the new frontend, migrations, ops tools and panel config.
+  restore_release_assets
   systemctl stop "$SVC" >/dev/null 2>&1 || true
   if [ -n "$PREDUMP" ] && [ -f "$PREDUMP" ]; then
-    if zcat "$PREDUMP" | mysql; then ok "DB restored to pre-repair backup ($PREDUMP)"
-    else warn "DB restore FAILED — manually: zcat '$PREDUMP' | mysql"; fi
+    # gzip -t first: a truncated dump would otherwise be HALF-APPLIED on the one
+    # path that exists to undo damage.
+    if gzip -t "$PREDUMP" && zcat "$PREDUMP" | mysql; then ok "DB restored to pre-repair backup ($PREDUMP)"
+    else warn "DB restore FAILED — the recovery dump remains at $PREDUMP"; fi
   fi
   systemctl restart "$SVC"; sleep 3
   if systemctl is-active --quiet "$SVC"; then
