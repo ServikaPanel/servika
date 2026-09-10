@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/provisioner"
 )
 
 // Refusal reasons, returned beside the English message because the screen
@@ -241,6 +242,16 @@ func Apply(ctx context.Context, db *sql.DB, chosen []string, actorUID int64) (Re
 
 // applyFile writes every parameter that lives in one file.
 func applyFile(ctx context.Context, db *sql.DB, path string, proposals []Proposal, actorUID int64) ([]Applied, []string, error) {
+	// An nginx apply writes a file, runs `nginx -t` over the WHOLE conf.d tree
+	// and reloads, with a restore between the steps. Held for the sequence, not
+	// per step: a domain render landing between the validation and the reload
+	// would be validated by this apply and reloaded by it, or rolled back by a
+	// restore that captured the file before it. See
+	// internal/provisioner/nginxlock.go.
+	if proposals[0].Service == ServiceNginx {
+		provisioner.LockNginx()
+		defer provisioner.UnlockNginx()
+	}
 	existing, err := os.ReadFile(path) // #nosec G304 -- path comes from the compile-time specs table.
 	if err != nil && !os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("read %s: %w", path, err)

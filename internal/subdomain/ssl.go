@@ -206,6 +206,12 @@ func issueLetsEncrypt(fqdn, certPath, keyPath string) error {
 }
 
 func applyVhost(path, config string) error {
+	// Serialised with every other nginx writer: `nginx -t` validates the whole
+	// conf.d tree, so this sequence and a domain render at once each observe the
+	// other's half-written file and roll back a valid change. See
+	// internal/provisioner/nginxlock.go.
+	provisioner.LockNginx()
+	defer provisioner.UnlockNginx()
 	// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	previous, readErr := os.ReadFile(path)
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).

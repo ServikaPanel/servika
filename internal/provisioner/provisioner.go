@@ -1749,6 +1749,16 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	if cfgPath == "" {
 		cfgPath = "/etc/nginx/conf.d/dom_" + systemUser + ".conf"
 	}
+	// Everything from here to the reload is one sequence: it writes this vhost,
+	// rewrites server-global http-context files, validates the WHOLE conf.d tree
+	// and rolls both back on failure. The rollback rests on the content captured
+	// at the start still being the correct previous content, which holds only
+	// while no other sequence runs. See nginxlock.go.
+	//
+	// The template render and the database reads above stay outside the lock,
+	// because they touch no shared file.
+	nginxMu.Lock()
+	defer nginxMu.Unlock()
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	previousConfig, readErr := os.ReadFile(cfgPath)
 	hadPreviousConfig := readErr == nil

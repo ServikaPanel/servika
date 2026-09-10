@@ -229,28 +229,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// A newly created subdomain has no protected directories or settings row yet, so
 	// it renders with the domain-level defaults until its own row exists.
 	web := loadWebRender(r.Context(), h.DB, id, 0, fqdn, false)
-	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-	if err := os.WriteFile(conf, []byte(vhost(fqdn, docroot, socket, "", web)), 0o644); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not write virtual host configuration")
-		return
-	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", conf).Run()
-	if _, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
-		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-		_ = os.Remove(conf) // Remove the invalid configuration so the running nginx instance remains unaffected.
-		_ = exec.Command("nginx", "-t").Run()
-		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
-	}
-	if out, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		// Config validated with `nginx -t` above but reload failed: the vhost is on
-		// disk yet not live. Remove it and report failure rather than a false success.
-		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-		_ = os.Remove(conf)
-		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("nginx reload after subdomain create %s: %v: %s", fqdn, err, strings.TrimSpace(string(out)))
-		httpx.WriteError(w, http.StatusInternalServerError, "subdomain configured but nginx reload failed")
+	if message, err := publishSubdomainVhost(conf, vhost(fqdn, docroot, socket, "", web)); err != nil {
+		// #nosec G706 -- logged values are a validated fqdn and command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("subdomain create %s: %v", fqdn, err)
+		httpx.WriteError(w, http.StatusInternalServerError, message)
 		return
 	}
 
@@ -258,9 +240,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 		id, subdomainName, fqdn, phpVersion)
 	if err != nil {
-		// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
-		_ = os.Remove(conf)
-		_ = exec.Command("systemctl", "reload", "nginx").Run()
+		withdrawSubdomainVhost(conf)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not add record")
 		return
 	}
@@ -285,6 +265,54 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		_ = dns.WriteZone(r.Context(), h.DB, id)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "fqdn": fqdn, "docroot": docroot})
+}
+
+// publishSubdomainVhost writes the server block, validates the whole nginx tree
+// and reloads. It returns the message the caller should answer with, and the
+// error to log.
+//
+// It holds the nginx lock for that sequence and nothing longer. `nginx -t`
+// validates every file under conf.d, so without the lock this sequence and a
+// domain render at once each observe the other's half-written file, and one
+// rolls back a change that was valid. The lock stops at the reload because
+// Create re-renders through ReRender afterwards, which takes the same lock.
+func publishSubdomainVhost(conf, body string) (string, error) {
+	provisioner.LockNginx()
+	defer provisioner.UnlockNginx()
+
+	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+	if err := os.WriteFile(conf, []byte(body), 0o644); err != nil {
+		return "could not write virtual host configuration", err
+	}
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+	_ = exec.Command("restorecon", conf).Run()
+	if out, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
+		// Remove the invalid configuration so the running nginx is unaffected.
+		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+		_ = os.Remove(conf)
+		_ = exec.Command("nginx", "-t").Run()
+		return "operation failed", fmt.Errorf("nginx -t: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	if out, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+		// Validated above but not live: remove it and report failure rather than
+		// a false success.
+		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+		_ = os.Remove(conf)
+		return "subdomain configured but nginx reload failed",
+			fmt.Errorf("nginx reload: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return "", nil
+}
+
+// withdrawSubdomainVhost takes a published server block back out, under the same
+// lock as the publication.
+func withdrawSubdomainVhost(conf string) {
+	provisioner.LockNginx()
+	defer provisioner.UnlockNginx()
+
+	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
+	_ = os.Remove(conf)
+	_ = exec.Command("systemctl", "reload", "nginx").Run()
 }
 
 // DELETE /domains/{id}/subdomain/{sid} removes a subdomain.

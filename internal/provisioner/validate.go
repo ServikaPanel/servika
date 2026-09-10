@@ -25,6 +25,10 @@ func ValidateNginxDirectives(directives string) error {
 	if d == "" {
 		return nil
 	}
+	// The probe file lands in the tree `nginx -t` validates, so it both sees a
+	// render in flight and is seen by one. See nginxlock.go.
+	nginxMu.Lock()
+	defer nginxMu.Unlock()
 
 	tmp, err := os.CreateTemp("/etc/nginx/conf.d", "_planvalidate_*.conf.tmp")
 	if err != nil {
@@ -71,6 +75,10 @@ func ValidateCustomVhost(content string) error {
 	if c == "" {
 		return fmt.Errorf("custom vhost content cannot be empty")
 	}
+	// The probe file lands in the tree `nginx -t` validates, so it both sees a
+	// render in flight and is seen by one. See nginxlock.go.
+	nginxMu.Lock()
+	defer nginxMu.Unlock()
 
 	tmp, err := os.CreateTemp("/etc/nginx/conf.d", "_customvhost_validate_*.conf.tmp")
 	if err != nil {

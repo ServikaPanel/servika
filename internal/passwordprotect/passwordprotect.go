@@ -362,9 +362,16 @@ func (h *Handlers) reRender(domainID int64, systemUser, version string) error {
 	backup, _ := os.ReadFile(cfg) // Nil when no backup exists.
 	if err := provisioner.ApplyVhostForDomain(h.DB, domainID, socket, version); err != nil {
 		if backup != nil {
+			// The restore is serialised with every other nginx writer. It rewrites
+			// a file `nginx -t` validates for the whole server, so a render in
+			// flight would otherwise see it half written. ApplyVhostForDomain took
+			// and released the same lock above, so taking it here does not
+			// re-enter. See internal/provisioner/nginxlock.go.
+			provisioner.LockNginx()
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 			_ = os.WriteFile(cfg, backup, 0o644) // Restore the last known-good configuration.
 			_ = exec.Command("nginx", "-t").Run()
+			provisioner.UnlockNginx()
 		}
 		return err
 	}

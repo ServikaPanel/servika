@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"servika/internal/provisioner"
 )
 
 const panelDomainVhostPath = "/etc/nginx/conf.d/_panel_domain.conf"
@@ -60,6 +62,12 @@ server {
 `
 
 func writePortlessPanelVhost(domain string) error {
+	// Serialised with every other nginx writer: `nginx -t` validates the whole
+	// conf.d tree, so this sequence and a domain render at once each observe the
+	// other's half-written file. See internal/provisioner/nginxlock.go.
+	provisioner.LockNginx()
+	defer provisioner.UnlockNginx()
+
 	content := fmt.Sprintf(panelDomainVhostTemplate, domain, domain)
 	backup, backupErr := os.ReadFile(panelDomainVhostPath)
 	hadBackup := backupErr == nil
@@ -87,6 +95,9 @@ func removePortlessPanelVhost() {
 	if _, err := os.Stat(panelDomainVhostPath); err != nil {
 		return
 	}
+	provisioner.LockNginx()
+	defer provisioner.UnlockNginx()
+
 	_ = os.Remove(panelDomainVhostPath)
 	_, _ = exec.Command("nginx", "-t").CombinedOutput()
 	_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
