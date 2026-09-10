@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "The subdirectory must be one name: lowercase letters, digits, hyphen and underscore.",
     "app_target_not_empty": "That location already holds files, or an installation into it is already running.",
     "app_database_exists": "A database with that name already exists.",
+    "app_database_limit": "Your plan does not allow another database. Remove an existing one or move to a larger plan.",
     "app_download_failed": "The archive could not be downloaded.",
     "app_extract_failed": "The archive could not be unpacked."
   },

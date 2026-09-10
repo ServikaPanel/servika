@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "Podadresář musí být jeden název: malá písmena, číslice, pomlčka a podtržítko.",
     "app_target_not_empty": "Na tomto místě už jsou soubory, nebo tam už instalace probíhá.",
     "app_database_exists": "Databáze s tímto názvem už existuje.",
+    "app_database_limit": "Váš tarif neumožňuje další database. Odstraňte některou stávající nebo přejděte na vyšší tarif.",
     "app_download_failed": "Archiv se nepodařilo stáhnout.",
     "app_extract_failed": "Archiv se nepodařilo rozbalit."
   },

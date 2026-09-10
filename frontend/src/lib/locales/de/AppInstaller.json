@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "Das Unterverzeichnis muss ein Name sein: Kleinbuchstaben, Ziffern, Bindestrich und Unterstrich.",
     "app_target_not_empty": "An dieser Stelle liegen bereits Dateien, oder eine Installation dorthin läuft schon.",
     "app_database_exists": "Eine Datenbank mit diesem Namen existiert bereits.",
+    "app_database_limit": "Ihr Tarif erlaubt keine weitere Database. Entfernen Sie eine vorhandene oder wechseln Sie zu einem größeren Tarif.",
     "app_download_failed": "Das Archiv konnte nicht heruntergeladen werden.",
     "app_extract_failed": "Das Archiv konnte nicht entpackt werden."
   },

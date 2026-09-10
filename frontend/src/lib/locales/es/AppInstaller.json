@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "El subdirectorio debe ser un solo nombre: minúsculas, dígitos, guion y guion bajo.",
     "app_target_not_empty": "Ese lugar ya contiene archivos, o ya hay una instalación en curso hacia él.",
     "app_database_exists": "Ya existe una base de datos con ese nombre.",
+    "app_database_limit": "Tu plan no permite otra database. Elimina una existente o cambia a un plan mayor.",
     "app_download_failed": "No se pudo descargar el archivo.",
     "app_extract_failed": "No se pudo descomprimir el archivo."
   },

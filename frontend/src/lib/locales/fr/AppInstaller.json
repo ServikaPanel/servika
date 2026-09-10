@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "Le sous-répertoire doit être un seul nom : minuscules, chiffres, tiret et souligné.",
     "app_target_not_empty": "Cet emplacement contient déjà des fichiers, ou une installation y est déjà en cours.",
     "app_database_exists": "Une base porte déjà ce nom.",
+    "app_database_limit": "Votre offre n'autorise pas une database supplémentaire. Supprimez-en une ou passez à une offre supérieure.",
     "app_download_failed": "L'archive n'a pas pu être téléchargée.",
     "app_extract_failed": "L'archive n'a pas pu être décompressée."
   },

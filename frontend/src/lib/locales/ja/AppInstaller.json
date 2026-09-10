@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "サブディレクトリは名前ひとつです。英小文字・数字・ハイフン・アンダースコアのみ使えます。",
     "app_target_not_empty": "その場所にはすでにファイルがあるか、導入が進行中です。",
     "app_database_exists": "その名前のデータベースはすでに存在します。",
+    "app_database_limit": "ご利用のプランではこれ以上 database を作成できません。既存のものを削除するか、上位プランに変更してください。",
     "app_download_failed": "アーカイブをダウンロードできませんでした。",
     "app_extract_failed": "アーカイブを展開できませんでした。"
   },

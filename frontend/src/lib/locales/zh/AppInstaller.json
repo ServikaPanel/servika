@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "子目录必须是一个名称：小写字母、数字、连字符和下划线。",
     "app_target_not_empty": "该位置已有文件，或已有安装正在进行。",
     "app_database_exists": "同名数据库已存在。",
+    "app_database_limit": "您的套餐不允许再创建 database。请删除一个现有的，或升级到更大的套餐。",
     "app_download_failed": "无法下载压缩包。",
     "app_extract_failed": "无法解压压缩包。"
   },

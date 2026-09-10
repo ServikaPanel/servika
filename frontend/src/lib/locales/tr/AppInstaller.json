@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "Alt dizin tek ad olmalı: küçük harf, rakam, tire ve alt çizgi.",
     "app_target_not_empty": "Bu konumda zaten dosya var veya buraya bir kurulum sürüyor.",
     "app_database_exists": "Bu adda bir veritabanı zaten var.",
+    "app_database_limit": "Planınız başka bir database oluşturmaya izin vermiyor. Mevcut birini silin veya daha büyük bir plana geçin.",
     "app_download_failed": "Arşiv indirilemedi.",
     "app_extract_failed": "Arşiv açılamadı."
   },

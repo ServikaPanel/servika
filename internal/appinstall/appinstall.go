@@ -13,6 +13,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"regexp"
 	"strings"
 )
@@ -27,6 +28,7 @@ const (
 	ReasonBadSubdirectory = "app_subdirectory_invalid"
 	ReasonTargetNotEmpty  = "app_target_not_empty"
 	ReasonDatabaseExists  = "app_database_exists"
+	ReasonDatabaseLimit   = "app_database_limit"
 	ReasonDownload        = "app_download_failed"
 	ReasonExtract         = "app_extract_failed"
 )
@@ -47,6 +49,21 @@ func (r *Refusal) Error() string {
 func (r *Refusal) Unwrap() error { return r.Err }
 
 func refuse(code string, err error) error { return &Refusal{Code: code, Err: err} }
+
+// statusForReason maps a refusal code to the status that describes it. A plan
+// limit is a 403 rather than a 400, because the request is well formed and the
+// customer's own subscription is what refuses it; retrying it unchanged after an
+// upgrade is the correct next step.
+func statusForReason(code string) int {
+	switch code {
+	case ReasonTargetNotEmpty, ReasonDatabaseExists:
+		return http.StatusConflict
+	case ReasonDatabaseLimit:
+		return http.StatusForbidden
+	default:
+		return http.StatusBadRequest
+	}
+}
 
 // ReasonOf returns the code of a refusal, or "" for anything else.
 func ReasonOf(err error) string {

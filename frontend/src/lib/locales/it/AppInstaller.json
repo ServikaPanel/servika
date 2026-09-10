@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "La sottocartella deve essere un solo nome: minuscole, cifre, trattino e trattino basso.",
     "app_target_not_empty": "In quella posizione ci sono già file, oppure un'installazione è già in corso.",
     "app_database_exists": "Esiste già un database con quel nome.",
+    "app_database_limit": "Il tuo piano non consente un altro database. Rimuovine uno esistente o passa a un piano superiore.",
     "app_download_failed": "Non è stato possibile scaricare l'archivio.",
     "app_extract_failed": "Non è stato possibile estrarre l'archivio."
   },

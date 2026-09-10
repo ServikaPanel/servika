@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +21,7 @@ import (
 	"servika/internal/archivex"
 	"servika/internal/credentials"
 	"servika/internal/netguard"
+	"servika/internal/quota"
 )
 
 const (
@@ -291,6 +293,15 @@ func Begin(ctx context.Context, db *sql.DB, request Request) (int64, Entry, erro
 	if err != nil {
 		return 0, Entry{}, err
 	}
+	// The authoritative gate is in Run, under the per-customer lock, next to the
+	// creation itself. This one only spares the customer a 200 MB download and an
+	// installation row that fails: a plan already at its limit is refused in the
+	// same request the customer made, with the same reason code.
+	if entry.NeedsDatabase {
+		if err := quota.CheckDatabaseAllowed(ctx, db, request.DomainID); err != nil {
+			return 0, Entry{}, databaseLimitRefusal(err)
+		}
+	}
 
 	result, err := db.ExecContext(ctx,
 		`INSERT INTO app_installs
@@ -351,6 +362,34 @@ func databaseNames(ctx context.Context, db *sql.DB, entry Entry, request Request
 	return dbName, dbUser, nil
 }
 
+// createDatabaseWithinPlan creates the installation's schema only if the
+// customer's plan still allows another database.
+//
+// credentials.MySQLCreateDBForUser INSERTs a db_accounts row, so every call site
+// of it is a path that spends the plan's max_db entitlement. The check and the
+// creation are one critical section under the per-customer lock, because a check
+// followed by an unlocked create is a gate two concurrent installations both
+// pass. This is what internal/domains and internal/wordpress already do around
+// the same primitive.
+func createDatabaseWithinPlan(ctx context.Context, db *sql.DB, domainID int64, dbName, dbUser string) error {
+	unlock := quota.LockCustomerForDomain(ctx, db, domainID)
+	defer unlock()
+	if err := quota.CheckDatabaseAllowed(ctx, db, domainID); err != nil {
+		return databaseLimitRefusal(err)
+	}
+	return credentials.MySQLCreateDBForUser(db, domainID, dbName, dbUser)
+}
+
+// databaseLimitRefusal converts a plan refusal into this package's own reason
+// code, so the screen renders it in twelve languages like every other refusal
+// here. Anything that is not a plan refusal is returned as it arrived.
+func databaseLimitRefusal(err error) error {
+	if limitErr, ok := errors.AsType[*quota.LimitError](err); ok {
+		return refuse(ReasonDatabaseLimit, fmt.Errorf("%s", limitErr.Message))
+	}
+	return err
+}
+
 // Run performs the work Begin claimed.
 //
 // The order matters. The archive is fetched and VERIFIED before anything on the
@@ -378,7 +417,7 @@ func Run(ctx context.Context, db *sql.DB, entry Entry, request Request) error {
 		return err
 	}
 	if entry.NeedsDatabase {
-		if err := credentials.MySQLCreateDBForUser(db, request.DomainID, dbName, dbUser); err != nil {
+		if err := createDatabaseWithinPlan(ctx, db, request.DomainID, dbName, dbUser); err != nil {
 			return err
 		}
 	}

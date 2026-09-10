@@ -146,11 +146,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	id, entry, err := Begin(r.Context(), h.DB, request)
 	if err != nil {
 		if code := ReasonOf(err); code != "" {
-			status := http.StatusBadRequest
-			if code == ReasonTargetNotEmpty || code == ReasonDatabaseExists {
-				status = http.StatusConflict
-			}
-			httpx.WriteError(w, status, code)
+			httpx.WriteError(w, statusForReason(code), code)
 			return
 		}
 		log.Printf("app install start: %v", err)

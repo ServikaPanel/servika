@@ -49,6 +49,7 @@
     "app_subdirectory_invalid": "Subdirectorul trebuie să fie un singur nume: litere mici, cifre, cratimă și liniuță de subliniere.",
     "app_target_not_empty": "Acel loc conține deja fișiere sau o instalare este deja în curs acolo.",
     "app_database_exists": "Există deja o bază de date cu acel nume.",
+    "app_database_limit": "Planul dumneavoastră nu permite încă o database. Ștergeți una existentă sau treceți la un plan mai mare.",
     "app_download_failed": "Arhiva nu a putut fi descărcată.",
     "app_extract_failed": "Arhiva nu a putut fi dezarhivată."
   },
