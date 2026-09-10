@@ -106,13 +106,7 @@ func ParseIPOutput(text string) []Address {
 		for index := 4; index < len(fields); index++ {
 			if fields[index] == "scope" && index+1 < len(fields) {
 				address.Scope = fields[index+1]
-				// The label, when there is one, is the LAST field of the
-				// record and follows the scope value. Everything after it that
-				// the kernel adds ("proto kernel_ll") is a keyed pair, so a
-				// bare trailing word is the label and a keyed one is not.
-				if tail := fields[index+2:]; len(tail) == 1 {
-					address.Label = tail[0]
-				}
+				address.Label = labelFromTail(fields[index+2:])
 				break
 			}
 		}
@@ -120,6 +114,45 @@ func ParseIPOutput(text string) []Address {
 		out = append(out, address)
 	}
 	return out
+}
+
+// addressFlags are the BARE words iproute2 prints between the scope value and
+// the label. They are not keyed pairs, so a reader that accepts a bare trailing
+// word only when exactly one remains loses the label on every flagged address.
+//
+// The kernel sets IFA_F_SECONDARY when the new address carries the same mask AND
+// the same network as an address already on the device, which is what an
+// operator produces by entering the provider's real prefix instead of 32.
+var addressFlags = map[string]bool{
+	"secondary": true, "primary": true, "dynamic": true, "mngtmpaddr": true,
+	"noprefixroute": true, "temporary": true, "deprecated": true, "tentative": true,
+	"dadfailed": true, "optimistic": true, "home": true, "nodad": true,
+	"autojoin": true, "stable-privacy": true,
+}
+
+// addressKeys are the words that CONSUME the field after them, so that field is
+// a value rather than the label.
+var addressKeys = map[string]bool{"proto": true, "metric": true, "link": true}
+
+// labelFromTail reads the address label out of the fields that follow the scope
+// value.
+//
+// The label is the LAST field of the record. It is read from the END rather than
+// by counting, because iproute2 puts a variable number of bare flag words and
+// keyed pairs in front of it. An empty result means the record carries no label,
+// which is every IPv6 address and every address nobody named.
+func labelFromTail(tail []string) string {
+	if len(tail) == 0 {
+		return ""
+	}
+	last := tail[len(tail)-1]
+	if addressFlags[last] {
+		return "" // a flag stands last only when there is no label
+	}
+	if len(tail) >= 2 && addressKeys[tail[len(tail)-2]] {
+		return "" // the value of a keyed pair, not a label
+	}
+	return last
 }
 
 func splitCIDR(value string) (string, int, bool) {
