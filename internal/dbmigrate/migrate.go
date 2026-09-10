@@ -155,11 +155,48 @@ func splitStatements(body string) []string {
 		}
 		cleaned = append(cleaned, line)
 	}
+	return splitOnUnquotedSemicolons(strings.Join(cleaned, "\n"))
+}
+
+// splitOnUnquotedSemicolons cuts SQL at the terminators only.
+//
+// A plain strings.Split on ";" also cuts inside a string literal, and
+// migrations/0104_php_defaults.sql carries one ('client_max_body_size 64m;'),
+// so that file could never apply on any server: its fourth statement arrived at
+// MariaDB truncated and answered a syntax error.
+func splitOnUnquotedSemicolons(sql string) []string {
 	var statements []string
-	for stmt := range strings.SplitSeq(strings.Join(cleaned, "\n"), ";") {
-		if s := strings.TrimSpace(stmt); s != "" {
-			statements = append(statements, s)
+	var current strings.Builder
+	var quote rune // 0 outside a literal, else the character that opened it
+	escaped := false
+
+	for _, c := range sql {
+		current.WriteRune(c)
+		switch {
+		case escaped:
+			// A backslash escapes the next character inside a MariaDB string, so
+			// a \' does not close the literal.
+			escaped = false
+		case quote != 0:
+			if c == '\\' && quote != '`' {
+				escaped = true
+			} else if c == quote {
+				quote = 0
+			}
+		case c == '\'' || c == '"' || c == '`':
+			quote = c
+		case c == ';':
+			text := current.String()
+			statements = appendStatement(statements, text[:len(text)-1])
+			current.Reset()
 		}
+	}
+	return appendStatement(statements, current.String())
+}
+
+func appendStatement(statements []string, stmt string) []string {
+	if s := strings.TrimSpace(stmt); s != "" {
+		return append(statements, s)
 	}
 	return statements
 }

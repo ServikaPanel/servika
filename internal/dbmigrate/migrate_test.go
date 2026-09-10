@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -93,6 +94,49 @@ THIS IS NOT SQL;
 const repairedBody = `CREATE TABLE mig_probe_one (id INT PRIMARY KEY);
 CREATE TABLE mig_probe_two (id INT PRIMARY KEY);
 `
+
+// A semicolon inside a string literal is not a statement terminator.
+// migrations/0104_php_defaults.sql carries one, so a plain split on ";" handed
+// MariaDB a truncated statement and that file could never apply on any server.
+func TestASemicolonInsideALiteralIsNotATerminator(t *testing.T) {
+	body := "UPDATE nginx_settings\n" +
+		"   SET extra_directives = REPLACE(extra_directives,\n" +
+		"         'client_max_body_size 64m;', 'client_max_body_size 8192m;')\n" +
+		" WHERE extra_directives LIKE '%client_max_body_size 64m;%';\n"
+
+	got := splitStatements(body)
+	if len(got) != 1 {
+		t.Fatalf("statements: want 1, got %d: %q", len(got), got)
+	}
+	if !strings.HasSuffix(got[0], "'%client_max_body_size 64m;%'") {
+		t.Errorf("the statement was cut short: %q", got[0])
+	}
+}
+
+// Backticks and double quotes also hold a semicolon, and a backslash escape must
+// not close a literal early.
+func TestQuotingFormsHoldASemicolon(t *testing.T) {
+	cases := map[string]string{
+		"backtick":    "CREATE TABLE `odd;name` (id INT);",
+		"doubleQuote": `INSERT INTO t(v) VALUES ("a;b");`,
+		"escaped":     `INSERT INTO t(v) VALUES ('it\'s; here');`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := splitStatements(body); len(got) != 1 {
+				t.Errorf("statements: want 1, got %d: %q", len(got), got)
+			}
+		})
+	}
+}
+
+// Ordinary terminators still split, so the quote awareness did not swallow them.
+func TestPlainTerminatorsStillSplit(t *testing.T) {
+	got := splitStatements("SELECT 1;\nSELECT 2;\n")
+	if len(got) != 2 {
+		t.Fatalf("statements: want 2, got %d: %q", len(got), got)
+	}
+}
 
 // A migration that fails part way through must leave a resume point behind, and
 // must not be recorded as applied. MariaDB commits DDL implicitly, so the first
