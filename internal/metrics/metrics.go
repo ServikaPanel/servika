@@ -49,8 +49,36 @@ var reg = &registry{
 	histgrams: map[histKey]*histogram{},
 }
 
+// knownMethods are the labels the method dimension may take.
+//
+// The registry is keyed on the label triple and is never evicted or capped, and
+// the route and status labels are already bounded (a registered chi pattern or
+// the literal "unmatched"; an HTTP status). The method was not: HTTP allows an
+// arbitrary token there and net/http passes it through, so an unauthenticated
+// client sending a fresh token per request grew both maps for ever. The
+// middleware runs before routing and there is no global rate limit, so nothing
+// else stood in the way.
+//
+// The set is RFC 9110's methods plus PATCH. Anything else is counted, under
+// "other": dropping it would hide a real client from the operator reading the
+// error rate during an incident, which is what these numbers are for.
+var knownMethods = map[string]bool{
+	http.MethodGet: true, http.MethodHead: true, http.MethodPost: true,
+	http.MethodPut: true, http.MethodPatch: true, http.MethodDelete: true,
+	http.MethodConnect: true, http.MethodOptions: true, http.MethodTrace: true,
+}
+
+// methodLabel bounds the method dimension to knownMethods.
+func methodLabel(method string) string {
+	if knownMethods[method] {
+		return method
+	}
+	return "other"
+}
+
 // record adds one observation for the given method/route/status and latency.
 func record(method, route string, status int, dur time.Duration) {
+	method = methodLabel(method)
 	sec := dur.Seconds()
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
