@@ -3,12 +3,9 @@
 package performance
 
 import (
-	"bufio"
 	"database/sql"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 
 	"servika/internal/httpx"
 	"servika/internal/phpdefaults"
@@ -98,7 +95,9 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	b := func(i int) bool { return i == 1 }
 	summary.Items = []Item{
 		{Name: "OPcache", Enabled: b(opcache), Value: statusString(b(opcache)), Setting: "php", Description: "PHP bytecode cache significantly reduces CPU usage."},
-		{Name: "FastCGI Cache", Enabled: b(fastcgi), Value: statusString(b(fastcgi)), Setting: "web-server", Description: "nginx caches dynamic PHP output for high-traffic sites."},
+		{Name: "FastCGI Cache", Enabled: b(fastcgi), Value: statusString(b(fastcgi)), Setting: "web-server",
+			Description: "nginx caches dynamic PHP output for high-traffic sites. " +
+				"The hit rate covers the most recent requests, not the whole log."},
 		{Name: "Browser Cache", Enabled: b(browserCache), Value: ifElse(b(browserCache), strconv.Itoa(browserCacheDays)+" days", "disabled"), Setting: "web-server", Description: "Long-lived cache headers for static files."},
 		{Name: "PHP-FPM Pool", Enabled: true, Value: pmStrategy + " · " + strconv.Itoa(pmMaxChildren) + " workers", Setting: "php", Description: "Worker process management strategy."},
 		{Name: "Memory Limit", Enabled: true, Value: memLimit, Setting: "php", Description: "PHP memory_limit."},
@@ -158,47 +157,6 @@ func (h *Handlers) redisEnabled(r *http.Request, domainID int64) bool {
 	err := h.DB.QueryRowContext(r.Context(),
 		`SELECT enabled FROM domain_redis WHERE domain_id=?`, domainID).Scan(&enabled)
 	return err == nil && enabled == 1
-}
-
-// computeFastCGICacheStats reads the domain's dedicated cache-status log
-// and aggregates upstream_cache_status values into a CacheStats struct.
-// The log file is written by nginx using the servika_cache_status log_format,
-// which records only the $upstream_cache_status variable per request.
-func computeFastCGICacheStats(domainName string) *CacheStats {
-	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	f, err := os.Open("/var/log/nginx/" + domainName + ".cache.log")
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = f.Close() }()
-
-	var cs CacheStats
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		switch strings.TrimSpace(sc.Text()) {
-		case "HIT":
-			cs.Hit++
-		case "MISS":
-			cs.Miss++
-		case "EXPIRED":
-			cs.Expired++
-		case "BYPASS":
-			cs.Bypass++
-		case "STALE":
-			cs.Stale++
-		case "UPDATING":
-			cs.Updating++
-		case "REVALIDATED":
-			cs.Revalidated++
-		}
-	}
-	cs.Total = cs.Hit + cs.Miss + cs.Expired + cs.Bypass + cs.Stale + cs.Updating + cs.Revalidated
-	if cs.Total > 0 {
-		// HIT, STALE, and REVALIDATED are served from cache.
-		cs.HitRate = float64(cs.Hit+cs.Stale+cs.Revalidated) / float64(cs.Total) * 100
-	}
-	_ = sc.Err()
-	return &cs
 }
 
 func statusString(enabled bool) string {
