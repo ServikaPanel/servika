@@ -1092,6 +1092,88 @@ else
   warn "backup root" "$BACKUP_ROOT_DIR does not exist, so no backup has been written yet (servika-db-backup creates it)"
 fi
 
+# The two timers that carry the whole panel-recovery story.
+#
+# servika-db-backup produces the ONLY artifact the panel database can be
+# recovered from, and the one servika-update and servika-restore both roll back
+# to. servika-system-backup produces the only host-state artifact. Both are
+# enabled at install time and after that nothing observed them: a timer an
+# operator disabled, a unit left failed after a MariaDB credential change, or a
+# mysqldump failing every night on a full disk all read as a perfectly healthy
+# server, because the tool checked only that the SCRIPT was on disk. Being on
+# disk is not enough, which is the principle the antivirus timer checks above
+# already apply.
+#
+# A backup timer that stops firing is by definition not noticed, so the gap
+# surfaces on the day a recovery is attempted and the newest dump predates the
+# incident.
+#
+# Every finding here is a WARNING, for the same reason the backup root is one:
+# this tool is a gate that servika-update and servika-restore exit 1 on, and a
+# freshly installed server has no dump until 03:30. A check that fails a healthy
+# server is worse than no check.
+#
+# newest_age_days <dir> <f|d> <name-pattern>: prints the age in whole days of the
+# newest matching entry, or nothing when the directory or the entry is absent.
+#
+# The age is computed from mtime rather than from the file NAME. Both producers
+# stamp the name, but a name is what the producer intended to write and the mtime
+# is when a byte last landed; a run that died half way leaves the first and not
+# the second.
+newest_age_days() {
+  local dir="$1" type="$2" pattern="$3" newest now mtime
+  [ -d "$dir" ] || return 0
+  newest=$(find "$dir" -mindepth 1 -maxdepth 1 -type "$type" -name "$pattern" \
+             -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f1)
+  [ -n "$newest" ] || return 0
+  now=$(date +%s)
+  mtime=${newest%%.*}
+  echo $(( (now - mtime) / 86400 ))
+}
+
+# check_backup_timer <unit> <label> <newest-file-command>
+# The third argument prints the age in days of the newest artifact, or nothing
+# when there is none.
+check_backup_timer() {
+  local unit="$1" label="$2" newest_days="$3" state
+  if [ ! -f "/etc/systemd/system/$unit" ] && [ ! -f "/usr/lib/systemd/system/$unit" ]; then
+    warn "$label timer" "the unit is not installed, so nothing schedules it"
+    return
+  fi
+  if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+    warn "$label timer" "installed but NOT enabled, so it never fires"
+    return
+  fi
+  # A failed unit stays enabled, so is-enabled alone reports a broken timer as
+  # healthy. This is the state a credential change or a full disk leaves behind.
+  state=$(systemctl is-failed "${unit%.timer}.service" 2>/dev/null)
+  if [ "$state" = "failed" ]; then
+    warn "$label timer" "enabled, but its last run FAILED (systemctl status ${unit%.timer}.service)"
+    return
+  fi
+  local age
+  age=$(eval "$newest_days" 2>/dev/null)
+  if [ -z "$age" ]; then
+    warn "$label timer" "enabled, but no artifact has been written yet"
+    return
+  fi
+  # Two days rather than one: the timer carries RandomizedDelaySec and Persistent,
+  # so a run can land well after its nominal hour, and a verify at 03:29 is
+  # measuring yesterday's.
+  if [ "$age" -gt 2 ]; then
+    warn "$label timer" "enabled, but the newest artifact is $age days old"
+    return
+  fi
+  pass "$label timer" "enabled, newest artifact ${age}d old"
+}
+
+DB_BACKUP_DIR="${SERVIKA_DBDIR:-/var/backups/servika/db}"
+SYSTEM_BACKUP_DIR="${SERVIKA_SYSDIR:-/var/backups/servika-system}"
+check_backup_timer servika-db-backup.timer "panel database backup" \
+  "newest_age_days \"$DB_BACKUP_DIR\" f 'panel-*.sql.gz'"
+check_backup_timer servika-system-backup.timer "host backup" \
+  "newest_age_days \"$SYSTEM_BACKUP_DIR\" d '20*'"
+
 section "Service to port"
 # "active" is not "listening". systemd calls a unit active while its process has
 # not bound anything: a wrong address, a refused bind or a port already taken all
