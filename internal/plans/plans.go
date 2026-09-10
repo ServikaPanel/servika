@@ -358,14 +358,25 @@ func (h *Handlers) wafPlanReapply(planID int64) {
 // Delete deletes an unused service plan.
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var n int
+	// Two tables carry plan_id for two different purposes, and BOTH are usage.
+	// domains.plan_id drives the resource and mail limits; customers.plan_id
+	// drives every count quota. Neither has a foreign key, so a plan deleted
+	// while only customers referenced it left those rows pointing at nothing,
+	// and each count gate then returned a raw sql.ErrNoRows that its caller
+	// reports as a 500. That is a durable denial of database, mailbox,
+	// application and addon-domain creation for the affected customers, with a
+	// message that names no cause.
+	var domainCount, customerCount int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM domains WHERE plan_id=?`, id).Scan(&n); err != nil {
+		`SELECT (SELECT COUNT(*) FROM domains   WHERE plan_id=?),
+		        (SELECT COUNT(*) FROM customers WHERE plan_id=?)`, id, id).
+		Scan(&domainCount, &customerCount); err != nil {
 		// FAIL-CLOSED: a count error must not bypass the "plan in use" guard and
 		// delete a plan that live subscriptions still reference.
 		httpx.WriteError(w, http.StatusInternalServerError, "plan operation failed")
 		return
-	} else if n > 0 {
+	}
+	if n := domainCount + customerCount; n > 0 {
 		httpx.WriteError(w, http.StatusConflict,
 			"this plan cannot be deleted because it is used by "+strconv.Itoa(n)+" subscriptions")
 		return

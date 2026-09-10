@@ -77,6 +77,35 @@ func (h *Handlers) ListCustomers(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// planExists reports whether a customer's plan_id may be written, and answers
+// the request itself when it may not.
+//
+// customers.plan_id has no foreign key, so an id that names no plan is stored
+// happily. Every count quota then reads that customer's plan, finds nothing, and
+// returns a raw sql.ErrNoRows that its caller reports as a 500 with no cause
+// named. The result is a durable denial of database, mailbox, application and
+// addon-domain creation for that customer.
+//
+// A nil plan is valid: it means the customer is on no plan and every count gate
+// passes them through. domains.Handlers.SetPlan asks the same question the same
+// way.
+func (h *Handlers) planExists(w http.ResponseWriter, r *http.Request, planID *int64) bool {
+	if planID == nil {
+		return true
+	}
+	var found int
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM service_plans WHERE id=?`, *planID).Scan(&found); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
+		return false
+	}
+	if found == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "plan not found")
+		return false
+	}
+	return true
+}
+
 // CreateCustomer creates a customer account.
 func (h *Handlers) CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	var cs Customer
@@ -108,6 +137,10 @@ func (h *Handlers) CreateCustomer(w http.ResponseWriter, r *http.Request) {
 		owner = c.UserID
 	}
 
+	if !h.planExists(w, r, cs.PlanID) {
+		return
+	}
+
 	res, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO customers(name, email, plan_id, status, notes, owner_user_id) VALUES(?,?,?,?,?,?)`,
 		cs.Name, cs.Email, cs.PlanID, cs.Status, cs.Notes, owner)
@@ -119,7 +152,6 @@ func (h *Handlers) CreateCustomer(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, cs)
 }
 
-// UpdateCustomer updates a customer account.
 // authorized reports whether the caller may act on this customer: admin on any,
 // a reseller only on its own. A missing record is also false (so a reseller
 // cannot probe existence by id).
@@ -137,6 +169,7 @@ func (h *Handlers) authorized(r *http.Request, customerID int64) bool {
 	return middleware.ResellerOwnsCustomer(r, c.UserID, customerID)
 }
 
+// UpdateCustomer updates a customer account.
 func (h *Handlers) UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if !h.authorized(r, id) {
@@ -146,6 +179,9 @@ func (h *Handlers) UpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	var cs Customer
 	if err := json.NewDecoder(r.Body).Decode(&cs); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !h.planExists(w, r, cs.PlanID) {
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(),
