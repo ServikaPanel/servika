@@ -11,9 +11,9 @@ jobs:
     name: Go
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
@@ -53,7 +53,7 @@ jobs:
         run: go test -count=1 ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
 
@@ -61,9 +61,9 @@ jobs:
     name: Frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
@@ -92,7 +92,29 @@ jobs:
     name: Shell and PHP
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # A git tag is mutable: whoever controls an action's repository can move it
+      # to any commit. The release job is the one place on this repository holding
+      # `contents: write`, and it produces the artifact install.sh and
+      # servika-update install as root on every server, so a repointed tag runs
+      # code that can substitute the bundle bytes BEFORE sha256sum sees them.
+      #
+      # A local reusable workflow (./.github/...) is this repository's own file
+      # and has nothing to pin.
+      - name: Actions are pinned to a commit SHA
+        run: |
+          unpinned="$(grep -rhoE '^\s*(- )?uses: [^ ]+' .github/workflows/ \
+            | sed -E 's/^\s*(- )?uses: //' \
+            | grep -v '^\./' \
+            | grep -vE '@[0-9a-f]{40}$' || true)"
+          if [ -n "$unpinned" ]; then
+            echo "These actions are referenced by a mutable tag, not a commit SHA:"
+            echo "$unpinned"
+            echo
+            echo "Resolve each with: gh api repos/<owner>/<repo>/git/ref/tags/<tag>"
+            exit 1
+          fi
 
       - name: shellcheck
         run: shellcheck -S warning assets/ops/*
