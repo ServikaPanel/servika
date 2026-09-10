@@ -25,16 +25,12 @@ func mask(s string) string {
 // TestTwoFASetupQR calls the real /me/2fa/setup handler via httptest (no DB needed,
 // only JWT claims) and proves the QR/otpauth chain end-to-end.
 func TestTwoFASetupQR(t *testing.T) {
-	key := []byte("test-jwt-secret-0123456789-abcdef")
-	h := &Handlers{Secret: key, LifetimeSec: 3600}
+	h := &Handlers{Secret: []byte("test-jwt-secret-0123456789-abcdef"), LifetimeSec: 3600}
 
-	tok, err := Issue(key, 3600, 1, "root", "admin", 0)
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
-
+	// The identity is carried in the request context, which is where RequireAuth
+	// puts it after verifying the session cookie.
 	req := httptest.NewRequest(http.MethodGet, "/me/2fa/setup", nil)
-	req.Header.Set("Authorization", "Bearer "+tok)
+	req = req.WithContext(WithClaims(req.Context(), &Claims{UserID: 1, Username: "root", Role: "admin"}))
 	rec := httptest.NewRecorder()
 	h.TwoFASetup(rec, req)
 

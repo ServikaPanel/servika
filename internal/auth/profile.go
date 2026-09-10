@@ -10,15 +10,20 @@ import (
 	"servika/internal/httpx"
 )
 
-// claims: RequireAuth middleware already validated; we re-parse the header
-// (to avoid auth→middleware import cycle) to obtain the UserID.
+// claims returns the identity RequireAuth verified for this request.
+//
+// It reads the request context, never the Authorization header. The panel is
+// cookie-only: the session JWT lives in the HttpOnly servika_session cookie and
+// no client sends a bearer token, so a handler resolving identity from that
+// header answered 401 to every real request. Re-parsing it would also skip the
+// token_version check RequireAuth performs, so the acted-upon UserID would come
+// from a credential nothing had checked for revocation.
+//
+// There is no import cycle to work around: ClaimsFromContext lives in this same
+// package (context.go), exactly so that auth can read the session middleware put
+// there.
 func (h *Handlers) claims(r *http.Request) *Claims {
-	raw := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-	c, err := Parse(h.Secret, raw)
-	if err != nil {
-		return nil
-	}
-	return c
+	return ClaimsFromContext(r.Context())
 }
 
 // PUT /me — profile information (full name + email + preferences)
