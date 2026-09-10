@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	dsn := flag.String("dsn", "", "MySQL DSN")
+	dsn := flag.String("dsn", "", "MySQL DSN (defaults to SERVIKA_DB_DSN)")
 	user := flag.String("username", "admin", "administrator username")
 	pass := flag.String("password", "", "administrator password (defaults to SERVIKA_SEED_PASSWORD)")
 	email := flag.String("email", "admin@local", "email address")
@@ -34,11 +34,23 @@ func main() {
 		*lang = "en"
 	}
 
+	// Both credentials are read from the environment when the flag is empty.
+	// /proc/<pid>/cmdline is mode 444 while /proc/<pid>/environ is 400, so a flag
+	// publishes the value to every local account for as long as the process runs.
+	// The DSN carries the panel MariaDB password, which holds GRANT ALL on
+	// panel.*: every user row and hash, every stored credential ciphertext, and
+	// write access with which a tenant makes itself an administrator.
+	//
+	// The flags stay, because an operator running this by hand on a server with no
+	// tenants is a supported use; the installer no longer uses them.
 	if *pass == "" {
 		*pass = os.Getenv("SERVIKA_SEED_PASSWORD")
 	}
+	if *dsn == "" {
+		*dsn = os.Getenv("SERVIKA_DB_DSN")
+	}
 	if *dsn == "" || *pass == "" {
-		log.Fatalf("DSN and password are required")
+		log.Fatalf("DSN and password are required (flags, or SERVIKA_DB_DSN and SERVIKA_SEED_PASSWORD)")
 	}
 
 	db, err := sql.Open("mysql", *dsn)

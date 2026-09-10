@@ -977,8 +977,16 @@ if [ -x /opt/servika/bin/servika-seed-admin ]; then
   if [ -z "$ADMIN_PASSWORD" ]; then
     ADMIN_PASSWORD="$(openssl rand -hex 16)"
   fi
-  /opt/servika/bin/servika-seed-admin -dsn "$DSN" -username root \
-    -password "$ADMIN_PASSWORD" -email "$ADMIN_EMAIL" -lang "$PANEL_LANG" >/dev/null 2>&1 \
+  # The DSN and the administrator password travel in the ENVIRONMENT, never argv:
+  # /proc/<pid>/cmdline is mode 444 while /proc/<pid>/environ is 400. This script
+  # is explicitly re-runnable on a live server, where every c_* tenant has a
+  # shell, cron and PHP while this step executes. The DSN carries the panel
+  # MariaDB password, which holds GRANT ALL on panel.* — every user row and hash,
+  # every stored credential ciphertext, and the write access with which a tenant
+  # makes itself an administrator of a panel that runs as root.
+  SERVIKA_DB_DSN="$DSN" SERVIKA_SEED_PASSWORD="$ADMIN_PASSWORD" \
+    /opt/servika/bin/servika-seed-admin -username root \
+    -email "$ADMIN_EMAIL" -lang "$PANEL_LANG" >/dev/null 2>&1 \
     && ok "administrator record ready" || warn "seed skipped (not critical)"
 fi
 # Server-default panel language for the pre-login screen (admin can change it later).
