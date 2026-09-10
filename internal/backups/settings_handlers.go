@@ -115,7 +115,15 @@ func (h *Handlers) BackupSettingsTest(w http.ResponseWriter, r *http.Request) {
 	s.RemoteEnabled = true // a test always validates the remote fields
 	applyRemoteDefaults(&s)
 	if s.RemotePassword == "" {
-		s.RemotePassword = readBackupSettings(r.Context(), h.DB).RemotePassword
+		// The stored one. A test that reuses a credential the panel cannot open
+		// would report the destination as refusing the login, which is the wrong
+		// answer and the one that sent operators after destination credentials.
+		stored := readBackupSettings(r.Context(), h.DB)
+		if err := stored.usablePassword(); err != nil {
+			httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		s.RemotePassword = stored.RemotePassword
 	}
 	if msg := validateBackupSettings(&s); msg != "" {
 		httpx.WriteError(w, http.StatusBadRequest, msg)

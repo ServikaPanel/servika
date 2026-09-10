@@ -53,6 +53,11 @@ type BackupSettings struct {
 	// Read-only live measurements for the UI.
 	FreeGB  float64 `json:"free_gb"`
 	StoreGB float64 `json:"store_gb"`
+	// PasswordErr is set when the stored off-site password could not be
+	// decrypted. It never leaves the server: what it names is a problem with this
+	// installation's key, and the screen has last_error for the destination's own
+	// answers.
+	PasswordErr error `json:"-"`
 }
 
 // defaultBackupSettings is what a host with no row yet behaves as: automatic
@@ -86,13 +91,32 @@ func readBackupSettings(ctx context.Context, db *sql.DB) *BackupSettings {
 	// The stored password is encrypted at rest; decrypt so runtime consumers
 	// receive the usable plaintext. A legacy plaintext value passes through, and an
 	// empty password is left as-is without touching the cipher.
+	//
+	// A FAILURE is recorded rather than discarded. The error branch used to be
+	// empty, which left the enc:v1: ciphertext in the field and handed it to lftp
+	// as the account password, turning a credential problem into an authentication
+	// one: the upload failed at the destination and the operator chased FTP
+	// credentials, and a restore answered "backup file is missing on disk" for an
+	// off-site copy that was intact. secret.Decrypt already returns a legacy
+	// plaintext value unchanged with a nil error, so the tolerant branch bought
+	// nothing and only swallowed real failures.
 	if s.RemotePassword != "" {
-		if pw, e := secret.Decrypt(s.RemotePassword); e == nil {
+		pw, e := secret.Decrypt(s.RemotePassword)
+		if e != nil {
+			s.RemotePassword = ""
+			s.PasswordErr = fmt.Errorf("the stored off-site password could not be decrypted "+
+				"(SERVIKA_SECRET_KEY may have changed): %w", e)
+		} else {
 			s.RemotePassword = pw
 		}
 	}
 	return s
 }
+
+// usablePassword reports whether the stored off-site credential could be opened.
+// Every consumer of the password asks first, so a key problem is named as one
+// rather than reported as a destination refusing the login.
+func (s *BackupSettings) usablePassword() error { return s.PasswordErr }
 
 // writeBackupSettings updates the singleton row. An empty RemotePassword PRESERVES
 // the stored one, because the field is write-only and the UI never reads it back,
@@ -292,6 +316,14 @@ func pushGlobalAsync(db *sql.DB, domainID, backupID int64, localPath, fileName s
 		if !s.RemoteEnabled || strings.TrimSpace(s.RemoteHost) == "" {
 			return
 		}
+		// Named as a key problem rather than reported as the destination refusing
+		// the login, which is what sending the ciphertext produced.
+		if err := s.usablePassword(); err != nil {
+			short := truncateError(err.Error())
+			markGlobalStatus(db, "failed", short)
+			notifyUploadFailed(ctx, db, domainID, backupID, short)
+			return
+		}
 		if err := ensureGlobalHostKey(ctx, db, s); err != nil {
 			short := truncateError(err.Error())
 			markGlobalStatus(db, "failed", short)
@@ -348,6 +380,13 @@ func truncateError(s string) string {
 // localPath. It looks in the date subdirectory first, then the base directory,
 // so a backup uploaded before the date-directory layout existed is still found.
 func fetchGlobalRemote(ctx context.Context, db *sql.DB, s *BackupSettings, fileName, localPath string) error {
+	// This runs during a RESTORE. Sending the ciphertext as the password made the
+	// fetch fail, and the caller answered "backup file is missing on disk" for an
+	// off-site copy that was intact, which is the worst possible answer during a
+	// recovery.
+	if err := s.usablePassword(); err != nil {
+		return err
+	}
 	if err := ensureGlobalHostKey(ctx, db, s); err != nil {
 		return err
 	}

@@ -279,6 +279,13 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 	// Then the SYSTEM-WIDE destination, which is where a delete-local backup lives.
 	s := readBackupSettings(ctx, db)
 	if s.RemoteEnabled && strings.TrimSpace(s.RemoteHost) != "" {
+		// A credential the panel cannot open is not a missing backup. Saying so
+		// here rather than falling through matters most during a recovery, where
+		// "backup file is missing on disk" sends the operator looking for an
+		// archive that is intact at the destination.
+		if err := s.usablePassword(); err != nil {
+			return err
+		}
 		// Do not download onto a disk that is already low.
 		if s.MinFreeGB > 0 {
 			if free, e := diskFreeGB(backupRoot()); e == nil && free < float64(s.MinFreeGB) {
