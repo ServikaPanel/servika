@@ -385,7 +385,7 @@ func (h *Handlers) ToolAction(w http.ResponseWriter, r *http.Request) {
 			out = []byte("Maintenance mode enabled.")
 		}
 	case "maintenance-off":
-		err = disableMaintenance(dir)
+		err = disableMaintenance(systemUser, dir)
 		if err == nil {
 			out = []byte("Maintenance mode disabled.")
 		}

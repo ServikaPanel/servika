@@ -1,10 +1,16 @@
 package wordpress
 
 import (
+	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
+
+	"servika/internal/files"
 )
+
+// maintenanceMessage is the default 503 body the plugin falls back to and the
+// initial content of the flag file.
+const maintenanceMessage = "This website is temporarily undergoing maintenance. Please try again later."
 
 const maintenancePluginPHP = `<?php
 /*
@@ -32,6 +38,9 @@ echo '<body><div class="card"><h1>Maintenance Mode</h1><p>' . htmlspecialchars($
 exit;
 `
 
+// maintenancePaths derives the three maintenance paths from dir. It is used with
+// an absolute directory for the read-only state probe and with a home-relative
+// one for every write, because filepath.Join preserves whichever form it is given.
 func maintenancePaths(dir string) (pluginDir, pluginFile, flag string) {
 	contentDir := filepath.Join(dir, "wp-content")
 	pluginDir = filepath.Join(contentDir, "mu-plugins")
@@ -46,30 +55,47 @@ func maintenanceEnabled(dir string) bool {
 	return err == nil
 }
 
+// enableMaintenance installs the mu-plugin and the flag file that make the site
+// answer 503.
+//
+// Every write goes through a files.*Beneath primitive rather than os.MkdirAll and
+// os.WriteFile. dir is bounded to the document root by resolveDirectory, but that
+// check is a string comparison and everything below the directory (wp-content, and
+// the leaf names inside it) belongs to the tenant. A path-resolving write follows a
+// symlink at any component, so a tenant who replaces wp-content with a link makes
+// root create a directory and two files wherever they point. openat2 refuses the
+// link instead, and the primitives chown what they create to the tenant, which is
+// what the chown -R here used to do.
 func enableMaintenance(systemUser, dir string) error {
-	pluginDir, pluginFile, flag := maintenancePaths(dir)
-	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+	home, rel, err := homeRel(systemUser, dir)
+	if err != nil {
 		return err
 	}
-	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-	if err := os.WriteFile(pluginFile, []byte(maintenancePluginPHP), 0644); err != nil {
+	pluginDir, pluginFile, flag := maintenancePaths(rel)
+	if err := files.MkdirAllBeneath(home, pluginDir, systemUser); err != nil {
 		return err
 	}
-	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-	if err := os.WriteFile(flag, []byte("This website is temporarily undergoing maintenance. Please try again later."), 0644); err != nil {
+	if err := files.WriteFileBeneath(home, pluginFile, []byte(maintenancePluginPHP), 0644, systemUser); err != nil {
 		return err
 	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("chown", "-R", systemUser+":"+systemUser, pluginDir, flag).Run()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", "-R", pluginDir, flag).Run()
+	if err := files.WriteFileBeneath(home, flag, []byte(maintenanceMessage), 0644, systemUser); err != nil {
+		return err
+	}
+	// WriteFileBeneath already relabels each file it writes; the created directories are not.
+	files.RestoreconBeneath(home, pluginDir)
 	return nil
 }
 
-func disableMaintenance(dir string) error {
-	_, _, flag := maintenancePaths(dir)
-	if err := os.Remove(flag); err != nil && !os.IsNotExist(err) {
+// disableMaintenance removes the flag file. It is pinned the same way as the
+// write: os.Remove resolves by path, so a symlinked wp-content aimed the deletion
+// at a root-owned file of the tenant's choosing.
+func disableMaintenance(systemUser, dir string) error {
+	home, rel, err := homeRel(systemUser, dir)
+	if err != nil {
+		return err
+	}
+	_, _, flag := maintenancePaths(rel)
+	if err := files.RemoveAllBeneath(home, flag); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil

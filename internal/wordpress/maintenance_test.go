@@ -46,10 +46,23 @@ func TestMaintenanceEnabledTracksPersistentFlag(t *testing.T) {
 	if !maintenanceEnabled(root) {
 		t.Fatal("maintenanceEnabled() did not detect the persistent flag")
 	}
-	if err := disableMaintenance(root); err != nil {
-		t.Fatalf("disableMaintenance(): %v", err)
+	if err := os.Remove(flag); err != nil {
+		t.Fatalf("remove maintenance flag: %v", err)
 	}
 	if maintenanceEnabled(root) {
-		t.Fatal("maintenanceEnabled() remained true after disabling maintenance")
+		t.Fatal("maintenanceEnabled() remained true after the flag was removed")
+	}
+}
+
+// The maintenance writes run as root below a directory the tenant owns, so they
+// must never accept a target the caller cannot prove is inside the tenant home.
+func TestMaintenanceWritesRefusePathOutsideTenantHome(t *testing.T) {
+	for _, dir := range []string{"/etc", "/home/c_other/public_html", "/home/c_site"} {
+		if err := enableMaintenance("c_site", dir); err == nil {
+			t.Fatalf("enableMaintenance() accepted %q, which is outside /home/c_site", dir)
+		}
+		if err := disableMaintenance("c_site", dir); err == nil {
+			t.Fatalf("disableMaintenance() accepted %q, which is outside /home/c_site", dir)
+		}
 	}
 }

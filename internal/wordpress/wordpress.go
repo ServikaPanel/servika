@@ -685,10 +685,9 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 // The prefix is still computed, but only to turn the absolute path into the
 // relative one the primitive takes; the refusal comes from the kernel.
 func removeBeneathHome(systemUser, absolutePath, what string) error {
-	home := "/home/" + systemUser
-	rel, ok := strings.CutPrefix(filepath.Clean(absolutePath), home+"/")
-	if !ok {
-		return fmt.Errorf("%s: path is outside the tenant home", what)
+	home, rel, err := homeRel(systemUser, absolutePath)
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
 	}
 	if err := files.RemoveAllBeneath(home, rel); err != nil && !errors.Is(err, os.ErrNotExist) {
 		// #nosec G706 -- rel is derived from a filepath.Clean'ed path whose source is either the regex-validated sub_dir or resolveDirectory, which rejects CR/LF/NUL; `what` is a literal.
@@ -696,6 +695,20 @@ func removeBeneathHome(systemUser, absolutePath, what string) error {
 		return err
 	}
 	return nil
+}
+
+// homeRel splits an absolute path inside a tenant home into the (home, rel) pair
+// every files.*Beneath primitive takes. The prefix comparison decides nothing
+// about safety; the refusal comes from the kernel inside the primitive. It exists
+// only to turn a path resolveDirectory already bounded to the document root into
+// the relative form openat2 needs.
+func homeRel(systemUser, absolutePath string) (home, rel string, err error) {
+	home = "/home/" + systemUser
+	rel, ok := strings.CutPrefix(filepath.Clean(absolutePath), home+"/")
+	if !ok {
+		return "", "", fmt.Errorf("path is outside the tenant home")
+	}
+	return home, rel, nil
 }
 
 func resolveDirectory(root, directoryValue string) (string, error) {
