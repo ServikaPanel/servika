@@ -4,7 +4,11 @@
 #   servika-update            # Fetch the latest release, replace assets, and restart
 #   servika-update --dry-run  # Show changes without applying them
 #   servika-update --force    # Apply the update even when the binary is unchanged
-#   servika-update --branch X # Update from another branch (default: main)
+#
+# The tagged release bundle is the only source. The server binary is built inside
+# the release job and is never committed, so a branch tarball carries no binary
+# to install. The --branch option was removed rather than left as a path that
+# always aborted.
 #
 # This command preserves /etc/servika/env, the MariaDB panel database, and /home/c_* sites.
 # Before migrations run, it creates a full panel database dump. A failed dump stops the update.
@@ -93,7 +97,7 @@ derive_health_url() {
 }
 
 REPO="${SERVIKA_REPO:-ServikaPanel/servika}"
-BRANCH="main"; DRY=0; FORCE=0; BRANCH_EXPLICIT=0
+DRY=0; FORCE=0
 PREFIX="${SERVIKA_PREFIX:-/opt/servika}"
 BIN="${SERVIKA_BIN:-$PREFIX/bin/servika-server}"
 SEED="${SERVIKA_SEED:-$PREFIX/bin/servika-seed-admin}"
@@ -129,8 +133,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
     --force) FORCE=1 ;;
-    --branch) BRANCH="$2"; BRANCH_EXPLICIT=1; shift ;;
-    --branch=*) BRANCH="${1#*=}"; BRANCH_EXPLICIT=1 ;;
+    # Recognised so a documented flag is retired with a reason rather than with
+    # "unknown argument".
+    --branch|--branch=*) echo "--branch was removed: a branch tarball carries no server binary to install, so it could never complete an update. Use the tagged release." >&2; exit 2 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -303,68 +308,47 @@ ROLLBACK_DIR="$PREFIX/.update-rollback.$$"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP" "$ROLLBACK_DIR"' EXIT
 mkdir -p "$ROLLBACK_DIR"
 
-# Source resolution: prefer the immutable tagged release bundle (same artifact as
-# install.sh). An explicit --branch opts into the mutable branch tarball; a failed
-# tag resolution or bundle download falls back to it with a warning. A bundle that
-# fails its checksum does NOT: that is a fatal error, never a reason to reach for
-# a source with no checksum.
+# Source resolution: the immutable tagged release bundle, and nothing else (same
+# artifact as install.sh).
+#
+# There used to be a fallback to the mutable branch tarball here. It could never
+# complete: the server binary is built inside the release job and copied into the
+# bundle, and has not been committed to the repository since the prebuilt assets
+# were deleted, so the branch tarball carries no $ARCH/servika-server and every
+# fallback ended at the missing-binary check three lines below. Removing it turns
+# a misleading late abort into an early message naming the real cause.
 A=""
-if [ "$BRANCH_EXPLICIT" = 0 ]; then
-  TAG=$(resolve_release_tag)
-  if [ -n "$TAG" ]; then
-    VERSION_TAG="${TAG#v}"
-    BUNDLE="servika-${VERSION_TAG}-${ARCH}.tar.gz"
-    BUNDLE_URL="https://github.com/$REPO/releases/download/$TAG/$BUNDLE"
-    SUMS_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
-    SIG_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS.sig"
-    step "Servika update (release $TAG, $ARCH)"
-    echo "  downloading release bundle..."
-    # A download that does not arrive and a bundle that does not match its
-    # checksum are NOT the same event, so they must not share an outcome.
-    #
-    # Not arriving is a network problem, and falling back to the branch tarball
-    # is a reasonable answer to it. Not matching is evidence that the bundle is
-    # not the one the release published. Falling back there would mean anyone
-    # able to serve a wrong bundle only has to make the checksum fail to move
-    # this script onto a source with no checksum at all, which it then installs
-    # from as root. install.sh has always treated a mismatch as fatal; this is
-    # the same rule in the two places that update an installed host.
-    if ! curl -fsSL --retry 3 -o "$TMP/$BUNDLE" "$BUNDLE_URL" \
-       || ! curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$SUMS_URL"; then
-      warn "release bundle download failed ($BUNDLE_URL); falling back to branch '$BRANCH'"
-      rm -rf "${TMP:?}/"* 2>/dev/null || true
-    elif ! fetch_release_signature "$SIG_URL" "$TMP/SHA256SUMS.sig" \
-         || ! verify_release_signature "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig"; then
-      # Judged exactly as a checksum mismatch is, and for the same reason: a
-      # signature that does not hold is evidence that SHA256SUMS is not the one
-      # the maintainer signed, and falling back to a source with NO checksum
-      # would hand that outcome to anyone able to break the signature.
-      die "the SHA256SUMS signature did not verify for $TAG; refusing to continue. Re-run with --branch $BRANCH only if you accept an unverified source."
-    elif ! verify_release_bundle "$TMP/$BUNDLE" "$TMP/SHA256SUMS" "$BUNDLE"; then
-      die "checksum mismatch for $BUNDLE against the $TAG release SHA256SUMS; refusing to continue. Re-run with --branch $BRANCH only if you accept an unverified source."
-    elif ! tar xz -C "$TMP" -f "$TMP/$BUNDLE"; then
-      # The checksum already passed, so this is a local unpack problem rather
-      # than a bad artifact: the branch tarball is a fair second attempt.
-      warn "the verified bundle could not be unpacked; falling back to branch '$BRANCH'"
-      rm -rf "${TMP:?}/"* 2>/dev/null || true
-    else
-      ok "checksum verified"
-      A="$TMP/assets"
-    fi
-  else
-    warn "could not resolve a release tag; falling back to branch '$BRANCH'"
-  fi
-fi
-if [ -z "$A" ]; then
-  step "Servika update (github.com/$REPO@$BRANCH)"
-  echo "  downloading..."
-  curl -fsSL "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" | tar xz -C "$TMP" \
-    || die "download failed; verify that the repository is public and branch '$BRANCH' exists"
-  SRC=$(find "$TMP" -maxdepth 1 -type d -name "*-$BRANCH" | head -1)
-  A="$SRC/assets"
+TAG=$(resolve_release_tag)
+[ -n "$TAG" ] || die "could not resolve a release tag from github.com/$REPO; check network access and try again (the unauthenticated GitHub API allows 60 requests per hour per address)"
+VERSION_TAG="${TAG#v}"
+BUNDLE="servika-${VERSION_TAG}-${ARCH}.tar.gz"
+BUNDLE_URL="https://github.com/$REPO/releases/download/$TAG/$BUNDLE"
+SUMS_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
+SIG_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS.sig"
+step "Servika update (release $TAG, $ARCH)"
+echo "  downloading release bundle..."
+# A download that does not arrive and a bundle that does not match its checksum
+# are still NOT the same event, and the messages keep them apart. Neither has a
+# second source to reach for any more, but a mismatch remains the more serious
+# report: it is evidence that the bundle is not the one the release published.
+if ! curl -fsSL --retry 3 -o "$TMP/$BUNDLE" "$BUNDLE_URL" \
+   || ! curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$SUMS_URL"; then
+  die "release bundle download failed ($BUNDLE_URL); check network access and try again"
+elif ! fetch_release_signature "$SIG_URL" "$TMP/SHA256SUMS.sig" \
+     || ! verify_release_signature "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig"; then
+  # A signature that does not hold is evidence that SHA256SUMS is not the one the
+  # maintainer signed. Installing from it as root is the worst possible answer.
+  die "the SHA256SUMS signature did not verify for $TAG; refusing to continue"
+elif ! verify_release_bundle "$TMP/$BUNDLE" "$TMP/SHA256SUMS" "$BUNDLE"; then
+  die "checksum mismatch for $BUNDLE against the $TAG release SHA256SUMS; refusing to continue"
+elif ! tar xz -C "$TMP" -f "$TMP/$BUNDLE"; then
+  die "the verified bundle could not be unpacked; check free space in $TMP and try again"
+else
+  ok "checksum verified"
+  A="$TMP/assets"
 fi
 NEWBIN="$A/$ARCH/servika-server"
-[ -f "$NEWBIN" ] || die "$A/$ARCH/servika-server is missing"
+[ -f "$NEWBIN" ] || die "$A/$ARCH/servika-server is missing from the $TAG bundle"
 
 # Validate the binary without executing it, then hash every release component so updates to
 # frontend, migrations, operations tools, or systemd units are not skipped.

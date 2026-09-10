@@ -8,9 +8,8 @@
 #   • INTEGRITY-FIRST / FORCE: restores even when the release hash matches if
 #     integrity is broken (empty/missing/not ELF). Update SKIPS on hash match.
 #
-#   servika-restore              # restore core from canonical (main) → restart if needed
+#   servika-restore              # restore core from the tagged release → restart if needed
 #   servika-restore --dry-run    # diagnose only + show what would change, touch NOTHING
-#   servika-restore --branch X   # different branch (default: main)
 #   servika-restore --no-db-dump # skip pre-migration DB dump (emergency; CAUTION)
 #   servika-restore --no-restart # repair files but do not restart the service
 #
@@ -103,7 +102,7 @@ derive_health_url() {
 }
 
 REPO="${SERVIKA_REPO:-ServikaPanel/servika}"
-BRANCH="main"; DRY=0; DODB=1; DORESTART=1; BRANCH_EXPLICIT=0
+DRY=0; DODB=1; DORESTART=1
 
 # Paths are overridable via env (for isolated testing). Production defaults apply.
 PREFIX="${SERVIKA_PREFIX:-/opt/servika}"
@@ -193,8 +192,9 @@ esac
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY=1 ;;
-    --branch) BRANCH="$2"; BRANCH_EXPLICIT=1; shift ;;
-    --branch=*) BRANCH="${1#*=}"; BRANCH_EXPLICIT=1 ;;
+    # Recognised so a documented flag is retired with a reason rather than with
+    # "unknown argument".
+    --branch|--branch=*) echo "--branch was removed: a branch tarball carries no server binary to restore from, so it could never complete a repair. Use the tagged release." >&2; exit 2 ;;
     --no-db-dump) DODB=0 ;;
     --no-restart) DORESTART=0 ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -280,11 +280,16 @@ step "Servika core repair (github.com/$REPO)$([ $DRY = 1 ] && echo '  [DRY-RUN]'
 # ───────────────────────────────────────────────────────────────────────────
 # a) Fetch the canonical release → $A (assets directory).
 #    SERVIKA_ASSETS_OVERRIDE skips the download (isolated/offline test).
-#    Default: the immutable tagged release bundle (same artifact as install.sh).
-#    --branch opts into the mutable branch tarball; a failed tag resolution or
-#    bundle download falls back to the branch tarball with a warning. A bundle
-#    that fails its checksum does NOT: that is fatal, never a reason to reach for
-#    a source with no checksum.
+#    The immutable tagged release bundle, and nothing else (same artifact as
+#    install.sh).
+#
+#    There used to be a fallback to the mutable branch tarball here. It could
+#    never complete: the server binary is built inside the release job and copied
+#    into the bundle, and has not been committed to the repository since the
+#    prebuilt assets were deleted, so the branch tarball carries no
+#    $ARCH/servika-server. Every fallback ended at the missing-binary check and
+#    reported "canonical release is corrupt or incomplete", sending the operator
+#    of an already-broken host after an upstream fault that was not there.
 # ───────────────────────────────────────────────────────────────────────────
 if [ -n "${SERVIKA_ASSETS_OVERRIDE:-}" ]; then
   A="$SERVIKA_ASSETS_OVERRIDE"
@@ -293,55 +298,32 @@ if [ -n "${SERVIKA_ASSETS_OVERRIDE:-}" ]; then
 else
   TMP=$(mktemp -d)
   A=""
-  if [ "$BRANCH_EXPLICIT" = 0 ]; then
-    TAG=$(resolve_release_tag)
-    if [ -n "$TAG" ]; then
-      VERSION_TAG="${TAG#v}"
-      BUNDLE="servika-${VERSION_TAG}-${ARCH}.tar.gz"
-      BUNDLE_URL="https://github.com/$REPO/releases/download/$TAG/$BUNDLE"
-      SUMS_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
-      echo "  downloading release bundle ($TAG, $ARCH)…"
-      # A download that does not arrive and a bundle that does not match its
-      # checksum are NOT the same event, so they must not share an outcome.
-      #
-      # Not arriving is a network problem, and the branch tarball is a
-      # reasonable answer. Not matching says the bundle is not what the release
-      # published, and falling back there would let anyone able to serve a wrong
-      # bundle move this script onto a source with no checksum at all by doing
-      # nothing more than making the comparison fail. This is a repair path, so
-      # it runs on a host that is already in trouble; installing unverified
-      # binaries as root is the worst possible answer to that.
-      if ! curl -fsSL --retry 3 -o "$TMP/$BUNDLE" "$BUNDLE_URL" \
-         || ! curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$SUMS_URL"; then
-        warn "release bundle download failed ($BUNDLE_URL); falling back to branch '$BRANCH'"
-        rm -rf "${TMP:?}/"* 2>/dev/null || true
-      elif ! verify_release_bundle "$TMP/$BUNDLE" "$TMP/SHA256SUMS" "$BUNDLE"; then
-        die "checksum mismatch for $BUNDLE against the $TAG release SHA256SUMS; repair cancelled. Re-run with --branch $BRANCH only if you accept an unverified source."
-      elif ! tar xz -C "$TMP" -f "$TMP/$BUNDLE"; then
-        # The checksum already passed, so this is a local unpack problem rather
-        # than a bad artifact: the branch tarball is a fair second attempt.
-        warn "the verified bundle could not be unpacked; falling back to branch '$BRANCH'"
-        rm -rf "${TMP:?}/"* 2>/dev/null || true
-      else
-        ok "checksum verified"
-        A="$TMP/assets"
-      fi
-    else
-      warn "could not resolve a release tag; falling back to branch '$BRANCH'"
-    fi
-  fi
-  if [ -z "$A" ]; then
-    echo "  downloading…"
-    curl -fsSL "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" | tar xz -C "$TMP" \
-      || die "download failed — is the repo public and branch '$BRANCH' available?"
-    SRC=$(find "$TMP" -maxdepth 1 -type d -name "*-$BRANCH" | head -1)
-    [ -n "$SRC" ] || die "downloaded archive is empty or has an unexpected structure — repair cancelled"
-    A="$SRC/assets"
+  TAG=$(resolve_release_tag)
+  [ -n "$TAG" ] || die "could not resolve a release tag from github.com/$REPO; check network access and try again (the unauthenticated GitHub API allows 60 requests per hour per address). Set SERVIKA_ASSETS_OVERRIDE to repair from a bundle already on this host."
+  VERSION_TAG="${TAG#v}"
+  BUNDLE="servika-${VERSION_TAG}-${ARCH}.tar.gz"
+  BUNDLE_URL="https://github.com/$REPO/releases/download/$TAG/$BUNDLE"
+  SUMS_URL="https://github.com/$REPO/releases/download/$TAG/SHA256SUMS"
+  echo "  downloading release bundle ($TAG, $ARCH)…"
+  # A download that does not arrive and a bundle that does not match its checksum
+  # are still NOT the same event, and the messages keep them apart. This is a
+  # repair path, so it runs on a host that is already in trouble; a message that
+  # names the wrong cause costs the operator the time they have least of.
+  if ! curl -fsSL --retry 3 -o "$TMP/$BUNDLE" "$BUNDLE_URL" \
+     || ! curl -fsSL --retry 3 -o "$TMP/SHA256SUMS" "$SUMS_URL"; then
+    die "release bundle download failed ($BUNDLE_URL); check network access and try again. Set SERVIKA_ASSETS_OVERRIDE to repair from a bundle already on this host."
+  elif ! verify_release_bundle "$TMP/$BUNDLE" "$TMP/SHA256SUMS" "$BUNDLE"; then
+    die "checksum mismatch for $BUNDLE against the $TAG release SHA256SUMS; repair cancelled"
+  elif ! tar xz -C "$TMP" -f "$TMP/$BUNDLE"; then
+    die "the verified bundle could not be unpacked; check free space in $TMP and try again"
+  else
+    ok "checksum verified"
+    A="$TMP/assets"
   fi
 fi
 [ -d "$A" ] || die "assets/ not found ($A) — repo structure differs from expected"
 NEWBIN="$A/$ARCH/servika-server"
-[ -f "$NEWBIN" ] || die "$NEWBIN missing — canonical release is corrupt or incomplete, repair cancelled"
+[ -f "$NEWBIN" ] || die "$NEWBIN missing from the release bundle — repair cancelled"
 
 # ───────────────────────────────────────────────────────────────────────────
 # b) INTEGRITY DIAGNOSIS (show first — let the operator see what is broken).
