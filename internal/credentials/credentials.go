@@ -471,6 +471,11 @@ func RunRootSQL(statements ...string) error { return runRootSQL(statements...) }
 // ErrInvalidMySQLCredentials indicates that a database name, user, or password is unsafe for SQL construction.
 var ErrInvalidMySQLCredentials = errors.New("invalid MySQL credentials")
 
+// ErrDBUserOwnedByAnotherDomain reports that the requested account name already
+// exists and belongs to a different domain, so creating it would reset that
+// account's password rather than make a new one.
+var ErrDBUserOwnedByAnotherDomain = errors.New("database user belongs to another domain")
+
 // MySQLCreateScopedUser creates an account privileged on exactly one schema.
 //
 // It exists so an untrusted SQL dump can be imported without touching the
@@ -545,6 +550,24 @@ func validateMySQLCredentials(dbName, dbUser, dbPass string) error {
 func MySQLCreateDB(db *sql.DB, domainID int64, dbName, dbUser, dbPass string) error {
 	if err := validateMySQLCredentials(dbName, dbUser, dbPass); err != nil {
 		return err
+	}
+	// The ALTER USER below sets the password unconditionally, so an account name
+	// that already belongs to a different domain would be handed a password the
+	// caller chose. The name prefix does not prevent that on its own: a system
+	// user is not a prefix-free namespace, because provisioner.allocateSystemUser
+	// mints c_X_2 on a slug collision and an account suffix may contain "_", so
+	// tenant c_X can spell tenant c_X_2's account exactly. This is asked in the
+	// layer that issues the statement, not only in the handler, because a caller
+	// that never learned about the collision cannot reintroduce it here.
+	var ownerID int64
+	switch err := db.QueryRow(
+		`SELECT domain_id FROM db_accounts WHERE db_user=? LIMIT 1`, dbUser).Scan(&ownerID); {
+	case errors.Is(err, sql.ErrNoRows):
+	case err != nil:
+		// Fail closed: an unreadable ownership row is not proof the name is free.
+		return fmt.Errorf("check database user ownership: %w", err)
+	case ownerID != domainID:
+		return fmt.Errorf("%w: %s", ErrDBUserOwnedByAnotherDomain, dbUser)
 	}
 	// Create the MariaDB database and user through root socket authentication.
 	if err := runRootSQL(

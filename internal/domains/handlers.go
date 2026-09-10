@@ -1301,6 +1301,23 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 				httpx.WriteError(w, http.StatusBadRequest, "user name too long (prefix + suffix must be at most 64 characters)")
 				return
 			}
+			// A new account may not take a name that already exists. The prefix
+			// test does not make this impossible: a suffix may contain "_" and
+			// provisioner.allocateSystemUser mints c_X_2 on a slug collision, so
+			// c_X can spell an account of c_X_2. Creating it would reset that
+			// account's password instead of making a new one. A name held by this
+			// same domain is refused too, because other databases share it and
+			// "existing" mode is what preserves their password.
+			var taken int
+			if err := h.DB.QueryRowContext(r.Context(),
+				`SELECT COUNT(*) FROM db_accounts WHERE db_user=?`, dbUser).Scan(&taken); err != nil {
+				httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
+				return
+			}
+			if taken > 0 {
+				httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+dbUser)
+				return
+			}
 			if req.Password == "" {
 				password = credentials.RandomPassword(24)
 			} else {
@@ -1341,6 +1358,10 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if err := credentials.MySQLCreateDB(h.DB, id, dbName, dbUser, password); err != nil {
+			if errors.Is(err, credentials.ErrDBUserOwnedByAnotherDomain) {
+				httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+dbUser)
+				return
+			}
 			if errors.Is(err, credentials.ErrInvalidMySQLCredentials) {
 				httpx.WriteError(w, http.StatusBadRequest, "invalid database name or user")
 				return
