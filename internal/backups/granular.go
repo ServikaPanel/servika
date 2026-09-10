@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"servika/internal/archivex"
@@ -134,21 +135,74 @@ func dumpComplete(path string) bool {
 	return strings.Contains(string(buf), dumpCompleteMark)
 }
 
+// stagingSlots serializes the backups that write into one tenant's staging
+// directory.
+//
+// The key is the SYSTEM USER, never the domain id: an addon or subdomain row
+// carries its parent's `system_user`, so two different domain ids resolve to one
+// `backupRoot()/<systemUser>/__db__`. A per-domain guard leaves that pair racing.
+var stagingSlots sync.Map // systemUser (string) -> chan struct{} of capacity 1
+
+// lockStaging takes the tenant's staging directory and returns the release.
+//
+// It WAITS rather than refusing, because the nightly sweep and a bulk job each
+// carry work that has to happen: refusing would drop that domain's backup for the
+// night and say nothing. The caller's context bounds the wait, so a queue cannot
+// outlive the job that is waiting in it.
+func lockStaging(ctx context.Context, systemUser string) (func(), error) {
+	value, _ := stagingSlots.LoadOrStore(systemUser, make(chan struct{}, 1))
+	slot, ok := value.(chan struct{})
+	if !ok {
+		return nil, errors.New("the staging slot is not a slot")
+	}
+	select {
+	case slot <- struct{}{}:
+		return func() { <-slot }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// takeStagingDir claims the tenant's database staging directory and returns it
+// empty, together with the release that frees it and removes it again.
+//
+// The claim comes FIRST, before the directory is touched. Every producer goes
+// through here rather than guarding its own entry point: the manual handler used
+// to hold the only guard, so the nightly scheduler and a bulk job could both
+// stage into one directory, each deleting it on the way in and again on the way
+// out. One run's tar then packaged the other run's half-written dumps, and the
+// archive was still recorded as successful, because tar's own bytes verify.
+func takeStagingDir(ctx context.Context, systemUser, dir string) (dbDir string, release func(), err error) {
+	slot, err := lockStaging(ctx, systemUser)
+	if err != nil {
+		return "", nil, fmt.Errorf("waiting for the tenant's backup staging directory: %w", err)
+	}
+	dbDir = filepath.Join(dir, "__db__")
+	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
+	_ = os.RemoveAll(dbDir)
+	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
+	if err := os.MkdirAll(dbDir, 0700); err != nil {
+		slot()
+		return "", nil, fmt.Errorf("db staging: %w", err)
+	}
+	return dbDir, func() {
+		// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
+		_ = os.RemoveAll(dbDir)
+		slot()
+	}, nil
+}
+
 // buildArchive packages /home/<systemUser> plus every domain DB (__db__/<name>.sql)
 // plus a manifest into a single .tar.gz. Used by both the manual Create handler
 // and the scheduler. Older backups dumped only <systemUser>_main; extra DBs such
 // as wp_* are now included. Returns the archive size in bytes.
 func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, dir, file, createdTS string) (int64, error) {
-	abs := filepath.Join(dir, file)
-	dbDir := filepath.Join(dir, "__db__")
-	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
-	_ = os.RemoveAll(dbDir)
-	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
-	if err := os.MkdirAll(dbDir, 0700); err != nil {
-		return 0, fmt.Errorf("db staging: %w", err)
+	dbDir, release, err := takeStagingDir(ctx, systemUser, dir)
+	if err != nil {
+		return 0, err
 	}
-	// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
-	defer func() { _ = os.RemoveAll(dbDir) }()
+	defer release()
+	abs := filepath.Join(dir, file)
 
 	// Progress stages are no-ops when no record exists (the scheduler path), so the
 	// same buildArchive serves both the interactive and scheduled backups.
