@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"servika/internal/bgjob"
 	"servika/internal/config"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
@@ -280,7 +281,14 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// from GET .../backups/progress. The concurrency lock is released by the task,
 	// not here, or a second backup could start before this one finishes.
 	progressStart(id, "backup", stagePreparing, previousBackupSize(h.DB, id))
-	go h.backupTask(id, domainName, systemUser, dir, file)
+	bgjob.Go("backups: single-domain backup",
+		func(err error) {
+			// The task releases the concurrency lock in its own defer, which a
+			// panic still runs; the progress record is what would otherwise say
+			// "preparing" for ever.
+			progressFinish(id, "", err)
+		},
+		func() { h.backupTask(id, domainName, systemUser, dir, file) })
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 		"ok":      true,
 		"started": true,

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"servika/internal/bgjob"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
 
@@ -298,6 +299,18 @@ func finishJobStopped(db *sql.DB, jobID int64, succeeded, failed int, stopped bo
 	}
 }
 
+// failJob closes a job row after a panic. The counters live inside the goroutine
+// that died, so only the status is corrected here: what matters is that the row
+// stops saying "running", which is what would otherwise block a second attempt
+// until the next restart heals it.
+func failJob(db *sql.DB, jobID int64) {
+	if _, err := db.Exec(
+		`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW() WHERE id=?`,
+		jobID); err != nil {
+		log.Printf("backup job %d: could not close after a panic: %v", jobID, err)
+	}
+}
+
 func actorName(r *http.Request) string {
 	if c := middleware.ClaimsFrom(r); c != nil {
 		return c.Username
@@ -332,7 +345,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 	jobCtx, jobCancel := context.WithCancel(context.Background())
 	registerJob(jobID, jobCancel)
 	// #nosec G118 -- intentional detached context: the job outlives the request, which would otherwise cancel it mid-archive.
-	go func() {
+	bgjob.Go("backups: bulk backup job", func(error) { failJob(h.DB, jobID) }, func() {
 		defer func() {
 			jobCancel()
 			unregisterJob(jobID)
@@ -377,7 +390,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
-	}()
+	})
 
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(domains)})
 }
@@ -683,7 +696,7 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 	jobCtx, jobCancel := context.WithCancel(context.Background())
 	registerJob(jobID, jobCancel)
 	// #nosec G118 -- intentional detached context: the job outlives the request, which would otherwise cancel it mid-restore.
-	go func() {
+	bgjob.Go("backups: bulk restore job", func(error) { failJob(h.DB, jobID) }, func() {
 		defer func() {
 			jobCancel()
 			unregisterJob(jobID)
@@ -731,7 +744,7 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
-	}()
+	})
 
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(items)})
 }

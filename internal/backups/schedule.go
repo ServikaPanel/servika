@@ -10,7 +10,11 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"servika/internal/bgjob"
 )
+
+const scheduleJobName = "backups: nightly scheduler"
 
 // Schedule defines automatic backup timing and retention.
 type Schedule struct {
@@ -30,11 +34,14 @@ func StartScheduler(db *sql.DB) {
 	go func() {
 		// First run: 2 minutes after the panel starts (warmup)
 		time.Sleep(2 * time.Minute)
-		tickOnce(db)
+		// Each pass is guarded on its own: an unrecovered panic here would take
+		// the whole panel process down, and recovering only at the loop's exit
+		// would leave the scheduler silent until the next restart.
+		bgjob.Guard(scheduleJobName, func() { tickOnce(db) })
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()
 		for range t.C {
-			tickOnce(db)
+			bgjob.Guard(scheduleJobName, func() { tickOnce(db) })
 		}
 	}()
 }

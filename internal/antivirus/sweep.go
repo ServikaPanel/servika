@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"servika/internal/avsettings"
+	"servika/internal/bgjob"
 	"servika/internal/config"
 	"servika/internal/httpx"
 
@@ -79,12 +80,12 @@ func (h *Handlers) Sweep(w http.ResponseWriter, r *http.Request) {
 	// #nosec G118 -- the request context is deliberately NOT used: the caller gets
 	// a scan id immediately and polls, so closing the tab must not cancel a sweep
 	// of the whole server that is already under way.
-	go func() {
+	bgjob.Go("antivirus: server sweep", func(error) { failScan(h.DB, sid) }, func() {
 		defer slot.Release()
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
 		runSweep(ctx, h.DB, sid, req)
-	}()
+	})
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"scan_id": sid, "scope": settings.Scope, "roots": req.Roots,

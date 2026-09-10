@@ -23,11 +23,23 @@ import (
 	"time"
 
 	"servika/internal/avsettings"
+	"servika/internal/bgjob"
 	"servika/internal/config"
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// failScan closes a scan row after a panic. A scan that produced nothing must
+// read as failed rather than finished: an empty finding list is exactly what a
+// clean site looks like, so calling it finished would present a sweep that never
+// ran as a clean bill of health.
+func failScan(db *sql.DB, sid int64) {
+	if _, err := db.Exec(
+		`UPDATE av_scans SET status='failed', finished_at=NOW() WHERE id=?`, sid); err != nil {
+		log.Printf("antivirus: scan %d could not be closed after a panic: %v", sid, err)
+	}
+}
 
 func clamBin() string { return config.ClamScanBin() }
 
@@ -308,7 +320,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 	// must not cancel a sweep that is already under way. The scan carries its
 	// own budget instead, and the settings it needs were read from the request
 	// context above, before this goroutine starts.
-	go func() {
+	bgjob.Go("antivirus: domain scan", func(error) { failScan(h.DB, sid) }, func() {
 		defer slot.Release()
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
@@ -339,7 +351,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = h.DB.Exec(`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
 			status, result.Scanned, len(result.Findings), confined, sid)
-	}()
+	})
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"scan_id": sid})
 }
 

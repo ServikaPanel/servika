@@ -15,7 +15,10 @@ import (
 	"time"
 
 	"servika/internal/avsettings"
+	"servika/internal/bgjob"
 )
+
+const scheduleJobName = "antivirus: nightly sweep scheduler"
 
 // scheduleWarmup delays the first pass past startup. provisioner.Init and the
 // migrations are still running in the first seconds, and a sweep of the whole
@@ -35,11 +38,14 @@ func StartScheduler(db *sql.DB) {
 	}
 	go func() {
 		time.Sleep(scheduleWarmup)
-		tickOnce(db, time.Now)
+		// Each pass is guarded on its own: an unrecovered panic here would take
+		// the whole panel process down, and recovering only at the loop's exit
+		// would leave the scheduler silent until the next restart.
+		bgjob.Guard(scheduleJobName, func() { tickOnce(db, time.Now) })
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()
 		for range t.C {
-			tickOnce(db, time.Now)
+			bgjob.Guard(scheduleJobName, func() { tickOnce(db, time.Now) })
 		}
 	}()
 }

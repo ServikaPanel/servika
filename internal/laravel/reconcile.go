@@ -5,7 +5,11 @@ import (
 	"database/sql"
 	"log"
 	"time"
+
+	"servika/internal/bgjob"
 )
+
+const reconcileJobName = "laravel: job reconciler"
 
 // jobReconcileGrace is how long a job may sit in a non-terminal state before the
 // reconciler is allowed to finalize it. It prevents finalizing a just-started job
@@ -19,11 +23,14 @@ const jobReconcileGrace = 120 * time.Second
 func StartJobReconciler(db *sql.DB, interval time.Duration) {
 	go func() {
 		time.Sleep(90 * time.Second) // warmup: let startup healing settle first
-		reconcileOnce(db)
+		// Each pass is guarded on its own: an unrecovered panic here would take
+		// the whole panel process down, and recovering only at the loop's exit
+		// would leave the reconciler silent until the next restart.
+		bgjob.Guard(reconcileJobName, func() { reconcileOnce(db) })
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for range t.C {
-			reconcileOnce(db)
+			bgjob.Guard(reconcileJobName, func() { reconcileOnce(db) })
 		}
 	}()
 }

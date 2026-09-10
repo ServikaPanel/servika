@@ -9,8 +9,12 @@ import (
 	"syscall"
 	"time"
 
+	"servika/internal/bgjob"
 	"servika/internal/config"
 )
+
+// collectJobName identifies the collector in a panic log line.
+const collectJobName = "slowquery: collector"
 
 const (
 	// collectInterval is how often the log is drained. Five minutes keeps the
@@ -41,11 +45,14 @@ func StartCollector(db *sql.DB) {
 	}
 	go func() {
 		time.Sleep(firstPassDelay)
-		CollectOnce(db)
+		// Each pass is guarded on its own: an unrecovered panic here would take
+		// the whole panel process down, and recovering only at the loop's exit
+		// would leave the collector silent until the next restart.
+		bgjob.Guard(collectJobName, func() { CollectOnce(db) })
 		ticker := time.NewTicker(collectInterval)
 		defer ticker.Stop()
 		for range ticker.C {
-			CollectOnce(db)
+			bgjob.Guard(collectJobName, func() { CollectOnce(db) })
 		}
 	}()
 }

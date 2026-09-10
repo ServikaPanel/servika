@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"servika/internal/bgjob"
 	"servika/internal/files"
 	"servika/internal/wordpress"
 )
@@ -120,17 +121,24 @@ func HealRunningScans(db *sql.DB) {
 	}
 }
 
+const collectorJobName = "sitesecurity: collector sweep"
+
 // StartCollector runs the sweep on a timer.
 func StartCollector(db *sql.DB) {
 	collector := New(db)
 	go func() {
 		time.Sleep(startupDelay)
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
-			if err := collector.ScanAll(ctx); err != nil && !errors.Is(err, ErrScanRunning) {
-				log.Printf("site security scan: %v", err)
-			}
-			cancel()
+			// Each pass is guarded on its own: an unrecovered panic here would
+			// take the whole panel process down, and recovering only at the
+			// loop's exit would leave the collector silent until the next restart.
+			bgjob.Guard(collectorJobName, func() {
+				ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
+				defer cancel()
+				if err := collector.ScanAll(ctx); err != nil && !errors.Is(err, ErrScanRunning) {
+					log.Printf("site security scan: %v", err)
+				}
+			})
 			time.Sleep(scanInterval)
 		}
 	}()

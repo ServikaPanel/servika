@@ -1,6 +1,7 @@
 package hostapps
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"servika/internal/bgjob"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
 )
@@ -171,7 +173,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	// tab closed mid-download would otherwise cancel a half-written installation
 	// and leave an account, a directory and a unit behind.
 	// #nosec G118 -- the operation is asynchronous by design; Install applies its own deadline.
-	go Install(h.DB, entry, app, jobID)
+	bgjob.Go("hostapps: install",
+		func(err error) { finishJob(context.Background(), h.DB, jobID, err) },
+		func() { Install(h.DB, entry, app, jobID) })
 
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 		"id": app.ID, "code": app.Code, "port": app.Port, "state": app.State,
@@ -202,7 +206,9 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	// Same as the install path: the removal archives the data directory first and
 	// must not be cancelled halfway by the request that asked for it.
 	// #nosec G118 -- the operation is asynchronous by design; Remove applies its own deadline.
-	go Remove(h.DB, app, jobID)
+	bgjob.Go("hostapps: remove",
+		func(err error) { finishJob(context.Background(), h.DB, jobID, err) },
+		func() { Remove(h.DB, app, jobID) })
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"id": app.ID, "state": "removing"})
 }
 

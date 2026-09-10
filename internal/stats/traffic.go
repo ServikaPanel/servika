@@ -9,7 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"servika/internal/bgjob"
 )
+
+const trafficJobName = "stats: traffic aggregator"
 
 var trafficDomainPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
 
@@ -17,11 +21,14 @@ var trafficDomainPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-
 func StartTrafficAggregator(db *sql.DB, every time.Duration) {
 	go func() {
 		time.Sleep(30 * time.Second)
-		AggregateAll(db)
+		// Each pass is guarded on its own: an unrecovered panic here would take
+		// the whole panel process down, and recovering only at the loop's exit
+		// would leave the aggregator silent until the next restart.
+		bgjob.Guard(trafficJobName, func() { AggregateAll(db) })
 		ticker := time.NewTicker(every)
 		defer ticker.Stop()
 		for range ticker.C {
-			AggregateAll(db)
+			bgjob.Guard(trafficJobName, func() { AggregateAll(db) })
 		}
 	}()
 }

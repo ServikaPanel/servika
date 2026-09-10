@@ -6,9 +6,13 @@ import (
 	"log"
 	"strings"
 
+	"servika/internal/bgjob"
 	"servika/internal/dnsbl"
 	"time"
 )
+
+// poolScanJobName identifies the scanner in a panic log line.
+const poolScanJobName = "mail: address pool blocklist scanner"
 
 // Blocklist scanning for the outbound addresses.
 //
@@ -37,11 +41,16 @@ func StartPoolScanner(db *sql.DB, primary string) {
 		// Nothing here is urgent, so it does not compete with the rest of boot.
 		time.Sleep(2 * time.Minute)
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			if err := ScanPool(ctx, db, primary); err != nil {
-				log.Printf("mail address pool scan: %v", err)
-			}
-			cancel()
+			// Each pass is guarded on its own: an unrecovered panic here would
+			// take the whole panel process down, and recovering only at the
+			// loop's exit would leave the scanner silent until the next restart.
+			bgjob.Guard(poolScanJobName, func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer cancel()
+				if err := ScanPool(ctx, db, primary); err != nil {
+					log.Printf("mail address pool scan: %v", err)
+				}
+			})
 			time.Sleep(dnsblScanInterval)
 		}
 	}()

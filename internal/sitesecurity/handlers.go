@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"servika/internal/bgjob"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
 
@@ -399,13 +400,15 @@ func (h *Handlers) ScanDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #nosec G118 -- detaching from the request context is the point: a single-domain scan still reaches the feeds and outlives the request that asked for it; the slot is released by RunOne.
-	go func() {
+	// The slot is released by RunOne's own defer, which a panic still runs, and a
+	// single-domain scan writes no state row, so there is nothing left to correct.
+	bgjob.Go("sitesecurity: domain scan", nil, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
 		defer cancel()
 		if e := h.Collector.RunOne(ctx, item); e != nil {
 			log.Printf("site security domain scan: %v", e)
 		}
-	}()
+	})
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"started": true})
 }
 
@@ -457,15 +460,19 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #nosec G118 -- detaching from the request context is the point: the sweep takes minutes and the operator closing the tab must not kill it half way and strand the state row on 'running'.
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
-		defer cancel()
-		counts, err := h.Collector.scan(ctx)
-		h.Collector.finish(counts, err)
-		if err != nil {
-			log.Printf("site security scan: %v", err)
-		}
-	}()
+	// finish runs in the goroutine's tail rather than a defer, so without this the
+	// state row would sit on 'running' until the next restart heals it.
+	bgjob.Go("sitesecurity: server sweep",
+		func(err error) { h.Collector.finish(tally{}, err) },
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
+			defer cancel()
+			counts, err := h.Collector.scan(ctx)
+			h.Collector.finish(counts, err)
+			if err != nil {
+				log.Printf("site security scan: %v", err)
+			}
+		})
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"started": true})
 }
 

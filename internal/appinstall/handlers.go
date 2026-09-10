@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"servika/internal/bgjob"
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
@@ -158,7 +159,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// #nosec G118 -- detaching from the request context is the point: the work outlives the request by design and the row Begin wrote is what carries the outcome.
-	go func() {
+	bgjob.Go("appinstall: install", func(err error) { Finish(h.DB, id, err) }, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), installBudget)
 		defer cancel()
 		runErr := Run(ctx, h.DB, entry, request)
@@ -166,7 +167,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			log.Printf("app install %d (%s): %v", id, entry.Code, runErr)
 		}
 		Finish(h.DB, id, runErr)
-	}()
+	})
 
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 		"id": id, "state": "installing", "site_url": siteURLFor(request),

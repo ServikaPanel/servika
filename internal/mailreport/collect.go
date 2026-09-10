@@ -10,7 +10,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"servika/internal/bgjob"
 )
+
+// collectJobName identifies the collector in a panic log line.
+const collectJobName = "mailreport: collector"
 
 // Reading reports out of the mailbox the DNS record already names.
 //
@@ -42,11 +47,16 @@ func StartCollector(db *sql.DB) {
 	go func() {
 		time.Sleep(collectStartDelay)
 		for {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			if err := CollectAll(ctx, db); err != nil {
-				log.Printf("mail report collector: %v", err)
-			}
-			cancel()
+			// Each pass is guarded on its own: an unrecovered panic here would
+			// take the whole panel process down, and recovering only at the
+			// loop's exit would leave the collector silent until the next restart.
+			bgjob.Guard(collectJobName, func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				defer cancel()
+				if err := CollectAll(ctx, db); err != nil {
+					log.Printf("mail report collector: %v", err)
+				}
+			})
 			time.Sleep(collectInterval)
 		}
 	}()
