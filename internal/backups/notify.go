@@ -89,6 +89,41 @@ func notifyDumpsFailed(ctx context.Context, db *sql.DB, domainID, backupID int64
 	}
 }
 
+// notifyBackupFailed writes one critical notification when a domain's backup
+// could not be produced at all.
+//
+// This is the one event that means "there is no recovery point for this domain
+// today", and it was the only backup event with no channel out of the log file.
+// Alerting had been added around the periphery — where the archive is stored,
+// whether the disk allowed it, whether it later rotted — but not around the
+// backup itself. A scheduled run that fails every night for a permission
+// problem, a corrupt file in the tree or a tenant large enough to exceed the
+// archive deadline left a partial job row nobody reads, and the loss surfaced
+// when a restore was needed and the newest archive was weeks old.
+//
+// DOMAIN-scoped like the other two, and a write failure is logged rather than
+// returned: a sweep must not stop because the alert about one domain could not
+// be written.
+func notifyBackupFailed(ctx context.Context, db *sql.DB, domainID int64, reason string) {
+	id := domainID
+	name := backupDomainName(ctx, db, domainID)
+	event := notifications.Event{
+		Level:    notifications.LevelCritical,
+		Category: backupNotifyCategory,
+		Title:    "Backup failed",
+		Message:  fmt.Sprintf("The backup of %s failed, so it has no recovery point from this run: %s", name, reason),
+		Key:      "backup.backupFailed",
+		Params:   map[string]any{"domain": name, "reason": reason},
+		DomainID: &id,
+		RefType:  "domain",
+		RefID:    domainID,
+	}
+	if err := notifications.Write(ctx, db, event); err != nil {
+		// #nosec G706 -- logged values are an integer ID and error output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup: the failed-backup alert for domain %d could not be written: %v", domainID, err)
+	}
+}
+
 // backupNotes records the gap on the backups row itself, so the backup LIST
 // carries it and not only the notification somebody may already have dismissed.
 func backupNotes(base string, failed []string) string {

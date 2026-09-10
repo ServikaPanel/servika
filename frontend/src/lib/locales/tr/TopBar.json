@@ -304,7 +304,8 @@
       "noSwap": "Bu sunucuda swap alanı yok; bellek tükendiğinde MariaDB ölür ve tüm siteler çöker. Bir swap dosyası ekleyin."
     },
     "backup": {
-      "uploadFailed": "{{domain}} için off-site backup upload başarısız oldu: {{reason}}",
+      "backupFailed": "{{domain}} yedeklemesi başarısız oldu, bu çalıştırmadan bir kurtarma noktası yok: {{reason}}",
+        "uploadFailed": "{{domain}} için off-site backup upload başarısız oldu: {{reason}}",
       "dumpFailed": "{{domain}} yedeği, dump'ı başarısız olan {{count}} veritabanını içermiyor: {{databases}}",
       "diskGate": "Otomatik backup'lar disk koruması nedeniyle durduruldu: {{reason}}.",
       "corruptMissing": "{{domain}} için en yeni backup okunamadı ({{file}}); kurtarma için geçersiz olabilir.",

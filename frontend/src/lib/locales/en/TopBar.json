@@ -304,7 +304,8 @@
       "noSwap": "This server has no swap space, so an out-of-memory event kills MariaDB and takes every site down. Add a swap file."
     },
     "backup": {
-      "uploadFailed": "The off-site backup upload for {{domain}} failed: {{reason}}",
+      "backupFailed": "The backup of {{domain}} failed, so it has no recovery point from this run: {{reason}}",
+        "uploadFailed": "The off-site backup upload for {{domain}} failed: {{reason}}",
       "dumpFailed": "The backup of {{domain}} does not contain {{count}} database(s) whose dump failed: {{databases}}",
       "diskGate": "Automatic backups were stopped by the disk guard: {{reason}}.",
       "corruptMissing": "The newest backup for {{domain}} could not be read ({{file}}); it may be invalid for recovery.",

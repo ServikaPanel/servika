@@ -304,7 +304,8 @@
       "noSwap": "Questo server non ha spazio di swap; in caso di memoria esaurita MariaDB viene terminato e tutti i siti cadono. Aggiungi un file di swap."
     },
     "backup": {
-      "uploadFailed": "Upload del backup off-site per {{domain}} non riuscito: {{reason}}",
+      "backupFailed": "Il backup di {{domain}} non è riuscito, quindi non esiste alcun punto di ripristino da questa esecuzione: {{reason}}",
+        "uploadFailed": "Upload del backup off-site per {{domain}} non riuscito: {{reason}}",
       "dumpFailed": "Il backup di {{domain}} non contiene {{count}} database il cui dump non è riuscito: {{databases}}",
       "diskGate": "I backup automatici sono stati interrotti dalla protezione disco: {{reason}}.",
       "corruptMissing": "Il backup più recente di {{domain}} non è stato letto ({{file}}); potrebbe non essere valido per il ripristino.",

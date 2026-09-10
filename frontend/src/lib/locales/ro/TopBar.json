@@ -304,7 +304,8 @@
       "noSwap": "Acest server nu are spațiu swap; la epuizarea memoriei MariaDB este oprit și toate site-urile cad. Adăugați un fișier swap."
     },
     "backup": {
-      "uploadFailed": "Încărcarea backupului off-site pentru {{domain}} a eșuat: {{reason}}",
+      "backupFailed": "Copia de siguranță pentru {{domain}} a eșuat, deci nu există niciun punct de restaurare din această rulare: {{reason}}",
+        "uploadFailed": "Încărcarea backupului off-site pentru {{domain}} a eșuat: {{reason}}",
       "dumpFailed": "Copia de rezervă a {{domain}} nu conține {{count}} baze de date al căror dump a eșuat: {{databases}}",
       "diskGate": "Backupurile automate au fost oprite de protecția discului: {{reason}}.",
       "corruptMissing": "Cel mai recent backup pentru {{domain}} nu a putut fi citit ({{file}}); poate fi invalid pentru recuperare.",

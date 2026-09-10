@@ -400,6 +400,10 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 				}
 				failed++
 				log.Printf("backup job %d: domain %d failed: %v", jobID, d.ID, err)
+				// The one event that means this domain has no recovery point from
+				// this run. Without this it reached nothing but the log and a
+				// partial job row nobody reads.
+				notifyBackupFailed(jobCtx, h.DB, d.ID, err.Error())
 			} else {
 				succeeded++
 				totalBytes += size

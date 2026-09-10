@@ -177,6 +177,10 @@ func tickOnce(db *sql.DB) {
 			}
 			failed++
 			log.Printf("backup scheduler %s: %v", d.DomainName, err)
+			// The one event that means this domain has no recovery point from
+			// tonight. Without this it reached nothing but the log and a partial
+			// job row nobody reads.
+			notifyBackupFailed(jobCtx, db, d.ID, err.Error())
 		} else {
 			succeeded++
 			totalBytes += size
