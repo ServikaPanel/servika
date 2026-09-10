@@ -18,6 +18,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/credentials"
+	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/system"
 
@@ -30,6 +31,32 @@ const (
 )
 
 func servikaJailBin() string { return config.OpsTool("servika-jail") }
+
+// sshDirRel is the SSH directory relative to the tenant home, the form the
+// symlink-safe primitives take.
+const sshDirRel = ".ssh"
+
+// prepareSSHDir creates ~/.ssh and pins its mode.
+//
+// The directory sits directly under a home the tenant owns at 0710, so the entry
+// is theirs to replace. os.MkdirAll returns nil for a symlink that resolves to an
+// existing directory, which is what let a tenant aim the root-privileged key write
+// that follows at /root/.ssh. MkdirAllBeneath opens every component with
+// O_NOFOLLOW and refuses the link instead. The explicit chmod is required because
+// the primitive creates directories 0755 while sshd expects 0700, and the chown
+// the primitive performs replaces the `chown -R` that stood here: GNU chown
+// defaults to -P and would have relabelled the symlink rather than its target.
+func prepareSSHDir(systemUser string) error {
+	home := filepath.Join("/home", systemUser)
+	if err := files.MkdirAllBeneath(home, sshDirRel, systemUser); err != nil {
+		return err
+	}
+	if err := files.ChmodBeneath(home, sshDirRel, 0700); err != nil {
+		return err
+	}
+	files.RestoreconBeneath(home, sshDirRel)
+	return nil
+}
 
 // Handlers provides HTTP handlers for per-domain SSH access.
 type Handlers struct {
@@ -143,14 +170,12 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Enabled {
-		// Prepare ~/.ssh for key uploads.
-		dir := filepath.Join("/home", systemUser, ".ssh")
-		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-		_ = os.MkdirAll(dir, 0700)
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command("chown", "-R", systemUser+":"+systemUser, dir).Run()
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command("restorecon", "-R", dir).Run()
+		// Prepare ~/.ssh for key uploads. Not fatal: the key upload itself refuses
+		// the same directory and reports the failure to the caller.
+		if err := prepareSSHDir(systemUser); err != nil {
+			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+			log.Printf("ssh enable: prepare ssh directory %s: %v", systemUser, err)
+		}
 		// Synchronize the SSH password with the FTP password.
 		if err := credentials.SyncSSHPassword(h.DB, systemUser); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
@@ -236,27 +261,36 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 		}
 	}
-	dir := filepath.Join("/home", systemUser, ".ssh")
-	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := prepareSSHDir(systemUser); err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("ssh key: prepare ssh directory %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
-	ak := filepath.Join(dir, "authorized_keys")
 	body := ""
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	if key != "" {
 		body = key + "\n"
 	}
-	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
-	if err := os.WriteFile(ak, []byte(body), 0600); err != nil {
+	// The write is pinned beneath the home for the same reason the directory is:
+	// a symlink at authorized_keys would otherwise make root truncate and rewrite
+	// whatever it points at with request-supplied text, and the endpoint is
+	// AdminOnly, so the administrator is the deputy the tenant confuses.
+	home := filepath.Join("/home", systemUser)
+	akRel := filepath.Join(sshDirRel, "authorized_keys")
+	if err := files.WriteFileBeneath(home, akRel, []byte(body), 0600, systemUser); err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("ssh key: write authorized_keys %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("chown", "-R", systemUser+":"+systemUser, dir).Run()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", "-R", dir).Run()
+	// WriteFileBeneath keeps the mode of a file that already exists, so pin 0600
+	// rather than trusting whatever the previous owner of the entry left behind.
+	if err := files.ChmodBeneath(home, akRel, 0600); err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("ssh key: chmod authorized_keys %s: %v", systemUser, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "has_key": key != ""})
 }
 

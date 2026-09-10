@@ -1,6 +1,50 @@
 package sshaccess
 
-import "testing"
+import (
+	"bytes"
+	"os"
+	"testing"
+)
+
+// Every path this package writes to sits under /home/<system_user>, a tree the
+// tenant owns and can replace an entry of. A root-privileged write that resolves
+// such a path by name follows a planted symlink, which is how a tenant reached
+// /root/.ssh/authorized_keys through the AdminOnly key endpoint. Writes must go
+// through the files.*Beneath primitives, which pin every component with openat2.
+func TestNoPathResolvingWritesUnderTenantHome(t *testing.T) {
+	src, err := os.ReadFile("sshaccess.go")
+	if err != nil {
+		t.Fatalf("read package source: %v", err)
+	}
+	// EnsureInfra writes /usr/local/bin and /etc/ssh, which are root-only and not
+	// reachable by a tenant, so the scan is limited to the two handlers that touch
+	// the home.
+	for _, fn := range []string{"func (h *Handlers) SaveKey(", "func (h *Handlers) Configure(", "func prepareSSHDir("} {
+		body := functionBody(t, src, fn)
+		for _, banned := range []string{"os.MkdirAll(", "os.WriteFile(", "os.Create(", "os.Remove(", "os.OpenFile("} {
+			if bytes.Contains(body, []byte(banned)) {
+				t.Fatalf("%s uses %s on a tenant path; use the files.*Beneath primitives instead", fn, banned)
+			}
+		}
+	}
+	for _, want := range []string{"files.MkdirAllBeneath(", "files.WriteFileBeneath("} {
+		if !bytes.Contains(src, []byte(want)) {
+			t.Fatalf("package no longer calls %s, so the SSH directory is not pinned beneath the tenant home", want)
+		}
+	}
+}
+
+// functionBody returns the source of the function whose declaration starts with
+// header, up to the next top-level declaration.
+func functionBody(t *testing.T, src []byte, header string) []byte {
+	t.Helper()
+	start := bytes.Index(src, []byte(header))
+	if start < 0 {
+		t.Fatalf("function %q not found in the package source", header)
+	}
+	body, _, _ := bytes.Cut(src[start+len(header):], []byte("\nfunc "))
+	return body
+}
 
 func TestValidSystemUser(t *testing.T) {
 	tests := []struct {
