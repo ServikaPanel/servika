@@ -326,6 +326,10 @@ func main() {
 	// The Redis ACL passwords get their own pass, because each is sealed against
 	// the row's own system_user rather than with the unbound key. Idempotent.
 	datamigrate.EncryptRedisPasswords(context.Background(), d)
+	// So do the TOTP seeds, sealed against the user id. A seed is written once,
+	// when 2FA is enabled, so nothing else would ever rewrite a legacy one.
+	// Idempotent.
+	datamigrate.EncryptTOTPSecrets(context.Background(), d)
 	provisioner.Init(d)
 	// swap is the only buffer before the OOM-killer, which on a swapless host
 	// killed MariaDB and took every site down (2026-08-22 incident). The drop-ins

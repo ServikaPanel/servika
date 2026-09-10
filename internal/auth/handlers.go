@@ -257,7 +257,15 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 				httpx.WriteJSON(w, http.StatusOK, map[string]any{"two_factor_required": true})
 				return
 			}
-			step, ok := TOTPVerifyStep(sec, req.Code, lastStep)
+			// FAIL-CLOSED, like every other branch here: a seed that cannot be
+			// opened denies the login rather than verifying the code against a
+			// value this could not read.
+			seed, err := OpenTOTPSecret(sec, uid)
+			if err != nil {
+				httpx.WriteError(w, http.StatusInternalServerError, "2FA configuration is invalid")
+				return
+			}
+			step, ok := TOTPVerifyStep(seed, req.Code, lastStep)
 			if !ok {
 				WriteAudit(h.DB, uid, username, auditIP, "auth.2fa", username, false)
 				httpx.WriteError(w, http.StatusUnauthorized, "invalid or reused 2FA code")

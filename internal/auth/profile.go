@@ -225,7 +225,14 @@ func (h *Handlers) TwoFAEnable(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "code verification failed; enter the six-digit code from your authenticator app")
 		return
 	}
-	if _, err := h.DB.Exec(`UPDATE users SET totp_secret=?, totp_enabled=1, totp_last_step=?, token_version=token_version+1 WHERE id=?`, b.Secret, step, c.UserID); err != nil {
+	sealed, err := SealTOTPSecret(b.Secret, c.UserID)
+	if err != nil {
+		// Storing the seed in the clear instead is not an acceptable fallback:
+		// that is the state this replaces.
+		httpx.WriteError(w, http.StatusInternalServerError, "2FA settings could not be saved")
+		return
+	}
+	if _, err := h.DB.Exec(`UPDATE users SET totp_secret=?, totp_enabled=1, totp_last_step=?, token_version=token_version+1 WHERE id=?`, sealed, step, c.UserID); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "2FA settings could not be saved")
 		return
 	}
@@ -247,9 +254,17 @@ func (h *Handlers) TwoFADisable(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	var secret string
-	_ = h.DB.QueryRow(`SELECT totp_secret FROM users WHERE id=?`, c.UserID).Scan(&secret)
-	if !TOTPVerify(secret, b.Code) {
+	var stored string
+	_ = h.DB.QueryRow(`SELECT totp_secret FROM users WHERE id=?`, c.UserID).Scan(&stored)
+	seed, err := OpenTOTPSecret(stored, c.UserID)
+	if err != nil {
+		// A seed that cannot be opened cannot verify a code. Refusing here leaves
+		// 2FA on, which is the safe direction: the alternative would let a caller
+		// who broke the seal turn the second factor off.
+		httpx.WriteError(w, http.StatusBadRequest, "code verification failed")
+		return
+	}
+	if !TOTPVerify(seed, b.Code) {
 		httpx.WriteError(w, http.StatusBadRequest, "code verification failed")
 		return
 	}
