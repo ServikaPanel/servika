@@ -20,6 +20,7 @@ import (
 	"strings"
 	"text/template"
 
+	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
 	"servika/internal/phpdefaults"
@@ -737,23 +738,29 @@ func (h *Handlers) GetDebugLog(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	p, err := debugLogPath(systemUser)
+	home, rel, err := debugLogHome(systemUser)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	f, openErr := os.Open(p)
+	f, openErr := files.OpenBeneath(home, rel)
 	if openErr != nil {
 		// File missing or unreadable -- debug may never have been triggered.
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"lines": []string{}})
 		return
 	}
 	defer func() { _ = f.Close() }()
+	// The regular-file test is on the DESCRIPTOR, never on a separate stat of the
+	// path, because the tenant owns the directory this was opened in.
+	st, statErr := f.Stat()
+	if statErr != nil || !st.Mode().IsRegular() {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"lines": []string{}})
+		return
+	}
 	// DoS-safe: only read the last ~64KB instead of the entire file.
 	const tailBytes = 64 * 1024
 	var data []byte
-	if st, statErr := f.Stat(); statErr == nil && st.Size() > tailBytes {
+	if st.Size() > tailBytes {
 		buf := make([]byte, tailBytes)
 		if _, e := f.ReadAt(buf, st.Size()-tailBytes); e == nil || e == io.EOF {
 			if i := bytes.IndexByte(buf, '\n'); i >= 0 {
@@ -784,26 +791,43 @@ func (h *Handlers) ClearDebugLog(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	p, err := debugLogPath(systemUser)
+	home, rel, err := debugLogHome(systemUser)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := os.Truncate(p, 0); err != nil {
+	// StatBeneath keeps os.Truncate's ENOENT behaviour: clearing a log that was
+	// never written stays an error rather than creating one.
+	if _, statErr := files.StatBeneath(home, rel); statErr != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to clear debug log")
+		return
+	}
+	if err := files.WriteFileBeneath(home, rel, nil, 0o600, systemUser); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to clear debug log")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// debugLogPath returns the per-domain PHP debug log path. The systemUser value
-// originates from the domain record and is validated for the c_ prefix, so
-// there is no path traversal risk.
-func debugLogPath(systemUser string) (string, error) {
-	if systemUser == "" || !strings.HasPrefix(systemUser, "c_") {
-		return "", fmt.Errorf("invalid system user")
+// debugSystemUserPattern is the whole system-user name, not just its prefix.
+//
+// A bare HasPrefix("c_") test accepts "c_../.." and would place the jail itself
+// outside /home, which no confinement below can recover from.
+var debugSystemUserPattern = regexp.MustCompile(`^c_[A-Za-z0-9_]{1,29}$`)
+
+// debugLogHome returns the tenant home that confines the per-domain PHP debug
+// log, plus the log's path relative to that home.
+//
+// The pair is returned rather than one absolute path because both endpoints
+// reach the file as root inside a tree the tenant owns: ~/.servika is root-owned
+// only while installDebugShim runs, so the tenant can put a symlink at the
+// directory or at the file, and an open or truncate by path follows it out of
+// the home.
+func debugLogHome(systemUser string) (home, rel string, err error) {
+	if !debugSystemUserPattern.MatchString(systemUser) {
+		return "", "", fmt.Errorf("invalid system user")
 	}
-	return "/home/" + systemUser + "/.servika/php_debug.log", nil
+	return "/home/" + systemUser, ".servika/php_debug.log", nil
 }
 
 // versionModules lists modules loaded by PHP-FPM for a version.
