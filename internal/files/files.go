@@ -178,7 +178,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 	// This endpoint moves a body far larger than the server's own read and write
 	// timeouts allow for, so it lifts them for this request alone.
-	if err := httpx.ExtendDeadline(w, httpx.LargeTransferDeadline); err != nil {
+	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
 		log.Printf("file download: could not extend the socket deadline: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// This endpoint moves a body far larger than the server's own read and write
 	// timeouts allow for, so it lifts them for this request alone.
-	if err := httpx.ExtendDeadline(w, httpx.LargeTransferDeadline); err != nil {
+	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
 		log.Printf("file upload: could not extend the socket deadline: %v", err)
 	}
 

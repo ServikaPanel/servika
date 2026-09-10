@@ -5,35 +5,9 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
 )
-
-// LargeTransferDeadline is the socket deadline a request gets when it genuinely
-// moves a large body: a multi-gigabyte upload, an archive, or a database dump.
-//
-// The server's own ReadTimeout and WriteTimeout are deliberately short, because
-// they apply to EVERY endpoint and a client dribbling one byte a second would
-// otherwise hold a connection, and its file descriptor, for as long as they
-// like. The few endpoints that really do take minutes lift the limit for their
-// own request only.
-const LargeTransferDeadline = 30 * time.Minute
-
-// ExtendDeadline lengthens the socket read and write deadlines of ONE request.
-//
-// It reports whether the extension reached the connection. A silent failure
-// would be worse than none: the endpoint would keep its long-transfer contract
-// on paper while the socket still closed at the server default, so a large
-// upload would break with no explanation. Every caller logs what it gets back.
-func ExtendDeadline(w http.ResponseWriter, d time.Duration) error {
-	controller := http.NewResponseController(w)
-	deadline := time.Now().Add(d)
-	if err := controller.SetReadDeadline(deadline); err != nil {
-		return err
-	}
-	return controller.SetWriteDeadline(deadline)
-}
 
 // SessionCookie is the name of the HttpOnly cookie that carries the session JWT
 // for both administrators and customers. The token is never exposed to

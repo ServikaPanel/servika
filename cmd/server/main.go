@@ -639,7 +639,10 @@ func main() {
 	// which would bypass login rate-limiting. The real client IP is obtained via
 	// httpx.ClientIP (trusts X-Real-IP only from loopback/nginx peer).
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Timeout(300 * time.Second))
+	// Not chimw.Timeout: its context.WithTimeout cannot be lengthened later, so
+	// the endpoints that lift their budget with httpx.ExtendDeadline kept this
+	// default for every piece of context-bound work.
+	r.Use(middleware.Timeout(300 * time.Second))
 	r.Use(chimw.Compress(5, "application/json", "text/html", "text/css", "text/javascript", "application/javascript"))
 	r.Use(middleware.CORS)
 	r.Use(middleware.MaintenanceMode)

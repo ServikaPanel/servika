@@ -69,7 +69,7 @@ var maildirLetters = map[rune]string{
 // tenant the kernel's own permission check applies to every file it opens. It is
 // never given -h, which would make it follow those links deliberately.
 func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
-	if err := httpx.ExtendDeadline(w, httpx.LargeTransferDeadline); err != nil {
+	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
 		log.Printf("mailbox export: could not extend the socket deadline: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func (h *Handlers) ImportFormats(w http.ResponseWriter, r *http.Request) {
 // Import unpacks an upload into the mailbox.
 // POST /domains/{id}/mail/{mid}/import
 func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
-	if err := httpx.ExtendDeadline(w, httpx.LargeTransferDeadline); err != nil {
+	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
 		log.Printf("mailbox import: could not extend the socket deadline: %v", err)
 	}
 
