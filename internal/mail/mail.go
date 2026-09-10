@@ -426,23 +426,70 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid status")
 		return
 	}
+	// mailboxes.status carries two independent authorities: the owner's own on/off
+	// switch, and the containment the spam policy applies when a mailbox passes its
+	// send limit (internal/mail/policy.go stamps spam_suspended_at with it). Only
+	// spam_suspended_at tells them apart, so a customer resuming a mailbox could
+	// undo the panel's only automatic answer to an abusive mailbox and erase the
+	// evidence in the same statement.
+	//
+	// The guard sits in the WHERE clause, not in a separate read, so the policy
+	// server cannot contain the mailbox between a check and the write.
+	operator := isMailOperator(r)
+	liftsContainment := operator && req.Status == "active"
+	guard := ""
+	if req.Status == "active" && !operator {
+		guard = " AND spam_suspended_at IS NULL"
+	}
 	res, err := h.DB.ExecContext(r.Context(),
 		`UPDATE mailboxes SET status=?,
 		   spam_suspended_at=IF(?='active',NULL,spam_suspended_at)
-		 WHERE id=? AND domain_id=?`, req.Status, req.Status, mailboxID, id)
+		 WHERE id=? AND domain_id=?`+guard, req.Status, req.Status, mailboxID, id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update mailbox")
 		return
 	}
 	if rowsAffected, _ := res.RowsAffected(); rowsAffected == 0 {
-		httpx.WriteError(w, http.StatusNotFound, "mailbox not found")
+		status, message := h.statusRefusal(r.Context(), id, mailboxID)
+		httpx.WriteError(w, status, message)
 		return
 	}
 	// mailboxes.status is an input to the cached passdb answer, so a suspension
 	// reaches IMAP only once the entry is dropped.
 	h.flushMailboxAuthCache(r.Context(), id, mailboxID)
-	h.audit(r, "mail.status", strconv.FormatInt(mailboxID, 10), true)
+	action := "mail.status"
+	if liftsContainment {
+		// Naming the lift separately is the point of reserving it: an operator
+		// undoing a spam containment leaves a line an operator can find later,
+		// rather than one indistinguishable from an ordinary resume.
+		action = "mail.status.spam_resume"
+	}
+	h.audit(r, action, strconv.FormatInt(mailboxID, 10), true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// statusRefusal explains why a status update matched no row. The update itself
+// carries the guard, so this only has to name which of the two reasons applied:
+// the mailbox is gone, or the spam policy holds it and the caller is its owner.
+//
+// It fails closed. A row it cannot read is not evidence the containment is gone.
+func (h *Handlers) statusRefusal(ctx context.Context, domainID, mailboxID int64) (int, string) {
+	// Reading the predicate rather than the timestamp keeps the answer independent
+	// of whether the DSN parses DATETIME into time.Time.
+	var contained bool
+	err := h.DB.QueryRowContext(ctx,
+		`SELECT spam_suspended_at IS NOT NULL FROM mailboxes WHERE id=? AND domain_id=?`,
+		mailboxID, domainID).Scan(&contained)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return http.StatusNotFound, "mailbox not found"
+	case err != nil:
+		return http.StatusInternalServerError, "could not update mailbox"
+	case contained:
+		return http.StatusForbidden, "the spam protection suspended this mailbox; an operator has to resume it"
+	default:
+		return http.StatusNotFound, "mailbox not found"
+	}
 }
 
 // planLimitsOrDefault reads the domain plan's mail limits for a mailbox that is

@@ -28,7 +28,7 @@ func TestOnlyAnOperatorMaySetALimitByHand(t *testing.T) {
 		middleware.RoleUser:     false,
 		"":                      false,
 	} {
-		if got := isMailLimitOperator(limitRequest(role)); got != want {
+		if got := isMailOperator(limitRequest(role)); got != want {
 			t.Errorf("role %q: operator = %v, want %v", role, got, want)
 		}
 	}

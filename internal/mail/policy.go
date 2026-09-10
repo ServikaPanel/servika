@@ -277,10 +277,12 @@ func (h *Handlers) SendLimitsGet(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, s)
 }
 
-// isMailLimitOperator reports whether the caller may set a mailbox's send limits
-// freely. The route is mounted under CustomerScope, so an admin and a reseller
-// reach it too, and only they may write a value the plan does not allow.
-func isMailLimitOperator(r *http.Request) bool {
+// isMailOperator reports whether the caller acts on a mailbox as an operator
+// rather than as its owner. Every mail route is mounted under CustomerScope, so
+// an admin and a reseller reach them too; the decisions reserved for them are
+// writing a send limit the plan does not allow, and lifting a suspension the
+// spam policy applied.
+func isMailOperator(r *http.Request) bool {
 	c := middleware.ClaimsFrom(r)
 	return c != nil && (c.Role == middleware.RoleAdmin || c.Role == middleware.RoleReseller)
 }
@@ -340,7 +342,7 @@ func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	// A customer may lower its own limits, never raise them past the plan and
 	// never to 0, which the policy server reads as unlimited.
-	operator := isMailLimitOperator(r)
+	operator := isMailOperator(r)
 	if !operator {
 		if reason, err := h.refuseAbovePlan(r.Context(), id, req); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not read the plan's mail limits")
