@@ -143,14 +143,38 @@ func tickOnce(db *sql.DB) {
 		log.Printf("backup scheduler: could not open job row: %v", err)
 	}
 
+	// The nightly pass registers its cancel function like every other bulk job.
+	// Without it StopJob found nothing to cancel, took the branch written for a row
+	// a panel restart left behind, marked this LIVE run as failed and answered
+	// ok:true, while the sweep kept saturating the host's disk for its full
+	// duration and finishJob then quietly overwrote the failure.
+	jobCtx, jobCancel := context.WithCancel(context.Background())
+	defer func() {
+		jobCancel()
+		unregisterJob(jobID)
+	}()
+	registerJob(jobID, jobCancel)
+
 	var totalBytes int64
 	succeeded, failed := 0, 0
+	stopped := false
 	for _, d := range due {
+		// Check for a stop BETWEEN domains: the domain in flight is killed by its
+		// own context, and the remaining ones are never started.
+		if jobCtx.Err() != nil {
+			stopped = true
+			break
+		}
 		if _, err := db.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, d.DomainName, jobID); err != nil {
 			log.Printf("backup scheduler: progress update failed: %v", err)
 		}
-		size, err := runOneBackup(db, d, jobID)
+		size, err := runOneBackup(jobCtx, db, d, jobID)
 		if err != nil {
+			if jobCtx.Err() != nil {
+				// The failure came from the stop, not the backup: do not count it.
+				stopped = true
+				break
+			}
 			failed++
 			log.Printf("backup scheduler %s: %v", d.DomainName, err)
 		} else {
@@ -172,16 +196,20 @@ func tickOnce(db *sql.DB) {
 			log.Printf("backup scheduler: progress update failed: %v", err)
 		}
 	}
-	finishJob(db, jobID, succeeded, failed)
+	finishJobStopped(db, jobID, succeeded, failed, stopped)
 }
 
 // runOneBackup creates a scheduled backup for one domain, tags it with the nightly
 // job, and updates last_backup_at. It returns the archive size so the job can total it.
-func runOneBackup(db *sql.DB, d dueDomain, jobID int64) (int64, error) {
+func runOneBackup(parent context.Context, db *sql.DB, d dueDomain, jobID int64) (int64, error) {
 	// Package the home directory plus EVERY domain-owned database (main + wp_* etc.)
 	// under __db__/ with a manifest, exactly like a manual backup, so a scheduled
 	// archive restores to the same state. buildArchive fails closed.
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+	//
+	// The timeout hangs off the JOB's context rather than off Background, so an
+	// operator stopping the nightly pass kills the tar in flight instead of
+	// waiting out the remaining 25 minutes of this one domain.
+	ctx, cancel := context.WithTimeout(parent, 25*time.Minute)
 	defer cancel()
 	sizeBytes, file, err := backupOneDomain(ctx, db, d.ID, d.SystemUser, "scheduled",
 		"Scheduled backup ("+d.Frequency+")", jobID)

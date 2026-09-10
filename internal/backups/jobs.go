@@ -280,13 +280,13 @@ func (h *Handlers) startJob(operation, restoreMode, startedBy string, total int)
 	return res.LastInsertId()
 }
 
-// finishJob closes a job with its aggregate status.
-func finishJob(db *sql.DB, jobID int64, succeeded, failed int) {
-	finishJobStopped(db, jobID, succeeded, failed, false)
-}
-
 // finishJobStopped closes a job, recording 'stopped' when the operator stopped it
 // so the UI can tell a stopped run apart from a failed one.
+//
+// Every bulk job goes through this one function. The wrapper that dropped the
+// stopped flag went with the last caller that could not be stopped: a run whose
+// tallies say "done" because it was cut short after two clean domains would
+// otherwise be indistinguishable from one that finished.
 func finishJobStopped(db *sql.DB, jobID int64, succeeded, failed int, stopped bool) {
 	status := jobStatus(succeeded, failed)
 	if stopped {
@@ -597,15 +597,20 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 // progress.
 func (h *Handlers) StopJob(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(chi.URLParam(r, "jid"), 10, 64)
+	// The scope filter is a READ filter and cannot serve as the write guard on its
+	// own. It shows a reseller the server-wide nightly job because that job
+	// archived one of their domains, and stopping it would end the backup of every
+	// other tenant on the host. Stopping is reserved to an admin and to whoever
+	// started the job.
 	filter, args := jobScopeFilter(r, "j")
-	q := `SELECT status FROM backup_jobs j WHERE j.id=?`
+	q := `SELECT status, started_by FROM backup_jobs j WHERE j.id=?`
 	scopedArgs := append([]any{jobID}, args...)
 	if filter != "" {
 		q += ` AND` + filter
 	}
-	var status string
+	var status, startedBy string
 	// #nosec G701 G202 -- filter is a constant fragment built from ScopeSQL with a literal alias; every value is bound.
-	err := h.DB.QueryRowContext(r.Context(), q, scopedArgs...).Scan(&status)
+	err := h.DB.QueryRowContext(r.Context(), q, scopedArgs...).Scan(&status, &startedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "backup job not found")
 		return
@@ -614,12 +619,18 @@ func (h *Handlers) StopJob(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	if !mayStopJob(r, startedBy) {
+		httpx.WriteError(w, http.StatusForbidden, "only the operator who started this job may stop it")
+		return
+	}
 	if status != "running" {
 		httpx.WriteError(w, http.StatusConflict, "the job is not running")
 		return
 	}
 	if !stopJob(jobID) {
-		// Not registered: a restart left it hung. Close the row as failed.
+		// Not registered: a restart left it hung. Close the row as failed. Every
+		// job this panel starts registers itself, so a running row with no cancel
+		// function belongs to a process that is gone.
 		if _, err := h.DB.Exec(
 			`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW()
 			 WHERE id=? AND status='running'`, jobID); err != nil {
@@ -627,6 +638,20 @@ func (h *Handlers) StopJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// mayStopJob reports whether the caller may end this job.
+//
+// Seeing a job and ending it are different questions. jobScopeFilter answers the
+// first, and it deliberately shows a reseller a job that produced one archive of
+// a domain they own; the nightly pass over every tenant on the host qualifies.
+// Ending that is not a decision one of its subjects gets to make.
+func mayStopJob(r *http.Request, startedBy string) bool {
+	c := middleware.ClaimsFrom(r)
+	if c == nil {
+		return false
+	}
+	return c.Role == middleware.RoleAdmin || c.Username == startedBy
 }
 
 // StartRestoreJob handles POST /admin/backups/restore and restores several domains in
