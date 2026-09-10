@@ -787,7 +787,13 @@ func main() {
 			// Read-only server status — visible so a reseller can offer support
 			// (user decision, Phase 5 plan); mutating endpoints stay AdminOnly.
 			r.With(middleware.ResellerOrAbove).Get("/system/usage", system.Handler)
-			r.With(middleware.ResellerOrAbove).Get("/system/metrics", metrics.Handler)
+			// NOT part of that decision, and metrics.Handler's own comment says so.
+			// Usage and service status describe the HOST; this describes every
+			// tenant's traffic: request counts and latency by method, route pattern
+			// and status across the whole server, including how often admin-only
+			// routes are exercised and the global error rate. A reseller's scope is
+			// its own customers.
+			r.With(middleware.AdminOnly).Get("/system/metrics", metrics.Handler)
 			r.With(middleware.ResellerOrAbove).Get("/system/services", system.ServiceStatuses)
 			r.With(middleware.AdminOnly).Post("/system/service-action", system.ServiceAction)
 			r.With(middleware.AdminOnly).Post("/system/reboot", system.Reboot)
