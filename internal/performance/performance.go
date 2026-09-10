@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -39,8 +38,12 @@ type Suggestion struct {
 }
 
 // CacheStats holds aggregated cache hit/miss counters and a computed hit rate.
-// For FastCGI, every upstream_cache_status variant is tracked. For Redis, only
-// keyspace_hits and keyspace_misses are available.
+// Every upstream_cache_status variant nginx writes is tracked.
+//
+// It covers the FastCGI cache alone. nginx writes a per-domain cache-status log,
+// so those counters really are one domain's. Valkey has no equivalent: one
+// instance serves every tenant, isolation is an ACL key prefix, and INFO stats
+// reports the whole instance.
 type CacheStats struct {
 	Hit         int64   `json:"hit"`
 	Miss        int64   `json:"miss"`
@@ -61,7 +64,6 @@ type Summary struct {
 	Items        []Item       `json:"items"`
 	Suggestions  []Suggestion `json:"suggestions"`
 	FastCGICache *CacheStats  `json:"fastcgi_cache,omitempty"`
-	RedisCache   *CacheStats  `json:"redis_cache,omitempty"`
 }
 
 // Show returns the current performance summary for a domain.
@@ -131,10 +133,18 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 		summary.FastCGICache = computeFastCGICacheStats(domainName)
 	}
 	if h.redisEnabled(r, id) {
-		summary.RedisCache = computeRedisCacheStats()
+		// No hit rate is reported here, deliberately. The panel runs ONE Valkey
+		// instance for every tenant, isolated by an ACL key prefix rather than by
+		// instance, and INFO stats has no per-user breakdown: keyspace_hits and
+		// keyspace_misses describe every site on the server. Presenting them as
+		// this domain's figures made a customer tune against a number they cannot
+		// influence, and handed every domain owner the aggregate cache traffic of
+		// their neighbours on a CustomerScope route.
 		summary.Items = append(summary.Items, Item{
 			Name: "Redis Cache", Enabled: true, Value: "Enabled",
-			Setting: "redis", Description: "In-memory object cache for WordPress and PHP applications.",
+			Setting: "redis",
+			Description: "In-memory object cache for WordPress and PHP applications. " +
+				"Hit rate is not shown: the server's Valkey instance reports its counters for all sites together.",
 		})
 	}
 
@@ -188,37 +198,6 @@ func computeFastCGICacheStats(domainName string) *CacheStats {
 		cs.HitRate = float64(cs.Hit+cs.Stale+cs.Revalidated) / float64(cs.Total) * 100
 	}
 	_ = sc.Err()
-	return &cs
-}
-
-// computeRedisCacheStats runs valkey-cli INFO stats and extracts keyspace
-// hit/miss counters. Returns nil when the admin password is unset or the
-// command fails.
-func computeRedisCacheStats() *CacheStats {
-	pass := os.Getenv("SERVIKA_REDIS_ADMIN_PASS")
-	if pass == "" {
-		return nil
-	}
-	cmd := exec.Command("valkey-cli", "INFO", "stats")
-	cmd.Env = append(os.Environ(), "REDISCLI_AUTH="+pass)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil
-	}
-	var cs CacheStats
-	for line := range strings.SplitSeq(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(line, "keyspace_hits:"); ok {
-			cs.Hit, _ = strconv.ParseInt(strings.TrimSpace(after), 10, 64)
-		}
-		if after, ok := strings.CutPrefix(line, "keyspace_misses:"); ok {
-			cs.Miss, _ = strconv.ParseInt(strings.TrimSpace(after), 10, 64)
-		}
-	}
-	cs.Total = cs.Hit + cs.Miss
-	if cs.Total > 0 {
-		cs.HitRate = float64(cs.Hit) / float64(cs.Total) * 100
-	}
 	return &cs
 }
 

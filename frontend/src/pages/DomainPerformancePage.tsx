@@ -8,7 +8,10 @@ import SlowQueryTable from '@/components/SlowQueryTable'
 type Item = { name: string; enabled: boolean; value: string; setting: string; description: string }
 type Suggestion = { text: string; severity: string; setting: string }
 type CacheStats = { hit: number; miss: number; expired?: number; bypass?: number; stale?: number; updating?: number; revalidated?: number; total: number; hit_rate: number }
-type Summary = { domain_name: string; php_version: string; score: number; items: Item[]; suggestions: Suggestion[]; fastcgi_cache?: CacheStats; redis_cache?: CacheStats }
+// There is no redis_cache counterpart. One Valkey instance serves every tenant
+// and INFO stats has no per-user breakdown, so a hit rate here would be the whole
+// server's. The Redis row says so in its own description.
+type Summary = { domain_name: string; php_version: string; score: number; items: Item[]; suggestions: Suggestion[]; fastcgi_cache?: CacheStats }
 
 export default function DomainPerformancePage() {
   const { t } = useTranslation('DomainPerformancePage')
@@ -74,9 +77,7 @@ export default function DomainPerformancePage() {
             <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('acceleratorsTitle')}</h3>
             <div className="space-y-2">
               {summary.items.map(item => {
-                const fcStats = item.name === 'FastCGI Cache' ? summary.fastcgi_cache : undefined
-                const redisStats = item.name === 'Redis Cache' ? summary.redis_cache : undefined
-                const cacheStats = fcStats || redisStats
+                const cacheStats = item.name === 'FastCGI Cache' ? summary.fastcgi_cache : undefined
                 return (
                 <div key={item.name} className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-50 dark:border-slate-800 last:border-0">
                   <div className="min-w-0">
