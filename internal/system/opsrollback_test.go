@@ -64,3 +64,30 @@ func readScript(t *testing.T, path string) string {
 	}
 	return string(body)
 }
+
+// The whole `-c` script is an element of lftp's argv, and /proc/<pid>/cmdline is
+// mode 444 while /proc/<pid>/environ is 400. Every c_* tenant on this host has
+// shell and cron, so `open -u user,pass` handed them the credentials of the
+// destination that holds the panel's OWN database dumps — every tenant's rows,
+// the users table and the encrypted secret columns.
+//
+// Measured with a real lftp: with the old form the password appears in the lftp
+// process's own cmdline; with --env-password it does not.
+func TestThePanelDatabaseUploadKeepsThePasswordOutOfArgv(t *testing.T) {
+	body := readScript(t, "../../assets/ops/servika-db-backup")
+
+	if strings.Contains(body, `open -u "%s","%s"`) {
+		t.Error("the offsite upload still puts the password in the lftp script")
+	}
+	if n := strings.Count(body, `open -u "%s" --env-password`); n != 3 {
+		t.Errorf("%d of the 3 lftp scripts use --env-password", n)
+	}
+	if n := strings.Count(body, `LFTP_PASSWORD="$pass" lftp -c`); n != 3 {
+		t.Errorf("%d of the 3 lftp calls supply LFTP_PASSWORD", n)
+	}
+	// Per command rather than exported, so no other subprocess of the script
+	// inherits the destination password.
+	if strings.Contains(body, `export LFTP_PASSWORD`) {
+		t.Error("LFTP_PASSWORD is exported to every subprocess instead of set per command")
+	}
+}

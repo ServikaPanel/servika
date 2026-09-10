@@ -86,34 +86,43 @@ upload_offsite() {
     echo "offsite: lftp not found on PATH, skipping upload" >&2
     return 0
   fi
-  local eu ep ed
-  eu=$(lftp_escape "$user"); ep=$(lftp_escape "$pass"); ed=$(lftp_escape "$dir")
+  local eu ed
+  eu=$(lftp_escape "$user"); ed=$(lftp_escape "$dir")
+  # The password travels in LFTP_PASSWORD, which `open --env-password` reads. The
+  # whole `-c` script is an element of lftp's argv, and /proc/<pid>/cmdline is
+  # mode 444: every c_* tenant on this host has shell and cron, so the older
+  # `open -u user,pass` form handed them the credentials of the destination that
+  # holds the panel's own database dumps. Those dumps carry every tenant's rows,
+  # the users table and the encrypted secret columns.
+  #
+  # It is set per COMMAND rather than exported, so no other subprocess of this
+  # script inherits it.
   # Upload the new dump, then keep only the newest $keep panel-*.sql.gz remotely.
   local script
-  script=$(printf 'set cmd:fail-exit yes; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s","%s" %s://%s:%s; mkdir -p -f "%s"; cd "%s"; put -O . "%s"; bye' \
-    "$eu" "$ep" "$otype" "$host" "$port" "$ed" "$ed" "$dump")
-  if ! lftp -c "$script" >/dev/null 2>&1; then
+  script=$(printf 'set cmd:fail-exit yes; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; mkdir -p -f "%s"; cd "%s"; put -O . "%s"; bye' \
+    "$eu" "$otype" "$host" "$port" "$ed" "$ed" "$dump")
+  if ! LFTP_PASSWORD="$pass" lftp -c "$script" >/dev/null 2>&1; then
     echo "offsite: upload of $name to $otype://$host:$port failed" >&2
     return 0
   fi
   # Remote retention: list newest-first, delete entries beyond $keep. Best-effort.
   local prune
-  prune=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s","%s" %s://%s:%s; cd "%s"; cls -1 --sort=date -r panel-*.sql.gz; bye' \
-    "$eu" "$ep" "$otype" "$host" "$port" "$ed")
+  prune=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s"; cls -1 --sort=date -r panel-*.sql.gz; bye' \
+    "$eu" "$otype" "$host" "$port" "$ed")
   local listing
-  if listing=$(lftp -c "$prune" 2>/dev/null); then
+  if listing=$(LFTP_PASSWORD="$pass" lftp -c "$prune" 2>/dev/null); then
     local old
     old=$(printf '%s\n' "$listing" | grep -E '^panel-.*\.sql\.gz$' | tail -n +$((keep + 1)))
     if [ -n "$old" ]; then
       local rm_script line
-      rm_script=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s","%s" %s://%s:%s; cd "%s";' \
-        "$eu" "$ep" "$otype" "$host" "$port" "$ed")
+      rm_script=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s";' \
+        "$eu" "$otype" "$host" "$port" "$ed")
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         rm_script+=$(printf ' rm -f "%s";' "$(lftp_escape "$line")")
       done <<< "$old"
       rm_script+=' bye'
-      lftp -c "$rm_script" >/dev/null 2>&1 || true
+      LFTP_PASSWORD="$pass" lftp -c "$rm_script" >/dev/null 2>&1 || true
     fi
   fi
   echo "offsite: uploaded $name to $otype://$host:$port/$dir" >&2
