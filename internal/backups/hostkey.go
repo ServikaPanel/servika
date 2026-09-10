@@ -112,8 +112,16 @@ func knownHostsFile(key string) (string, func(), error) {
 
 // sshHostKeyOptions are the ssh flags that turn the pinned file into the only
 // key the client will accept.
-func sshHostKeyOptions(knownHosts string) []string {
+//
+// hostAlias is the NAME the key was pinned under. The caller connects to the
+// address netguard vetted rather than to the name, so that the name is not
+// resolved a second time; ssh-keyscan wrote the pin under the name, so without
+// the alias ssh would look the address up in known_hosts, find nothing, and
+// refuse. ssh applies the same [host]:port bracketing ssh-keyscan used, so the
+// bare name is right for a default and a non-default port alike.
+func sshHostKeyOptions(knownHosts, hostAlias string) []string {
 	return []string{
+		"-o", "HostKeyAlias=" + hostAlias,
 		"-o", "StrictHostKeyChecking=yes",
 		"-o", "UserKnownHostsFile=" + knownHosts,
 		// Without this ssh also consults the root account's known_hosts, which

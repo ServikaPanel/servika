@@ -69,6 +69,52 @@ func CheckHost(host string) error {
 	return nil
 }
 
+// ResolveAllowed resolves host ONCE, vets every answer, and returns the concrete
+// address a caller should connect to.
+//
+// CheckHost validates the name and hands the bare name back, which is enough for
+// an in-process client whose dialer also carries DialControl. It is not enough
+// for an EXTERNAL tool: that tool resolves the name a second time, and between
+// the two lookups an attacker's authoritative server can answer with a public
+// address for the check and an internal one for the connection. Handing the tool
+// the vetted address instead removes the second lookup.
+//
+// The address comes back BARE, never bracketed: ssh takes an IPv6 address
+// without brackets and a URL authority takes it with them, so the caller that
+// knows which one it is building adds them.
+func ResolveAllowed(host string) (string, error) {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", fmt.Errorf("empty host")
+	}
+	// The opt-out disables every check in this package, this one included: an
+	// operator hosting the destination on a private network needs the name to
+	// reach it.
+	if AllowPrivateTargets() {
+		return host, nil
+	}
+	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
+		if blocked(ip) {
+			return "", ErrBlockedTarget
+		}
+		return ip.String(), nil
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return "", fmt.Errorf("resolve host: %w", err)
+	}
+	// Every answer is vetted, not just the one that gets used: a record mixing a
+	// public and a private address must be refused outright rather than
+	// silently reduced to its public half.
+	if slices.ContainsFunc(ips, blocked) {
+		return "", ErrBlockedTarget
+	}
+	if len(ips) == 0 {
+		return "", ErrBlockedTarget
+	}
+	return ips[0].String(), nil
+}
+
 // CheckGitURL extracts the host from a Git remote URL and validates it.
 // It handles https://, ssh://, and the scp-like git@host:path form.
 func CheckGitURL(raw string) error {

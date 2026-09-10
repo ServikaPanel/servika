@@ -41,6 +41,12 @@ type Destination struct {
 	LastUpload string `json:"last_upload,omitempty"`
 	LastStatus string `json:"last_status,omitempty"`
 	LastError  string `json:"last_error,omitempty"`
+
+	// dialHost is the concrete address netguard approved, filled by
+	// pinDialTarget for SFTP only. It is not persisted and not serialised: it is
+	// valid for one operation, because a name may legitimately resolve elsewhere
+	// tomorrow.
+	dialHost string
 }
 
 func validType(t string) bool {
@@ -90,12 +96,63 @@ func readDestination(ctx context.Context, db *sql.DB, domainID int64) (*Destinat
 	return d, nil
 }
 
-// lftpURL builds an lftp URL from the type, host, and port.
-func lftpURL(d *Destination) string {
-	if d.Type == "sftp" {
-		return fmt.Sprintf("sftp://%s:%d", d.Host, d.Port)
+// pinDialTarget vets the destination and, for SFTP, pins the address lftp will
+// connect to.
+//
+// netguard.CheckHost resolves the name and hands the bare name onward, and lftp
+// then resolves it a SECOND time. Between the two lookups a low-TTL record under
+// the customer's control can answer with a public address for the check and an
+// internal one for the connection, so the panel opens a connection to an address
+// it never approved.
+//
+// Only SFTP is pinned. An FTP destination is reached with ssl-force plus
+// verify-certificate, and a certificate names a host rather than an address, so
+// dialing the IP would mean turning the hostname check off: that trades a blind
+// TCP probe for a weaker transport, which is the worse of the two. SFTP has no
+// such cost, because the pinned host key is verified under HostKeyAlias.
+func pinDialTarget(d *Destination) error {
+	if d.Type != "sftp" {
+		if err := netguard.CheckHost(d.Host); err != nil {
+			return fmt.Errorf("destination host not permitted: %w", err)
+		}
+		return nil
 	}
-	return fmt.Sprintf("ftp://%s:%d", d.Host, d.Port)
+	address, err := netguard.ResolveAllowed(d.Host)
+	if err != nil {
+		return fmt.Errorf("destination host not permitted: %w", err)
+	}
+	d.dialHost = address
+	return nil
+}
+
+// dialTarget is the address a client should connect to: the pinned one when
+// pinDialTarget supplied it, the configured host otherwise. It is BARE, which is
+// the form ssh takes.
+func dialTarget(d *Destination) string {
+	if d.dialHost != "" {
+		return d.dialHost
+	}
+	return d.Host
+}
+
+// urlHost renders an address for a URL authority. A bare IPv6 address has to be
+// bracketed there, and a hostname or IPv4 address must not be.
+func urlHost(address string) string {
+	if strings.Contains(address, ":") {
+		return "[" + address + "]"
+	}
+	return address
+}
+
+// lftpURL builds an lftp URL from the type, host, and port. It uses the pinned
+// address when pinDialTarget supplied one, so the connection goes where netguard
+// looked rather than wherever the name resolves a second time.
+func lftpURL(d *Destination) string {
+	host := urlHost(dialTarget(d))
+	if d.Type == "sftp" {
+		return fmt.Sprintf("sftp://%s:%d", host, d.Port)
+	}
+	return fmt.Sprintf("ftp://%s:%d", host, d.Port)
 }
 
 // uploadToRemote: uploads the local tar.gz to the remote destination.
@@ -107,8 +164,8 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 	if objectStorageType(d.Type) {
 		return uploadS3Object(ctx, d, localPath, fileName)
 	}
-	if err := netguard.CheckHost(d.Host); err != nil {
-		return fmt.Errorf("destination host not permitted: %w", err)
+	if err := pinDialTarget(d); err != nil {
+		return err
 	}
 	if err := credentialSafe(d.Password); err != nil {
 		return err
@@ -292,8 +349,8 @@ func fetchRemoteInto(ctx context.Context, db *sql.DB, d *Destination, fileName, 
 	if objectStorageType(d.Type) {
 		return downloadS3Object(ctx, d, fileName, localPath)
 	}
-	if err := netguard.CheckHost(d.Host); err != nil {
-		return fmt.Errorf("destination host not permitted: %w", err)
+	if err := pinDialTarget(d); err != nil {
+		return err
 	}
 	if err := credentialSafe(d.Password); err != nil {
 		return err
@@ -327,7 +384,7 @@ func remoteSize(ctx context.Context, db *sql.DB, d *Destination, fileName string
 	if objectStorageType(d.Type) {
 		return headS3Object(ctx, d, fileName)
 	}
-	if err := netguard.CheckHost(d.Host); err != nil {
+	if err := pinDialTarget(d); err != nil {
 		return -1
 	}
 	if err := credentialSafe(d.Password); err != nil {
@@ -387,8 +444,8 @@ func deleteFromRemote(ctx context.Context, db *sql.DB, d *Destination, fileName 
 	if objectStorageType(d.Type) {
 		return deleteS3Object(ctx, d, fileName)
 	}
-	if err := netguard.CheckHost(d.Host); err != nil {
-		return fmt.Errorf("destination host not permitted: %w", err)
+	if err := pinDialTarget(d); err != nil {
+		return err
 	}
 	if err := credentialSafe(d.Password); err != nil {
 		return err
@@ -459,8 +516,15 @@ func lftpHostKeySettings(ctx context.Context, db *sql.DB, d *Destination) (strin
 	if err != nil {
 		return "", func() {}, err
 	}
+	// HostKeyAlias is what makes the pinned address and the pinned key agree. The
+	// URL carries the vetted IP so lftp cannot resolve the name a second time,
+	// and ssh-keyscan wrote the pin under the NAME, so without the alias ssh
+	// would look the address up in known_hosts, find nothing, and refuse. ssh
+	// applies the same [host]:port bracketing ssh-keyscan used, so the bare name
+	// is the right value for both default and non-default ports.
 	return `set sftp:auto-confirm no; ` +
 		`set sftp:connect-program "ssh -a -x` +
+		` -o HostKeyAlias=` + lftpEscape(d.Host) +
 		` -o StrictHostKeyChecking=yes` +
 		` -o UserKnownHostsFile=` + lftpEscape(path) +
 		` -o GlobalKnownHostsFile=/dev/null"; `, cleanup, nil
@@ -548,8 +612,8 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 	if objectStorageType(d.Type) {
 		return testS3Connection(ctx, d)
 	}
-	if err := netguard.CheckHost(d.Host); err != nil {
-		return fmt.Errorf("destination host not permitted: %w", err)
+	if err := pinDialTarget(d); err != nil {
+		return err
 	}
 	if err := credentialSafe(d.Password); err != nil {
 		return err
@@ -583,8 +647,11 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 			"-o", "PubkeyAuthentication=no",
 			"-o", "BatchMode=no",
 		}
-		args = append(args, sshHostKeyOptions(knownHosts)...)
-		args = append(args, "--", d.Host, "true")
+		args = append(args, sshHostKeyOptions(knownHosts, d.Host)...)
+		// The vetted address, not the name: ssh would otherwise resolve the name
+		// a THIRD time, after netguard and after ssh-keyscan, and the connection
+		// test is the path a customer can drive at will.
+		args = append(args, "--", dialTarget(d), "true")
 		out, err := sshpassCommand(ctx, d, args...).CombinedOutput()
 		if err != nil {
 			short := strings.TrimSpace(string(out))

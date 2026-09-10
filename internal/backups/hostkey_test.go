@@ -85,11 +85,15 @@ func TestScanHostKeyRefusesAnUnreachableHost(t *testing.T) {
 }
 
 func TestSSHHostKeyOptionsCloseEveryFallback(t *testing.T) {
-	joined := strings.Join(sshHostKeyOptions("/tmp/known"), " ")
+	joined := strings.Join(sshHostKeyOptions("/tmp/known", "backup.example.com"), " ")
 	for _, want := range []string{
 		"StrictHostKeyChecking=yes",
 		"UserKnownHostsFile=/tmp/known",
 		"GlobalKnownHostsFile=/dev/null",
+		// The connection goes to the vetted ADDRESS; the pin was written under
+		// the NAME. Without the alias ssh looks the address up, finds nothing,
+		// and refuses every connection.
+		"HostKeyAlias=backup.example.com",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("options %q are missing %q", joined, want)
