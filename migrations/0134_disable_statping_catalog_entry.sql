@@ -1,0 +1,21 @@
+-- Disable the Statping-ng catalog entry until a fixed build exists to point at.
+--
+-- The seeded pin 0.93.0 is inside the affected range of CVE-2026-50884
+-- (GO-2026-6299, GHSA-5442-mh7f-72px, CVSS 3.1 AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H):
+-- incorrect access control lets a low-privilege user escalate to Administrator
+-- and reach sensitive components.
+--
+-- Bumping the pin does NOT fix this. The range is {introduced: 0,
+-- last_affected: 0.93.0} with no fixed event, and 0.93.0 is upstream's newest
+-- release (June 2025), so there is nothing to upgrade to.
+--
+-- The panel put it in the catalog, pinned it and vouched for its digest; the
+-- digest proves integrity and says nothing about whether the artefact is
+-- vulnerable. Offering an install button for a status page any low-privilege
+-- user can take over is the part this corrects.
+--
+-- The row is kept rather than deleted, the same way the TeamSpeak and MinIO rows
+-- are kept and disabled: the entry stays visible with its version, so an
+-- operator sees what is being withheld and one UPDATE brings it back once
+-- upstream ships a fixed build.
+UPDATE host_app_catalog SET enabled = 0 WHERE code = 'statping';
