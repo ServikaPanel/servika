@@ -155,13 +155,21 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var sk string
+	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&sk); err != nil {
+		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).Scan(&sk, &isDemo); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		} else {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to read domain")
 		}
+		return
+	}
+	// A demo subscription is read-only, and this endpoint accepts mode=off: without
+	// the guard a demo tenant could turn a security control off on a live vhost.
+	// CustomerScope enforces ownership and suspension, never is_demo.
+	if isDemo == 1 {
+		httpx.WriteError(w, http.StatusForbidden, "the firewall cannot be changed for a demo subscription")
 		return
 	}
 
