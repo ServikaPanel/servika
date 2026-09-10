@@ -113,7 +113,11 @@
   "directives": {
     "pre": "Ce texte est ajouté à la fin du bloc ",
     "mid": ". Exemple : ",
-    "placeholder": "# Exemple :\nclient_max_body_size 200m;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+    "placeholder": "# Exemple :\nexpires 7d;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+  },
+  "uploadLimit": {
+    "label": "Limite d’upload",
+    "fromPlan": "définie par votre offre"
   },
   "success": {
     "backendChanged": "✓ Serveur web changé en « {{name}} »",

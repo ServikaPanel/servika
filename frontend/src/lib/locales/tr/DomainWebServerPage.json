@@ -113,7 +113,11 @@
   "directives": {
     "pre": "Bu metin, ",
     "mid": " bloğunun sonuna eklenir. Örnek: ",
-    "placeholder": "# Örnek:\nclient_max_body_size 200m;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+    "placeholder": "# Örnek:\nexpires 7d;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+  },
+  "uploadLimit": {
+    "label": "Upload limiti",
+    "fromPlan": "planınız tarafından belirlenir"
   },
   "success": {
     "backendChanged": "✓ Web sunucusu \"{{name}}\" olarak değiştirildi",

@@ -1632,18 +1632,23 @@ func (h *Handlers) applyPlanNginxDefaults(ctx context.Context, domainID, planID 
 		log.Printf("read plan nginx defaults (plan=%d): %v", planID, err)
 		return
 	}
-	extraDirectives := ""
+	// The ceiling goes into its OWN column, not into extra_directives. That column
+	// is the one the customer's nginx-settings save replaces wholesale, so a plan
+	// value written there as text held only until the customer sent one request.
+	clientMaxBody := ""
 	if clientMaxBodyMB > 0 {
-		extraDirectives = "client_max_body_size " + strconv.Itoa(clientMaxBodyMB) + "m;\n"
+		clientMaxBody = strconv.Itoa(clientMaxBodyMB) + "m"
 	}
+	extraDirectives := ""
 	if strings.TrimSpace(planDirectives) != "" {
-		extraDirectives += planDirectives
+		extraDirectives = planDirectives
 	}
 	if _, err := h.DB.ExecContext(ctx,
-		`INSERT INTO nginx_settings(domain_id, subdomain_id, fastcgi_cache, extra_directives)
-		 VALUES(?,0,?,?)
-		 ON DUPLICATE KEY UPDATE fastcgi_cache=VALUES(fastcgi_cache), extra_directives=VALUES(extra_directives)`,
-		domainID, fastCGICache, extraDirectives); err != nil {
+		`INSERT INTO nginx_settings(domain_id, subdomain_id, fastcgi_cache, extra_directives, client_max_body)
+		 VALUES(?,0,?,?,?)
+		 ON DUPLICATE KEY UPDATE fastcgi_cache=VALUES(fastcgi_cache),
+		    extra_directives=VALUES(extra_directives), client_max_body=VALUES(client_max_body)`,
+		domainID, fastCGICache, extraDirectives, clientMaxBody); err != nil {
 		log.Printf("seed nginx_settings (domain=%d): %v", domainID, err)
 		return
 	}

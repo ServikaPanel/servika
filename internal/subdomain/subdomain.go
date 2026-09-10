@@ -398,7 +398,7 @@ func vhost(fqdn, docroot, socket, protected string, web webRender) string {
 
     root %[2]s;
     index index.php index.html index.htm;
-
+%[8]s
     access_log /var/log/nginx/%[1]s.access.log;
     error_log  /var/log/nginx/%[1]s.error.log warn;
 
@@ -431,7 +431,7 @@ func vhost(fqdn, docroot, socket, protected string, web webRender) string {
 %[7]s    # Servika subdomain — %[1]s
 }
 `, fqdn, docroot, protected, web.Headers,
-		backendBlock(socket, web, false), web.BrowserCache, web.Extra)
+		backendBlock(socket, web, false), web.BrowserCache, web.Extra, web.ClientMaxBody)
 }
 
 // backendBlock renders the request-serving locations for a scope. A static backend

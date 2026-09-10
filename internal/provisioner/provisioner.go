@@ -770,7 +770,9 @@ server {
     root {{.WebRoot}};
     index index.php index.html index.htm;
     disable_symlinks if_not_owner;
-
+{{if .ClientMaxBody}}    # ---- Request body ceiling (managed by the panel, from the plan) ----
+    client_max_body_size {{.ClientMaxBody}};
+{{end}}
     # ---- Security headers (managed by the panel) ----
 {{.SecHeaders}}
 {{.ModSec}}{{.MaintenanceBlock}}{{.GeoBlock}}{{.RateLimit}}{{.IPRules}}{{.DenyBlocks}}{{.HotlinkLocation}}{{.WebmailBlock}}{{.AutoconfigBlock}}
@@ -849,7 +851,9 @@ server {
     root {{.WebRoot}};
     index index.php index.html index.htm;
     disable_symlinks if_not_owner;
-
+{{if .ClientMaxBody}}    # ---- Request body ceiling (managed by the panel, from the plan) ----
+    client_max_body_size {{.ClientMaxBody}};
+{{end}}
     access_log /var/log/nginx/{{.DomainName}}.access.log;
     error_log  /var/log/nginx/{{.DomainName}}.error.log warn;
 
@@ -1137,6 +1141,15 @@ type VhostOpts struct {
 
 	// User-provided extra directives.
 	ExtraDirectives string
+
+	// ClientMaxBody is the plan's request-body ceiling as a raw nginx size
+	// string ("8192m"), empty when the plan states none.
+	//
+	// It is rendered by the panel rather than carried inside ExtraDirectives,
+	// because that field is the customer's own text and the ceiling is an
+	// entitlement. client_max_body_size is on the forbidden list, so the
+	// customer's block cannot state a second one for nginx to prefer.
+	ClientMaxBody string
 
 	// Full raw custom vhost, enabled only for administrator-managed domains.
 	CustomVhostContent string
@@ -2693,14 +2706,14 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 
 	var b1, b2, b3, b4, b5, b6, b7, b8, bFC, bBC int
 	var maxAge, fastCgiCacheMinutes, browserCacheDays int
-	var extraDirectives string
+	var extraDirectives, clientMaxBody string
 	err := db.QueryRow(
 		`SELECT hdr_x_content_type, hdr_x_xss, hdr_referrer, hdr_permissions,
 		        hdr_csp_upgrade, hdr_hsts, hsts_max_age, hsts_subdomains, hsts_preload, extra_directives,
-		        fastcgi_cache, fastcgi_cache_minutes, browser_cache, browser_cache_days
+		        fastcgi_cache, fastcgi_cache_minutes, browser_cache, browser_cache_days, client_max_body
 		 FROM nginx_settings WHERE domain_id=? AND subdomain_id=0`, domainID).
 		Scan(&b1, &b2, &b3, &b4, &b5, &b6, &maxAge, &b7, &b8, &extraDirectives,
-			&bFC, &fastCgiCacheMinutes, &bBC, &browserCacheDays)
+			&bFC, &fastCgiCacheMinutes, &bBC, &browserCacheDays, &clientMaxBody)
 	if err == nil {
 		opts.HdrXContentType = b1 == 1
 		opts.HdrXXSS = b2 == 1
@@ -2712,6 +2725,7 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 		opts.HSTSSubdomains = b7 == 1
 		opts.HSTSPreload = b8 == 1
 		opts.ExtraDirectives = extraDirectives
+		opts.ClientMaxBody = clientMaxBody
 		opts.FastCgiCache = bFC == 1
 		opts.FastCgiCacheMinutes = fastCgiCacheMinutes
 		opts.BrowserCache = bBC == 1

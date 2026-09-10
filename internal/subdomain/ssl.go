@@ -267,6 +267,7 @@ server {
 
     root %[2]s;
     index index.php index.html index.htm;
+%[10]s
     access_log /var/log/nginx/%[1]s.access.log;
     error_log  /var/log/nginx/%[1]s.error.log warn;
 %[6]s
@@ -279,5 +280,5 @@ server {
 
 %[9]s}
 `, fqdn, docroot, certPath, keyPath, protected, web.Headers,
-		backendBlock(socket, web, true), web.BrowserCache, web.Extra)
+		backendBlock(socket, web, true), web.BrowserCache, web.Extra, web.ClientMaxBody)
 }

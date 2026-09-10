@@ -29,8 +29,13 @@ func TestDangerousNginxDirectiveRejectsPrivilegedOperations(t *testing.T) {
 		{name: "local file disclosure", directives: "location /secret { alias /etc/; }", want: "alias"},
 		{name: "module loading", directives: "load_module modules/ngx_http_perl_module.so;", want: "load_module"},
 		{name: "Lua execution", directives: "content_by_lua_block { ngx.say('unsafe') }", want: "content_by_lua_block"},
-		{name: "commented directive", directives: "# proxy_pass http://127.0.0.1;\nclient_max_body_size 10m;", want: ""},
-		{name: "safe directive", directives: "client_max_body_size 10m;\nadd_header X-Test safe;", want: ""},
+		{name: "commented directive", directives: "# proxy_pass http://127.0.0.1;\nadd_header X-Test safe;", want: ""},
+		{name: "safe directive", directives: "expires 7d;\nadd_header X-Test safe;", want: ""},
+		// The request-body ceiling belongs to the plan and is rendered by the
+		// panel from its own column. A tenant stating one would both bypass a
+		// billed tier boundary and spool an oversized body into the root-owned
+		// client_body_temp_path, outside their XFS quota.
+		{name: "plan upload ceiling", directives: "client_max_body_size 10240m;", want: "client_max_body_size"},
 		{name: "quoted hash does not hide alias", directives: `add_header X-Test "#"; alias /etc/;`, want: "alias"},
 		{name: "hash inside quotes is literal", directives: `add_header X-Marker "a#b safe";`, want: ""},
 		{name: "quoted directive name still caught", directives: `"alias" /etc/;`, want: "alias"},

@@ -28,6 +28,11 @@ type webRender struct {
 	FastCgiCache string // fastcgi_cache_* directives inside the php location
 	BrowserCache string // static-asset location block, empty when browser caching is off
 	Extra        string // operator-provided directives
+	// ClientMaxBody is the rendered client_max_body_size line for this scope's
+	// plan ceiling, empty when the plan states none. It is separate from Extra
+	// because Extra is the customer's own text and the ceiling is an entitlement
+	// the customer must not be able to state.
+	ClientMaxBody string
 	// Static reports that the subdomain serves files only, so the vhost must not
 	// pass anything to PHP-FPM.
 	Static bool
@@ -141,6 +146,10 @@ func renderWebSettings(s nginxset.Settings, fqdn string, https bool) webRender {
 
 	if directives := strings.TrimSpace(s.ExtraDirectives); directives != "" {
 		out.Extra = "    # ---- Additional directives (user-provided) ----\n    " + directives + "\n"
+	}
+	if ceiling := strings.TrimSpace(s.ClientMaxBody); ceiling != "" {
+		out.ClientMaxBody = "    # ---- Request body ceiling (managed by the panel, from the plan) ----\n" +
+			"    client_max_body_size " + ceiling + ";\n"
 	}
 	return out
 }

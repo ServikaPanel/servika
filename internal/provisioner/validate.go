@@ -127,6 +127,12 @@ var forbiddenNginxDirectives = map[string]bool{
 	"ssl_certificate": true, "ssl_certificate_key": true, "ssl_trusted_certificate": true,
 	"error_log": true, "access_log": true, "fastcgi_param": true,
 	"auth_basic_user_file": true, "secure_link_secret": true,
+	// The request-body ceiling is the PLAN's, rendered by the panel from
+	// nginx_settings.client_max_body. A tenant stating one here would both bypass
+	// a billed tier boundary and let nginx spool an oversized body into
+	// client_body_temp_path, which is root-owned and outside the tenant's XFS
+	// quota. An operator states the plan's value in the plan's own field.
+	"client_max_body_size": true,
 }
 
 // DangerousNginxDirective returns the first forbidden custom directive name, or

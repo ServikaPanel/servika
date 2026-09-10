@@ -63,7 +63,7 @@
     "saving": "Guardando…",
     "confirmReturn": "¿Devolver este archivo a la gestión estándar del panel?\n\nSus ediciones NO se eliminan — volver al modo personalizado reanuda donde lo dejó."
   },
-  "directives": { "pre": "Este texto se añade al final del bloque ", "mid": ". Ejemplo: ", "placeholder": "# Ejemplo:\nclient_max_body_size 200m;\nrewrite ^/antiguo/(.*)$ /nuevo/$1 permanent;" },
+  "directives": { "pre": "Este texto se añade al final del bloque ", "mid": ". Ejemplo: ", "placeholder": "# Ejemplo:\nexpires 7d;\nrewrite ^/antiguo/(.*)$ /nuevo/$1 permanent;" },"uploadLimit":{"label":"Límite de upload","fromPlan":"definido por tu plan"},
   "success": { "backendChanged": "✓ Servidor web cambiado a «{{name}}»", "docRootUpdated": "✓ Directorio raíz actualizado y nginx recargado", "settingsApplied": "✓ Configuración aplicada y nginx recargado", "customVhostSaved": "✓ Vhost personalizado guardado y nginx recargado", "returnedToPanel": "✓ Vuelto a la gestión del panel, vhost regenerado" },
   "errors": { "changeBackendFailed": "No se pudo cambiar el backend", "updateDocRootFailed": "No se pudo actualizar el directorio raíz", "saveSettingsFailed": "No se pudo guardar la configuración", "saveCustomVhostFailed": "No se pudo guardar el vhost personalizado", "returnManagedFailed": "No se pudo volver al vhost gestionado" }
 }

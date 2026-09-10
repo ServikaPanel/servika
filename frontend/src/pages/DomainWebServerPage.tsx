@@ -27,6 +27,10 @@ type Settings = {
   browser_cache: boolean
   browser_cache_days: number
   extra_directives: string
+  // Read-only. The plan's request-body ceiling as a raw nginx size string
+  // ("8192m"), empty when the plan states none. The save path re-reads it from
+  // the stored value, so sending a different one changes nothing.
+  client_max_body: string
 }
 
 type Response = { domain_name: string; settings: Settings }
@@ -475,8 +479,18 @@ export default function DomainWebServerPage() {
 
           {/* Additional directives */}
           <Card title={t('cards.additionalDirectives')}>
+            {/* The request-body ceiling comes from the plan and is rendered by the
+                panel, so it is shown here rather than left as a value that simply
+                vanished from the editable text. */}
+            {settings.client_max_body && (
+              <div className="flex items-baseline gap-2 mb-3 pb-3 border-b border-slate-200 dark:border-slate-700">
+                <span className="text-xs text-slate-500 dark:text-slate-500">{t('uploadLimit.label')}</span>
+                <code className="font-mono text-sm text-slate-900 dark:text-slate-100">{settings.client_max_body}</code>
+                <span className="text-xs text-slate-400 dark:text-slate-500">{t('uploadLimit.fromPlan')}</span>
+              </div>
+            )}
             <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
-              {t('directives.pre')}<code className="font-mono">server</code>{t('directives.mid')}<code className="font-mono">client_max_body_size 200m;</code>
+              {t('directives.pre')}<code className="font-mono">server</code>{t('directives.mid')}<code className="font-mono">expires 7d;</code>
             </p>
             <textarea value={settings.extra_directives} onChange={event => updateSetting('extra_directives', event.target.value)}
               rows={6}

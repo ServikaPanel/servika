@@ -69,15 +69,46 @@ func TestDisabledSecurityHeadersAreNotRendered(t *testing.T) {
 }
 
 func TestSubdomainInheritsParentExtraDirectivesUntilConfigured(t *testing.T) {
-	// The plan's client_max_body_size reaches a domain through the extra_directives
-	// of its own nginx_settings row. A subdomain with no row of its own must render
-	// that same directive, or it would reject uploads the parent accepts.
+	// A subdomain with no row of its own renders the parent's directive block, or
+	// it would answer differently from the domain it belongs to.
 	parent := nginxset.Defaults()
-	parent.ExtraDirectives = "client_max_body_size 64m;"
+	parent.ExtraDirectives = "add_header X-Parent yes;"
 	web := renderWebSettings(parent, "app.example.com", false)
 	config := vhost("app.example.com", "/home/c_example_com/subdomains/app.example.com",
 		"/run/php-fpm-c_example_com/sub-3.sock", "", web)
-	if !strings.Contains(config, "client_max_body_size 64m;") {
-		t.Error("the subdomain vhost dropped the inherited upload limit")
+	if !strings.Contains(config, "add_header X-Parent yes;") {
+		t.Error("the subdomain vhost dropped the inherited directives")
+	}
+}
+
+// The plan's ceiling reaches a subdomain through its own column, not through the
+// customer-writable directive block. A subdomain that dropped it would reject
+// uploads the parent accepts.
+func TestSubdomainRendersTheInheritedUploadCeiling(t *testing.T) {
+	parent := nginxset.Defaults()
+	parent.ClientMaxBody = "8192m"
+	web := renderWebSettings(parent, "app.example.com", false)
+
+	plain := vhost("app.example.com", "/home/c_example_com/subdomains/app.example.com",
+		"/run/php-fpm-c_example_com/sub-3.sock", "", web)
+	if got := strings.Count(plain, "client_max_body_size 8192m;"); got != 1 {
+		t.Errorf("the plain subdomain vhost states the ceiling %d times, want exactly 1", got)
+	}
+
+	secure := vhostSSL("app.example.com", "/home/c_example_com/subdomains/app.example.com",
+		"/run/php-fpm-c_example_com/sub-3.sock", "/etc/ssl/x.pem", "/etc/ssl/x.key", "", web)
+	if got := strings.Count(secure, "client_max_body_size 8192m;"); got != 1 {
+		t.Errorf("the HTTPS subdomain vhost states the ceiling %d times, want exactly 1", got)
+	}
+}
+
+// A plan that states no ceiling must leave the directive out entirely rather than
+// render an empty one, which nginx refuses to load.
+func TestSubdomainWithNoCeilingStatesNoDirective(t *testing.T) {
+	web := renderWebSettings(nginxset.Defaults(), "app.example.com", false)
+	config := vhost("app.example.com", "/home/c_example_com/subdomains/app.example.com",
+		"/run/php-fpm-c_example_com/sub-3.sock", "", web)
+	if strings.Contains(config, "client_max_body_size") {
+		t.Error("a subdomain with no plan ceiling still states client_max_body_size")
 	}
 }

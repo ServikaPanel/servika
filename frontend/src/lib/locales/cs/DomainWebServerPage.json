@@ -113,7 +113,11 @@
   "directives": {
     "pre": "Tento text se připojí na konec bloku ",
     "mid": ". Příklad: ",
-    "placeholder": "# Příklad:\nclient_max_body_size 200m;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+    "placeholder": "# Příklad:\nexpires 7d;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+  },
+  "uploadLimit": {
+    "label": "Limit uploadu",
+    "fromPlan": "určeno vaším tarifem"
   },
   "success": {
     "backendChanged": "✓ Webový server změněn na „{{name}}“",

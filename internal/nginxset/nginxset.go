@@ -35,6 +35,16 @@ type Settings struct {
 	BrowserCacheDays    int  `json:"browser_cache_days"`
 
 	ExtraDirectives string `json:"extra_directives"`
+
+	// ClientMaxBody is the plan's request-body ceiling as a raw nginx size
+	// string ("8192m"), empty when the plan states none.
+	//
+	// It is an ENTITLEMENT, not a setting: it is served so the screen can show
+	// what the plan allows, and the save path overwrites whatever arrives in it
+	// with the value already stored. It lived inside ExtraDirectives before,
+	// which is the column the customer's own text replaces wholesale, so the
+	// tier's limit held only until somebody sent one request.
+	ClientMaxBody string `json:"client_max_body"`
 }
 
 // Defaults returns the default nginx settings.
@@ -46,6 +56,7 @@ func Defaults() Settings {
 		FastCgiCache: false, FastCgiCacheMinutes: 60,
 		BrowserCache: true, BrowserCacheDays: 30,
 		ExtraDirectives: "",
+		ClientMaxBody:   "",
 	}
 }
 
@@ -64,10 +75,11 @@ func Get(ctx context.Context, db *sql.DB, domainID, subdomainID int64) (Settings
 		`SELECT hdr_x_content_type, hdr_x_xss, hdr_referrer, hdr_permissions,
 		        hdr_csp_upgrade, hdr_hsts, hsts_max_age, hsts_subdomains, hsts_preload,
 		        extra_directives, fastcgi_cache, fastcgi_cache_minutes,
-		        browser_cache, browser_cache_days
+		        browser_cache, browser_cache_days, client_max_body
 		 FROM nginx_settings WHERE domain_id=? AND subdomain_id=?`, domainID, subdomainID).
 		Scan(&b1, &b2, &b3, &b4, &b5, &b6, &s.HSTSMaxAge, &b7, &b8,
-			&s.ExtraDirectives, &bFC, &s.FastCgiCacheMinutes, &bBC, &s.BrowserCacheDays)
+			&s.ExtraDirectives, &bFC, &s.FastCgiCacheMinutes, &bBC, &s.BrowserCacheDays,
+			&s.ClientMaxBody)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, nil
 	}
@@ -114,8 +126,9 @@ func Save(ctx context.Context, db *sql.DB, domainID, subdomainID int64, s Settin
 	_, err := db.ExecContext(ctx,
 		`INSERT INTO nginx_settings(domain_id, subdomain_id, hdr_x_content_type, hdr_x_xss, hdr_referrer,
 		    hdr_permissions, hdr_csp_upgrade, hdr_hsts, hsts_max_age, hsts_subdomains, hsts_preload,
-		    extra_directives, fastcgi_cache, fastcgi_cache_minutes, browser_cache, browser_cache_days)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		    extra_directives, fastcgi_cache, fastcgi_cache_minutes, browser_cache, browser_cache_days,
+		    client_max_body)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		 ON DUPLICATE KEY UPDATE
 		    hdr_x_content_type=VALUES(hdr_x_content_type),
 		    hdr_x_xss=VALUES(hdr_x_xss),
@@ -130,12 +143,13 @@ func Save(ctx context.Context, db *sql.DB, domainID, subdomainID int64, s Settin
 		    fastcgi_cache=VALUES(fastcgi_cache),
 		    fastcgi_cache_minutes=VALUES(fastcgi_cache_minutes),
 		    browser_cache=VALUES(browser_cache),
-		    browser_cache_days=VALUES(browser_cache_days)`,
+		    browser_cache_days=VALUES(browser_cache_days),
+		    client_max_body=VALUES(client_max_body)`,
 		domainID, subdomainID, b2i(s.HdrXContentType), b2i(s.HdrXXSS), b2i(s.HdrReferrer),
 		b2i(s.HdrPermissions), b2i(s.HdrCSPUpgrade), b2i(s.HdrHSTS),
 		s.HSTSMaxAge, b2i(s.HSTSSubdomains), b2i(s.HSTSPreload),
 		s.ExtraDirectives, b2i(s.FastCgiCache), s.FastCgiCacheMinutes,
-		b2i(s.BrowserCache), s.BrowserCacheDays)
+		b2i(s.BrowserCache), s.BrowserCacheDays, s.ClientMaxBody)
 	return err
 }
 
@@ -303,6 +317,22 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
+	// The plan's request-body ceiling is an entitlement, not a setting. It is
+	// re-read from the scope's own state and written back, so the customer's
+	// payload can neither raise it nor drop it.
+	//
+	// Reading it here rather than leaving the column out of the write is
+	// deliberate: GetScoped inherits the domain's value only while a subdomain
+	// has NO row of its own, so the FIRST save of a subdomain would otherwise
+	// insert the column's empty default and silently lose the ceiling it was
+	// inheriting.
+	current, err := GetScoped(r.Context(), h.DB, id, sid)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to load nginx settings")
+		return
+	}
+	req.Settings.ClientMaxBody = current.ClientMaxBody
+
 	if directive := provisioner.DangerousNginxDirective(req.Settings.ExtraDirectives); directive != "" {
 		httpx.WriteError(w, http.StatusBadRequest, "nginx directive is not allowed")
 		return

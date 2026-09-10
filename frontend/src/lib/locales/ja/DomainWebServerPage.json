@@ -113,7 +113,11 @@
   "directives": {
     "pre": "このテキストは ",
     "mid": " ブロックの末尾に追加されます。例: ",
-    "placeholder": "# 例:\nclient_max_body_size 200m;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+    "placeholder": "# 例:\nexpires 7d;\nrewrite ^/old/(.*)$ /new/$1 permanent;"
+  },
+  "uploadLimit": {
+    "label": "アップロード上限",
+    "fromPlan": "ご利用のプランで決まります"
   },
   "success": {
     "backendChanged": "✓ Web サーバーを「{{name}}」に変更しました",
