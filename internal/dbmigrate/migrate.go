@@ -112,6 +112,13 @@ func appliedChecksums(d *sql.DB) (map[string]string, error) {
 		}
 		applied[name] = sum
 	}
+	// database/sql reports a connection drop, a driver error or a context
+	// deadline that arrives MID-ITERATION only here. Without this check the map
+	// comes back SHORT, every migration whose row was not read counts as
+	// unapplied, and the runner re-applies it. MariaDB gives DDL an implicit
+	// commit, so the statements that succeed before the first duplicate-object
+	// error stay applied, the schema_migrations INSERT never runs, and the panel
+	// then refuses to start on every later boot naming a file that is correct.
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read applied rows: %w", err)
 	}
