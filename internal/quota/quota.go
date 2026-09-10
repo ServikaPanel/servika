@@ -4,6 +4,7 @@ package quota
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 )
@@ -48,12 +49,17 @@ func (e *LimitError) Error() string { return e.Message }
 // CheckResellerCustomerAllowed reports whether a reseller may create one more customer.
 func CheckResellerCustomerAllowed(ctx context.Context, db *sql.DB, resellerUserID int64) error {
 	maximum, err := resellerLimit(ctx, db, resellerUserID, "max_customer")
-	if err != nil || maximum <= 0 {
+	if err != nil {
+		return err // FAIL-CLOSED: never bypass the limit gate on a read error.
+	}
+	if maximum <= 0 {
 		return nil
 	}
 	var current int
-	_ = db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM customers WHERE owner_user_id=?`, resellerUserID).Scan(&current)
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM customers WHERE owner_user_id=?`, resellerUserID).Scan(&current); err != nil {
+		return err // FAIL-CLOSED: an unread count is not proof the ceiling has room.
+	}
 	if current >= maximum {
 		return &LimitError{Message: fmt.Sprintf("reseller limit reached: at most %d customers", maximum)}
 	}
@@ -66,14 +72,19 @@ func CheckResellerCustomerAllowed(ctx context.Context, db *sql.DB, resellerUserI
 // customer, this caps the sum across all of the reseller's customers. Both apply.
 func CheckResellerDomainAllowed(ctx context.Context, db *sql.DB, resellerUserID int64) error {
 	maximum, err := resellerLimit(ctx, db, resellerUserID, "max_domain")
-	if err != nil || maximum <= 0 {
+	if err != nil {
+		return err // FAIL-CLOSED: never bypass the limit gate on a read error.
+	}
+	if maximum <= 0 {
 		return nil
 	}
 	var current int
-	_ = db.QueryRowContext(ctx, `
+	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*)
 		FROM domains d JOIN customers c ON c.id = d.customer_id
-		WHERE c.owner_user_id = ?`, resellerUserID).Scan(&current)
+		WHERE c.owner_user_id = ?`, resellerUserID).Scan(&current); err != nil {
+		return err // FAIL-CLOSED: an unread count is not proof the ceiling has room.
+	}
 	if current >= maximum {
 		return &LimitError{Message: fmt.Sprintf("reseller limit reached: at most %d domains", maximum)}
 	}
@@ -90,14 +101,19 @@ func CheckResellerDomainAllowed(ctx context.Context, db *sql.DB, resellerUserID 
 // of the tenant-level XFS quota, not this check.
 func CheckResellerDiskAllowed(ctx context.Context, db *sql.DB, resellerUserID int64) error {
 	maximum, err := resellerLimit(ctx, db, resellerUserID, "disk_quota_mb")
-	if err != nil || maximum <= 0 {
+	if err != nil {
+		return err // FAIL-CLOSED: never bypass the limit gate on a read error.
+	}
+	if maximum <= 0 {
 		return nil
 	}
 	var usedKB int64
-	_ = db.QueryRowContext(ctx, `
+	if err := db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(d.size_kb), 0)
 		FROM domains d JOIN customers c ON c.id = d.customer_id
-		WHERE c.owner_user_id = ?`, resellerUserID).Scan(&usedKB)
+		WHERE c.owner_user_id = ?`, resellerUserID).Scan(&usedKB); err != nil {
+		return err // FAIL-CLOSED: an unread total is not proof the quota has room.
+	}
 	usedMB := int(usedKB / 1024)
 	if usedMB >= maximum {
 		return &LimitError{Message: fmt.Sprintf("reseller disk quota full: %d MB / %d MB", usedMB, maximum)}
@@ -111,14 +127,19 @@ func CheckResellerDiskAllowed(ctx context.Context, db *sql.DB, resellerUserID in
 // reflects the last measurement rather than a live figure.
 func CheckResellerTrafficAllowed(ctx context.Context, db *sql.DB, resellerUserID int64) error {
 	maximum, err := resellerLimit(ctx, db, resellerUserID, "traffic_quota_mb")
-	if err != nil || maximum <= 0 {
+	if err != nil {
+		return err // FAIL-CLOSED: never bypass the limit gate on a read error.
+	}
+	if maximum <= 0 {
 		return nil
 	}
 	var usedKB int64
-	_ = db.QueryRowContext(ctx, `
+	if err := db.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(d.traffic_kb), 0)
 		FROM domains d JOIN customers c ON c.id = d.customer_id
-		WHERE c.owner_user_id = ?`, resellerUserID).Scan(&usedKB)
+		WHERE c.owner_user_id = ?`, resellerUserID).Scan(&usedKB); err != nil {
+		return err // FAIL-CLOSED: an unread total is not proof the quota has room.
+	}
 	usedMB := int(usedKB / 1024)
 	if usedMB >= maximum {
 		return &LimitError{Message: fmt.Sprintf("reseller traffic quota full: %d MB / %d MB", usedMB, maximum)}
@@ -177,8 +198,16 @@ func resellerLimit(ctx context.Context, db *sql.DB, resellerUserID int64, column
 	var v int
 	err := db.QueryRowContext(ctx,
 		`SELECT `+column+` FROM reseller_limits WHERE user_id=?`, resellerUserID).Scan(&v)
+	// ONLY a missing row means unlimited. A blanket `err != nil` here could not
+	// tell that apart from a connection failure, a timeout or a missing column,
+	// so one unhealthy moment lifted max_customer, max_domain, disk_quota_mb and
+	// traffic_quota_mb at once. The gate is checked at creation time only, so the
+	// excess stays after the database recovers.
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
 	if err != nil {
-		return 0, nil // No row = unlimited.
+		return 0, err
 	}
 	return v, nil
 }
