@@ -25,6 +25,14 @@ type purgeRecorder struct {
 	steps   []string
 	failOn  string // a statement containing this substring returns an error
 	diskRan bool
+
+	// otherMailDomains is what the shared-root check sees: how many mail_domains
+	// rows still name this system user once the purged one is committed away.
+	otherMailDomains int64
+	// domainMaildirs is what the mailboxes lookup answers with, and
+	// maildirsRemoved is what the per-Maildir remover was asked to delete.
+	domainMaildirs  []string
+	maildirsRemoved []string
 }
 
 func (r *purgeRecorder) record(step string) {
@@ -90,6 +98,22 @@ func (c *purgeConn) QueryContext(_ context.Context, query string, _ []driver.Nam
 			values:  [][]driver.Value{{"c_example", int64(0)}},
 		}, nil
 	}
+	if strings.Contains(query, "COUNT(*) FROM mail_domains WHERE system_user=?") {
+		c.recorder.mu.Lock()
+		others := c.recorder.otherMailDomains
+		c.recorder.mu.Unlock()
+		return &recorderRows{columns: []string{"c"}, values: [][]driver.Value{{others}}}, nil
+	}
+	if strings.Contains(query, "SELECT maildir FROM mailboxes WHERE domain_id=?") {
+		c.recorder.mu.Lock()
+		list := append([]string(nil), c.recorder.domainMaildirs...)
+		c.recorder.mu.Unlock()
+		values := make([][]driver.Value, 0, len(list))
+		for _, maildir := range list {
+			values = append(values, []driver.Value{maildir})
+		}
+		return &recorderRows{columns: []string{"maildir"}, values: values}, nil
+	}
 	return &recorderRows{}, nil
 }
 
@@ -133,14 +157,20 @@ func purgeHarness(t *testing.T, failOn string, diskErr error) (*sql.DB, *purgeRe
 		purgeStateMu.Unlock()
 	})
 
-	original := removeMailFiles
+	originalRoot, originalMaildirs := removeMailFiles, removeMaildirs
 	removeMailFiles = func(string) error {
 		recorder.mu.Lock()
 		recorder.diskRan = true
 		recorder.mu.Unlock()
 		return diskErr
 	}
-	t.Cleanup(func() { removeMailFiles = original })
+	removeMaildirs = func(_ string, maildirs []string) error {
+		recorder.mu.Lock()
+		recorder.maildirsRemoved = append(recorder.maildirsRemoved, maildirs...)
+		recorder.mu.Unlock()
+		return diskErr
+	}
+	t.Cleanup(func() { removeMailFiles, removeMaildirs = originalRoot, originalMaildirs })
 
 	db, err := sql.Open("mail_purge_recorder", name)
 	if err != nil {
@@ -171,8 +201,9 @@ func TestPurgeDeletesEveryNonCascadingTableInOneTransaction(t *testing.T) {
 	if len(steps) == 0 || steps[0] != "BEGIN" {
 		t.Fatalf("the work did not start in a transaction: %v", steps)
 	}
-	if steps[len(steps)-1] != "COMMIT" {
-		t.Errorf("the transaction was not committed: %v", steps)
+	commit := indexOfStep(steps, "COMMIT")
+	if commit < 0 {
+		t.Fatalf("the transaction was not committed: %v", steps)
 	}
 	for _, table := range []string{
 		"mail_aliases", "mail_send_log", "mail_spam_settings",
@@ -187,11 +218,73 @@ func TestPurgeDeletesEveryNonCascadingTableInOneTransaction(t *testing.T) {
 	if mailDomains < 0 {
 		t.Fatalf("mail_domains was never deleted: %v", steps)
 	}
-	if mailDomains != len(steps)-2 {
+	if mailDomains != commit-1 {
 		t.Errorf("mail_domains is not the last delete before COMMIT: %v", steps)
 	}
 	if !recorder.diskRan {
 		t.Error("the files were never removed")
+	}
+}
+
+// An addon domain carries its PARENT's system_user, and mail can be enabled on
+// it, so /home/<system_user>/mail is not the property of one domain. Removing the
+// root from an addon's purge destroyed the parent's message stores and every
+// other addon's, while their mailboxes rows survived: the deletes are keyed on
+// domain_id.
+func TestPurgeLeavesASharedMailRootAloneAndRemovesOnlyItsOwnMaildirs(t *testing.T) {
+	db, recorder := purgeHarness(t, "", nil)
+	recorder.otherMailDomains = 1
+	recorder.domainMaildirs = []string{"/home/c_example/mail/info", "/home/c_example/mail/sales"}
+
+	diskFailed, err := PurgeDomain(context.Background(), db, 7, "c_example")
+	if err != nil {
+		t.Fatalf("PurgeDomain: %v", err)
+	}
+	if diskFailed {
+		t.Error("diskFailed is set although the removal succeeded")
+	}
+	if recorder.diskRan {
+		t.Fatal("the whole mail root was removed although another mail domain still uses this system user")
+	}
+	if got := strings.Join(recorder.maildirsRemoved, ","); got != "/home/c_example/mail/info,/home/c_example/mail/sales" {
+		t.Errorf("removed maildirs = %q, want the purged domain's own two", got)
+	}
+}
+
+// The last mail domain on a system user still takes the whole root, which is
+// what reclaims a Maildir left behind by a mailbox deleted earlier and the
+// compiled sieve beside it.
+func TestPurgeRemovesTheWholeRootWhenNoOtherMailDomainRemains(t *testing.T) {
+	db, recorder := purgeHarness(t, "", nil)
+	recorder.otherMailDomains = 0
+	recorder.domainMaildirs = []string{"/home/c_example/mail/info"}
+
+	if _, err := PurgeDomain(context.Background(), db, 7, "c_example"); err != nil {
+		t.Fatalf("PurgeDomain: %v", err)
+	}
+	if !recorder.diskRan {
+		t.Fatal("the mail root survived although this was the last mail domain on the system user")
+	}
+}
+
+// The Maildirs must be read before the deletes: mailboxes cascade from
+// mail_domains, so after the commit nothing says which ones belonged here.
+func TestPurgeReadsTheMaildirsBeforeDeletingTheRows(t *testing.T) {
+	db, recorder := purgeHarness(t, "", nil)
+	recorder.otherMailDomains = 1
+	recorder.domainMaildirs = []string{"/home/c_example/mail/info"}
+
+	if _, err := PurgeDomain(context.Background(), db, 7, "c_example"); err != nil {
+		t.Fatalf("PurgeDomain: %v", err)
+	}
+	steps := recorder.recorded()
+	read := indexOfStep(steps, "SELECT maildir FROM mailboxes WHERE domain_id=?")
+	deleted := indexOfStep(steps, "DELETE FROM mail_domains WHERE domain_id=?")
+	if read < 0 {
+		t.Fatalf("the maildirs were never read: %v", steps)
+	}
+	if deleted < 0 || read > deleted {
+		t.Errorf("the maildirs were read after the cascading delete: %v", steps)
 	}
 }
 

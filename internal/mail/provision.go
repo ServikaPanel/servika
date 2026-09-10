@@ -105,12 +105,79 @@ func DisableDomain(ctx context.Context, db *sql.DB, domainID int64) error {
 	return nil
 }
 
-// removeMailFiles deletes the domain's Maildir root. It is a variable so a test
-// can exercise both the success and the failure path: the real implementation is
-// Linux-only (safeio_stub.go returns an error on macOS), which would otherwise
-// make every local run take the failure branch.
+// removeMailFiles deletes the WHOLE Maildir root of a system user. It is a
+// variable so a test can exercise both the success and the failure path: the real
+// implementation is Linux-only (safeio_stub.go returns an error on macOS), which
+// would otherwise make every local run take the failure branch.
+//
+// Only safe when no other mail domain answers to that system user. See
+// mailRootIsShared.
 var removeMailFiles = func(systemUser string) error {
 	return files.RemoveAllBeneath(filepath.Join("/home", systemUser), "mail")
+}
+
+// removeMaildirs deletes the listed Maildirs and nothing else. A mailbox's
+// compiled .dovecot.sieve lives inside its own Maildir, so this takes it too.
+//
+// A path outside the system user's home is SKIPPED rather than removed. It can
+// only come from a mailboxes row whose maildir column does not match its mail
+// domain, and deleting an unrelated tree as root is worse than leaving a stale
+// directory behind.
+var removeMaildirs = func(systemUser string, maildirs []string) error {
+	home := filepath.Join("/home", systemUser)
+	var firstErr error
+	for _, maildir := range maildirs {
+		rel, inside := strings.CutPrefix(filepath.Clean(maildir), home+"/")
+		if !inside || rel == "" {
+			// #nosec G706 -- logged values are a validated identifier (^c_[A-Za-z0-9_]+$) and a filepath.Clean'ed column value; no raw tenant string with CR/LF reaches the log.
+			log.Printf("purge mail: maildir %q is not under %s, left in place", maildir, home)
+			continue
+		}
+		if err := files.RemoveAllBeneath(home, rel); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// mailRootIsShared reports whether another mail domain still answers to this
+// system user. It is called AFTER the purged domain's own row is committed away,
+// so any row it counts belongs to a different domain.
+//
+// An addon domain carries its PARENT's system_user, and mail can be enabled on
+// it, so /home/<system_user>/mail is not the property of one domain. A read that
+// FAILS answers true: leaving files behind costs disk, removing another domain's
+// message stores is irreversible.
+func mailRootIsShared(ctx context.Context, db *sql.DB, systemUser string) bool {
+	var others int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mail_domains WHERE system_user=?`, systemUser).Scan(&others); err != nil {
+		// #nosec G706 -- logged values are a validated identifier (^c_[A-Za-z0-9_]+$) and an error string; no raw tenant string with CR/LF reaches the log.
+		log.Printf("purge mail: could not check whether %s still hosts mail, keeping the shared root: %v", systemUser, err)
+		return true
+	}
+	return others > 0
+}
+
+// domainMaildirs reads the Maildir of every mailbox of one domain, before the
+// rows are deleted.
+func domainMaildirs(ctx context.Context, tx *sql.Tx, domainID int64) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT maildir FROM mailboxes WHERE domain_id=?`, domainID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var maildirs []string
+	for rows.Next() {
+		var maildir string
+		if err := rows.Scan(&maildir); err != nil {
+			return nil, err
+		}
+		if maildir = strings.TrimSpace(maildir); maildir != "" {
+			maildirs = append(maildirs, maildir)
+		}
+	}
+	return maildirs, rows.Err()
 }
 
 // nonCascadingMailTables are the per-domain mail tables that hang off domains(id)
@@ -154,6 +221,13 @@ func PurgeDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser str
 	}
 	defer func() { _ = transaction.Rollback() }()
 
+	// Read BEFORE the deletes: mailboxes cascade from mail_domains, so after the
+	// commit there is no row left to say which Maildirs belonged to this domain.
+	maildirs, err := domainMaildirs(ctx, transaction, domainID)
+	if err != nil {
+		return false, fmt.Errorf("read maildirs: %w", err)
+	}
+
 	for _, table := range nonCascadingMailTables {
 		// #nosec G202 -- table comes from the package-level allowlist above, never from a request.
 		if _, err := transaction.ExecContext(ctx, `DELETE FROM `+table+` WHERE domain_id=?`, domainID); err != nil {
@@ -174,15 +248,26 @@ func PurgeDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser str
 	FlushAllAuthCache(ctx)
 
 	// /home/<system_user>/mail holds every mailbox's Maildir and the .dovecot.sieve
-	// compiled into it, so one removal covers both, plus any Maildir left behind by
-	// a mailbox deleted earlier.
+	// compiled into it, so removing the root covers both, plus any Maildir left
+	// behind by a mailbox deleted earlier.
 	//
-	// Through files.RemoveAllBeneath, never os.RemoveAll: the panel runs as root
-	// inside a tenant's home, and a tenant who replaced "mail" with a symlink could
-	// otherwise redirect the deletion anywhere on the host.
-	if err := removeMailFiles(systemUser); err != nil && !errors.Is(err, os.ErrNotExist) {
+	// It is only the root of ONE domain when no other mail domain answers to the
+	// same system user. An addon domain carries its parent's system_user and mail
+	// can be enabled on it, so removing the root from an addon's purge destroyed
+	// the parent's message stores and every other addon's, while their mailboxes
+	// rows survived: the deletes above are keyed on domain_id. Where the root is
+	// shared, only this domain's own Maildirs go.
+	//
+	// Through the files.*Beneath primitives, never os.RemoveAll: the panel runs as
+	// root inside a tenant's home, and a tenant who replaced "mail" with a symlink
+	// could otherwise redirect the deletion anywhere on the host.
+	removeErr := removeMaildirs(systemUser, maildirs)
+	if !mailRootIsShared(ctx, db, systemUser) {
+		removeErr = removeMailFiles(systemUser)
+	}
+	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("purge mail domain=%d: mail files not removed: %v", domainID, err)
+		log.Printf("purge mail domain=%d: mail files not removed: %v", domainID, removeErr)
 		return true, nil
 	}
 	return false, nil
