@@ -305,6 +305,7 @@
     },
     "backup": {
       "uploadFailed": "{{domain}} için off-site backup upload başarısız oldu: {{reason}}",
+      "dumpFailed": "{{domain}} yedeği, dump'ı başarısız olan {{count}} veritabanını içermiyor: {{databases}}",
       "diskGate": "Otomatik backup'lar disk koruması nedeniyle durduruldu: {{reason}}.",
       "corruptMissing": "{{domain}} için en yeni backup okunamadı ({{file}}); kurtarma için geçersiz olabilir.",
       "bitRot": "{{domain}} için en yeni backup ({{file}}) yazıldığı andaki checksum ile artık uyuşmuyor; bundan geri yükleme başarısız olabilir."

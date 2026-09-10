@@ -301,7 +301,7 @@ func (h *Handlers) backupTask(id int64, domainName, systemUser, dir, file string
 	// Package the home directory plus EVERY domain-owned database (main + wp_* etc.)
 	// under __db__/ with a manifest, into one archive. buildArchive fails closed, so
 	// a failed dump/tar aborts the backup instead of storing an unrestorable archive.
-	sizeBytes, aerr := buildArchive(ctx, h.DB, id, systemUser, dir, file, time.Now().UTC().Format("2006-01-02 15:04:05"))
+	sizeBytes, failedDBs, aerr := buildArchive(ctx, h.DB, id, systemUser, dir, file, time.Now().UTC().Format("2006-01-02 15:04:05"))
 	if aerr != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers, or error output; no raw tenant string with CR/LF reaches the log.
 		log.Printf("backup build failed for %s: %v", systemUser, aerr)
@@ -318,12 +318,16 @@ func (h *Handlers) backupTask(id int64, domainName, systemUser, dir, file string
 	}
 	res, err := h.DB.Exec(
 		`INSERT INTO backups(domain_id, type, file, size_b, notes, sha256, verification) VALUES(?,?,?,?,?,?,?)`,
-		id, "full", file, sizeBytes, "domain: "+domainName, sum, verification)
+		id, "full", file, sizeBytes, backupNotes(domainName, failedDBs), sum, verification)
 	if err != nil {
 		progressFinish(id, "", fmt.Errorf("could not save backup record: %w", err))
 		return
 	}
 	backupID, _ := res.LastInsertId()
+	// A database the panel owns and could not dump is a hole in the archive, and
+	// nothing outside it would ever say so: the row, the progress record and the
+	// job status all read as a clean backup.
+	notifyDumpsFailed(ctx, h.DB, id, backupID, failedDBs)
 	// Cap manual backups too: retention previously applied only to scheduled
 	// backups, so manual ones accumulated on the root disk (outside the tenant
 	// quota) and could fill it (a slow disk-exhaustion DoS).

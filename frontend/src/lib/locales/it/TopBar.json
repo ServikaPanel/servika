@@ -305,6 +305,7 @@
     },
     "backup": {
       "uploadFailed": "Upload del backup off-site per {{domain}} non riuscito: {{reason}}",
+      "dumpFailed": "Il backup di {{domain}} non contiene {{count}} database il cui dump non è riuscito: {{databases}}",
       "diskGate": "I backup automatici sono stati interrotti dalla protezione disco: {{reason}}.",
       "corruptMissing": "Il backup più recente di {{domain}} non è stato letto ({{file}}); potrebbe non essere valido per il ripristino.",
       "bitRot": "Il backup più recente di {{domain}} ({{file}}) non corrisponde più al checksum di quando è stato scritto; il ripristino potrebbe non riuscire."

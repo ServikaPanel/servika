@@ -305,6 +305,7 @@
     },
     "backup": {
       "uploadFailed": "Încărcarea backupului off-site pentru {{domain}} a eșuat: {{reason}}",
+      "dumpFailed": "Copia de rezervă a {{domain}} nu conține {{count}} baze de date al căror dump a eșuat: {{databases}}",
       "diskGate": "Backupurile automate au fost oprite de protecția discului: {{reason}}.",
       "corruptMissing": "Cel mai recent backup pentru {{domain}} nu a putut fi citit ({{file}}); poate fi invalid pentru recuperare.",
       "bitRot": "Cel mai recent backup pentru {{domain}} ({{file}}) nu mai corespunde cu checksumul de la scriere; restaurarea din el poate eșua."

@@ -196,10 +196,10 @@ func takeStagingDir(ctx context.Context, systemUser, dir string) (dbDir string, 
 // plus a manifest into a single .tar.gz. Used by both the manual Create handler
 // and the scheduler. Older backups dumped only <systemUser>_main; extra DBs such
 // as wp_* are now included. Returns the archive size in bytes.
-func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, dir, file, createdTS string) (int64, error) {
+func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, dir, file, createdTS string) (int64, []string, error) {
 	dbDir, release, err := takeStagingDir(ctx, systemUser, dir)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	defer release()
 	abs := filepath.Join(dir, file)
@@ -216,7 +216,7 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 		// goes to the log, not into the job record the customer reads.
 		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
 		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
-		return 0, errors.New("could not list the domain's databases")
+		return 0, nil, errors.New("could not list the domain's databases")
 	}
 	for _, dbName := range ownedDBs {
 		target := filepath.Join(dbDir, dbName+".sql")
@@ -248,6 +248,14 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 			continue
 		}
 		written = append(written, dbName)
+	}
+
+	// A backup of a site whose every database dump failed is not a backup of the
+	// site, so it fails rather than being recorded as a green archive. The
+	// per-database failures below it are reported by the caller instead: an
+	// archive missing ONE of several databases is still worth keeping.
+	if len(written) == 0 && len(ownedDBs) > 0 {
+		return 0, failedDBs, fmt.Errorf("none of the domain's %d database(s) could be dumped", len(ownedDBs))
 	}
 
 	// Capture the owning MySQL accounts (with their password hash) and grants.
@@ -285,7 +293,7 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 		} else {
 			// #nosec G703 -- staging paths derive from backupRoot()/<validSystemUser-checked systemUser> and ValidDBIdentifier-checked DB names; no raw tenant path input.
 			_ = os.Remove(abs)
-			return 0, fmt.Errorf("tar: %s: %w", strings.TrimSpace(string(out)), err)
+			return 0, failedDBs, fmt.Errorf("tar: %s: %w", strings.TrimSpace(string(out)), err)
 		}
 	}
 	progressStopFile(domainID)
@@ -294,7 +302,7 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	if st, _ := os.Stat(abs); st != nil {
 		size = st.Size()
 	}
-	return size, nil
+	return size, failedDBs, nil
 }
 
 // tarArchiveUsable reports whether a tar exit code leaves a COMPLETE archive.

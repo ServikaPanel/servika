@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	"servika/internal/notifications"
 )
@@ -48,4 +49,51 @@ func backupDomainName(ctx context.Context, db *sql.DB, domainID int64) string {
 		return "a domain"
 	}
 	return name
+}
+
+// notifyDumpsFailed writes one warning when a backup could not dump every
+// database the domain owns.
+//
+// The gap used to be recorded only in the archive's OWN manifest, a file inside
+// the artefact that no restore path, endpoint or screen ever reads. Every
+// surface an operator or customer looks at is fed from the backups and
+// backup_jobs rows, so a checksum-verified archive of the expected size (the
+// tenant home dominates it) reported a green backup whose database was never
+// captured, every night, until somebody tried to restore.
+//
+// It is DOMAIN-scoped like the upload-failure alert, and a write failure is
+// logged rather than returned, or a backup would fail because the alert about it
+// could not be written.
+func notifyDumpsFailed(ctx context.Context, db *sql.DB, domainID, backupID int64, failed []string) {
+	if len(failed) == 0 {
+		return
+	}
+	id := domainID
+	name := backupDomainName(ctx, db, domainID)
+	list := strings.Join(failed, ", ")
+	event := notifications.Event{
+		Level:    notifications.LevelWarning,
+		Category: backupNotifyCategory,
+		Title:    "Backup is missing a database",
+		Message: fmt.Sprintf("The backup of %s does not contain %d database(s) whose dump failed: %s",
+			name, len(failed), list),
+		Key:      "backup.dumpFailed",
+		Params:   map[string]any{"domain": name, "count": len(failed), "databases": list},
+		DomainID: &id,
+		RefType:  "backup",
+		RefID:    backupID,
+	}
+	if err := notifications.Write(ctx, db, event); err != nil {
+		// #nosec G706 -- logged values are an integer ID and error output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup: the failed-dump alert for domain %d could not be written: %v", domainID, err)
+	}
+}
+
+// backupNotes records the gap on the backups row itself, so the backup LIST
+// carries it and not only the notification somebody may already have dismissed.
+func backupNotes(base string, failed []string) string {
+	if len(failed) == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s | database dump failed: %s", base, strings.Join(failed, ", "))
 }

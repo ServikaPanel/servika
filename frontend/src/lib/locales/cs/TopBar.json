@@ -305,6 +305,7 @@
     },
     "backup": {
       "uploadFailed": "Nahrání off-site backupu pro {{domain}} selhalo: {{reason}}",
+      "dumpFailed": "Záloha domény {{domain}} neobsahuje {{count}} databázi/databáze, jejichž dump selhal: {{databases}}",
       "diskGate": "Automatické backupy byly zastaveny ochranou disku: {{reason}}.",
       "corruptMissing": "Nejnovější backup pro {{domain}} nešlo přečíst ({{file}}); pro obnovu může být neplatný.",
       "bitRot": "Nejnovější backup pro {{domain}} ({{file}}) už neodpovídá svému checksumu z doby zápisu; obnova z něj může selhat."

@@ -84,7 +84,7 @@ func TestBuildArchiveWaitsBeforeItTouchesTheStagingDirectory(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if _, err := buildArchive(ctx, nil, 1, "c_busy", dir, "out.tar.gz", "2026-01-01 00:00:00"); err == nil {
+	if _, _, err := buildArchive(ctx, nil, 1, "c_busy", dir, "out.tar.gz", "2026-01-01 00:00:00"); err == nil {
 		t.Fatal("buildArchive ran while another backup of the same tenant held the staging slot")
 	}
 	if _, err := os.Stat(marker); err != nil {

@@ -98,7 +98,7 @@ func backupOneDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser
 		suffix = "-auto"
 	}
 	file := fmt.Sprintf("%s%s-%s.tar.gz", systemUser, suffix, stamp)
-	size, err := buildArchive(ctx, db, domainID, systemUser, dir, file, time.Now().UTC().Format("2006-01-02 15:04:05"))
+	size, failedDBs, err := buildArchive(ctx, db, domainID, systemUser, dir, file, time.Now().UTC().Format("2006-01-02 15:04:05"))
 	if err != nil {
 		return 0, "", err
 	}
@@ -116,11 +116,15 @@ func backupOneDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser
 	}
 	res, err := db.Exec(
 		`INSERT INTO backups(domain_id, type, file, size_b, notes, job_id, sha256, verification) VALUES(?,?,?,?,?,?,?,?)`,
-		domainID, backupType, file, size, notes, job, sum, verification)
+		domainID, backupType, file, size, backupNotes(notes, failedDBs), job, sum, verification)
 	if err != nil {
 		return size, file, err
 	}
 	backupID, _ := res.LastInsertId()
+	// The scheduler counts this run as succeeded, so without an alert a domain can
+	// accumulate weeks of file-only backups with nothing saying its database was
+	// never captured.
+	notifyDumpsFailed(ctx, db, domainID, backupID, failedDBs)
 	pushToDestinationAsync(db, domainID, backupID, abs, file)
 	// Also copy to the system-wide off-site destination, if one is configured.
 	// This is the shared core, so the scheduler, bulk jobs and a manual backup all
