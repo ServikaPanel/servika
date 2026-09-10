@@ -123,31 +123,34 @@ func TestParseUnitStateSeparatesMissingFromStopped(t *testing.T) {
 	}
 }
 
-func TestReadServicesOmitsUnitsThatAreNotInstalled(t *testing.T) {
+// These two exercise the PROBE rather than ReadServices, because ReadServices
+// serves a cached list and would answer with whatever the previous test left
+// behind. The cache itself is covered in snapshot_test.go.
+func TestProbeServicesOmitsUnitsThatAreNotInstalled(t *testing.T) {
 	previous := systemctlProbe
 	// Only the panel's own unit exists on this imaginary host.
 	systemctlProbe = func(name string) (bool, bool) { return name == "servika", name == "servika" }
 	t.Cleanup(func() { systemctlProbe = previous })
 
-	services := ReadServices()
+	services := probeServices()
 	if len(services) != 1 {
-		t.Fatalf("ReadServices() returned %d services, want only the installed one", len(services))
+		t.Fatalf("probeServices() returned %d services, want only the installed one", len(services))
 	}
 	if services[0].Name != "servika" || !services[0].Enabled {
-		t.Fatalf("ReadServices() returned %+v, want the running servika unit", services[0])
+		t.Fatalf("probeServices() returned %+v, want the running servika unit", services[0])
 	}
 }
 
 // A systemctl that cannot be run must not empty the list: reporting nothing would
 // read as "this host has no services", which is a worse lie than the old
 // everything-is-down list.
-func TestReadServicesKeepsEveryUnitWhenSystemctlIsUnavailable(t *testing.T) {
+func TestProbeServicesKeepsEveryUnitWhenSystemctlIsUnavailable(t *testing.T) {
 	previous := systemctlProbe
 	systemctlProbe = func(string) (bool, bool) { return true, false }
 	t.Cleanup(func() { systemctlProbe = previous })
 
-	if got, want := len(ReadServices()), len(serviceList); got != want {
-		t.Fatalf("ReadServices() returned %d services, want all %d", got, want)
+	if got, want := len(probeServices()), len(serviceList); got != want {
+		t.Fatalf("probeServices() returned %d services, want all %d", got, want)
 	}
 }
 

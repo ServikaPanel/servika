@@ -136,7 +136,35 @@ func readCPUStat() (cpuStat, error) {
 	return stat, nil
 }
 
+// cpuSnapshot holds the CPU reading for one poll interval.
+//
+// The reading costs a 150 ms sleep between two /proc/stat samples, taken on the
+// request goroutine, which made 150 ms the latency floor of the panel's busiest
+// route. The cache serves consecutive polls from one sample and coalesces two
+// panel tabs polling together into one. See snapshot.go.
+type cpuReading struct {
+	usage CPUUsage
+	err   error
+}
+
+// cpuSampler is a variable so the cache can be exercised without /proc/stat,
+// which macOS does not have. It is the same seam systemctlProbe provides.
+var cpuSampler = sampleCPU
+
+var cpuSnapshot = newSnapshot(cpuTTL, func() cpuReading {
+	usage, err := cpuSampler()
+	return cpuReading{usage: usage, err: err}
+})
+
+// ReadCPU returns the CPU reading, taking a new sample only when the cached one
+// has expired.
 func ReadCPU() (CPUUsage, error) {
+	reading := cpuSnapshot.get()
+	return reading.usage, reading.err
+}
+
+// sampleCPU takes the two /proc/stat samples the percentage is computed from.
+func sampleCPU() (CPUUsage, error) {
 	s1, err := readCPUStat()
 	if err != nil {
 		return CPUUsage{}, err
@@ -575,11 +603,27 @@ var systemctlProbe = func(name string) (installed, active bool) {
 	return parseUnitState(string(output))
 }
 
-// ReadServices returns only the services that are actually installed. A service
+// serviceSnapshot holds the service list between polls.
+//
+// Reading it forks one `systemctl show` per entry of serviceList, fifteen on a
+// stock host, and the answer changes only when an operator installs, removes,
+// starts or stops something. See snapshot.go.
+var serviceSnapshot = newSnapshot(serviceTTL, probeServices)
+
+// InvalidateServices drops the cached service list. A panel action that starts,
+// stops or installs a unit calls it, so the screen does not keep reporting the
+// state from before the action for the rest of the TTL.
+func InvalidateServices() { serviceSnapshot.invalidate() }
+
+// ReadServices returns the cached service list, probing again only when it has
+// expired.
+func ReadServices() []ServiceStat { return serviceSnapshot.get() }
+
+// probeServices returns only the services that are actually installed. A service
 // that was never installed (a PHP version the operator never added, an FTP server
 // on a host that does not offer FTP) is omitted rather than listed as down, which
 // otherwise reported a permanent fault for software nobody asked for.
-func ReadServices() []ServiceStat {
+func probeServices() []ServiceStat {
 	out := make([]ServiceStat, 0, len(serviceList))
 	type res struct {
 		i         int
@@ -607,11 +651,18 @@ func ReadServices() []ServiceStat {
 	return out
 }
 
+// quotaSnapshot holds the quota-reboot answer between polls.
+//
+// On a healthy XFS host the sentinel file is absent, so the reader falls through
+// to xfs_quota and forks a process on every poll. What it reports changes only
+// when the operator reboots into rootflags=uquota. See snapshot.go.
+var quotaSnapshot = newSnapshot(quotaTTL, resourcelimit.QuotaRebootRequired)
+
 func Handler(w http.ResponseWriter, r *http.Request) {
-	cpu, _ := ReadCPU()
 	mem, _ := ReadMem()
 	disk, _ := ReadDisk("/")
 
+	var cpu CPUUsage
 	var disks []DiskUsage
 	var network NetworkUsage
 	var services []ServiceStat
@@ -622,13 +673,17 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	var quotaFSUnsupported bool
 
 	var wg sync.WaitGroup
-	wg.Add(7)
+	wg.Add(8)
+	// The CPU reading joins the parallel section. It used to run first and alone,
+	// on the request goroutine, so its 150 ms sample was added to the latency of
+	// everything below rather than overlapped with it.
+	go func() { defer wg.Done(); cpu, _ = ReadCPU() }()
 	go func() { defer wg.Done(); disks = ReadDisks() }()
 	go func() { defer wg.Done(); network = ReadNetwork() }()
 	go func() { defer wg.Done(); services = ReadServices() }()
 	go func() { defer wg.Done(); swap = ReadSwap() }()
 	go func() { defer wg.Done(); info = ReadInfo() }()
-	go func() { defer wg.Done(); quotaReboot = resourcelimit.QuotaRebootRequired() }()
+	go func() { defer wg.Done(); quotaReboot = quotaSnapshot.get() }()
 	go func() { defer wg.Done(); quotaFSUnsupported = !resourcelimit.QuotaFSCompatible() }()
 	wg.Wait()
 

@@ -98,6 +98,10 @@ func ServiceAction(w http.ResponseWriter, r *http.Request) {
 		action = "restart"
 	}
 	runSystemctl(action, service.Unit)
+	// The usage endpoint serves its service list from a cache. Drop it here, or
+	// the dashboard keeps reporting the state from before this action for the
+	// rest of the TTL and the restart reads as having done nothing.
+	InvalidateServices()
 	status := serviceState(service.Unit)
 	if status != "active" {
 		httpx.WriteError(w, http.StatusInternalServerError, "service action failed")
