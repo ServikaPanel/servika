@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import Breadcrumb from '@/components/Breadcrumb'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import { safeHref } from '@/lib/safeUrl'
 import {
   responsiveTableActionCellClass,
   responsiveTableBodyClass,
@@ -231,7 +232,7 @@ export default function DomainAppInstallerPage() {
                   {row.name} <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{row.version}</span>
                 </td>
                 <td className={responsiveTableCellClass} data-label={t('list.location')}>
-                  {row.state === 'installed' ? (
+                  {row.state === 'installed' && safeHref(row.site_url) ? (
                     <a href={row.site_url} target="_blank" rel="noreferrer noopener"
                       className="font-mono text-xs text-brand-600 hover:underline dark:text-brand-400">
                       {row.site_url}

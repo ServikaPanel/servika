@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import { safeHref } from '@/lib/safeUrl'
 import Breadcrumb from '@/components/Breadcrumb'
 import { Icon } from '@/components/Icon'
 import { ICON } from '@/components/iconPaths'
@@ -180,7 +181,9 @@ export default function WordPressPage() {
                   return (
                     <tr key={key} className={`${responsiveTableRowClass} ${isOutdated ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
                       <td data-label={t('table.domain')} className={responsiveTableCellClass}>
-                        <a href={installation.site_url} target="_blank" rel="noreferrer" className="font-medium text-slate-800 dark:text-slate-100 hover:text-brand-600 dark:hover:text-brand-400">{installation.domain_name}</a>
+                        {safeHref(installation.site_url)
+                          ? <a href={installation.site_url} target="_blank" rel="noreferrer" className="font-medium text-slate-800 dark:text-slate-100 hover:text-brand-600 dark:hover:text-brand-400">{installation.domain_name}</a>
+                          : <span className="font-medium text-slate-800 dark:text-slate-100">{installation.domain_name}</span>}
                       </td>
                       <td data-label={t('table.directory')} className={responsiveTableCodeCellClass}>{displayDirectory(installation.dir)}</td>
                       <td data-label={t('table.version')} className={responsiveTableCellClass}>
@@ -190,7 +193,9 @@ export default function WordPressPage() {
                       <td data-label={t('table.installed')} className={responsiveTableCodeCellClass}>{installation.install_date || '-'}</td>
                       <td className={responsiveTableActionCellClass}>
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <a href={installation.admin_url} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">{t('adminButton')}</a>
+                          {safeHref(installation.admin_url) && (
+                            <a href={installation.admin_url} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">{t('adminButton')}</a>
+                          )}
                           <button disabled={!!busyKey} onClick={() => update(installation)}
                             className={`text-xs px-2.5 py-1 rounded-md disabled:opacity-50 ${isOutdated ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                             {busyKey === key ? '...' : isOutdated ? t('updateToVersion', { version: installation.last_version }) : t('update')}
@@ -271,7 +276,7 @@ function Info({ label, value, mono, link }: { label: string; value: string; mono
   return (
     <div className="flex items-baseline gap-1.5 min-w-0">
       <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold shrink-0">{label}</span>
-      {link ? <a href={value} target="_blank" rel="noreferrer" className="text-xs text-brand-600 dark:text-brand-400 hover:underline truncate font-mono">{value}</a>
+      {link && safeHref(value) ? <a href={value} target="_blank" rel="noreferrer" className="text-xs text-brand-600 dark:text-brand-400 hover:underline truncate font-mono">{value}</a>
         : <span className={`text-xs text-slate-800 dark:text-slate-100 truncate ${mono ? 'font-mono' : ''}`}>{value}</span>}
     </div>
   )

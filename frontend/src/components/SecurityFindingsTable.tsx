@@ -7,6 +7,7 @@ import {
   responsiveTableHeadClass,
   responsiveTableRowClass,
 } from '@/lib/table'
+import { safeHref } from '@/lib/safeUrl'
 
 export type SecurityFinding = {
   id: number
@@ -105,7 +106,7 @@ export default function SecurityFindingsTable({
                 {finding.fixed_in || t('table.noFix')}
               </td>
               <td className={responsiveTableCellClass} data-label={t('table.advisory')}>
-                {finding.source ? (
+                {safeHref(finding.source) ? (
                   <a href={finding.source} target="_blank" rel="noreferrer noopener"
                     className="font-mono text-xs text-brand-600 hover:underline dark:text-brand-400">
                     {finding.cve_id}

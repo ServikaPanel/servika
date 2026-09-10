@@ -8,6 +8,7 @@ import Breadcrumb from '@/components/Breadcrumb'
 import { Icon } from '@/components/Icon'
 import { ICON } from '@/components/iconPaths'
 import { useResourceScope } from '@/lib/scope'
+import { safeHref } from '@/lib/safeUrl'
 
 type Install = { dir: string; site_url: string; admin_url: string; version: string }
 type Result = { site_url: string; admin_url: string; admin_user: string; admin_password: string; version: string }
@@ -264,7 +265,7 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {installation.admin_url && (
+          {safeHref(installation.admin_url) && (
             <a href={installation.admin_url} target="_blank" rel="noreferrer"
               className="inline-flex items-center gap-1 px-3.5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition">
               {t('toolkit.adminPanel')} <span className="opacity-70">↗</span>
@@ -515,7 +516,7 @@ function ResultRow({ label, value, mono, link }: { label: string; value: string;
   return (
     <div className="flex items-baseline gap-2 min-w-0">
       <span className="text-xs text-slate-400 shrink-0 w-16">{label}</span>
-      {link ? <a href={value} target="_blank" rel="noreferrer" className="text-sm text-slate-700 dark:text-slate-200 hover:underline truncate">{value}</a>
+      {link && safeHref(value) ? <a href={value} target="_blank" rel="noreferrer" className="text-sm text-slate-700 dark:text-slate-200 hover:underline truncate">{value}</a>
         : <span className={`text-sm text-slate-800 dark:text-slate-100 truncate ${mono ? 'font-mono' : ''}`}>{value}</span>}
     </div>
   )
