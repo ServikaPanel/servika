@@ -2,4 +2,15 @@ hosts = 127.0.0.1
 user = mailro
 password = __SERVIKA_MAIL_DB_PASS__
 dbname = panel
-query = SELECT CONCAT(md.system_user,'/mail/',m.local_part,'/') FROM mailboxes m JOIN mail_domains md ON md.id=m.mail_domain_id WHERE m.email='%s' AND m.status='active' AND md.status='active'
+# Derived from m.maildir for the same reason as Dovecot's user_query: a path
+# rebuilt from md.system_user and m.local_part is per system user, while two mail
+# domains can share one. The value is relative to virtual_mailbox_base (/home),
+# so the leading '/home/' is dropped; the LIKE keeps a row whose column does not
+# start there out of the answer rather than returning a truncated path. A literal
+# percent is written '%%' because dict_mysql expands '%s' itself.
+#
+# Delivery does not use this path (virtual_transport is Dovecot LMTP, which
+# resolves the mailbox through its own user_query); the map decides whether the
+# address exists. It is derived from the same column anyway, so the two cannot
+# drift apart.
+query = SELECT SUBSTRING(m.maildir, 7) FROM mailboxes m JOIN mail_domains md ON md.id=m.mail_domain_id WHERE m.email='%s' AND m.status='active' AND md.status='active' AND m.maildir LIKE '/home/%%'

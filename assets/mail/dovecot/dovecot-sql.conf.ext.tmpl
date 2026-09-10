@@ -2,5 +2,12 @@ driver = mysql
 connect = host=127.0.0.1 dbname=panel user=mailro password=__SERVIKA_MAIL_DB_PASS__
 default_pass_scheme = SHA512-CRYPT
 password_query = SELECT m.email AS user, m.password_hash AS password FROM mailboxes m JOIN mail_domains md ON md.id=m.mail_domain_id WHERE m.email='%u' AND m.status='active' AND md.status='active'
-user_query = SELECT CONCAT('/home/',md.system_user,'/mail/',m.local_part) AS home, md.uid_n AS uid, md.gid_n AS gid, CONCAT('maildir:/home/',md.system_user,'/mail/',m.local_part) AS mail, CASE WHEN m.quota_bytes > 0 THEN CONCAT('*:bytes=', m.quota_bytes) ELSE NULL END AS quota_rule FROM mailboxes m JOIN mail_domains md ON md.id=m.mail_domain_id WHERE m.email='%u' AND m.status='active' AND md.status='active'
+# The path comes from m.maildir, never rebuilt from md.system_user and
+# m.local_part. Uniqueness is (domain_id, local_part) while a rebuilt path is per
+# SYSTEM USER, and an addon domain carries its parent's system_user, so
+# info@parent.com and info@addon.com are two rows with two passwords that both
+# resolved to /home/c_parent/mail/info: either password read and deleted the
+# other account's messages. m.maildir is the column the panel writes and the one
+# ApplyMailboxSieve already reads.
+user_query = SELECT TRIM(TRAILING '/' FROM m.maildir) AS home, md.uid_n AS uid, md.gid_n AS gid, CONCAT('maildir:', m.maildir) AS mail, CASE WHEN m.quota_bytes > 0 THEN CONCAT('*:bytes=', m.quota_bytes) ELSE NULL END AS quota_rule FROM mailboxes m JOIN mail_domains md ON md.id=m.mail_domain_id WHERE m.email='%u' AND m.status='active' AND md.status='active'
 iterate_query = SELECT email AS user FROM mailboxes WHERE status='active'

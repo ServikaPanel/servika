@@ -5,6 +5,43 @@ import (
 	"testing"
 )
 
+// The Maildir root belongs to the SYSTEM USER while uniqueness on mailboxes is
+// (domain_id, local_part), and an addon domain carries its parent's system_user.
+// Keyed on the local part alone, info@parent.com and info@addon.com were two
+// rows with two passwords and two quotas that resolved to one directory: either
+// password read and deleted the other account's mail.
+func TestMaildirOfTwoDomainsOnOneSystemUserDoNotCollide(t *testing.T) {
+	const root = "/home/c_parent/mail"
+	parent := mailboxMaildir(root, "parent.com", "info")
+	addon := mailboxMaildir(root, "addon.com", "info")
+	if parent == addon {
+		t.Fatalf("both mail domains resolve to %q", parent)
+	}
+	for _, path := range []string{parent, addon} {
+		if !strings.HasPrefix(path, root+"/") {
+			t.Errorf("%q is outside the tenant Maildir root", path)
+		}
+		// Dovecot and Postfix both read the path as a Maildir, which the trailing
+		// slash is what marks.
+		if !strings.HasSuffix(path, "/") {
+			t.Errorf("%q does not end in a slash, so it is not read as a Maildir", path)
+		}
+	}
+	if parent != root+"/parent.com/info/" {
+		t.Errorf("maildir = %q, want the domain between the root and the local part", parent)
+	}
+}
+
+// createMaildir writes as root inside a home the tenant owns, so it must refuse
+// a path it cannot prove is under that home rather than following it.
+func TestCreateMaildirRefusesAPathOutsideTheTenantHome(t *testing.T) {
+	for _, maildir := range []string{"/etc/cron.d/", "/home/c_other/mail/info/", "/home/c_site"} {
+		if err := createMaildir("c_site", maildir); err == nil {
+			t.Errorf("createMaildir() accepted %q, which is outside /home/c_site", maildir)
+		}
+	}
+}
+
 // Dovecot reads the letters after ":2," on sight, so getting them wrong makes a
 // migrated mailbox come back entirely unread, which is what the customer notices
 // first.

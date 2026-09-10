@@ -7,9 +7,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -253,11 +250,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var mailDomainID int64
-	var domainName, maildirRoot string
-	var uidN, gidN int
+	var domainName, maildirRoot, systemUser string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT id, domain_name, maildir_root, uid_n, gid_n FROM mail_domains WHERE domain_id=? AND status='active'`, id).
-		Scan(&mailDomainID, &domainName, &maildirRoot, &uidN, &gidN)
+		`SELECT id, domain_name, maildir_root, system_user FROM mail_domains WHERE domain_id=? AND status='active'`, id).
+		Scan(&mailDomainID, &domainName, &maildirRoot, &systemUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
 		return
@@ -287,17 +283,13 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not prepare mailbox password")
 		return
 	}
-	maildir := filepath.Join(maildirRoot, localPart) + "/"
-	if err := os.MkdirAll(maildir, 0o700); err != nil {
+	maildir := mailboxMaildir(maildirRoot, domainName, localPart)
+	if err := createMaildir(systemUser, maildir); err != nil {
+		// #nosec G706 -- logged values are a filepath.Join of a template-derived root, a validated domain name and a validated local part, plus an error string; no raw tenant string with CR/LF reaches the log.
 		log.Printf("create Maildir %q: %v", maildir, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create mailbox storage")
 		return
 	}
-	_ = os.Chown(maildir, uidN, gidN)
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	cmd := exec.Command("/sbin/restorecon", "-R", maildir)
-	cmd.Env = subprocessEnv
-	_ = cmd.Run()
 
 	// The plan's mail limits are applied at creation. Dovecot reads the quota
 	// through its userdb query and the policy server reads the send limits from

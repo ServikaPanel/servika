@@ -3,6 +3,7 @@ package mail
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -15,6 +16,46 @@ import (
 // over IMAP, because the panel keeps only a hash of the mailbox password and so
 // cannot log in as its own customer. Writing the files is also what lets the
 // copy set ownership correctly.
+
+// mailboxMaildir composes a mailbox's message store, with the trailing slash
+// Dovecot and Postfix both expect on a Maildir path.
+//
+// domainName is IN the path. maildirRoot belongs to the SYSTEM USER, while the
+// uniqueness constraint on mailboxes is (domain_id, local_part); an addon domain
+// carries its parent's system_user, so keying the store on the local part alone
+// sent info@parent.com and info@addon.com to one directory. They are two rows
+// with two passwords and two quotas, so either password read and deleted the
+// other account's mail.
+//
+// Existing mailboxes keep whatever their maildir column already holds: Dovecot's
+// user_query and Postfix's mailbox map read that column instead of rebuilding a
+// path, so the two layouts coexist and no message has to be moved.
+func mailboxMaildir(maildirRoot, domainName, localPart string) string {
+	return filepath.Join(maildirRoot, domainName, localPart) + "/"
+}
+
+// createMaildir creates the store and hands it to the tenant.
+//
+// Through the files.*Beneath primitives, never os.MkdirAll plus os.Chown: this
+// runs as root inside a home the tenant owns, so a symlink planted at any
+// component of the path would otherwise make root create a directory, and give
+// it away, anywhere on the host. MkdirAllBeneath creates 0755, so the leaf is
+// chmodded to the 0700 a Maildir wants.
+func createMaildir(systemUser, maildir string) error {
+	home := filepath.Join("/home", systemUser)
+	rel, inside := strings.CutPrefix(filepath.Clean(maildir), home+"/")
+	if !inside || rel == "" {
+		return fmt.Errorf("maildir is outside the tenant home")
+	}
+	if err := files.MkdirAllBeneath(home, rel, systemUser); err != nil {
+		return err
+	}
+	if err := files.ChmodBeneath(home, rel, 0o700); err != nil {
+		return err
+	}
+	files.RestoreconBeneath(home, rel)
+	return nil
+}
 
 // maildirFlags maps IMAP flags onto the Maildir info suffix.
 //

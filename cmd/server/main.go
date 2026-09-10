@@ -395,6 +395,12 @@ func main() {
 	// too, but it can exit before that step and this repair also has to reach
 	// hosts that were installed before it existed.
 	mail.HealDovecotAuth(context.Background())
+	// The mail SQL maps used to rebuild a mailbox's path from the system user and
+	// the local part, which is one directory for two mail domains that share a
+	// system user. They read mailboxes.maildir now, and an existing host has to be
+	// repointed here or a mailbox created under the new per-domain path would be
+	// unreachable.
+	mail.HealMaildirQuery(context.Background())
 	// The three Postfix delivery settings and the Dovecot listen line reach a
 	// NEW install through servika-mail-setup; an existing one never reruns it,
 	// so without this repair IPv6 mail would work only on hosts installed after
