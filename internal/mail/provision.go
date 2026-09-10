@@ -96,7 +96,13 @@ func EnableDomain(ctx context.Context, db *sql.DB, domainID int64) error {
 // DisableDomain soft-disables mail for a domain without deleting mailbox rows or Maildir data.
 func DisableDomain(ctx context.Context, db *sql.DB, domainID int64) error {
 	_, err := db.ExecContext(ctx, `UPDATE mail_domains SET status='suspended' WHERE domain_id=?`, domainID)
-	return err
+	if err != nil {
+		return err
+	}
+	// mail_domains.status is an input to the cached passdb answer, so every
+	// mailbox of this domain keeps authenticating until the cache is dropped.
+	FlushAllAuthCache(ctx)
+	return nil
 }
 
 // removeMailFiles deletes the domain's Maildir root. It is a variable so a test
@@ -163,6 +169,9 @@ func PurgeDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser str
 	if err := transaction.Commit(); err != nil {
 		return false, fmt.Errorf("commit: %w", err)
 	}
+	// The rows are gone, but Dovecot answers a login from its cached passdb
+	// result, so every purged mailbox keeps authenticating until it is dropped.
+	FlushAllAuthCache(ctx)
 
 	// /home/<system_user>/mail holds every mailbox's Maildir and the .dovecot.sieve
 	// compiled into it, so one removal covers both, plus any Maildir left behind by

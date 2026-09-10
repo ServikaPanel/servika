@@ -346,6 +346,9 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not delete mailbox")
 		return
 	}
+	// The passdb answer is cached, so the deleted mailbox keeps authenticating
+	// until the entry expires; its Maildir is deliberately preserved on disk.
+	FlushAuthCache(r.Context(), email)
 	h.audit(r, "mail.delete", email, true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -393,6 +396,9 @@ func (h *Handlers) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "mailbox not found")
 		return
 	}
+	// Without this the OLD password still opens the mailbox over IMAP and SASL
+	// for the life of the cache entry, which is the window a rotation closes.
+	h.flushMailboxAuthCache(r.Context(), id, mailboxID)
 	h.audit(r, "mail.password", strconv.FormatInt(mailboxID, 10), true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "password": req.Password})
 }
@@ -428,6 +434,9 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "mailbox not found")
 		return
 	}
+	// mailboxes.status is an input to the cached passdb answer, so a suspension
+	// reaches IMAP only once the entry is dropped.
+	h.flushMailboxAuthCache(r.Context(), id, mailboxID)
 	h.audit(r, "mail.status", strconv.FormatInt(mailboxID, 10), true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

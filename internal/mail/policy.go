@@ -219,6 +219,9 @@ func evaluateSendPolicy(db *sql.DB, attrs map[string]string) string {
 		_, _ = tx.ExecContext(ctx, `INSERT INTO mail_send_log(mailbox_id,domain_id,ok,recipient_count,client_ip)
 			VALUES(?,?,0,?,?)`, mailboxID, domainID, recipients, clientIP)
 		_ = tx.Commit()
+		// The suspension reaches Postfix immediately (this server re-reads the
+		// row per message) but not IMAP, whose passdb answer is cached.
+		FlushAuthCache(ctx, email)
 		log.Printf("mail spam protection: %s auto-suspended (hour=%d/%d day=%d/%d)",
 			email, sentHour, hourLimit, sentDay, dayLimit)
 		return "REJECT 5.7.1 Send limit exceeded; account suspended for security"
