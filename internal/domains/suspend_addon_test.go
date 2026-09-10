@@ -23,9 +23,14 @@ func TestSuspensionReachesTheAddonRows(t *testing.T) {
 	// built before then is what this measures.
 	_, _ = ApplyDomainSuspend(context.Background(), handlers.DB, 7, true)
 
-	statements, values := recorder.matching("UPDATE domains SET suspended=?, status=? WHERE id=? OR parent_domain_id=?")
+	statements, values := recorder.matching("UPDATE domains SET suspended=?, status=?, suspended_by_reseller=0")
 	if len(statements) != 1 {
 		t.Fatalf("the suspension wrote %d statements covering addon rows, want 1", len(statements))
+	}
+	// The individual path takes ownership of the row's state from the reseller
+	// cascade, so a later reseller resume leaves the row alone.
+	if !strings.Contains(statements[0], "suspended_by_reseller=0") {
+		t.Fatalf("the individual suspension did not clear the cascade marker:\n%s", statements[0])
 	}
 	if got := values[0]; len(got) != 4 || got[0] != int64(1) || got[1] != "passive" || got[2] != int64(7) || got[3] != int64(7) {
 		t.Fatalf("bound values = %v, want [1 passive 7 7]", got)
@@ -42,21 +47,24 @@ func TestTheRollbackRestoresEachRowsOwnState(t *testing.T) {
 		t.Fatal("the refused render did not fail the suspension")
 	}
 
-	_, values := recorder.matching("UPDATE domains SET suspended=?, status=? WHERE id=?")
+	_, values := recorder.matching("UPDATE domains SET suspended=?, status=?, suspended_by_reseller=? WHERE id=?")
 	var restored [][]driver.Value
 	for _, bound := range values {
-		if len(bound) == 3 {
+		if len(bound) == 4 {
 			restored = append(restored, bound)
 		}
 	}
 	if len(restored) != 2 {
 		t.Fatalf("%d rows were rolled back, want 2", len(restored))
 	}
-	if got := restored[0]; got[0] != int64(0) || got[1] != "active" || got[2] != int64(7) {
-		t.Errorf("the parent was restored as %v, want [0 active 7]", got)
+	// The cascade marker is part of "as it was found". Leaving it cleared would
+	// hand a suspension the reseller cascade owns to nobody, and the reseller's
+	// own resume would then never lift it.
+	if got := restored[0]; got[0] != int64(0) || got[1] != "active" || got[2] != int64(0) || got[3] != int64(7) {
+		t.Errorf("the parent was restored as %v, want [0 active 0 7]", got)
 	}
-	if got := restored[1]; got[0] != int64(1) || got[1] != "passive" || got[2] != int64(8) {
-		t.Errorf("the addon was restored as %v, want [1 passive 8]", got)
+	if got := restored[1]; got[0] != int64(1) || got[1] != "passive" || got[2] != int64(1) || got[3] != int64(8) {
+		t.Errorf("the addon was restored as %v, want [1 passive 1 8]", got)
 	}
 }
 

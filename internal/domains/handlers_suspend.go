@@ -70,6 +70,10 @@ type suspensionRow struct {
 	id        int64
 	suspended int
 	status    string
+	// byReseller is the row's suspended_by_reseller marker. A rollback has to put
+	// it back too: leaving it cleared would hand a suspension the reseller cascade
+	// owns to nobody, and the next reseller resume would not lift it.
+	byReseller int
 }
 
 // suspensionTargets returns the domain and every addon row that answers to it.
@@ -79,7 +83,8 @@ type suspensionRow struct {
 // levelled it to the parent's state would silently discard that decision.
 func suspensionTargets(ctx context.Context, db *sql.DB, id int64) ([]suspensionRow, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT id, COALESCE(suspended,0), status FROM domains WHERE id=? OR parent_domain_id=? ORDER BY id`, id, id)
+		`SELECT id, COALESCE(suspended,0), status, COALESCE(suspended_by_reseller,0)
+		 FROM domains WHERE id=? OR parent_domain_id=? ORDER BY id`, id, id)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +92,7 @@ func suspensionTargets(ctx context.Context, db *sql.DB, id int64) ([]suspensionR
 	var targets []suspensionRow
 	for rows.Next() {
 		var row suspensionRow
-		if err := rows.Scan(&row.id, &row.suspended, &row.status); err != nil {
+		if err := rows.Scan(&row.id, &row.suspended, &row.status, &row.byReseller); err != nil {
 			// A dropped row is a domain left active while the caller is told the
 			// whole tenant was suspended, which is the defect this exists to close.
 			return nil, err
@@ -119,8 +124,8 @@ func rerenderTargets(db *sql.DB, targets []suspensionRow) error {
 func restoreSuspensionState(ctx context.Context, db *sql.DB, targets []suspensionRow) {
 	for _, target := range targets {
 		if _, err := db.ExecContext(ctx,
-			`UPDATE domains SET suspended=?, status=? WHERE id=?`,
-			target.suspended, target.status, target.id); err != nil {
+			`UPDATE domains SET suspended=?, status=?, suspended_by_reseller=? WHERE id=?`,
+			target.suspended, target.status, target.byReseller, target.id); err != nil {
 			log.Printf("rollback domain suspension state for domain %d: %v", target.id, err)
 			continue
 		}
@@ -158,8 +163,14 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		value = 1
 		status = "passive"
 	}
+	// suspended_by_reseller is CLEARED here whichever direction this goes. This is
+	// the individual path: an operator naming one domain has made an explicit
+	// decision about it, and that decision takes ownership of the row's state from
+	// the reseller cascade. A later reseller resume then leaves the row alone,
+	// which is the point of the marker.
 	if _, err := db.ExecContext(ctx,
-		`UPDATE domains SET suspended=?, status=? WHERE id=? OR parent_domain_id=?`,
+		`UPDATE domains SET suspended=?, status=?, suspended_by_reseller=0
+		 WHERE id=? OR parent_domain_id=?`,
 		value, status, id, id); err != nil {
 		return domainName, err
 	}
@@ -211,36 +222,92 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 // the customer login is suspended (EnforceCustomerNotSuspended), so no separate
 // lock is needed to stop a domain being created mid-sweep and escaping suspension.
 func SuspendResellerDomains(ctx context.Context, db *sql.DB, resellerID int64, suspended bool) (affected, failed int, err error) {
-	rows, err := db.QueryContext(ctx,
-		`SELECT d.id FROM domains d JOIN customers c ON c.id = d.customer_id WHERE c.owner_user_id = ?`, resellerID)
+	targets, err := resellerDomainSnapshot(ctx, db, resellerID)
 	if err != nil {
 		return 0, 0, err
 	}
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			// A dropped id is a domain that is not suspended or not resumed while
-			// the count returned to the caller says it was.
-			log.Printf("suspend: skipping an unreadable domain id: %v", err)
+	for _, target := range targets {
+		if !cascadeShouldAct(target, suspended) {
 			continue
 		}
-		ids = append(ids, id)
-	}
-	_ = rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, 0, err
-	}
-	for _, id := range ids {
-		if _, e := ApplyDomainSuspend(ctx, db, id, suspended); e != nil {
+		if _, e := applySuspend(ctx, db, target.id, suspended); e != nil {
 			if errors.Is(e, ErrDemoSuspend) {
 				continue
 			}
 			failed++
-			log.Printf("reseller %d suspend cascade: domain %d: %v", resellerID, id, e)
+			log.Printf("reseller %d suspend cascade: domain %d: %v", resellerID, target.id, e)
 			continue
+		}
+		if suspended {
+			// Mark AFTER the suspension succeeded, so a row the cascade failed to
+			// close is not later opened by a resume that believes it closed it.
+			// ApplyDomainSuspend cleared the marker on its way through; the resume
+			// direction needs no counterpart, because it clears it the same way.
+			if _, e := db.ExecContext(ctx,
+				`UPDATE domains SET suspended_by_reseller=1 WHERE id=?`, target.id); e != nil {
+				log.Printf("reseller %d suspend cascade: marking domain %d: %v", resellerID, target.id, e)
+			}
 		}
 		affected++
 	}
 	return affected, failed, nil
+}
+
+// applySuspend is the per-domain step of the cascade, a test seam.
+//
+// ApplyDomainSuspend renders a vhost and runs `nginx -t`, which a unit test
+// cannot let succeed, so the cascade's OWN decisions (which rows it acts on and
+// which it marks) would otherwise only ever be observable on the failure path.
+var applySuspend = ApplyDomainSuspend
+
+// cascadeShouldAct reports whether the reseller cascade owns this row's state.
+//
+// Suspending: only a row that is currently OPEN. One already closed is left
+// entirely alone, so the sweep does not re-render a vhost, rewrite FTP and mail
+// rows and stop a tenant runtime that are already in the target state, and
+// `affected` counts rows that really changed.
+//
+// Resuming: only a row the cascade itself closed. This is the whole fix. A
+// domain an administrator suspended individually carries no marker, so it stays
+// closed while the reseller comes back.
+func cascadeShouldAct(target suspensionRow, suspended bool) bool {
+	if suspended {
+		return target.suspended == 0
+	}
+	return target.byReseller == 1
+}
+
+// resellerDomainSnapshot reads every domain of a reseller's customers WITH the
+// state each row is in before any write.
+//
+// The snapshot is taken once, up front, and the loop decides from it rather than
+// re-reading. An addon domain is a full domains row, so it appears in this list
+// on its own AND is swept by its parent's ApplyDomainSuspend; a mid-loop re-read
+// would see the write the parent just made and conclude the addon was already
+// closed, so the addon would never be marked and a later resume would leave it
+// down for good.
+func resellerDomainSnapshot(ctx context.Context, db *sql.DB, resellerID int64) ([]suspensionRow, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT d.id, COALESCE(d.suspended,0), COALESCE(d.suspended_by_reseller,0)
+		 FROM domains d JOIN customers c ON c.id = d.customer_id
+		 WHERE c.owner_user_id = ? ORDER BY d.id`, resellerID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var targets []suspensionRow
+	for rows.Next() {
+		var target suspensionRow
+		if err := rows.Scan(&target.id, &target.suspended, &target.byReseller); err != nil {
+			// A dropped row is a domain that is not suspended or not resumed while
+			// the count returned to the caller says it was.
+			log.Printf("suspend: skipping an unreadable domain row: %v", err)
+			continue
+		}
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return targets, nil
 }

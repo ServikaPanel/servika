@@ -23,8 +23,11 @@ type ownerRecorder struct {
 	mu sync.Mutex
 	// ownsCustomer decides what the reseller ownership lookup answers.
 	ownsCustomer bool
-	statements   []string
-	values       [][]driver.Value
+	// cascadeSnapshot is what the reseller cascade's own read returns: one row per
+	// domain, as {id, suspended, suspended_by_reseller}.
+	cascadeSnapshot [][]driver.Value
+	statements      []string
+	values          [][]driver.Value
 }
 
 func (r *ownerRecorder) record(query string, args []driver.NamedValue) {
@@ -109,15 +112,23 @@ func (c *ownerConn) QueryContext(_ context.Context, query string, args []driver.
 			columns: []string{"domain_name", "system_user", "is_demo"},
 			rows:    [][]driver.Value{{"parent.example", "c_parent", int64(0)}},
 		}, nil
+	case strings.Contains(query, "FROM domains d JOIN customers c"):
+		// The reseller cascade's snapshot. One domain the cascade closed earlier
+		// and one an operator closed individually, so a resume must lift exactly
+		// the first.
+		return &staticRows{
+			columns: []string{"id", "suspended", "suspended_by_reseller"},
+			rows:    c.rec.cascadeSnapshot,
+		}, nil
 	case strings.Contains(query, "parent_domain_id=?"):
 		// A parent that is active and an addon that was suspended on its own
 		// earlier. The two differ deliberately: a rollback must put each row back
 		// as it was found.
 		return &staticRows{
-			columns: []string{"id", "suspended", "status"},
+			columns: []string{"id", "suspended", "status", "suspended_by_reseller"},
 			rows: [][]driver.Value{
-				{int64(7), int64(0), "active"},
-				{int64(8), int64(1), "passive"},
+				{int64(7), int64(0), "active", int64(0)},
+				{int64(8), int64(1), "passive", int64(1)},
 			},
 		}, nil
 	case strings.Contains(query, "php_version"):

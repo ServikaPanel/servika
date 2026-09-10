@@ -404,6 +404,36 @@ func (h *Handlers) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// subAccountCascade returns the statement that carries a reseller's status down
+// to its own sub-accounts. It takes ONE bound argument: the reseller's id.
+//
+// The two directions are not symmetric, which is the whole point. Suspending
+// marks the rows this cascade closed and leaves the marker alone on a row that
+// was already suspended. Resuming then opens ONLY the rows carrying that marker,
+// so a customer login an administrator disabled individually for abuse or
+// non-payment stays disabled while the reseller comes back.
+//
+// In the suspend statement the marker assignment must come BEFORE status. MariaDB
+// evaluates SET assignments left to right and a later one sees what an earlier
+// one wrote, so putting status first would make every row look already-suspended
+// and nothing would ever be marked.
+func subAccountCascade(status string) string {
+	if status == "suspended" {
+		return `UPDATE users
+		   SET suspended_by_reseller = IF(status='suspended', COALESCE(suspended_by_reseller,0), 1),
+		       status = 'suspended',
+		       token_version = token_version+1,
+		       updated_at = NOW()
+		 WHERE reseller_id=?`
+	}
+	return `UPDATE users
+	   SET status = 'active',
+	       suspended_by_reseller = 0,
+	       token_version = token_version+1,
+	       updated_at = NOW()
+	 WHERE reseller_id=? AND COALESCE(suspended_by_reseller,0)=1`
+}
+
 // SetStatus: POST /users/{id}/status
 func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	c := middleware.ClaimsFrom(r)
@@ -435,8 +465,13 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	// Bump token_version so a suspended account's live session is revoked at once
 	// rather than surviving until the JWT expires.
+	//
+	// suspended_by_reseller is cleared whichever direction this goes: an operator
+	// naming one account has made an explicit decision about it, and that decision
+	// takes ownership of the row's state from the reseller cascade.
 	if _, err := h.DB.ExecContext(r.Context(),
-		`UPDATE users SET status=?, token_version=token_version+1, updated_at=NOW() WHERE id=?`, b.Status, id); err != nil {
+		`UPDATE users SET status=?, token_version=token_version+1, suspended_by_reseller=0, updated_at=NOW()
+		 WHERE id=?`, b.Status, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not change status")
 		return
 	}
@@ -446,8 +481,7 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// cascade only touches rows bound to this reseller (reseller_id = id), so an
 	// ordinary customer account (no sub-accounts) matches nothing. Non-fatal: the
 	// primary status change already succeeded, so a cascade failure is logged.
-	if _, err := h.DB.ExecContext(r.Context(),
-		`UPDATE users SET status=?, token_version=token_version+1, updated_at=NOW() WHERE reseller_id=?`, b.Status, id); err != nil {
+	if _, err := h.DB.ExecContext(r.Context(), subAccountCascade(b.Status), id); err != nil {
 		log.Printf("cascade status to sub-accounts of user %d failed: %v", id, err)
 	}
 
