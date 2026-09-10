@@ -555,6 +555,10 @@ func main() {
 	copyH := &sitecopy.Handlers{DB: d}
 	importH := &siteimport.Handlers{DB: d}
 	wpH := &wordpress.Handlers{DB: d}
+	// The server-wide WordPress inventory costs two PHP processes and one
+	// wordpress.org call per installation, so it is collected here rather than
+	// inside the request the dashboard makes on mount.
+	wordpress.StartInventoryRefresher(context.Background(), d)
 	fwH := &firewall.Handlers{DB: d}
 	geoIPH := &geoip.Handlers{DB: d}
 	wafH := &waf.Handlers{DB: d}

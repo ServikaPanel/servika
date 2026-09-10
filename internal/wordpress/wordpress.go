@@ -205,7 +205,7 @@ func configPasswordMatches(systemUser, target, want string) bool {
 	return string(bytes.TrimSpace(out)) == want
 }
 
-func (h *Handlers) scheme(ssl bool) string {
+func scheme(ssl bool) string {
 	if ssl {
 		return "https://"
 	}
@@ -269,57 +269,62 @@ type wpCandidate struct {
 	dir, root              string
 }
 
-// GET /wordpress/all scans installations across all domains for versions, updates, and installation dates.
-// The AdminOnly endpoint runs wp-cli calls through a four-worker pool with per-call context timeouts.
+// GET /wordpress/all reports every WordPress installation in the caller's scope
+// with its version and update state.
+//
+// The wp-cli fan-out behind it is NOT on this path: one shared pass produces the
+// whole server's inventory (inventory.go) and this narrows its result, because
+// the pass costs two PHP processes and one wordpress.org call per site and the
+// dashboard fetches this on mount.
 func (h *Handlers) ListAll(w http.ResponseWriter, r *http.Request) {
-	// Scope: a reseller sees only its own customers' sites.
-	cond, arg := middleware.ScopeSQL(r, "d")
-	// #nosec G701 G202 -- cond is a constant scope fragment from ScopeSQL with a literal alias; all user values are bound via arg placeholders.
-	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT d.id, d.system_user, d.domain_name, COALESCE(d.cert_path,'') FROM domains d`+
-			cond+` ORDER BY d.domain_name`, arg...)
+	visible, err := h.visibleDomainIDs(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not list domains")
 		return
 	}
-	var candidates []wpCandidate
-	for rows.Next() {
-		var id int64
-		var systemUser, domainName, cert string
-		if err := rows.Scan(&id, &systemUser, &domainName, &cert); err != nil {
-			// A dropped row is a tenant whose WordPress installations are never
-			// discovered, so they are absent from every server-wide pass.
-			log.Printf("wordpress: skipping an unreadable domain row: %v", err)
-			continue
-		}
-		root := "/home/" + systemUser + "/public_html"
-		for _, install := range Discover(systemUser) {
-			candidates = append(candidates, wpCandidate{id, systemUser, domainName, cert != "", install.Dir, root})
+	installs, err := Inventory(r.Context(), h.DB)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read the WordPress inventory")
+		return
+	}
+	out := make([]AllInstallation, 0, len(installs))
+	for _, install := range installs {
+		if visible[install.DomainID] {
+			out = append(out, install)
 		}
 	}
-	_ = rows.Err()
-	_ = rows.Close()
-
-	out := make([]AllInstallation, len(candidates))
-	sem := make(chan struct{}, 4)
-	var wg sync.WaitGroup
-	for i := range candidates {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(i int, a wpCandidate) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			out[i] = h.inspectInstallation(r.Context(), a)
-		}(i, candidates[i])
-	}
-	wg.Wait()
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// visibleDomainIDs returns the domains this caller may see: a reseller sees only
+// its own customers' sites.
+//
+// An unreadable row is an ERROR rather than a silently narrower set, because a
+// missing id hides that domain's installations and an absent site reads as a
+// domain with no WordPress on it.
+func (h *Handlers) visibleDomainIDs(r *http.Request) (map[int64]bool, error) {
+	cond, arg := middleware.ScopeSQL(r, "d")
+	// #nosec G701 G202 -- cond is a constant scope fragment from ScopeSQL with a literal alias; all user values are bound via arg placeholders.
+	rows, err := h.DB.QueryContext(r.Context(), `SELECT d.id FROM domains d`+cond, arg...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	visible := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		visible[id] = true
+	}
+	return visible, rows.Err()
+}
+
 // inspectInstallation collects version, update state, and installation date for one WordPress installation.
-func (h *Handlers) inspectInstallation(ctx context.Context, a wpCandidate) AllInstallation {
+func inspectInstallation(ctx context.Context, a wpCandidate) AllInstallation {
 	directoryPath := strings.TrimPrefix(strings.TrimPrefix(a.dir, a.root), "/")
-	base := h.scheme(a.ssl) + a.domainName
+	base := scheme(a.ssl) + a.domainName
 	if directoryPath != "" {
 		base += "/" + directoryPath
 	}
@@ -530,7 +535,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		fail("wp-config creation", []byte("the database password was not stored in wp-config.php"))
 		return
 	}
-	url := h.scheme(ssl) + domainName
+	url := scheme(ssl) + domainName
 	if req.SubDir != "" {
 		url += "/" + req.SubDir
 	}
