@@ -1,0 +1,31 @@
+-- Disable the MinIO catalog entry until a fixed build exists to point at.
+--
+-- The seeded pin RELEASE.2025-09-07T16-13-09Z is inside the affected range of
+-- eight OSV advisories, two of which need no credential at all:
+--
+--   CVE-2026-40344 (GO-2026-5284) unauthenticated object write, missing
+--                                 signature verification on unsigned-trailer
+--                                 uploads
+--   CVE-2026-41145 (GO-2026-5437) unauthenticated object write, query-string
+--                                 credential signature bypass
+--
+-- The rest are CVE-2026-42600 (path traversal through the ReadMultiple storage
+-- REST endpoint), CVE-2026-33322 (JWT algorithm confusion in OIDC),
+-- CVE-2026-34204, CVE-2026-39414, CVE-2026-33419 and CVE-2025-62506.
+--
+-- Bumping the pin does NOT fix this. Both unauthenticated advisories give
+-- last_affected at a source commit dated 2026-02-12, while the newest published
+-- MinIO release is RELEASE.2025-10-15T17-29-55Z, which is still inside the
+-- range: re-running the OSV query at that version returns the same eight ids.
+--
+-- A host application binds its port unbound by design and an operator publishes
+-- it with host_app_ports.firewall_open, so an installed MinIO is meant to be
+-- reachable from outside the server. The panel put it in the catalog, pinned it
+-- and vouched for its digest; the digest proves integrity and says nothing about
+-- whether the artefact is vulnerable.
+--
+-- The row is kept rather than deleted, for the reason the TeamSpeak row is kept
+-- and disabled: the entry stays visible with its version, so an operator sees
+-- what is being withheld and one UPDATE brings it back once upstream ships a
+-- fixed build.
+UPDATE host_app_catalog SET enabled = 0 WHERE code = 'minio';

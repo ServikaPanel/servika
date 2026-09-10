@@ -1,7 +1,11 @@
 package hostapps
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -245,5 +249,40 @@ func TestAnInvalidCatalogRowNamesTheFieldThatIsWrong(t *testing.T) {
 	}
 	if field, err := ValidEntry(sampleEntry()); err != nil {
 		t.Errorf("a good row was refused (%s): %v", field, err)
+	}
+}
+
+// The seeded MinIO pin is inside the affected range of two UNAUTHENTICATED
+// object-write advisories (CVE-2026-40344, CVE-2026-41145), and bumping it does
+// not help: both give last_affected at a source commit later than the newest
+// published release, so every obtainable build is affected. A host application
+// binds its port unbound by design and an operator publishes it at the firewall,
+// so an installed MinIO is meant to be reachable from outside.
+//
+// This reads the LAST migration statement that touches the row rather than one
+// file, so a later migration re-enabling it fails here.
+func TestTheMinIOCatalogEntryStaysDisabled(t *testing.T) {
+	files, err := filepath.Glob("../../migrations/*.sql")
+	if err != nil {
+		t.Fatalf("list the migrations: %v", err)
+	}
+	sort.Strings(files)
+	pattern := regexp.MustCompile(`(?i)UPDATE\s+host_app_catalog\s+SET\s+enabled\s*=\s*(\d+)[^;]*'minio'`)
+
+	last := ""
+	for _, file := range files {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		for _, match := range pattern.FindAllStringSubmatch(string(body), -1) {
+			last = match[1]
+		}
+	}
+	if last == "" {
+		t.Fatal("no migration disables the MinIO catalog entry")
+	}
+	if last != "0" {
+		t.Errorf("the last migration to touch the MinIO entry sets enabled = %s, want 0", last)
 	}
 }
