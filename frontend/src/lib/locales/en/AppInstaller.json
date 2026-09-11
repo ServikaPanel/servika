@@ -28,7 +28,8 @@
     "actions": "Actions",
     "forget": "Remove from list",
     "loading": "Loading…",
-    "empty": "Nothing has been installed here yet."
+    "empty": "Nothing has been installed here yet.",
+    "unavailable": "The installation list could not be loaded."
   },
   "state": {
     "installing": "Installing",

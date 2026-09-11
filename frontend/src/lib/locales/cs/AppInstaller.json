@@ -28,7 +28,8 @@
     "actions": "Akce",
     "forget": "Odebrat ze seznamu",
     "loading": "Načítá se…",
-    "empty": "Zde zatím nebylo nic nainstalováno."
+    "empty": "Zde zatím nebylo nic nainstalováno.",
+    "unavailable": "Seznam instalací se nepodařilo načíst."
   },
   "state": {
     "installing": "Instaluje se",

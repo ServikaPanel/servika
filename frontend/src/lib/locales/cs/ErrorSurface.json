@@ -37,6 +37,7 @@
     "wordpressInstalls": "instalace WordPressu",
     "wordpressPlugins": "pluginy WordPressu",
     "wordpressThemes": "šablony WordPressu",
-    "wordpressUsers": "uživatelé WordPressu"
+    "wordpressUsers": "uživatelé WordPressu",
+    "appInstalls": "instalace aplikací"
   }
 }

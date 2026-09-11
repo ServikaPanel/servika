@@ -28,7 +28,8 @@
     "actions": "Actions",
     "forget": "Retirer de la liste",
     "loading": "Chargement…",
-    "empty": "Rien n'a encore été installé ici."
+    "empty": "Rien n'a encore été installé ici.",
+    "unavailable": "La liste des installations n’a pas pu être chargée."
   },
   "state": {
     "installing": "Installation",

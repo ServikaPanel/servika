@@ -37,6 +37,7 @@
     "wordpressInstalls": "WordPress kurulumları",
     "wordpressPlugins": "WordPress plugin listesi",
     "wordpressThemes": "WordPress temaları",
-    "wordpressUsers": "WordPress kullanıcıları"
+    "wordpressUsers": "WordPress kullanıcıları",
+    "appInstalls": "uygulama kurulumları"
   }
 }

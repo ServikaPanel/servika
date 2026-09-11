@@ -28,7 +28,8 @@
     "actions": "İşlemler",
     "forget": "Listeden kaldır",
     "loading": "Yükleniyor…",
-    "empty": "Buraya henüz bir şey kurulmadı."
+    "empty": "Buraya henüz bir şey kurulmadı.",
+    "unavailable": "Kurulum listesi yüklenemedi."
   },
   "state": {
     "installing": "Kuruluyor",

@@ -37,6 +37,7 @@
     "wordpressInstalls": "instalaciones de WordPress",
     "wordpressPlugins": "complementos de WordPress",
     "wordpressThemes": "temas de WordPress",
-    "wordpressUsers": "usuarios de WordPress"
+    "wordpressUsers": "usuarios de WordPress",
+    "appInstalls": "instalaciones de aplicaciones"
   }
 }

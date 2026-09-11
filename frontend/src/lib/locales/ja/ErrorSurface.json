@@ -37,6 +37,7 @@
     "wordpressInstalls": "WordPress のインストール",
     "wordpressPlugins": "WordPress のプラグイン",
     "wordpressThemes": "WordPress のテーマ",
-    "wordpressUsers": "WordPress のユーザー"
+    "wordpressUsers": "WordPress のユーザー",
+    "appInstalls": "アプリケーションのインストール"
   }
 }

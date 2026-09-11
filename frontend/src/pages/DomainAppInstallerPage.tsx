@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import Breadcrumb from '@/components/Breadcrumb'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import { useReportError } from '@/lib/errors'
 import { safeHref } from '@/lib/safeUrl'
 import {
   responsiveTableActionCellClass,
@@ -41,9 +42,11 @@ const INPUT_CLASS = 'w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border bord
 export default function DomainAppInstallerPage() {
   const { t } = useTranslation('AppInstaller')
   const { confirm } = useDialog()
+  const report = useReportError()
   const { id } = useParams()
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [installs, setInstalls] = useState<InstallRow[]>([])
+  const [listFailed, setListFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,9 +66,13 @@ export default function DomainAppInstallerPage() {
       .catch(cause => setError(apiError(cause, t('errors.catalog'))))
       .finally(() => setLoading(false))
     api.get<InstallRow[]>(`/domains/${id}/app-installer/installs`)
-      .then(response => setInstalls(response.data || []))
-      .catch(() => setInstalls([]))
-  }, [id, t])
+      .then(response => { setInstalls(response.data || []); setListFailed(false) })
+      // The rows are NOT cleared. `busy` below is derived from them and gates
+      // the poll, so emptying the list on a failed read both hid the running
+      // installation and cancelled the polling that would have recovered it.
+      // Keeping the previous rows keeps the poll alive across a transient error.
+      .catch(cause => { setListFailed(true); report('appInstalls')(cause) })
+  }, [id, t, report])
 
   useEffect(() => { load() }, [load])
 
@@ -223,7 +230,9 @@ export default function DomainAppInstallerPage() {
             )}
             {!loading && installs.length === 0 && (
               <tr className={responsiveTableRowClass}>
-                <td className={responsiveTableCellClass} colSpan={6}>{t('list.empty')}</td>
+                {/* A list that could not be read says so. "No applications
+                    installed" is a fact the screen must not invent. */}
+                <td className={responsiveTableCellClass} colSpan={6}>{listFailed ? t('list.unavailable') : t('list.empty')}</td>
               </tr>
             )}
             {!loading && installs.map(row => (

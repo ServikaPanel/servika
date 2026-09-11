@@ -28,7 +28,8 @@
     "actions": "操作",
     "forget": "从列表移除",
     "loading": "加载中…",
-    "empty": "这里尚未安装任何内容。"
+    "empty": "这里尚未安装任何内容。",
+    "unavailable": "无法加载安装列表。"
   },
   "state": {
     "installing": "安装中",

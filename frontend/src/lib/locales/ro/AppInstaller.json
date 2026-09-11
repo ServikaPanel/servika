@@ -28,7 +28,8 @@
     "actions": "Acțiuni",
     "forget": "Scoate din listă",
     "loading": "Se încarcă…",
-    "empty": "Aici nu s-a instalat încă nimic."
+    "empty": "Aici nu s-a instalat încă nimic.",
+    "unavailable": "Lista instalărilor nu a putut fi încărcată."
   },
   "state": {
     "installing": "Se instalează",

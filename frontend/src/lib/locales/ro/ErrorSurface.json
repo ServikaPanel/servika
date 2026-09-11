@@ -37,6 +37,7 @@
     "wordpressInstalls": "instalări WordPress",
     "wordpressPlugins": "pluginuri WordPress",
     "wordpressThemes": "teme WordPress",
-    "wordpressUsers": "utilizatori WordPress"
+    "wordpressUsers": "utilizatori WordPress",
+    "appInstalls": "instalări de aplicații"
   }
 }

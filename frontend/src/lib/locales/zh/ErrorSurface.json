@@ -37,6 +37,7 @@
     "wordpressInstalls": "WordPress 安装",
     "wordpressPlugins": "WordPress 插件",
     "wordpressThemes": "WordPress 主题",
-    "wordpressUsers": "WordPress 用户"
+    "wordpressUsers": "WordPress 用户",
+    "appInstalls": "应用安装"
   }
 }
