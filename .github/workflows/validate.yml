@@ -73,6 +73,13 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # Namespace, key and placeholder parity of the eleven translations against
+      # en. tsc, ESLint and the build all pass with a key missing from a locale,
+      # so this is the only gate that sees it. The script uses node built-ins
+      # only, so it needs no npm ci.
+      - name: Translation parity
+        run: node scripts/i18n-verify.mjs
+
       - name: npm ci
         run: npm ci
         working-directory: frontend
