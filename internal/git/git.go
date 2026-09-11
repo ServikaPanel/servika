@@ -175,12 +175,18 @@ func generateDeployKey(systemUser string) (pubKey string, err error) {
 		relDir  = ".ssh"
 		relPriv = ".ssh/servika_deploy"
 		relPub  = ".ssh/servika_deploy.pub"
-		relCfg  = ".ssh/config"
 	)
 	if err := files.MkdirAllBeneath(home, relDir, systemUser); err != nil {
 		return "", fmt.Errorf("prepare the deploy key directory: %w", err)
 	}
+	// Before the early return below, so a tenant who already has a deploy key
+	// still gets the pinned host keys. A host installed before this change would
+	// otherwise keep the configuration that disabled verification.
+	if err := writeSSHTrust(home, systemUser); err != nil {
+		return "", err
+	}
 	if existing, err := files.ReadFileBeneath(home, relPub, deployKeyMaxBytes); err == nil {
+		files.RestoreconBeneath(home, relDir)
 		return strings.TrimSpace(string(existing)), nil // Reuse the current key.
 	}
 
@@ -211,16 +217,6 @@ func generateDeployKey(systemUser string) (pubKey string, err error) {
 	}
 	if err := files.WriteFileBeneath(home, relPub, publicKey, 0o644, systemUser); err != nil {
 		return "", fmt.Errorf("install the deploy key: %w", err)
-	}
-	cfgBody := `Host github.com
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/servika_deploy
-    StrictHostKeyChecking no
-    UserKnownHostsFile=/dev/null
-`
-	if err := files.WriteFileBeneath(home, relCfg, []byte(cfgBody), 0o600, systemUser); err != nil {
-		return "", fmt.Errorf("write the ssh configuration: %w", err)
 	}
 	files.RestoreconBeneath(home, relDir)
 	return strings.TrimSpace(string(publicKey)), nil
