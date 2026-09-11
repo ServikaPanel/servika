@@ -62,7 +62,6 @@ func TickOnce(db *sql.DB) { tickOnce(db) }
 // tickOnce: find domains due for this hour, back them up, apply retention.
 func tickOnce(db *sql.DB) {
 	now := time.Now()
-	currentHour := now.Hour()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
@@ -86,6 +85,19 @@ func tickOnce(db *sql.DB) {
 		return
 	}
 
+	// Every scheduled domain is read, and the due test is made in Go below.
+	//
+	// The query used to match the configured backup hour against the current one,
+	// which made a domain eligible during ONE tick a day and nothing ever caught
+	// up. Two things routinely eat that tick: the pass is
+	// serial and each domain gets its own 25-minute budget, so a server with
+	// dozens of tenants runs the 03:00 pass well past 04:00 and the hour-4 and
+	// hour-5 domains are skipped for the whole night; and the panel being
+	// restarted during a domain's hour loses the same day. Nothing reported it,
+	// because the job row records the domains that DID run.
+	//
+	// There are dozens of domains, not thousands, so reading them all and
+	// deciding here costs nothing and keeps the whole rule in one place.
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, domain_name, system_user,
 		       COALESCE(backup_freq,'none'), COALESCE(backup_hour,3),
@@ -93,9 +105,7 @@ func tickOnce(db *sql.DB) {
 		       UNIX_TIMESTAMP(last_backup_at)
 		FROM domains
 		WHERE COALESCE(backup_freq,'none') != 'none'
-		  AND COALESCE(backup_hour,3) = ?
-		  AND is_demo = 0`,
-		currentHour)
+		  AND is_demo = 0`)
 	if err != nil {
 		log.Printf("backup scheduler tick query: %v", err)
 		return
@@ -110,16 +120,9 @@ func tickOnce(db *sql.DB) {
 			log.Printf("backup scheduler scan: %v", err)
 			continue
 		}
-		// Filter: if freq=daily, 23 hours must have passed; if weekly, 6.5 days
-		// (slack: to avoid missing when it lands on a day/week boundary)
-		minSec := int64(23 * 3600)
-		if d.Frequency == "weekly" {
-			minSec = int64(6*24*3600 + 12*3600)
+		if backupDue(now, d.Hour, d.Frequency, lastTs) {
+			due = append(due, d)
 		}
-		if lastTs.Valid && (now.Unix()-lastTs.Int64) < minSec {
-			continue
-		}
-		due = append(due, d)
 	}
 	if err := rows.Err(); err != nil {
 		// A domain missing from this list is simply not backed up tonight, and the
