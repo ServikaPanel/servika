@@ -194,7 +194,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	}
 
 	zoneWarning := ""
-	if zerr := WriteZone(r.Context(), h.DB, id); zerr != nil {
+	if zerr := writeZone(r.Context(), h.DB, id); zerr != nil {
 		zoneWarning = "records saved but zone validation warned: " + zerr.Error()
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{

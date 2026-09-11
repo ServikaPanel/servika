@@ -135,7 +135,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	nid, _ := res.LastInsertId()
 	row := h.DB.QueryRowContext(r.Context(), selectAll+" WHERE id=?", nid)
 	saved, _ := scan(row)
-	if err := WriteZone(r.Context(), h.DB, id); err != nil {
+	if err := writeZone(r.Context(), h.DB, id); err != nil {
 		httpx.LogR(r, "write DNS zone after record create for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "record saved but DNS zone could not be updated")
 		return
@@ -345,7 +345,7 @@ func SeedDefaults(ctx context.Context, db *sql.DB, domainID int64, domainName, i
 	if meta.DKIMEnabled {
 		for _, row := range rows {
 			if row.Enabled && strings.Contains(row.Value, "{DKIM}") {
-				dkimTXT, err = EnsureDKIM(ctx, db, domainID, domainName, selector)
+				dkimTXT, err = ensureDKIM(ctx, db, domainID, domainName, selector)
 				if err != nil {
 					log.Printf("generate DKIM key domain=%d: %v", domainID, err)
 				}

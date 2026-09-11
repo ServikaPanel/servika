@@ -137,7 +137,7 @@ func (h *Handlers) PutSOA(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save SOA settings")
 		return
 	}
-	if err := WriteZone(r.Context(), h.DB, id); err != nil {
+	if err := writeZone(r.Context(), h.DB, id); err != nil {
 		httpx.LogR(r, "dns WriteZone(soa) domain=%d: %v", id, err)
 	}
 	httpx.WriteJSON(w, http.StatusOK, soa)

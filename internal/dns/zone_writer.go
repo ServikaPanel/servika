@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -189,10 +188,10 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 		return nil
 	}
 
-	if err := os.MkdirAll(ZoneDir, 0750); err != nil {
+	if err := os.MkdirAll(zoneDirectory, 0750); err != nil {
 		return err
 	}
-	zonePath := filepath.Join(ZoneDir, domainName+".zone")
+	zonePath := filepath.Join(zoneDirectory, domainName+".zone")
 	serial := strconv.FormatUint(uint64(nextSerial(readZoneSerial(zonePath))), 10)
 
 	soa := LoadSOA(ctx, db, domainID, domainName)
@@ -206,7 +205,7 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 		return err
 	}
 	// #nosec G204 G702 -- fixed binary (named-checkzone) with separate args (no shell); domainName is validated before this point.
-	if out, err := exec.Command("named-checkzone", domainName, tmpPath).CombinedOutput(); err != nil {
+	if out, err := zoneCommand("named-checkzone", domainName, tmpPath).CombinedOutput(); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("named-checkzone: %s: %w", strings.TrimSpace(string(out)), err)
 	}
@@ -220,9 +219,9 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 		return err
 	}
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with constant/internal args (no shell); no tenant input.
-	_, _ = exec.Command("chown", "named:named", zonePath).CombinedOutput()
+	_, _ = zoneCommand("chown", "named:named", zonePath).CombinedOutput()
 	// #nosec G204 G702 -- fixed binary (restorecon) with internal zone path (no shell); no tenant input.
-	_, _ = exec.Command("restorecon", zonePath).CombinedOutput()
+	_, _ = zoneCommand("restorecon", zonePath).CombinedOutput()
 
 	if err := updateZoneIncludes(ctx, db); err != nil {
 		return err
@@ -233,17 +232,17 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 
 // reloadNamed reloads BIND and validates the configuration before a restart fallback.
 func reloadNamed() {
-	if err := exec.Command("rndc", "reload").Run(); err == nil {
+	if err := zoneCommand("rndc", "reload").Run(); err == nil {
 		return
 	}
-	if err := exec.Command("systemctl", "reload", "named").Run(); err == nil {
+	if err := zoneCommand("systemctl", "reload", "named").Run(); err == nil {
 		return
 	}
-	if err := exec.Command("named-checkconf").Run(); err != nil {
+	if err := zoneCommand("named-checkconf").Run(); err != nil {
 		log.Printf("dns reload: named-checkconf failed; named restart skipped: %v", err)
 		return
 	}
-	_ = exec.Command("systemctl", "restart", "named").Run()
+	_ = zoneCommand("systemctl", "restart", "named").Run()
 }
 
 func zoneIncludeStatement(domainName string, dnssec bool) string {
@@ -283,20 +282,20 @@ func updateZoneIncludes(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	tmpPath := NamedConfInclude + ".tmp"
+	tmpPath := namedConfIncludePath + ".tmp"
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
 		return err
 	}
-	if output, checkErr := exec.Command("named-checkconf", tmpPath).CombinedOutput(); checkErr != nil {
+	if output, checkErr := zoneCommand("named-checkconf", tmpPath).CombinedOutput(); checkErr != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("validate generated zone include: %s: %w", strings.TrimSpace(string(output)), checkErr)
 	}
-	if err := os.Rename(tmpPath, NamedConfInclude); err != nil {
+	if err := os.Rename(tmpPath, namedConfIncludePath); err != nil {
 		_ = os.Remove(tmpPath)
 		return err
 	}
-	_, _ = exec.Command("restorecon", NamedConfInclude).CombinedOutput()
+	_, _ = zoneCommand("restorecon", namedConfIncludePath).CombinedOutput()
 	return nil
 }
 

@@ -81,7 +81,7 @@ func ApplyMailDiscovery(ctx context.Context, db *sql.DB) (MailDiscoveryResult, e
 
 	for _, domain := range domainList {
 		result.Domains++
-		added, err := SeedDefaults(ctx, db, domain.id, domain.name, domain.ipv4)
+		added, err := seedDefaults(ctx, db, domain.id, domain.name, domain.ipv4)
 		if err != nil {
 			// Which domain failed goes to the log; the response carries a count,
 			// because one broken zone must not stop the rest from being fixed.
@@ -93,7 +93,7 @@ func ApplyMailDiscovery(ctx context.Context, db *sql.DB) (MailDiscoveryResult, e
 			continue // Already had them; no need to rewrite an unchanged zone.
 		}
 		result.RecordsAdded += added
-		if err := WriteZone(ctx, db, domain.id); err != nil {
+		if err := writeZone(ctx, db, domain.id); err != nil {
 			log.Printf("write zone after adding mail discovery records for domain %d: %v", domain.id, err)
 			result.Failed++
 		}
