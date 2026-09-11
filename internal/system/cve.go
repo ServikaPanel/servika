@@ -119,7 +119,7 @@ func cveScan() *CveSummary {
 	// CVE list line: "CVE-2025-68724  Important/Sec. kernel-...x86_64"
 	sevOf := map[string]string{} // cveID → highest severity label
 	pkgOf := map[string]string{} // cveID → example package at that severity
-	for ln := range strings.SplitSeq(cveRunShell(150*time.Second, "-q", "updateinfo", "list", "cves"), "\n") {
+	for ln := range strings.SplitSeq(cveShell(150*time.Second, "-q", "updateinfo", "list", "cves"), "\n") {
 		f := strings.Fields(ln)
 		if len(f) < 3 || !strings.HasPrefix(f[0], "CVE-") {
 			continue
@@ -160,7 +160,7 @@ func cveScan() *CveSummary {
 		s.TopCves = append(s.TopCves, CveEntry{ID: id, Severity: sevOf[id], Package: pkgOf[id]})
 	}
 	// Total advisory count (summary): "    15 Security notice(s)"
-	for ln := range strings.SplitSeq(cveRunShell(60*time.Second, "-q", "updateinfo", "--summary"), "\n") {
+	for ln := range strings.SplitSeq(cveShell(60*time.Second, "-q", "updateinfo", "--summary"), "\n") {
 		t := strings.TrimSpace(ln)
 		if strings.HasSuffix(t, "Security notice(s)") &&
 			!strings.Contains(t, "Critical") && !strings.Contains(t, "Important") &&

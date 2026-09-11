@@ -303,7 +303,7 @@ func ReadDisks() []DiskUsage {
 		"ramfs": true,
 	}
 	skipPrefix := []string{"/proc", "/sys", "/dev", "/run", "/var/lib/docker", "/var/lib/containers", "/snap", "/home/jails"}
-	f, err := os.Open("/proc/mounts")
+	f, err := os.Open(procMounts)
 	if err != nil {
 		return nil
 	}
@@ -339,7 +339,7 @@ func ReadDisks() []DiskUsage {
 			}
 			seenDev[dev] = true
 		}
-		d, err := ReadDisk(mount)
+		d, err := readDiskUsage(mount)
 		if err != nil {
 			return true
 		}
@@ -364,7 +364,7 @@ type networkSnapshot struct {
 }
 
 func ReadNetwork() NetworkUsage {
-	f, err := os.Open("/proc/net/dev")
+	f, err := os.Open(procNetDev)
 	if err != nil {
 		return NetworkUsage{}
 	}
@@ -445,7 +445,7 @@ func round2(f float64) float64 {
 }
 
 func primaryIP() string {
-	ifaces, err := net.Interfaces()
+	ifaces, err := netInterfaces()
 	if err != nil {
 		return ""
 	}
@@ -460,7 +460,7 @@ func primaryIP() string {
 			strings.HasPrefix(n, "virbr") || strings.HasPrefix(n, "vnet") {
 			continue
 		}
-		addrs, err := iface.Addrs()
+		addrs, err := netAddrs(iface)
 		if err != nil {
 			continue
 		}
@@ -481,7 +481,7 @@ func primaryIP() string {
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		addrs, _ := iface.Addrs()
+		addrs, _ := netAddrs(iface)
 		for _, a := range addrs {
 			if ipnet, ok := a.(*net.IPNet); ok {
 				if ip := ipnet.IP.To4(); ip != nil && !ip.IsLoopback() {

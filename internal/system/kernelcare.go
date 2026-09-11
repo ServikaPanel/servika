@@ -67,18 +67,18 @@ func kernelcareUpdateRunning() bool {
 // kernelcareStatus queries the agent. Returns zero-value (Installed=false) when kcarectl is absent.
 func kernelcareStatus() KcStatus {
 	kc := KcStatus{}
-	if !kernelcareInstalled() {
+	if !kcInstalled() {
 		return kc
 	}
 	kc.Installed = true
-	kc.Running = kernelcareUpdateRunning()
+	kc.Running = kcRunning()
 
-	if o, c := kcRunShell(10*time.Second, "--uname"); c == 0 {
+	if o, c := kcShell(10*time.Second, "--uname"); c == 0 {
 		kc.EffectiveKernel = strings.TrimSpace(o)
 	}
 
 	// patch-info: patches loaded when exit 0 + non-empty; extract CVEs.
-	if pi, pc := kcRunShell(15*time.Second, "--patch-info"); pc == 0 && strings.TrimSpace(pi) != "" {
+	if pi, pc := kcShell(15*time.Second, "--patch-info"); pc == 0 && strings.TrimSpace(pi) != "" {
 		kc.Active = true
 		seen := map[string]bool{}
 		for _, tok := range strings.FieldsFunc(pi, func(r rune) bool {
@@ -92,7 +92,7 @@ func kernelcareStatus() KcStatus {
 	}
 
 	// registration status: --info output without "unregistered/not registered/no key" → registered.
-	info, _ := kcRunShell(10*time.Second, "--info")
+	info, _ := kcShell(10*time.Second, "--info")
 	low := strings.ToLower(info)
 	kc.Registered = strings.TrimSpace(info) != "" &&
 		!strings.Contains(low, "unregistered") &&
