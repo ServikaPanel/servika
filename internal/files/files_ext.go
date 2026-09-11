@@ -311,7 +311,7 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 			return
 		}
-		command := newFileCommand(r.Context(), "gunzip", "-k", "-c", archivePinned)
+		command := fileCommand(r.Context(), "gunzip", "-k", "-c", archivePinned)
 		command.Stdout = gzipOutput
 		runErr := command.Run()
 		if runErr == nil {
@@ -353,7 +353,7 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		extractJobs.Store(jobID, job)
 		handedOff = true
 		// #nosec G118 -- the request context is cancelled when this handler returns the job id, which would kill the extraction; runExtractJob deliberately uses a background context with its own timeout.
-		go runExtractJob(job, archiveFd, targetFd, archivePinned, targetPinned, systemUser, archiveType, limits)
+		go startExtractJob(job, archiveFd, targetFd, archivePinned, targetPinned, systemUser, archiveType, limits)
 		httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
 			"ok":     true,
 			"job_id": jobID,
@@ -365,7 +365,7 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 
 	// The gzip branch above is quick and stays synchronous, so it relabels and
 	// answers here. The asynchronous archive branch relabels in its goroutine.
-	if _, err := newFileCommand(r.Context(), "restorecon", "-R", targetPinned).CombinedOutput(); err != nil {
+	if _, err := fileCommand(r.Context(), "restorecon", "-R", targetPinned).CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -527,14 +527,14 @@ func (h *Handlers) Archive(w http.ResponseWriter, r *http.Request) {
 	// The panel's 300-second request timeout already bounds the run, and the
 	// request context cancels the tool when the browser goes away.
 	tool, args := archiveCommand(req.Format, outputAbs, sources)
-	if _, err := tenantFileCommand(r.Context(), systemUser, tool, args...).CombinedOutput(); err != nil {
+	if _, err := tenantCommand(r.Context(), systemUser, tool, args...).CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
 	// No chown: the tool ran as the tenant, so the archive is already theirs. The
 	// relabel stays because restorecon reads the link itself (lgetfilecon) and so
 	// cannot be redirected by one.
-	_, _ = newFileCommand(r.Context(), "restorecon", outputAbs).CombinedOutput()
+	_, _ = fileCommand(r.Context(), "restorecon", outputAbs).CombinedOutput()
 
 	// The archive exists either way, so a failure here is not the request's.
 	// But size is OMITTED rather than sent as 0: an archive that was written and
@@ -666,7 +666,7 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	// because an unbounded walk is a cheap way to hold a root process.
 	searchCtx, cancelSearch := context.WithTimeout(r.Context(), searchTimeout)
 	defer cancelSearch()
-	out, _ := newFileCommand(searchCtx, "find", searchArgs(fdBase, pattern)...).Output()
+	out, _ := fileCommand(searchCtx, "find", searchArgs(fdBase, pattern)...).Output()
 	relBase := "/" + strings.Trim(relClean(rel), "/")
 	results := []Entry{}
 	for ln := range strings.SplitSeq(string(out), "\n") {

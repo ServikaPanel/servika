@@ -65,7 +65,7 @@ func (h *Handlers) home(r *http.Request) (string, string, error) {
 	if !managedSystemUserPattern.MatchString(systemUser) {
 		return "", "", errBadUser
 	}
-	return "/home/" + systemUser, systemUser, nil
+	return homeRoot + "/" + systemUser, systemUser, nil
 }
 
 var (
@@ -73,8 +73,6 @@ var (
 	errEscape     = errors.New("security: escape from home directory blocked")
 	errNotRegular = errors.New("not a regular file")
 	errTooLarge   = errors.New("file exceeds the size limit")
-
-	errSafeIOBadTarget = errors.New("security: empty destination path")
 )
 
 type Entry struct {
@@ -402,11 +400,11 @@ func (h *Handlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// filesystem cannot hold another upload rather than letting parallel uploads
 	// fill it and take the whole service down. The reservation is released on
 	// every exit path below.
-	if !reserveUploadSpace() {
+	if !reserveSpace() {
 		httpx.WriteError(w, http.StatusInsufficientStorage, "server disk space is temporarily low, please retry the upload later")
 		return
 	}
-	defer releaseUploadSpace()
+	defer releaseSpace()
 	if err := parseMultipartUpload(w, r, MaxUploadBytes, maxMultipartMemory); err != nil {
 		if errors.Is(err, errUploadTooLarge) {
 			httpx.WriteError(w, http.StatusRequestEntityTooLarge, "upload exceeds the 10 GiB limit")
@@ -436,7 +434,7 @@ func (h *Handlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// The panel writes as root and then chowns to the tenant, which bypasses the
 	// kernel EDQUOT check, so the plan disk quota could be exceeded. Check the
 	// XFS quota before writing.
-	if !uploadQuotaAvailable(systemUser, fh.Size) {
+	if !quotaAvailable(systemUser, fh.Size) {
 		httpx.WriteError(w, http.StatusInsufficientStorage, "disk quota exceeded — this upload would exceed your plan quota")
 		return
 	}
