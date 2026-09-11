@@ -32,6 +32,8 @@ import (
 	"time"
 	"unsafe"
 
+	"servika/internal/avsettings"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -47,6 +49,31 @@ const readBuffer = 64 * 1024
 // pollTimeoutMS bounds how long a read waits, so the context is checked and the
 // settings are refreshed even on a server where nothing is being written.
 const pollTimeoutMS = 1000
+
+// settingsRefresh is how often the watcher re-reads av_settings.
+//
+// A threshold or a layer changed on the settings screen has to reach a process
+// that may have been running for weeks, and restarting the watcher to apply one
+// is a window in which nothing is watched at all.
+const settingsRefresh = time.Minute
+
+// refresh re-reads the settings. A read that FAILS keeps the settings the
+// watcher already has: a database hiccup must not silently turn a detection
+// layer off, which is the opposite of what a watcher exists to do.
+func (w *watcher) refresh(ctx context.Context) error {
+	settings, err := avsettings.Read(ctx, w.db)
+	if err != nil {
+		log.Printf("antivirus watcher: settings could not be re-read, keeping the current ones: %v", err)
+		return nil
+	}
+	if !settings.Realtime {
+		return errWatchDisabled
+	}
+	w.mu.Lock()
+	w.settings = settings
+	w.mu.Unlock()
+	return nil
+}
 
 func (w *watcher) run(ctx context.Context) error {
 	roots := w.current().ScanRoots()

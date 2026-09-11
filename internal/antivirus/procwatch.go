@@ -38,8 +38,6 @@ import (
 const procWatchFlag = "proc-watch"
 
 const (
-	// procScoreSuspicious is the score at or above which a chain is reported.
-	procScoreSuspicious = 30
 	// procScoreCritical is a verdict of its own: an untrusted-origin execution
 	// or a web process running a suspicious command. Automatic action never
 	// happens (this is notification-only), so this only decides the alert level.

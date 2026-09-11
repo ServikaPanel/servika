@@ -135,7 +135,7 @@ func TestTurningTheSettingOffEndsTheWatcherCleanly(t *testing.T) {
 // other direction turns a database hiccup into a detection layer silently
 // switching off, which is the opposite of what a watcher is for.
 func TestAFailedRefreshKeepsTheCurrentSettings(t *testing.T) {
-	source := sourceOf(t, "watch.go")
+	source := sourceOf(t, "watch_linux.go")
 	idx := strings.Index(source, "settings, err := avsettings.Read(ctx, w.db)")
 	if idx < 0 {
 		t.Fatal("the refresh no longer reads the settings")

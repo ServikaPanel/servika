@@ -28,6 +28,8 @@ import (
 )
 
 const (
+	// procScoreSuspicious is the score at or above which a chain is reported.
+	procScoreSuspicious = 30
 	// procThrottleWindow is how long the same (domain, reason) alert is
 	// suppressed, so a burst of execs cannot flood the bell.
 	procThrottleWindow = 60 * time.Second

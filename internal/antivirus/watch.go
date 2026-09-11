@@ -31,7 +31,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"servika/internal/avsettings"
 	"servika/internal/chains"
@@ -40,13 +39,6 @@ import (
 )
 
 const watchFlag = "av-watch"
-
-// settingsRefresh is how often the watcher re-reads av_settings.
-//
-// A threshold or a layer changed on the settings screen has to reach a process
-// that may have been running for weeks, and restarting the watcher to apply one
-// is a window in which nothing is watched at all.
-const settingsRefresh = time.Minute
 
 // RunWatcherIfAsked answers "-av-watch" and reports whether it did.
 func RunWatcherIfAsked() bool {
@@ -168,24 +160,6 @@ func (w *watcher) current() avsettings.Settings {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.settings
-}
-
-// refresh re-reads the settings. A read that FAILS keeps the settings the
-// watcher already has: a database hiccup must not silently turn a detection
-// layer off, which is the opposite of what a watcher exists to do.
-func (w *watcher) refresh(ctx context.Context) error {
-	settings, err := avsettings.Read(ctx, w.db)
-	if err != nil {
-		log.Printf("antivirus watcher: settings could not be re-read, keeping the current ones: %v", err)
-		return nil
-	}
-	if !settings.Realtime {
-		return errWatchDisabled
-	}
-	w.mu.Lock()
-	w.settings = settings
-	w.mu.Unlock()
-	return nil
 }
 
 // watchable reports whether a path is worth opening at all.
