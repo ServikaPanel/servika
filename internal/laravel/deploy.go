@@ -13,9 +13,11 @@ import (
 	"servika/internal/httpx"
 )
 
-func deployUnit(id int64) string       { return fmt.Sprintf("servika-laravel-deploy-%d", id) }
-func deployLog(id int64) string        { return fmt.Sprintf("%s/deploy-%d.log", logRootDir(), id) }
-func deployScriptPath(id int64) string { return fmt.Sprintf("/run/servika-laravel-deploy-%d.sh", id) }
+func deployUnit(id int64) string { return fmt.Sprintf("servika-laravel-deploy-%d", id) }
+func deployLog(id int64) string  { return fmt.Sprintf("%s/deploy-%d.log", logRootDir(), id) }
+func deployScriptPath(id int64) string {
+	return fmt.Sprintf("%s/servika-laravel-deploy-%d.sh", runScriptDir, id)
+}
 
 func deployScript(appDir, php, nodeDir string, migrate, npmBuild bool) string {
 	var b strings.Builder
@@ -84,7 +86,7 @@ func (h *Handlers) Deploy(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid application directory")
 		return
 	}
-	nodeDir := nodeBinDir(req.NodeVersion)
+	nodeDir := nodeBinDirFor(req.NodeVersion)
 	script := deployScript(appDir, phpBin(phpVersion), nodeDir, req.Migrate, req.NpmBuild)
 	path := deployScriptPath(id)
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
@@ -93,8 +95,8 @@ func (h *Handlers) Deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("systemctl", "reset-failed", deployUnit(id)+".service").Run()
-	if err := systemdRunDetached(systemUser, appDir, deployUnit(id), deployLog(id), "/bin/bash", path); err != nil {
+	_ = laravelCommand("systemctl", "reset-failed", deployUnit(id)+".service").Run()
+	if err := runDetached(systemUser, appDir, deployUnit(id), deployLog(id), "/bin/bash", path); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "deploy start failed")
 		return
 	}

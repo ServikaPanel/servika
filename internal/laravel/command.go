@@ -65,7 +65,7 @@ func (h *Handlers) Artisan(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid application directory")
 		return
 	}
-	out, commandOK := TenantExec(r.Context(), systemUser, appDir, phpBin(phpVersion), argv...)
+	out, commandOK := tenantExec(r.Context(), systemUser, appDir, phpBin(phpVersion), argv...)
 	if maintenanceActive(appDir) != (sub == "down") && (sub == "down" || sub == "up") {
 		_, _ = h.DB.ExecContext(r.Context(), `UPDATE cp_laravel_apps SET maintenance=? WHERE domain_id=?`, map[bool]int{true: 1, false: 0}[sub == "down"], id)
 	}
@@ -83,7 +83,7 @@ func (h *Handlers) Composer(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	if _, err := os.Stat(composerBin()); err != nil {
+	if _, err := os.Stat(composerBinPath()); err != nil {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "composer is not installed")
 		return
 	}
@@ -104,7 +104,7 @@ func (h *Handlers) Composer(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid application directory")
 		return
 	}
-	argv := []string{composerBin(), req.Command, "--no-interaction", "--no-ansi", "-d", appDir}
+	argv := []string{composerBinPath(), req.Command, "--no-interaction", "--no-ansi", "-d", appDir}
 	if req.Command == "install" || req.Command == "update" {
 		argv = append(argv, "--prefer-dist")
 	}
@@ -116,7 +116,7 @@ func (h *Handlers) Composer(w http.ResponseWriter, r *http.Request) {
 		}
 		argv = append(argv, pkg)
 	}
-	out, commandOK := TenantExec(r.Context(), systemUser, appDir, phpBin(phpVersion), argv...)
+	out, commandOK := tenantExec(r.Context(), systemUser, appDir, phpBin(phpVersion), argv...)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "composer " + req.Command, "output": out})
 }
 
@@ -166,7 +166,7 @@ func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid application directory")
 		return
 	}
-	binDir := nodeBinDir(req.NodeVersion)
+	binDir := nodeBinDirFor(req.NodeVersion)
 	npmBin := filepath.Join(binDir, "npm")
 	if _, err := os.Stat(npmBin); err != nil {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "node or npm is not installed")
@@ -190,7 +190,7 @@ func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 			env[i] = "PATH=" + binDir + ":" + systemPath
 		}
 	}
-	out, commandOK := tenantExecEnv(r.Context(), systemUser, appDir, env, npmBin, argv...)
+	out, commandOK := tenantExecWithEnv(r.Context(), systemUser, appDir, env, npmBin, argv...)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "npm " + req.Command, "output": out, "node_dir": binDir})
 }
 

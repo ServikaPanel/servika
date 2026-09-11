@@ -12,31 +12,31 @@ import (
 	"strings"
 
 	"servika/internal/httpx"
-	"servika/internal/netguard"
-	"servika/internal/provisioner"
 )
 
-func setupUnit(id int64) string       { return fmt.Sprintf("servika-laravel-install-%d", id) }
-func setupLog(id int64) string        { return fmt.Sprintf("%s/install-%d.log", logRootDir(), id) }
-func setupScriptPath(id int64) string { return fmt.Sprintf("/run/servika-laravel-install-%d.sh", id) }
+func setupUnit(id int64) string { return fmt.Sprintf("servika-laravel-install-%d", id) }
+func setupLog(id int64) string  { return fmt.Sprintf("%s/install-%d.log", logRootDir(), id) }
+func setupScriptPath(id int64) string {
+	return fmt.Sprintf("%s/servika-laravel-install-%d.sh", runScriptDir, id)
+}
 
 func mkdirTenant(systemUser, dir string) error {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if err := exec.Command("runuser", "-u", systemUser, "--", "/bin/mkdir", "-p", dir).Run(); err != nil {
+	if err := laravelCommand("runuser", "-u", systemUser, "--", "/bin/mkdir", "-p", dir).Run(); err != nil {
 		return fmt.Errorf("directory creation failed")
 	}
 	return nil
 }
 
 func (h *Handlers) setDocroot(ctx context.Context, id int64, systemUser, subdirectory string) error {
-	abs, err := provisioner.AbsoluteWebRoot(systemUser, subdirectory)
+	abs, err := absoluteWebRoot(systemUser, subdirectory)
 	if err != nil {
 		return err
 	}
 	if _, err := h.DB.ExecContext(ctx, `UPDATE domains SET web_root=? WHERE id=?`, abs, id); err != nil {
 		return err
 	}
-	return provisioner.RerenderVhost(h.DB, id)
+	return rerenderVhost(h.DB, id)
 }
 
 func publicSubdirectory(appRoot string) string {
@@ -92,7 +92,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	}
 	php := phpBin(phpVersion)
 	logPath := setupLog(id)
-	tmp := "/home/" + systemUser + "/.laravel-skeleton-" + fmt.Sprint(id)
+	tmp := homeRoot + "/" + systemUser + "/.laravel-skeleton-" + fmt.Sprint(id)
 	// The base row must exist before the status updates below target it; abort if
 	// it cannot be written rather than proceeding with broken status tracking.
 	if err := h.upsertBase(r.Context(), id, appRoot, req.Mode, phpVersion, ""); err != nil {
@@ -105,7 +105,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Mode {
 	case "local":
-		out, gitOK := TenantExec(r.Context(), systemUser, appDir, "/usr/bin/git", "init")
+		out, gitOK := tenantExec(r.Context(), systemUser, appDir, "/usr/bin/git", "init")
 		status := "failed"
 		if gitOK {
 			status = "ready"
@@ -138,7 +138,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		// internal/git guards both of its clone paths with exactly this call. The
 		// guard was never carried across when this second entry point grew its
 		// own clone.
-		if err := netguard.CheckGitURL(req.RepoURL); err != nil {
+		if err := checkGitURL(req.RepoURL); err != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "the repository host is not allowed")
 			return
 		}
@@ -173,8 +173,8 @@ func detachedInstall(id int64, systemUser, appDir, logPath, script string) error
 		return fmt.Errorf("setup script write failed")
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("systemctl", "reset-failed", setupUnit(id)+".service").Run()
-	return systemdRunDetached(systemUser, appDir, setupUnit(id), logPath, "/bin/bash", path)
+	_ = laravelCommand("systemctl", "reset-failed", setupUnit(id)+".service").Run()
+	return runDetached(systemUser, appDir, setupUnit(id), logPath, "/bin/bash", path)
 }
 
 func scaffoldInstallScript(appDir, php, tmp string) string {
@@ -221,7 +221,7 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 // row out of 'installing' performs the one-time side effects (docroot, unit cleanup).
 func (h *Handlers) finalizeInstall(ctx context.Context, id int64, systemUser string, rec record) record {
 	unit := setupUnit(id) + ".service"
-	status := unitStatus(unit)
+	status := readUnitStatus(unit)
 	running := status == "activating" || status == "active" || status == "reloading"
 	if running || rec.LastDeployStatus != "installing" {
 		return rec
@@ -249,7 +249,7 @@ func (h *Handlers) finalizeInstall(ctx context.Context, id int64, systemUser str
 			}
 		}
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command("systemctl", "reset-failed", unit).Run()
+		_ = laravelCommand("systemctl", "reset-failed", unit).Run()
 		_ = os.Remove(setupScriptPath(id))
 	}
 	rec.LastDeployStatus = newStatus

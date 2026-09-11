@@ -101,8 +101,8 @@ func safeAppDir(systemUser, appRoot string) (string, error) {
 	if rel != "public_html" && !strings.HasPrefix(rel, "public_html/") {
 		return "", fmt.Errorf("application directory must be under public_html")
 	}
-	base := "/home/" + systemUser + "/public_html"
-	abs := filepath.Clean("/home/" + systemUser + "/" + rel)
+	base := homeRoot + "/" + systemUser + "/public_html"
+	abs := filepath.Clean(homeRoot + "/" + systemUser + "/" + rel)
 	if abs != base && !strings.HasPrefix(abs, base+"/") {
 		return "", fmt.Errorf("application directory cannot leave public_html")
 	}

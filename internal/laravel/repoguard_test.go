@@ -58,14 +58,22 @@ func TestAPublicRepositoryIsStillAllowed(t *testing.T) {
 	}
 }
 
-// And the handler actually calls it, before the clone is scripted.
+// And the handler actually calls it, before the clone is scripted. The call
+// goes through this package's own test seam, so the binding is checked too.
 func TestTheInstallHandlerGuardsTheRepositoryHost(t *testing.T) {
+	seams, err := os.ReadFile("seams.go") // #nosec G304 -- a file of this package.
+	if err != nil {
+		t.Fatalf("read seams.go: %v", err)
+	}
+	if !strings.Contains(string(seams), "= netguard.CheckGitURL") {
+		t.Fatal("the seam no longer binds the network guard")
+	}
 	body, err := os.ReadFile("install.go") // #nosec G304 -- a file of this package.
 	if err != nil {
 		t.Fatalf("read install.go: %v", err)
 	}
 	source := string(body)
-	guard := strings.Index(source, "netguard.CheckGitURL(req.RepoURL)")
+	guard := strings.Index(source, "checkGitURL(req.RepoURL)")
 	script := strings.Index(source, "remoteInstallScript(appDir, req.RepoURL")
 	if guard < 0 {
 		t.Fatal("the remote install does not check the repository host")
