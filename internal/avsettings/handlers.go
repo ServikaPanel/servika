@@ -16,9 +16,11 @@ package avsettings
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"servika/internal/httpx"
+	"servika/internal/middleware"
 )
 
 type Handlers struct{ DB *sql.DB }
@@ -82,7 +84,9 @@ func (h *Handlers) Put(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "the request body could not be read")
 		return
 	}
+	target := auditTarget(settings)
 	if err := Write(r.Context(), h.DB, settings); err != nil {
+		middleware.RecordAudit(h.DB, r, "antivirus.settings", target, false)
 		// A refused FIELD is the operator's input and carries a stable code the
 		// screen words in twelve languages. Anything else is the server failing
 		// and must not be presented as a field they typed wrong.
@@ -95,12 +99,35 @@ func (h *Handlers) Put(w http.ResponseWriter, r *http.Request) {
 			"the antivirus settings could not be saved: "+err.Error())
 		return
 	}
+	middleware.RecordAudit(h.DB, r, "antivirus.settings", target, true)
 	stored, err := Read(r.Context(), h.DB)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "the antivirus settings could not be read back")
 		return
 	}
 	h.respond(w, stored)
+}
+
+// auditTarget summarises the switches a reader of the audit log actually needs:
+// the ones that turn protection off. It is the requested state rather than the
+// stored one, because a write that FAILED is recorded too and its target has to
+// say what was attempted.
+//
+// The excluded-path list is recorded as a COUNT, not verbatim: it is free text
+// with no length bound and audit_log.target is 255 characters, so pasting it in
+// would truncate the row and lose the fields after it.
+func auditTarget(s Settings) string {
+	return fmt.Sprintf(
+		"auto_quarantine=%s realtime=%s process_monitor=%s scheduled_scan=%s rule_engine=%s location_heuristics=%s threshold=%d excluded=%d scope=%s",
+		onOff(s.AutoQuarantine), onOff(s.Realtime), onOff(s.ProcessMonitor), onOff(s.ScheduledScan),
+		onOff(s.RuleEngine), onOff(s.LocationHeuristics), s.CriticalThreshold, len(s.ExcludedList()), s.Scope)
+}
+
+func onOff(v bool) string {
+	if v {
+		return "on"
+	}
+	return "off"
 }
 
 func (h *Handlers) respond(w http.ResponseWriter, settings Settings) {

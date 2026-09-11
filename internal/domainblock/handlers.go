@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"servika/internal/httpx"
@@ -165,6 +166,10 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		result.Applied++
 	}
 	Invalidate()
+	// A count rather than the names: the list is bulk-pasted and bounded only by
+	// maxEntriesPerRequest, so the names would truncate audit_log.target.
+	middleware.RecordAudit(h.DB, r, "domain_block.add",
+		"applied="+strconv.Itoa(result.Applied)+" skipped="+strconv.Itoa(result.Skipped), true)
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
@@ -214,5 +219,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		result.Applied++
 	}
 	Invalidate()
+	middleware.RecordAudit(h.DB, r, "domain_block.remove",
+		"applied="+strconv.Itoa(result.Applied)+" skipped="+strconv.Itoa(result.Skipped), true)
 	httpx.WriteJSON(w, http.StatusOK, result)
 }

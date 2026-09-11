@@ -137,7 +137,15 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), applyTimeout)
 	defer cancel()
 
+	// The audit entry names the direction, so a reader does not have to pair the
+	// row with a separate state read to learn which way the port went.
+	action := "db_remote.disable"
+	if *request.Enabled {
+		action = "db_remote.enable"
+	}
+
 	if err := Apply(ctx, h.DB, *request.Enabled); err != nil {
+		middleware.RecordAudit(h.DB, r, action, "mariadb", false)
 		h.recordError(r.Context(), err.Error())
 		// A missing key pair is its own refusal. Opening the port without one
 		// would publish the plain MySQL protocol to the internet, and the operator
@@ -157,9 +165,11 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 		`UPDATE panel_settings
 		    SET db_remote_enabled=?, db_remote_last_error='', db_remote_applied_at=NOW()
 		  WHERE id=1`, boolToInt(*request.Enabled)); err != nil {
+		middleware.RecordAudit(h.DB, r, action, "mariadb", false)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save the remote access setting")
 		return
 	}
+	middleware.RecordAudit(h.DB, r, action, "mariadb", true)
 	// The firewall follows the switch: turning it on without the drop leaves the
 	// port open to everybody, and leaving the drop behind after turning it off
 	// blocks nothing but is still wrong state.

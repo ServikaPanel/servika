@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 
 	"servika/internal/httpx"
+	"servika/internal/middleware"
 	"servika/internal/sessionidle"
 )
 
@@ -51,12 +53,15 @@ func (h *Handlers) SessionIdleSave(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, reasonIdleOutOfRange)
 		return
 	}
+	target := "minutes=" + strconv.Itoa(req.Minutes)
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE panel_settings SET session_idle_minutes=? WHERE id=1`, req.Minutes); err != nil {
+		middleware.RecordAudit(h.DB, r, "panel.session_idle", target, false)
 		log.Printf("session idle setting write: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "panel settings could not be saved")
 		return
 	}
+	middleware.RecordAudit(h.DB, r, "panel.session_idle", target, true)
 	// Without this the operator watches the old value stay in force for up to a
 	// minute after the screen said it was saved.
 	sessionidle.Invalidate()

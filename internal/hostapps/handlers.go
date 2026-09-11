@@ -288,11 +288,17 @@ func (h *Handlers) SetEnabled(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	action := "host_apps.disable"
+	if body.Enabled {
+		action = "host_apps.enable"
+	}
 	if err := SetFeatureEnabled(r.Context(), h.DB, body.Enabled); err != nil {
+		middleware.RecordAudit(h.DB, r, action, "host_apps", false)
 		complain("write the feature switch: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database write failed")
 		return
 	}
+	middleware.RecordAudit(h.DB, r, action, "host_apps", true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
 }
 

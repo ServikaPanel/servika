@@ -12,6 +12,7 @@ import (
 
 	"servika/internal/geoip"
 	"servika/internal/httpx"
+	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -174,10 +175,12 @@ func (h *Handlers) AddGeo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.rebuild(); err != nil {
+		middleware.RecordAudit(h.DB, r, "firewall.geo.block", code, false)
 		log.Printf("firewall: apply the country block: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the country block was saved but the firewall was not updated")
 		return
 	}
+	middleware.RecordAudit(h.DB, r, "firewall.geo.block", code, true)
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true})
 }
 
@@ -194,9 +197,11 @@ func (h *Handlers) DeleteGeo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.rebuild(); err != nil {
+		middleware.RecordAudit(h.DB, r, "firewall.geo.unblock", code, false)
 		log.Printf("firewall: remove the country block: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the block was removed but the firewall was not updated")
 		return
 	}
+	middleware.RecordAudit(h.DB, r, "firewall.geo.unblock", code, true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

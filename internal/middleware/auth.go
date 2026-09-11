@@ -83,6 +83,28 @@ func EnforceDomainNotDemo(w http.ResponseWriter, r *http.Request, domainID int64
 	return true
 }
 
+// RecordAudit writes one audit_log row naming the authenticated actor, their
+// address, what they changed and whether it took effect.
+//
+// It exists so a settings handler does not have to assemble the actor itself.
+// auth.WriteAudit was adopted per package as each identity feature was written
+// and nothing carried it to the surfaces added afterwards, so every server-wide
+// feature switch flipped with no entry at all: who opened MariaDB to the
+// internet, who turned auto-quarantine off, who added a path to the scanner's
+// exclusion list. internal/chains reconstructs an initial-access kill chain
+// from audit_log logins, and the follow-on actions that matter most left it
+// nothing to correlate.
+//
+// An unauthenticated request writes nothing: there is no actor to record, and
+// every route that reaches here is behind RequireAuth.
+func RecordAudit(db *sql.DB, r *http.Request, action, target string, ok bool) {
+	claims := ClaimsFrom(r)
+	if claims == nil {
+		return
+	}
+	auth.WriteAudit(db, claims.UserID, claims.Username, httpx.AuditIP(r), action, target, ok)
+}
+
 // Init configures the database used to enforce suspended customer scopes.
 func Init(db *sql.DB) {
 	scopeDB = db
