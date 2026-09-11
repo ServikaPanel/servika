@@ -149,7 +149,7 @@ func safeCommand(ctx context.Context, name string, arguments ...string) *exec.Cm
 	return command
 }
 
-func rarTool() (string, bool) {
+func detectRARTool() (string, bool) {
 	if _, err := exec.LookPath("bsdtar"); err == nil {
 		return "bsdtar", true
 	}
@@ -503,7 +503,7 @@ func extractStrip(ctx context.Context, archivePath string, archiveType Type, des
 		}
 	}
 	total := 0
-	if err := scan(ctx, archivePath, archiveType, limits, func(string, int64) { total++ }); err != nil {
+	if err := scanArchive(ctx, archivePath, archiveType, limits, func(string, int64) { total++ }); err != nil {
 		return "", err
 	}
 	if onTotal != nil {
@@ -517,23 +517,23 @@ func extractStrip(ctx context.Context, archivePath string, archiveType Type, des
 	switch archiveType {
 	case TypeZIP:
 		if strip > 0 {
-			if _, err := exec.LookPath("bsdtar"); err != nil {
+			if _, err := lookPath("bsdtar"); err != nil {
 				return "", ErrStripUnsupported
 			}
 			bsdX := "-x"
 			if verbose {
 				bsdX = "-xv"
 			}
-			command = tenantCommand(ctx, systemUser, "bsdtar", bsdX, stripFlag(strip),
+			command = extractCommand(ctx, systemUser, "bsdtar", bsdX, stripFlag(strip),
 				"-f", archivePath, "-C", destination)
 			break
 		}
 		// verbose drops -q so unzip prints one " extracting: ..." line per member.
 		if verbose {
-			command = tenantCommand(ctx, systemUser, "unzip", "-o", archivePath, "-d", destination)
+			command = extractCommand(ctx, systemUser, "unzip", "-o", archivePath, "-d", destination)
 			break
 		}
-		command = tenantCommand(ctx, systemUser, "unzip", "-o", "-q", archivePath, "-d", destination)
+		command = extractCommand(ctx, systemUser, "unzip", "-o", "-q", archivePath, "-d", destination)
 	case TypeRAR:
 		tool, ok := rarTool()
 		if !ok {
@@ -548,14 +548,14 @@ func extractStrip(ctx context.Context, archivePath string, archiveType Type, des
 			if strip > 0 {
 				arguments = append(arguments, stripFlag(strip))
 			}
-			command = tenantCommand(ctx, systemUser, append(arguments, "-f", archivePath, "-C", destination)...)
+			command = extractCommand(ctx, systemUser, append(arguments, "-f", archivePath, "-C", destination)...)
 			break
 		}
 		// unar unpacks whole; it cannot drop a leading component.
 		if strip > 0 {
 			return "", ErrStripUnsupported
 		}
-		command = tenantCommand(ctx, systemUser, "unar", "-f", "-D", "-o", destination, archivePath)
+		command = extractCommand(ctx, systemUser, "unar", "-f", "-D", "-o", destination, archivePath)
 	default:
 		// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 		file, err := os.Open(archivePath)
@@ -580,7 +580,7 @@ func extractStrip(ctx context.Context, archivePath string, archiveType Type, des
 		if strip > 0 {
 			arguments = append(arguments, stripFlag(strip))
 		}
-		command = tenantCommand(ctx, systemUser, append(arguments, "-f", "-", "-C", destination)...)
+		command = extractCommand(ctx, systemUser, append(arguments, "-f", "-", "-C", destination)...)
 		command.Stdin = file
 	}
 
