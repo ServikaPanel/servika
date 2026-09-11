@@ -11,9 +11,6 @@ import (
 	"time"
 
 	"servika/internal/httpx"
-	"servika/internal/mail"
-	"servika/internal/provisioner"
-	"servika/internal/resourcelimit"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -66,19 +63,19 @@ func (h *Handlers) SetPlan(w http.ResponseWriter, r *http.Request) {
 	go func(did int64) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := resourcelimit.ApplyAll(ctx, h.DB, did); err != nil {
+		if err := applyResourceLimits(ctx, h.DB, did); err != nil {
 			httpx.LogR(r, "resource limit apply domain=%d: %v", did, err)
 		}
 		// Plan change may also change the WAF default; re-render the vhost with WAF
 		// (domain override takes precedence, plan default is the fallback).
-		if err := provisioner.WAFApply(h.DB, did); err != nil {
+		if err := applyWAF(h.DB, did); err != nil {
 			httpx.LogR(r, "waf apply (plan change) domain=%d: %v", did, err)
 		}
 		// Mail limits follow the plan as well. A mailbox whose limits were set by
 		// hand keeps them; everything else moves to the new plan's values, so the
 		// plan on the screen and the limits Dovecot and the policy server enforce
 		// describe the same thing.
-		if _, err := mail.ApplyPlanLimitsToDomain(ctx, h.DB, did); err != nil {
+		if _, err := applyMailPlanLimits(ctx, h.DB, did); err != nil {
 			httpx.LogR(r, "mail limit apply (plan change) domain=%d: %v", did, err)
 		}
 	}(id)

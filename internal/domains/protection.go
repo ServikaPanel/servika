@@ -124,7 +124,7 @@ func (h *Handlers) SetGeo(w http.ResponseWriter, r *http.Request) {
 		// FAIL-CLOSED on the WRITE path. Without ranges a deny list refuses
 		// nobody and an allow list would refuse everybody, so the policy is not
 		// stored at all rather than stored and silently not enforced.
-		if !geoip.Available() {
+		if !geoDatabaseAvailable() {
 			writeReason(w, http.StatusConflict,
 				"no country database has been downloaded", geoip.ReasonUnavailable)
 			return
@@ -134,7 +134,7 @@ func (h *Handlers) SetGeo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, code := range countries {
-			if !geoip.KnownCountry(code) {
+			if !geoKnownCountry(code) {
 				writeReason(w, http.StatusBadRequest,
 					"the country database does not carry that country", geoip.ReasonCountryUnknown)
 				return
@@ -171,7 +171,7 @@ func (h *Handlers) SetGeo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
+	if err := rerenderVhost(h.DB, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "rules saved but virtual host update failed")
 		return
 	}

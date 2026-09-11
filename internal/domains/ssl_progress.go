@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"servika/internal/httpx"
-	"servika/internal/mail"
 	"servika/internal/provisioner"
 
 	"github.com/go-chi/chi/v5"
@@ -246,9 +245,9 @@ func (h *Handlers) runSSLInstall(job *sslJob, id int64, req sslIssueReq, domainN
 		var e error
 		switch req.Type {
 		case SSLSourceSelfSigned:
-			certPath, keyPath, e = provisioner.EnableSelfSigned(domainName, systemUser, phpVersion, backend)
+			certPath, keyPath, e = enableSelfSigned(domainName, systemUser, phpVersion, backend)
 		default:
-			certPath, keyPath, outcome, e = provisioner.EnableLetsEncrypt(domainName, systemUser, phpVersion, backend)
+			certPath, keyPath, outcome, e = enableLetsEncrypt(domainName, systemUser, phpVersion, backend)
 			if !outcome.Real {
 				actualType = SSLSourceSelfSigned
 			}
@@ -315,7 +314,7 @@ func (h *Handlers) runSSLInstall(job *sslJob, id int64, req sslIssueReq, domainN
 		var mailCert provisioner.MailCertificate
 		mailIssued := job.step(sslStepMailCertificate, func() (string, bool, error) {
 			var mailErr error
-			mailCert, mailErr = provisioner.IssueMailCertificate(domainName)
+			mailCert, mailErr = issueMailCertificate(domainName)
 			if len(mailCert.Skipped) > 0 {
 				job.set("mail_ssl_skipped", mailCert.Skipped)
 			}
@@ -333,7 +332,7 @@ func (h *Handlers) runSSLInstall(job *sslJob, id int64, req sslIssueReq, domainN
 
 		if mailIssued {
 			_ = job.step(sslStepMailSNI, func() (string, bool, error) {
-				if e := mail.ApplySNI(); e != nil {
+				if e := applyMailSNI(); e != nil {
 					// The certificate exists but nothing serves it yet, which is
 					// a different situation from not having one.
 					job.set("mail_ssl_error", "mail_sni_apply_failed")

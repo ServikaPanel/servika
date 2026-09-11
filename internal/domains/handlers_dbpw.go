@@ -81,11 +81,11 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusConflict, "this user name is already used by another database")
 			return
 		}
-		if err := credentials.MySQLAddUser(dbName, newUser, req.Password); err != nil {
+		if err := mysqlAddUser(dbName, newUser, req.Password); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
 			return
 		}
-		encPass, err := credentials.EncryptDBPass(newUser, req.Password)
+		encPass, err := encryptDBPass(newUser, req.Password)
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
 			return
@@ -97,7 +97,7 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		dbUser = newUser
-	} else if err := credentials.MySQLChangePassword(h.DB, dbUser, req.Password); err != nil {
+	} else if err := mysqlChangePassword(h.DB, dbUser, req.Password); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "password change failed")
 		return
 	}

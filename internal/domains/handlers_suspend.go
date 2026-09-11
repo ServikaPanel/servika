@@ -8,9 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"servika/internal/apps"
 	"servika/internal/httpx"
-	"servika/internal/provisioner"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -105,7 +103,7 @@ func suspensionTargets(ctx context.Context, db *sql.DB, id int64) ([]suspensionR
 // so a parent-only render leaves the addon site serving.
 func rerenderTargets(db *sql.DB, targets []suspensionRow) error {
 	for _, target := range targets {
-		if err := provisioner.RerenderVhost(db, target.id); err != nil {
+		if err := rerenderVhost(db, target.id); err != nil {
 			return err
 		}
 	}
@@ -121,7 +119,7 @@ func restoreSuspensionState(ctx context.Context, db *sql.DB, targets []suspensio
 			log.Printf("rollback domain suspension state for domain %d: %v", target.id, err)
 			continue
 		}
-		if err := provisioner.RerenderVhost(db, target.id); err != nil {
+		if err := rerenderVhost(db, target.id); err != nil {
 			log.Printf("restore domain vhost after suspension rollback for domain %d: %v", target.id, err)
 		}
 	}
@@ -191,11 +189,11 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		log.Printf("update mailbox suspension state for domain %d: %v", id, err)
 	}
 	if systemUser != "" {
-		provisioner.SuspendUserRuntime(systemUser, suspended)
+		suspendUserRuntime(systemUser, suspended)
 		// Separate from the pkill above: an application unit carries
 		// Restart=always, so a killed process is back within seconds and the
 		// suspended account keeps serving until systemd is told to stop it.
-		if err := apps.SuspendForUser(ctx, db, systemUser, suspended); err != nil {
+		if err := suspendApps(ctx, db, systemUser, suspended); err != nil {
 			log.Printf("apply application suspension state for domain %d: %v", id, err)
 		}
 	}

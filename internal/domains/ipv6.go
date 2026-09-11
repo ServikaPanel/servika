@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"servika/internal/config"
-	"servika/internal/dns"
 	"servika/internal/httpx"
 
 	"github.com/go-chi/chi/v5"
@@ -57,7 +56,7 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 		// AAAA record, makes the site dead for every IPv6 client while the panel
 		// shows a healthy domain, and it stops certificate renewal because
 		// Let's Encrypt tries the AAAA first. Both failures are silent.
-		if !config.AddressIsLocal(value) {
+		if !addressIsLocal(value) {
 			writeReason(w, http.StatusBadRequest,
 				"that address is not configured on this server", reasonIPv6NotLocal)
 			return
@@ -87,7 +86,7 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	changed, err := dns.RepointIPv6(r.Context(), h.DB, id, domainName, previous, value)
+	changed, err := repointIPv6(r.Context(), h.DB, id, domainName, previous, value)
 	if err != nil {
 		httpx.LogR(r, "repoint AAAA records for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
@@ -97,7 +96,7 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 	// The zone is rewritten even when no record changed: a domain whose zone was
 	// edited by hand is brought back into line, and named-checkzone is the gate
 	// that refuses a zone this would have broken.
-	if err := dns.WriteZone(r.Context(), h.DB, id); err != nil {
+	if err := writeDNSZone(r.Context(), h.DB, id); err != nil {
 		httpx.LogR(r, "write DNS zone after IPv6 change for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the records were updated but the DNS zone could not be written")

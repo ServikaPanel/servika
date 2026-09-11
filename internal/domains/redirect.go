@@ -108,11 +108,11 @@ func (h *Handlers) redirectDomainInfo(w http.ResponseWriter, r *http.Request) (i
 }
 
 func (h *Handlers) applyRedirectVhost(id int64, systemUser, phpVersion string) error {
-	socket, err := provisioner.PHPSocketFor(systemUser, phpVersion)
+	socket, err := phpSocketFor(systemUser, phpVersion)
 	if err != nil {
 		socket = "/run/php-fpm/" + systemUser + ".sock"
 	}
-	return provisioner.ApplyVhostForDomain(h.DB, id, socket, phpVersion)
+	return applyVhostForDomain(h.DB, id, socket, phpVersion)
 }
 
 func cleanRedirectTarget(raw string) (string, error) {
@@ -241,11 +241,11 @@ func (h *Handlers) checkCanonicalTargetReachable(mode, domainName, certPath, key
 	target := domainName
 	if mode == "to_www" {
 		target = "www." + domainName
-		if !provisioner.WWWResolvesToApex(domainName) {
+		if !wwwResolvesToApex(domainName) {
 			return errors.New("www." + domainName + " does not resolve to this server; point it here first")
 		}
 	}
-	if certPath != "" && keyPath != "" && !provisioner.CertificateCoversHost(certPath, keyPath, target) {
+	if certPath != "" && keyPath != "" && !certificateCoversHost(certPath, keyPath, target) {
 		return errors.New("the installed certificate does not cover " + target + "; reissue it first")
 	}
 	return nil

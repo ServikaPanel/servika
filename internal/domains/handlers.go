@@ -13,21 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"servika/internal/addondomains"
-	"servika/internal/antivirus"
-	"servika/internal/apps"
 	"servika/internal/credentials"
-	"servika/internal/dns"
-	"servika/internal/domainblock"
 	"servika/internal/httpx"
-	"servika/internal/laravel"
-	"servika/internal/mail"
 	"servika/internal/middleware"
 	"servika/internal/provisioner"
 	"servika/internal/quota"
-	"servika/internal/redis"
-	"servika/internal/resourcelimit"
-	"servika/internal/tenantaccount"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -422,7 +412,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	// The archive import path reaches domain creation through this handler, so
 	// the ban covers it here rather than in internal/transfers.
-	if domainblock.RefuseIfBlocked(w, r, h.DB, req.DomainName) {
+	if refuseIfBlocked(w, r, h.DB, req.DomainName) {
 		return
 	}
 
@@ -457,11 +447,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusBadRequest, "a domain must be attached to a customer")
 			return
 		}
-		if !middleware.ResellerOwnsCustomer(r, c.UserID, *req.CustomerID) {
+		if !resellerOwnsCustomer(r, c.UserID, *req.CustomerID) {
 			httpx.WriteError(w, http.StatusForbidden, "no access to this customer")
 			return
 		}
-		if err := quota.CheckResellerDomainAllowed(r.Context(), h.DB, c.UserID); err != nil {
+		if err := checkResellerDomainAllowed(r.Context(), h.DB, c.UserID); err != nil {
 			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
@@ -471,7 +461,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		// Disk/traffic quota: when full, no new domain may be opened. Existing
 		// sites are unaffected — these are "new resource" gates, not cuts.
-		if err := quota.CheckResellerDiskAllowed(r.Context(), h.DB, c.UserID); err != nil {
+		if err := checkResellerDiskAllowed(r.Context(), h.DB, c.UserID); err != nil {
 			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
@@ -479,7 +469,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller disk quota")
 			return
 		}
-		if err := quota.CheckResellerTrafficAllowed(r.Context(), h.DB, c.UserID); err != nil {
+		if err := checkResellerTrafficAllowed(r.Context(), h.DB, c.UserID); err != nil {
 			if le, ok := errors.AsType[*quota.LimitError](err); ok {
 				httpx.WriteError(w, http.StatusForbidden, le.Message)
 				return
@@ -512,7 +502,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// It runs AFTER referencedAccountsExist so an id that names no customer is
 	// answered as a bad request rather than as a failed quota read, and BEFORE
 	// Provision so a refusal leaves no Linux user, vhost or FPM pool behind.
-	if err := quota.CheckDomainAllowed(r.Context(), h.DB, req.CustomerID); err != nil {
+	if err := checkDomainAllowed(r.Context(), h.DB, req.CustomerID); err != nil {
 		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
@@ -523,7 +513,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1) Linux user + nginx + PHP pool
-	pr, err := provisioner.Provision(req.DomainName, req.PHPVersion)
+	pr, err := provisionTenant(req.DomainName, req.PHPVersion)
 	if err != nil {
 		httpx.LogR(r, "provision %q failed: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "domain provisioning failed")
@@ -545,7 +535,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		req.DomainName, pr.SystemUser, req.PHPVersion, h.IPv4,
 		h.IPv4, pr.SystemUser, dbUser, dbName, pr.WebRoot, siteType)
 	if err != nil {
-		_ = provisioner.Deprovision(req.DomainName, pr.SystemUser)
+		_ = deprovisionTenant(req.DomainName, pr.SystemUser)
 		// The domain name was already checked above, so the only key left to break
 		// here is uq_domains_system_user_top: two creates running together read the
 		// same free system user name, and the database refused the second. The
@@ -590,7 +580,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		//
 		// Not fatal. The domain is already provisioned and serving; a failure here
 		// is logged and the startup backfill picks the tenant up.
-		account, err := tenantaccount.Ensure(r.Context(), h.DB, pr.SystemUser, req.DomainName, req.OwnerUserID)
+		account, err := ensureTenantAccount(r.Context(), h.DB, pr.SystemUser, req.DomainName, req.OwnerUserID)
 		switch {
 		case err != nil:
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
@@ -613,7 +603,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// 3) FTP account with a random password.
 	ftpPass := credentials.RandomPassword(20)
 	uidN, gidN := uidGidOf(pr.SystemUser)
-	if err := credentials.FTPCreate(h.DB, id, pr.SystemUser, ftpPass, uidN, gidN); err != nil {
+	if err := createFTPAccount(h.DB, id, pr.SystemUser, ftpPass, uidN, gidN); err != nil {
 		httpx.LogR(r, "FTP create %q error: %v", pr.SystemUser, err)
 	}
 
@@ -621,10 +611,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	dbPass := h.provisionDatabase(id, dbName, dbUser)
 
 	// 5) Auto-seed the DNS template + write BIND zone + reload
-	if _, err := dns.SeedDefaults(r.Context(), h.DB, id, req.DomainName, h.IPv4); err != nil {
+	if _, err := seedDNSDefaults(r.Context(), h.DB, id, req.DomainName, h.IPv4); err != nil {
 		httpx.LogR(r, "DNS SeedDefaults %q error: %v", req.DomainName, err)
 	}
-	if err := dns.WriteZone(r.Context(), h.DB, id); err != nil {
+	if err := writeDNSZone(r.Context(), h.DB, id); err != nil {
 		httpx.LogR(r, "DNS WriteZone %q error: %v", req.DomainName, err)
 	}
 
@@ -632,7 +622,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	go func(domainID int64) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := resourcelimit.ApplyAll(ctx, h.DB, domainID); err != nil {
+		if err := applyResourceLimits(ctx, h.DB, domainID); err != nil {
 			httpx.LogR(r, "resource limit apply after domain creation, domain=%d: %v", domainID, err)
 		}
 	}(id)
@@ -646,8 +636,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// Only shown when a REAL pair is configured. The vanity values returned
 	// otherwise (ns1.<domain>) cannot be handed to a customer, because they
 	// would need a separate glue record at that domain's own registrar.
-	if dns.NameserversConfigured(r.Context(), h.DB) {
-		ns1, ns2 := dns.NameserverPair(r.Context(), h.DB, d.ID, d.DomainName)
+	if nameserversConfigured(r.Context(), h.DB) {
+		ns1, ns2 := readNameserverPair(r.Context(), h.DB, d.ID, d.DomainName)
 		resp.Nameservers = &nameserverPair{NS1: ns1, NS2: ns2}
 	}
 	httpx.WriteJSON(w, http.StatusCreated, resp)
@@ -671,7 +661,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if parentDomainID.Valid {
-		deleted, err := addondomains.Cleanup(r.Context(), h.DB, id)
+		deleted, err := cleanupAddonDomain(r.Context(), h.DB, id)
 		if err != nil {
 			httpx.LogR(r, "addon domain delete warn (%d): %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "addon domain deletion failed")
@@ -701,7 +691,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = childRows.Close()
 		for _, childID := range childIDs {
-			if _, err := addondomains.Cleanup(r.Context(), h.DB, childID); err != nil {
+			if _, err := cleanupAddonDomain(r.Context(), h.DB, childID); err != nil {
 				httpx.LogR(r, "addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
 			}
 		}
@@ -710,16 +700,16 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// Applications go before the row does: the foreign key removes their records
 	// but not their units, environment files or logs, and a unit left behind
 	// holds its port out of the allocator's reach for good.
-	apps.TeardownForDomain(r.Context(), h.DB, id)
+	teardownApps(r.Context(), h.DB, id)
 	// Laravel queue workers and the schedule cron are the same shape of
 	// artefact and were left behind until now: the unit kept running as a login
 	// userdel had just removed, and the cron entry kept trying to run a
 	// scheduler in a directory that was gone.
-	laravel.TeardownForDomain(r.Context(), h.DB, id)
+	teardownLaravel(r.Context(), h.DB, id)
 	// The generated maintenance page is a host artefact: the foreign key
 	// cascade removes the database rows and nothing on disk, so a deleted
 	// domain would leave its page behind for good.
-	if err := provisioner.RemoveMaintenancePage(id); err != nil {
+	if err := removeMaintenancePage(id); err != nil {
 		httpx.LogR(r, "remove maintenance page for domain %d: %v", id, err)
 	}
 
@@ -729,30 +719,30 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// survivor's cgroup limits, cache account and files with it. A failed lookup
 	// counts as shared, because the cost of guessing wrong is a live tenant's
 	// resources.
-	siblings, siblingErr := provisioner.OtherTopLevelDomainsUsing(sk, domainName)
+	siblings, siblingErr := otherTopLevelDomainsUsing(sk, domainName)
 	if siblingErr != nil {
 		httpx.LogR(r, "delete %q: cannot tell whether the system user is shared, keeping tenant resources: %v", domainName, siblingErr)
 	}
 	systemUserShared := siblingErr != nil || len(siblings) > 0
 
 	// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
-	if err := credentials.MySQLDropAllForDomain(h.DB, id); err != nil {
+	if err := mysqlDropAllForDomain(h.DB, id); err != nil {
 		httpx.LogR(r, "mysql drop-all warn (%s): %v", domainName, err)
 	}
 	// nginx vhost + PHP pool + Linux user. Deprovision asks the same question
 	// again for itself, so a caller that never learned about sharing cannot
 	// reintroduce the data loss.
-	if err := provisioner.Deprovision(domainName, sk); err != nil {
+	if err := deprovisionTenant(domainName, sk); err != nil {
 		httpx.LogR(r, "deprovision warn (%s): %v", domainName, err)
 	}
 	if !systemUserShared {
-		if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
+		if err := deleteSystemdSlice(sk); err != nil {
 			httpx.LogR(r, "resource slice cleanup warn (%s): %v", sk, err)
 		}
 		// The quarantine store lives OUTSIDE the home, so userdel -r never
 		// reaches it: the rows go with the foreign key and the files would stay
 		// for good, holding a tenant's malware after the tenant is gone.
-		if err := antivirus.RemoveStoreForUser(sk); err != nil {
+		if err := removeQuarantineStore(sk); err != nil {
 			httpx.LogR(r, "quarantine store cleanup warn (%s): %v", sk, err)
 		}
 	}
@@ -761,14 +751,14 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// While the system user is shared, the ACL account belongs to the survivor,
 	// so only this domain's row goes.
 	if systemUserShared {
-		if err := redis.ForgetDomain(h.DB, id); err != nil {
+		if err := forgetRedisDomain(h.DB, id); err != nil {
 			httpx.LogR(r, "redis row cleanup warn (%d): %v", id, err)
 		}
-	} else if err := redis.CloseDomain(h.DB, id, sk); err != nil {
+	} else if err := closeRedisDomain(h.DB, id, sk); err != nil {
 		httpx.LogR(r, "redis close-domain warn (%s): %v", sk, err)
 	}
 	// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
-	mail.CleanupDomain(h.DB, id, sk)
+	cleanupMailDomain(h.DB, id, sk)
 	// NOTE: Preserve /var/backups/servika/<sk>/ intentionally.
 	// The customer may have deleted the domain by accident, so backups are kept for recovery.
 	// (backups.RemoveDomainBackups is available for manual cleanup.)
@@ -799,7 +789,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// deleted domain in server_name. Render it again from the survivor's own row,
 	// AFTER the delete so the table no longer contains the domain that just went.
 	for _, otherID := range siblings {
-		if err := provisioner.RerenderVhost(h.DB, otherID); err != nil {
+		if err := rerenderVhost(h.DB, otherID); err != nil {
 			httpx.LogR(r, "re-render the vhost of domain %d after %q was deleted: %v", otherID, domainName, err)
 		}
 	}
@@ -807,7 +797,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// BIND zone cleanup AFTER the DELETE: updateZoneIncludes regenerates zones.conf from the domains
 	// table; if the domain were still in the table (old order) the last deleted
 	// domain zone include would be rewritten (dangling, named reload error).
-	if err := dns.DeleteZone(r.Context(), h.DB, domainName); err != nil {
+	if err := deleteDNSZone(r.Context(), h.DB, domainName); err != nil {
 		httpx.LogR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
@@ -1210,9 +1200,9 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	// Hold a per-customer lock across the quota check AND the database creation below
 	// so concurrent requests cannot each pass the count check before either insert
 	// lands and exceed the plan limit.
-	unlock := quota.LockCustomerForDomain(r.Context(), h.DB, id)
+	unlock := lockCustomerForDomain(r.Context(), h.DB, id)
 	defer unlock()
-	if err := quota.CheckDatabaseAllowed(r.Context(), h.DB, id); err != nil {
+	if err := checkDatabaseAllowed(r.Context(), h.DB, id); err != nil {
 		if le, ok := errors.AsType[*quota.LimitError](err); ok {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
@@ -1317,7 +1307,7 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if existingUserMode {
-		if err := credentials.MySQLCreateDBForUser(h.DB, id, dbName, dbUser); err != nil {
+		if err := mysqlCreateDBForUser(h.DB, id, dbName, dbUser); err != nil {
 			if errors.Is(err, credentials.ErrInvalidMySQLCredentials) {
 				httpx.WriteError(w, http.StatusBadRequest, "invalid database name or user")
 				return
@@ -1329,12 +1319,12 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 		var stored string
 		if err := h.DB.QueryRowContext(r.Context(),
 			`SELECT db_pass_plain FROM db_accounts WHERE db_user=? LIMIT 1`, dbUser).Scan(&stored); err == nil {
-			if pw, derr := credentials.DecryptDBPass(dbUser, stored); derr == nil {
+			if pw, derr := decryptDBPass(dbUser, stored); derr == nil {
 				password = pw
 			}
 		}
 	} else {
-		if err := credentials.MySQLCreateDB(h.DB, id, dbName, dbUser, password); err != nil {
+		if err := mysqlCreateDB(h.DB, id, dbName, dbUser, password); err != nil {
 			if errors.Is(err, credentials.ErrDBUserOwnedByAnotherDomain) {
 				httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+dbUser)
 				return
@@ -1353,7 +1343,7 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	go func(domainID int64) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := resourcelimit.ApplyAll(ctx, h.DB, domainID); err != nil {
+		if err := applyResourceLimits(ctx, h.DB, domainID); err != nil {
 			httpx.LogR(r, "resourcelimit apply (db-create) domain=%d: %v", domainID, err)
 		}
 	}(id)
@@ -1612,12 +1602,12 @@ func (h *Handlers) applyPlanNginxDefaults(ctx context.Context, domainID, planID 
 		log.Printf("seed nginx_settings (domain=%d): %v", domainID, err)
 		return
 	}
-	socket, err := provisioner.PHPSocketFor(sk, php)
+	socket, err := phpSocketFor(sk, php)
 	if err != nil {
 		log.Printf("php socket (domain=%d): %v", domainID, err)
 		return
 	}
-	if err := provisioner.ApplyVhostForDomain(h.DB, domainID, socket, php); err != nil {
+	if err := applyVhostForDomain(h.DB, domainID, socket, php); err != nil {
 		log.Printf("rerender plan virtual host (domain=%d): %v", domainID, err)
 	}
 }

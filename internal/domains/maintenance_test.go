@@ -69,8 +69,8 @@ func TestTheWritePathChecksTheShapeItself(t *testing.T) {
 	// Matched on the CALL form, not the bare name: a comment mentioning
 	// WriteMaintenancePage appears earlier in the function and would satisfy a
 	// name-only search whatever the real order was.
-	write := strings.Index(save, "provisioner.WriteMaintenancePage(")
-	render := strings.Index(save, "provisioner.RerenderVhost(")
+	write := strings.Index(save, "writeMaintenancePage(")
+	render := strings.Index(save, "rerenderVhost(")
 	if write < 0 || render < 0 || write > render {
 		t.Error("the vhost is rendered before the page file exists")
 	}

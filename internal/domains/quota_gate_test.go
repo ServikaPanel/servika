@@ -39,10 +39,10 @@ func createBody(t *testing.T) string {
 // a plan allowing one domain could be given any number of them.
 func TestTheDomainPlanGateAsksAboutTheRequestedCustomer(t *testing.T) {
 	body := createBody(t)
-	if !strings.Contains(body, "quota.CheckDomainAllowed(r.Context(), h.DB, req.CustomerID)") {
+	if !strings.Contains(body, "checkDomainAllowed(r.Context(), h.DB, req.CustomerID)") {
 		t.Error("Create does not check the plan limit against the customer the request names")
 	}
-	if strings.Contains(body, "quota.CheckDomainAllowed(r.Context(), h.DB, nil)") {
+	if strings.Contains(body, "checkDomainAllowed(r.Context(), h.DB, nil)") {
 		t.Error("Create passes a literal nil, which short-circuits the plan limit to unlimited")
 	}
 }
@@ -54,8 +54,8 @@ func TestTheDomainPlanGateAsksAboutTheRequestedCustomer(t *testing.T) {
 func TestTheDomainPlanGateRunsBetweenValidationAndProvisioning(t *testing.T) {
 	body := createBody(t)
 	validation := strings.Index(body, "h.referencedAccountsExist(")
-	gate := strings.Index(body, "quota.CheckDomainAllowed(")
-	provision := strings.Index(body, "provisioner.Provision(")
+	gate := strings.Index(body, "checkDomainAllowed(")
+	provision := strings.Index(body, "provisionTenant(")
 	if validation < 0 || gate < 0 || provision < 0 {
 		t.Fatal("one of the three steps is missing from Create")
 	}

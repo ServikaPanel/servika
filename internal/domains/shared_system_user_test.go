@@ -39,8 +39,8 @@ func deleteBody(t *testing.T) string {
 func TestTheSharedUserQuestionIsAskedFirst(t *testing.T) {
 	body := deleteBody(t)
 
-	ask := strings.Index(body, "provisioner.OtherTopLevelDomainsUsing(sk, domainName)")
-	teardown := strings.Index(body, "provisioner.Deprovision(domainName, sk)")
+	ask := strings.Index(body, "otherTopLevelDomainsUsing(sk, domainName)")
+	teardown := strings.Index(body, "deprovisionTenant(domainName, sk)")
 	rowGone := strings.Index(body, "`DELETE FROM domains WHERE id=?`")
 	switch {
 	case ask < 0:
@@ -70,14 +70,14 @@ func TestAFailedLookupKeepsTenantResources(t *testing.T) {
 func TestTheUserKeyedTeardownsAreSkippedWhileShared(t *testing.T) {
 	body := deleteBody(t)
 
-	slice := strings.Index(body, "resourcelimit.DeleteSystemdSlice(sk)")
+	slice := strings.Index(body, "deleteSystemdSlice(sk)")
 	guard := strings.Index(body, "if !systemUserShared {")
 	if slice < 0 || guard < 0 || guard > slice {
 		t.Error("the systemd slice is removed without checking whether the system user is shared")
 	}
 
-	acl := strings.Index(body, "redis.CloseDomain(h.DB, id, sk)")
-	rowOnly := strings.Index(body, "redis.ForgetDomain(h.DB, id)")
+	acl := strings.Index(body, "closeRedisDomain(h.DB, id, sk)")
+	rowOnly := strings.Index(body, "forgetRedisDomain(h.DB, id)")
 	switch {
 	case acl < 0 || rowOnly < 0:
 		t.Fatal("the Redis cleanup moved; these assertions have to follow it")
@@ -91,7 +91,7 @@ func TestTheUserKeyedTeardownsAreSkippedWhileShared(t *testing.T) {
 func TestTheSurvivingVhostIsRenderedAgain(t *testing.T) {
 	body := deleteBody(t)
 
-	render := strings.Index(body, "provisioner.RerenderVhost(h.DB, otherID)")
+	render := strings.Index(body, "rerenderVhost(h.DB, otherID)")
 	rowGone := strings.Index(body, "`DELETE FROM domains WHERE id=?`")
 	switch {
 	case render < 0:
