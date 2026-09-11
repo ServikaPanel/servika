@@ -3,6 +3,7 @@ package domains
 import (
 	"context"
 	"database/sql/driver"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -47,6 +48,23 @@ func TestTheRollbackRestoresEachRowsOwnState(t *testing.T) {
 		t.Fatal("the refused render did not fail the suspension")
 	}
 
+	restored := restoredRows(recorder)
+	if len(restored) != 2 {
+		t.Fatalf("%d rows were rolled back, want 2", len(restored))
+	}
+	// The cascade marker is part of "as it was found". Leaving it cleared would
+	// hand a suspension the reseller cascade owns to nobody, and the reseller's
+	// own resume would then never lift it.
+	if got := restored[0]; !reflect.DeepEqual(got, []driver.Value{int64(0), "active", int64(0), int64(7)}) {
+		t.Errorf("the parent was restored as %v, want [0 active 0 7]", got)
+	}
+	if got := restored[1]; !reflect.DeepEqual(got, []driver.Value{int64(1), "passive", int64(1), int64(8)}) {
+		t.Errorf("the addon was restored as %v, want [1 passive 1 8]", got)
+	}
+}
+
+// restoredRows returns the bound values of every rollback write.
+func restoredRows(recorder *ownerRecorder) [][]driver.Value {
 	_, values := recorder.matching("UPDATE domains SET suspended=?, status=?, suspended_by_reseller=? WHERE id=?")
 	var restored [][]driver.Value
 	for _, bound := range values {
@@ -54,18 +72,7 @@ func TestTheRollbackRestoresEachRowsOwnState(t *testing.T) {
 			restored = append(restored, bound)
 		}
 	}
-	if len(restored) != 2 {
-		t.Fatalf("%d rows were rolled back, want 2", len(restored))
-	}
-	// The cascade marker is part of "as it was found". Leaving it cleared would
-	// hand a suspension the reseller cascade owns to nobody, and the reseller's
-	// own resume would then never lift it.
-	if got := restored[0]; got[0] != int64(0) || got[1] != "active" || got[2] != int64(0) || got[3] != int64(7) {
-		t.Errorf("the parent was restored as %v, want [0 active 0 7]", got)
-	}
-	if got := restored[1]; got[0] != int64(1) || got[1] != "passive" || got[2] != int64(1) || got[3] != int64(8) {
-		t.Errorf("the addon was restored as %v, want [1 passive 1 8]", got)
-	}
+	return restored
 }
 
 // The FTP, mail-domain and mailbox cascades run on the same set. A parent-only

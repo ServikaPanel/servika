@@ -143,12 +143,7 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		return domainName, err
 	}
 
-	value := 0
-	status := "active"
-	if suspended {
-		value = 1
-		status = "passive"
-	}
+	value, status := suspensionState(suspended)
 	// suspended_by_reseller is CLEARED here whichever direction this goes. This is
 	// the individual path: an operator naming one domain has made an explicit
 	// decision about it, and that decision takes ownership of the row's state from
@@ -165,6 +160,31 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		return domainName, err
 	}
 
+	cascadeSuspension(ctx, db, id, suspended)
+	if systemUser != "" {
+		suspendUserRuntime(systemUser, suspended)
+		// Separate from the pkill above: an application unit carries
+		// Restart=always, so a killed process is back within seconds and the
+		// suspended account keeps serving until systemd is told to stop it.
+		if err := suspendApps(ctx, db, systemUser, suspended); err != nil {
+			log.Printf("apply application suspension state for domain %d: %v", id, err)
+		}
+	}
+	return domainName, nil
+}
+
+// suspensionState is the suspended flag and the status a domains row takes.
+func suspensionState(suspended bool) (int, string) {
+	if suspended {
+		return 1, "passive"
+	}
+	return 0, "active"
+}
+
+// cascadeSuspension carries the state to the FTP accounts, the mail domains and
+// the mailboxes of the domain and its addons. A failed write is logged and the
+// others still run.
+func cascadeSuspension(ctx context.Context, db *sql.DB, id int64, suspended bool) {
 	ftpStatus := "active"
 	// Suspending bumps token_version so any active customer JWT is revoked at once;
 	// resuming only restores status and leaves the version untouched.
@@ -188,16 +208,6 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		`UPDATE mailboxes SET status=? WHERE `+ownedByDomainOrItsAddons, mailStatus, id, id); err != nil {
 		log.Printf("update mailbox suspension state for domain %d: %v", id, err)
 	}
-	if systemUser != "" {
-		suspendUserRuntime(systemUser, suspended)
-		// Separate from the pkill above: an application unit carries
-		// Restart=always, so a killed process is back within seconds and the
-		// suspended account keeps serving until systemd is told to stop it.
-		if err := suspendApps(ctx, db, systemUser, suspended); err != nil {
-			log.Printf("apply application suspension state for domain %d: %v", id, err)
-		}
-	}
-	return domainName, nil
 }
 
 // SuspendResellerDomains applies the suspend/resume state to every domain owned

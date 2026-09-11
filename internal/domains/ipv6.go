@@ -40,31 +40,9 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	value := strings.TrimSpace(request.IPv6)
-
-	if value != "" {
-		parsed := net.ParseIP(value)
-		if parsed == nil {
-			writeReason(w, http.StatusBadRequest, "that is not a valid address", reasonIPv6Invalid)
-			return
-		}
-		if parsed.To4() != nil {
-			writeReason(w, http.StatusBadRequest, "that is an IPv4 address", reasonIPv6NotV6)
-			return
-		}
-		// FAIL-CLOSED. An address this server does not answer on, published as a
-		// AAAA record, makes the site dead for every IPv6 client while the panel
-		// shows a healthy domain, and it stops certificate renewal because
-		// Let's Encrypt tries the AAAA first. Both failures are silent.
-		if !addressIsLocal(value) {
-			writeReason(w, http.StatusBadRequest,
-				"that address is not configured on this server", reasonIPv6NotLocal)
-			return
-		}
-		// Stored in the canonical form so the AAAA records the panel writes and
-		// the value the verification screen compares against cannot differ by
-		// spelling alone.
-		value = parsed.String()
+	value, ok := localIPv6Value(w, strings.TrimSpace(request.IPv6))
+	if !ok {
+		return
 	}
 
 	var (
@@ -104,6 +82,36 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "ipv6": value, "records": changed})
+}
+
+// localIPv6Value checks an address for the domain to answer on and returns it
+// in canonical form. An empty value clears the address and is always accepted.
+func localIPv6Value(w http.ResponseWriter, value string) (string, bool) {
+	if value == "" {
+		return "", true
+	}
+	parsed := net.ParseIP(value)
+	if parsed == nil {
+		writeReason(w, http.StatusBadRequest, "that is not a valid address", reasonIPv6Invalid)
+		return "", false
+	}
+	if parsed.To4() != nil {
+		writeReason(w, http.StatusBadRequest, "that is an IPv4 address", reasonIPv6NotV6)
+		return "", false
+	}
+	// FAIL-CLOSED. An address this server does not answer on, published as a
+	// AAAA record, makes the site dead for every IPv6 client while the panel
+	// shows a healthy domain, and it stops certificate renewal because
+	// Let's Encrypt tries the AAAA first. Both failures are silent.
+	if !addressIsLocal(value) {
+		writeReason(w, http.StatusBadRequest,
+			"that address is not configured on this server", reasonIPv6NotLocal)
+		return "", false
+	}
+	// Stored in the canonical form so the AAAA records the panel writes and
+	// the value the verification screen compares against cannot differ by
+	// spelling alone.
+	return parsed.String(), true
 }
 
 // ServerIPv6Addresses lists the globally routable IPv6 addresses of this

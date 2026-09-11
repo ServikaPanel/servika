@@ -158,9 +158,21 @@ func TestTheSnapshotIsReadBeforeAnyWrite(t *testing.T) {
 		t.Fatalf("the cascade marked %v, want both open rows", marked)
 	}
 
+	snapshotAt, firstWriteAt := snapshotAndFirstWrite(recorder)
+	if snapshotAt < 0 {
+		t.Fatal("the cascade never read its snapshot")
+	}
+	if firstWriteAt >= 0 && snapshotAt > firstWriteAt {
+		t.Fatalf("the snapshot was read at %d, after the first write at %d", snapshotAt, firstWriteAt)
+	}
+}
+
+// snapshotAndFirstWrite returns where the cascade read its snapshot and where
+// it first wrote, each -1 when it never did.
+func snapshotAndFirstWrite(recorder *ownerRecorder) (snapshotAt, firstWriteAt int) {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()
-	snapshotAt, firstWriteAt := -1, -1
+	snapshotAt, firstWriteAt = -1, -1
 	for i, statement := range recorder.statements {
 		if snapshotAt < 0 && strings.Contains(statement, "FROM domains d JOIN customers c") {
 			snapshotAt = i
@@ -169,12 +181,7 @@ func TestTheSnapshotIsReadBeforeAnyWrite(t *testing.T) {
 			firstWriteAt = i
 		}
 	}
-	if snapshotAt < 0 {
-		t.Fatal("the cascade never read its snapshot")
-	}
-	if firstWriteAt >= 0 && snapshotAt > firstWriteAt {
-		t.Fatalf("the snapshot was read at %d, after the first write at %d", snapshotAt, firstWriteAt)
-	}
+	return snapshotAt, firstWriteAt
 }
 
 // An empty snapshot is not an error: a reseller with no customers matches

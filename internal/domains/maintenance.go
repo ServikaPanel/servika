@@ -132,16 +132,7 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The domain has to exist before anything is written: WriteMaintenancePage
-	// would otherwise leave a file for an id that names nothing.
-	var exists int
-	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT 1 FROM domains WHERE id=?`, id).Scan(&exists); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		} else {
-			httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
-		}
+	if !h.maintenanceDomainFound(w, r, id) {
 		return
 	}
 
@@ -175,7 +166,43 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	duration := max(request.DurationMinutes, 0)
+	if err := h.saveMaintenance(r, id, request.Enabled, request.DurationMinutes, page); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the maintenance settings could not be saved")
+		return
+	}
+
+	if err := rerenderVhost(h.DB, id); err != nil {
+		httpx.LogR(r, "rerender vhost after maintenance change for domain %d: %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError,
+			"the settings were saved but the web server configuration could not be applied")
+		return
+	}
+
+	h.MaintenanceStatus(w, r)
+}
+
+// maintenanceDomainFound answers a request for an id that names no domain.
+//
+// The domain has to exist before anything is written: WriteMaintenancePage
+// would otherwise leave a file for an id that names nothing.
+func (h *Handlers) maintenanceDomainFound(w http.ResponseWriter, r *http.Request, id int64) bool {
+	var exists int
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT 1 FROM domains WHERE id=?`, id).Scan(&exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			httpx.WriteError(w, http.StatusNotFound, "domain not found")
+		} else {
+			httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
+		}
+		return false
+	}
+	return true
+}
+
+// saveMaintenance stores the switch, the window and the page fields. The window
+// is a duration the database clock applies, capped at a month.
+func (h *Handlers) saveMaintenance(r *http.Request, id int64, enabled bool, minutes int, page provisioner.MaintenancePage) error {
+	duration := max(minutes, 0)
 	const maxDurationMinutes = 60 * 24 * 30 // a month; beyond that the mode is not a window
 	if duration > maxDurationMinutes {
 		duration = maxDurationMinutes
@@ -183,7 +210,7 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	switch {
-	case !request.Enabled:
+	case !enabled:
 		_, err = h.DB.ExecContext(r.Context(),
 			`UPDATE domains SET maintenance_enabled=0, maintenance_until=NULL,
 			        maintenance_title=?, maintenance_message=?, maintenance_accent=?, maintenance_logo_url=?
@@ -203,19 +230,7 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 			  WHERE id=?`,
 			duration, page.Title, page.Message, page.Accent, page.LogoURL, id)
 	}
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "the maintenance settings could not be saved")
-		return
-	}
-
-	if err := rerenderVhost(h.DB, id); err != nil {
-		httpx.LogR(r, "rerender vhost after maintenance change for domain %d: %v", id, err)
-		httpx.WriteError(w, http.StatusInternalServerError,
-			"the settings were saved but the web server configuration could not be applied")
-		return
-	}
-
-	h.MaintenanceStatus(w, r)
+	return err
 }
 
 // MaintenanceIPAdd records an address that reaches the real site.

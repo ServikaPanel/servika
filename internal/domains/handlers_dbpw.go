@@ -31,18 +31,7 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.Password == "" {
-		req.Password = credentials.RandomPassword(24)
-	}
-	// Reject a user-supplied value that already looks like ciphertext: storing it
-	// verbatim and revealing it later would turn this endpoint into a decryption
-	// oracle for another account's password.
-	if credentials.IsEncryptedValue(req.Password) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid password")
-		return
-	}
-	if len(req.Password) < 6 {
-		httpx.WriteError(w, http.StatusBadRequest, "password must be at least 6 characters")
+	if !acceptDatabasePassword(w, &req) {
 		return
 	}
 
@@ -60,40 +49,8 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(dbUser) == "" {
-		// The database has no MySQL user. This happens when a database is deleted
-		// from the panel and restored from a backup: the archive holds schema and
-		// data, not the account. The panel assumed every database had a user, so the
-		// site could not connect and there was no way to create one. Create it now.
-		newUser := strings.TrimSpace(req.User)
-		if newUser == "" {
-			httpx.WriteError(w, http.StatusBadRequest, "this database has no user — send a user name to create one")
-			return
-		}
-		if !credentials.ValidDBIdentifier(newUser) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid user name")
-			return
-		}
-		// The new name must not collide with another database's account, which would
-		// hand this database's password to that account's owner.
-		var clash int
-		if e := h.DB.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM db_accounts WHERE db_user=? AND id<>?`, newUser, dbid).Scan(&clash); e != nil || clash > 0 {
-			httpx.WriteError(w, http.StatusConflict, "this user name is already used by another database")
-			return
-		}
-		if err := mysqlAddUser(dbName, newUser, req.Password); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
-			return
-		}
-		encPass, err := encryptDBPass(newUser, req.Password)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
-			return
-		}
-		if _, err := h.DB.ExecContext(r.Context(),
-			`UPDATE db_accounts SET db_user=?, db_pass_plain=?, db_host='localhost' WHERE id=?`,
-			newUser, encPass, dbid); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "database record could not be updated")
+		newUser, ok := h.createMissingDBUser(w, r, dbid, dbName, req)
+		if !ok {
 			return
 		}
 		dbUser = newUser
@@ -108,4 +65,67 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 		"db_user": dbUser,
 		"db_pass": req.Password,
 	})
+}
+
+// acceptDatabasePassword generates a password when the request sends none, and
+// refuses one that cannot be set.
+func acceptDatabasePassword(w http.ResponseWriter, req *setDBPwReq) bool {
+	if req.Password == "" {
+		req.Password = credentials.RandomPassword(24)
+	}
+	// Reject a user-supplied value that already looks like ciphertext: storing it
+	// verbatim and revealing it later would turn this endpoint into a decryption
+	// oracle for another account's password.
+	if credentials.IsEncryptedValue(req.Password) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid password")
+		return false
+	}
+	if len(req.Password) < 6 {
+		httpx.WriteError(w, http.StatusBadRequest, "password must be at least 6 characters")
+		return false
+	}
+	return true
+}
+
+// createMissingDBUser creates the MariaDB account a database has lost, under the
+// name the request sends, and returns that name.
+//
+// The database has no MySQL user. This happens when a database is deleted
+// from the panel and restored from a backup: the archive holds schema and
+// data, not the account. The panel assumed every database had a user, so the
+// site could not connect and there was no way to create one. Create it now.
+func (h *Handlers) createMissingDBUser(w http.ResponseWriter, r *http.Request, dbid int64, dbName string, req setDBPwReq) (string, bool) {
+	newUser := strings.TrimSpace(req.User)
+	if newUser == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "this database has no user — send a user name to create one")
+		return "", false
+	}
+	if !credentials.ValidDBIdentifier(newUser) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid user name")
+		return "", false
+	}
+	// The new name must not collide with another database's account, which would
+	// hand this database's password to that account's owner.
+	var clash int
+	if e := h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM db_accounts WHERE db_user=? AND id<>?`, newUser, dbid).Scan(&clash); e != nil || clash > 0 {
+		httpx.WriteError(w, http.StatusConflict, "this user name is already used by another database")
+		return "", false
+	}
+	if err := mysqlAddUser(dbName, newUser, req.Password); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
+		return "", false
+	}
+	encPass, err := encryptDBPass(newUser, req.Password)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "user could not be created")
+		return "", false
+	}
+	if _, err := h.DB.ExecContext(r.Context(),
+		`UPDATE db_accounts SET db_user=?, db_pass_plain=?, db_host='localhost' WHERE id=?`,
+		newUser, encPass, dbid); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database record could not be updated")
+		return "", false
+	}
+	return newUser, true
 }

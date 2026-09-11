@@ -26,9 +26,10 @@ func deleteBody(t *testing.T) string {
 	if start < 0 {
 		t.Fatal("Delete was renamed; these assertions have to follow it")
 	}
-	end := strings.Index(body[start:], "\nfunc ")
+	// Delete and the helpers that follow it in the order it calls them.
+	end := strings.Index(body[start:], "\nfunc uidGidOf(")
 	if end < 0 {
-		return body[start:]
+		t.Fatal("uidGidOf moved; these assertions have to follow it")
 	}
 	return body[start : start+end]
 }

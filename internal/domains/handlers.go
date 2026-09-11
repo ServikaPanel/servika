@@ -228,47 +228,48 @@ const warningOwnerNotApplied = "owner_not_applied"
 // A database failure is reported as an error, not as "not found", so the caller
 // refuses instead of provisioning against an unchecked id.
 func (h *Handlers) referencedAccountsExist(ctx context.Context, customerID, planID, ownerUserID *int64) (string, error) {
-	if ownerUserID != nil && *ownerUserID > 0 {
-		if customerID != nil && *customerID > 0 {
-			// Two different intents in one request. Applying one and dropping the
-			// other would report a placement that did not happen.
-			return reasonOwnerWithCustomer, nil
-		}
+	if positiveID(ownerUserID) && positiveID(customerID) {
+		// Two different intents in one request. Applying one and dropping the
+		// other would report a placement that did not happen.
+		return reasonOwnerWithCustomer, nil
+	}
+	for _, ref := range []struct {
+		id      *int64
+		query   string
+		missing string
+	}{
 		// The role and the status are both part of the check: a suspended account
 		// is one an operator deliberately took out of service, and handing it a
 		// fresh domain would quietly put it back to work.
-		var found int64
-		switch err := h.DB.QueryRowContext(ctx,
-			`SELECT id FROM users WHERE id=? AND role='reseller' AND status='active'`,
-			*ownerUserID).Scan(&found); {
-		case errors.Is(err, sql.ErrNoRows):
-			return reasonOwnerNotReseller, nil
-		case err != nil:
-			return "", err
+		{ownerUserID, `SELECT id FROM users WHERE id=? AND role='reseller' AND status='active'`, reasonOwnerNotReseller},
+		{customerID, `SELECT id FROM customers WHERE id=?`, reasonCustomerNotFound},
+		{planID, `SELECT id FROM service_plans WHERE id=?`, reasonPlanNotFound},
+	} {
+		if !positiveID(ref.id) {
+			continue
 		}
-	}
-	if customerID != nil && *customerID > 0 {
-		var found int64
-		switch err := h.DB.QueryRowContext(ctx,
-			`SELECT id FROM customers WHERE id=?`, *customerID).Scan(&found); {
-		case errors.Is(err, sql.ErrNoRows):
-			return reasonCustomerNotFound, nil
-		case err != nil:
-			return "", err
-		}
-	}
-	if planID != nil && *planID > 0 {
-		var found int64
-		switch err := h.DB.QueryRowContext(ctx,
-			`SELECT id FROM service_plans WHERE id=?`, *planID).Scan(&found); {
-		case errors.Is(err, sql.ErrNoRows):
-			return reasonPlanNotFound, nil
-		case err != nil:
-			return "", err
+		if reason, err := h.referencedRowMissing(ctx, ref.query, *ref.id, ref.missing); reason != "" || err != nil {
+			return reason, err
 		}
 	}
 	return "", nil
 }
+
+// referencedRowMissing looks up one referenced row and returns missing when it
+// is not there. A lookup that failed is an error, never a verdict.
+func (h *Handlers) referencedRowMissing(ctx context.Context, query string, id int64, missing string) (string, error) {
+	var found int64
+	switch err := h.DB.QueryRowContext(ctx, query, id).Scan(&found); {
+	case errors.Is(err, sql.ErrNoRows):
+		return missing, nil
+	case err != nil:
+		return "", err
+	}
+	return "", nil
+}
+
+// positiveID reports whether an optional id names a row.
+func positiveID(id *int64) bool { return id != nil && *id > 0 }
 
 // nameAlreadyServed reports whether a name already has an nginx server block, as
 // a domain or as somebody's subdomain.
@@ -386,6 +387,24 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.DomainName = strings.ToLower(strings.TrimSpace(req.DomainName))
+	h.fillCreateDefaults(r, &req)
+	if h.createRefused(w, r, &req) {
+		return
+	}
+	domain, ok := h.provisionDomain(w, r, &req)
+	if !ok {
+		return
+	}
+	createWarning, ok := h.attachDomain(w, r, &req, domain)
+	if !ok {
+		return
+	}
+	h.finishCreate(w, r, &req, domain, createWarning)
+}
+
+// fillCreateDefaults fills in what a create request left out: the default plan,
+// and the PHP version of the selected plan or 8.3.
+func (h *Handlers) fillCreateDefaults(r *http.Request, req *createReq) {
 	if req.PlanID == nil {
 		var defaultPlanID int64
 		err := h.DB.QueryRowContext(r.Context(),
@@ -406,79 +425,126 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// createRefused answers a create request that must not provision anything, and
+// reports whether it did.
+func (h *Handlers) createRefused(w http.ResponseWriter, r *http.Request, req *createReq) bool {
 	if err := provisioner.ValidateDomain(req.DomainName); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
-		return
+		return true
 	}
 	// The archive import path reaches domain creation through this handler, so
 	// the ban covers it here rather than in internal/transfers.
 	if refuseIfBlocked(w, r, h.DB, req.DomainName) {
-		return
+		return true
 	}
+	if h.nameRefused(w, r, req.DomainName) {
+		return true
+	}
+	if ownerRefused(w, r, req) {
+		return true
+	}
+	if h.resellerRefused(w, r, req) {
+		return true
+	}
+	return h.accountsRefused(w, r, req)
+}
 
-	switch taken, err := h.nameAlreadyServed(r.Context(), req.DomainName); {
+// nameRefused answers a name that is already served, or that could not be
+// checked.
+func (h *Handlers) nameRefused(w http.ResponseWriter, r *http.Request, name string) bool {
+	switch taken, err := h.nameAlreadyServed(r.Context(), name); {
 	case err != nil:
 		// #nosec G706 -- the logged name passed provisioner.ValidateDomain just above, so it carries no CR/LF.
-		httpx.LogR(r, "check whether %q is already served: %v", req.DomainName, err)
+		httpx.LogR(r, "check whether %q is already served: %v", name, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify the domain name")
-		return
+		return true
 	case taken:
 		httpx.WriteError(w, http.StatusConflict, "this domain name is already registered")
-		return
+		return true
 	}
+	return false
+}
 
-	// Choosing which reseller a new customer belongs to is an administrator's
-	// decision. A reseller cannot reach the auto-creation path at all, it is
-	// refused just below unless it names one of its own customers, so accepting
-	// the field from one would let it ask for something that silently does
-	// nothing.
-	if req.OwnerUserID != nil {
-		if c := middleware.ClaimsFrom(r); c == nil || c.Role != middleware.RoleAdmin {
-			httpx.WriteError(w, http.StatusForbidden, reasonOwnerNotAllowed)
-			return
-		}
+// ownerRefused answers an owner named by anyone but an administrator.
+//
+// Choosing which reseller a new customer belongs to is an administrator's
+// decision. A reseller cannot reach the auto-creation path at all, it is
+// refused just below unless it names one of its own customers, so accepting
+// the field from one would let it ask for something that silently does
+// nothing.
+func ownerRefused(w http.ResponseWriter, r *http.Request, req *createReq) bool {
+	if req.OwnerUserID == nil {
+		return false
 	}
+	if c := middleware.ClaimsFrom(r); c == nil || c.Role != middleware.RoleAdmin {
+		httpx.WriteError(w, http.StatusForbidden, reasonOwnerNotAllowed)
+		return true
+	}
+	return false
+}
 
-	// Reseller guard: a reseller may only attach a domain to its own customer,
-	// and the reseller's total domain quota applies (a ceiling separate from the
-	// customer plan's max_domain).
-	if c := middleware.ClaimsFrom(r); c != nil && c.Role == middleware.RoleReseller {
-		if req.CustomerID == nil {
-			httpx.WriteError(w, http.StatusBadRequest, "a domain must be attached to a customer")
-			return
-		}
-		if !resellerOwnsCustomer(r, c.UserID, *req.CustomerID) {
-			httpx.WriteError(w, http.StatusForbidden, "no access to this customer")
-			return
-		}
-		if err := checkResellerDomainAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			if le, ok := errors.AsType[*quota.LimitError](err); ok {
-				httpx.WriteError(w, http.StatusForbidden, le.Message)
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
-			return
-		}
+// resellerRefused applies the reseller guard: a reseller may only attach a
+// domain to its own customer, and the reseller's total domain quota applies (a
+// ceiling separate from the customer plan's max_domain).
+func (h *Handlers) resellerRefused(w http.ResponseWriter, r *http.Request, req *createReq) bool {
+	c := middleware.ClaimsFrom(r)
+	if c == nil || c.Role != middleware.RoleReseller {
+		return false
+	}
+	if req.CustomerID == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "a domain must be attached to a customer")
+		return true
+	}
+	if !resellerOwnsCustomer(r, c.UserID, *req.CustomerID) {
+		httpx.WriteError(w, http.StatusForbidden, "no access to this customer")
+		return true
+	}
+	return resellerQuotaRefused(w, r, h.DB, c.UserID)
+}
+
+// resellerQuotaRefused checks the reseller's domain ceiling and its disk and
+// traffic quotas, in that order, and answers the first one that does not pass.
+func resellerQuotaRefused(w http.ResponseWriter, r *http.Request, db *sql.DB, resellerID int64) bool {
+	for _, gate := range []struct {
+		check   func(context.Context, *sql.DB, int64) error
+		failure string
+	}{
+		{checkResellerDomainAllowed, "could not verify reseller limit"},
 		// Disk/traffic quota: when full, no new domain may be opened. Existing
 		// sites are unaffected — these are "new resource" gates, not cuts.
-		if err := checkResellerDiskAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			if le, ok := errors.AsType[*quota.LimitError](err); ok {
-				httpx.WriteError(w, http.StatusForbidden, le.Message)
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller disk quota")
-			return
-		}
-		if err := checkResellerTrafficAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			if le, ok := errors.AsType[*quota.LimitError](err); ok {
-				httpx.WriteError(w, http.StatusForbidden, le.Message)
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller traffic quota")
-			return
+		{checkResellerDiskAllowed, "could not verify reseller disk quota"},
+		{checkResellerTrafficAllowed, "could not verify reseller traffic quota"},
+	} {
+		if err := gate.check(r.Context(), db, resellerID); err != nil {
+			writeQuotaRefusal(w, err, gate.failure)
+			return true
 		}
 	}
+	return false
+}
 
+// writeQuotaRefusal answers a quota check that did not pass: a reached limit
+// with its own message, and anything else as the failure it is.
+func writeQuotaRefusal(w http.ResponseWriter, err error, failure string) {
+	if le, ok := errors.AsType[*quota.LimitError](err); ok {
+		httpx.WriteError(w, http.StatusForbidden, le.Message)
+		return
+	}
+	httpx.WriteError(w, http.StatusInternalServerError, failure)
+}
+
+// quotaLimitReached reports whether a quota check refused on a reached limit
+// rather than failing to read it.
+func quotaLimitReached(err error) bool {
+	_, limited := errors.AsType[*quota.LimitError](err)
+	return limited
+}
+
+// accountsRefused checks the accounts the request points at and the customer
+// plan's domain ceiling.
+func (h *Handlers) accountsRefused(w http.ResponseWriter, r *http.Request, req *createReq) bool {
 	// Check the ids the request points at BEFORE provisioning. Provision creates
 	// the Linux user, the nginx vhost and the FPM pool, so refusing after it ran
 	// would leave a half-provisioned domain behind for a request that was never
@@ -486,10 +552,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	if reason, err := h.referencedAccountsExist(r.Context(), req.CustomerID, req.PlanID, req.OwnerUserID); err != nil {
 		httpx.LogR(r, "verify referenced accounts for %q: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify the selected account")
-		return
+		return true
 	} else if reason != "" {
 		httpx.WriteError(w, http.StatusBadRequest, reason)
-		return
+		return true
 	}
 
 	// The customer plan's max_domain ceiling, with the customer the request names.
@@ -503,21 +569,31 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// answered as a bad request rather than as a failed quota read, and BEFORE
 	// Provision so a refusal leaves no Linux user, vhost or FPM pool behind.
 	if err := checkDomainAllowed(r.Context(), h.DB, req.CustomerID); err != nil {
-		if le, ok := errors.AsType[*quota.LimitError](err); ok {
-			httpx.WriteError(w, http.StatusForbidden, le.Message)
-			return
+		if !quotaLimitReached(err) {
+			httpx.LogR(r, "domain quota check failed: %v", err)
 		}
-		httpx.LogR(r, "domain quota check failed: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
-		return
+		writeQuotaRefusal(w, err, "could not verify plan limit")
+		return true
 	}
+	return false
+}
 
+// createdDomain is the tenant Create provisioned and the row it recorded.
+type createdDomain struct {
+	id             int64
+	systemUser     string
+	dbName, dbUser string
+}
+
+// provisionDomain builds the tenant on the host and records its domains row. A
+// row that cannot be written takes the tenant down again.
+func (h *Handlers) provisionDomain(w http.ResponseWriter, r *http.Request, req *createReq) (createdDomain, bool) {
 	// 1) Linux user + nginx + PHP pool
 	pr, err := provisionTenant(req.DomainName, req.PHPVersion)
 	if err != nil {
 		httpx.LogR(r, "provision %q failed: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "domain provisioning failed")
-		return
+		return createdDomain{}, false
 	}
 
 	// A static site never connects to MySQL, so it gets no database and no user.
@@ -544,13 +620,19 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(err.Error(), "uq_domains_system_user_top") {
 			httpx.LogR(r, "create %q lost the race for system user %q", req.DomainName, pr.SystemUser)
 			httpx.WriteError(w, http.StatusConflict, "another domain took this system user name; try again")
-			return
+			return createdDomain{}, false
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, "domain record creation failed")
-		return
+		return createdDomain{}, false
 	}
 	id, _ := res.LastInsertId()
+	return createdDomain{id: id, systemUser: pr.SystemUser, dbName: dbName, dbUser: dbUser}, true
+}
 
+// attachDomain writes the customer and plan the request named, or builds the
+// ownership chain when it named no customer. It returns the warning the response
+// carries, and false when the answer was already written.
+func (h *Handlers) attachDomain(w http.ResponseWriter, r *http.Request, req *createReq, domain createdDomain) (string, bool) {
 	if req.CustomerID != nil || req.PlanID != nil {
 		// Not silently discarded: the domain is provisioned and serving, so a lost
 		// write here leaves it attached to nobody while the caller was told which
@@ -558,57 +640,70 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		// the database itself.
 		if _, err := h.DB.ExecContext(r.Context(),
 			`UPDATE domains SET customer_id=?, plan_id=? WHERE id=?`,
-			req.CustomerID, req.PlanID, id); err != nil {
-			httpx.LogR(r, "attach domain %d to customer/plan: %v", id, err)
+			req.CustomerID, req.PlanID, domain.id); err != nil {
+			httpx.LogR(r, "attach domain %d to customer/plan: %v", domain.id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the domain was created but could not be attached to the selected account")
-			return
+			return "", false
 		}
 	}
-	// Set when the caller asked for a reseller owner that could not be applied.
-	// Carried to the response so a placement that did not happen is never
-	// reported as one that did.
-	var createWarning string
-	if req.CustomerID == nil {
-		// Nobody was named, so build the ownership chain now rather than leaving
-		// it to the next restart. Until this existed, the account for a freshly
-		// added domain appeared only after the startup backfill ran, so the
-		// Customer Accounts screen stayed empty in the meantime.
-		//
-		// Reachable on an administrator's authority alone: a reseller is refused
-		// above unless it names one of its own customers, so the owner written
-		// here is one an administrator chose, or none at all.
-		//
-		// Not fatal. The domain is already provisioned and serving; a failure here
-		// is logged and the startup backfill picks the tenant up.
-		account, err := ensureTenantAccount(r.Context(), h.DB, pr.SystemUser, req.DomainName, req.OwnerUserID)
-		switch {
-		case err != nil:
-			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			httpx.LogR(r, "customer account for %q: %v", pr.SystemUser, err)
-		case account.CustomerID > 0:
-			if _, err := h.DB.ExecContext(r.Context(),
-				`UPDATE domains SET customer_id=? WHERE id=?`, account.CustomerID, id); err != nil {
-				httpx.LogR(r, "link domain %d to customer %d: %v", id, account.CustomerID, err)
-			}
-			if req.OwnerUserID != nil && account.Reused {
-				createWarning = warningOwnerNotApplied
-			}
+	if req.CustomerID != nil {
+		return "", true
+	}
+	return h.linkTenantAccount(r, req, domain), true
+}
+
+// linkTenantAccount builds the ownership chain for a domain created with no
+// customer named, and returns the warning to carry to the response: set when the
+// caller asked for a reseller owner that could not be applied, so a placement
+// that did not happen is never reported as one that did.
+//
+// Nobody was named, so build the ownership chain now rather than leaving
+// it to the next restart. Until this existed, the account for a freshly
+// added domain appeared only after the startup backfill ran, so the
+// Customer Accounts screen stayed empty in the meantime.
+//
+// Reachable on an administrator's authority alone: a reseller is refused
+// above unless it names one of its own customers, so the owner written
+// here is one an administrator chose, or none at all.
+//
+// Not fatal. The domain is already provisioned and serving; a failure here
+// is logged and the startup backfill picks the tenant up.
+func (h *Handlers) linkTenantAccount(r *http.Request, req *createReq, domain createdDomain) string {
+	account, err := ensureTenantAccount(r.Context(), h.DB, domain.systemUser, req.DomainName, req.OwnerUserID)
+	switch {
+	case err != nil:
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		httpx.LogR(r, "customer account for %q: %v", domain.systemUser, err)
+	case account.CustomerID > 0:
+		if _, err := h.DB.ExecContext(r.Context(),
+			`UPDATE domains SET customer_id=? WHERE id=?`, account.CustomerID, domain.id); err != nil {
+			httpx.LogR(r, "link domain %d to customer %d: %v", domain.id, account.CustomerID, err)
+		}
+		if req.OwnerUserID != nil && account.Reused {
+			return warningOwnerNotApplied
 		}
 	}
+	return ""
+}
+
+// finishCreate runs the best-effort steps that follow the domain row, and
+// answers with the domain and the passwords created for it.
+func (h *Handlers) finishCreate(w http.ResponseWriter, r *http.Request, req *createReq, domain createdDomain, createWarning string) {
+	id := domain.id
 	// If a plan is selected, seed the nginx web-server defaults to the domain + refresh vhost
 	if req.PlanID != nil {
-		h.applyPlanNginxDefaults(r.Context(), id, *req.PlanID, pr.SystemUser, req.PHPVersion)
+		h.applyPlanNginxDefaults(r.Context(), id, *req.PlanID, domain.systemUser, req.PHPVersion)
 	}
 
 	// 3) FTP account with a random password.
 	ftpPass := credentials.RandomPassword(20)
-	uidN, gidN := uidGidOf(pr.SystemUser)
-	if err := createFTPAccount(h.DB, id, pr.SystemUser, ftpPass, uidN, gidN); err != nil {
-		httpx.LogR(r, "FTP create %q error: %v", pr.SystemUser, err)
+	uidN, gidN := uidGidOf(domain.systemUser)
+	if err := createFTPAccount(h.DB, id, domain.systemUser, ftpPass, uidN, gidN); err != nil {
+		httpx.LogR(r, "FTP create %q error: %v", domain.systemUser, err)
 	}
 
 	// 4) Default MySQL database + user, unless the site type is entitled to none.
-	dbPass := h.provisionDatabase(id, dbName, dbUser)
+	dbPass := h.provisionDatabase(id, domain.dbName, domain.dbUser)
 
 	// 5) Auto-seed the DNS template + write BIND zone + reload
 	if _, err := seedDNSDefaults(r.Context(), h.DB, id, req.DomainName, h.IPv4); err != nil {
@@ -661,42 +756,69 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if parentDomainID.Valid {
-		deleted, err := cleanupAddonDomain(r.Context(), h.DB, id)
-		if err != nil {
-			httpx.LogR(r, "addon domain delete warn (%d): %v", id, err)
-			httpx.WriteError(w, http.StatusInternalServerError, "addon domain deletion failed")
-			return
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{
-			"ok":      true,
-			"deleted": map[string]string{"domain_name": deleted, "system_user": sk},
-		})
+		h.deleteAddonDomain(w, r, id, sk)
 		return
 	}
 
-	if childRows, err := h.DB.QueryContext(r.Context(), `SELECT id FROM domains WHERE parent_domain_id=?`, id); err == nil {
-		childIDs := make([]int64, 0)
-		for childRows.Next() {
-			var childID int64
-			if err := childRows.Scan(&childID); err != nil {
-				httpx.LogR(r, "addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
-				continue
-			}
-			childIDs = append(childIDs, childID)
+	h.cleanupAddonChildren(r, id)
+	siblings := h.tearDownTenant(r, id, domainName, sk)
+	if !h.deleteDomainRows(w, r, id) {
+		return
+	}
+	h.afterDomainRowDeleted(r, domainName, siblings)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"deleted": map[string]string{"domain_name": domainName, "system_user": sk},
+	})
+}
+
+// deleteAddonDomain removes an addon domain through its own cleanup.
+func (h *Handlers) deleteAddonDomain(w http.ResponseWriter, r *http.Request, id int64, sk string) {
+	deleted, err := cleanupAddonDomain(r.Context(), h.DB, id)
+	if err != nil {
+		httpx.LogR(r, "addon domain delete warn (%d): %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "addon domain deletion failed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"deleted": map[string]string{"domain_name": deleted, "system_user": sk},
+	})
+}
+
+// cleanupAddonChildren removes every addon domain that answers to this one. A
+// child list that cannot be read is skipped, and every other failure is logged.
+func (h *Handlers) cleanupAddonChildren(r *http.Request, id int64) {
+	childRows, err := h.DB.QueryContext(r.Context(), `SELECT id FROM domains WHERE parent_domain_id=?`, id)
+	if err != nil {
+		return
+	}
+	childIDs := make([]int64, 0)
+	for childRows.Next() {
+		var childID int64
+		if err := childRows.Scan(&childID); err != nil {
+			httpx.LogR(r, "addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
+			continue
 		}
-		if err := childRows.Err(); err != nil {
-			// A child missed here keeps its vhost, its certificate paths and its DNS
-			// zone after the parent is gone, with no row left to find it from.
-			httpx.LogR(r, "addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
-		}
-		_ = childRows.Close()
-		for _, childID := range childIDs {
-			if _, err := cleanupAddonDomain(r.Context(), h.DB, childID); err != nil {
-				httpx.LogR(r, "addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
-			}
+		childIDs = append(childIDs, childID)
+	}
+	if err := childRows.Err(); err != nil {
+		// A child missed here keeps its vhost, its certificate paths and its DNS
+		// zone after the parent is gone, with no row left to find it from.
+		httpx.LogR(r, "addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
+	}
+	_ = childRows.Close()
+	for _, childID := range childIDs {
+		if _, err := cleanupAddonDomain(r.Context(), h.DB, childID); err != nil {
+			httpx.LogR(r, "addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
 		}
 	}
+}
 
+// tearDownTenant removes what the domain holds on the host and in the other
+// panel packages, and returns the top-level domains that still share its system
+// user.
+func (h *Handlers) tearDownTenant(r *http.Request, id int64, domainName, sk string) []int64 {
 	// Applications go before the row does: the foreign key removes their records
 	// but not their units, environment files or logs, and a unit left behind
 	// holds its port out of the allocator's reach for good.
@@ -735,6 +857,18 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := deprovisionTenant(domainName, sk); err != nil {
 		httpx.LogR(r, "deprovision warn (%s): %v", domainName, err)
 	}
+	h.releaseTenantUser(r, id, sk, systemUserShared)
+	// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
+	cleanupMailDomain(h.DB, id, sk)
+	// NOTE: Preserve /var/backups/servika/<sk>/ intentionally.
+	// The customer may have deleted the domain by accident, so backups are kept for recovery.
+	// (backups.RemoveDomainBackups is available for manual cleanup.)
+	return siblings
+}
+
+// releaseTenantUser removes what is named after the system user unless another
+// domain still answers to it. This domain's Redis row goes either way.
+func (h *Handlers) releaseTenantUser(r *http.Request, id int64, sk string, systemUserShared bool) {
 	if !systemUserShared {
 		if err := deleteSystemdSlice(sk); err != nil {
 			httpx.LogR(r, "resource slice cleanup warn (%s): %v", sk, err)
@@ -757,12 +891,11 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	} else if err := closeRedisDomain(h.DB, id, sk); err != nil {
 		httpx.LogR(r, "redis close-domain warn (%s): %v", sk, err)
 	}
-	// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
-	cleanupMailDomain(h.DB, id, sk)
-	// NOTE: Preserve /var/backups/servika/<sk>/ intentionally.
-	// The customer may have deleted the domain by accident, so backups are kept for recovery.
-	// (backups.RemoveDomainBackups is available for manual cleanup.)
+}
 
+// deleteDomainRows removes the rows no foreign key cascades to, and the domain
+// row last. It answers the request and reports false when the domain row stays.
+func (h *Handlers) deleteDomainRows(w http.ResponseWriter, r *http.Request, id int64) bool {
 	// Existing installations may not have foreign keys on the traffic tables.
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_traffic WHERE domain_id=?`, id); err != nil {
 		httpx.LogR(r, "domain traffic cleanup warn (%d): %v", id, err)
@@ -782,9 +915,14 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domains WHERE id=?`, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "domain deletion failed")
-		return
+		return false
 	}
+	return true
+}
 
+// afterDomainRowDeleted renders the surviving domains' vhosts again and removes
+// the DNS zone, both of which have to wait until the row is gone.
+func (h *Handlers) afterDomainRowDeleted(r *http.Request, domainName string, siblings []int64) {
 	// A shared vhost file is named after the SYSTEM USER, so it still carries the
 	// deleted domain in server_name. Render it again from the survivor's own row,
 	// AFTER the delete so the table no longer contains the domain that just went.
@@ -800,10 +938,6 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := deleteDNSZone(r.Context(), h.DB, domainName); err != nil {
 		httpx.LogR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"ok":      true,
-		"deleted": map[string]string{"domain_name": domainName, "system_user": sk},
-	})
 }
 
 func uidGidOf(u string) (int, int) {
@@ -1203,139 +1337,29 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	unlock := lockCustomerForDomain(r.Context(), h.DB, id)
 	defer unlock()
 	if err := checkDatabaseAllowed(r.Context(), h.DB, id); err != nil {
-		if le, ok := errors.AsType[*quota.LimitError](err); ok {
-			httpx.WriteError(w, http.StatusForbidden, le.Message)
-			return
+		if !quotaLimitReached(err) {
+			httpx.LogR(r, "database quota check for domain %d: %v", id, err)
 		}
-		httpx.LogR(r, "database quota check for domain %d: %v", id, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
+		writeQuotaRefusal(w, err, "could not verify plan limit")
 		return
 	}
 
-	// Backward compatible: empty body or Auto=true generates everything (legacy behavior).
-	auto := req.Auto ||
-		(req.DBSuffix == "" && req.UserSuffix == "" && req.ExistingUser == "" && req.Password == "")
-
-	var dbName, dbUser, password string
-	existingUserMode := false
-
-	if auto {
-		dbName = sk + "_db" + strconv.FormatInt(id, 10)
-		dbUser = dbName
-		password = credentials.RandomPassword(24)
-	} else {
-		if req.DBSuffix == "" {
-			httpx.WriteError(w, http.StatusBadRequest, "database name suffix is required")
-			return
-		}
-		if !credentials.ValidDBSuffix(req.DBSuffix) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid database suffix (lowercase letters, digits, underscore only; 1-32 characters)")
-			return
-		}
-		dbName = sk + "_" + req.DBSuffix
-		if !credentials.ValidCustomerDBIdentifier(sk, dbName) {
-			httpx.WriteError(w, http.StatusBadRequest, "database name too long (prefix + suffix must be at most 64 characters)")
-			return
-		}
-
-		switch req.UserMode {
-		case "existing":
-			if req.ExistingUser == "" || !credentials.ValidCustomerDBIdentifier(sk, req.ExistingUser) {
-				httpx.WriteError(w, http.StatusBadRequest, "invalid existing user")
-				return
-			}
-			// Ownership: the selected user must actually belong to this domain (prefix guarantee).
-			var n int
-			_ = h.DB.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM db_accounts WHERE domain_id=? AND db_user=?`, id, req.ExistingUser).Scan(&n)
-			if n == 0 {
-				httpx.WriteError(w, http.StatusBadRequest, "selected user does not belong to this domain")
-				return
-			}
-			dbUser = req.ExistingUser
-			existingUserMode = true
-		default: // "new"
-			if req.UserSuffix == "" {
-				httpx.WriteError(w, http.StatusBadRequest, "user name suffix is required")
-				return
-			}
-			if !credentials.ValidDBSuffix(req.UserSuffix) {
-				httpx.WriteError(w, http.StatusBadRequest, "invalid user suffix (lowercase letters, digits, underscore only; 1-32 characters)")
-				return
-			}
-			dbUser = sk + "_" + req.UserSuffix
-			if !credentials.ValidCustomerDBIdentifier(sk, dbUser) {
-				httpx.WriteError(w, http.StatusBadRequest, "user name too long (prefix + suffix must be at most 64 characters)")
-				return
-			}
-			// A new account may not take a name that already exists. The prefix
-			// test does not make this impossible: a suffix may contain "_" and
-			// provisioner.allocateSystemUser mints c_X_2 on a slug collision, so
-			// c_X can spell an account of c_X_2. Creating it would reset that
-			// account's password instead of making a new one. A name held by this
-			// same domain is refused too, because other databases share it and
-			// "existing" mode is what preserves their password.
-			var taken int
-			if err := h.DB.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM db_accounts WHERE db_user=?`, dbUser).Scan(&taken); err != nil {
-				httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
-				return
-			}
-			if taken > 0 {
-				httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+dbUser)
-				return
-			}
-			if req.Password == "" {
-				password = credentials.RandomPassword(24)
-			} else {
-				if ok, reason := credentials.StrongPassword(req.Password); !ok {
-					httpx.WriteError(w, http.StatusBadRequest, reason)
-					return
-				}
-				password = req.Password
-			}
-		}
+	plan, ok := h.planDatabase(w, r, id, sk, req)
+	if !ok {
+		return
 	}
 
 	// Name collision: return a clear 409 instead of a duplicate-key 500.
 	var collision int
 	_ = h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM db_accounts WHERE db_name=?`, dbName).Scan(&collision)
+		`SELECT COUNT(*) FROM db_accounts WHERE db_name=?`, plan.name).Scan(&collision)
 	if collision > 0 {
-		httpx.WriteError(w, http.StatusConflict, "A database with this name already exists: "+dbName)
+		httpx.WriteError(w, http.StatusConflict, "A database with this name already exists: "+plan.name)
 		return
 	}
 
-	if existingUserMode {
-		if err := mysqlCreateDBForUser(h.DB, id, dbName, dbUser); err != nil {
-			if errors.Is(err, credentials.ErrInvalidMySQLCredentials) {
-				httpx.WriteError(w, http.StatusBadRequest, "invalid database name or user")
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
-			return
-		}
-		// Surface the existing user's password in the response (the customer already owns it).
-		var stored string
-		if err := h.DB.QueryRowContext(r.Context(),
-			`SELECT db_pass_plain FROM db_accounts WHERE db_user=? LIMIT 1`, dbUser).Scan(&stored); err == nil {
-			if pw, derr := decryptDBPass(dbUser, stored); derr == nil {
-				password = pw
-			}
-		}
-	} else {
-		if err := mysqlCreateDB(h.DB, id, dbName, dbUser, password); err != nil {
-			if errors.Is(err, credentials.ErrDBUserOwnedByAnotherDomain) {
-				httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+dbUser)
-				return
-			}
-			if errors.Is(err, credentials.ErrInvalidMySQLCredentials) {
-				httpx.WriteError(w, http.StatusBadRequest, "invalid database name or user")
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
-			return
-		}
+	if !h.createPlannedDatabase(w, r, id, &plan) {
+		return
 	}
 
 	// Governor/limits: apply plan limits to the new database user in the background, best-effort.
@@ -1349,8 +1373,167 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}(id)
 
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
-		"ok": true, "domain_id": id, "db_name": dbName, "db_user": dbUser, "db_pass": password,
+		"ok": true, "domain_id": id, "db_name": plan.name, "db_user": plan.user, "db_pass": plan.password,
 	})
+}
+
+// databasePlan is the database, the user and the password a create request
+// resolves to.
+type databasePlan struct {
+	name, user, password string
+	// existingUser is set when the database is opened for a user the domain
+	// already holds, whose password is kept.
+	existingUser bool
+}
+
+// wantsGeneratedDatabase reports whether a request asks for everything to be
+// generated. Backward compatible: empty body or Auto=true generates everything
+// (legacy behavior).
+func wantsGeneratedDatabase(req createDBReq) bool {
+	return req.Auto ||
+		(req.DBSuffix == "" && req.UserSuffix == "" && req.ExistingUser == "" && req.Password == "")
+}
+
+// planDatabase resolves the names and the password a request asks for, and
+// answers the request itself when they are not acceptable.
+func (h *Handlers) planDatabase(w http.ResponseWriter, r *http.Request, id int64, sk string, req createDBReq) (databasePlan, bool) {
+	if wantsGeneratedDatabase(req) {
+		name := sk + "_db" + strconv.FormatInt(id, 10)
+		return databasePlan{name: name, user: name, password: credentials.RandomPassword(24)}, true
+	}
+	if req.DBSuffix == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "database name suffix is required")
+		return databasePlan{}, false
+	}
+	if !credentials.ValidDBSuffix(req.DBSuffix) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid database suffix (lowercase letters, digits, underscore only; 1-32 characters)")
+		return databasePlan{}, false
+	}
+	plan := databasePlan{name: sk + "_" + req.DBSuffix}
+	if !credentials.ValidCustomerDBIdentifier(sk, plan.name) {
+		httpx.WriteError(w, http.StatusBadRequest, "database name too long (prefix + suffix must be at most 64 characters)")
+		return databasePlan{}, false
+	}
+	var ok bool
+	if req.UserMode == "existing" {
+		ok = h.planExistingUser(w, r, id, sk, req, &plan)
+	} else { // "new"
+		ok = h.planNewUser(w, r, sk, req, &plan)
+	}
+	return plan, ok
+}
+
+// planExistingUser takes a user the domain already holds.
+func (h *Handlers) planExistingUser(w http.ResponseWriter, r *http.Request, id int64, sk string, req createDBReq, plan *databasePlan) bool {
+	if req.ExistingUser == "" || !credentials.ValidCustomerDBIdentifier(sk, req.ExistingUser) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid existing user")
+		return false
+	}
+	// Ownership: the selected user must actually belong to this domain (prefix guarantee).
+	var n int
+	_ = h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM db_accounts WHERE domain_id=? AND db_user=?`, id, req.ExistingUser).Scan(&n)
+	if n == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "selected user does not belong to this domain")
+		return false
+	}
+	plan.user = req.ExistingUser
+	plan.existingUser = true
+	return true
+}
+
+// planNewUser names a new user and its password.
+func (h *Handlers) planNewUser(w http.ResponseWriter, r *http.Request, sk string, req createDBReq, plan *databasePlan) bool {
+	if req.UserSuffix == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "user name suffix is required")
+		return false
+	}
+	if !credentials.ValidDBSuffix(req.UserSuffix) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid user suffix (lowercase letters, digits, underscore only; 1-32 characters)")
+		return false
+	}
+	plan.user = sk + "_" + req.UserSuffix
+	if !credentials.ValidCustomerDBIdentifier(sk, plan.user) {
+		httpx.WriteError(w, http.StatusBadRequest, "user name too long (prefix + suffix must be at most 64 characters)")
+		return false
+	}
+	// A new account may not take a name that already exists. The prefix
+	// test does not make this impossible: a suffix may contain "_" and
+	// provisioner.allocateSystemUser mints c_X_2 on a slug collision, so
+	// c_X can spell an account of c_X_2. Creating it would reset that
+	// account's password instead of making a new one. A name held by this
+	// same domain is refused too, because other databases share it and
+	// "existing" mode is what preserves their password.
+	var taken int
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM db_accounts WHERE db_user=?`, plan.user).Scan(&taken); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
+		return false
+	}
+	if taken > 0 {
+		httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+plan.user)
+		return false
+	}
+	return planNewUserPassword(w, req, plan)
+}
+
+// planNewUserPassword takes the password the customer chose when it is strong
+// enough, or generates one.
+func planNewUserPassword(w http.ResponseWriter, req createDBReq, plan *databasePlan) bool {
+	if req.Password == "" {
+		plan.password = credentials.RandomPassword(24)
+		return true
+	}
+	if ok, reason := credentials.StrongPassword(req.Password); !ok {
+		httpx.WriteError(w, http.StatusBadRequest, reason)
+		return false
+	}
+	plan.password = req.Password
+	return true
+}
+
+// createPlannedDatabase creates the database in MariaDB, for the user the
+// domain already holds or with a new one, and answers the request itself when
+// that fails.
+func (h *Handlers) createPlannedDatabase(w http.ResponseWriter, r *http.Request, id int64, plan *databasePlan) bool {
+	if plan.existingUser {
+		return h.createForExistingUser(w, r, id, plan)
+	}
+	if err := mysqlCreateDB(h.DB, id, plan.name, plan.user, plan.password); err != nil {
+		if errors.Is(err, credentials.ErrDBUserOwnedByAnotherDomain) {
+			httpx.WriteError(w, http.StatusConflict, "A database user with this name already exists: "+plan.user)
+			return false
+		}
+		if errors.Is(err, credentials.ErrInvalidMySQLCredentials) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid database name or user")
+			return false
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
+		return false
+	}
+	return true
+}
+
+// createForExistingUser opens the database for a user the domain holds, and
+// returns that user's stored password with it.
+func (h *Handlers) createForExistingUser(w http.ResponseWriter, r *http.Request, id int64, plan *databasePlan) bool {
+	if err := mysqlCreateDBForUser(h.DB, id, plan.name, plan.user); err != nil {
+		if errors.Is(err, credentials.ErrInvalidMySQLCredentials) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid database name or user")
+			return false
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "database creation failed")
+		return false
+	}
+	// Surface the existing user's password in the response (the customer already owns it).
+	var stored string
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT db_pass_plain FROM db_accounts WHERE db_user=? LIMIT 1`, plan.user).Scan(&stored); err == nil {
+		if pw, derr := decryptDBPass(plan.user, stored); derr == nil {
+			plan.password = pw
+		}
+	}
+	return true
 }
 
 func (h *Handlers) DeleteDatabase(w http.ResponseWriter, r *http.Request) {
@@ -1464,18 +1647,8 @@ func (h *Handlers) BulkOwner(w http.ResponseWriter, r *http.Request) {
 	clearing := req.CustomerID == nil || *req.CustomerID <= 0
 
 	// A reseller may move a domain between its OWN customers and nothing else.
-	if c := middleware.ClaimsFrom(r); c != nil && c.Role == middleware.RoleReseller {
-		if clearing {
-			// Detaching hands the domain to admin, which takes it out of the
-			// reseller's own scope permanently. That is a one-way loss the reseller
-			// could not undo, so it stays an administrator's decision.
-			httpx.WriteError(w, http.StatusForbidden, "a reseller cannot detach a domain from its customer")
-			return
-		}
-		if !middleware.ResellerOwnsCustomer(r, c.UserID, *req.CustomerID) {
-			httpx.WriteError(w, http.StatusForbidden, "no access to this customer")
-			return
-		}
+	if bulkOwnerRefusedForReseller(w, r, req, clearing) {
+		return
 	}
 
 	// customer_id may be NULL or a positive value.
@@ -1488,6 +1661,41 @@ func (h *Handlers) BulkOwner(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	sql, args := bulkOwnerStatement(r, req, clearing)
+	// #nosec G701 G202 -- scope is a constant fragment from ScopeSQL with a literal alias and placeholders holds only literal "?"; every user value is bound via args.
+	res, err := h.DB.ExecContext(r.Context(), sql, args...)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "bulk update failed")
+		return
+	}
+	n, _ := res.RowsAffected()
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "updated": n})
+}
+
+// bulkOwnerRefusedForReseller answers a reseller that asks for a move it may not
+// make.
+func bulkOwnerRefusedForReseller(w http.ResponseWriter, r *http.Request, req bulkOwnerReq, clearing bool) bool {
+	c := middleware.ClaimsFrom(r)
+	if c == nil || c.Role != middleware.RoleReseller {
+		return false
+	}
+	if clearing {
+		// Detaching hands the domain to admin, which takes it out of the
+		// reseller's own scope permanently. That is a one-way loss the reseller
+		// could not undo, so it stays an administrator's decision.
+		httpx.WriteError(w, http.StatusForbidden, "a reseller cannot detach a domain from its customer")
+		return true
+	}
+	if !middleware.ResellerOwnsCustomer(r, c.UserID, *req.CustomerID) {
+		httpx.WriteError(w, http.StatusForbidden, "no access to this customer")
+		return true
+	}
+	return false
+}
+
+// bulkOwnerStatement builds the UPDATE that moves the named domains and their
+// addon rows to the new customer, narrowed to the caller's scope.
+func bulkOwnerStatement(r *http.Request, req bulkOwnerReq, clearing bool) (string, []any) {
 	// Build placeholders for the IN clause.
 	placeholders := make([]string, len(req.IDs))
 	args := []any{}
@@ -1522,14 +1730,7 @@ func (h *Handlers) BulkOwner(w http.ResponseWriter, r *http.Request) {
 	idList := strings.Join(placeholders, ",")
 	// #nosec G202 -- only literal "?" placeholders and the constant ScopeSQL fragment are joined; all values are bound via args.
 	sql := `UPDATE domains d SET d.customer_id=? WHERE (d.id IN (` + idList + `) OR d.parent_domain_id IN (` + idList + `))` + scope
-	// #nosec G701 G202 -- scope is a constant fragment from ScopeSQL with a literal alias and placeholders holds only literal "?"; every user value is bound via args.
-	res, err := h.DB.ExecContext(r.Context(), sql, args...)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "bulk update failed")
-		return
-	}
-	n, _ := res.RowsAffected()
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "updated": n})
+	return sql, args
 }
 
 // BulkStatus toggles multiple domains between active and passive states.

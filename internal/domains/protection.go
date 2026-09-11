@@ -101,13 +101,34 @@ func (h *Handlers) SetGeo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	countries := make([]string, 0, len(request.Countries))
+	countries, ok := geoCountries(w, request.Countries)
+	if !ok {
+		return
+	}
+	if request.Mode != "off" && !geoPolicyEnforceable(w, countries) {
+		return
+	}
+	if !h.storeGeoPolicy(w, r, id, request.Mode, countries) {
+		return
+	}
+
+	if err := rerenderVhost(h.DB, id); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "rules saved but virtual host update failed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// geoCountries normalises the requested country codes and keeps each once. It
+// refuses a value that is not a code and a list past maxDomainCountries.
+func geoCountries(w http.ResponseWriter, requested []string) ([]string, bool) {
+	countries := make([]string, 0, len(requested))
 	seen := map[string]bool{}
-	for _, raw := range request.Countries {
+	for _, raw := range requested {
 		code := geoip.NormalizeCountry(raw)
 		if code == "" {
 			writeReason(w, http.StatusBadRequest, "that is not a country code", geoip.ReasonCountryUnknown)
-			return
+			return nil, false
 		}
 		if seen[code] {
 			continue
@@ -117,65 +138,69 @@ func (h *Handlers) SetGeo(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(countries) > maxDomainCountries {
 		writeReason(w, http.StatusBadRequest, "too many countries", geoip.ReasonTooManyCountries)
-		return
+		return nil, false
 	}
+	return countries, true
+}
 
-	if request.Mode != "off" {
-		// FAIL-CLOSED on the WRITE path. Without ranges a deny list refuses
-		// nobody and an allow list would refuse everybody, so the policy is not
-		// stored at all rather than stored and silently not enforced.
-		if !geoDatabaseAvailable() {
-			writeReason(w, http.StatusConflict,
-				"no country database has been downloaded", geoip.ReasonUnavailable)
-			return
-		}
-		if len(countries) == 0 {
-			httpx.WriteError(w, http.StatusBadRequest, "select at least one country")
-			return
-		}
-		for _, code := range countries {
-			if !geoKnownCountry(code) {
-				writeReason(w, http.StatusBadRequest,
-					"the country database does not carry that country", geoip.ReasonCountryUnknown)
-				return
-			}
+// geoPolicyEnforceable checks that a policy that is switched on can be
+// enforced, and answers the request when it cannot.
+//
+// FAIL-CLOSED on the WRITE path. Without ranges a deny list refuses
+// nobody and an allow list would refuse everybody, so the policy is not
+// stored at all rather than stored and silently not enforced.
+func geoPolicyEnforceable(w http.ResponseWriter, countries []string) bool {
+	if !geoDatabaseAvailable() {
+		writeReason(w, http.StatusConflict,
+			"no country database has been downloaded", geoip.ReasonUnavailable)
+		return false
+	}
+	if len(countries) == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "select at least one country")
+		return false
+	}
+	for _, code := range countries {
+		if !geoKnownCountry(code) {
+			writeReason(w, http.StatusBadRequest,
+				"the country database does not carry that country", geoip.ReasonCountryUnknown)
+			return false
 		}
 	}
+	return true
+}
 
+// storeGeoPolicy replaces the stored mode and country list in one transaction,
+// and answers the request when it cannot.
+func (h *Handlers) storeGeoPolicy(w http.ResponseWriter, r *http.Request, id int64, mode string, countries []string) bool {
 	transaction, err := h.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "country rules could not be saved")
-		return
+		return false
 	}
 	defer func() { _ = transaction.Rollback() }()
 
 	if _, err := transaction.ExecContext(r.Context(),
-		`UPDATE domains SET geo_mode=? WHERE id=?`, request.Mode, id); err != nil {
+		`UPDATE domains SET geo_mode=? WHERE id=?`, mode, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "country rules could not be saved")
-		return
+		return false
 	}
 	if _, err := transaction.ExecContext(r.Context(),
 		`DELETE FROM domain_geo_rules WHERE domain_id=?`, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "country rules could not be saved")
-		return
+		return false
 	}
 	for _, code := range countries {
 		if _, err := transaction.ExecContext(r.Context(),
 			`INSERT INTO domain_geo_rules(domain_id, country_code) VALUES(?,?)`, id, code); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "country rules could not be saved")
-			return
+			return false
 		}
 	}
 	if err := transaction.Commit(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "country rules could not be saved")
-		return
+		return false
 	}
-
-	if err := rerenderVhost(h.DB, id); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "rules saved but virtual host update failed")
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return true
 }
 
 type rateLimitSettings struct {

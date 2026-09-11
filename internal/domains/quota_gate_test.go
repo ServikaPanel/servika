@@ -13,6 +13,9 @@ import (
 //
 // CheckDomainAllowed's own behaviour is proven against a scripted database in
 // internal/quota.
+//
+// createBody returns Create together with the helpers that follow it in the
+// order it calls them, which is everything up to Delete.
 func createBody(t *testing.T) string {
 	t.Helper()
 	source, err := os.ReadFile("handlers.go")
@@ -24,9 +27,9 @@ func createBody(t *testing.T) string {
 	if start < 0 {
 		t.Fatal("Create was renamed; these assertions have to follow it")
 	}
-	end := strings.Index(body[start:], "\nfunc ")
+	end := strings.Index(body[start:], "\n// Delete removes a domain")
 	if end < 0 {
-		return body[start:]
+		t.Fatal("Delete moved; these assertions have to follow it")
 	}
 	return body[start : start+end]
 }

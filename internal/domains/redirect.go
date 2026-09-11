@@ -185,28 +185,7 @@ func (h *Handlers) SetWWWRedirect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "mode must be off, to_www or to_apex")
 		return
 	}
-
-	var domainName, certPath, keyPath string
-	var parent sql.NullInt64
-	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, COALESCE(cert_path,''), COALESCE(key_path,''), parent_domain_id FROM domains WHERE id=?`, id).
-		Scan(&domainName, &certPath, &keyPath, &parent); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	// Only a root domain has an apex/www pair of its own; an addon or parked domain
-	// is rendered from its parent's vhost path.
-	if parent.Valid {
-		httpx.WriteError(w, http.StatusBadRequest, "only a root domain has a canonical hostname setting")
-		return
-	}
-	if strings.HasPrefix(strings.ToLower(domainName), "www.") && req.Mode != "off" {
-		httpx.WriteError(w, http.StatusBadRequest, "the domain is already a www hostname")
-		return
-	}
-
-	if err := h.checkCanonicalTargetReachable(req.Mode, domainName, certPath, keyPath); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+	if !h.canonicalRedirectAllowed(w, r, id, req.Mode) {
 		return
 	}
 
@@ -228,6 +207,35 @@ func (h *Handlers) SetWWWRedirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "mode": req.Mode})
+}
+
+// canonicalRedirectAllowed checks that a domain can take the canonical hostname
+// mode, and answers the request when it cannot.
+func (h *Handlers) canonicalRedirectAllowed(w http.ResponseWriter, r *http.Request, id int64, mode string) bool {
+	var domainName, certPath, keyPath string
+	var parent sql.NullInt64
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT domain_name, COALESCE(cert_path,''), COALESCE(key_path,''), parent_domain_id FROM domains WHERE id=?`, id).
+		Scan(&domainName, &certPath, &keyPath, &parent); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+		return false
+	}
+	// Only a root domain has an apex/www pair of its own; an addon or parked domain
+	// is rendered from its parent's vhost path.
+	if parent.Valid {
+		httpx.WriteError(w, http.StatusBadRequest, "only a root domain has a canonical hostname setting")
+		return false
+	}
+	if strings.HasPrefix(strings.ToLower(domainName), "www.") && mode != "off" {
+		httpx.WriteError(w, http.StatusBadRequest, "the domain is already a www hostname")
+		return false
+	}
+
+	if err := h.checkCanonicalTargetReachable(mode, domainName, certPath, keyPath); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	return true
 }
 
 // checkCanonicalTargetReachable refuses a redirect that would take the site down.
