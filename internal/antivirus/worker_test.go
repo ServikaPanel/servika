@@ -57,6 +57,24 @@ func TestTheWorkerAndTheFallbackFindTheSameThing(t *testing.T) {
 	}
 
 	// Now through the file protocol the worker actually uses.
+	viaFile := scanThroughWorkerFiles(t, req)
+	if len(viaFile.Findings) != len(direct.Findings) {
+		t.Fatalf("the worker found %d findings, the in-process scan %d",
+			len(viaFile.Findings), len(direct.Findings))
+	}
+	if !sameFinding(viaFile.Findings[0], direct.Findings[0]) {
+		t.Errorf("the finding did not survive the file protocol:\n  worker: %+v\n  direct: %+v",
+			viaFile.Findings[0], direct.Findings[0])
+	}
+	if viaFile.Scanned != direct.Scanned {
+		t.Errorf("scanned count %d vs %d", viaFile.Scanned, direct.Scanned)
+	}
+}
+
+// scanThroughWorkerFiles runs req through the request and result files the
+// worker binary reads and writes.
+func scanThroughWorkerFiles(t *testing.T, req ScanRequest) ScanResult {
+	t.Helper()
 	dir := t.TempDir()
 	requestPath := filepath.Join(dir, "request.json")
 	resultPath := filepath.Join(dir, "result.json")
@@ -74,20 +92,12 @@ func TestTheWorkerAndTheFallbackFindTheSameThing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the result could not be read back: %v", err)
 	}
-	if len(viaFile.Findings) != len(direct.Findings) {
-		t.Fatalf("the worker found %d findings, the in-process scan %d",
-			len(viaFile.Findings), len(direct.Findings))
-	}
-	if viaFile.Findings[0].File != direct.Findings[0].File ||
-		viaFile.Findings[0].Signature != direct.Findings[0].Signature ||
-		viaFile.Findings[0].Score != direct.Findings[0].Score ||
-		viaFile.Findings[0].Level != direct.Findings[0].Level {
-		t.Errorf("the finding did not survive the file protocol:\n  worker: %+v\n  direct: %+v",
-			viaFile.Findings[0], direct.Findings[0])
-	}
-	if viaFile.Scanned != direct.Scanned {
-		t.Errorf("scanned count %d vs %d", viaFile.Scanned, direct.Scanned)
-	}
+	return viaFile
+}
+
+// sameFinding compares the fields a finding must keep across the file protocol.
+func sameFinding(a, b Finding) bool {
+	return a.File == b.File && a.Signature == b.Signature && a.Score == b.Score && a.Level == b.Level
 }
 
 // The result file is the whole handoff, so a missing or unreadable one is a
@@ -283,7 +293,13 @@ func TestTheScanReallyRunsInsideTheResourceSlice(t *testing.T) {
 
 	// And the kernel really held it: read the limit out of the cgroup the
 	// worker named, not out of systemd's own report.
-	if b, err := os.ReadFile("/sys/fs/cgroup" + filepath.Dir(result.Cgroup) + "/cpu.max"); err != nil {
+	assertSliceCPUMax(t, result.Cgroup)
+}
+
+// assertSliceCPUMax checks the CPU limit of the slice that holds cgroup.
+func assertSliceCPUMax(t *testing.T, cgroup string) {
+	t.Helper()
+	if b, err := os.ReadFile("/sys/fs/cgroup" + filepath.Dir(cgroup) + "/cpu.max"); err != nil {
 		t.Errorf("cpu.max is unreadable for the slice the scan ran in: %v", err)
 	} else if got := strings.TrimSpace(string(b)); got != "150000 100000" {
 		t.Errorf("the scan ran under cpu.max %q, want \"150000 100000\"", got)

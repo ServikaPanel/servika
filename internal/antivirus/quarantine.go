@@ -221,14 +221,7 @@ func (h *Handlers) quarantineFinding(domainID int64, systemUser string, findingI
 	if err != nil {
 		// The row describes a containment that did not happen, so it goes.
 		_, _ = h.DB.Exec(`DELETE FROM av_quarantine WHERE id=?`, rowID)
-		switch {
-		case errors.Is(err, errTooLarge):
-			return reasonTooLarge
-		case errors.Is(err, os.ErrNotExist):
-			return reasonFileMissing
-		default:
-			return reasonQuarantineFail
-		}
+		return containFailureReason(err)
 	}
 	if _, err := h.DB.Exec(
 		`UPDATE av_quarantine SET stored_name=?, size_bytes=? WHERE id=?`,
@@ -237,6 +230,18 @@ func (h *Handlers) quarantineFinding(domainID int64, systemUser string, findingI
 	}
 	_, _ = h.DB.Exec(`UPDATE av_findings SET quarantined=1 WHERE id=? AND domain_id=?`, findingID, domainID)
 	return ""
+}
+
+// containFailureReason is the reason code for a containment that failed.
+func containFailureReason(err error) string {
+	switch {
+	case errors.Is(err, errTooLarge):
+		return reasonTooLarge
+	case errors.Is(err, os.ErrNotExist):
+		return reasonFileMissing
+	default:
+		return reasonQuarantineFail
+	}
 }
 
 // POST /domains/{id}/antivirus/quarantine  {finding_id}

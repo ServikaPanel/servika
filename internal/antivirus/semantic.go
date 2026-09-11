@@ -262,15 +262,15 @@ func (s *semState) detectSuperglobalCall(i int) {
 // nested `$_GET[$_GET[...]]` cannot cost O(n^2). It returns j unchanged when
 // there is no subscript.
 func (s *semState) skipIndex(j int) int {
-	if j >= len(s.toks) || s.toks[j].kind != stOther || s.toks[j].val != "[" {
+	if !s.bracketAt(j, "[") {
 		return j
 	}
 	depth, steps := 0, 0
 	for j < len(s.toks) && steps < semMaxIndexTok {
 		switch {
-		case s.toks[j].kind == stOther && s.toks[j].val == "[":
+		case s.bracketAt(j, "["):
 			depth++
-		case s.toks[j].kind == stOther && s.toks[j].val == "]":
+		case s.bracketAt(j, "]"):
 			depth--
 			if depth == 0 {
 				return j + 1
@@ -280,6 +280,19 @@ func (s *semState) skipIndex(j int) int {
 		steps++
 	}
 	return j
+}
+
+// bracketAt reports whether token j exists and is the bracket b.
+func (s *semState) bracketAt(j int, b string) bool {
+	return j < len(s.toks) && s.toks[j].kind == stOther && s.toks[j].val == b
+}
+
+// kindAt returns the kind of token j, or -1 when there is no token j.
+func (s *semState) kindAt(j int) semTokKind {
+	if j < len(s.toks) {
+		return s.toks[j].kind
+	}
+	return -1
 }
 
 // detectEvalConcat reports eval/assert/create_function given concatenated code,
@@ -295,12 +308,18 @@ func (s *semState) detectEvalConcat(i int) {
 	case arg.kind == stVar && s.concatVar[arg.val]:
 		s.add(weightProof, "PHP.Semantic.EvalConcat")
 		s.queueFragment(s.symtab[arg.val])
-	case arg.kind == stStr && i+3 < len(s.toks) && s.toks[i+3].kind == stDot:
-		val, parts, constant, _, _ := s.foldExpr(i + 2)
-		if constant && parts >= 2 {
-			s.add(weightProof, "PHP.Semantic.EvalConcat")
-			s.queueFragment(val)
-		}
+	case arg.kind == stStr && s.kindAt(i+3) == stDot:
+		s.evalFoldedConcat(i + 2)
+	}
+}
+
+// evalFoldedConcat reports an eval family call whose argument folds, from token
+// j, into constant code built from two parts or more, and queues that code.
+func (s *semState) evalFoldedConcat(j int) {
+	val, parts, constant, _, _ := s.foldExpr(j)
+	if constant && parts >= 2 {
+		s.add(weightProof, "PHP.Semantic.EvalConcat")
+		s.queueFragment(val)
 	}
 }
 
@@ -309,19 +328,25 @@ func (s *semState) detectEvalConcat(i int) {
 // one, so the pieces are not re-walked as separate strings.
 func (s *semState) detectDirectConcat(i int) (int, bool) {
 	t := s.toks[i]
-	if t.kind == stStr && i+1 < len(s.toks) && s.toks[i+1].kind == stDot {
-		val, parts, constant, _, next := s.foldExpr(i)
-		if constant && parts >= 2 && semSinkName(val) && next < len(s.toks) && s.toks[next].kind == stLParen {
-			s.add(weightProof, "PHP.Semantic.ConcatenatedSink")
-		}
-		if next > i {
+	if t.kind == stStr && s.kindAt(i+1) == stDot {
+		if next := s.foldInlineSink(i); next > i {
 			return next, true
 		}
 	}
-	if t.kind == stLParen && i+2 < len(s.toks) && s.toks[i+1].kind == stStr && s.toks[i+2].kind == stDot {
+	if t.kind == stLParen && s.kindAt(i+1) == stStr && s.kindAt(i+2) == stDot {
 		s.detectParenConcat(i)
 	}
 	return 0, false
+}
+
+// foldInlineSink folds the concatenation that starts at token i, reports it when
+// it names a sink called in place, and returns the index past the expression.
+func (s *semState) foldInlineSink(i int) int {
+	val, parts, constant, _, next := s.foldExpr(i)
+	if constant && parts >= 2 && semSinkName(val) && s.kindAt(next) == stLParen {
+		s.add(weightProof, "PHP.Semantic.ConcatenatedSink")
+	}
+	return next
 }
 
 // detectParenConcat reports `('sy'.'stem')(` without consuming tokens, so a
@@ -515,19 +540,27 @@ func openTag(src []byte, i int) (int, bool) {
 // tokenizeOne reads one token (or skips whitespace/comments/close tag) starting
 // at i, appends it to out, and returns the next index and whether still in PHP.
 func tokenizeOne(src []byte, i int, out *[]semToken) (int, bool) {
-	n := len(src)
-	c := src[i]
 	switch {
-	case c == '?' && i+1 < n && src[i+1] == '>':
+	case bytesAt(src, i, "?>"):
 		return i + 2, false
-	case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+	case phpBlank(src[i]):
 		return i + 1, true
-	case c == '/' && i+1 < n && src[i+1] == '/', c == '#':
+	case bytesAt(src, i, "//"), src[i] == '#':
 		return skipLine(src, i), true
-	case c == '/' && i+1 < n && src[i+1] == '*':
+	case bytesAt(src, i, "/*"):
 		return skipBlockComment(src, i), true
 	}
 	return tokenizeToken(src, i, out), true
+}
+
+// bytesAt reports whether src holds s starting at index i.
+func bytesAt(src []byte, i int, s string) bool {
+	return len(src)-i >= len(s) && string(src[i:i+len(s)]) == s
+}
+
+// phpBlank reports the whitespace bytes the tokenizer steps over.
+func phpBlank(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
 func skipLine(src []byte, i int) int {
@@ -585,32 +618,29 @@ func scanWord(src []byte, i int) int {
 
 // tokenizeOperator reads the punctuation tokens the fold detectors care about.
 func tokenizeOperator(src []byte, i int, out *[]semToken) int {
-	n := len(src)
-	c := src[i]
-	switch {
-	case c == '.' && i+1 < n && src[i+1] == '=':
-		*out = append(*out, semToken{kind: stDotEq, val: ".="})
-		return i + 2
-	case c == '.':
-		*out = append(*out, semToken{kind: stDot})
-		return i + 1
-	case c == '=' && i+1 < n && (src[i+1] == '=' || src[i+1] == '>'):
-		*out = append(*out, semToken{kind: stOther, val: string(src[i : i+2])})
-		return i + 2
-	case c == '=':
-		*out = append(*out, semToken{kind: stAssign})
-		return i + 1
-	case c == '-' && i+1 < n && src[i+1] == '>':
-		*out = append(*out, semToken{kind: stOther, val: "->"})
-		return i + 2
-	case c == '?' && i+2 < n && src[i+1] == '-' && src[i+2] == '>':
-		*out = append(*out, semToken{kind: stOther, val: "?->"})
-		return i + 3
-	case c == ':' && i+1 < n && src[i+1] == ':':
-		*out = append(*out, semToken{kind: stOther, val: "::"})
-		return i + 2
+	for _, op := range semOperators {
+		if bytesAt(src, i, op.text) {
+			*out = append(*out, op.tok)
+			return i + len(op.text)
+		}
 	}
 	return tokenizePunct(src, i, out)
+}
+
+// semOperators are the operators tokenizeOperator reads, each listed ahead of
+// the shorter operator it begins with.
+var semOperators = []struct {
+	text string
+	tok  semToken
+}{
+	{".=", semToken{kind: stDotEq, val: ".="}},
+	{".", semToken{kind: stDot}},
+	{"==", semToken{kind: stOther, val: "=="}},
+	{"=>", semToken{kind: stOther, val: "=>"}},
+	{"=", semToken{kind: stAssign}},
+	{"->", semToken{kind: stOther, val: "->"}},
+	{"?->", semToken{kind: stOther, val: "?->"}},
+	{"::", semToken{kind: stOther, val: "::"}},
 }
 
 // tokenizePunct reads the single-byte structural tokens.
@@ -686,31 +716,33 @@ func doubleQuote(src []byte, i int) (string, bool, int) {
 // and returns the next index. A resolved escape that pushes the value past the
 // fold ceiling marks the string non-constant.
 func doubleQuoteEscape(src []byte, i int, sb *strings.Builder, constant *bool) int {
-	n := len(src)
-	nx := src[i+1]
-	var next int
-	switch {
-	case nx == '\\' || nx == '"' || nx == '$':
-		sb.WriteByte(nx)
-		next = i + 2
-	case nx == 'n':
-		sb.WriteByte('\n')
-		next = i + 2
-	case nx == 't':
-		sb.WriteByte('\t')
-		next = i + 2
-	case nx == 'x' && i+2 < n && isHexByte(src[i+2]):
-		next = writeHexEscape(src, i, sb)
-	case nx >= '0' && nx <= '7':
-		next = writeOctalEscape(src, i, sb)
-	default:
-		sb.WriteByte(nx)
-		next = i + 2
-	}
+	next := writeEscape(src, i, sb)
 	if sb.Len() > semMaxFoldBytes {
 		*constant = false
 	}
 	return next
+}
+
+// simpleEscapes are the one-byte escapes of a double-quoted string and the byte
+// each one writes.
+var simpleEscapes = map[byte]byte{'\\': '\\', '"': '"', '$': '$', 'n': '\n', 't': '\t'}
+
+// writeEscape resolves the backslash escape at i into sb and returns the next
+// index. An escape PHP does not resolve writes the escaped byte as it is.
+func writeEscape(src []byte, i int, sb *strings.Builder) int {
+	nx := src[i+1]
+	if b, ok := simpleEscapes[nx]; ok {
+		sb.WriteByte(b)
+		return i + 2
+	}
+	switch {
+	case nx == 'x' && i+2 < len(src) && isHexByte(src[i+2]):
+		return writeHexEscape(src, i, sb)
+	case nx >= '0' && nx <= '7':
+		return writeOctalEscape(src, i, sb)
+	}
+	sb.WriteByte(nx)
+	return i + 2
 }
 
 // writeHexEscape resolves \xNN (one or two hex digits) and returns the next
@@ -746,8 +778,19 @@ func writeOctalEscape(src []byte, i int, sb *strings.Builder) int {
 // heredoc reads <<<EOT / <<<'EOT' (nowdoc). A nowdoc is constant; a heredoc is
 // constant when it carries no interpolation.
 func heredoc(src []byte, i int) (string, bool, int) {
+	labelStart, nowdoc := heredocLabelStart(src, i+3)
+	j := scanWord(src, labelStart)
+	label := string(src[labelStart:j])
+	if label == "" {
+		return "", false, i + 3
+	}
+	return heredocBody(src, pastLineEnd(src, j), label, nowdoc)
+}
+
+// heredocLabelStart steps over the blanks after <<< and an opening quote, and
+// reports whether a single quote makes the literal a nowdoc.
+func heredocLabelStart(src []byte, j int) (int, bool) {
 	n := len(src)
-	j := i + 3
 	for j < n && (src[j] == ' ' || src[j] == '\t') {
 		j++
 	}
@@ -756,19 +799,17 @@ func heredoc(src []byte, i int) (string, bool, int) {
 		nowdoc = src[j] == '\''
 		j++
 	}
-	labelStart := j
-	j = scanWord(src, j)
-	label := string(src[labelStart:j])
-	if label == "" {
-		return "", false, i + 3
-	}
-	for j < n && src[j] != '\n' {
+	return j, nowdoc
+}
+
+// pastLineEnd returns the index after the newline that ends the line holding j,
+// or the end of src when that line has no newline.
+func pastLineEnd(src []byte, j int) int {
+	j = skipLine(src, j)
+	if j < len(src) {
 		j++
 	}
-	if j < n {
-		j++
-	}
-	return heredocBody(src, j, label, nowdoc)
+	return j
 }
 
 // heredocBody reads from bodyStart to the closing label line.

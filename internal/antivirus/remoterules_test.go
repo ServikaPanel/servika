@@ -349,6 +349,13 @@ func TestAThinPackageCannotTakeABuiltInRuleAway(t *testing.T) {
 
 	// Not vacuous in the other direction: the same adopted package really is in
 	// use, so it adds a finding to a file its own pattern matches.
+	assertInertPackageInUse(t)
+}
+
+// assertInertPackageInUse checks that the adopted Remote.Inert package adds a
+// finding to a file its own pattern matches.
+func assertInertPackageInUse(t *testing.T) {
+	t.Helper()
 	own := evaluate(".php", []byte(`<?php /* zzz-this-matches-nothing-zzz */`))
 	if len(own) != 1 || !own[0].remote {
 		t.Fatalf("the adopted package produced %+v on a file its own rule matches", own)
@@ -396,16 +403,7 @@ func TestTheStateSaysWhichRuleSetIsRunning(t *testing.T) {
 	key := withSigningKey(t)
 	now := time.Now()
 
-	before := RuleSetInUse()
-	if before.Source != "builtin" || before.Version != 0 || before.Produced != "" {
-		t.Fatalf("with no package adopted the state reads %+v", before)
-	}
-	if !before.Configured {
-		t.Fatal("a build with a key reports itself unconfigured")
-	}
-	if before.MaxAgeDays != int(RemoteRuleMaxAge/(24*time.Hour)) {
-		t.Errorf("the reported limit is %d days, not the one the code enforces", before.MaxAgeDays)
-	}
+	assertBuiltInRuleSetState(t, RuleSetInUse())
 
 	// The age comes from the package's own SIGNED stamp, never from the cache
 	// file's timestamp: that file is written only when a NEWER package arrives,
@@ -425,6 +423,21 @@ func TestTheStateSaysWhichRuleSetIsRunning(t *testing.T) {
 	}
 	if after.Produced == "" {
 		t.Error("the state carries no production stamp")
+	}
+}
+
+// assertBuiltInRuleSetState checks the state a panel reports before it adopts
+// any package.
+func assertBuiltInRuleSetState(t *testing.T, before RuleSetState) {
+	t.Helper()
+	if before.Source != "builtin" || before.Version != 0 || before.Produced != "" {
+		t.Fatalf("with no package adopted the state reads %+v", before)
+	}
+	if !before.Configured {
+		t.Fatal("a build with a key reports itself unconfigured")
+	}
+	if before.MaxAgeDays != int(RemoteRuleMaxAge/(24*time.Hour)) {
+		t.Errorf("the reported limit is %d days, not the one the code enforces", before.MaxAgeDays)
 	}
 }
 

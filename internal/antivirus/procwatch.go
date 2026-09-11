@@ -223,12 +223,7 @@ func cmdlineRemoteURL(cmdline string) bool {
 // own cron over SSH is their own business, but a php-fpm child is not.
 func cmdlinePersistence(cmdline string) bool {
 	l := strings.ToLower(cmdline)
-	// Direct persistence verbs. crontab -l (list) and crontab -e (editor) are
-	// reads or interactive, so they are excluded; crontab <file> and crontab -
-	// install a table and are not.
-	if strings.Contains(l, "systemctl enable") || strings.Contains(l, "chkconfig ") ||
-		strings.Contains(l, "update-rc.d") ||
-		(strings.Contains(l, "crontab") && !strings.Contains(l, "crontab -l") && !strings.Contains(l, "crontab -e")) {
+	if persistenceVerb(l) {
 		return true
 	}
 	// Writing a persistence file: a write operator must stand BEFORE the path, so
@@ -236,15 +231,27 @@ func cmdlinePersistence(cmdline string) bool {
 	// read that merely names the path (cat, grep, tar) is not either.
 	for _, path := range procPersistencePaths {
 		before, _, found := strings.Cut(l, path)
-		if !found {
-			continue
-		}
-		if strings.Contains(before, ">>") || strings.Contains(before, ">") ||
-			strings.Contains(before, "tee ") || strings.Contains(before, "install -") {
+		if found && writeOperator(before) {
 			return true
 		}
 	}
 	return false
+}
+
+// persistenceVerb reports a direct persistence verb in a lower-cased command
+// line. crontab -l (list) and crontab -e (editor) are reads or interactive, so
+// they are excluded; crontab <file> and crontab - install a table and are not.
+func persistenceVerb(l string) bool {
+	return strings.Contains(l, "systemctl enable") || strings.Contains(l, "chkconfig ") ||
+		strings.Contains(l, "update-rc.d") ||
+		(strings.Contains(l, "crontab") && !strings.Contains(l, "crontab -l") && !strings.Contains(l, "crontab -e"))
+}
+
+// writeOperator reports a write operator in the part of a command line that
+// stands before a persistence path.
+func writeOperator(before string) bool {
+	return strings.Contains(before, ">>") || strings.Contains(before, ">") ||
+		strings.Contains(before, "tee ") || strings.Contains(before, "install -")
 }
 
 // exeClean strips the " (deleted)" suffix the kernel appends to a removed
@@ -341,7 +348,12 @@ func parseOneEvent(nlType uint16, p []byte) (procEvent, bool) {
 		return procEvent{}, false
 	}
 	what := binary.LittleEndian.Uint32(p[20:])
-	data := p[20+16:] // event_data
+	return procEventData(what, p[20+16:]) // event_data
+}
+
+// procEventData decodes the event data of one tracked event kind. It returns
+// ok=false for another kind, a short FORK payload, or a non-positive pid.
+func procEventData(what uint32, data []byte) (procEvent, bool) {
 	switch what {
 	case procEventExec:
 		if pid := wirePID(data[0:]); pid > 0 {

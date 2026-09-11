@@ -87,48 +87,62 @@ func (w *watcher) run(ctx context.Context) error {
 	defer func() { _ = closeFD(fd) }()
 
 	for _, root := range roots {
-		// FAN_MARK_FILESYSTEM, never FAN_MARK_MOUNT, and the reason is the
-		// unit rather than the kernel API.
-		//
-		// A mount mark is attached to the vfsmount the path resolves to. The
-		// watcher unit carries ProtectSystem=strict, which gives the service
-		// its own mount namespace built from read-only binds, so the mark
-		// lands on the service's PRIVATE clone of the mount while every tenant
-		// writes through the host's. Measured on 6.x with the shipped unit: the
-		// mark is accepted, fanotify_mark returns success, and not one event is
-		// ever delivered. Nothing reports it, so the screen shows a running
-		// watcher that has been blind since the day the hardening was added.
-		//
-		// A filesystem mark is attached to the SUPERBLOCK, which both mounts
-		// share, so a write through any of them is reported. Same measurement,
-		// same unit, filesystem mark: the event arrives. PrivateMounts=yes
-		// alone did NOT break the mount mark, so this is specific to the
-		// read-only binds strict builds, which is exactly what the unit ships.
-		//
-		// It needs Linux 4.20. AlmaLinux 9 is on 5.14 and AlmaLinux 10 on 6.12,
-		// so a failure here is reported rather than downgraded to a mount mark:
-		// the downgrade is the silent blindness above.
-		if err := fanotifyMark(fd, unix.FAN_MARK_ADD|unix.FAN_MARK_FILESYSTEM,
-			unix.FAN_CLOSE_WRITE, unix.AT_FDCWD, root); err != nil {
-			return fmt.Errorf("fanotify_mark %s: %w (FAN_MARK_FILESYSTEM needs Linux 4.20 or newer)", root, err)
-		}
-		// The mark covers the whole filesystem the root sits on, not the
-		// subtree under it. Measured on a single-filesystem host: marking /home
-		// reported writes under /var/tmp and /opt as well. AlmaLinux's default
-		// layout is one / partition, so on most servers this really is a mark
-		// on everything and the exclusion list is the only thing narrowing it.
-		// Say so, rather than letting an operator read "watching /home" as a
-		// statement about cost.
-		mount := mountPointOf(root)
-		if mount == root {
-			log.Printf("antivirus watcher: watching %s", root)
-		} else {
-			log.Printf("antivirus watcher: watching %s, which marks the whole %s filesystem "+
-				"because %s is not a separate one; the exclusion list is what narrows it",
-				root, mount, root)
+		if err := markFilesystem(fd, root); err != nil {
+			return err
 		}
 	}
+	return w.readEvents(ctx, fd)
+}
 
+// markFilesystem places the watch mark for one root and logs how much of the
+// server the mark covers.
+func markFilesystem(fd int, root string) error {
+	// FAN_MARK_FILESYSTEM, never FAN_MARK_MOUNT, and the reason is the
+	// unit rather than the kernel API.
+	//
+	// A mount mark is attached to the vfsmount the path resolves to. The
+	// watcher unit carries ProtectSystem=strict, which gives the service
+	// its own mount namespace built from read-only binds, so the mark
+	// lands on the service's PRIVATE clone of the mount while every tenant
+	// writes through the host's. Measured on 6.x with the shipped unit: the
+	// mark is accepted, fanotify_mark returns success, and not one event is
+	// ever delivered. Nothing reports it, so the screen shows a running
+	// watcher that has been blind since the day the hardening was added.
+	//
+	// A filesystem mark is attached to the SUPERBLOCK, which both mounts
+	// share, so a write through any of them is reported. Same measurement,
+	// same unit, filesystem mark: the event arrives. PrivateMounts=yes
+	// alone did NOT break the mount mark, so this is specific to the
+	// read-only binds strict builds, which is exactly what the unit ships.
+	//
+	// It needs Linux 4.20. AlmaLinux 9 is on 5.14 and AlmaLinux 10 on 6.12,
+	// so a failure here is reported rather than downgraded to a mount mark:
+	// the downgrade is the silent blindness above.
+	if err := fanotifyMark(fd, unix.FAN_MARK_ADD|unix.FAN_MARK_FILESYSTEM,
+		unix.FAN_CLOSE_WRITE, unix.AT_FDCWD, root); err != nil {
+		return fmt.Errorf("fanotify_mark %s: %w (FAN_MARK_FILESYSTEM needs Linux 4.20 or newer)", root, err)
+	}
+	// The mark covers the whole filesystem the root sits on, not the
+	// subtree under it. Measured on a single-filesystem host: marking /home
+	// reported writes under /var/tmp and /opt as well. AlmaLinux's default
+	// layout is one / partition, so on most servers this really is a mark
+	// on everything and the exclusion list is the only thing narrowing it.
+	// Say so, rather than letting an operator read "watching /home" as a
+	// statement about cost.
+	mount := mountPointOf(root)
+	if mount == root {
+		log.Printf("antivirus watcher: watching %s", root)
+	} else {
+		log.Printf("antivirus watcher: watching %s, which marks the whole %s filesystem "+
+			"because %s is not a separate one; the exclusion list is what narrows it",
+			root, mount, root)
+	}
+	return nil
+}
+
+// readEvents reads the event stream until the context ends or a read fails, and
+// re-reads the settings each time the refresh ticker fires.
+func (w *watcher) readEvents(ctx context.Context, fd int) error {
 	refresh := time.NewTicker(settingsRefresh)
 	defer refresh.Stop()
 
@@ -144,27 +158,38 @@ func (w *watcher) run(ctx context.Context) error {
 		default:
 		}
 
-		ready, err := pollFDs([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, pollTimeoutMS)
+		n, err := waitForEvents(fd, buf)
 		if err != nil {
-			if errors.Is(err, unix.EINTR) {
-				continue
-			}
-			return fmt.Errorf("poll: %w", err)
-		}
-		if ready == 0 {
-			continue
-		}
-		n, err := readFD(fd, buf)
-		if err != nil {
-			if errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN) {
-				continue
-			}
-			return fmt.Errorf("read: %w", err)
+			return err
 		}
 		if err := w.handleEvents(ctx, buf[:n]); err != nil {
 			return err
 		}
 	}
+}
+
+// waitForEvents polls the descriptor and reads what is ready into buf. A count of
+// zero with no error means there was nothing to read: the poll timed out, or a
+// call was interrupted and is retried on the next pass.
+func waitForEvents(fd int, buf []byte) (int, error) {
+	ready, err := pollFDs([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, pollTimeoutMS)
+	if err != nil {
+		if errors.Is(err, unix.EINTR) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("poll: %w", err)
+	}
+	if ready == 0 {
+		return 0, nil
+	}
+	n, err := readFD(fd, buf)
+	if err != nil {
+		if errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read: %w", err)
+	}
+	return n, nil
 }
 
 // handleEvents parses one read() of the event stream.

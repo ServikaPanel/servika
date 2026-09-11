@@ -286,11 +286,7 @@ func TestAZoneListIsValidatedOnTheWritePath(t *testing.T) {
 	if code, body := save("dbl.spamhaus.org multi.uribl.com"); code != http.StatusOK {
 		t.Fatalf("a valid zone list answered %d: %s", code, body)
 	}
-	var stored string
-	if err := db.QueryRow(`SELECT domain_dnsbl_zones FROM panel_settings WHERE id=1`).Scan(&stored); err != nil {
-		t.Fatal(err)
-	}
-	if stored != "dbl.spamhaus.org multi.uribl.com" {
+	if stored := storedZones(t, h); stored != "dbl.spamhaus.org multi.uribl.com" {
 		t.Errorf("the stored zone list is %q", stored)
 	}
 
@@ -315,12 +311,19 @@ func TestAZoneListIsValidatedOnTheWritePath(t *testing.T) {
 	}
 
 	// A refused write leaves the previous value in place.
-	if err := db.QueryRow(`SELECT domain_dnsbl_zones FROM panel_settings WHERE id=1`).Scan(&stored); err != nil {
-		t.Fatal(err)
-	}
-	if stored != "dbl.spamhaus.org multi.uribl.com" {
+	if stored := storedZones(t, h); stored != "dbl.spamhaus.org multi.uribl.com" {
 		t.Errorf("a refused write changed the stored list to %q", stored)
 	}
+}
+
+// storedZones reads the zone list the panel settings row holds.
+func storedZones(t *testing.T, h *Handlers) string {
+	t.Helper()
+	var stored string
+	if err := h.DB.QueryRow(`SELECT domain_dnsbl_zones FROM panel_settings WHERE id=1`).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	return stored
 }
 
 func mustJSON(value string) string {

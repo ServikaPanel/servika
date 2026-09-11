@@ -114,44 +114,70 @@ func decodedMatches(ext string, content []byte, clearNames map[string]bool) []ma
 	if !phpish(ext) || !encodedIndicator.Match(content) {
 		return nil
 	}
-	budget := decodeMaxBytes
-	seen := map[uint64]bool{}
+	d := &decodeWalk{ext: ext, clearNames: clearNames, budget: decodeMaxBytes, seen: map[uint64]bool{}}
 	// Seed the ORIGINAL content, because rot13 is its own inverse: applying it
 	// twice reproduces the file exactly, which would otherwise re-fire every
 	// clear-text rule as a decoded double of itself one layer down.
-	seen[blobKey(content)] = true
-	var out []match
+	d.seen[blobKey(content)] = true
+	d.walk(content, 1)
+	return dedupeMatches(d.out)
+}
 
-	var walk func(data []byte, depth int)
-	walk = func(data []byte, depth int) {
-		if depth > decodeMaxDepth || budget <= 0 || len(out) >= decodeMaxMatches {
+// decodeWalk is one file's decode pass: the budget it charges, the blobs it has
+// already seen and the matches it has found.
+type decodeWalk struct {
+	ext        string
+	clearNames map[string]bool
+	budget     int
+	seen       map[uint64]bool
+	out        []match
+}
+
+// walk decodes one layer of data and weighs each new blob, then descends into it.
+func (d *decodeWalk) walk(data []byte, depth int) {
+	if depth > decodeMaxDepth || d.budget <= 0 || len(d.out) >= decodeMaxMatches {
+		return
+	}
+	for _, blob := range decodeLayer(data, &d.budget) {
+		if !d.firstSight(blob) {
+			continue
+		}
+		if d.match(blob) {
 			return
 		}
-		for _, blob := range decodeLayer(data, &budget) {
-			if len(blob) < 8 || looksLikeAsset(blob) {
-				continue
+		d.walk(blob, depth+1)
+	}
+}
+
+// firstSight reports whether a decoded blob is worth weighing: long enough, not
+// a media file, and not seen before. It records the blob as seen.
+func (d *decodeWalk) firstSight(blob []byte) bool {
+	if len(blob) < 8 || looksLikeAsset(blob) {
+		return false
+	}
+	key := blobKey(blob)
+	if d.seen[key] {
+		return false
+	}
+	d.seen[key] = true
+	return true
+}
+
+// match runs the behavioural rules against one decoded blob and reports whether
+// the match cap was reached.
+func (d *decodeWalk) match(blob []byte) bool {
+	for _, h := range heuristics {
+		if h.score < decodeMinWeight || d.clearNames[h.name] || !appliesTo(h, d.ext) {
+			continue
+		}
+		if h.re.Match(blob) {
+			d.out = append(d.out, match{name: decodedPrefix + h.name, score: h.score, decoded: true})
+			if len(d.out) >= decodeMaxMatches {
+				return true
 			}
-			key := blobKey(blob)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			for _, h := range heuristics {
-				if h.score < decodeMinWeight || clearNames[h.name] || !appliesTo(h, ext) {
-					continue
-				}
-				if h.re.Match(blob) {
-					out = append(out, match{name: decodedPrefix + h.name, score: h.score, decoded: true})
-					if len(out) >= decodeMaxMatches {
-						return
-					}
-				}
-			}
-			walk(blob, depth+1)
 		}
 	}
-	walk(content, 1)
-	return dedupeMatches(out)
+	return false
 }
 
 // blobKey fingerprints a decoded payload for the seen set with a full-content
@@ -167,27 +193,13 @@ func blobKey(b []byte) uint64 {
 // inner compression; `\x` hex, likewise; rot13 when the file calls it),
 // charging every decoded byte to budget.
 func decodeLayer(data []byte, budget *int) [][]byte {
-	var out [][]byte
-	add := func(b []byte) {
-		if len(b) == 0 || *budget <= 0 {
-			return
-		}
-		if len(b) > *budget {
-			b = b[:*budget]
-		}
-		*budget -= len(b)
-		out = append(out, b)
-	}
-
+	layer := &decodedLayer{budget: budget}
 	for _, blob := range reBase64Blob.FindAll(data, decodeMaxBlobs) {
 		dec := decodeBase64(blob)
 		if len(dec) == 0 {
 			continue
 		}
-		add(dec)
-		if inf := inflate(dec, budget); inf != nil {
-			out = append(out, inf) // inflate charged the budget itself
-		}
+		layer.addInflated(dec)
 	}
 	for _, run := range reHexEscapes.FindAll(data, decodeMaxBlobs) {
 		clean := bytes.ReplaceAll(run, []byte(`\x`), nil)
@@ -195,21 +207,46 @@ func decodeLayer(data []byte, budget *int) [][]byte {
 		if err != nil {
 			continue
 		}
-		add(dec)
 		// hex is the other input to gzinflate: gzinflate(hex2bin('...')) hides a
 		// compressed payload behind hex rather than base64.
-		if inf := inflate(dec, budget); inf != nil {
-			out = append(out, inf)
-		}
+		layer.addInflated(dec)
 	}
 	// rot13 only when the file actually calls str_rot13: applying it to every
 	// file is a full-copy cost and turns arbitrary code into noise.
 	if bytes.Contains(data, []byte("str_rot13")) {
 		if r := rot13(data); r != nil {
-			add(r)
+			layer.add(r)
 		}
 	}
-	return out
+	return layer.out
+}
+
+// decodedLayer collects the blobs one decode layer produced, charging each to
+// the file's budget.
+type decodedLayer struct {
+	budget *int
+	out    [][]byte
+}
+
+// add keeps one decoded blob, cut to the budget that is left.
+func (l *decodedLayer) add(b []byte) {
+	if len(b) == 0 || *l.budget <= 0 {
+		return
+	}
+	if len(b) > *l.budget {
+		b = b[:*l.budget]
+	}
+	*l.budget -= len(b)
+	l.out = append(l.out, b)
+}
+
+// addInflated keeps a decoded blob and, when it decompresses, the decompressed
+// output as well.
+func (l *decodedLayer) addInflated(dec []byte) {
+	l.add(dec)
+	if inf := inflate(dec, l.budget); inf != nil {
+		l.out = append(l.out, inf) // inflate charged the budget itself
+	}
 }
 
 // decodeBase64 tries the standard alphabet, padded and raw. URL-safe is not
@@ -232,35 +269,53 @@ func inflate(b []byte, budget *int) []byte {
 	if len(b) < 4 || *budget <= 0 {
 		return nil
 	}
-	limit := int64(*budget)
-	read := func(r io.Reader) []byte {
-		o, err := io.ReadAll(io.LimitReader(r, limit))
-		if err != nil || len(o) == 0 {
-			return nil
-		}
-		*budget -= len(o)
-		if len(o) > len(b)*decodeBombRatio {
-			return nil
-		}
+	in := inflation{input: len(b), limit: int64(*budget), budget: budget}
+	if o := in.readHeadered(b); o != nil {
 		return o
 	}
+	// Raw DEFLATE accepts any input, so its output is kept only when it reads as
+	// text; the header formats above already refuse non-matching input.
+	if o := in.read(flate.NewReader(bytes.NewReader(b))); o != nil && printableText(o) {
+		return o
+	}
+	return nil
+}
 
+// inflation is one blob's decompression attempts. Every attempt reads no more
+// than the budget that was left when the first one began.
+type inflation struct {
+	input  int
+	limit  int64
+	budget *int
+}
+
+// read decompresses r and charges the budget for the output. It returns nil for
+// a read error, an empty output, or an output past decodeBombRatio times the
+// input.
+func (in inflation) read(r io.Reader) []byte {
+	o, err := io.ReadAll(io.LimitReader(r, in.limit))
+	if err != nil || len(o) == 0 {
+		return nil
+	}
+	*in.budget -= len(o)
+	if len(o) > in.input*decodeBombRatio {
+		return nil
+	}
+	return o
+}
+
+// readHeadered tries gzip and then zlib, the two formats whose header refuses
+// input in another format.
+func (in inflation) readHeadered(b []byte) []byte {
 	if b[0] == 0x1f && b[1] == 0x8b {
 		if r, err := gzip.NewReader(bytes.NewReader(b)); err == nil {
-			if o := read(r); o != nil {
+			if o := in.read(r); o != nil {
 				return o
 			}
 		}
 	}
 	if r, err := zlib.NewReader(bytes.NewReader(b)); err == nil {
-		if o := read(r); o != nil {
-			return o
-		}
-	}
-	// Raw DEFLATE accepts any input, so its output is kept only when it reads as
-	// text; the header formats above already refuse non-matching input.
-	if o := read(flate.NewReader(bytes.NewReader(b))); o != nil && printableText(o) {
-		return o
+		return in.read(r)
 	}
 	return nil
 }

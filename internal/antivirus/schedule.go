@@ -74,33 +74,47 @@ func tickOnce(db *sql.DB, now func() time.Time) {
 	if avsettings.ScanTimerEnabled() {
 		return
 	}
+	settings, due := scheduledSweepDue(ctx, db, now)
+	if !due {
+		return
+	}
+	startScheduledSweep(ctx, db, settings)
+}
+
+// scheduledSweepDue reads the settings and reports whether this hour's tick
+// starts a sweep.
+func scheduledSweepDue(ctx context.Context, db *sql.DB, now func() time.Time) (avsettings.Settings, bool) {
 	settings, err := avsettings.Read(ctx, db)
 	if err != nil {
 		log.Printf("antivirus: the scheduled sweep could not read its settings: %v", err)
-		return
+		return settings, false
 	}
 	if !settings.ScheduledScan {
-		return
+		return settings, false
 	}
 	if now().Hour() != settings.ScheduledHour {
-		return
+		return settings, false
 	}
 	if !settings.RuleEngine && !settings.LocationHeuristics {
 		// Every layer is off, so a sweep would inspect nothing and record a
 		// finished scan with no findings, which reads exactly like a clean
 		// server. The hand-started sweep refuses this too.
-		return
+		return settings, false
 	}
 	if recent, err := sweptRecently(ctx, db, now()); err != nil {
 		// A read that failed is NOT treated as "no sweep yet". That direction
 		// starts a sweep of the whole filesystem every hour for as long as the
 		// database is unwell, which is the worst hour to be adding load.
 		log.Printf("antivirus: whether a sweep is already due could not be read: %v", err)
-		return
+		return settings, false
 	} else if recent {
-		return
+		return settings, false
 	}
+	return settings, true
+}
 
+// startScheduledSweep takes the scan slot, records the sweep and runs it.
+func startScheduledSweep(ctx context.Context, db *sql.DB, settings avsettings.Settings) {
 	// The same single slot a hand-started scan takes. A tick that cannot get it
 	// simply waits for the next hour: forcing it would mean two sweeps reading
 	// the same trees under one resource limit.

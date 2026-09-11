@@ -96,34 +96,60 @@ func phpSyntaxByte(c byte) bool { return bytes.IndexByte(phpSyntaxBytes, c) >= 0
 // the body is fully printable). The plaintext preamble before that point stays
 // inside the scan; the body itself is opaque and never scanned.
 func encoderBlobStart(content []byte) (name string, offset int, ok bool) {
+	name = encoderStampName(content)
+	if name == "" {
+		return "", 0, false
+	}
+	// (a) A binary body (some packers write raw binary).
+	if start, found := binaryBodyStart(content); found {
+		return name, start, true
+	}
+	// (b) A base64 body (ionCube's actual form: fully printable, so the binary
+	// heuristic never sees it). The tell is base64-alphabet density, which real
+	// PHP source cannot sustain because space, $, (, ; are not base64.
+	if start, found := base64BodyStart(content); found {
+		return name, start, true
+	}
+	// A stamp but no encoded body → not actually packed (a plain PHP file that
+	// MENTIONS ionCube, or a webshell imitating a stamp). Scan it in full.
+	return "", 0, false
+}
+
+// encoderStampName returns the name of the encoder whose stamp sits in the head
+// of the file, or "" when none does.
+func encoderStampName(content []byte) string {
 	head := content
 	if len(head) > encoderHeadWindow {
 		head = head[:encoderHeadWindow]
 	}
 	for _, s := range encoderStamps {
 		if bytes.Contains(head, s.stamp) {
-			name = s.name
-			break
+			return s.name
 		}
 	}
-	if name == "" {
-		return "", 0, false
-	}
-	// (a) A binary body (some packers write raw binary).
+	return ""
+}
+
+// binaryBodyStart returns the offset of the first run of encoderBinaryRun binary
+// bytes.
+func binaryBodyStart(content []byte) (int, bool) {
 	run := 0
 	for i := range content {
 		if nonTextByte(content[i]) {
 			run++
 			if run >= encoderBinaryRun {
-				return name, i - run + 1, true
+				return i - run + 1, true
 			}
 			continue
 		}
 		run = 0
 	}
-	// (b) A base64 body (ionCube's actual form: fully printable, so the binary
-	// heuristic never sees it). The tell is base64-alphabet density, which real
-	// PHP source cannot sustain because space, $, (, ; are not base64.
+	return 0, false
+}
+
+// base64BodyStart returns where the base64 run begins that holds the first
+// window dense enough in the base64 alphabet to cross encoderB64Ratio.
+func base64BodyStart(content []byte) (int, bool) {
 	for i := 0; i+encoderB64Window <= len(content); i += encoderB64Window {
 		window := content[i : i+encoderB64Window]
 		count := 0
@@ -137,12 +163,10 @@ func encoderBlobStart(content []byte) (name string, offset int, ok bool) {
 			for start > 0 && base64Byte(content[start-1]) {
 				start--
 			}
-			return name, start, true
+			return start, true
 		}
 	}
-	// A stamp but no encoded body → not actually packed (a plain PHP file that
-	// MENTIONS ionCube, or a webshell imitating a stamp). Scan it in full.
-	return "", 0, false
+	return 0, false
 }
 
 // blobEndBase64 returns the offset at which a base64 body ends, i.e. where plain

@@ -76,7 +76,13 @@ func runWatcher() error {
 	if err := loadPackagedRules(); err != nil && !errors.Is(err, ErrRuleKeyAbsent) && !os.IsNotExist(err) {
 		log.Printf("antivirus watcher: packaged rules not in use: %v", err)
 	}
+	return watchUntilStopped(ctx, handle)
+}
 
+// watchUntilStopped builds the watcher and runs its event loop. Real-time
+// watching switched off, at startup or later, and a stop signal both end it with
+// no error.
+func watchUntilStopped(ctx context.Context, handle *sql.DB) error {
 	w, err := startWatcher(ctx, handle)
 	if err != nil {
 		if errors.Is(err, errWatchDisabled) {

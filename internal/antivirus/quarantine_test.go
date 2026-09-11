@@ -178,6 +178,13 @@ func TestTheEndpointTakesAFindingIDAndNotAPath(t *testing.T) {
 	// Reads and removals inside a tenant tree go through the openat2 jail. The
 	// store is outside every home and root-owned, so os.* there is correct; what
 	// must never come back is a raw operation on a path under the home.
+	assertTenantPathsGoThroughSafeio(t, body)
+}
+
+// assertTenantPathsGoThroughSafeio checks the quarantine source for a raw file
+// operation on a tenant path and for the three safeio calls.
+func assertTenantPathsGoThroughSafeio(t *testing.T, body string) {
+	t.Helper()
 	for _, raw := range []string{"os.Rename(", "os.Lstat("} {
 		if strings.Contains(body, raw) {
 			t.Errorf("a tenant path reaches %s instead of going through safeio", raw)

@@ -64,22 +64,33 @@ func TestTheScanSourcesAreTheOnesTheScreenKnows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for name, body := range productionSources(t) {
+		if name != "scansource.go" && strings.Contains(body, "SourceUnknown") {
+			t.Errorf("%s writes SourceUnknown, which would claim a row was measured as unmeasurable", name)
+		}
+	}
+	_ = source
+}
+
+// productionSources reads every Go file of this package that is not a test, by
+// file name.
+func productionSources(t *testing.T) map[string]string {
+	t.Helper()
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)
 	}
+	sources := map[string]string{}
 	for _, entry := range entries {
 		name := entry.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || name == "scansource.go" {
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
 		body, err := os.ReadFile(filepath.Clean(name))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(body), "SourceUnknown") {
-			t.Errorf("%s writes SourceUnknown, which would claim a row was measured as unmeasurable", name)
-		}
+		sources[name] = string(body)
 	}
-	_ = source
+	return sources
 }

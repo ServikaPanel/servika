@@ -102,6 +102,27 @@ func TestAnInPlaceEditWithTheTimestampPutBackIsStillCaught(t *testing.T) {
 		t.Fatalf("the clean tree produced %d findings", len(findings))
 	}
 
+	before, after := stompInPlace(t, victim)
+	// The two halves of the key an attacker CAN control really are unchanged, so
+	// this test is a proof about ctime and not about a size or mtime it happened
+	// to move.
+	assertOnlyCtimeMoved(t, before, after)
+
+	scanned, skipped, findings := sweepOnce(t, root, cachePath)
+	if scanned != 1 {
+		t.Fatalf("the warm sweep read %d files; only the edited one should have been read", scanned)
+	}
+	if skipped != 1 {
+		t.Fatalf("the warm sweep skipped %d files; the untouched one should have been skipped", skipped)
+	}
+	assertOneCriticalFinding(t, findings, victim)
+}
+
+// stompInPlace writes the webshell over victim through its existing inode and
+// then puts atime and mtime back to the nanosecond. It returns the file's stat
+// from before and after the edit.
+func stompInPlace(t *testing.T, victim string) (before, after os.FileInfo) {
+	t.Helper()
 	before, err := os.Stat(victim)
 	if err != nil {
 		t.Fatal(err)
@@ -127,13 +148,17 @@ func TestAnInPlaceEditWithTheTimestampPutBackIsStillCaught(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	after, err := os.Stat(victim)
+	after, err = os.Stat(victim)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The two halves of the key an attacker CAN control really are unchanged, so
-	// this test is a proof about ctime and not about a size or mtime it happened
-	// to move.
+	return before, after
+}
+
+// assertOnlyCtimeMoved checks that an edit kept the size and the modification
+// time and still changed the cache key.
+func assertOnlyCtimeMoved(t *testing.T, before, after os.FileInfo) {
+	t.Helper()
 	if after.Size() != before.Size() {
 		t.Fatalf("the size changed (%d against %d); this no longer measures ctime",
 			after.Size(), before.Size())
@@ -145,14 +170,12 @@ func TestAnInPlaceEditWithTheTimestampPutBackIsStillCaught(t *testing.T) {
 	if fileKey(after) == fileKey(before) {
 		t.Fatal("size, mtime AND ctime all matched after an in-place edit, so the key carries nothing an owner cannot forge")
 	}
+}
 
-	scanned, skipped, findings := sweepOnce(t, root, cachePath)
-	if scanned != 1 {
-		t.Fatalf("the warm sweep read %d files; only the edited one should have been read", scanned)
-	}
-	if skipped != 1 {
-		t.Fatalf("the warm sweep skipped %d files; the untouched one should have been skipped", skipped)
-	}
+// assertOneCriticalFinding checks that the sweep reported the edited file, and
+// only it, as critical.
+func assertOneCriticalFinding(t *testing.T, findings []Finding, victim string) {
+	t.Helper()
 	if len(findings) != 1 {
 		t.Fatalf("the edited file produced %d findings, so the cache let a webshell past", len(findings))
 	}

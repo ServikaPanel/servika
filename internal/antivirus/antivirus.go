@@ -317,37 +317,43 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 	// context above, before this goroutine starts.
 	bgjob.Go("antivirus: domain scan", func(error) { failScan(h.DB, sid) }, func() {
 		defer slot.Release()
-		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
-		defer cancel()
-		result, confined, err := scanTree(ctx, req, strconv.FormatInt(sid, 10))
-		if err != nil {
-			// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
-			httpx.LogR(r, "antivirus: scan %d could not run: %v", sid, err)
-		}
-		for _, f := range result.Findings {
-			_ = insertFinding(h.DB, sid, id, f)
-		}
-		// A scan that ran out of its budget covered part of the tree, so it is
-		// recorded as FAILED with the findings it did get. Calling it finished
-		// would present a partial sweep as a clean bill of health, which for a
-		// webshell in the part that was never reached is the worst answer the
-		// screen can give. A scan that could not be placed in the resource slice
-		// at all is failed for the same reason: it produced nothing, and an
-		// empty finding list is exactly what a clean site looks like.
-		// Containment runs BEFORE the status is written, so a screen that sees
-		// a finished scan sees the containment that went with it rather than a
-		// list of findings that are about to move under it.
-		if req.AutoQuarantine {
-			recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))
-		}
-		status := "finished"
-		if err != nil || result.Partial || ctx.Err() != nil {
-			status = "failed"
-		}
-		_, _ = h.DB.Exec(`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
-			status, result.Scanned, len(result.Findings), confined, sid)
+		h.runDomainScan(r, req, id, sid)
 	})
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"scan_id": sid})
+}
+
+// runDomainScan runs a recorded domain scan to its end: it stores the findings,
+// contains them when the switch is on, and writes the final status.
+func (h *Handlers) runDomainScan(r *http.Request, req ScanRequest, id, sid int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
+	defer cancel()
+	result, confined, err := scanTree(ctx, req, strconv.FormatInt(sid, 10))
+	if err != nil {
+		// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
+		httpx.LogR(r, "antivirus: scan %d could not run: %v", sid, err)
+	}
+	for _, f := range result.Findings {
+		_ = insertFinding(h.DB, sid, id, f)
+	}
+	// A scan that ran out of its budget covered part of the tree, so it is
+	// recorded as FAILED with the findings it did get. Calling it finished
+	// would present a partial sweep as a clean bill of health, which for a
+	// webshell in the part that was never reached is the worst answer the
+	// screen can give. A scan that could not be placed in the resource slice
+	// at all is failed for the same reason: it produced nothing, and an
+	// empty finding list is exactly what a clean site looks like.
+	// Containment runs BEFORE the status is written, so a screen that sees
+	// a finished scan sees the containment that went with it rather than a
+	// list of findings that are about to move under it.
+	if req.AutoQuarantine {
+		recordAutoQuarantine(h.DB, sid, h.autoQuarantine(ctx, sid))
+	}
+	status := "finished"
+	if err != nil || result.Partial || ctx.Err() != nil {
+		status = "failed"
+	}
+	_, _ = h.DB.Exec(`UPDATE av_scans SET status=?, scanned=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
+		status, result.Scanned, len(result.Findings), confined, sid)
 }
 
 // GET /domains/{id}/antivirus/scan/{sid}
@@ -433,31 +439,7 @@ func runScan(ctx context.Context, root string, req ScanRequest, cache *scanCache
 	// clamscan at / would read every data file on the machine, which is exactly
 	// the cost the exclusion list exists to avoid, and it has no way to be told
 	// otherwise.
-	if _, err := os.Stat(clamBin()); err == nil && len(req.Excluded) == 0 {
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		cmd := exec.CommandContext(ctx, clamBin(), "-r", "-i", "--no-summary", "--stdout",
-			"--max-filesize=25M", "--max-scansize=500M", root)
-		out, _ := cmd.CombinedOutput()
-		for line := range strings.SplitSeq(string(out), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasSuffix(line, " FOUND") {
-				if i := strings.LastIndex(line, ": "); i > 0 {
-					file := line[:i]
-					signature := strings.TrimSuffix(line[i+2:], " FOUND")
-					if !seen["c|"+file] {
-						seen["c|"+file] = true
-						// ClamAV reached a verdict of its own rather than an
-						// evidence weight, so it is recorded at the critical end
-						// instead of being fed through the thresholds.
-						findings = append(findings, Finding{
-							File: file, Signature: signature, Engine: "clamav",
-							Score: scoreCritical, Level: LevelCritical,
-						})
-					}
-				}
-			}
-		}
-	}
+	findings = clamavFindings(ctx, root, req, seen)
 
 	// 2) Heuristic scan of the file kinds a site executes or serves
 	//
@@ -466,170 +448,289 @@ func runScan(ctx context.Context, root string, req ScanRequest, cache *scanCache
 	// findings come back in. A walk is readdir plus a stat, so it is not what
 	// costs. What the pool parallelises is the part that does, reading the file
 	// and running the rules over it.
-	type job struct {
-		index int
-		path  string
-		ext   string
-		limit int64
-		// key is this file's size:mtime:ctime, taken from the stat the walk
-		// already paid for. A worker that finds the file clean records it under
-		// this key, so the next sweep can skip it while it still looks the same.
-		key     string
-		matches []match
-	}
-	type produced struct {
-		index   int
-		finding Finding
-	}
 	workers := max(req.Workers, 1)
-	jobs := make(chan job, workers*4)
+	jobs := make(chan scanJob, workers*4)
 
 	// The rate ceiling is ONE shared ticker. Every worker takes a tick before
 	// it opens a file, so N workers inspect at most FileRatePerSec files a
 	// second between them rather than that many each.
-	var ticks <-chan time.Time
-	if req.FileRatePerSec > 0 {
-		interval := time.Second / time.Duration(req.FileRatePerSec)
-		if interval <= 0 {
-			// NewTicker PANICS on a non-positive duration. The write path
-			// refuses a rate this high, but the request reaches the worker
-			// through a file that outlives the code which wrote it.
-			interval = time.Nanosecond
-		}
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		ticks = ticker.C
-	}
+	ticks, stopTicks := rateTicker(req.FileRatePerSec)
+	defer stopTicks()
 
-	var (
-		mu     sync.Mutex
-		output []produced
-		wg     sync.WaitGroup
-	)
+	pool := &scanPool{req: req, cache: cache, jobs: jobs, ticks: ticks}
 	for range workers {
-		wg.Go(func() {
-			for j := range jobs {
-				if ticks != nil {
-					select {
-					case <-ticks:
-					case <-ctx.Done():
-						return
-					}
-				}
-				matches := j.matches
-				if j.limit > 0 {
-					if b, e := readForScan(j.path, j.limit); e == nil {
-						matches = append(matches, evaluate(j.ext, b)...)
-					}
-				}
-				// One finding per FILE, not per matching rule. Three rows for
-				// one file used to mean bulk cleanup contained it on the first
-				// row and then reported "file missing" twice for the same file
-				// it had just quarantined, so a successful cleanup read as two
-				// failures.
-				score, signature, matched, level := verdict(matches, req.CriticalThreshold)
-				if level == "" {
-					// Clean, and only clean. A file that produced a finding is
-					// reported again by every sweep until it stops producing
-					// one, so suspicious and critical are never recorded here.
-					cache.markClean(j.path, j.key)
-					continue
-				}
-				mu.Lock()
-				output = append(output, produced{j.index, Finding{
-					File: j.path, Signature: signature, Engine: "heuristic",
-					Score: score, Level: level, Rules: strings.Join(matched, ", "),
-				}})
-				mu.Unlock()
-			}
-		})
+		pool.wg.Go(func() { pool.work(ctx) })
 	}
 
-	dispatched := 0
+	walk := &scanWalk{root: root, req: req, cache: cache, jobs: jobs}
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	walkErr := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", ".quarantined":
-				return filepath.SkipDir
-			}
-			// An excluded DIRECTORY is skipped whole. Testing each file inside it
-			// instead would still walk /proc and /sys entry by entry, which is
-			// most of what the exclusion list exists to avoid.
-			if avsettings.PathExcluded(req.Excluded, p) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if avsettings.PathExcluded(req.Excluded, p) {
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(p))
-		limit := readLimitFor(ext)
-		if !req.RuleEngine {
-			limit = 0
-		}
-		// The path is judged even when the content will not be read. A payload
-		// can sit in a file past the read limit, and where it sits is evidence
-		// that costs nothing to collect.
-		var matches []match
-		if req.LocationHeuristics {
-			matches = locationMatches(root, p)
-		}
-		if limit == 0 && len(matches) == 0 {
-			return nil
-		}
-		fi, e := d.Info()
-		if e != nil {
-			return nil
-		}
-		// A file the last sweep read and found clean, unchanged since. The key
-		// is size:mtime:ctime and ctime cannot be put back by any syscall, so a
-		// file edited in place with its mtime restored does NOT match.
-		//
-		// A skipped file does not count towards the cap. The cap bounds how much
-		// this sweep READS, and a tree larger than the cap would otherwise have
-		// the same first 50000 files walked every night with the rest never
-		// reached at all.
-		key := fileKey(fi)
-		if cache.unchanged(p, key) {
-			skipped++
-			cache.markClean(p, key)
-			return nil
-		}
-		scanned++
-		if scanned > fileCap {
-			return errCap
-		}
-		// A file past its limit is NOT skipped. Zeroing the limit here was the
-		// escape: padding a webshell past 3 MiB stepped around every content
-		// rule while the file was still recorded as scanned. readForScan reads
-		// the head to the limit and the tail beyond it.
-		//
-		// The send selects on the context too. Without that, a pool whose
-		// workers have all returned on cancellation leaves the walk blocked on
-		// a channel nobody reads, and the scan never ends at all.
-		select {
-		case jobs <- job{index: dispatched, path: p, ext: ext, limit: limit, key: key, matches: matches}:
-			dispatched++
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		return nil
+		return walk.visit(ctx, p, d, err)
 	})
 	close(jobs)
-	wg.Wait()
+	pool.wg.Wait()
 
 	// Findings come back in DISPATCH order, not in whichever order the workers
 	// happened to finish, so the same tree produces the same list on a machine
 	// with one core and on one with thirty-two.
-	slices.SortFunc(output, func(a, b produced) int { return a.index - b.index })
+	findings = appendInDispatchOrder(findings, pool.output, seen)
+	// A sweep that stopped at the file cap or ran out of its budget covered part
+	// of the tree. Reporting it as complete would present it as a clean bill of
+	// health for everything it never reached, which is the same defect the
+	// status check in the handler exists to prevent. The cap was silently
+	// swallowed here before: the walk's error was discarded and 50000 files was
+	// reported as a finished scan of the whole tree.
+	return walk.scanned, walk.skipped, findings, walkErr == nil && ctx.Err() == nil
+}
+
+// clamavFindings runs clamscan over root when it is installed and the request
+// carries no exclusion list, and returns one finding per infected file.
+func clamavFindings(ctx context.Context, root string, req ScanRequest, seen map[string]bool) []Finding {
+	var findings []Finding
+	if _, err := os.Stat(clamBin()); err == nil && len(req.Excluded) == 0 {
+		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+		cmd := exec.CommandContext(ctx, clamBin(), "-r", "-i", "--no-summary", "--stdout",
+			"--max-filesize=25M", "--max-scansize=500M", root)
+		out, _ := cmd.CombinedOutput()
+		for line := range strings.SplitSeq(string(out), "\n") {
+			if f, ok := clamavFinding(line, seen); ok {
+				findings = append(findings, f)
+			}
+		}
+	}
+	return findings
+}
+
+// clamavFinding reads one line of clamscan output. It returns a finding for the
+// first report of an infected file and nothing for any other line.
+func clamavFinding(line string, seen map[string]bool) (Finding, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasSuffix(line, " FOUND") {
+		return Finding{}, false
+	}
+	i := strings.LastIndex(line, ": ")
+	if i <= 0 {
+		return Finding{}, false
+	}
+	file := line[:i]
+	signature := strings.TrimSuffix(line[i+2:], " FOUND")
+	if seen["c|"+file] {
+		return Finding{}, false
+	}
+	seen["c|"+file] = true
+	// ClamAV reached a verdict of its own rather than an evidence weight, so it
+	// is recorded at the critical end instead of being fed through the
+	// thresholds.
+	return Finding{
+		File: file, Signature: signature, Engine: "clamav",
+		Score: scoreCritical, Level: LevelCritical,
+	}, true
+}
+
+// rateTicker returns the shared ticker behind the rate ceiling and the function
+// that stops it. With no ceiling the channel is nil and nothing waits on it.
+func rateTicker(perSec int) (<-chan time.Time, func()) {
+	if perSec <= 0 {
+		return nil, func() {}
+	}
+	interval := time.Second / time.Duration(perSec)
+	if interval <= 0 {
+		// NewTicker PANICS on a non-positive duration. The write path
+		// refuses a rate this high, but the request reaches the worker
+		// through a file that outlives the code which wrote it.
+		interval = time.Nanosecond
+	}
+	ticker := time.NewTicker(interval)
+	return ticker.C, ticker.Stop
+}
+
+// scanJob is one file the walk hands to the pool.
+type scanJob struct {
+	index int
+	path  string
+	ext   string
+	limit int64
+	// key is this file's size:mtime:ctime, taken from the stat the walk
+	// already paid for. A worker that finds the file clean records it under
+	// this key, so the next sweep can skip it while it still looks the same.
+	key     string
+	matches []match
+}
+
+// scanOutput is a finding a worker produced, with the dispatch index of its
+// file.
+type scanOutput struct {
+	index   int
+	finding Finding
+}
+
+// scanPool is the workers that read the dispatched files and run the rules over
+// them.
+type scanPool struct {
+	req    ScanRequest
+	cache  *scanCache
+	jobs   <-chan scanJob
+	ticks  <-chan time.Time
+	mu     sync.Mutex
+	output []scanOutput
+	wg     sync.WaitGroup
+}
+
+// work inspects jobs until the channel closes or the scan is cancelled.
+func (p *scanPool) work(ctx context.Context) {
+	for j := range p.jobs {
+		if !waitForTick(ctx, p.ticks) {
+			return
+		}
+		matches := j.matches
+		if j.limit > 0 {
+			if b, e := readForScan(j.path, j.limit); e == nil {
+				matches = append(matches, evaluate(j.ext, b)...)
+			}
+		}
+		// One finding per FILE, not per matching rule. Three rows for
+		// one file used to mean bulk cleanup contained it on the first
+		// row and then reported "file missing" twice for the same file
+		// it had just quarantined, so a successful cleanup read as two
+		// failures.
+		score, signature, matched, level := verdict(matches, p.req.CriticalThreshold)
+		if level == "" {
+			// Clean, and only clean. A file that produced a finding is
+			// reported again by every sweep until it stops producing
+			// one, so suspicious and critical are never recorded here.
+			p.cache.markClean(j.path, j.key)
+			continue
+		}
+		p.mu.Lock()
+		p.output = append(p.output, scanOutput{j.index, Finding{
+			File: j.path, Signature: signature, Engine: "heuristic",
+			Score: score, Level: level, Rules: strings.Join(matched, ", "),
+		}})
+		p.mu.Unlock()
+	}
+}
+
+// waitForTick takes the next tick of the rate ceiling, and reports false when
+// the scan was cancelled first. With no ceiling it returns at once.
+func waitForTick(ctx context.Context, ticks <-chan time.Time) bool {
+	if ticks == nil {
+		return true
+	}
+	select {
+	case <-ticks:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// scanWalk is the single-threaded walk over one root. It decides which files
+// are read, counts them against the cap and dispatches them in a fixed order.
+type scanWalk struct {
+	root       string
+	req        ScanRequest
+	cache      *scanCache
+	jobs       chan<- scanJob
+	scanned    int
+	skipped    int
+	dispatched int
+}
+
+// visit is the WalkDir callback for one entry.
+func (sw *scanWalk) visit(ctx context.Context, p string, d fs.DirEntry, err error) error {
+	if err != nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if d.IsDir() {
+		return sw.enterDir(p, d)
+	}
+	req := &sw.req
+	if avsettings.PathExcluded(req.Excluded, p) {
+		return nil
+	}
+	ext := strings.ToLower(filepath.Ext(p))
+	limit := readLimitFor(ext)
+	if !req.RuleEngine {
+		limit = 0
+	}
+	// The path is judged even when the content will not be read. A payload
+	// can sit in a file past the read limit, and where it sits is evidence
+	// that costs nothing to collect.
+	var matches []match
+	if req.LocationHeuristics {
+		matches = locationMatches(sw.root, p)
+	}
+	if limit == 0 && len(matches) == 0 {
+		return nil
+	}
+	return sw.dispatch(ctx, p, d, scanJob{path: p, ext: ext, limit: limit, matches: matches})
+}
+
+// enterDir decides whether the walk descends into a directory.
+func (sw *scanWalk) enterDir(p string, d fs.DirEntry) error {
+	switch d.Name() {
+	case ".git", "node_modules", "vendor", ".quarantined":
+		return filepath.SkipDir
+	}
+	// An excluded DIRECTORY is skipped whole. Testing each file inside it
+	// instead would still walk /proc and /sys entry by entry, which is
+	// most of what the exclusion list exists to avoid.
+	if avsettings.PathExcluded(sw.req.Excluded, p) {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+// dispatch hands one file to the pool unless the cache holds it clean and
+// unchanged, and stops the walk at the file cap.
+func (sw *scanWalk) dispatch(ctx context.Context, p string, d fs.DirEntry, job scanJob) error {
+	fi, e := d.Info()
+	if e != nil {
+		return nil
+	}
+	// A file the last sweep read and found clean, unchanged since. The key
+	// is size:mtime:ctime and ctime cannot be put back by any syscall, so a
+	// file edited in place with its mtime restored does NOT match.
+	//
+	// A skipped file does not count towards the cap. The cap bounds how much
+	// this sweep READS, and a tree larger than the cap would otherwise have
+	// the same first 50000 files walked every night with the rest never
+	// reached at all.
+	key := fileKey(fi)
+	if sw.cache.unchanged(p, key) {
+		sw.skipped++
+		sw.cache.markClean(p, key)
+		return nil
+	}
+	sw.scanned++
+	if sw.scanned > fileCap {
+		return errCap
+	}
+	// A file past its limit is NOT skipped. Zeroing the limit here was the
+	// escape: padding a webshell past 3 MiB stepped around every content
+	// rule while the file was still recorded as scanned. readForScan reads
+	// the head to the limit and the tail beyond it.
+	//
+	// The send selects on the context too. Without that, a pool whose
+	// workers have all returned on cancellation leaves the walk blocked on
+	// a channel nobody reads, and the scan never ends at all.
+	job.index, job.key = sw.dispatched, key
+	select {
+	case sw.jobs <- job:
+		sw.dispatched++
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
+// appendInDispatchOrder sorts the pool's findings back into the order the walk
+// dispatched their files, and appends the first finding for each file.
+func appendInDispatchOrder(findings []Finding, output []scanOutput, seen map[string]bool) []Finding {
+	slices.SortFunc(output, func(a, b scanOutput) int { return a.index - b.index })
 	for _, o := range output {
 		if seen["h|"+o.finding.File] {
 			continue
@@ -637,13 +738,7 @@ func runScan(ctx context.Context, root string, req ScanRequest, cache *scanCache
 		seen["h|"+o.finding.File] = true
 		findings = append(findings, o.finding)
 	}
-	// A sweep that stopped at the file cap or ran out of its budget covered part
-	// of the tree. Reporting it as complete would present it as a clean bill of
-	// health for everything it never reached, which is the same defect the
-	// status check in the handler exists to prevent. The cap was silently
-	// swallowed here before: the walk's error was discarded and 50000 files was
-	// reported as a finished scan of the whole tree.
-	return scanned, skipped, findings, walkErr == nil && ctx.Err() == nil
+	return findings
 }
 
 // phpish reports whether a PHP-FPM pool would execute this extension. The list

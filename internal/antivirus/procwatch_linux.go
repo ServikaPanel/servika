@@ -107,10 +107,7 @@ func (w *procWatcher) loop(fd int) {
 	for {
 		n, from, err := recvNetlink(fd, buf, 0)
 		if err != nil {
-			if errors.Is(err, unix.EINTR) || errors.Is(err, unix.ENOBUFS) || errors.Is(err, unix.EAGAIN) {
-				if errors.Is(err, unix.ENOBUFS) {
-					log.Print("process watcher: netlink buffer overran (ENOBUFS) — events dropped, continuing")
-				}
+			if transientNetlinkError(err) {
 				continue
 			}
 			log.Printf("process watcher: netlink read stopped: %v", err)
@@ -118,7 +115,7 @@ func (w *procWatcher) loop(fd int) {
 		}
 		// Only KERNEL-sourced events (a netlink peer pid of 0). This rejects a
 		// local process injecting a forged event on the same multicast group.
-		if nl, ok := from.(*unix.SockaddrNetlink); !ok || nl.Pid != 0 {
+		if !fromKernel(from) {
 			continue
 		}
 		for _, ev := range parseProcEvents(buf[:n]) {
@@ -129,6 +126,22 @@ func (w *procWatcher) loop(fd int) {
 			lastSweep = time.Now()
 		}
 	}
+}
+
+// transientNetlinkError reports whether the watcher survives a read error. An
+// ENOBUFS overrun is journalled, because it means events were dropped.
+func transientNetlinkError(err error) bool {
+	if errors.Is(err, unix.ENOBUFS) {
+		log.Print("process watcher: netlink buffer overran (ENOBUFS) — events dropped, continuing")
+		return true
+	}
+	return errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN)
+}
+
+// fromKernel reports whether a netlink message came from the kernel.
+func fromKernel(from unix.Sockaddr) bool {
+	nl, ok := from.(*unix.SockaddrNetlink)
+	return ok && nl.Pid == 0
 }
 
 // procWatcher holds the database handle and the watcher's in-memory state.
@@ -185,25 +198,7 @@ func (w *procWatcher) evaluate(pid int) {
 	cmdline := readProcCmdline(pid)
 	uid := readProcUID(pid)
 
-	// If this process IS a web server, mark it web in the table so the children
-	// it forks after this point inherit the web-ancestor flag, even a php-fpm
-	// worker respawned mid-session.
-	if _, comm := readProcStat(pid); isWebServer(exe, comm) {
-		if rec := w.pidTable[pid]; rec != nil {
-			rec.web = true
-		} else if len(w.pidTable) < procPidTableCap {
-			w.pidTable[pid] = &pidRecord{web: true, born: time.Now()}
-		}
-	}
-
-	web := false
-	if rec := w.pidTable[pid]; rec != nil {
-		web = rec.web
-	} else {
-		web = w.ancestorHasWeb(pid)
-	}
-
-	finding := scoreProcess(web, exe, cmdline, uid)
+	finding := scoreProcess(w.webAncestry(pid, exe), exe, cmdline, uid)
 	if finding.score < procScoreSuspicious {
 		return
 	}
@@ -248,6 +243,24 @@ func (w *procWatcher) evaluate(pid int) {
 		level = notifications.LevelCritical
 	}
 	writeChainEvent(w.db, domainID, "process", stageForCode(finding.code), level, "", exeClean(exe), pid, "av_proc", 0)
+}
+
+// webAncestry reports whether a process descends from a web server.
+func (w *procWatcher) webAncestry(pid int, exe string) bool {
+	// If this process IS a web server, mark it web in the table so the children
+	// it forks after this point inherit the web-ancestor flag, even a php-fpm
+	// worker respawned mid-session.
+	if _, comm := readProcStat(pid); isWebServer(exe, comm) {
+		if rec := w.pidTable[pid]; rec != nil {
+			rec.web = true
+		} else if len(w.pidTable) < procPidTableCap {
+			w.pidTable[pid] = &pidRecord{web: true, born: time.Now()}
+		}
+	}
+	if rec := w.pidTable[pid]; rec != nil {
+		return rec.web
+	}
+	return w.ancestorHasWeb(pid)
 }
 
 // stageForCode maps a process reason code to its kill-chain stage: a downloader

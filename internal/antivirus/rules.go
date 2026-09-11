@@ -359,9 +359,7 @@ func evaluateWith(rules []rule, ext string, content []byte) []match {
 // means the total did not reach the reporting threshold and no row is written.
 func verdict(matches []match, critical int) (score int, signature string, names []string, level string) {
 	best := 0
-	clearBuiltIn := false     // a shipped rule fired against the file's literal bytes
-	clearBehavioural := false // such a rule that is also weightModerate or above
-	hasRemote, hasDecoded := false, false
+	var evidence verdictEvidence
 	for _, m := range matches {
 		names = append(names, m.name)
 		// An informational tag carries context but no evidence. It is skipped
@@ -371,17 +369,7 @@ func verdict(matches []match, critical int) (score int, signature string, names 
 			continue
 		}
 		score += m.score
-		switch {
-		case m.remote:
-			hasRemote = true
-		case m.decoded:
-			hasDecoded = true
-		default:
-			clearBuiltIn = true
-			if m.score >= weightModerate {
-				clearBehavioural = true
-			}
-		}
+		evidence.note(m)
 		if m.score > best {
 			best, signature = m.score, m.name
 		}
@@ -398,11 +386,40 @@ func verdict(matches []match, critical int) (score int, signature string, names 
 	// in-clear BEHAVIOURAL rule (weightModerate+), because the weak in-clear
 	// signal it would otherwise lean on is the encoding SHAPE the decode layer
 	// is already built on, the same evidence rather than corroboration.
+	return score, signature, names, evidence.limitLevel(level)
+}
+
+// verdictEvidence records where the evidence behind a verdict came from.
+type verdictEvidence struct {
+	clearBuiltIn     bool // a shipped rule fired against the file's literal bytes
+	clearBehavioural bool // such a rule that is also weightModerate or above
+	hasRemote        bool
+	hasDecoded       bool
+}
+
+// note records the source of one match that carries evidence.
+func (e *verdictEvidence) note(m match) {
 	switch {
-	case level == LevelCritical && hasDecoded && !clearBehavioural:
-		level = LevelSuspicious
-	case level == LevelCritical && hasRemote && !clearBuiltIn:
-		level = LevelSuspicious
+	case m.remote:
+		e.hasRemote = true
+	case m.decoded:
+		e.hasDecoded = true
+	default:
+		e.clearBuiltIn = true
+		if m.score >= weightModerate {
+			e.clearBehavioural = true
+		}
 	}
-	return score, signature, names, level
+}
+
+// limitLevel lowers a critical level to suspicious when the evidence behind it
+// was not measured against the clean corpus and nothing in the clear backs it.
+func (e verdictEvidence) limitLevel(level string) string {
+	switch {
+	case level == LevelCritical && e.hasDecoded && !e.clearBehavioural:
+		return LevelSuspicious
+	case level == LevelCritical && e.hasRemote && !e.clearBuiltIn:
+		return LevelSuspicious
+	}
+	return level
 }
