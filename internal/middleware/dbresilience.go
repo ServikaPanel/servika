@@ -107,6 +107,7 @@ func readState(ctx context.Context, key string, query func(context.Context) (int
 		value, err := query(ctx)
 		if err == nil {
 			stateStore(key, value, stateNow())
+			noteStateHealthy()
 			return value, nil
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -117,9 +118,23 @@ func readState(ctx context.Context, key string, query func(context.Context) (int
 	return fallbackState(key, lastErr)
 }
 
+// fallbackState serves the last value read for key, or gives up.
+//
+// Both outcomes are LOGGED, throttled. Serving from the cache is the degraded
+// mode whose documented consequence is that a revocation written right now is
+// not visible until the entry expires; giving up is the 503 the caller answers
+// with, which never reaches a handler that could record a reason. Without these
+// lines an operator asking "why did a revoked session still work at 03:12" or
+// "why was everything 503 at 03:12" has nothing to read.
 func fallbackState(key string, readErr error) (int64, error) {
 	if value, ok := stateLoad(key, stateNow()); ok {
+		complainState(complaintFallback,
+			"%s could not be read (%v); serving the value last read for it, so a revocation written now is not visible for up to %s",
+			key, readErr, stateCacheTTL)
 		return value, nil
 	}
+	complainState(complaintDenied,
+		"%s could not be read (%v) and nothing fresh is cached; requests needing it are being refused",
+		key, readErr)
 	return 0, readErr
 }
