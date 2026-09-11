@@ -371,6 +371,16 @@ SERVIKA_DB_DSN='<DSN>' SERVIKA_SEED_PASSWORD='CHOOSE_A_PASSWORD' \
 # /proc/<pid>/cmdline, which is readable by every local account.
 ```
 
+Live-database tests (`*_live_test.go`, `internal/dbmigrate`) skip without `SERVIKA_TEST_DSN`, so a plain `go test ./...` proves nothing about SQL. Run them against a throwaway MariaDB 10.11 with the panel schema applied. The DSN needs `parseTime=true`, as the production DSN does:
+
+```bash
+docker run -d --name servika-test-db -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 \
+  -e MARIADB_DATABASE=panel -p 127.0.0.1:3306:3306 mariadb:10.11
+export SERVIKA_TEST_DSN='root@tcp(127.0.0.1:3306)/panel?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci'
+go run scripts/migrate_test_db.go   # applies migrations/ with the panel's own runner
+go test -count=1 ./...
+```
+
 ### Frontend (React + Vite + TypeScript)
 
 ```bash

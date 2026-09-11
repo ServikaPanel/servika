@@ -10,6 +10,36 @@ jobs:
   go:
     name: Go
     runs-on: ubuntu-latest
+
+    # The live-database tests skip themselves without SERVIKA_TEST_DSN and the
+    # package still prints ok, so without a server here every test that proves
+    # the SQL passes by not running.
+    #
+    # 10.11 is the MariaDB AlmaLinux 10 ships. The image is pinned by digest for
+    # the same reason the actions are pinned to a commit: a tag can be moved.
+    # The root account has no password because the container exists only on the
+    # runner for the length of this job, and a credential in the repository
+    # would read as a real one.
+    services:
+      mariadb:
+        image: mariadb:10.11@sha256:07c0aaff7396b74cb7975cba78257178d188e30f531a5db2b617c48beef13c41
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MARIADB_DATABASE: panel
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    # The parameters are the production DSN's (servika-install.sh). parseTime is
+    # load-bearing: without it a TIMESTAMP scans as []uint8 and the attack-chain
+    # correlator drops every event it reads.
+    env:
+      SERVIKA_TEST_DSN: root@tcp(127.0.0.1:3306)/panel?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -47,6 +77,11 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/nginx.list
           sudo apt-get update && sudo apt-get install -y nginx
           nginx -v
+
+      # The live-database tests expect the panel's schema, and the thing that
+      # builds it on a server is the migration runner the panel calls at startup.
+      - name: Apply migrations to the test database
+        run: go run scripts/migrate_test_db.go
 
       # -count=1 because a cached PASS is not a test run.
       #
