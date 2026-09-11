@@ -386,8 +386,16 @@ func importDB(ctx context.Context, dbName, sqlPath string) error {
 		return err
 	}
 	defer func() { _ = dump.Close() }()
-	return sqlimport.Import(ctx, dbName, dump)
+	return importSQL(ctx, dbName, dump)
 }
+
+// importSQL and createDBForUser are the two database writes a restore makes
+// through other packages. They are variables so a test can answer them without
+// a MariaDB; nothing outside tests changes them.
+var (
+	importSQL       = sqlimport.Import
+	createDBForUser = credentials.MySQLCreateDBForUser
+)
 
 // ensureSchema creates the target database when it does not exist, so a restore
 // can rebuild a database that was dropped. The name is validated before it is
@@ -562,7 +570,7 @@ func restoreOneDB(ctx context.Context, db *sql.DB, domainID int64, tmp, systemUs
 		return "", fmt.Errorf("%q already exists; leave the target empty to overwrite it", targetDB)
 	}
 	dbUser := tenantPrimaryDBUser(db, domainID, systemUser)
-	if err := credentials.MySQLCreateDBForUser(db, domainID, targetDB, dbUser); err != nil {
+	if err := createDBForUser(db, domainID, targetDB, dbUser); err != nil {
 		return "", fmt.Errorf("could not create target database: %w", err)
 	}
 	if err := importDB(ctx, targetDB, sqlPath); err != nil {

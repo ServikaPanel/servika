@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // A scripted database, in the shape internal/provisioner uses: a query is
@@ -32,7 +33,16 @@ type sqlScript struct {
 	// endWith maps a query fragment to the error its result set ends with once
 	// its rows are exhausted.
 	endWith map[string]error
-	execs   []sqlScriptExec
+	// insertID is what every statement reports as its last insert id.
+	insertID int64
+	// affected maps a statement fragment to the row count it reports; any other
+	// statement reports one row.
+	affected map[string]int64
+	queries  []string
+	// onExec, when set, runs after a statement is recorded, for a test that has
+	// to act at one exact step of a sequence running on another goroutine.
+	onExec func(query string)
+	execs  []sqlScriptExec
 }
 
 type sqlScriptExec struct {
@@ -77,6 +87,7 @@ func (s *sqlScript) fragmentFor(query string) (string, error) {
 func (s *sqlScript) query(query string) (driver.Rows, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.queries = append(s.queries, query)
 	fragment, err := s.fragmentFor(query)
 	if err != nil {
 		return nil, err
@@ -89,18 +100,63 @@ func (s *sqlScript) query(query string) (driver.Rows, error) {
 
 // exec records the statement and fails it only when the script says so; a
 // statement nobody scripted succeeds.
-func (s *sqlScript) exec(query string, args []driver.NamedValue) error {
+func (s *sqlScript) exec(query string, args []driver.NamedValue) (driver.Result, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	plain := make([]driver.Value, 0, len(args))
 	for _, arg := range args {
 		plain = append(plain, arg.Value)
 	}
 	s.execs = append(s.execs, sqlScriptExec{query: query, args: plain})
+	var failure error
+	rows := int64(1)
 	if fragment, err := s.fragmentFor(query); err == nil {
-		return s.fail[fragment]
+		failure = s.fail[fragment]
 	}
-	return nil
+	for fragment, count := range s.affected {
+		if strings.Contains(query, fragment) {
+			rows = count
+		}
+	}
+	result, hook := sqlScriptResult{id: s.insertID, rows: rows}, s.onExec
+	s.mu.Unlock()
+	if hook != nil {
+		hook(query)
+	}
+	if failure != nil {
+		return nil, failure
+	}
+	return result, nil
+}
+
+type sqlScriptResult struct{ id, rows int64 }
+
+func (r sqlScriptResult) LastInsertId() (int64, error) { return r.id, nil }
+func (r sqlScriptResult) RowsAffected() (int64, error) { return r.rows, nil }
+
+// queriesContaining counts the recorded queries whose text holds fragment.
+func (s *sqlScript) queriesContaining(fragment string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, query := range s.queries {
+		if strings.Contains(query, fragment) {
+			n++
+		}
+	}
+	return n
+}
+
+// waitForQuery waits until a query holding fragment has run.
+func (s *sqlScript) waitForQuery(t *testing.T, fragment string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if s.queriesContaining(fragment) > 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("no query holding %q ran", fragment)
 }
 
 // execsContaining returns every recorded statement whose text holds fragment,
@@ -157,10 +213,22 @@ func (c sqlScriptConn) QueryContext(_ context.Context, query string, _ []driver.
 }
 
 func (c sqlScriptConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	if err := c.s.exec(query, args); err != nil {
-		return nil, err
+	return c.s.exec(query, args)
+}
+
+// waitForExec waits until a statement holding fragment has run, for work that
+// finishes on a goroutine the test does not own.
+func (s *sqlScript) waitForExec(t *testing.T, fragment string) []sqlScriptExec {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if found := s.execsContaining(fragment); len(found) > 0 {
+			return found
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	return driver.RowsAffected(1), nil
+	t.Fatalf("no statement holding %q ran", fragment)
+	return nil
 }
 
 type sqlScriptDriver struct{}

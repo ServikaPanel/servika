@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +41,7 @@ func scanHostKey(ctx context.Context, host string, port int) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, hostKeyScanTimeout)
 	defer cancel()
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); host passed validHost and netguard, port is an int.
-	command := exec.CommandContext(ctx, "ssh-keyscan", "-p", strconv.Itoa(port), "-T", "10", host)
+	command := commandContext(ctx, "ssh-keyscan", "-p", strconv.Itoa(port), "-T", "10", host)
 	output, err := command.Output()
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", errHostKeyUnavailable, err)

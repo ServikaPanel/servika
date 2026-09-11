@@ -20,11 +20,21 @@ import (
 
 const restoreCommandPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+// commandContext builds every command this package runs. It is a variable so a
+// test can answer tar, rsync, mysql, lftp and ssh-keyscan without running them;
+// nothing outside tests changes it.
+var commandContext = exec.CommandContext
+
+// restoreSelected copies the chosen paths out of an extracted archive. The copy
+// goes through openat2, which only Linux has, so a test answers it instead;
+// nothing outside tests changes it.
+var restoreSelected = restoreSelectedFiles
+
 // newRestoreCommand runs a restore subprocess with an explicit environment
 // allowlist, so panel secrets in the server environment are never inherited.
 func newRestoreCommand(ctx context.Context, name string, arguments ...string) *exec.Cmd {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	command := exec.CommandContext(ctx, name, arguments...)
+	command := commandContext(ctx, name, arguments...)
 	command.Env = []string{"PATH=" + restoreCommandPath, "HOME=/root"}
 	return command
 }
@@ -235,7 +245,7 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusBadRequest, "no file was selected for restore")
 			return
 		}
-		count, folder, err := restoreSelectedFiles(r.Context(), tmpDir, systemUser, req.Paths, req.Target)
+		count, folder, err := restoreSelected(r.Context(), tmpDir, systemUser, req.Paths, req.Target)
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not restore the selected files")
 			return
