@@ -350,7 +350,14 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DomainIDs []int64 `json:"domain_ids"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	// An EMPTY body means "every domain in scope" and is tolerated; a body that
+	// does not parse is refused. Discarding the error left the id list nil,
+	// which scopedDomains reads as "all of them", so a malformed "back up these
+	// two domains" request ran as "back up every domain on the server".
+	if err := decodeOptionalBody(r, &req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
 	domains, err := h.scopedDomains(r, req.DomainIDs)
 	if err != nil {

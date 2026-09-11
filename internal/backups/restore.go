@@ -3,7 +3,6 @@ package backups
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -56,7 +55,15 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	backupID, _ := strconv.ParseInt(chi.URLParam(r, "bid"), 10, 64)
 
 	var req restoreRequest
-	_ = json.NewDecoder(r.Body).Decode(&req) // an empty body is tolerated
+	// An EMPTY body is tolerated and means "full"; a body that does not parse is
+	// refused. Discarding the error made the two indistinguishable, and the
+	// defaults below turn an unparsed body into the WIDEST operation this
+	// endpoint offers: a request asking for files-only or one database, arriving
+	// truncated, ran as a full restore over the live site and every schema.
+	if err := decodeOptionalBody(r, &req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 	req.Mode = strings.TrimSpace(req.Mode)
 	if req.Mode == "" {
 		req.Mode = "full"
