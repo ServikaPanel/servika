@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/netguard"
 	"servika/internal/provisioner"
 )
 
@@ -127,6 +128,22 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	case "remote":
 		if !validRepoURL(req.RepoURL) {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid repository URL")
+			return
+		}
+		// validRepoURL is an ARGUMENT filter: it refuses shell metacharacters and
+		// a non-Git scheme. It never looks at the host, so without this the clone
+		// reached any address the panel host can: the panel's own API, MariaDB
+		// and Valkey on loopback, tenant and host applications on their port
+		// ranges, RFC1918 neighbours and the cloud metadata endpoint. `git clone`
+		// over https issues a GET, and the ssh forms open a raw handshake, so
+		// arbitrary TCP ports were probeable, with the failure text returned by
+		// the install-status endpoint as the oracle.
+		//
+		// internal/git guards both of its clone paths with exactly this call. The
+		// guard was never carried across when this second entry point grew its
+		// own clone.
+		if err := netguard.CheckGitURL(req.RepoURL); err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "the repository host is not allowed")
 			return
 		}
 		branch := strings.TrimSpace(req.Branch)
