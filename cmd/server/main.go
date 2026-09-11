@@ -1066,8 +1066,18 @@ func main() {
 				r.With(middleware.CustomerScope).Post("/domains/{id}/import/archive/apply", importH.ApplyArchive)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/import/sql", importH.UploadSQL)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/import/config", importH.RewriteConfig)
+				// Expensive file operations (recursive walks, archive extraction and
+				// creation, du, find, a whole-document-root rsync) are throttled per IP
+				// so a customer cannot exhaust CPU, disk or I/O by launching them in a
+				// tight loop. Declared here because the staging copy below is the first
+				// route that needs it; the file-manager routes further down share the
+				// same budget.
+				fileHeavy := middleware.RateLimit("files-heavy", 60, time.Minute)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/copy", copyH.List)
-				r.With(middleware.CustomerScope).Post("/domains/{id}/copy", copyH.Create)
+				// The staging copy rsyncs up to 3 GB as root, outside the tenant's
+				// cgroup. The package also refuses a second concurrent copy of the same
+				// domain; this bounds the rate at which a customer can start them.
+				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/copy", copyH.Create)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/copy/{name}", copyH.Delete)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/wordpress", wpH.List)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress", wpH.Install)
@@ -1157,10 +1167,8 @@ func main() {
 				r.With(middleware.CustomerScope).Post("/domains/{id}/files/rename", filesH.Rename)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/files/chmod", filesH.Chmod)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/files/reset-permissions", filesH.ResetPermissions)
-				// Expensive file operations (recursive walks, archive extraction/creation,
-				// du, find) are throttled per IP so a customer cannot exhaust CPU/disk/IO
-				// by launching them in a tight loop. new-file stays unthrottled (cheap).
-				fileHeavy := middleware.RateLimit("files-heavy", 60, time.Minute)
+				// fileHeavy is declared above, at the staging-copy route. new-file stays
+				// unthrottled (cheap).
 				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/files/extract", filesH.Extract)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/files/extract-progress", filesH.ExtractProgress)
 				r.With(middleware.CustomerScope, fileHeavy).Post("/domains/{id}/files/copy", filesH.Copy)

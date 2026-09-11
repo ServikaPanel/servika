@@ -75,7 +75,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/copy creates a staging copy.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, demo, ok := h.domain(r)
+	domainID, systemUser, demo, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -88,6 +88,15 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid user")
 		return
 	}
+	// One copy per domain at a time. This runs a root rsync over the whole
+	// document root, outside the tenant's cgroup, so without it a customer could
+	// start any number of them at once and saturate the host's disk.
+	release, claimed := lockDomain(domainID)
+	if !claimed {
+		httpx.WriteError(w, http.StatusConflict, "a copy is already being created for this domain")
+		return
+	}
+	defer release()
 	home := "/home/" + systemUser
 	source := home + "/public_html"
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
