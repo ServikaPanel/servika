@@ -114,7 +114,11 @@ func loginStatus(ip string) (int, time.Duration) {
 	return len(r.failures), 0
 }
 
-func loginRecordFail(ip string) {
+// loginRecordFail records one failed attempt and reports whether THIS attempt
+// engaged the lock. The caller audits that transition; it must not do so while
+// the mutex is held, because an audit row is a database write and every login
+// would queue behind it.
+func loginRecordFail(ip string) (locked bool) {
 	now := time.Now()
 	loginMu.Lock()
 	defer loginMu.Unlock()
@@ -127,7 +131,9 @@ func loginRecordFail(ip string) {
 	if len(r.failures) >= loginMaxFail {
 		r.lockedAt = now.Add(loginLock)
 		r.failures = nil
+		return true
 	}
+	return false
 }
 
 // ---- Per-account counter (against a distributed attack) ----
@@ -177,7 +183,9 @@ func accountLockRemaining(name string) time.Duration {
 	return 0
 }
 
-func accountRecordFail(name string) {
+// accountRecordFail is the per-account twin of loginRecordFail and reports the
+// same transition.
+func accountRecordFail(name string) (locked bool) {
 	now := time.Now()
 	accountMu.Lock()
 	defer accountMu.Unlock()
@@ -190,7 +198,9 @@ func accountRecordFail(name string) {
 	if len(r.failures) >= accountMaxFail {
 		r.lockedAt = now.Add(accountLock)
 		r.failures = nil
+		return true
 	}
+	return false
 }
 
 // maxLoginBody bounds one login request body. A real one is a few hundred bytes
@@ -300,6 +310,7 @@ func RateLimit(name string, maxRequests int, window time.Duration) func(http.Han
 			if len(rec.hits) >= maxRequests {
 				retry := int(rec.hits[0].Add(window).Sub(now).Seconds()) + 1
 				genMu.Unlock()
+				noteBlocked("the "+name+" limiter", name, httpx.ClientIP(r))
 				w.Header().Set("Retry-After", strconv.Itoa(retry))
 				httpx.WriteError(w, http.StatusTooManyRequests, "rate limit exceeded — try again later")
 				return
@@ -320,6 +331,10 @@ func LoginRateLimit(next http.Handler) http.Handler {
 		ip := httpx.RateLimitKey(httpx.ClientIP(r))
 		count, remain := loginStatus(ip)
 		if remain > 0 {
+			// Throttled, not per request: a locked address can be retried as
+			// fast as the attacker likes. One line a minute is what separates an
+			// attack that stopped from one that is still running.
+			noteBlocked("the address lock", ip, ip)
 			sec := int(remain.Seconds()) + 1
 			w.Header().Set("Retry-After", strconv.Itoa(sec))
 			httpx.WriteError(w, http.StatusTooManyRequests,
@@ -333,6 +348,7 @@ func LoginRateLimit(next http.Handler) http.Handler {
 		}
 		if account != "" {
 			if remaining := accountLockRemaining(account); remaining > 0 {
+				noteBlocked("the account lock", account, ip)
 				sec := int(remaining.Seconds()) + 1
 				w.Header().Set("Retry-After", strconv.Itoa(sec))
 				httpx.WriteError(w, http.StatusTooManyRequests,
@@ -347,13 +363,21 @@ func LoginRateLimit(next http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, code: http.StatusOK}
 		next.ServeHTTP(sw, r)
 		if sw.code == http.StatusUnauthorized {
-			loginRecordFail(ip)
+			// The audit rows are written for the TRANSITION only, and outside
+			// the limiter's mutex. Without them the attack becomes invisible the
+			// moment the lock engages: this middleware returns before the login
+			// handler, so the handler's own auth.login failure rows stop too,
+			// and a screen reports an attack that ran for hours as exactly five
+			// attempts that stopped.
+			if loginRecordFail(ip) {
+				recordLockout(lockoutActionAddress, account, ip, ip)
+			}
 			// Not reset on success either, for the reason the per-IP counter is
 			// not: a correct password in the 2FA flow answers 200, so resetting
 			// would let an attacker who holds the password clear the counter
 			// before every TOTP guess.
-			if account != "" {
-				accountRecordFail(account)
+			if account != "" && accountRecordFail(account) {
+				recordLockout(lockoutActionAccount, account, ip, account)
 			}
 		}
 	})
