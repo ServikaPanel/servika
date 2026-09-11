@@ -2,6 +2,25 @@
 Description=Servika backend
 After=network-online.target mariadb.service
 Wants=network-online.target
+# Both StartLimit keys belong here and nowhere else: systemd answers
+# `Unknown key 'StartLimitIntervalSec' in section [Service], ignoring.` while
+# silently accepting StartLimitBurst there, which would leave the burst counting
+# against the default ten-second window.
+#
+# Without them the panel never reaches `failed`, which is the one state a screen,
+# `systemctl --failed` and an OnFailure= hook read as broken. The defaults are a
+# ten-second window and a burst of five, and RestartSec=3 places starts at t=0,
+# 3, 6 and 9 within any such window: four, so the burst of five is never
+# reached. That state is reachable by design, not only by accident, because a
+# migration failure, an unreadable secret and a listen failure all exit the
+# process on purpose.
+#
+# Measured against systemd 257 on AlmaLinux 10 with a unit of exactly this
+# shape: without the keys it was still `activating` after 40 seconds and 12
+# restarts and `systemctl --failed` was empty; with them it reached `failed`
+# after 5 restarts, about 16 seconds in, and appeared there.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
