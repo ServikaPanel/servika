@@ -55,6 +55,22 @@ type installReq struct {
 	AppRoot string `json:"app_root"`
 }
 
+// installTarget is where one install writes and what it writes with.
+type installTarget struct {
+	id         int64
+	systemUser string
+	appDir     string
+	appRoot    string
+	php        string
+}
+
+// jobRunning reports whether an install or a deploy already holds this domain.
+func (h *Handlers) jobRunning(r *http.Request, id int64) bool {
+	var currentStatus string
+	_ = h.DB.QueryRowContext(r.Context(), `SELECT COALESCE(last_deploy_status,'') FROM cp_laravel_apps WHERE domain_id=?`, id).Scan(&currentStatus)
+	return currentStatus == "installing" || currentStatus == "running"
+}
+
 func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
@@ -62,19 +78,12 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer lockDomain(id)()
-	var currentStatus string
-	_ = h.DB.QueryRowContext(r.Context(), `SELECT COALESCE(last_deploy_status,'') FROM cp_laravel_apps WHERE domain_id=?`, id).Scan(&currentStatus)
-	if currentStatus == "installing" || currentStatus == "running" {
+	if h.jobRunning(r, id) {
 		httpx.WriteError(w, http.StatusConflict, "an install or deploy operation is already running for this domain")
 		return
 	}
-	var req installReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if req.Mode != "local" && req.Mode != "remote" && req.Mode != "scaffold" {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid mode")
+	req, valid := decodeInstall(w, r)
+	if !valid {
 		return
 	}
 	appDir, err := safeAppDir(systemUser, req.AppRoot)
@@ -90,9 +99,6 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "directory creation failed")
 		return
 	}
-	php := phpBin(phpVersion)
-	logPath := setupLog(id)
-	tmp := homeRoot + "/" + systemUser + "/.laravel-skeleton-" + fmt.Sprint(id)
 	// The base row must exist before the status updates below target it; abort if
 	// it cannot be written rather than proceeding with broken status tracking.
 	if err := h.upsertBase(r.Context(), id, appRoot, req.Mode, phpVersion, ""); err != nil {
@@ -103,66 +109,98 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = h.DB.ExecContext(r.Context(), `UPDATE cp_laravel_apps SET last_deploy_status='installing' WHERE domain_id=?`, id)
 
-	switch req.Mode {
-	case "local":
-		out, gitOK := tenantExec(r.Context(), systemUser, appDir, "/usr/bin/git", "init")
-		status := "failed"
-		if gitOK {
-			status = "ready"
-		}
-		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-		_, _ = h.DB.ExecContext(r.Context(), `UPDATE cp_laravel_apps SET last_deploy_status=? WHERE domain_id=?`, status, id)
-		// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
-		if _, err := os.Stat(filepath.Join(appDir, "public")); err == nil {
-			if err := h.setDocroot(r.Context(), id, systemUser, publicSubdirectory(appRoot)); err != nil {
-				// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-				httpx.LogR(r, "laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
-			}
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": gitOK, "async": false, "output": out, "message": "Empty git repository created. Push code and deploy from the Deploy tab."})
+	target := installTarget{id: id, systemUser: systemUser, appDir: appDir, appRoot: appRoot, php: phpBin(phpVersion)}
+	if req.Mode == "local" {
+		h.installLocal(w, r, target)
 		return
-	case "remote":
-		if !validRepoURL(req.RepoURL) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid repository URL")
-			return
-		}
-		// validRepoURL is an ARGUMENT filter: it refuses shell metacharacters and
-		// a non-Git scheme. It never looks at the host, so without this the clone
-		// reached any address the panel host can: the panel's own API, MariaDB
-		// and Valkey on loopback, tenant and host applications on their port
-		// ranges, RFC1918 neighbours and the cloud metadata endpoint. `git clone`
-		// over https issues a GET, and the ssh forms open a raw handshake, so
-		// arbitrary TCP ports were probeable, with the failure text returned by
-		// the install-status endpoint as the oracle.
-		//
-		// internal/git guards both of its clone paths with exactly this call. The
-		// guard was never carried across when this second entry point grew its
-		// own clone.
-		if err := checkGitURL(req.RepoURL); err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "the repository host is not allowed")
-			return
-		}
-		branch := strings.TrimSpace(req.Branch)
-		if branch == "" {
-			branch = "main"
-		}
-		if !reArg.MatchString(branch) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid branch name")
-			return
-		}
-		script := remoteInstallScript(appDir, req.RepoURL, branch, php, tmp)
-		if err := detachedInstall(id, systemUser, appDir, logPath, script); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "install start failed")
-			return
-		}
-	case "scaffold":
-		script := scaffoldInstallScript(appDir, php, tmp)
-		if err := detachedInstall(id, systemUser, appDir, logPath, script); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "install start failed")
-			return
+	}
+	h.installDetached(w, req, target)
+}
+
+// decodeInstall reads the request and refuses a mode the panel does not offer.
+func decodeInstall(w http.ResponseWriter, r *http.Request) (installReq, bool) {
+	var req installReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return req, false
+	}
+	if req.Mode != "local" && req.Mode != "remote" && req.Mode != "scaffold" {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid mode")
+		return req, false
+	}
+	return req, true
+}
+
+// installLocal creates an empty repository and answers in the request, because
+// there is nothing to wait for.
+func (h *Handlers) installLocal(w http.ResponseWriter, r *http.Request, target installTarget) {
+	out, gitOK := tenantExec(r.Context(), target.systemUser, target.appDir, "/usr/bin/git", "init")
+	status := "failed"
+	if gitOK {
+		status = "ready"
+	}
+	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+	_, _ = h.DB.ExecContext(r.Context(), `UPDATE cp_laravel_apps SET last_deploy_status=? WHERE domain_id=?`, status, target.id)
+	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
+	if _, err := os.Stat(filepath.Join(target.appDir, "public")); err == nil {
+		if err := h.setDocroot(r.Context(), target.id, target.systemUser, publicSubdirectory(target.appRoot)); err != nil {
+			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+			httpx.LogR(r, "laravel setDocroot domain %d: %v (docroot may still serve project root)", target.id, err)
 		}
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "async": true, "unit": setupUnit(id), "message": "Installation started. Poll the status endpoint for progress."})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": gitOK, "async": false, "output": out, "message": "Empty git repository created. Push code and deploy from the Deploy tab."})
+}
+
+// installDetached hands the clone or the skeleton to systemd, because either
+// one outlasts the request.
+func (h *Handlers) installDetached(w http.ResponseWriter, req installReq, target installTarget) {
+	tmp := homeRoot + "/" + target.systemUser + "/.laravel-skeleton-" + fmt.Sprint(target.id)
+	script, allowed := installScriptFor(w, req, target, tmp)
+	if !allowed {
+		return
+	}
+	if err := detachedInstall(target.id, target.systemUser, target.appDir, setupLog(target.id), script); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "install start failed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "async": true, "unit": setupUnit(target.id), "message": "Installation started. Poll the status endpoint for progress."})
+}
+
+// installScriptFor builds the script the detached job runs, and answers the
+// client itself when the repository or the branch is refused.
+func installScriptFor(w http.ResponseWriter, req installReq, target installTarget, tmp string) (string, bool) {
+	if req.Mode == "scaffold" {
+		return scaffoldInstallScript(target.appDir, target.php, tmp), true
+	}
+	if !validRepoURL(req.RepoURL) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid repository URL")
+		return "", false
+	}
+	// validRepoURL is an ARGUMENT filter: it refuses shell metacharacters and
+	// a non-Git scheme. It never looks at the host, so without this the clone
+	// reached any address the panel host can: the panel's own API, MariaDB
+	// and Valkey on loopback, tenant and host applications on their port
+	// ranges, RFC1918 neighbours and the cloud metadata endpoint. `git clone`
+	// over https issues a GET, and the ssh forms open a raw handshake, so
+	// arbitrary TCP ports were probeable, with the failure text returned by
+	// the install-status endpoint as the oracle.
+	//
+	// internal/git guards both of its clone paths with exactly this call. The
+	// guard was never carried across when this second entry point grew its
+	// own clone.
+	if err := checkGitURL(req.RepoURL); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "the repository host is not allowed")
+		return "", false
+	}
+	branch := strings.TrimSpace(req.Branch)
+	if branch == "" {
+		branch = "main"
+	}
+	if !reArg.MatchString(branch) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid branch name")
+		return "", false
+	}
+	return remoteInstallScript(target.appDir, req.RepoURL, branch, target.php, tmp), true
 }
 
 func detachedInstall(id int64, systemUser, appDir, logPath, script string) error {
@@ -214,6 +252,12 @@ func remoteInstallScript(appDir, repoURL, branch, php, tmp string) string {
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
+// unitRunning reports whether a job's unit is still working.
+func unitRunning(unit string) bool {
+	status := readUnitStatus(unit)
+	return status == "activating" || status == "active" || status == "reloading"
+}
+
 // finalizeInstall transitions a stopped install job to its terminal status. It is a
 // no-op while the unit is still running or the record is not in the installing state,
 // so it is safe to call from both the status handler and the background reconciler.
@@ -221,9 +265,7 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 // row out of 'installing' performs the one-time side effects (docroot, unit cleanup).
 func (h *Handlers) finalizeInstall(ctx context.Context, id int64, systemUser string, rec record) record {
 	unit := setupUnit(id) + ".service"
-	status := readUnitStatus(unit)
-	running := status == "activating" || status == "active" || status == "reloading"
-	if running || rec.LastDeployStatus != "installing" {
+	if unitRunning(unit) || rec.LastDeployStatus != "installing" {
 		return rec
 	}
 	appDir, _ := safeAppDir(systemUser, rec.AppRoot)
@@ -238,15 +280,9 @@ func (h *Handlers) finalizeInstall(ctx context.Context, id int64, systemUser str
 	if err != nil {
 		return rec
 	}
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	if affected, _ := result.RowsAffected(); affected == 1 {
 		if artisan {
-			if _, statErr := os.Stat(filepath.Join(appDir, "public")); statErr == nil {
-				if err := h.setDocroot(ctx, id, systemUser, publicSubdirectory(rec.AppRoot)); err != nil {
-					// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-					log.Printf("laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
-				}
-			}
+			h.moveDocrootToPublic(ctx, id, systemUser, rec.AppRoot, appDir)
 		}
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		_ = laravelCommand("systemctl", "reset-failed", unit).Run()
@@ -254,6 +290,19 @@ func (h *Handlers) finalizeInstall(ctx context.Context, id int64, systemUser str
 	}
 	rec.LastDeployStatus = newStatus
 	return rec
+}
+
+// moveDocrootToPublic points the vhost at the application's public directory,
+// because serving the project root exposes .env and vendor.
+func (h *Handlers) moveDocrootToPublic(ctx context.Context, id int64, systemUser, appRoot, appDir string) {
+	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+	if _, statErr := os.Stat(filepath.Join(appDir, "public")); statErr != nil {
+		return
+	}
+	if err := h.setDocroot(ctx, id, systemUser, publicSubdirectory(appRoot)); err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
+	}
 }
 
 func (h *Handlers) InstallStatus(w http.ResponseWriter, r *http.Request) {

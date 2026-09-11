@@ -43,22 +43,9 @@ func (h *Handlers) Artisan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Fields(strings.TrimSpace(req.Command))
-	if len(parts) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "command is required")
+	argv, allowed := artisanArgv(w, parts)
+	if !allowed {
 		return
-	}
-	sub := parts[0]
-	if !artisanAllowed[sub] {
-		httpx.WriteError(w, http.StatusBadRequest, "artisan command is not allowed")
-		return
-	}
-	argv := []string{"artisan", sub, "--no-interaction"}
-	for _, arg := range parts[1:] {
-		if !reArtisanArg.MatchString(arg) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid argument")
-			return
-		}
-		argv = append(argv, arg)
 	}
 	appDir, err := h.appDir(r, id, systemUser)
 	if err != nil {
@@ -66,10 +53,39 @@ func (h *Handlers) Artisan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out, commandOK := tenantExec(r.Context(), systemUser, appDir, phpBin(phpVersion), argv...)
+	h.recordMaintenance(r, id, appDir, parts[0])
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "artisan " + strings.Join(parts, " "), "output": out})
+}
+
+// artisanArgv builds the argument list from a request, and answers the client
+// itself when the command or one of its arguments is not one the panel offers.
+func artisanArgv(w http.ResponseWriter, parts []string) ([]string, bool) {
+	if len(parts) == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "command is required")
+		return nil, false
+	}
+	sub := parts[0]
+	if !artisanAllowed[sub] {
+		httpx.WriteError(w, http.StatusBadRequest, "artisan command is not allowed")
+		return nil, false
+	}
+	argv := []string{"artisan", sub, "--no-interaction"}
+	for _, arg := range parts[1:] {
+		if !reArtisanArg.MatchString(arg) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid argument")
+			return nil, false
+		}
+		argv = append(argv, arg)
+	}
+	return argv, true
+}
+
+// recordMaintenance keeps the stored flag in step with what the application on
+// disk now says, and only when the two disagree.
+func (h *Handlers) recordMaintenance(r *http.Request, id int64, appDir, sub string) {
 	if maintenanceActive(appDir) != (sub == "down") && (sub == "down" || sub == "up") {
 		_, _ = h.DB.ExecContext(r.Context(), `UPDATE cp_laravel_apps SET maintenance=? WHERE domain_id=?`, map[bool]int{true: 1, false: 0}[sub == "down"], id)
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "artisan " + strings.Join(parts, " "), "output": out})
 }
 
 var composerAllowed = map[string]bool{
@@ -104,20 +120,30 @@ func (h *Handlers) Composer(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid application directory")
 		return
 	}
-	argv := []string{composerBinPath(), req.Command, "--no-interaction", "--no-ansi", "-d", appDir}
-	if req.Command == "install" || req.Command == "update" {
-		argv = append(argv, "--prefer-dist")
-	}
-	if req.Command == "require" || req.Command == "remove" {
-		pkg := strings.TrimSpace(req.Package)
-		if !reComposerPkg.MatchString(pkg) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid package name")
-			return
-		}
-		argv = append(argv, pkg)
+	argv, named := composerArgv(w, req.Command, req.Package, appDir)
+	if !named {
+		return
 	}
 	out, commandOK := tenantExec(r.Context(), systemUser, appDir, phpBin(phpVersion), argv...)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "composer " + req.Command, "output": out})
+}
+
+// composerArgv builds the argument list one composer command runs with, and
+// answers the client itself when a package name is not one.
+func composerArgv(w http.ResponseWriter, command, packageName, appDir string) ([]string, bool) {
+	argv := []string{composerBinPath(), command, "--no-interaction", "--no-ansi", "-d", appDir}
+	if command == "install" || command == "update" {
+		argv = append(argv, "--prefer-dist")
+	}
+	if command == "require" || command == "remove" {
+		pkg := strings.TrimSpace(packageName)
+		if !reComposerPkg.MatchString(pkg) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid package name")
+			return nil, false
+		}
+		argv = append(argv, pkg)
+	}
+	return argv, true
 }
 
 // Which interpreters exist is answered in one place, internal/appruntime, so the
@@ -134,8 +160,22 @@ func installedNodeVersions() []string {
 
 func nodeBinDir(version string) string { return appruntime.NodeBinDir(version) }
 
+// validNodeVersion reports whether a request may name this interpreter. An
+// empty value and "system" mean the host's own node.
+func validNodeVersion(version string) bool {
+	return version == "" || version == "system" || reNodeVersion.MatchString(version)
+}
+
 var npmAllowed = map[string]bool{"install": true, "ci": true, "run": true, "prune": true, "ls": true, "outdated": true, "audit": true, "--version": true}
 var reNpmScript = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:_-]*$`)
+
+// npmRequest is what the npm box on the screen sends.
+type npmRequest struct {
+	Command       string `json:"command"`
+	Script        string `json:"script"`
+	NodeVersion   string `json:"node_version"`
+	IgnoreScripts bool   `json:"ignore_scripts"`
+}
 
 func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 	id, systemUser, _, ok := h.lookup(r)
@@ -143,12 +183,7 @@ func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	var req struct {
-		Command       string `json:"command"`
-		Script        string `json:"script"`
-		NodeVersion   string `json:"node_version"`
-		IgnoreScripts bool   `json:"ignore_scripts"`
-	}
+	var req npmRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -157,7 +192,7 @@ func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "npm command is not allowed")
 		return
 	}
-	if req.NodeVersion != "" && req.NodeVersion != "system" && !reNodeVersion.MatchString(req.NodeVersion) {
+	if !validNodeVersion(req.NodeVersion) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid node version")
 		return
 	}
@@ -172,6 +207,17 @@ func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "node or npm is not installed")
 		return
 	}
+	argv, named := npmArgv(w, req, appDir)
+	if !named {
+		return
+	}
+	out, commandOK := tenantExecWithEnv(r.Context(), systemUser, appDir, npmEnv(systemUser, binDir), npmBin, argv...)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "npm " + req.Command, "output": out, "node_dir": binDir})
+}
+
+// npmArgv builds the argument list, and answers the client itself when a script
+// name is not one.
+func npmArgv(w http.ResponseWriter, req npmRequest, appDir string) ([]string, bool) {
 	argv := []string{req.Command, "--prefix", appDir, "--no-fund", "--no-audit"}
 	if req.IgnoreScripts {
 		argv = append(argv, "--ignore-scripts")
@@ -180,18 +226,23 @@ func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
 		script := strings.TrimSpace(req.Script)
 		if !reNpmScript.MatchString(script) {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid script name")
-			return
+			return nil, false
 		}
 		argv = []string{"run", script, "--prefix", appDir}
 	}
+	return argv, true
+}
+
+// npmEnv puts the chosen node directory in front of the system PATH, so a build
+// runs against the interpreter the customer picked.
+func npmEnv(systemUser, binDir string) []string {
 	env := tenantEnv(systemUser)
 	for i, item := range env {
 		if strings.HasPrefix(item, "PATH=") {
 			env[i] = "PATH=" + binDir + ":" + systemPath
 		}
 	}
-	out, commandOK := tenantExecWithEnv(r.Context(), systemUser, appDir, env, npmBin, argv...)
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": commandOK, "command": "npm " + req.Command, "output": out, "node_dir": binDir})
+	return env
 }
 
 func (h *Handlers) NodeVersions(w http.ResponseWriter, _ *http.Request) {

@@ -107,7 +107,15 @@ func ValidateWorker(w *Worker) string {
 		return reasonWorkerQueues
 	}
 	w.Queues = queues
+	return workerBoundsReason(w)
+}
 
+// workerBoundsReason checks every numeric field against its range.
+//
+// Out-of-range values are REFUSED rather than clamped to a default. A screen
+// that asked for twelve processes and silently got ten is telling the operator
+// something untrue about their own server.
+func workerBoundsReason(w *Worker) string {
 	for _, bound := range []struct{ value, low, high int }{
 		{w.Processes, 1, maxWorkerProcesses},
 		{w.Tries, 1, 10},

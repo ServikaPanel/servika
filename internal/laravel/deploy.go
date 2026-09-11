@@ -62,9 +62,7 @@ func (h *Handlers) Deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer lockDomain(id)()
-	var currentStatus string
-	_ = h.DB.QueryRowContext(r.Context(), `SELECT COALESCE(last_deploy_status,'') FROM cp_laravel_apps WHERE domain_id=?`, id).Scan(&currentStatus)
-	if currentStatus == "installing" || currentStatus == "running" {
+	if h.jobRunning(r, id) {
 		httpx.WriteError(w, http.StatusConflict, "an install or deploy operation is already running for this domain")
 		return
 	}
@@ -77,7 +75,7 @@ func (h *Handlers) Deploy(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.NodeVersion != "" && req.NodeVersion != "system" && !reNodeVersion.MatchString(req.NodeVersion) {
+	if !validNodeVersion(req.NodeVersion) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid node version")
 		return
 	}

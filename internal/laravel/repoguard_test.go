@@ -74,7 +74,7 @@ func TestTheInstallHandlerGuardsTheRepositoryHost(t *testing.T) {
 	}
 	source := string(body)
 	guard := strings.Index(source, "checkGitURL(req.RepoURL)")
-	script := strings.Index(source, "remoteInstallScript(appDir, req.RepoURL")
+	script := strings.Index(source, "remoteInstallScript(target.appDir, req.RepoURL")
 	if guard < 0 {
 		t.Fatal("the remote install does not check the repository host")
 	}

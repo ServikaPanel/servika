@@ -91,35 +91,52 @@ func safeAppDir(systemUser, appRoot string) (string, error) {
 	if !validSystemUser(systemUser) {
 		return "", fmt.Errorf("invalid system user")
 	}
-	rel := strings.Trim(strings.TrimSpace(appRoot), "/")
-	if rel == "" {
-		rel = "public_html"
-	}
-	if strings.Contains(rel, "..") || !regexp.MustCompile(`^[A-Za-z0-9._/-]+$`).MatchString(rel) {
-		return "", fmt.Errorf("invalid application directory")
-	}
-	if rel != "public_html" && !strings.HasPrefix(rel, "public_html/") {
-		return "", fmt.Errorf("application directory must be under public_html")
+	rel, err := relativeAppDir(appRoot)
+	if err != nil {
+		return "", err
 	}
 	base := homeRoot + "/" + systemUser + "/public_html"
 	abs := filepath.Clean(homeRoot + "/" + systemUser + "/" + rel)
 	if abs != base && !strings.HasPrefix(abs, base+"/") {
 		return "", fmt.Errorf("application directory cannot leave public_html")
 	}
-	check := abs
-	for check == base || strings.HasPrefix(check, base+"/") {
-		if real, err := filepath.EvalSymlinks(check); err == nil {
-			if real != base && !strings.HasPrefix(real, base+"/") {
-				return "", fmt.Errorf("application directory cannot leave public_html through a symlink")
-			}
-			break
-		}
-		if check == base {
-			break
-		}
-		check = filepath.Dir(check)
+	if escapesThroughSymlink(abs, base) {
+		return "", fmt.Errorf("application directory cannot leave public_html through a symlink")
 	}
 	return abs, nil
+}
+
+var reAppDir = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+
+// relativeAppDir normalizes the requested directory and refuses one the panel
+// must not run a tenant command in.
+func relativeAppDir(appRoot string) (string, error) {
+	rel := strings.Trim(strings.TrimSpace(appRoot), "/")
+	if rel == "" {
+		rel = "public_html"
+	}
+	if strings.Contains(rel, "..") || !reAppDir.MatchString(rel) {
+		return "", fmt.Errorf("invalid application directory")
+	}
+	if rel != "public_html" && !strings.HasPrefix(rel, "public_html/") {
+		return "", fmt.Errorf("application directory must be under public_html")
+	}
+	return rel, nil
+}
+
+// escapesThroughSymlink reports whether the deepest existing component of abs
+// resolves outside base. A directory that does not exist yet is not an escape:
+// the install creates it after this answer.
+func escapesThroughSymlink(abs, base string) bool {
+	for check := abs; check == base || strings.HasPrefix(check, base+"/"); check = filepath.Dir(check) {
+		if real, err := filepath.EvalSymlinks(check); err == nil {
+			return real != base && !strings.HasPrefix(real, base+"/")
+		}
+		if check == base {
+			return false
+		}
+	}
+	return false
 }
 
 func tenantEnv(systemUser string) []string {
