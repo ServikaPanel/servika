@@ -144,7 +144,7 @@ class servika_signon extends rcube_plugin
             return null;
         }
 
-        $curl = curl_init('http://127.0.0.1:8080/api/v1/internal/webmail-redeem');
+        $curl = curl_init('http://{{BACKEND}}/api/v1/internal/webmail-redeem');
         if ($curl === false) {
             return null;
         }
@@ -181,8 +181,16 @@ class servika_signon extends rcube_plugin
 `
 
 // webmailPluginPHP is the plugin with the shared-secret path substituted.
+// webmailPluginPHP renders the signon plugin for THIS host.
+//
+// The backend address is substituted rather than written into the template. It
+// used to be the literal 127.0.0.1:8080, which the shipped port-move feature
+// does not rewrite: that rewrite reaches the two panel vhosts, and this plugin
+// goes direct to the backend rather than through nginx, so moving the port
+// broke every "Open webmail" click with no sign of why.
 func webmailPluginPHP() string {
-	return strings.ReplaceAll(webmailPluginPHPTemplate, "{{TOKEN_PATH}}", phpSingleQuoted(config.PMATokenPath()))
+	plugin := strings.ReplaceAll(webmailPluginPHPTemplate, "{{TOKEN_PATH}}", phpSingleQuoted(config.PMATokenPath()))
+	return strings.ReplaceAll(plugin, "{{BACKEND}}", config.LoopbackBackend())
 }
 
 // phpSingleQuoted escapes a value for a PHP single-quoted string literal.

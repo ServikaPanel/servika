@@ -10,13 +10,41 @@ import (
 	"testing"
 )
 
+// The shipped asset is what the installer drops before the panel first runs; the
+// startup repair rewrites it for THIS host. They must agree on everything the
+// host does not decide.
+//
+// The backend address is now substituted per host, because the panel's backend
+// port is movable and this plugin dials it directly rather than through nginx.
+// The asset therefore carries the DEFAULT address, and the comparison pins the
+// environment so it measures the template rather than whatever the machine
+// running the test happens to export.
 func TestWebmailPluginAssetMatchesStartupRepairContent(t *testing.T) {
+	t.Setenv("SERVIKA_LISTEN", "")
 	asset, err := os.ReadFile("../../assets/mail/roundcube/plugins/servika_signon/servika_signon.php")
 	if err != nil {
 		t.Fatalf("read webmail signon plugin asset: %v", err)
 	}
 	if string(asset) != webmailPluginPHP() {
 		t.Fatal("webmail signon plugin asset differs from startup repair content")
+	}
+}
+
+// And the address actually follows the port, or the substitution is decorative.
+func TestTheWebmailPluginDialsTheConfiguredBackend(t *testing.T) {
+	t.Setenv("SERVIKA_LISTEN", "127.0.0.1:9443")
+	php := webmailPluginPHP()
+	if !strings.Contains(php, "http://127.0.0.1:9443/api/v1/internal/webmail-redeem") {
+		t.Error("the plugin does not dial the configured backend port")
+	}
+	if strings.Contains(php, "127.0.0.1:8080") {
+		t.Error("the plugin still carries the hardcoded default port")
+	}
+	// A wildcard listen is not an address a client can dial, so it falls back to
+	// the loopback while keeping the port.
+	t.Setenv("SERVIKA_LISTEN", "0.0.0.0:9443")
+	if !strings.Contains(webmailPluginPHP(), "http://127.0.0.1:9443/") {
+		t.Error("a wildcard listen did not fall back to the loopback address")
 	}
 }
 

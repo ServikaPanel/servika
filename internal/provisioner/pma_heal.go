@@ -79,7 +79,7 @@ if ($internalToken === '') {
 }
 
 $payload = json_encode(['token' => $token], JSON_THROW_ON_ERROR);
-$curl = curl_init('http://127.0.0.1:8080/api/v1/internal/pma-redeem');
+$curl = curl_init('http://{{BACKEND}}/api/v1/internal/pma-redeem');
 if ($curl === false) {
     http_response_code(500);
     exit('phpMyAdmin signon could not be initialized.');
@@ -137,8 +137,18 @@ header('Location: ' . $target, true, 302);
 exit;
 `
 
+// pmaSignonPHP renders the signon page for THIS host.
+//
+// The backend address is substituted rather than written into the template. It
+// used to be the literal 127.0.0.1:8080, which the shipped port-move feature
+// does not rewrite: that rewrite reaches the two panel vhosts, and this page
+// goes direct to the backend rather than through nginx, so moving the port
+// broke every "Open phpMyAdmin" click with no sign of why. ensurePMASignon
+// compares the installed file against this render on every start, so the heal
+// is also the repair: the page follows the port.
 func pmaSignonPHP() string {
-	return strings.ReplaceAll(pmaSignonPHPTemplate, "{{PMA_TOKEN_PATH}}", addcslashes(pmaTokenPath()))
+	page := strings.ReplaceAll(pmaSignonPHPTemplate, "{{PMA_TOKEN_PATH}}", addcslashes(pmaTokenPath()))
+	return strings.ReplaceAll(page, "{{BACKEND}}", addcslashes(config.LoopbackBackend()))
 }
 
 func addcslashes(value string) string {
