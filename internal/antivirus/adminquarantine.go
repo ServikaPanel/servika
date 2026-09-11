@@ -18,7 +18,6 @@ package antivirus
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -65,7 +64,7 @@ func (h *Handlers) AdminQuarantineList(w http.ResponseWriter, r *http.Request) {
 		   FROM av_quarantine q JOIN domains d ON d.id = q.domain_id`+
 			condition+` ORDER BY q.id DESC LIMIT `+strconv.Itoa(adminMaxRows), args...)
 	if err != nil {
-		log.Printf("antivirus: the server-wide quarantine could not be read: %v", err)
+		httpx.LogR(r, "antivirus: the server-wide quarantine could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the quarantine")
 		return
 	}
@@ -80,7 +79,7 @@ func (h *Handlers) AdminQuarantineList(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&entry.ID, &entry.DomainID, &entry.Domain, &findingID,
 			&systemUser, &rel, &entry.Size, &entry.Signature, &entry.Engine,
 			&entry.CreatedAt, &restored); err != nil {
-			log.Printf("antivirus: a quarantine row could not be read: %v", err)
+			httpx.LogR(r, "antivirus: a quarantine row could not be read: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "could not read the quarantine")
 			return
 		}
@@ -96,7 +95,7 @@ func (h *Handlers) AdminQuarantineList(w http.ResponseWriter, r *http.Request) {
 	// and "fewer files are being held than I thought" is exactly the reading this
 	// screen must not produce.
 	if err := rows.Err(); err != nil {
-		log.Printf("antivirus: the server-wide quarantine read ended early: %v", err)
+		httpx.LogR(r, "antivirus: the server-wide quarantine read ended early: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the quarantine")
 		return
 	}

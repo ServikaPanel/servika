@@ -12,7 +12,6 @@ package appruntime
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"servika/internal/config"
@@ -137,7 +136,7 @@ func (h *Handlers) DotnetInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	descriptor := opDescriptor{Kind: "dotnet", Version: pkg, Action: "install"}
 	if err := startOp(descriptor, dotnetInstallScript(pkg)); err != nil {
-		log.Printf("dotnet install %s: %v", pkg, err)
+		httpx.LogR(r, "dotnet install %s: %v", pkg, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the installation")
 		return
 	}
@@ -165,7 +164,7 @@ func (h *Handlers) DotnetRemove(w http.ResponseWriter, r *http.Request) {
 	}
 	descriptor := opDescriptor{Kind: "dotnet", Version: pkg, Action: "remove"}
 	if err := startOp(descriptor, dotnetRemoveScript(pkg)); err != nil {
-		log.Printf("dotnet remove %s: %v", pkg, err)
+		httpx.LogR(r, "dotnet remove %s: %v", pkg, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the removal")
 		return
 	}

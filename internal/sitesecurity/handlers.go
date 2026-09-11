@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -123,7 +122,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			condition+domainFilter+` ORDER BY `+severityRank+`, f.cvss DESC, f.id DESC LIMIT `+
 			strconv.Itoa(maxRows), args...)
 	if err != nil {
-		log.Printf("site security list: %v", err)
+		httpx.LogR(r, "site security list: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -131,7 +130,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 	out, err := scanRows(rows)
 	if err != nil {
-		log.Printf("site security list scan: %v", err)
+		httpx.LogR(r, "site security list scan: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -153,7 +152,7 @@ func (h *Handlers) DomainList(w http.ResponseWriter, r *http.Request) {
 		  ORDER BY `+severityRank+`, f.cvss DESC, f.id DESC LIMIT `+strconv.Itoa(maxRows),
 		domainID)
 	if err != nil {
-		log.Printf("site security domain list: %v", err)
+		httpx.LogR(r, "site security domain list: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -161,7 +160,7 @@ func (h *Handlers) DomainList(w http.ResponseWriter, r *http.Request) {
 
 	out, err := scanRows(rows)
 	if err != nil {
-		log.Printf("site security domain list scan: %v", err)
+		httpx.LogR(r, "site security domain list scan: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -210,7 +209,7 @@ func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
 			condition+` ORDER BY a.finding_count DESC, d.domain_name ASC, a.app_type ASC,
 		        a.install_path ASC LIMIT `+strconv.Itoa(maxRows), args...)
 	if err != nil {
-		log.Printf("site security apps: %v", err)
+		httpx.LogR(r, "site security apps: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -219,7 +218,7 @@ func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
 		var row AppRow
 		if err := rows.Scan(&row.DomainID, &row.DomainName, &row.AppType, &row.Install,
 			&row.AppVersion, &row.PackageCount, &row.FindingCount, &row.LastScanned); err != nil {
-			log.Printf("site security apps scan: %v", err)
+			httpx.LogR(r, "site security apps scan: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 			return
 		}
@@ -230,7 +229,7 @@ func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
 	// "fewer installations than expected" is precisely the reading this screen
 	// must never invite.
 	if err := rows.Err(); err != nil {
-		log.Printf("site security apps rows: %v", err)
+		httpx.LogR(r, "site security apps rows: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -250,7 +249,7 @@ func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
 			   AND NOT EXISTS (SELECT 1 FROM security_apps a WHERE a.domain_id = d.id)
 			 ORDER BY d.domain_name LIMIT `+strconv.Itoa(maxRows), args...)
 	if err != nil {
-		log.Printf("site security unscanned: %v", err)
+		httpx.LogR(r, "site security unscanned: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -258,14 +257,14 @@ func (h *Handlers) Apps(w http.ResponseWriter, r *http.Request) {
 	for domainRows.Next() {
 		var name string
 		if err := domainRows.Scan(&name); err != nil {
-			log.Printf("site security unscanned scan: %v", err)
+			httpx.LogR(r, "site security unscanned scan: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 			return
 		}
 		out.Unscanned = append(out.Unscanned, name)
 	}
 	if err := domainRows.Err(); err != nil {
-		log.Printf("site security unscanned rows: %v", err)
+		httpx.LogR(r, "site security unscanned rows: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -318,7 +317,7 @@ func deriveStatus(running bool, scanning map[int64]bool, domainID int64,
 func (h *Handlers) Domains(w http.ResponseWriter, r *http.Request) {
 	everScanned, err := h.everScanned(r.Context())
 	if err != nil {
-		log.Printf("site security domains status: %v", err)
+		httpx.LogR(r, "site security domains status: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -339,7 +338,7 @@ func (h *Handlers) Domains(w http.ResponseWriter, r *http.Request) {
 		  ORDER BY (a.app_type IS NULL) ASC, a.finding_count DESC, d.domain_name ASC,
 		           a.app_type ASC, a.install_path ASC LIMIT `+strconv.Itoa(maxRows), args...)
 	if err != nil {
-		log.Printf("site security domains: %v", err)
+		httpx.LogR(r, "site security domains: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -350,7 +349,7 @@ func (h *Handlers) Domains(w http.ResponseWriter, r *http.Request) {
 		var row DomainRow
 		if err := rows.Scan(&row.DomainID, &row.DomainName, &row.AppType, &row.Install,
 			&row.AppVersion, &row.PackageCount, &row.FindingCount, &row.LastScanned); err != nil {
-			log.Printf("site security domains scan: %v", err)
+			httpx.LogR(r, "site security domains scan: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 			return
 		}
@@ -359,7 +358,7 @@ func (h *Handlers) Domains(w http.ResponseWriter, r *http.Request) {
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("site security domains rows: %v", err)
+		httpx.LogR(r, "site security domains rows: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -394,7 +393,7 @@ func (h *Handlers) ScanDomain(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrDomainNotFound):
 			httpx.WriteError(w, http.StatusNotFound, "invalid domain")
 		default:
-			log.Printf("site security domain scan start: %v", err)
+			httpx.LogR(r, "site security domain scan start: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the scan could not be started")
 		}
 		return
@@ -406,7 +405,7 @@ func (h *Handlers) ScanDomain(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
 		defer cancel()
 		if e := h.Collector.RunOne(ctx, item); e != nil {
-			log.Printf("site security domain scan: %v", e)
+			httpx.LogR(r, "site security domain scan: %v", e)
 		}
 	})
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"started": true})
@@ -425,7 +424,7 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 			&status.ScannedPackages, &status.UnparsedPackages, &status.FindingCount,
 			&status.LastError)
 	if err != nil {
-		log.Printf("site security status: %v", err)
+		httpx.LogR(r, "site security status: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -455,7 +454,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusConflict, reasonScanRunning)
 			return
 		}
-		log.Printf("site security scan start: %v", err)
+		httpx.LogR(r, "site security scan start: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the scan could not be started")
 		return
 	}
@@ -470,7 +469,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 			counts, err := h.Collector.scan(ctx)
 			h.Collector.finish(counts, err)
 			if err != nil {
-				log.Printf("site security scan: %v", err)
+				httpx.LogR(r, "site security scan: %v", err)
 			}
 		})
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"started": true})

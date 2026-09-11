@@ -3,7 +3,6 @@ package domainblock
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,7 +50,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		   LEFT JOIN users u ON u.id = b.created_by
 		  ORDER BY b.domain`)
 	if err != nil {
-		log.Printf("banned domain list: %v", err)
+		httpx.LogR(r, "banned domain list: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -62,7 +61,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		var it item
 		var match int
 		if err := rows.Scan(&it.Domain, &it.Description, &match, &it.CreatedBy, &it.CreatedAt); err != nil {
-			log.Printf("banned domain list scan: %v", err)
+			httpx.LogR(r, "banned domain list scan: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 			return
 		}
@@ -70,7 +69,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		out = append(out, it)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("banned domain list rows: %v", err)
+		httpx.LogR(r, "banned domain list rows: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -152,7 +151,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 			 ON DUPLICATE KEY UPDATE description=VALUES(description), match_subdomains=VALUES(match_subdomains)`,
 			name, description, match, createdBy)
 		if err != nil {
-			log.Printf("banned domain insert: %v", err)
+			httpx.LogR(r, "banned domain insert: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the list could not be written")
 			return
 		}
@@ -202,13 +201,13 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	for _, name := range entries {
 		res, err := h.DB.ExecContext(r.Context(), `DELETE FROM banned_domains WHERE domain=?`, name)
 		if err != nil {
-			log.Printf("banned domain delete: %v", err)
+			httpx.LogR(r, "banned domain delete: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the list could not be written")
 			return
 		}
 		affected, err := res.RowsAffected()
 		if err != nil {
-			log.Printf("banned domain delete count: %v", err)
+			httpx.LogR(r, "banned domain delete count: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the list could not be written")
 			return
 		}

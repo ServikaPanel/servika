@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -25,7 +24,7 @@ type Handlers struct{ DB *sql.DB }
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	status, err := ReadStatus(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("geoip: read the status: %v", err)
+		httpx.LogR(r, "geoip: read the status: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the country database status could not be read")
 		return
 	}
@@ -77,7 +76,7 @@ func (h *Handlers) SaveCredentials(w http.ResponseWriter, r *http.Request) {
 
 	sealed, err := secret.Encrypt(licenseKey)
 	if err != nil {
-		log.Printf("geoip: seal the license key: %v", err)
+		httpx.LogR(r, "geoip: seal the license key: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the credentials could not be stored")
 		return
 	}
@@ -112,7 +111,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		// The reason is already stored on panel_settings, so the screen shows it
 		// with the rest of the state instead of only in this one response.
-		log.Printf("geoip: download the country database: %v", err)
+		httpx.LogR(r, "geoip: download the country database: %v", err)
 		httpx.WriteError(w, http.StatusBadGateway, "the country database could not be downloaded")
 		return
 	}

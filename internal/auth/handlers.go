@@ -312,7 +312,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	// last_login_at uses the MySQL clock and is display-only (never compared to
 	// a Go time value), so NOW() is safe here.
 	if _, err := h.DB.Exec(`UPDATE users SET last_login_at=NOW(), last_login_ip=? WHERE id=?`, ip, uid); err != nil {
-		log.Printf("last_login update failed for uid=%d: %v", uid, err)
+		httpx.LogR(r, "last_login update failed for uid=%d: %v", uid, err)
 	}
 
 	// Only an admin or reseller reaches this line; the customer role is refused
@@ -503,7 +503,7 @@ func (h *Handlers) AuditList(w http.ResponseWriter, r *http.Request) {
 			// A dropped row is an audit entry that disappears from the record
 			// somebody is reading precisely to account for what happened.
 			// #nosec G706 -- the logged value is a database error; no request-controlled string reaches the log.
-			log.Printf("audit list: skipping an unreadable entry: %v", err)
+			httpx.LogR(r, "audit list: skipping an unreadable entry: %v", err)
 			continue
 		}
 		e.OK = okv == 1

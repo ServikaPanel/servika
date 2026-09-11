@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"maps"
 	"net/http"
 	"os"
@@ -577,7 +576,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	// and closes the tab must still get the install.
 	descriptor := opDescriptor{Version: m.Version, Resource: m.Resource, Action: "install"}
 	if err := startPHPOp(descriptor, installScript(m)); err != nil {
-		log.Printf("php install %s (%s): %v", m.Version, m.Resource, err)
+		httpx.LogR(r, "php install %s (%s): %v", m.Version, m.Resource, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the installation")
 		return
 	}
@@ -639,7 +638,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	// service before dnf so packages are not pulled from under a running pool.
 	descriptor := opDescriptor{Version: m.Version, Resource: m.Resource, Action: "remove"}
 	if err := startPHPOp(descriptor, removeScript(m)); err != nil {
-		log.Printf("php remove %s (%s): %v", m.Version, m.Resource, err)
+		httpx.LogR(r, "php remove %s (%s): %v", m.Version, m.Resource, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the removal")
 		return
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -144,7 +143,7 @@ func (h *Handlers) PutSOA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("dns WriteZone(soa) domain=%d: %v", id, err)
+		httpx.LogR(r, "dns WriteZone(soa) domain=%d: %v", id, err)
 	}
 	httpx.WriteJSON(w, http.StatusOK, soa)
 }

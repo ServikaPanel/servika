@@ -14,7 +14,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -328,7 +327,7 @@ func appendUnique(path, line string) {
 func (h *Handlers) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	records, err := LoadTemplate(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("load DNS template: %v", err)
+		httpx.LogR(r, "load DNS template: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not load DNS template")
 		return
 	}
@@ -372,13 +371,13 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.DB.BeginTx(r.Context(), nil)
 	if err != nil {
-		log.Printf("begin DNS template update: %v", err)
+		httpx.LogR(r, "begin DNS template update: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(r.Context(), `DELETE FROM dns_template`); err != nil {
-		log.Printf("clear DNS template: %v", err)
+		httpx.LogR(r, "clear DNS template: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
 		return
 	}
@@ -390,7 +389,7 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.ExecContext(r.Context(),
 			`INSERT INTO dns_template(name,type,value,ttl,priority,sort_order,enabled) VALUES(?,?,?,?,?,?,?)`,
 			record.Name, record.Type, record.Value, record.TTL, record.Priority, record.SortOrder, enabled); err != nil {
-			log.Printf("insert DNS template record: %v", err)
+			httpx.LogR(r, "insert DNS template record: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
 			return
 		}
@@ -406,12 +405,12 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 		 soa_expire=VALUES(soa_expire), soa_minimum=VALUES(soa_minimum), soa_ttl=VALUES(soa_ttl),
 		 dkim_selector=VALUES(dkim_selector), dkim_enabled=VALUES(dkim_enabled)`,
 		req.Meta.SOARefresh, req.Meta.SOARetry, req.Meta.SOAExpire, req.Meta.SOAMinimum, req.Meta.SOATTL, req.Meta.DKIMSelector, dkimEnabled); err != nil {
-		log.Printf("update DNS template metadata: %v", err)
+		httpx.LogR(r, "update DNS template metadata: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("commit DNS template update: %v", err)
+		httpx.LogR(r, "commit DNS template update: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
 		return
 	}

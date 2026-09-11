@@ -70,7 +70,7 @@ var maildirLetters = map[rune]string{
 // never given -h, which would make it follow those links deliberately.
 func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
-		log.Printf("mailbox export: could not extend the socket deadline: %v", err)
+		httpx.LogR(r, "mailbox export: could not extend the socket deadline: %v", err)
 	}
 
 	id, _, _, ok := h.domain(r)
@@ -85,7 +85,7 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 	layout, localPart, err := h.mailboxLayout(r.Context(), mailboxID)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("locate mailbox=%d for export: %v", mailboxID, err)
+		httpx.LogR(r, "locate mailbox=%d for export: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be located on disk")
 		return
 	}
@@ -99,7 +99,7 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := command.Start(); err != nil {
 		// #nosec G706 -- integer id and the exec error.
-		log.Printf("start mailbox=%d export: %v", mailboxID, err)
+		httpx.LogR(r, "start mailbox=%d export: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the export could not be started")
 		return
 	}
@@ -118,11 +118,11 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 	// not finish, which is the honest signal that the file is incomplete.
 	if _, err := io.Copy(w, stdout); err != nil {
 		// #nosec G706 -- integer id and an I/O error.
-		log.Printf("stream mailbox=%d export: %v", mailboxID, err)
+		httpx.LogR(r, "stream mailbox=%d export: %v", mailboxID, err)
 	}
 	if err := command.Wait(); err != nil {
 		// #nosec G706 -- integer id and the exec error.
-		log.Printf("mailbox=%d export finished badly: %v", mailboxID, err)
+		httpx.LogR(r, "mailbox=%d export finished badly: %v", mailboxID, err)
 	}
 	h.audit(r, "mail.export", "", true)
 }
@@ -154,7 +154,7 @@ func (h *Handlers) ImportFormats(w http.ResponseWriter, r *http.Request) {
 // POST /domains/{id}/mail/{mid}/import
 func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
-		log.Printf("mailbox import: could not extend the socket deadline: %v", err)
+		httpx.LogR(r, "mailbox import: could not extend the socket deadline: %v", err)
 	}
 
 	id, _, _, ok := h.domain(r)
@@ -175,7 +175,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	busy, err := migrationInFlight(r.Context(), h.DB, mailboxID)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("check migrations for mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "check migrations for mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox state could not be read")
 		return
 	}
@@ -189,7 +189,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	layout, _, err := h.mailboxLayout(r.Context(), mailboxID)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("locate mailbox=%d for import: %v", mailboxID, err)
+		httpx.LogR(r, "locate mailbox=%d for import: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be located on disk")
 		return
 	}
@@ -224,7 +224,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		// #nosec G706 -- integer id and the unpack error.
-		log.Printf("import into mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "import into mailbox=%d: %v", mailboxID, err)
 		// Everything this attempt wrote is taken out again. Keeping it would put
 		// the customer in a worse place than an empty mailbox: the only way to
 		// finish the import is to upload the whole archive again, and that writes
@@ -232,7 +232,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 		removed, rollbackErr := sink.rollback()
 		if rollbackErr != nil {
 			// #nosec G706 -- integer id and a filesystem error.
-			log.Printf("import into mailbox=%d: rollback left files behind: %v", mailboxID, rollbackErr)
+			httpx.LogR(r, "import into mailbox=%d: rollback left files behind: %v", mailboxID, rollbackErr)
 		}
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
 			"error": "the upload could not be unpacked", "reason": reasonForImport(err),

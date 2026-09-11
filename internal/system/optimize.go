@@ -3,7 +3,6 @@ package system
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -89,21 +88,21 @@ func OptimizeStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := writeOptimizeWrapper(); err != nil {
-		log.Printf("optimize: write wrapper: %v", err)
+		httpx.LogR(r, "optimize: write wrapper: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start optimization")
 		return
 	}
 	logPath := optimizeLogPath()
 	wrapper := optimizeWrapper()
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o750); err != nil {
-		log.Printf("optimize: prepare log directory %s: %v", filepath.Dir(logPath), err)
+		httpx.LogR(r, "optimize: prepare log directory %s: %v", filepath.Dir(logPath), err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start optimization")
 		return
 	}
 	header := fmt.Sprintf("=== Optimization started: %s ===\n", time.Now().Format("2006-01-02 15:04:05"))
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(logPath, []byte(header), 0o640); err != nil {
-		log.Printf("optimize: open log %s: %v", logPath, err)
+		httpx.LogR(r, "optimize: open log %s: %v", logPath, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start optimization")
 		return
 	}
@@ -117,7 +116,7 @@ func OptimizeStart(w http.ResponseWriter, r *http.Request) {
 		"-p", "StandardError=append:"+logPath,
 		wrapper)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("optimize: systemd-run start: %v: %s", err, strings.TrimSpace(string(out)))
+		httpx.LogR(r, "optimize: systemd-run start: %v: %s", err, strings.TrimSpace(string(out)))
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start optimization")
 		return
 	}

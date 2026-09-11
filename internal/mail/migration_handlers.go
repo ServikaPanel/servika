@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -185,7 +184,7 @@ func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		// #nosec G706 -- integer ids only; the remote host is not logged here.
-		log.Printf("start mail migration mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "start mail migration mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the migration")
 		return
 	}
@@ -226,7 +225,7 @@ func (h *Handlers) MigrationStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		// #nosec G706 -- integer id only.
-		log.Printf("read mail migration mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "read mail migration mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the migration")
 		return
 	}
@@ -261,7 +260,7 @@ func (h *Handlers) CancelMigration(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		// #nosec G706 -- integer id only.
-		log.Printf("cancel mail migration mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "cancel mail migration mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not cancel the migration")
 		return
 	}
@@ -276,7 +275,7 @@ func (h *Handlers) CancelMigration(w http.ResponseWriter, r *http.Request) {
 			        remote_password=NULL, credentials_cleared=1
 			  WHERE id=?`, jobID); err != nil {
 			// #nosec G706 -- integer id only.
-			log.Printf("cancel mail migration job=%d: %v", jobID, err)
+			httpx.LogR(r, "cancel mail migration job=%d: %v", jobID, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "could not cancel the migration")
 			return
 		}

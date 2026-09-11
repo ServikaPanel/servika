@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -60,7 +59,7 @@ func (h *Handlers) Analyze(w http.ResponseWriter, r *http.Request) {
 	// This endpoint moves a body far larger than the server's own read and write
 	// timeouts allow for, so it lifts them for this request alone.
 	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
-		log.Printf("transfer analyze: could not extend the socket deadline: %v", err)
+		httpx.LogR(r, "transfer analyze: could not extend the socket deadline: %v", err)
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, MaxUploadBytes)
@@ -146,7 +145,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	// This endpoint moves a body far larger than the server's own read and write
 	// timeouts allow for, so it lifts them for this request alone.
 	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
-		log.Printf("transfer import: could not extend the socket deadline: %v", err)
+		httpx.LogR(r, "transfer import: could not extend the socket deadline: %v", err)
 	}
 
 	if h.Domains == nil {

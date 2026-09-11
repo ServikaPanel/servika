@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -93,7 +92,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := ListForDomain(r.Context(), h.DB, s.DomainID)
 	if err != nil {
-		log.Printf("apps: list for domain %d: %v", s.DomainID, err)
+		httpx.LogR(r, "apps: list for domain %d: %v", s.DomainID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "applications could not be listed")
 		return
 	}
@@ -200,7 +199,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusForbidden, limit.Message)
 			return
 		}
-		log.Printf("apps: application limit check for domain %d: %v", s.DomainID, err)
+		httpx.LogR(r, "apps: application limit check for domain %d: %v", s.DomainID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the plan limit could not be verified")
 		return
 	}
@@ -237,7 +236,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusConflict, "another application already answers on that path")
 			return
 		}
-		log.Printf("apps: create on domain %d: %v", s.DomainID, err)
+		httpx.LogR(r, "apps: create on domain %d: %v", s.DomainID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
 		return
 	}
@@ -245,7 +244,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	app, err := Get(r.Context(), h.DB, s.DomainID, appID)
 	if err != nil {
-		log.Printf("apps: reread application %d: %v", appID, err)
+		httpx.LogR(r, "apps: reread application %d: %v", appID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
 		return
 	}
@@ -254,9 +253,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		// than leaving a port allocated to an application that never ran.
 		Teardown(app.ID)
 		if _, delErr := h.DB.ExecContext(r.Context(), `DELETE FROM apps WHERE id=?`, app.ID); delErr != nil {
-			log.Printf("apps: roll back application %d: %v", app.ID, delErr)
+			httpx.LogR(r, "apps: roll back application %d: %v", app.ID, delErr)
 		}
-		log.Printf("apps: apply application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: apply application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be started")
 		return
 	}
@@ -301,18 +300,18 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusConflict, "another application already answers on that path")
 			return
 		}
-		log.Printf("apps: update application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: update application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be updated")
 		return
 	}
 	updated, err := Get(r.Context(), h.DB, s.DomainID, app.ID)
 	if err != nil {
-		log.Printf("apps: reread application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: reread application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be updated")
 		return
 	}
 	if err := h.apply(r, s, updated, valid.appDir, valid.argv); err != nil {
-		log.Printf("apps: apply application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: apply application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be restarted")
 		return
 	}
@@ -335,14 +334,14 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	Teardown(app.ID)
 	if _, err := h.DB.ExecContext(r.Context(),
 		`DELETE FROM apps WHERE id=? AND domain_id=?`, app.ID, s.DomainID); err != nil {
-		log.Printf("apps: delete application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: delete application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be removed")
 		return
 	}
 	if err := h.render(s, app.SubdomainID); err != nil {
 		// The application is gone; a stale proxy block is the remaining
 		// problem, and saying so is better than reporting a clean delete.
-		log.Printf("apps: re-render after deleting application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: re-render after deleting application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the application was removed but the web server configuration could not be rewritten")
 		return
@@ -389,7 +388,7 @@ func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("apps: %s application %d: %v", req.Action, app.ID, err)
+		httpx.LogR(r, "apps: %s application %d: %v", req.Action, app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application did not answer the request")
 		return
 	}
@@ -397,7 +396,7 @@ func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
 		if _, err := h.DB.ExecContext(r.Context(),
 			`UPDATE apps SET enabled=? WHERE id=? AND domain_id=?`,
 			map[bool]int{true: 1, false: 0}[enabled], app.ID, s.DomainID); err != nil {
-			log.Printf("apps: record state of application %d: %v", app.ID, err)
+			httpx.LogR(r, "apps: record state of application %d: %v", app.ID, err)
 			httpx.WriteError(w, http.StatusInternalServerError,
 				"the application answered but its state could not be recorded")
 			return
@@ -512,18 +511,18 @@ func (h *Handlers) EnvWrite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := ReplaceEnv(r.Context(), h.DB, app.ID, req.Env); err != nil {
-		log.Printf("apps: write environment of application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: write environment of application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the environment could not be saved")
 		return
 	}
 	if err := WriteEnvFile(app, req.Env); err != nil {
-		log.Printf("apps: install environment file of application %d: %v", app.ID, err)
+		httpx.LogR(r, "apps: install environment file of application %d: %v", app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the environment could not be published")
 		return
 	}
 	if app.Enabled {
 		if err := Restart(app.ID); err != nil {
-			log.Printf("apps: restart application %d after an environment change: %v", app.ID, err)
+			httpx.LogR(r, "apps: restart application %d after an environment change: %v", app.ID, err)
 			httpx.WriteError(w, http.StatusInternalServerError,
 				"the environment was saved but the application could not be restarted")
 			return

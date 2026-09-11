@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -222,7 +221,7 @@ func (h *Handlers) SetWebBackend(w http.ResponseWriter, r *http.Request) {
 	if err := ReRender(h.DB, sid); err != nil {
 		if _, rollbackErr := h.DB.ExecContext(r.Context(),
 			`UPDATE subdomains SET web_backend=? WHERE id=? AND domain_id=?`, previous, sid, id); rollbackErr != nil {
-			log.Printf("subdomain %d web backend rollback failed: %v", sid, rollbackErr)
+			httpx.LogR(r, "subdomain %d web backend rollback failed: %v", sid, rollbackErr)
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, "nginx rejected the configuration")
 		return

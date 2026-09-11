@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -249,7 +248,7 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		status := statusFromPathErr(err)
 		if status == http.StatusInternalServerError {
 			// #nosec G706 -- the logged path is relClean-normalised and the error is the kernel's; no raw tenant string with CR/LF reaches the log.
-			log.Printf("extract: could not stat %q: %v", relClean(req.Path), err)
+			httpx.LogR(r, "extract: could not stat %q: %v", relClean(req.Path), err)
 		}
 		httpx.WriteError(w, status, "operation failed")
 		return
@@ -544,7 +543,7 @@ func (h *Handlers) Archive(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{"ok": true, "output_path": req.OutputPath}
 	if info, err := statBeneath(home, outputRel); err != nil {
 		// #nosec G706 -- the logged path is relClean-normalised and the error is the kernel's; no raw tenant string with CR/LF reaches the log.
-		log.Printf("archive: created %q but could not read its size: %v", outputRel, err)
+		httpx.LogR(r, "archive: created %q but could not read its size: %v", outputRel, err)
 	} else {
 		response["size"] = info.Size()
 	}

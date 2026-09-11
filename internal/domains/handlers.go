@@ -406,7 +406,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			req.PlanID = &defaultPlanID
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			log.Printf("read default plan: %v", err)
+			httpx.LogR(r, "read default plan: %v", err)
 		}
 	}
 	if req.PHPVersion == "" {
@@ -432,7 +432,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	switch taken, err := h.nameAlreadyServed(r.Context(), req.DomainName); {
 	case err != nil:
 		// #nosec G706 -- the logged name passed provisioner.ValidateDomain just above, so it carries no CR/LF.
-		log.Printf("check whether %q is already served: %v", req.DomainName, err)
+		httpx.LogR(r, "check whether %q is already served: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify the domain name")
 		return
 	case taken:
@@ -497,7 +497,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// would leave a half-provisioned domain behind for a request that was never
 	// going to be accepted.
 	if reason, err := h.referencedAccountsExist(r.Context(), req.CustomerID, req.PlanID, req.OwnerUserID); err != nil {
-		log.Printf("verify referenced accounts for %q: %v", req.DomainName, err)
+		httpx.LogR(r, "verify referenced accounts for %q: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify the selected account")
 		return
 	} else if reason != "" {
@@ -520,7 +520,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}
-		log.Printf("domain quota check failed: %v", err)
+		httpx.LogR(r, "domain quota check failed: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
 		return
 	}
@@ -528,7 +528,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// 1) Linux user + nginx + PHP pool
 	pr, err := provisioner.Provision(req.DomainName, req.PHPVersion)
 	if err != nil {
-		log.Printf("provision %q failed: %v", req.DomainName, err)
+		httpx.LogR(r, "provision %q failed: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "domain provisioning failed")
 		return
 	}
@@ -555,7 +555,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		// teardown just above correctly leaves the host alone, because the winner's
 		// row now answers to that name. Retrying allocates the next one.
 		if strings.Contains(err.Error(), "uq_domains_system_user_top") {
-			log.Printf("create %q lost the race for system user %q", req.DomainName, pr.SystemUser)
+			httpx.LogR(r, "create %q lost the race for system user %q", req.DomainName, pr.SystemUser)
 			httpx.WriteError(w, http.StatusConflict, "another domain took this system user name; try again")
 			return
 		}
@@ -572,7 +572,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		if _, err := h.DB.ExecContext(r.Context(),
 			`UPDATE domains SET customer_id=?, plan_id=? WHERE id=?`,
 			req.CustomerID, req.PlanID, id); err != nil {
-			log.Printf("attach domain %d to customer/plan: %v", id, err)
+			httpx.LogR(r, "attach domain %d to customer/plan: %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the domain was created but could not be attached to the selected account")
 			return
 		}
@@ -597,11 +597,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case err != nil:
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("customer account for %q: %v", pr.SystemUser, err)
+			httpx.LogR(r, "customer account for %q: %v", pr.SystemUser, err)
 		case account.CustomerID > 0:
 			if _, err := h.DB.ExecContext(r.Context(),
 				`UPDATE domains SET customer_id=? WHERE id=?`, account.CustomerID, id); err != nil {
-				log.Printf("link domain %d to customer %d: %v", id, account.CustomerID, err)
+				httpx.LogR(r, "link domain %d to customer %d: %v", id, account.CustomerID, err)
 			}
 			if req.OwnerUserID != nil && account.Reused {
 				createWarning = warningOwnerNotApplied
@@ -617,7 +617,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	ftpPass := credentials.RandomPassword(20)
 	uidN, gidN := uidGidOf(pr.SystemUser)
 	if err := credentials.FTPCreate(h.DB, id, pr.SystemUser, ftpPass, uidN, gidN); err != nil {
-		log.Printf("FTP create %q error: %v", pr.SystemUser, err)
+		httpx.LogR(r, "FTP create %q error: %v", pr.SystemUser, err)
 	}
 
 	// 4) Default MySQL database + user, unless the site type is entitled to none.
@@ -625,10 +625,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	// 5) Auto-seed the DNS template + write BIND zone + reload
 	if _, err := dns.SeedDefaults(r.Context(), h.DB, id, req.DomainName, h.IPv4); err != nil {
-		log.Printf("DNS SeedDefaults %q error: %v", req.DomainName, err)
+		httpx.LogR(r, "DNS SeedDefaults %q error: %v", req.DomainName, err)
 	}
 	if err := dns.WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("DNS WriteZone %q error: %v", req.DomainName, err)
+		httpx.LogR(r, "DNS WriteZone %q error: %v", req.DomainName, err)
 	}
 
 	// #nosec G118 -- intentional detached context: the request ends before this background cgroup write finishes; the request context would cancel it mid-write.
@@ -636,7 +636,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		if err := resourcelimit.ApplyAll(ctx, h.DB, domainID); err != nil {
-			log.Printf("resource limit apply after domain creation, domain=%d: %v", domainID, err)
+			httpx.LogR(r, "resource limit apply after domain creation, domain=%d: %v", domainID, err)
 		}
 	}(id)
 
@@ -677,7 +677,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if parentDomainID.Valid {
 		deleted, err := addondomains.Cleanup(r.Context(), h.DB, id)
 		if err != nil {
-			log.Printf("addon domain delete warn (%d): %v", id, err)
+			httpx.LogR(r, "addon domain delete warn (%d): %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "addon domain deletion failed")
 			return
 		}
@@ -693,7 +693,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		for childRows.Next() {
 			var childID int64
 			if err := childRows.Scan(&childID); err != nil {
-				log.Printf("addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
+				httpx.LogR(r, "addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
 				continue
 			}
 			childIDs = append(childIDs, childID)
@@ -701,12 +701,12 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		if err := childRows.Err(); err != nil {
 			// A child missed here keeps its vhost, its certificate paths and its DNS
 			// zone after the parent is gone, with no row left to find it from.
-			log.Printf("addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
+			httpx.LogR(r, "addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
 		}
 		_ = childRows.Close()
 		for _, childID := range childIDs {
 			if _, err := addondomains.Cleanup(r.Context(), h.DB, childID); err != nil {
-				log.Printf("addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
+				httpx.LogR(r, "addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
 			}
 		}
 	}
@@ -724,7 +724,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// cascade removes the database rows and nothing on disk, so a deleted
 	// domain would leave its page behind for good.
 	if err := provisioner.RemoveMaintenancePage(id); err != nil {
-		log.Printf("remove maintenance page for domain %d: %v", id, err)
+		httpx.LogR(r, "remove maintenance page for domain %d: %v", id, err)
 	}
 
 	// Read BEFORE anything is torn down and before the row goes: an upgraded panel
@@ -735,30 +735,30 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// resources.
 	siblings, siblingErr := provisioner.OtherTopLevelDomainsUsing(sk, domainName)
 	if siblingErr != nil {
-		log.Printf("delete %q: cannot tell whether the system user is shared, keeping tenant resources: %v", domainName, siblingErr)
+		httpx.LogR(r, "delete %q: cannot tell whether the system user is shared, keeping tenant resources: %v", domainName, siblingErr)
 	}
 	systemUserShared := siblingErr != nil || len(siblings) > 0
 
 	if isDemo == 0 {
 		// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
 		if err := credentials.MySQLDropAllForDomain(h.DB, id); err != nil {
-			log.Printf("mysql drop-all warn (%s): %v", domainName, err)
+			httpx.LogR(r, "mysql drop-all warn (%s): %v", domainName, err)
 		}
 		// nginx vhost + PHP pool + Linux user. Deprovision asks the same question
 		// again for itself, so a caller that never learned about sharing cannot
 		// reintroduce the data loss.
 		if err := provisioner.Deprovision(domainName, sk); err != nil {
-			log.Printf("deprovision warn (%s): %v", domainName, err)
+			httpx.LogR(r, "deprovision warn (%s): %v", domainName, err)
 		}
 		if !systemUserShared {
 			if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
-				log.Printf("resource slice cleanup warn (%s): %v", sk, err)
+				httpx.LogR(r, "resource slice cleanup warn (%s): %v", sk, err)
 			}
 			// The quarantine store lives OUTSIDE the home, so userdel -r never
 			// reaches it: the rows go with the foreign key and the files would stay
 			// for good, holding a tenant's malware after the tenant is gone.
 			if err := antivirus.RemoveStoreForUser(sk); err != nil {
-				log.Printf("quarantine store cleanup warn (%s): %v", sk, err)
+				httpx.LogR(r, "quarantine store cleanup warn (%s): %v", sk, err)
 			}
 		}
 		// Redis tenant cache: Valkey ACL user + WP drop-in + domain_redis row.
@@ -767,10 +767,10 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		// so only this domain's row goes.
 		if systemUserShared {
 			if err := redis.ForgetDomain(h.DB, id); err != nil {
-				log.Printf("redis row cleanup warn (%d): %v", id, err)
+				httpx.LogR(r, "redis row cleanup warn (%d): %v", id, err)
 			}
 		} else if err := redis.CloseDomain(h.DB, id, sk); err != nil {
-			log.Printf("redis close-domain warn (%s): %v", sk, err)
+			httpx.LogR(r, "redis close-domain warn (%s): %v", sk, err)
 		}
 		// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
 		mail.CleanupDomain(h.DB, id, sk)
@@ -781,10 +781,10 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Existing installations may not have foreign keys on the traffic tables.
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_traffic WHERE domain_id=?`, id); err != nil {
-		log.Printf("domain traffic cleanup warn (%d): %v", id, err)
+		httpx.LogR(r, "domain traffic cleanup warn (%d): %v", id, err)
 	}
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_traffic_cursor WHERE domain_id=?`, id); err != nil {
-		log.Printf("domain traffic cursor cleanup warn (%d): %v", id, err)
+		httpx.LogR(r, "domain traffic cursor cleanup warn (%d): %v", id, err)
 	}
 	// These domain-owned tables have a domain_id index but no ON DELETE CASCADE, so
 	// their rows would be orphaned after the domain is deleted. Remove them explicitly.
@@ -792,7 +792,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		// #nosec G202 -- table names come from this fixed literal whitelist, never user input; domain_id is bound.
 		if _, err := h.DB.ExecContext(r.Context(),
 			"DELETE FROM "+table+" WHERE domain_id=?", id); err != nil {
-			log.Printf("%s cleanup warn (%d): %v", table, id, err)
+			httpx.LogR(r, "%s cleanup warn (%d): %v", table, id, err)
 		}
 	}
 
@@ -806,7 +806,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// AFTER the delete so the table no longer contains the domain that just went.
 	for _, otherID := range siblings {
 		if err := provisioner.RerenderVhost(h.DB, otherID); err != nil {
-			log.Printf("re-render the vhost of domain %d after %q was deleted: %v", otherID, domainName, err)
+			httpx.LogR(r, "re-render the vhost of domain %d after %q was deleted: %v", otherID, domainName, err)
 		}
 	}
 
@@ -815,7 +815,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// domain zone include would be rewritten (dangling, named reload error).
 	if isDemo == 0 {
 		if err := dns.DeleteZone(r.Context(), h.DB, domainName); err != nil {
-			log.Printf("DNS DeleteZone warn (%s): %v", domainName, err)
+			httpx.LogR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
@@ -1101,7 +1101,7 @@ func (h *Handlers) SetFTPPassword(w http.ResponseWriter, r *http.Request) {
 		if err := credentials.SyncSSHPassword(h.DB, sk); err != nil {
 			// SSH password stayed at its old value; the returned password only works
 			// for FTP. Report a degraded result rather than implying SSH is in sync.
-			log.Printf("ssh password sync warn (%s): %v", sk, err)
+			httpx.LogR(r, "ssh password sync warn (%s): %v", sk, err)
 			httpx.WriteJSON(w, http.StatusOK, map[string]any{
 				"ok": true, "id": id, "username": sk, "password": req.Password,
 				"ssh_sync_failed": true,
@@ -1164,7 +1164,7 @@ func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&d.ID, &d.DomainID, &d.DBName, &d.DBUser, &d.DBHost, &d.DBPass, &d.CreatedAt); err != nil {
 			// A dropped row is a database the customer owns and cannot see, so it
 			// can be neither opened, nor reset, nor deleted from this screen.
-			log.Printf("databases: skipping an unreadable account row for domain %d: %v", d.DomainID, err)
+			httpx.LogR(r, "databases: skipping an unreadable account row for domain %d: %v", d.DomainID, err)
 			continue
 		}
 		// db_pass_plain is encrypted at rest (bound to db_user); decrypt for the
@@ -1189,7 +1189,7 @@ func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
 			names[i] = out[i].DBName
 		}
 		if sizes, err := credentials.SchemaSizes(r.Context(), names); err != nil {
-			log.Printf("database sizes could not be read: %v", err)
+			httpx.LogR(r, "database sizes could not be read: %v", err)
 		} else {
 			for i := range out {
 				out[i].Size = sizes[out[i].DBName]
@@ -1250,7 +1250,7 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}
-		log.Printf("database quota check for domain %d: %v", id, err)
+		httpx.LogR(r, "database quota check for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
 		return
 	}
@@ -1387,7 +1387,7 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		if err := resourcelimit.ApplyAll(ctx, h.DB, domainID); err != nil {
-			log.Printf("resourcelimit apply (db-create) domain=%d: %v", domainID, err)
+			httpx.LogR(r, "resourcelimit apply (db-create) domain=%d: %v", domainID, err)
 		}
 	}(id)
 

@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"time"
 
@@ -46,7 +45,7 @@ func (h *Handlers) QuotaRecalc(w http.ResponseWriter, r *http.Request) {
 	layout, err := layoutFor(r.Context(), h.DB, mailboxID)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("locate mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "locate mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be located on disk")
 		return
 	}
@@ -54,7 +53,7 @@ func (h *Handlers) QuotaRecalc(w http.ResponseWriter, r *http.Request) {
 	used, err := diskusage.Bytes(r.Context(), layout.home+"/"+layout.root)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("measure mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "measure mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be measured")
 		return
 	}
@@ -62,7 +61,7 @@ func (h *Handlers) QuotaRecalc(w http.ResponseWriter, r *http.Request) {
 	quota, err := storeUsage(r.Context(), h.DB, mailboxID, used)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("store usage mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "store usage mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the measurement could not be saved")
 		return
 	}
@@ -74,7 +73,7 @@ func (h *Handlers) QuotaRecalc(w http.ResponseWriter, r *http.Request) {
 	reset := true
 	if err := files.RemoveAllBeneath(layout.home, layout.root+"/"+maildirsizeName); err != nil {
 		// #nosec G706 -- integer id and a filesystem error.
-		log.Printf("reset dovecot quota cache mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "reset dovecot quota cache mailbox=%d: %v", mailboxID, err)
 		reset = false
 	}
 

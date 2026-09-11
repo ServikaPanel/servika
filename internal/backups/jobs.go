@@ -387,7 +387,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			if _, err := h.DB.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, d.DomainName, jobID); err != nil {
-				log.Printf("backup job %d: progress update failed: %v", jobID, err)
+				httpx.LogR(r, "backup job %d: progress update failed: %v", jobID, err)
 			}
 			ctx, cancel := context.WithTimeout(jobCtx, 20*time.Minute)
 			size, _, err := backupOneDomain(ctx, h.DB, d.ID, d.SystemUser, "full", "Bulk backup", jobID)
@@ -399,7 +399,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 				failed++
-				log.Printf("backup job %d: domain %d failed: %v", jobID, d.ID, err)
+				httpx.LogR(r, "backup job %d: domain %d failed: %v", jobID, d.ID, err)
 				// The one event that means this domain has no recovery point from
 				// this run. Without this it reached nothing but the log and a
 				// partial job row nobody reads.
@@ -416,7 +416,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 			if _, err := h.DB.Exec(
 				`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, size_b=? WHERE id=?`,
 				succeeded+failed, succeeded, failed, totalBytes, jobID); err != nil {
-				log.Printf("backup job %d: progress update failed: %v", jobID, err)
+				httpx.LogR(r, "backup job %d: progress update failed: %v", jobID, err)
 			}
 		}
 		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
@@ -602,7 +602,7 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var it JobItem
 		if err := rows.Scan(&it.BackupID, &it.DomainID, &it.DomainName, &it.SystemUser, &it.SizeBytes, &it.Type); err != nil {
-			log.Printf("backups: skipping an unreadable job item row: %v", err)
+			httpx.LogR(r, "backups: skipping an unreadable job item row: %v", err)
 			continue
 		}
 		items = append(items, it)
@@ -664,7 +664,7 @@ func (h *Handlers) StopJob(w http.ResponseWriter, r *http.Request) {
 		if _, err := h.DB.Exec(
 			`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW()
 			 WHERE id=? AND status='running'`, jobID); err != nil {
-			log.Printf("backup job %d: could not close hung job: %v", jobID, err)
+			httpx.LogR(r, "backup job %d: could not close hung job: %v", jobID, err)
 		}
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -771,7 +771,7 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			if _, err := h.DB.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, it.domainName, jobID); err != nil {
-				log.Printf("restore job %d: progress update failed: %v", jobID, err)
+				httpx.LogR(r, "restore job %d: progress update failed: %v", jobID, err)
 			}
 			ctx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
 			message, err := restoreCore(ctx, h.DB, it.domainID, it.backupID, req.Mode, req.Clean)
@@ -795,7 +795,7 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 			if _, err := h.DB.Exec(
 				`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, detail=? WHERE id=?`,
 				succeeded+failed, succeeded, failed, string(payload), jobID); err != nil {
-				log.Printf("restore job %d: progress update failed: %v", jobID, err)
+				httpx.LogR(r, "restore job %d: progress update failed: %v", jobID, err)
 			}
 		}
 		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)

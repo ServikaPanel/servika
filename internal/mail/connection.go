@@ -2,7 +2,6 @@ package mail
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"servika/internal/autoconfig"
@@ -36,7 +35,7 @@ func (h *Handlers) ConnectionSettings(w http.ResponseWriter, r *http.Request) {
 		   JOIN mail_domains d ON d.id = m.mail_domain_id
 		  WHERE m.id = ?`, mailboxID).Scan(&email, &domainName); err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("read mailbox=%d for connection settings: %v", mailboxID, err)
+		httpx.LogR(r, "read mailbox=%d for connection settings: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be read")
 		return
 	}
@@ -57,7 +56,7 @@ func (h *Handlers) ConnectionSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("read mail settings for mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "read mail settings for mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the connection settings could not be read")
 		return
 	}

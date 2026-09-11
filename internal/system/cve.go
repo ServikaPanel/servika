@@ -11,7 +11,6 @@ package system
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -247,14 +246,14 @@ func CveUpdate(w http.ResponseWriter, r *http.Request) {
 	logPath := cveLogPath()
 	_ = os.MkdirAll(filepath.Dir(logPath), 0o750)
 	if err := cveWriteWrapper(); err != nil {
-		log.Printf("cve update: prepare wrapper: %v", err)
+		httpx.LogR(r, "cve update: prepare wrapper: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start security update")
 		return
 	}
 	header := fmt.Sprintf("=== Security update started: %s ===\n", time.Now().Format("2006-01-02 15:04:05"))
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(logPath, []byte(header), 0o640); err != nil {
-		log.Printf("cve update: open log %s: %v", logPath, err)
+		httpx.LogR(r, "cve update: open log %s: %v", logPath, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start security update")
 		return
 	}
@@ -267,7 +266,7 @@ func CveUpdate(w http.ResponseWriter, r *http.Request) {
 		"-p", "StandardError=append:"+logPath,
 		cveWrapper)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("cve update: systemd-run start: %v: %s", err, strings.TrimSpace(string(out)))
+		httpx.LogR(r, "cve update: systemd-run start: %v: %s", err, strings.TrimSpace(string(out)))
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start security update")
 		return
 	}

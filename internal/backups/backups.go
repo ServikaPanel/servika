@@ -139,7 +139,7 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&id, &domainName, &systemUser, &frequency, &hour, &retention); err != nil {
 			// A dropped row leaves a domain out of the server-wide summary and out
 			// of the schedule figures computed from it.
-			log.Printf("backups: skipping an unreadable summary row: %v", err)
+			httpx.LogR(r, "backups: skipping an unreadable summary row: %v", err)
 			continue
 		}
 		schedule.add(frequency, hour, retention)
@@ -396,7 +396,7 @@ func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 	// This endpoint moves a body far larger than the server's own read and write
 	// timeouts allow for, so it lifts them for this request alone.
 	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
-		log.Printf("backup download: could not extend the socket deadline: %v", err)
+		httpx.LogR(r, "backup download: could not extend the socket deadline: %v", err)
 	}
 
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

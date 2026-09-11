@@ -16,7 +16,6 @@ package overview
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -78,7 +77,7 @@ ORDER BY d.domain_name`
 			&s.RecordCount, &s.ACount, &s.MXCount, &s.TXTCount, &s.DisabledN); err != nil {
 			// A dropped row is a domain missing from an overview built to show every
 			// domain, so it reads as one that has no DNS at all.
-			log.Printf("overview: skipping an unreadable dns row: %v", err)
+			httpx.LogR(r, "overview: skipping an unreadable dns row: %v", err)
 			continue
 		}
 		s.DNSSEC = dnssec == 1
@@ -168,7 +167,7 @@ func (h *Handlers) SSL(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&s.DomainID, &s.DomainName, &s.Status, &enabled, &s.Expiry, &s.Source, &remaining); err != nil {
 			// A dropped row hides a certificate from the screen an operator uses to
 			// find the ones about to expire.
-			log.Printf("overview: skipping an unreadable ssl row: %v", err)
+			httpx.LogR(r, "overview: skipping an unreadable ssl row: %v", err)
 			continue
 		}
 		s.Enabled = enabled == 1
@@ -228,7 +227,7 @@ ORDER BY d.domain_name`
 		if err := rows.Scan(&s.DomainID, &s.DomainName, &s.MailStatus,
 			&s.MailboxCount, &s.AliasCount, &s.SuspendedBox); err != nil {
 			// A dropped row reads as a domain with no mail service at all.
-			log.Printf("overview: skipping an unreadable mail row: %v", err)
+			httpx.LogR(r, "overview: skipping an unreadable mail row: %v", err)
 			continue
 		}
 		s.MailEnabled = s.MailStatus != ""
@@ -346,7 +345,7 @@ ORDER BY d.domain_name, a.db_name`
 		// than discarded silently, because a list that is quietly short reads as
 		// "this database does not exist".
 		if err := rows.Scan(&s.ID, &s.DomainID, &s.DomainName, &s.DBName, &s.DBUser, &s.DBHost, &s.DBPass, &s.CreatedAt); err != nil {
-			log.Printf("overview: skipping unreadable db_accounts row: %v", err)
+			httpx.LogR(r, "overview: skipping unreadable db_accounts row: %v", err)
 			continue
 		}
 		s.DBPass = revealDBPass(s.DBUser, s.DBPass)

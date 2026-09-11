@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -45,7 +44,7 @@ func (h *Handlers) UploadArchive(w http.ResponseWriter, r *http.Request) {
 	// This endpoint moves a body far larger than the server's own read and write
 	// timeouts allow for, so it lifts them for this request alone.
 	if err := httpx.ExtendDeadline(w, r, httpx.LargeTransferDeadline); err != nil {
-		log.Printf("archive upload: could not extend the socket deadline: %v", err)
+		httpx.LogR(r, "archive upload: could not extend the socket deadline: %v", err)
 	}
 
 	_, home, systemUser, err := h.domain(r)

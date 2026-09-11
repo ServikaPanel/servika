@@ -2,7 +2,6 @@ package domains
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"servika/internal/geoip"
@@ -61,7 +60,7 @@ func (h *Handlers) GetGeo(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&code); err != nil {
 			// A dropped country is one the operator saved and can no longer see or
 			// remove, while the rule it belongs to keeps being enforced.
-			log.Printf("country rules: skipping an unreadable code: %v", err)
+			httpx.LogR(r, "country rules: skipping an unreadable code: %v", err)
 			continue
 		}
 		countries = append(countries, code)

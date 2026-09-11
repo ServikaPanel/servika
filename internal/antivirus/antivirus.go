@@ -327,7 +327,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		result, confined, err := Scan(ctx, req, strconv.FormatInt(sid, 10))
 		if err != nil {
 			// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("antivirus: scan %d could not run: %v", sid, err)
+			httpx.LogR(r, "antivirus: scan %d could not run: %v", sid, err)
 		}
 		for _, f := range result.Findings {
 			_ = insertFinding(h.DB, sid, id, f)

@@ -91,7 +91,7 @@ func (h *Handlers) PutNameserver(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE panel_settings SET ns1_hostname=?, ns2_hostname=? WHERE id=1`, ns1, ns2); err != nil {
-		log.Printf("save panel nameservers: %v", err)
+		httpx.LogR(r, "save panel nameservers: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "nameservers could not be saved")
 		return
 	}
@@ -116,7 +116,7 @@ func (h *Handlers) GetResellerNameserver(w http.ResponseWriter, r *http.Request)
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("read reseller nameservers user=%d: %v", claims.UserID, err)
+		httpx.LogR(r, "read reseller nameservers user=%d: %v", claims.UserID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "nameservers could not be read")
 		return
 	}
@@ -151,7 +151,7 @@ func (h *Handlers) PutResellerNameserver(w http.ResponseWriter, r *http.Request)
 		 ON DUPLICATE KEY UPDATE ns1=VALUES(ns1), ns2=VALUES(ns2)`,
 		claims.UserID, ns1, ns2); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("save reseller nameservers user=%d: %v", claims.UserID, err)
+		httpx.LogR(r, "save reseller nameservers user=%d: %v", claims.UserID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "nameservers could not be saved")
 		return
 	}
@@ -179,7 +179,7 @@ type MigrationResult struct {
 func (h *Handlers) MigrateNameservers(w http.ResponseWriter, r *http.Request) {
 	result, err := MigrateNameserverRecords(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("migrate nameserver records: %v", err)
+		httpx.LogR(r, "migrate nameserver records: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "nameserver migration failed")
 		return
 	}

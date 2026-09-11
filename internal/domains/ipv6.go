@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -90,7 +89,7 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 
 	changed, err := dns.RepointIPv6(r.Context(), h.DB, id, domainName, previous, value)
 	if err != nil {
-		log.Printf("repoint AAAA records for domain %d: %v", id, err)
+		httpx.LogR(r, "repoint AAAA records for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the address was saved but its DNS records could not be updated")
 		return
@@ -99,7 +98,7 @@ func (h *Handlers) SetIPv6(w http.ResponseWriter, r *http.Request) {
 	// edited by hand is brought back into line, and named-checkzone is the gate
 	// that refuses a zone this would have broken.
 	if err := dns.WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after IPv6 change for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after IPv6 change for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the records were updated but the DNS zone could not be written")
 		return

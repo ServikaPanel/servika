@@ -141,7 +141,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	row := h.DB.QueryRowContext(r.Context(), selectAll+" WHERE id=?", nid)
 	saved, _ := scan(row)
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after record create for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after record create for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "record saved but DNS zone could not be updated")
 		return
 	}
@@ -194,7 +194,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	row := h.DB.QueryRowContext(r.Context(), selectAll+" WHERE id=? AND domain_id=?", rid, id)
 	saved, _ := scan(row)
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after record update for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after record update for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "record saved but DNS zone could not be updated")
 		return
 	}
@@ -261,7 +261,7 @@ func (h *Handlers) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	n, _ := res.RowsAffected()
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after bulk delete for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after bulk delete for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "records deleted but DNS zone could not be updated")
 		return
 	}
@@ -313,7 +313,7 @@ func (h *Handlers) BulkStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	n, _ := res.RowsAffected()
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after bulk status change for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after bulk status change for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "records updated but DNS zone could not be updated")
 		return
 	}
@@ -340,7 +340,7 @@ func (h *Handlers) ApplyTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after template apply for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after template apply for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "records added but DNS zone could not be updated")
 		return
 	}

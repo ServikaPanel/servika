@@ -598,7 +598,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	out2, _ := runWP(systemUser, "core", "update-db", "--path="+dir)
 	if e1 != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("wp core update failed for %s (dir=%s): %s", systemUser, dir, strings.TrimSpace(string(out1)))
+		httpx.LogR(r, "wp core update failed for %s (dir=%s): %s", systemUser, dir, strings.TrimSpace(string(out1)))
 		httpx.WriteError(w, http.StatusInternalServerError, "update failed")
 		return
 	}

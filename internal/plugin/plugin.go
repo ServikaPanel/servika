@@ -89,7 +89,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&plugin.Name, &plugin.Label, &plugin.Version, &enabled, &ui, &plugin.Health); err != nil {
 			// A dropped row is an installed plugin the operator cannot see, so they
 			// cannot disable or remove it either.
-			log.Printf("plugin list: skipping an unreadable row: %v", err)
+			httpx.LogR(r, "plugin list: skipping an unreadable row: %v", err)
 			continue
 		}
 		plugin.Enabled, plugin.UI = enabled == 1, ui == 1
@@ -177,7 +177,7 @@ func (h *Handlers) Proxy(w http.ResponseWriter, r *http.Request) {
 			// log; the caller gets a code it can act on, plus the header that tells
 			// a client this is worth retrying rather than a permanent gateway fault.
 			// #nosec G706 -- name passed validName above, an allowlist of [a-z0-9-] bounded to 64 characters, so it cannot carry CR/LF or control characters; err is a dial error.
-			log.Printf("plugin proxy %s: %v", name, err)
+			httpx.LogR(r, "plugin proxy %s: %v", name, err)
 			w.Header().Set("Retry-After", "3")
 			httpx.WriteError(w, http.StatusServiceUnavailable, "plugin is restarting")
 		},

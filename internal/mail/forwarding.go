@@ -41,7 +41,7 @@ func (h *Handlers) ForwardingGet(w http.ResponseWriter, r *http.Request) {
 	forwarding, err := readForwarding(r.Context(), h.DB, mailboxID)
 	if err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("read forwarding mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "read forwarding mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the forwarding")
 		return
 	}
@@ -78,7 +78,7 @@ func (h *Handlers) ForwardingPut(w http.ResponseWriter, r *http.Request) {
 		if _, err := h.DB.ExecContext(r.Context(),
 			`DELETE FROM mail_forwarding WHERE mailbox_id=?`, mailboxID); err != nil {
 			// #nosec G706 -- integer id only.
-			log.Printf("clear forwarding mailbox=%d: %v", mailboxID, err)
+			httpx.LogR(r, "clear forwarding mailbox=%d: %v", mailboxID, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
 			return
 		}
@@ -101,7 +101,7 @@ func (h *Handlers) ForwardingPut(w http.ResponseWriter, r *http.Request) {
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT email FROM mailboxes WHERE id=?`, mailboxID).Scan(&email); err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("read mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "read mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
 		return
 	}
@@ -119,7 +119,7 @@ func (h *Handlers) ForwardingPut(w http.ResponseWriter, r *http.Request) {
 		 ON DUPLICATE KEY UPDATE destinations=VALUES(destinations), keep_copy=VALUES(keep_copy)`,
 		mailboxID, strings.Join(destinations, ","), boolToInt(request.KeepCopy)); err != nil {
 		// #nosec G706 -- integer id only.
-		log.Printf("save forwarding mailbox=%d: %v", mailboxID, err)
+		httpx.LogR(r, "save forwarding mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
 		return
 	}

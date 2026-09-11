@@ -102,7 +102,7 @@ func (h *Handlers) AdminDBScan(w http.ResponseWriter, r *http.Request) {
 
 	schemas, err := h.tenantSchemas(ctx)
 	if err != nil {
-		log.Printf("antivirus: the tenant database list could not be read: %v", err)
+		httpx.LogR(r, "antivirus: the tenant database list could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the tenant databases could not be listed")
 		return
 	}
@@ -115,7 +115,7 @@ func (h *Handlers) AdminDBScan(w http.ResponseWriter, r *http.Request) {
 		findings, installed, err := scanSchema(ctx, schema)
 		if err != nil {
 			// #nosec G706 -- the schema name passed ValidDBIdentifier, so it carries no CR/LF.
-			log.Printf("antivirus: %s could not be scanned: %v", schema.name, err)
+			httpx.LogR(r, "antivirus: %s could not be scanned: %v", schema.name, err)
 			result.Failed++
 			continue
 		}
@@ -131,7 +131,7 @@ func (h *Handlers) AdminDBScan(w http.ResponseWriter, r *http.Request) {
 		// produced it exactly as a file finding is.
 		if _, err := RecordScan(h.DB, schema.domainID, EngineDatabase, len(findings), findings); err != nil {
 			// #nosec G706 -- the schema name passed ValidDBIdentifier.
-			log.Printf("antivirus: the findings for %s could not be recorded: %v", schema.name, err)
+			httpx.LogR(r, "antivirus: the findings for %s could not be recorded: %v", schema.name, err)
 			result.Failed++
 			continue
 		}

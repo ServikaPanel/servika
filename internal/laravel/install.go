@@ -100,7 +100,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	// it cannot be written rather than proceeding with broken status tracking.
 	if err := h.upsertBase(r.Context(), id, appRoot, req.Mode, phpVersion, ""); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("laravel upsertBase domain %d: %v", id, err)
+		httpx.LogR(r, "laravel upsertBase domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not initialize Laravel app record")
 		return
 	}
@@ -119,7 +119,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		if _, err := os.Stat(filepath.Join(appDir, "public")); err == nil {
 			if err := h.setDocroot(r.Context(), id, systemUser, publicSubdirectory(appRoot)); err != nil {
 				// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-				log.Printf("laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
+				httpx.LogR(r, "laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
 			}
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": gitOK, "async": false, "output": out, "message": "Empty git repository created. Push code and deploy from the Deploy tab."})

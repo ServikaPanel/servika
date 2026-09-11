@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"regexp"
@@ -121,7 +120,7 @@ func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
 			// A dropped rule is one the operator saved and can no longer see, so
 			// they cannot remove it either.
 			// #nosec G706 -- id is an int64; %d cannot carry a line break into the log.
-			log.Printf("ip rules: skipping an unreadable rule for domain %d: %v", id, err)
+			httpx.LogR(r, "ip rules: skipping an unreadable rule for domain %d: %v", id, err)
 			continue
 		}
 		rules = append(rules, rule)

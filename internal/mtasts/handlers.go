@@ -78,7 +78,7 @@ func (h *Handlers) Policy(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		// #nosec G706 -- domain came through policyHostDomain, which rejects control characters and separators; err is a database driver error.
-		log.Printf("mtasts: look up the policy for %s: %v", domain, err)
+		httpx.LogR(r, "mtasts: look up the policy for %s: %v", domain, err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "the policy is temporarily unavailable")
 		return
 	}
@@ -89,7 +89,7 @@ func (h *Handlers) Policy(w http.ResponseWriter, r *http.Request) {
 
 	hosts, err := MXHosts(r.Context(), h.DB, id)
 	if err != nil {
-		log.Printf("mtasts: read the MX hosts for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: read the MX hosts for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "the policy is temporarily unavailable")
 		return
 	}
@@ -99,7 +99,7 @@ func (h *Handlers) Policy(w http.ResponseWriter, r *http.Request) {
 		// PolicyFile refuses to render rather than serve a policy that matches
 		// no server. Answering 404 leaves the domain unprotected; serving that
 		// file would reject its mail outright.
-		log.Printf("mtasts: render the policy for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: render the policy for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusNotFound, "no MTA-STS policy is published for this host")
 		return
 	}
@@ -108,7 +108,7 @@ func (h *Handlers) Policy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(body)); err != nil {
-		log.Printf("mtasts: write the policy for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: write the policy for domain %d: %v", id, err)
 	}
 }
 
@@ -121,7 +121,7 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("mtasts: read the state for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: read the state for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -159,7 +159,7 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("mtasts: load domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: load domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -167,7 +167,7 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 	if requested == ModeEnforce {
 		hosts, err := MXHosts(r.Context(), h.DB, id)
 		if err != nil {
-			log.Printf("mtasts: read the MX hosts for domain %d: %v", id, err)
+			httpx.LogR(r, "mtasts: read the MX hosts for domain %d: %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -182,7 +182,7 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, err := setMode(r.Context(), h.DB, id, ModeEnforce, true); err != nil {
-			log.Printf("mtasts: set enforce for domain %d: %v", id, err)
+			httpx.LogR(r, "mtasts: set enforce for domain %d: %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -201,12 +201,12 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := WriteEnableRecords(r.Context(), h.DB, id, row.domainName, h.IPv4); err != nil {
-		log.Printf("mtasts: write the enable records for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: write the enable records for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the DNS records could not be written")
 		return
 	}
 	if _, err := setMode(r.Context(), h.DB, id, ModePendingDNS, false); err != nil {
-		log.Printf("mtasts: set pending_dns for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: set pending_dns for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -232,7 +232,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("mtasts: load domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: load domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -244,12 +244,12 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		// The sequence never got as far as publishing anything senders could
 		// cache, so there is nothing to age out and the records can go now.
 		if err := RemoveRecords(r.Context(), h.DB, id); err != nil {
-			log.Printf("mtasts: remove the records for domain %d: %v", id, err)
+			httpx.LogR(r, "mtasts: remove the records for domain %d: %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the DNS records could not be updated")
 			return
 		}
 		if _, err := setMode(r.Context(), h.DB, id, ModeOff, false); err != nil {
-			log.Printf("mtasts: set off for domain %d: %v", id, err)
+			httpx.LogR(r, "mtasts: set off for domain %d: %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
@@ -257,7 +257,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := setMode(r.Context(), h.DB, id, ModeWithdrawing, true); err != nil {
-		log.Printf("mtasts: set withdrawing for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: set withdrawing for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -286,7 +286,7 @@ func (h *Handlers) republish(r *http.Request, id int64) error {
 func (h *Handlers) respondState(w http.ResponseWriter, r *http.Request, id int64) {
 	state, err := Read(r.Context(), h.DB, id)
 	if err != nil {
-		log.Printf("mtasts: read the state for domain %d: %v", id, err)
+		httpx.LogR(r, "mtasts: read the state for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}

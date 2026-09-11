@@ -2,7 +2,6 @@ package domainblock
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
 
 	"servika/internal/httpx"
@@ -31,7 +30,7 @@ const ReasonUnreadable = "domain_block_list_unreadable"
 func RefuseIfBlocked(w http.ResponseWriter, r *http.Request, db *sql.DB, hostname string) bool {
 	blocked, _, err := Blocked(r.Context(), db, hostname)
 	if err != nil {
-		log.Printf("banned domain list read: %v", err)
+		httpx.LogR(r, "banned domain list read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, ReasonUnreadable)
 		return true
 	}

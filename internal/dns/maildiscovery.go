@@ -105,7 +105,7 @@ func ApplyMailDiscovery(ctx context.Context, db *sql.DB) (MailDiscoveryResult, e
 func (h *Handlers) MigrateMailDiscovery(w http.ResponseWriter, r *http.Request) {
 	result, err := ApplyMailDiscovery(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("apply mail discovery records: %v", err)
+		httpx.LogR(r, "apply mail discovery records: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "mail discovery record migration failed")
 		return
 	}

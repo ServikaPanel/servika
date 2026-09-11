@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -231,7 +230,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	web := loadWebRender(r.Context(), h.DB, id, 0, fqdn, false)
 	if message, err := publishSubdomainVhost(conf, vhost(fqdn, docroot, socket, "", web)); err != nil {
 		// #nosec G706 -- logged values are a validated fqdn and command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("subdomain create %s: %v", fqdn, err)
+		httpx.LogR(r, "subdomain create %s: %v", fqdn, err)
 		httpx.WriteError(w, http.StatusInternalServerError, message)
 		return
 	}
@@ -252,10 +251,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	if sid, idErr := result.LastInsertId(); idErr == nil && sid > 0 {
 		if _, fpmErr := provisioner.ApplySubdomainFPM(h.DB, id, sid, systemUser, docroot, phpVersion); fpmErr != nil {
 			// #nosec G706 -- fqdn passed provisioner.ValidateDomain above, so it carries no CR/LF; the error value is command output, not raw tenant input.
-			log.Printf("subdomain %s dedicated PHP-FPM pool: %v", fqdn, fpmErr)
+			httpx.LogR(r, "subdomain %s dedicated PHP-FPM pool: %v", fqdn, fpmErr)
 		} else if rerr := ReRender(h.DB, sid); rerr != nil {
 			// #nosec G706 -- fqdn passed provisioner.ValidateDomain above, so it carries no CR/LF; the error value is command output, not raw tenant input.
-			log.Printf("subdomain %s vhost re-render after pool install: %v", fqdn, rerr)
+			httpx.LogR(r, "subdomain %s vhost re-render after pool install: %v", fqdn, rerr)
 		}
 	}
 	// Add the DNS A record to the parent zone and rewrite the zone file.
@@ -348,14 +347,14 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// foreign key cannot clean these up; remove them explicitly or the ids would be
 	// reused by a later subdomain and silently inherit the deleted one's settings.
 	if _, err := h.DB.Exec(`DELETE FROM php_settings WHERE domain_id=? AND subdomain_id=?`, id, sid); err != nil {
-		log.Printf("delete subdomain PHP settings %d: %v", sid, err)
+		httpx.LogR(r, "delete subdomain PHP settings %d: %v", sid, err)
 	}
 	if _, err := h.DB.Exec(`DELETE FROM nginx_settings WHERE domain_id=? AND subdomain_id=?`, id, sid); err != nil {
-		log.Printf("delete subdomain nginx settings %d: %v", sid, err)
+		httpx.LogR(r, "delete subdomain nginx settings %d: %v", sid, err)
 	}
 	provisioner.RemoveSubdomainFPM(systemUser, sid)
 	if _, err := h.DB.Exec(`DELETE FROM dns_records WHERE domain_id=? AND name=? AND type='A'`, id, subdomainName); err != nil {
-		log.Printf("delete subdomain DNS record %s: %v", subdomainName, err)
+		httpx.LogR(r, "delete subdomain DNS record %s: %v", subdomainName, err)
 		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	}
 	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
@@ -369,7 +368,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// the jail while the string still reads /home/<user>/subdomains/... The mkdir
 	// a few lines up already refuses that; the removal did not.
 	if err := files.RemoveAllBeneath("/home/"+systemUser, "subdomains/"+fqdn); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("delete subdomain document root %s: %v", fqdn, err)
+		httpx.LogR(r, "delete subdomain document root %s: %v", fqdn, err)
 	}
 	// The certificate goes with it. Left behind, ~/ssl/<fqdn>.crt and .key
 	// outlive everything that referred to them, and creating the same name again
@@ -379,11 +378,11 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// Same removal as above, for the same reason: ~/ssl is the tenant's too.
 	for _, extension := range []string{".crt", ".key"} {
 		if err := files.RemoveAllBeneath("/home/"+systemUser, "ssl/"+fqdn+extension); err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("delete subdomain certificate %s%s: %v", fqdn, extension, err)
+			httpx.LogR(r, "delete subdomain certificate %s%s: %v", fqdn, extension, err)
 		}
 	}
 	if err := dns.WriteZone(r.Context(), h.DB, id); err != nil {
-		log.Printf("write DNS zone after subdomain delete %s: %v", subdomainName, err)
+		httpx.LogR(r, "write DNS zone after subdomain delete %s: %v", subdomainName, err)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

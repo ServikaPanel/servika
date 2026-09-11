@@ -6,7 +6,6 @@ package panelsettings
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -29,7 +28,7 @@ type sessionIdleBody struct {
 func (h *Handlers) SessionIdleGet(w http.ResponseWriter, r *http.Request) {
 	minutes, err := sessionidle.Minutes(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("session idle setting read: %v", err)
+		httpx.LogR(r, "session idle setting read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "panel settings could not be read")
 		return
 	}
@@ -57,7 +56,7 @@ func (h *Handlers) SessionIdleSave(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE panel_settings SET session_idle_minutes=? WHERE id=1`, req.Minutes); err != nil {
 		middleware.RecordAudit(h.DB, r, "panel.session_idle", target, false)
-		log.Printf("session idle setting write: %v", err)
+		httpx.LogR(r, "session idle setting write: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "panel settings could not be saved")
 		return
 	}

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -86,7 +85,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	}
 	descriptor := opDescriptor{Kind: string(kind), Version: version, Action: "install"}
 	if err := startOp(descriptor, script); err != nil {
-		log.Printf("runtime install %s %s: %v", kind, version, err)
+		httpx.LogR(r, "runtime install %s %s: %v", kind, version, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the installation")
 		return
 	}
@@ -144,7 +143,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	}
 	descriptor := opDescriptor{Kind: string(kind), Version: version, Action: "remove"}
 	if err := startOp(descriptor, script); err != nil {
-		log.Printf("runtime remove %s %s: %v", kind, version, err)
+		httpx.LogR(r, "runtime remove %s %s: %v", kind, version, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the removal")
 		return
 	}

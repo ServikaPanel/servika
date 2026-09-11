@@ -2,7 +2,6 @@ package mailreport
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -72,7 +71,7 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusNotFound, "domain not found")
 			return
 		}
-		log.Printf("mail report status for domain %d: %v", id, err)
+		httpx.LogR(r, "mail report status for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the report status could not be read")
 		return
 	}
@@ -83,13 +82,13 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	// would read as "no reports have ever arrived".
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM dmarc_reports WHERE domain_id=?`, id).Scan(&dmarcCount); err != nil {
-		log.Printf("mail report count for domain %d: %v", id, err)
+		httpx.LogR(r, "mail report count for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the report status could not be read")
 		return
 	}
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM tlsrpt_reports WHERE domain_id=?`, id).Scan(&tlsCount); err != nil {
-		log.Printf("mail report count for domain %d: %v", id, err)
+		httpx.LogR(r, "mail report count for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the report status could not be read")
 		return
 	}
@@ -111,7 +110,7 @@ func (h *Handlers) DMARC(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	sources, err := Sources(r.Context(), h.DB, id, days)
 	if err != nil {
-		log.Printf("mail report sources for domain %d: %v", id, err)
+		httpx.LogR(r, "mail report sources for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the reports could not be read")
 		return
 	}
@@ -124,7 +123,7 @@ func (h *Handlers) TLSRPT(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	summary, err := TLSOverview(r.Context(), h.DB, id, days)
 	if err != nil {
-		log.Printf("mail report TLS overview for domain %d: %v", id, err)
+		httpx.LogR(r, "mail report TLS overview for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the reports could not be read")
 		return
 	}

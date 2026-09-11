@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os/exec"
 	"regexp"
@@ -39,7 +38,7 @@ func (h *Handlers) QueueList(w http.ResponseWriter, r *http.Request) {
 	cmd.Env = subprocessEnv
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("mail queue stdout pipe: %v", err)
+		httpx.LogR(r, "mail queue stdout pipe: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the Postfix queue")
 		return
 	}
@@ -47,7 +46,7 @@ func (h *Handlers) QueueList(w http.ResponseWriter, r *http.Request) {
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		// #nosec G706 -- the exec error names the binary, not a tenant string.
-		log.Printf("mail queue start: %v", err)
+		httpx.LogR(r, "mail queue start: %v", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "could not read the Postfix queue")
 		return
 	}

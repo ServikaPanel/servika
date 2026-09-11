@@ -26,7 +26,6 @@ package antivirus
 import (
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,7 +100,7 @@ func (h *Handlers) AdminDomains(w http.ResponseWriter, r *http.Request) {
 	// #nosec G202 G701 -- condition is a constant scope fragment from ScopeCondition with a literal alias; every user value is bound through args.
 	rows, err := h.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
-		log.Printf("antivirus: the domain list could not be read: %v", err)
+		httpx.LogR(r, "antivirus: the domain list could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the domain list")
 		return
 	}
@@ -118,7 +117,7 @@ func (h *Handlers) AdminDomains(w http.ResponseWriter, r *http.Request) {
 			// A failed row is REPORTED, never skipped. A short list here reads as
 			// fewer domains carrying findings than there are, which is the one
 			// answer this screen must not invent.
-			log.Printf("antivirus: a domain row could not be read: %v", err)
+			httpx.LogR(r, "antivirus: a domain row could not be read: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "could not read the domain list")
 			return
 		}
@@ -130,14 +129,14 @@ func (h *Handlers) AdminDomains(w http.ResponseWriter, r *http.Request) {
 		out = append(out, entry)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("antivirus: the domain list read ended early: %v", err)
+		httpx.LogR(r, "antivirus: the domain list read ended early: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the domain list")
 		return
 	}
 
 	sweep, err := lastSweepAt(r, h.DB)
 	if err != nil {
-		log.Printf("antivirus: the last sweep could not be read: %v", err)
+		httpx.LogR(r, "antivirus: the last sweep could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read the domain list")
 		return
 	}

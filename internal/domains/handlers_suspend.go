@@ -45,7 +45,7 @@ func (h *Handlers) setSuspended(w http.ResponseWriter, r *http.Request, suspende
 		return
 	}
 	if err != nil {
-		log.Printf("apply domain suspension state: %v", err)
+		httpx.LogR(r, "apply domain suspension state: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update domain")
 		return
 	}

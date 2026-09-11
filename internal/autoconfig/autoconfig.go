@@ -213,7 +213,7 @@ func (h *Handlers) resolve(w http.ResponseWriter, r *http.Request) (domain, mail
 	domain, hosted, err := h.hostedDomainFor(r, requested)
 	if err != nil {
 		// #nosec G706 -- requested came through normalizeHost, which accepts only the hostname alphabet, so it cannot carry CR/LF or control characters; err is a database driver error.
-		log.Printf("autoconfig lookup for %s: %v", requested, err)
+		httpx.LogR(r, "autoconfig lookup for %s: %v", requested, err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "mail settings are temporarily unavailable")
 		return "", "", false
 	}

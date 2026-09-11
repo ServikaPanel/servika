@@ -448,10 +448,10 @@ func (h *Handlers) Open(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err := disableUser(systemUser); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("redis enable rollback ACL user %s: %v", systemUser, err)
+			httpx.LogR(r, "redis enable rollback ACL user %s: %v", systemUser, err)
 		}
 		// #nosec G706 -- logged values are a validated identifier and an error; no raw tenant string with CR/LF reaches the log.
-		log.Printf("redis enable: could not seal the password for %s: %v", systemUser, err)
+		httpx.LogR(r, "redis enable: could not seal the password for %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "redis settings could not be saved")
 		return
 	}
@@ -461,7 +461,7 @@ func (h *Handlers) Open(w http.ResponseWriter, r *http.Request) {
 		id, systemUser, sealed); err != nil {
 		if err := disableUser(systemUser); err != nil { // Roll back the ACL if the database write fails.
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("redis enable rollback ACL user %s: %v", systemUser, err)
+			httpx.LogR(r, "redis enable rollback ACL user %s: %v", systemUser, err)
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, "redis settings could not be saved")
 		return
@@ -488,13 +488,13 @@ func (h *Handlers) Close(w http.ResponseWriter, r *http.Request) {
 	disconnectWordPress(systemUser) // Remove the WordPress drop-in while the credentials are still valid.
 	if err := disableUser(systemUser); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("redis disable ACL user %s: %v", systemUser, err)
+		httpx.LogR(r, "redis disable ACL user %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not revoke Redis credentials")
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_redis WHERE domain_id=?`, id); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("redis delete domain_redis row %d: %v", id, err)
+		httpx.LogR(r, "redis delete domain_redis row %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update Redis state")
 		return
 	}

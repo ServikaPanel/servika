@@ -12,7 +12,6 @@ package system
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -146,7 +145,7 @@ func KernelcarePatch(w http.ResponseWriter, r *http.Request) {
 	logPath := kcLogPath()
 	_ = os.MkdirAll(filepath.Dir(logPath), 0o750)
 	if err := kcWriteWrapper(); err != nil {
-		log.Printf("kernelcare: prepare wrapper: %v", err)
+		httpx.LogR(r, "kernelcare: prepare wrapper: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start live patching")
 		return
 	}
@@ -154,7 +153,7 @@ func KernelcarePatch(w http.ResponseWriter, r *http.Request) {
 	wrapper := kcWrapper()
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(logPath, []byte(header), 0o640); err != nil {
-		log.Printf("kernelcare: open log %s: %v", logPath, err)
+		httpx.LogR(r, "kernelcare: open log %s: %v", logPath, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start live patching")
 		return
 	}
@@ -167,7 +166,7 @@ func KernelcarePatch(w http.ResponseWriter, r *http.Request) {
 		"-p", "StandardError=append:"+logPath,
 		wrapper)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("kernelcare: systemd-run start: %v: %s", err, strings.TrimSpace(string(out)))
+		httpx.LogR(r, "kernelcare: systemd-run start: %v: %s", err, strings.TrimSpace(string(out)))
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start live patching")
 		return
 	}

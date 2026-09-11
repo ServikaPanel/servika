@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -243,7 +242,7 @@ func (h *Handlers) SaveCustomVhost(w http.ResponseWriter, r *http.Request) {
 		if _, rollbackErr := h.DB.ExecContext(r.Context(),
 			`UPDATE domains SET custom_vhost_enabled=?, custom_vhost_content=? WHERE id=?`,
 			previousEnabled, previousContent, id); rollbackErr != nil {
-			log.Printf("custom vhost rollback failed for domain %d: %v", id, rollbackErr)
+			httpx.LogR(r, "custom vhost rollback failed for domain %d: %v", id, rollbackErr)
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to apply custom vhost")
 		return

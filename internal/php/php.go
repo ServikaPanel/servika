@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -798,7 +797,7 @@ func (h *Handlers) applySubdomain(w http.ResponseWriter, r *http.Request, domain
 			if _, rollbackErr := h.DB.ExecContext(r.Context(),
 				`UPDATE subdomains SET php_version=? WHERE id=? AND domain_id=?`, previousVersion, subdomainID, domainID); rollbackErr != nil {
 				// #nosec G706 -- the logged values are an integer id and a database error, never raw tenant text.
-				log.Printf("subdomain %d PHP version rollback failed: %v", subdomainID, rollbackErr)
+				httpx.LogR(r, "subdomain %d PHP version rollback failed: %v", subdomainID, rollbackErr)
 			}
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to apply PHP pool configuration")

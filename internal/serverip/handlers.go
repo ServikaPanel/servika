@@ -97,7 +97,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 	records, err := h.records(r)
 	if err != nil {
-		log.Printf("server ip records: %v", err)
+		httpx.LogR(r, "server ip records: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -210,7 +210,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		 VALUES (?,?,?,?,?,?)`,
 		ip.String(), device, body.Prefix, label, body.Note, actor)
 	if err != nil {
-		log.Printf("server ip insert: %v", err)
+		httpx.LogR(r, "server ip insert: %v", err)
 		httpx.WriteError(w, http.StatusConflict, "this address is already recorded")
 		return
 	}
@@ -226,7 +226,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := WritePersistence(r.Context(), h.DB); err != nil {
-		log.Printf("server ip persistence: %v", err)
+		httpx.LogR(r, "server ip persistence: %v", err)
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"id": id, "ip": ip.String(), "interface": device, "label": label,
 			// The address IS live; it is the reboot that is not covered. Saying
@@ -269,7 +269,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("server ip lookup %d: %v", id, err)
+		httpx.LogR(r, "server ip lookup %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -303,7 +303,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		// already took away by hand.
 		h.forget(r, id)
 		if err := WritePersistence(r.Context(), h.DB); err != nil {
-			log.Printf("server ip persistence: %v", err)
+			httpx.LogR(r, "server ip persistence: %v", err)
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"removed": id, "was_absent": true})
 		return
@@ -318,7 +318,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	}
 	h.forget(r, id)
 	if err := WritePersistence(r.Context(), h.DB); err != nil {
-		log.Printf("server ip persistence: %v", err)
+		httpx.LogR(r, "server ip persistence: %v", err)
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"removed": id,
 			"warning": "the address is gone but the reboot script could not be rewritten",

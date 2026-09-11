@@ -3,7 +3,6 @@ package optimize
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"sync"
@@ -51,7 +50,7 @@ func (h *Handlers) Proposals(w http.ResponseWriter, r *http.Request) {
 
 	notes := make([]string, 0, len(problems))
 	for _, problem := range problems {
-		log.Printf("optimize read: %v", problem)
+		httpx.LogR(r, "optimize read: %v", problem)
 		notes = append(notes, problem.Error())
 	}
 
@@ -89,7 +88,7 @@ func (h *Handlers) ApplyChosen(w http.ResponseWriter, r *http.Request) {
 
 	result, err := Apply(r.Context(), h.DB, body.IDs, actorOf(r))
 	if err != nil {
-		log.Printf("optimize apply: %v", err)
+		httpx.LogR(r, "optimize apply: %v", err)
 		if reason := ReasonOf(err); reason != "" {
 			writeRefusal(w, http.StatusConflict, reason, err.Error())
 			return
@@ -105,7 +104,7 @@ func (h *Handlers) ListHistory(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	changes, err := History(r.Context(), h.DB, limit)
 	if err != nil {
-		log.Printf("optimize history: %v", err)
+		httpx.LogR(r, "optimize history: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -124,7 +123,7 @@ func (h *Handlers) RevertChange(w http.ResponseWriter, r *http.Request) {
 	defer h.applying.Unlock()
 
 	if err := Revert(r.Context(), h.DB, id); err != nil {
-		log.Printf("optimize revert %d: %v", id, err)
+		httpx.LogR(r, "optimize revert %d: %v", id, err)
 		if reason := ReasonOf(err); reason != "" {
 			writeRefusal(w, http.StatusConflict, reason, err.Error())
 			return

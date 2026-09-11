@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -171,7 +170,7 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 	// The page file is written BEFORE the vhost points at it. The other order
 	// leaves a window in which nginx serves a location whose file is absent.
 	if err := provisioner.WriteMaintenancePage(id, page); err != nil {
-		log.Printf("write maintenance page for domain %d: %v", id, err)
+		httpx.LogR(r, "write maintenance page for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the maintenance page could not be written")
 		return
 	}
@@ -210,7 +209,7 @@ func (h *Handlers) MaintenanceSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
-		log.Printf("rerender vhost after maintenance change for domain %d: %v", id, err)
+		httpx.LogR(r, "rerender vhost after maintenance change for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the settings were saved but the web server configuration could not be applied")
 		return
@@ -271,7 +270,7 @@ func (h *Handlers) MaintenanceIPAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
-		log.Printf("rerender vhost after maintenance ip add for domain %d: %v", id, err)
+		httpx.LogR(r, "rerender vhost after maintenance ip add for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the address was added but the web server configuration could not be applied")
 		return
@@ -293,7 +292,7 @@ func (h *Handlers) MaintenanceIPDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
-		log.Printf("rerender vhost after maintenance ip delete for domain %d: %v", id, err)
+		httpx.LogR(r, "rerender vhost after maintenance ip delete for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError,
 			"the address was removed but the web server configuration could not be applied")
 		return

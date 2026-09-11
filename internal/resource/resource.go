@@ -4,7 +4,6 @@ package resource
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -155,7 +154,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 			if err := rows.Scan(&u); err != nil {
 				// The length of this list IS the reported database count, so a
 				// dropped row tells the customer they have room they do not have.
-				log.Printf("resource: skipping an unreadable database account for domain %d: %v", id, err)
+				httpx.LogR(r, "resource: skipping an unreadable database account for domain %d: %v", id, err)
 				continue
 			}
 			dbUsers = append(dbUsers, u)
@@ -164,7 +163,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 			// The length of this list IS the reported database count, so a short
 			// read understates usage and the customer is told they have room they
 			// do not have.
-			log.Printf("resource: could not read the database account list for domain %d: %v", id, err)
+			httpx.LogR(r, "resource: could not read the database account list for domain %d: %v", id, err)
 		}
 		_ = rows.Close()
 	}

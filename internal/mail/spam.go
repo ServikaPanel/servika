@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -43,7 +42,7 @@ func (h *Handlers) SpamGet(w http.ResponseWriter, r *http.Request) {
 	s, found, err := readSpamSettings(r.Context(), h.DB, id)
 	if err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("read spam settings domain=%d: %v", id, err)
+		httpx.LogR(r, "read spam settings domain=%d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read spam settings")
 		return
 	}
@@ -81,7 +80,7 @@ func (h *Handlers) SpamPut(w http.ResponseWriter, r *http.Request) {
 	old, oldFound, err := readSpamSettings(r.Context(), h.DB, id)
 	if err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("read spam settings domain=%d: %v", id, err)
+		httpx.LogR(r, "read spam settings domain=%d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read spam settings")
 		return
 	}

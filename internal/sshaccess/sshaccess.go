@@ -174,12 +174,12 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 		// the same directory and reports the failure to the caller.
 		if err := prepareSSHDir(systemUser); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("ssh enable: prepare ssh directory %s: %v", systemUser, err)
+			httpx.LogR(r, "ssh enable: prepare ssh directory %s: %v", systemUser, err)
 		}
 		// Synchronize the SSH password with the FTP password.
 		if err := credentials.SyncSSHPassword(h.DB, systemUser); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("ssh enable: password sync %s: %v", systemUser, err)
+			httpx.LogR(r, "ssh enable: password sync %s: %v", systemUser, err)
 		}
 		// Configure the chroot jail and the restricted SSH group. These are the
 		// confinement controls (sshd Match keys on servika-ssh membership).
@@ -189,7 +189,7 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		if out, err := exec.Command(servikaJailBin(), "setup", systemUser).CombinedOutput(); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("ssh enable: jail setup %s: %v: %s", systemUser, err, strings.TrimSpace(string(out)))
+			httpx.LogR(r, "ssh enable: jail setup %s: %v: %s", systemUser, err, strings.TrimSpace(string(out)))
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 			_, _ = exec.Command("usermod", "-s", disabledShell, systemUser).CombinedOutput()
 			httpx.WriteError(w, http.StatusInternalServerError, "SSH jail could not be configured")
@@ -198,7 +198,7 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		if out, err := exec.Command("gpasswd", "-a", systemUser, "servika-ssh").CombinedOutput(); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("ssh enable: group add %s: %v: %s", systemUser, err, strings.TrimSpace(string(out)))
+			httpx.LogR(r, "ssh enable: group add %s: %v: %s", systemUser, err, strings.TrimSpace(string(out)))
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 			_, _ = exec.Command(servikaJailBin(), "teardown", systemUser).CombinedOutput()
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
@@ -263,7 +263,7 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := prepareSSHDir(systemUser); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("ssh key: prepare ssh directory %s: %v", systemUser, err)
+		httpx.LogR(r, "ssh key: prepare ssh directory %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -279,7 +279,7 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 	akRel := filepath.Join(sshDirRel, "authorized_keys")
 	if err := files.WriteFileBeneath(home, akRel, []byte(body), 0600, systemUser); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("ssh key: write authorized_keys %s: %v", systemUser, err)
+		httpx.LogR(r, "ssh key: write authorized_keys %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -287,7 +287,7 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 	// rather than trusting whatever the previous owner of the entry left behind.
 	if err := files.ChmodBeneath(home, akRel, 0600); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("ssh key: chmod authorized_keys %s: %v", systemUser, err)
+		httpx.LogR(r, "ssh key: chmod authorized_keys %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}

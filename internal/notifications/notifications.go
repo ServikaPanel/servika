@@ -185,7 +185,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	// #nosec G202 G701 -- see the annotation on the query above.
 	rows, err := h.DB.QueryContext(r.Context(), query, append([]any{userID}, args...)...)
 	if err != nil {
-		log.Printf("notifications: the list could not be read: %v", err)
+		httpx.LogR(r, "notifications: the list could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the notifications could not be read")
 		return
 	}
@@ -198,7 +198,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&item.ID, &item.Level, &item.Category, &item.Title, &item.Message,
 			&item.Key, &item.Params, &domainID, &item.Domain, &item.RefType, &item.RefID,
 			&item.Read, &item.CreatedAt, &item.CreatedUnix); err != nil {
-			log.Printf("notifications: a row could not be read: %v", err)
+			httpx.LogR(r, "notifications: a row could not be read: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the notifications could not be read")
 			return
 		}
@@ -212,7 +212,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	// and "fewer alerts than expected" is exactly the reading this exists to
 	// prevent.
 	if err := rows.Err(); err != nil {
-		log.Printf("notifications: the list ended early: %v", err)
+		httpx.LogR(r, "notifications: the list ended early: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the notifications could not be read")
 		return
 	}
@@ -221,7 +221,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// A failed count rendered as zero is a badge saying there is nothing to
 		// look at, which is the one answer this must never invent.
-		log.Printf("notifications: the unread count could not be read: %v", err)
+		httpx.LogR(r, "notifications: the unread count could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the notifications could not be read")
 		return
 	}
@@ -276,13 +276,13 @@ func (h *Handlers) MarkRead(w http.ResponseWriter, r *http.Request) {
 	// #nosec G202 G701 -- see the annotation on the statement above.
 	result, err := h.DB.ExecContext(r.Context(), statement, params...)
 	if err != nil {
-		log.Printf("notifications: a read could not be recorded: %v", err)
+		httpx.LogR(r, "notifications: a read could not be recorded: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the notification could not be marked read")
 		return
 	}
 	marked, err := result.RowsAffected()
 	if err != nil {
-		log.Printf("notifications: the affected count could not be read: %v", err)
+		httpx.LogR(r, "notifications: the affected count could not be read: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the notification could not be marked read")
 		return
 	}

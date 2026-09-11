@@ -176,7 +176,7 @@ func (h *Handlers) AddGeo(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.rebuild(); err != nil {
 		middleware.RecordAudit(h.DB, r, "firewall.geo.block", code, false)
-		log.Printf("firewall: apply the country block: %v", err)
+		httpx.LogR(r, "firewall: apply the country block: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the country block was saved but the firewall was not updated")
 		return
 	}
@@ -198,7 +198,7 @@ func (h *Handlers) DeleteGeo(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.rebuild(); err != nil {
 		middleware.RecordAudit(h.DB, r, "firewall.geo.unblock", code, false)
-		log.Printf("firewall: remove the country block: %v", err)
+		httpx.LogR(r, "firewall: remove the country block: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the block was removed but the firewall was not updated")
 		return
 	}

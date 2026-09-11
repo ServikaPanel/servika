@@ -18,7 +18,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -119,7 +118,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	auth.WriteAudit(h.DB, uid, req.Username, auditIP, "customer.login", req.Username, true)
 	if _, err := h.DB.Exec(`UPDATE users SET last_login_at=NOW(), last_login_ip=? WHERE id=?`, ip, uid); err != nil {
-		log.Printf("customer login: last_login update failed for uid=%d: %v", uid, err)
+		httpx.LogR(r, "customer login: last_login update failed for uid=%d: %v", uid, err)
 	}
 
 	// Deliver the token only in the HttpOnly session cookie, never in the body.

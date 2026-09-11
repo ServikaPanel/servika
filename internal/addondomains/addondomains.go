@@ -173,7 +173,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}
-		log.Printf("addon domain quota check failed: %v", err)
+		httpx.LogR(r, "addon domain quota check failed: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
 		return
 	}
@@ -188,7 +188,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusForbidden, le.Message)
 			return
 		}
-		log.Printf("addon domain reseller quota check failed: %v", err)
+		httpx.LogR(r, "addon domain reseller quota check failed: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
 		return
 	}
@@ -212,7 +212,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	if !req.Parked {
 		docroot = provisioner.AddonWebRoot(parent.SystemUser, req.DomainName)
 		if err := prepareDocRoot(docroot, parent.SystemUser, req.DomainName); err != nil {
-			log.Printf("addon domain docroot prepare %q: %v", req.DomainName, err)
+			httpx.LogR(r, "addon domain docroot prepare %q: %v", req.DomainName, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "document root creation failed")
 			return
 		}
@@ -225,7 +225,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		req.DomainName, parent.SystemUser, parent.PHPVersion, h.IPv4,
 		h.IPv4, parent.SystemUser, docroot, parent.CustomerID, parent.PlanID, parent.ID, boolInt(req.Parked))
 	if err != nil {
-		log.Printf("addon domain insert %q: %v", req.DomainName, err)
+		httpx.LogR(r, "addon domain insert %q: %v", req.DomainName, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "addon domain record creation failed")
 		return
 	}
@@ -233,16 +233,16 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	addonID, _ := res.LastInsertId()
 
 	if err := provisioner.RerenderVhost(h.DB, addonID); err != nil {
-		log.Printf("addon domain vhost render %q: %v", req.DomainName, err)
+		httpx.LogR(r, "addon domain vhost render %q: %v", req.DomainName, err)
 		_, _ = Cleanup(r.Context(), h.DB, addonID)
 		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
 		return
 	}
 	if _, err := dns.SeedDefaults(r.Context(), h.DB, addonID, req.DomainName, h.IPv4); err != nil {
-		log.Printf("DNS SeedDefaults %q error: %v", req.DomainName, err)
+		httpx.LogR(r, "DNS SeedDefaults %q error: %v", req.DomainName, err)
 	}
 	if err := dns.WriteZone(r.Context(), h.DB, addonID); err != nil {
-		log.Printf("DNS WriteZone %q error: %v", req.DomainName, err)
+		httpx.LogR(r, "DNS WriteZone %q error: %v", req.DomainName, err)
 	}
 
 	row := h.DB.QueryRowContext(r.Context(),
@@ -276,7 +276,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("addon domain delete %d: %v", addonID, err)
+		httpx.LogR(r, "addon domain delete %d: %v", addonID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "addon domain deletion failed")
 		return
 	}

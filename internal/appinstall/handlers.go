@@ -52,7 +52,7 @@ func (h *Handlers) domainOf(ctx context.Context, id int64) (Request, bool) {
 func (h *Handlers) CatalogForDomain(w http.ResponseWriter, r *http.Request) {
 	entries, err := Catalog(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("app catalog: %v", err)
+		httpx.LogR(r, "app catalog: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -88,7 +88,7 @@ func (h *Handlers) Installs(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.DB.QueryContext(r.Context(),
 		`SELECT `+installColumns+` FROM app_installs WHERE domain_id=? ORDER BY id DESC`, domainID)
 	if err != nil {
-		log.Printf("app installs: %v", err)
+		httpx.LogR(r, "app installs: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -100,14 +100,14 @@ func (h *Handlers) Installs(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&row.ID, &row.DomainID, &row.Code, &row.Name, &row.Version,
 			&row.Subdirectory, &row.SiteURL, &row.DBName, &row.DBUser,
 			&row.State, &row.LastError, &row.CreatedAt); err != nil {
-			log.Printf("app installs scan: %v", err)
+			httpx.LogR(r, "app installs scan: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 			return
 		}
 		out = append(out, row)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("app installs rows: %v", err)
+		httpx.LogR(r, "app installs rows: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
@@ -156,7 +156,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, statusForReason(code), code)
 			return
 		}
-		log.Printf("app install start: %v", err)
+		httpx.LogR(r, "app install start: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the installation could not be started")
 		return
 	}
@@ -167,7 +167,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		runErr := Run(ctx, h.DB, entry, request)
 		if runErr != nil {
-			log.Printf("app install %d (%s): %v", id, entry.Code, runErr)
+			httpx.LogR(r, "app install %d (%s): %v", id, entry.Code, runErr)
 		}
 		Finish(h.DB, id, runErr)
 	})
@@ -199,7 +199,7 @@ func (h *Handlers) Forget(w http.ResponseWriter, r *http.Request) {
 	result, err := h.DB.ExecContext(r.Context(),
 		`DELETE FROM app_installs WHERE id=? AND domain_id=?`, installID, domainID)
 	if err != nil {
-		log.Printf("app install forget: %v", err)
+		httpx.LogR(r, "app install forget: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database write failed")
 		return
 	}
@@ -214,7 +214,7 @@ func (h *Handlers) Forget(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) AdminCatalog(w http.ResponseWriter, r *http.Request) {
 	entries, err := Catalog(r.Context(), h.DB)
 	if err != nil {
-		log.Printf("app catalog: %v", err)
+		httpx.LogR(r, "app catalog: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
 		return
 	}
@@ -240,7 +240,7 @@ func (h *Handlers) AdminSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := SaveEntry(r.Context(), h.DB, entry); err != nil {
-		log.Printf("app catalog save: %v", err)
+		httpx.LogR(r, "app catalog save: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the catalog could not be written")
 		return
 	}
@@ -255,7 +255,7 @@ func (h *Handlers) AdminDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := DeleteEntry(r.Context(), h.DB, code); err != nil {
-		log.Printf("app catalog delete: %v", err)
+		httpx.LogR(r, "app catalog delete: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the catalog could not be written")
 		return
 	}

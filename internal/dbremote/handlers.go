@@ -174,7 +174,7 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 	// port open to everybody, and leaving the drop behind after turning it off
 	// blocks nothing but is still wrong state.
 	if err := h.rebuild(); err != nil {
-		log.Printf("remote db: firewall rebuild after the switch: %v", err)
+		httpx.LogR(r, "remote db: firewall rebuild after the switch: %v", err)
 	}
 	h.ServerGet(w, r)
 }
@@ -258,7 +258,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := credentials.MySQLGrantRemote(request.DBUser, mysqlHost, password, databases); err != nil {
-		log.Printf("remote db: grant %s@%s: %v", request.DBUser, mysqlHost, err)
+		httpx.LogR(r, "remote db: grant %s@%s: %v", request.DBUser, mysqlHost, err)
 		writeReason(w, http.StatusInternalServerError,
 			"MariaDB did not accept the remote account", reasonApplyFailed)
 		return
@@ -272,7 +272,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 		// The grant is undone rather than left behind: an account reachable from
 		// an address the panel has no record of is a credential nobody can find.
 		if revokeErr := credentials.MySQLRevokeRemote(request.DBUser, mysqlHost); revokeErr != nil {
-			log.Printf("remote db: could not undo the grant for %s@%s: %v", request.DBUser, mysqlHost, revokeErr)
+			httpx.LogR(r, "remote db: could not undo the grant for %s@%s: %v", request.DBUser, mysqlHost, revokeErr)
 		}
 		if isDuplicate(err) {
 			writeReason(w, http.StatusConflict, "that address is already allowed", reasonDuplicate)
@@ -283,7 +283,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.rebuild(); err != nil {
-		log.Printf("remote db: firewall rebuild after an add: %v", err)
+		httpx.LogR(r, "remote db: firewall rebuild after an add: %v", err)
 		writeReason(w, http.StatusInternalServerError,
 			"the firewall could not be updated, so the address was not opened", reasonApplyFailed)
 		return
@@ -332,12 +332,12 @@ func (h *Handlers) DomainDelete(w http.ResponseWriter, r *http.Request) {
 	// The port closes first, from the row set that no longer carries this
 	// address.
 	if err := h.rebuild(); err != nil {
-		log.Printf("remote db: firewall rebuild after a delete: %v", err)
+		httpx.LogR(r, "remote db: firewall rebuild after a delete: %v", err)
 	}
 	// The stored mysql_host is used verbatim: deriving it again here would fail
 	// to drop an account written under an earlier conversion.
 	if err := credentials.MySQLRevokeRemote(dbUser, mysqlHost); err != nil {
-		log.Printf("remote db: could not drop %s@%s: %v", dbUser, mysqlHost, err)
+		httpx.LogR(r, "remote db: could not drop %s@%s: %v", dbUser, mysqlHost, err)
 		writeReason(w, http.StatusInternalServerError,
 			"the address was removed but MariaDB still holds the account", reasonApplyFailed)
 		return

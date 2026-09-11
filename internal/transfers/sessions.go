@@ -101,7 +101,7 @@ func (h *Handlers) SessionList(w http.ResponseWriter, r *http.Request) {
 		  WHERE expires_at > NOW()
 		  ORDER BY last_used DESC LIMIT 25`)
 	if err != nil {
-		log.Printf("migration sessions list: %v", err)
+		httpx.LogR(r, "migration sessions list: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the sessions could not be read")
 		return
 	}
@@ -111,14 +111,14 @@ func (h *Handlers) SessionList(w http.ResponseWriter, r *http.Request) {
 		var s sessionSummary
 		if err := rows.Scan(&s.ID, &s.Type, &s.Host, &s.Port, &s.User,
 			&s.CredentialsStored, &s.LastUsed); err != nil {
-			log.Printf("migration sessions scan: %v", err)
+			httpx.LogR(r, "migration sessions scan: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the sessions could not be read")
 			return
 		}
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("migration sessions rows: %v", err)
+		httpx.LogR(r, "migration sessions rows: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the sessions could not be read")
 		return
 	}
@@ -150,7 +150,7 @@ func (h *Handlers) SessionGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("migration session get: %v", err)
+		httpx.LogR(r, "migration session get: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the session could not be read")
 		return
 	}
@@ -175,7 +175,7 @@ func (h *Handlers) SessionDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM migration_sessions WHERE id=?`, id); err != nil {
-		log.Printf("migration session delete: %v", err)
+		httpx.LogR(r, "migration session delete: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the session could not be deleted")
 		return
 	}

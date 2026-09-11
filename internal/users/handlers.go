@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -150,7 +149,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			&s.ResellerID, &twoFA, &s.LastLogin, &s.LastLoginIP, &s.CreatedAt, &passwordless); err != nil {
 			// A dropped row is an account that exists and can sign in while the
 			// screen that manages accounts does not show it.
-			log.Printf("user list: skipping an unreadable row: %v", err)
+			httpx.LogR(r, "user list: skipping an unreadable row: %v", err)
 			continue
 		}
 		s.TwoFA = twoFA == 1
@@ -281,7 +280,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			 VALUES(?,?, 'active', '', ?, ?)`,
 			displayName, strings.TrimSpace(b.Email), id, owner); e != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("auto customer record for user %d failed: %v", id, e)
+			httpx.LogR(r, "auto customer record for user %d failed: %v", id, e)
 		}
 	}
 
@@ -482,7 +481,7 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// ordinary customer account (no sub-accounts) matches nothing. Non-fatal: the
 	// primary status change already succeeded, so a cascade failure is logged.
 	if _, err := h.DB.ExecContext(r.Context(), subAccountCascade(b.Status), id); err != nil {
-		log.Printf("cascade status to sub-accounts of user %d failed: %v", id, err)
+		httpx.LogR(r, "cascade status to sub-accounts of user %d failed: %v", id, err)
 	}
 
 	// Cascade to the reseller's actual hosting: without this, suspending a
@@ -491,9 +490,9 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// Non-fatal: the account status change already succeeded. This is a no-op for
 	// a customer account (it owns no customers, so the sweep matches nothing).
 	if affected, failed, err := domains.SuspendResellerDomains(r.Context(), h.DB, id, b.Status == "suspended"); err != nil {
-		log.Printf("hosting suspend cascade for reseller %d failed: %v", id, err)
+		httpx.LogR(r, "hosting suspend cascade for reseller %d failed: %v", id, err)
 	} else if affected > 0 || failed > 0 {
-		log.Printf("hosting suspend cascade for reseller %d: %d applied, %d failed", id, affected, failed)
+		httpx.LogR(r, "hosting suspend cascade for reseller %d: %d applied, %d failed", id, affected, failed)
 	}
 
 	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.status", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id))
@@ -659,7 +658,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// own a scope, and once this id can be reassigned by AUTO_INCREMENT a future
 	// reseller must not inherit the deleted one's history.
 	if _, err := h.DB.ExecContext(r.Context(), `UPDATE audit_log SET reseller_id=0 WHERE reseller_id=?`, id); err != nil {
-		log.Printf("audit scope cleanup after deleting user %d failed: %v", id, err)
+		httpx.LogR(r, "audit scope cleanup after deleting user %d failed: %v", id, err)
 	}
 	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.delete", strconv.FormatInt(id, 10), true, deletedScope)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})

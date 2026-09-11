@@ -3,7 +3,6 @@ package dns
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -92,9 +91,9 @@ func (h *Handlers) PostDNSSEC(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := WriteZone(r.Context(), h.DB, id); err != nil {
 		if _, rollbackErr := h.DB.ExecContext(r.Context(), `UPDATE domains SET dnssec_active=? WHERE id=?`, previous, id); rollbackErr != nil {
-			log.Printf("rollback DNSSEC state for domain %d: %v", id, rollbackErr)
+			httpx.LogR(r, "rollback DNSSEC state for domain %d: %v", id, rollbackErr)
 		}
-		log.Printf("write DNS zone after DNSSEC change for domain %d: %v", id, err)
+		httpx.LogR(r, "write DNS zone after DNSSEC change for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "dNS zone could not be updated")
 		return
 	}
