@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Otomatik Yedekleme Zamanlaması",
     "description": "Etkinleştirildiğinde panel saatlik olarak denetler. Seçilen saatte bir yedek oluşturulur ve saklama sayısının üzerindeki yedekler silinir.",
+    "unread": "Mevcut zamanlama okunamadı. Aşağıda gösterilen değerler yapılandırılmış olanla eşleşmeyebilir.",
     "lastBackup": "Son otomatik yedek:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Uzak Yedekleme Hedefi (FTP / SFTP / S3 / B2)",
     "description": "Oluşturulduktan sonra yedekler, disk arızasına karşı site dışı koruma için arka planda uzak hedefe yüklenir.",
+    "unread": "Mevcut hedef okunamadı. Bu, hiçbir hedefin yapılandırılmadığının kanıtı değildir.",
     "statusSuccessful": "● Son: başarılı",
     "statusError": "✗ Son: hata",
     "lastUpload": "Son yükleme:",

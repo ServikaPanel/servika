@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Programación de copias automáticas",
     "description": "Cuando está activada, el panel verifica cada hora. Se crea una copia a la hora seleccionada y las copias que superan la retención se eliminan.",
+    "unread": "No se pudo leer la programación actual. Los valores mostrados abajo pueden no coincidir con lo configurado.",
     "lastBackup": "Última copia automática:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Destino remoto de copias (FTP / SFTP / S3 / B2)",
     "description": "Tras la creación, las copias se suben al destino remoto en segundo plano para protección externa contra fallos de disco.",
+    "unread": "No se pudo leer el destino actual. Eso no prueba que no haya ningún destino configurado.",
     "statusSuccessful": "● Último: correcto",
     "statusError": "✗ Último: error",
     "lastUpload": "Última subida:",

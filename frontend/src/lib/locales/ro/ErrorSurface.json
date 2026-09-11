@@ -38,6 +38,8 @@
     "wordpressPlugins": "pluginuri WordPress",
     "wordpressThemes": "teme WordPress",
     "wordpressUsers": "utilizatori WordPress",
-    "appInstalls": "instalări de aplicații"
+    "appInstalls": "instalări de aplicații",
+    "backupSchedule": "programarea backup-urilor",
+    "backupDestination": "destinația backup-urilor"
   }
 }

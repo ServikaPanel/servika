@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Agendamento de backup automático",
     "description": "Quando ativado, o painel verifica a cada hora. Um backup é criado no horário selecionado e os backups além do período de retenção são excluídos.",
+    "unread": "Não foi possível ler o agendamento atual. Os valores mostrados abaixo podem não corresponder ao que está configurado.",
     "lastBackup": "Último backup automático:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Destino de backup remoto (FTP / SFTP / S3 / B2)",
     "description": "Após a criação, os backups são enviados ao destino remoto em segundo plano para proteção externa contra falhas de disco.",
+    "unread": "Não foi possível ler o destino atual. Isso não prova que nenhum destino esteja configurado.",
     "statusSuccessful": "● Último: bem-sucedido",
     "statusError": "✗ Último: erro",
     "lastUpload": "Último envio:",

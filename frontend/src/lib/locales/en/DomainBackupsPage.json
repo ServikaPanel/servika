@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Automatic Backup Schedule",
     "description": "When enabled, the panel checks hourly. A backup is created at the selected hour, and backups beyond retention are deleted.",
+    "unread": "The current schedule could not be read. The values shown below may not match what is configured.",
     "lastBackup": "Latest automatic backup:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Remote Backup Destination (FTP / SFTP / S3 / B2)",
     "description": "After creation, backups are uploaded to the remote destination in the background for off-site protection against disk failure.",
+    "unread": "The current destination could not be read. That is not evidence that no destination is configured.",
     "statusSuccessful": "● Latest: successful",
     "statusError": "✗ Latest: error",
     "lastUpload": "Latest upload:",

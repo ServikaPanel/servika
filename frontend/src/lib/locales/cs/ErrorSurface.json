@@ -38,6 +38,8 @@
     "wordpressPlugins": "pluginy WordPressu",
     "wordpressThemes": "šablony WordPressu",
     "wordpressUsers": "uživatelé WordPressu",
-    "appInstalls": "instalace aplikací"
+    "appInstalls": "instalace aplikací",
+    "backupSchedule": "plán záloh",
+    "backupDestination": "cíl záloh"
   }
 }

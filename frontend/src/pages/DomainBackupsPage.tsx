@@ -58,6 +58,11 @@ export default function DomainBackupsPage() {
 
   const [sched, setSched] = useState<Schedule>({ freq: 'none', hour: 3, retention: 7 })
   const [scheduleSaving, setScheduleSaving] = useState(false)
+  // A read that FAILED is not a schedule of 'none' and not an absent
+  // destination. Both of those are answers this screen must not invent: it is
+  // where an operator confirms the domain is covered.
+  const [scheduleUnread, setScheduleUnread] = useState(false)
+  const [destinationUnread, setDestinationUnread] = useState(false)
 
   const [dest, setDest] = useState<Destination>({ missing: true })
   const [destForm, setDestForm] = useState({
@@ -72,33 +77,46 @@ export default function DomainBackupsPage() {
   // refreshes that follow a write.
   const fetchBackups = useCallback(() => {
     if (!id) return
+    // Each of the two settings requests resolves to null on failure rather than
+    // to a substitute object. A substitute is indistinguishable from a real
+    // answer once it reaches the render, so a 500 from the schedule endpoint
+    // reported a nightly schedule as "no automatic backup", and a 500 from the
+    // destination endpoint reported a configured off-site destination as
+    // absent. The outer catch below cannot see either, because both were
+    // already resolved.
     Promise.all([
       api.get<Backup[]>(`/domains/${id}/backups`),
-      api.get<Schedule>(`/domains/${id}/backup-schedule`).catch(() => ({ data: { freq: 'none', hour: 3, retention: 7 } as Schedule })),
-      api.get<Destination>(`/domains/${id}/backup-destination`).catch(() => ({ data: { missing: true } as Destination })),
+      api.get<Schedule>(`/domains/${id}/backup-schedule`)
+        .then(r => r.data).catch(cause => { report('backupSchedule')(cause); return null }),
+      api.get<Destination>(`/domains/${id}/backup-destination`)
+        .then(r => r.data).catch(cause => { report('backupDestination')(cause); return null }),
     ]).then(([y, s, d]) => {
       setBackups(y.data)
-      setSched(s.data)
-      setDest(d.data)
-      if (!d.data.missing) {
-        setDestForm({
-          type: (d.data.type || 'sftp') as DestType,
-          host: d.data.host || '',
-          port: d.data.port || (d.data.type === 'ftp' ? 21 : 22),
-          username: d.data.username || '',
-          password: '',  // Security: leave blank unless the user chooses to enter it again.
-          remote_dir: d.data.remote_dir || '/',
-          bucket: d.data.bucket || '',
-          region: d.data.region || '',
-          endpoint: d.data.endpoint || '',
-          path_style: !!d.data.path_style,
-          active: !!d.data.active,
-        })
+      setScheduleUnread(s === null)
+      if (s) setSched(s)
+      setDestinationUnread(d === null)
+      if (d) {
+        setDest(d)
+        if (!d.missing) {
+          setDestForm({
+            type: (d.type || 'sftp') as DestType,
+            host: d.host || '',
+            port: d.port || (d.type === 'ftp' ? 21 : 22),
+            username: d.username || '',
+            password: '',  // Security: leave blank unless the user chooses to enter it again.
+            remote_dir: d.remote_dir || '/',
+            bucket: d.bucket || '',
+            region: d.region || '',
+            endpoint: d.endpoint || '',
+            path_style: !!d.path_style,
+            active: !!d.active,
+          })
+        }
       }
     })
       .catch(e => setError(apiError(e)))
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, report])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -314,6 +332,7 @@ export default function DomainBackupsPage() {
             <div className="text-xs text-slate-500 dark:text-slate-500">{t('schedule.lastBackup')} <span className="font-mono">{sched.last_backup_at.replace('T',' ').replace('Z','')}</span></div>
           )}
         </div>
+        {scheduleUnread && <UnreadNotice text={t('schedule.unread')} />}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {(['none','daily','weekly'] as const).map(f => {
             const isSelected = sched.freq === f
@@ -387,6 +406,7 @@ export default function DomainBackupsPage() {
             }`}>{dest.last_status === 'successful' ? t('destination.statusSuccessful') : dest.last_status === 'error' ? t('destination.statusError') : dest.last_status}</span>
           )}
         </div>
+        {destinationUnread && <UnreadNotice text={t('destination.unread')} />}
 
         {!dest.missing && dest.last_upload && (
           <div className="mb-3 text-xs text-slate-500 dark:text-slate-500">
@@ -630,6 +650,17 @@ export default function DomainBackupsPage() {
           onSubmit={restore}
         />
       )}
+    </div>
+  )
+}
+
+// UnreadNotice sits above a settings block whose current value could not be
+// read. Without it the block shows whatever it held before, which on a first
+// load is the component's own default and reads as a fact.
+function UnreadNotice({ text }: { text: string }) {
+  return (
+    <div className="mb-3 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/15 text-xs text-amber-700 dark:text-amber-300">
+      {text}
     </div>
   )
 }

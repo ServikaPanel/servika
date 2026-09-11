@@ -38,6 +38,8 @@
     "wordpressPlugins": "WordPress 插件",
     "wordpressThemes": "WordPress 主题",
     "wordpressUsers": "WordPress 用户",
-    "appInstalls": "应用安装"
+    "appInstalls": "应用安装",
+    "backupSchedule": "备份计划",
+    "backupDestination": "备份目标"
   }
 }

@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Agendamento de Cópias Automáticas",
     "description": "Quando ativado, o painel verifica a cada hora. Uma cópia é criada à hora selecionada e as cópias além da retenção são eliminadas.",
+    "unread": "Não foi possível ler o agendamento atual. Os valores mostrados abaixo podem não corresponder ao que está configurado.",
     "lastBackup": "Última cópia automática:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Destino Remoto (FTP / SFTP / S3 / B2)",
     "description": "Após a criação, as cópias são carregadas para o destino remoto em segundo plano para proteção fora do site contra falhas de disco.",
+    "unread": "Não foi possível ler o destino atual. Isso não prova que nenhum destino esteja configurado.",
     "statusSuccessful": "● Mais recente: bem-sucedido",
     "statusError": "✗ Mais recente: erro",
     "lastUpload": "Último carregamento:",

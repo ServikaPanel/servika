@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Automatischer Backup-Zeitplan",
     "description": "Wenn aktiviert, prüft das Panel stündlich. Zur ausgewählten Stunde wird ein Backup erstellt, und Backups über die Aufbewahrung hinaus werden gelöscht.",
+    "unread": "Der aktuelle Zeitplan konnte nicht gelesen werden. Die unten gezeigten Werte entsprechen möglicherweise nicht der gespeicherten Einstellung.",
     "lastBackup": "Letztes automatisches Backup:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Remote-Backup-Ziel (FTP / SFTP / S3 / B2)",
     "description": "Nach der Erstellung werden Backups im Hintergrund zum Remote-Ziel hochgeladen, um sie extern vor Festplattenausfall zu schützen.",
+    "unread": "Das aktuelle Ziel konnte nicht gelesen werden. Das ist kein Beleg dafür, dass kein Ziel konfiguriert ist.",
     "statusSuccessful": "● Letztes: erfolgreich",
     "statusError": "✗ Letztes: Fehler",
     "lastUpload": "Letzter Upload:",

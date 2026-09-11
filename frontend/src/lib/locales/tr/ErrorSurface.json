@@ -38,6 +38,8 @@
     "wordpressPlugins": "WordPress plugin listesi",
     "wordpressThemes": "WordPress temaları",
     "wordpressUsers": "WordPress kullanıcıları",
-    "appInstalls": "uygulama kurulumları"
+    "appInstalls": "uygulama kurulumları",
+    "backupSchedule": "yedek zamanlaması",
+    "backupDestination": "yedek hedefi"
   }
 }

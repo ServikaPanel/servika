@@ -38,6 +38,8 @@
     "wordpressPlugins": "WordPress のプラグイン",
     "wordpressThemes": "WordPress のテーマ",
     "wordpressUsers": "WordPress のユーザー",
-    "appInstalls": "アプリケーションのインストール"
+    "appInstalls": "アプリケーションのインストール",
+    "backupSchedule": "バックアップのスケジュール",
+    "backupDestination": "バックアップの保存先"
   }
 }

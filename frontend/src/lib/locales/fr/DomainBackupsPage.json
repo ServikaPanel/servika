@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Planification des sauvegardes automatiques",
     "description": "Lorsqu'elle est activée, le panneau vérifie chaque heure. Une sauvegarde est créée à l'heure sélectionnée, et les sauvegardes au-delà de la rétention sont supprimées.",
+    "unread": "La planification actuelle n’a pas pu être lue. Les valeurs affichées ci-dessous peuvent ne pas correspondre à la configuration.",
     "lastBackup": "Dernière sauvegarde automatique :",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Destination de sauvegarde distante (FTP / SFTP / S3 / B2)",
     "description": "Après leur création, les sauvegardes sont envoyées vers la destination distante en arrière-plan pour une protection hors site contre les pannes de disque.",
+    "unread": "La destination actuelle n’a pas pu être lue. Cela ne prouve pas qu’aucune destination n’est configurée.",
     "statusSuccessful": "● Dernière : réussie",
     "statusError": "✗ Dernière : erreur",
     "lastUpload": "Dernier envoi :",

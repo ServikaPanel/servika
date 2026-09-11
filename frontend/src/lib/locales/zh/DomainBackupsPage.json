@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "自动备份计划",
     "description": "启用后，面板每小时检查一次。在所选小时创建备份，并删除超过保留数量的备份。",
+    "unread": "无法读取当前计划。下方显示的值可能与实际配置不符。",
     "lastBackup": "最近的自动备份：",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "远程备份目标（FTP / SFTP / S3 / B2）",
     "description": "创建后，备份会在后台上传到远程目标，用于异地保护以防磁盘故障。",
+    "unread": "无法读取当前目标。这并不表示未配置任何目标。",
     "statusSuccessful": "● 最近：成功",
     "statusError": "✗ 最近：错误",
     "lastUpload": "最近上传：",

@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Plán automatických záloh",
     "description": "Po povolení panel kontroluje každou hodinu. Ve vybranou hodinu se vytvoří záloha a zálohy nad rámec uchovávání se smažou.",
+    "unread": "Aktuální plán se nepodařilo načíst. Níže zobrazené hodnoty nemusí odpovídat tomu, co je nastaveno.",
     "lastBackup": "Poslední automatická záloha:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Vzdálený cíl záloh (FTP / SFTP / S3 / B2)",
     "description": "Po vytvoření se zálohy na pozadí nahrají do vzdáleného cíle pro ochranu mimo server proti selhání disku.",
+    "unread": "Aktuální cíl se nepodařilo načíst. Není to doklad, že žádný cíl není nastaven.",
     "statusSuccessful": "● Poslední: úspěšná",
     "statusError": "✗ Poslední: chyba",
     "lastUpload": "Poslední nahrání:",

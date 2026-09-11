@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Program backup automat",
     "description": "Când este activat, panoul verifică orar. Un backup este creat la ora selectată, iar backup-urile depășite sunt șterse.",
+    "unread": "Programarea curentă nu a putut fi citită. Valorile afișate mai jos pot să nu corespundă configurației.",
     "lastBackup": "Ultimul backup automat:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Destinație backup remote (FTP / SFTP / S3 / B2)",
     "description": "După creare, backup-urile sunt încărcate în destinația remote în fundal pentru protecție off-site împotriva defecțiunilor de disc.",
+    "unread": "Destinația curentă nu a putut fi citită. Aceasta nu dovedește că nu există o destinație configurată.",
     "statusSuccessful": "● Ultimul: reușit",
     "statusError": "✗ Ultimul: eroare",
     "lastUpload": "Ultima încărcare:",

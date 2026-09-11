@@ -31,6 +31,7 @@
   "schedule": {
     "heading": "Pianificazione backup automatici",
     "description": "Quando è abilitata, il pannello controlla ogni ora. Un backup viene creato all'ora selezionata e i backup oltre il limite di conservazione vengono eliminati.",
+    "unread": "Impossibile leggere la pianificazione attuale. I valori mostrati sotto potrebbero non corrispondere a quelli configurati.",
     "lastBackup": "Ultimo backup automatico:",
     "options": {
       "none": {
@@ -54,6 +55,7 @@
   "destination": {
     "heading": "Destinazione di backup remota (FTP / SFTP / S3 / B2)",
     "description": "Dopo la creazione, i backup vengono caricati sulla destinazione remota in background per la protezione fuori sede contro i guasti del disco.",
+    "unread": "Impossibile leggere la destinazione attuale. Questo non dimostra che nessuna destinazione sia configurata.",
     "statusSuccessful": "● Ultimo: riuscito",
     "statusError": "✗ Ultimo: errore",
     "lastUpload": "Ultimo caricamento:",

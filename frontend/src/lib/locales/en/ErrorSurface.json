@@ -38,6 +38,8 @@
     "wordpressPlugins": "WordPress plugins",
     "wordpressThemes": "WordPress themes",
     "wordpressUsers": "WordPress users",
-    "appInstalls": "application installations"
+    "appInstalls": "application installations",
+    "backupSchedule": "backup schedule",
+    "backupDestination": "backup destination"
   }
 }
