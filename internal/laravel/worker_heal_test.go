@@ -9,13 +9,21 @@ import (
 // The domain delete path is the only thing that reaches these files. Without a
 // call there the unit keeps running as a login userdel has just removed and the
 // cron entry keeps trying to run a scheduler in a directory that is gone.
+// The delete path reaches this function through the domains package's own test
+// seam, so both halves are checked: the seam still binds this function, and the
+// delete path still calls the seam.
 func TestTheDomainDeletePathTearsDownTheToolkit(t *testing.T) {
-	source, err := os.ReadFile("../domains/handlers.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(source), "laravel.TeardownForDomain(r.Context(), h.DB, id)") {
-		t.Error("deleting a domain no longer tears the Laravel toolkit down")
+	for _, want := range []struct{ file, call string }{
+		{file: "../domains/seams.go", call: "= laravel.TeardownForDomain"},
+		{file: "../domains/handlers.go", call: "teardownLaravel(r.Context(), h.DB, id)"},
+	} {
+		source, err := os.ReadFile(want.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(source), want.call) {
+			t.Errorf("deleting a domain no longer tears the Laravel toolkit down: %s lacks %q", want.file, want.call)
+		}
 	}
 }
 
