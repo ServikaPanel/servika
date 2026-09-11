@@ -26,8 +26,7 @@
     "disabledPrefix": "已禁用：",
     "currentPrefix": "当前：",
     "disable": "禁用 SSH",
-    "enable": "启用 SSH",
-    "demoNotice": "演示域名无法更改 SSH 访问。"
+    "enable": "启用 SSH"
   },
   "connection": {
     "title": "连接详情",

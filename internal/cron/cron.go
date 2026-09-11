@@ -97,28 +97,21 @@ type Handlers struct {
 	SecretKey []byte
 }
 
-var (
-	errDemo = errors.New("cron cannot be managed for a demo subscription")
-	errBad  = errors.New("security: user without c_ prefix rejected")
-)
+var errBad = errors.New("security: user without c_ prefix rejected")
 
 // lookup returns the domain's system user and its id. The id is needed on the
 // write paths to sign the reporter's domain-bound token.
 func (h *Handlers) lookup(r *http.Request) (string, int64, error) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var systemUser string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &isDemo)
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&systemUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", 0, os.ErrNotExist
 	}
 	if err != nil {
 		return "", 0, err
-	}
-	if isDemo == 1 {
-		return "", 0, errDemo
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
 		return "", 0, errBad
@@ -489,8 +482,6 @@ func statusFromErr(err error) int {
 	switch err {
 	case os.ErrNotExist:
 		return http.StatusNotFound
-	case errDemo:
-		return http.StatusForbidden
 	case errBad:
 		return http.StatusBadRequest
 	}

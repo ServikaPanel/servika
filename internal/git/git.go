@@ -89,12 +89,10 @@ func redactURLCredentials(raw string) string {
 	return u.String()
 }
 
-func (h *Handlers) lookupDomain(r *http.Request) (id int64, systemUser string, demo bool, err error) {
+func (h *Handlers) lookupDomain(r *http.Request) (id int64, systemUser string, err error) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var dmo int
 	err = h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).Scan(&systemUser, &dmo)
-	demo = dmo == 1
+		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&systemUser)
 	return
 }
 
@@ -517,17 +515,13 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 
 // Connect creates a deploy key and stores the repository URL without cloning.
 func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, err := h.lookupDomain(r)
+	id, systemUser, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "git cannot be connected to a demo subscription")
 		return
 	}
 	var req connectRequest
@@ -590,8 +584,8 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 
 // Clone performs the initial clone.
 func (h *Handlers) Clone(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, err := h.lookupDomain(r)
-	if err != nil || demo {
+	id, systemUser, err := h.lookupDomain(r)
+	if err != nil {
 		httpx.WriteError(w, http.StatusForbidden, "permission denied")
 		return
 	}
@@ -623,8 +617,8 @@ func (h *Handlers) Clone(w http.ResponseWriter, r *http.Request) {
 
 // Pull updates an existing repository.
 func (h *Handlers) Pull(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, err := h.lookupDomain(r)
-	if err != nil || demo {
+	id, systemUser, err := h.lookupDomain(r)
+	if err != nil {
 		httpx.WriteError(w, http.StatusForbidden, "permission denied")
 		return
 	}

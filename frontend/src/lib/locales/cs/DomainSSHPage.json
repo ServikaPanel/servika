@@ -26,8 +26,7 @@
     "disabledPrefix": "Zakázáno:",
     "currentPrefix": "Aktuální:",
     "disable": "Zakázat SSH",
-    "enable": "Povolit SSH",
-    "demoNotice": "Přístup SSH nelze pro demo doménu změnit."
+    "enable": "Povolit SSH"
   },
   "connection": {
     "title": "Údaje o připojení",

@@ -53,7 +53,6 @@ type dueDomain struct {
 	Frequency  string
 	Hour       int
 	Retention  int
-	IsDemo     int
 }
 
 // TickOnce runs one scheduler pass for tests or an operator-triggered backup.
@@ -101,11 +100,10 @@ func tickOnce(db *sql.DB) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, domain_name, system_user,
 		       COALESCE(backup_freq,'none'), COALESCE(backup_hour,3),
-		       COALESCE(backup_retention,7), is_demo,
+		       COALESCE(backup_retention,7),
 		       UNIX_TIMESTAMP(last_backup_at)
 		FROM domains
-		WHERE COALESCE(backup_freq,'none') != 'none'
-		  AND is_demo = 0`)
+		WHERE COALESCE(backup_freq,'none') != 'none'`)
 	if err != nil {
 		log.Printf("backup scheduler tick query: %v", err)
 		return
@@ -116,7 +114,7 @@ func tickOnce(db *sql.DB) {
 	for rows.Next() {
 		var d dueDomain
 		var lastTs sql.NullInt64
-		if err := rows.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.Frequency, &d.Hour, &d.Retention, &d.IsDemo, &lastTs); err != nil {
+		if err := rows.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.Frequency, &d.Hour, &d.Retention, &lastTs); err != nil {
 			log.Printf("backup scheduler scan: %v", err)
 			continue
 		}

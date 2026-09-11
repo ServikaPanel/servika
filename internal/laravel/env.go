@@ -8,7 +8,7 @@ import (
 )
 
 func (h *Handlers) EnvRead(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, _, ok := h.lookup(r)
+	id, systemUser, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -27,13 +27,9 @@ func (h *Handlers) EnvRead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) EnvWrite(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, demo, ok := h.lookup(r)
+	id, systemUser, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, ".env cannot be edited for demo subscriptions")
 		return
 	}
 	var req struct {
@@ -56,13 +52,9 @@ func (h *Handlers) EnvWrite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Maintenance(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "maintenance mode cannot be changed for demo subscriptions")
 		return
 	}
 	var req struct {

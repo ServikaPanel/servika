@@ -38,7 +38,7 @@ type workerView struct {
 
 // WorkerList answers with every definition on the domain and its live state.
 func (h *Handlers) WorkerList(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.lookup(r)
+	id, _, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -57,13 +57,9 @@ func (h *Handlers) WorkerList(w http.ResponseWriter, r *http.Request) {
 
 // WorkerCreate stores a new definition and applies it.
 func (h *Handlers) WorkerCreate(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "queue workers cannot be managed for demo subscriptions")
 		return
 	}
 	worker, bad := decodeWorker(r, id, 0)
@@ -87,13 +83,9 @@ func (h *Handlers) WorkerCreate(w http.ResponseWriter, r *http.Request) {
 
 // WorkerUpdate writes a definition back and re-applies it.
 func (h *Handlers) WorkerUpdate(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "queue workers cannot be managed for demo subscriptions")
 		return
 	}
 	existing, found := h.worker(r, id)
@@ -121,7 +113,7 @@ func (h *Handlers) WorkerUpdate(w http.ResponseWriter, r *http.Request) {
 
 // WorkerDelete removes a definition and everything it put on the host.
 func (h *Handlers) WorkerDelete(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.lookup(r)
+	id, _, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -146,13 +138,9 @@ func (h *Handlers) WorkerDelete(w http.ResponseWriter, r *http.Request) {
 // WorkerRestart restarts a worker in place, which is how a customer picks up
 // code they changed outside a deploy.
 func (h *Handlers) WorkerRestart(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.lookup(r)
+	id, _, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "queue workers cannot be managed for demo subscriptions")
 		return
 	}
 	worker, found := h.worker(r, id)
@@ -169,7 +157,7 @@ func (h *Handlers) WorkerRestart(w http.ResponseWriter, r *http.Request) {
 
 // WorkerLog returns the tail of one worker's output.
 func (h *Handlers) WorkerLog(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.lookup(r)
+	id, _, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

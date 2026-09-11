@@ -28,7 +28,7 @@ var destinationEmailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
 // ListAliases returns mail aliases for a domain.
 func (h *Handlers) ListAliases(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -57,13 +57,9 @@ func (h *Handlers) ListAliases(w http.ResponseWriter, r *http.Request) {
 
 // CreateAlias creates a forwarder or catch-all alias for a domain.
 func (h *Handlers) CreateAlias(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	var req struct {
@@ -129,13 +125,9 @@ func (h *Handlers) CreateAlias(w http.ResponseWriter, r *http.Request) {
 
 // DeleteAlias removes a mail alias for a domain.
 func (h *Handlers) DeleteAlias(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	aliasID, _ := strconv.ParseInt(chi.URLParam(r, "aid"), 10, 64)
@@ -156,13 +148,9 @@ func (h *Handlers) DeleteAlias(w http.ResponseWriter, r *http.Request) {
 
 // SetAliasStatus changes a mail alias status.
 func (h *Handlers) SetAliasStatus(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	aliasID, _ := strconv.ParseInt(chi.URLParam(r, "aid"), 10, 64)

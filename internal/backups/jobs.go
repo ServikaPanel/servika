@@ -159,19 +159,15 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	defer release()
 
 	var systemUser, file, verification string
-	var isDemo int
 	err := db.QueryRowContext(ctx,
-		`SELECT d.system_user, d.is_demo, b.file, COALESCE(b.verification,'') FROM backups b
+		`SELECT d.system_user, b.file, COALESCE(b.verification,'') FROM backups b
 		 JOIN domains d ON d.id=b.domain_id WHERE b.id=? AND b.domain_id=?`, backupID, domainID).
-		Scan(&systemUser, &isDemo, &file, &verification)
+		Scan(&systemUser, &file, &verification)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("backup not found")
 	}
 	if err != nil {
 		return "", fmt.Errorf("backup lookup failed")
-	}
-	if isDemo == 1 {
-		return "", fmt.Errorf("restore is unavailable for demo subscriptions")
 	}
 	// A bulk job carries no per-item override, so an archive the integrity scan
 	// recorded as corrupt is refused outright here. The single-domain endpoint is
@@ -243,21 +239,20 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	return "", fmt.Errorf("invalid restore mode")
 }
 
-// scopedDomains returns the in-scope, non-demo domains, optionally narrowed to ids.
-// The scope filter runs inside the query, so a reseller can never reach another
+// scopedDomains returns the in-scope domains, optionally narrowed to ids. The
+// scope filter runs inside the query, so a reseller can never reach another
 // reseller's domains by passing their ids.
 func (h *Handlers) scopedDomains(r *http.Request, ids []int64) ([]jobDomain, error) {
 	cond, args := middleware.ScopeSQL(r, "d")
 	// #nosec G202 -- cond is a constant ScopeSQL fragment with a literal alias; user values are bound via args.
 	q := `SELECT d.id, d.system_user, d.domain_name FROM domains d` + cond
-	if cond == "" {
-		q += ` WHERE d.is_demo=0`
-	} else {
-		q += ` AND d.is_demo=0`
-	}
 	if len(ids) > 0 {
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
-		q += ` AND d.id IN (` + placeholders + `)`
+		if cond == "" {
+			q += ` WHERE d.id IN (` + placeholders + `)`
+		} else {
+			q += ` AND d.id IN (` + placeholders + `)`
+		}
 		for _, id := range ids {
 			args = append(args, id)
 		}

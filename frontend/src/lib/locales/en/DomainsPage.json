@@ -30,7 +30,6 @@
   "sslExpires": "Expires: {{date}}",
   "sslActive": "SSL active",
   "sslSelfSigned": "Self-signed certificate: visitors get a browser security warning. Issue a Let's Encrypt one from the SSL page.",
-  "demoBadge": "DEMO",
   "reseller": "Reseller: {{name}}",
   "noPlan": "None",
   "subdomain": "SUB",

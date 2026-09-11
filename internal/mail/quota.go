@@ -29,7 +29,7 @@ const maildirsizeName = "maildirsize"
 // trees. Dovecot's figure is not measured at all: removing its cache file is
 // what makes it recount, which is the same repair doveadm performs.
 func (h *Handlers) QuotaRecalc(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

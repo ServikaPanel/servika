@@ -72,9 +72,8 @@ func (h *Handlers) parent(ctx context.Context, id int64) (parentDomain, error) {
 	var customerID, planID sql.NullInt64
 	var demo int
 	err := h.DB.QueryRowContext(ctx,
-		`SELECT id, domain_name, system_user, COALESCE(php_version,'8.3'), COALESCE(web_root,''), customer_id, plan_id, COALESCE(is_demo,0)
-		 FROM domains WHERE id=? AND parent_domain_id IS NULL`, id).
-		Scan(&p.ID, &p.DomainName, &p.SystemUser, &p.PHPVersion, &p.WebRoot, &customerID, &planID, &demo)
+		`SELECT id, domain_name, system_user, COALESCE(php_version,'8.3'), COALESCE(web_root,''), customer_id, plan_id FROM domains WHERE id=? AND parent_domain_id IS NULL`, id).
+		Scan(&p.ID, &p.DomainName, &p.SystemUser, &p.PHPVersion, &p.WebRoot, &customerID, &planID)
 	if err != nil {
 		return p, err
 	}
@@ -220,8 +219,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO domains(domain_name, system_user, php_version, ssl_enabled, status, ipv4,
-		   ftp_host, ftp_user, db_host, db_user, db_name, web_root, is_demo, customer_id, plan_id, parent_domain_id, parked)
-		 VALUES(?,?,?,0,'active',?,?,?, 'localhost','','',?,0,?,?,?,?)`,
+		   ftp_host, ftp_user, db_host, db_user, db_name, web_root, customer_id, plan_id, parent_domain_id, parked)
+		 VALUES(?,?,?,0,'active',?,?,?, 'localhost','','',?,?,?,?,?)`,
 		req.DomainName, parent.SystemUser, parent.PHPVersion, h.IPv4,
 		h.IPv4, parent.SystemUser, docroot, parent.CustomerID, parent.PlanID, parent.ID, boolInt(req.Parked))
 	if err != nil {
@@ -287,9 +286,8 @@ func Cleanup(ctx context.Context, db *sql.DB, addonID int64) (string, error) {
 	var domainName, systemUser, webRoot string
 	var parentID, demo, parked int
 	err := db.QueryRowContext(ctx,
-		`SELECT domain_name, system_user, COALESCE(web_root,''), COALESCE(parent_domain_id,0), COALESCE(is_demo,0), COALESCE(parked,0)
-		 FROM domains WHERE id=?`, addonID).
-		Scan(&domainName, &systemUser, &webRoot, &parentID, &demo, &parked)
+		`SELECT domain_name, system_user, COALESCE(web_root,''), COALESCE(parent_domain_id,0), COALESCE(parked,0) FROM domains WHERE id=?`, addonID).
+		Scan(&domainName, &systemUser, &webRoot, &parentID, &parked)
 	if err != nil {
 		return "", err
 	}

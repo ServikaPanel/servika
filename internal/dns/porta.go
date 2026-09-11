@@ -30,7 +30,7 @@ var typeOrder = map[string]int{
 // Export writes the domain's DNS records and SOA as a downloadable BIND zone file.
 func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	domainName, _, err := h.lookup(r)
+	domainName, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -102,13 +102,9 @@ func renderBindZone(domainName string, soa SOA, records []Record) string {
 // Import parses an uploaded BIND zone file and merges or replaces the records.
 func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	domainName, isDemo, err := h.lookup(r)
+	domainName, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "DNS cannot be changed for a demo subscription")
 		return
 	}
 

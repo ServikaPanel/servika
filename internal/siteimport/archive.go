@@ -277,7 +277,7 @@ func archiveMessage(err error) string {
 // importMessage surfaces this package's own refusals and nothing else.
 func importMessage(err error) string {
 	switch {
-	case errors.Is(err, errDemo), errors.Is(err, errBadUser):
+	case errors.Is(err, errBadUser):
 		return err.Error()
 	case errors.Is(err, os.ErrNotExist):
 		return "domain not found"

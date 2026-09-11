@@ -30,7 +30,6 @@
   "sslExpires": "Vyprší: {{date}}",
   "sslActive": "SSL aktivní",
   "sslSelfSigned": "Self-signed certifikát: návštěvníci dostanou v prohlížeči bezpečnostní varování. Vydejte certifikát Let's Encrypt na stránce SSL.",
-  "demoBadge": "DEMO",
   "reseller": "Reseller: {{name}}",
   "noPlan": "Žádný",
   "subdomain": "SUB",

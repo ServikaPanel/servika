@@ -214,12 +214,6 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// This grants a MariaDB account to an outside address and opens a matching
-	// firewall accept. CustomerScope enforces ownership and suspension, never
-	// is_demo.
-	if !middleware.EnforceDomainNotDemo(w, r, domainID, "remote database access") {
-		return
-	}
 	var request addRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&request); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -299,10 +293,6 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DomainDelete(w http.ResponseWriter, r *http.Request) {
 	domainID, ok := domainParam(w, r)
 	if !ok {
-		return
-	}
-	// DROP USER plus a firewall rebuild is as much a host mutation as the add.
-	if !middleware.EnforceDomainNotDemo(w, r, domainID, "remote database access") {
 		return
 	}
 	hostID, err := strconv.ParseInt(chi.URLParam(r, "hid"), 10, 64)

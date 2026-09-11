@@ -329,18 +329,16 @@ type statusResponse struct {
 	WPConnected int    `json:"wp_connected,omitempty"`
 }
 
-// domainSystemUser resolves the domain and reports whether it is a demo
-// subscription. is_demo is read here rather than by each handler so a new write
-// path cannot forget it; CustomerScope enforces ownership and suspension but
-// says nothing about demo.
-func (h *Handlers) domainSystemUser(r *http.Request) (id int64, systemUser string, demo, ok bool) {
+// domainSystemUser resolves the domain to its system user and reports whether
+// that user carries the managed tenant prefix. Ownership and suspension are
+// already enforced by CustomerScope on the route.
+func (h *Handlers) domainSystemUser(r *http.Request) (id int64, systemUser string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).Scan(&systemUser, &isDemo); err != nil {
-		return id, "", false, false
+		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&systemUser); err != nil {
+		return id, "", false
 	}
-	return id, systemUser, isDemo == 1, systemUserPattern.MatchString(systemUser)
+	return id, systemUser, systemUserPattern.MatchString(systemUser)
 }
 
 func wpSnippet(systemUser, password string) string {
@@ -405,7 +403,7 @@ func SavePassword(ctx context.Context, db *sql.DB, domainID int64, systemUser, p
 }
 
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, ok := h.domainSystemUser(r)
+	id, systemUser, ok := h.domainSystemUser(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -426,13 +424,9 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/redis enables the tenant cache.
 func (h *Handlers) Open(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, ok := h.domainSystemUser(r)
+	id, systemUser, ok := h.domainSystemUser(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "the cache cannot be changed for a demo subscription")
 		return
 	}
 	if adminPass() == "" {
@@ -476,13 +470,9 @@ func (h *Handlers) Open(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /domains/{id}/redis disables the tenant cache.
 func (h *Handlers) Close(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, ok := h.domainSystemUser(r)
+	id, systemUser, ok := h.domainSystemUser(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "the cache cannot be changed for a demo subscription")
 		return
 	}
 	disconnectWordPress(systemUser) // Remove the WordPress drop-in while the credentials are still valid.

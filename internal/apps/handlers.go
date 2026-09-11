@@ -37,8 +37,8 @@ func (h *Handlers) lookup(r *http.Request) (scope, bool) {
 	var s scope
 	var demo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(php_version,'8.3'), is_demo FROM domains WHERE id=?`, id).
-		Scan(&s.SystemUser, &s.PHPVersion, &demo); err != nil {
+		`SELECT system_user, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
+		Scan(&s.SystemUser, &s.PHPVersion); err != nil {
 		return scope{}, false
 	}
 	s.DomainID = id

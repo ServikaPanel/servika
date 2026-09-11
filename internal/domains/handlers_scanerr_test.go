@@ -60,12 +60,12 @@ func errorMessage(t *testing.T, recorder *httptest.ResponseRecorder) string {
 
 // A Scan error that is not ErrNoRows must stop the request at the read.
 //
-// Continuing past it is not a cosmetic problem. The scanned identifiers stay
-// empty AND the is_demo flag read from the same row stays 0, so the demo guard
-// in each of these handlers is bypassed by a database hiccup. The assertion is
-// on the message rather than the status alone: every one of these handlers also
-// answers 500 when the work it should never have started fails, so a status-only
-// check would pass against the unfixed code.
+// Continuing past it is not a cosmetic problem: the scanned identifiers stay
+// empty, so each of these handlers would drive the provisioner, the FTP account
+// or the database drop with an empty domain name and system user. The assertion
+// is on the message rather than the status alone: every one of these handlers
+// also answers 500 when the work it should never have started fails, so a
+// status-only check would pass against the unfixed code.
 func TestHandlersStopOnAReadFailureInsteadOfActingOnEmptyValues(t *testing.T) {
 	handlers := &Handlers{DB: failingDB(t)}
 

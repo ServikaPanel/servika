@@ -142,30 +142,24 @@ func patErrorMessage(status int, b []byte) string {
 	return fmt.Sprintf("GitHub HTTP %d", status)
 }
 
-func (h *Handlers) lookupDomain(r *http.Request) (id int64, systemUser string, demo bool, err error) {
+func (h *Handlers) lookupDomain(r *http.Request) (id int64, systemUser string, err error) {
 	idStr := chi.URLParam(r, "id")
 	_, _ = fmt.Sscanf(idStr, "%d", &id)
-	var dmo int
 	err = h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &dmo)
-	demo = dmo == 1
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&systemUser)
 	return
 }
 
 // POST /domains/{id}/github/connect — body: { token }
 func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, err := h.lookupDomain(r)
+	id, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "gitHub cannot be connected to a demo subscription")
 		return
 	}
 	var req struct {
@@ -215,7 +209,7 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/github
 func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
-	id, _, _, err := h.lookupDomain(r)
+	id, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -238,7 +232,7 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /domains/{id}/github
 func (h *Handlers) Disconnect(w http.ResponseWriter, r *http.Request) {
-	id, _, _, err := h.lookupDomain(r)
+	id, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -267,7 +261,7 @@ func (h *Handlers) Disconnect(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/github/repos
 func (h *Handlers) ListRepos(w http.ResponseWriter, r *http.Request) {
-	id, _, _, err := h.lookupDomain(r)
+	id, _, err := h.lookupDomain(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
@@ -309,7 +303,7 @@ func (h *Handlers) ListRepos(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/github/branches?repo=owner/name
 func (h *Handlers) ListBranches(w http.ResponseWriter, r *http.Request) {
-	id, _, _, err := h.lookupDomain(r)
+	id, _, err := h.lookupDomain(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
@@ -348,13 +342,9 @@ func (h *Handlers) ListBranches(w http.ResponseWriter, r *http.Request) {
 // POST /domains/{id}/github/use — body: { repo, branch, target_dir, auto_deploy }
 // Use stores the selected repository in git_repos and creates a GitHub webhook when auto_deploy is true.
 func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, err := h.lookupDomain(r)
+	id, systemUser, err := h.lookupDomain(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "demo subscription")
 		return
 	}
 	var req struct {

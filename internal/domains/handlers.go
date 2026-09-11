@@ -54,7 +54,6 @@ type Domain struct {
 	DBUser    string `json:"db_user"`
 	DBName    string `json:"db_name"`
 	WebRoot   string `json:"web_root"`
-	IsDemo    bool   `json:"is_demo"`
 	Notes     string `json:"notes,omitempty"`
 	PlanID    *int64 `json:"plan_id,omitempty"`
 	PlanName  string `json:"plan_name,omitempty"`
@@ -108,28 +107,26 @@ type Handlers struct {
 
 const selectAll = `SELECT d.id, d.domain_name, d.system_user, d.php_version, d.ssl_enabled,
   COALESCE(DATE_FORMAT(d.ssl_expiry,'%Y-%m-%d'),''), d.status, d.ipv4, d.ftp_host, d.ftp_user,
-  d.db_host, d.db_user, d.db_name, d.web_root, d.size_kb, d.traffic_kb, d.is_demo,
+  d.db_host, d.db_user, d.db_name, d.web_root, d.size_kb, d.traffic_kb,
   COALESCE(d.notes,''), DATE_FORMAT(d.created_at,'%Y-%m-%d'),
   d.plan_id, COALESCE(p.name,''), d.ssh_access, COALESCE(d.suspended,0),
   COALESCE(ru.username,''), d.site_type, COALESCE(d.ssl_source,''), COALESCE(d.ipv6,''),
-  COALESCE(d.maintenance_enabled,0)
-  FROM domains d
+  COALESCE(d.maintenance_enabled,0) FROM domains d
   LEFT JOIN service_plans p ON p.id=d.plan_id
   LEFT JOIN customers cu ON cu.id=d.customer_id
   LEFT JOIN users ru ON ru.id=cu.owner_user_id`
 
 func scan(rs interface{ Scan(...any) error }) (Domain, error) {
 	var d Domain
-	var ssl, demo, sshE, suspended, maintenance int
+	var ssl, sshE, suspended, maintenance int
 	var planID sql.NullInt64
 	err := rs.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.PHPVersion, &ssl,
 		&d.SSLExpiry, &d.Status, &d.IPv4, &d.FTPHost, &d.FTPUser,
-		&d.DBHost, &d.DBUser, &d.DBName, &d.WebRoot, &d.SizeKB, &d.TrafficKB, &demo,
+		&d.DBHost, &d.DBUser, &d.DBName, &d.WebRoot, &d.SizeKB, &d.TrafficKB,
 		&d.Notes, &d.CreatedAt,
 		&planID, &d.PlanName, &sshE, &suspended,
 		&d.ResellerName, &d.SiteType, &d.SSLSource, &d.IPv6, &maintenance)
 	d.SSL = ssl == 1
-	d.IsDemo = demo == 1
 	d.SshAccess = sshE == 1
 	d.Suspended = suspended == 1
 	d.MaintenanceEnabled = maintenance == 1
@@ -543,8 +540,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// 2) domains row
 	res, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO domains(domain_name, system_user, php_version, ssl_enabled, status, ipv4,
-		   ftp_host, ftp_user, db_host, db_user, db_name, web_root, is_demo, site_type)
-		 VALUES(?,?,?,0,'active',?,?,?, 'localhost',?,?,?, 0,?)`,
+		   ftp_host, ftp_user, db_host, db_user, db_name, web_root, site_type)
+		 VALUES(?,?,?,0,'active',?,?,?, 'localhost',?,?,?,?)`,
 		req.DomainName, pr.SystemUser, req.PHPVersion, h.IPv4,
 		h.IPv4, pr.SystemUser, dbUser, dbName, pr.WebRoot, siteType)
 	if err != nil {
@@ -660,11 +657,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var domainName, sk string
-	var isDemo int
 	var parentDomainID sql.NullInt64
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, is_demo, parent_domain_id FROM domains WHERE id=?`, id).
-		Scan(&domainName, &sk, &isDemo, &parentDomainID)
+		`SELECT domain_name, system_user, parent_domain_id FROM domains WHERE id=?`, id).
+		Scan(&domainName, &sk, &parentDomainID)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -739,45 +735,43 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	systemUserShared := siblingErr != nil || len(siblings) > 0
 
-	if isDemo == 0 {
-		// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
-		if err := credentials.MySQLDropAllForDomain(h.DB, id); err != nil {
-			httpx.LogR(r, "mysql drop-all warn (%s): %v", domainName, err)
-		}
-		// nginx vhost + PHP pool + Linux user. Deprovision asks the same question
-		// again for itself, so a caller that never learned about sharing cannot
-		// reintroduce the data loss.
-		if err := provisioner.Deprovision(domainName, sk); err != nil {
-			httpx.LogR(r, "deprovision warn (%s): %v", domainName, err)
-		}
-		if !systemUserShared {
-			if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
-				httpx.LogR(r, "resource slice cleanup warn (%s): %v", sk, err)
-			}
-			// The quarantine store lives OUTSIDE the home, so userdel -r never
-			// reaches it: the rows go with the foreign key and the files would stay
-			// for good, holding a tenant's malware after the tenant is gone.
-			if err := antivirus.RemoveStoreForUser(sk); err != nil {
-				httpx.LogR(r, "quarantine store cleanup warn (%s): %v", sk, err)
-			}
-		}
-		// Redis tenant cache: Valkey ACL user + WP drop-in + domain_redis row.
-		// Since domain_redis has no CASCADE FK, the row was orphaned when the domain was deleted.
-		// While the system user is shared, the ACL account belongs to the survivor,
-		// so only this domain's row goes.
-		if systemUserShared {
-			if err := redis.ForgetDomain(h.DB, id); err != nil {
-				httpx.LogR(r, "redis row cleanup warn (%d): %v", id, err)
-			}
-		} else if err := redis.CloseDomain(h.DB, id, sk); err != nil {
-			httpx.LogR(r, "redis close-domain warn (%s): %v", sk, err)
-		}
-		// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
-		mail.CleanupDomain(h.DB, id, sk)
-		// NOTE: Preserve /var/backups/servika/<sk>/ intentionally.
-		// The customer may have deleted the domain by accident, so backups are kept for recovery.
-		// (backups.RemoveDomainBackups is available for manual cleanup.)
+	// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
+	if err := credentials.MySQLDropAllForDomain(h.DB, id); err != nil {
+		httpx.LogR(r, "mysql drop-all warn (%s): %v", domainName, err)
 	}
+	// nginx vhost + PHP pool + Linux user. Deprovision asks the same question
+	// again for itself, so a caller that never learned about sharing cannot
+	// reintroduce the data loss.
+	if err := provisioner.Deprovision(domainName, sk); err != nil {
+		httpx.LogR(r, "deprovision warn (%s): %v", domainName, err)
+	}
+	if !systemUserShared {
+		if err := resourcelimit.DeleteSystemdSlice(sk); err != nil {
+			httpx.LogR(r, "resource slice cleanup warn (%s): %v", sk, err)
+		}
+		// The quarantine store lives OUTSIDE the home, so userdel -r never
+		// reaches it: the rows go with the foreign key and the files would stay
+		// for good, holding a tenant's malware after the tenant is gone.
+		if err := antivirus.RemoveStoreForUser(sk); err != nil {
+			httpx.LogR(r, "quarantine store cleanup warn (%s): %v", sk, err)
+		}
+	}
+	// Redis tenant cache: Valkey ACL user + WP drop-in + domain_redis row.
+	// Since domain_redis has no CASCADE FK, the row was orphaned when the domain was deleted.
+	// While the system user is shared, the ACL account belongs to the survivor,
+	// so only this domain's row goes.
+	if systemUserShared {
+		if err := redis.ForgetDomain(h.DB, id); err != nil {
+			httpx.LogR(r, "redis row cleanup warn (%d): %v", id, err)
+		}
+	} else if err := redis.CloseDomain(h.DB, id, sk); err != nil {
+		httpx.LogR(r, "redis close-domain warn (%s): %v", sk, err)
+	}
+	// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
+	mail.CleanupDomain(h.DB, id, sk)
+	// NOTE: Preserve /var/backups/servika/<sk>/ intentionally.
+	// The customer may have deleted the domain by accident, so backups are kept for recovery.
+	// (backups.RemoveDomainBackups is available for manual cleanup.)
 
 	// Existing installations may not have foreign keys on the traffic tables.
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_traffic WHERE domain_id=?`, id); err != nil {
@@ -813,10 +807,8 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// BIND zone cleanup AFTER the DELETE: updateZoneIncludes regenerates zones.conf from the domains
 	// table; if the domain were still in the table (old order) the last deleted
 	// domain zone include would be rewritten (dangling, named reload error).
-	if isDemo == 0 {
-		if err := dns.DeleteZone(r.Context(), h.DB, domainName); err != nil {
-			httpx.LogR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
-		}
+	if err := dns.DeleteZone(r.Context(), h.DB, domainName); err != nil {
+		httpx.LogR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
@@ -850,20 +842,15 @@ func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var domainName, sk, backend, certPath, keyPath, sslSource, webRoot string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, is_demo, COALESCE(web_backend,'php-fpm'), COALESCE(cert_path,''), COALESCE(key_path,''), COALESCE(ssl_source,''), COALESCE(web_root,'') FROM domains WHERE id=?`, id).
-		Scan(&domainName, &sk, &isDemo, &backend, &certPath, &keyPath, &sslSource, &webRoot)
+		`SELECT domain_name, system_user, COALESCE(web_backend,'php-fpm'), COALESCE(cert_path,''), COALESCE(key_path,''), COALESCE(ssl_source,''), COALESCE(web_root,'') FROM domains WHERE id=?`, id).
+		Scan(&domainName, &sk, &backend, &certPath, &keyPath, &sslSource, &webRoot)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "pHP versions cannot be changed for demo subscriptions")
 		return
 	}
 	socket, err := provisioner.SetPHPVersion(domainName, sk, req.PHPVersion, certPath, keyPath, sslSource, backend, webRoot)
@@ -939,20 +926,15 @@ func (h *Handlers) SetWebRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var systemUser string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &isDemo)
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&systemUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "web root cannot be changed for demo subscriptions")
 		return
 	}
 	abs, err := provisioner.AbsoluteWebRoot(systemUser, req.Subdirectory)
@@ -1013,20 +995,15 @@ func (h *Handlers) SetWebBackend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var domainName, sk, phpVersion string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, php_version, is_demo FROM domains WHERE id=?`, id).
-		Scan(&domainName, &sk, &phpVersion, &isDemo)
+		`SELECT domain_name, system_user, php_version FROM domains WHERE id=?`, id).
+		Scan(&domainName, &sk, &phpVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "the backend cannot be changed for demo subscriptions")
 		return
 	}
 	_ = domainName
@@ -1067,27 +1044,22 @@ func (h *Handlers) SetFTPPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sk string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&sk, &isDemo)
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&sk)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	// A swallowed Scan error would update the FTP password of the empty system
 	// user, which matches no account and still answers 200 with the new
-	// password, and would leave isDemo reading 0 so the guard below is bypassed.
+	// password.
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
 	if sk == "" {
 		httpx.WriteError(w, http.StatusInternalServerError, "domain record is incomplete")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "fTP passwords cannot be changed for demo subscriptions")
 		return
 	}
 	if err := credentials.FTPUpdatePassword(h.DB, sk, req.Password); err != nil {
@@ -1224,20 +1196,15 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var sk string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&sk, &isDemo)
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&sk)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "domain query failed")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "databases cannot be added to demo subscriptions")
 		return
 	}
 	// Hold a per-customer lock across the quota check AND the database creation below
@@ -1399,27 +1366,20 @@ func (h *Handlers) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DeleteDatabase(w http.ResponseWriter, r *http.Request) {
 	dbid, _ := strconv.ParseInt(chi.URLParam(r, "dbid"), 10, 64)
 	var dbName, dbUser string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT db.db_name, db.db_user, d.is_demo
-		 FROM db_accounts db JOIN domains d ON d.id=db.domain_id
-		 WHERE db.id=?`, dbid).Scan(&dbName, &dbUser, &isDemo)
+		`SELECT db.db_name, db.db_user FROM db_accounts db JOIN domains d ON d.id=db.domain_id
+		 WHERE db.id=?`, dbid).Scan(&dbName, &dbUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "database record not found")
 		return
 	}
-	// A swallowed Scan error would leave isDemo reading 0, bypassing the demo
-	// guard below, and would send empty identifiers into the drop path.
+	// A swallowed Scan error would send empty identifiers into the drop path.
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
 	if dbName == "" || dbUser == "" {
 		httpx.WriteError(w, http.StatusInternalServerError, "database record is incomplete")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "databases cannot be deleted from demo subscriptions")
 		return
 	}
 	// When the user is shared across other databases (existing-user mode), drop only the database

@@ -37,7 +37,7 @@ func dnsCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
 // GetDNSSEC returns the DNSSEC state and registrar DS records for a domain.
 func (h *Handlers) GetDNSSEC(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	domainName, _, err := h.lookup(r)
+	domainName, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -59,13 +59,9 @@ func (h *Handlers) GetDNSSEC(w http.ResponseWriter, r *http.Request) {
 // PostDNSSEC enables or disables DNSSEC for a domain and rewrites its BIND configuration.
 func (h *Handlers) PostDNSSEC(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	domainName, isDemo, err := h.lookup(r)
+	domainName, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNSSEC cannot be changed for demo subscriptions")
 		return
 	}
 	var request struct {

@@ -256,7 +256,7 @@ func (h *Handlers) VerifyChecksums(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	id, _, _, _, _, _, found := h.domain(r)
+	id, _, _, _, _, found := h.domain(r)
 	if !found {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

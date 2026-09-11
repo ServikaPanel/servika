@@ -54,13 +54,9 @@ func deployScript(appDir, php, nodeDir string, migrate, npmBuild bool) string {
 }
 
 func (h *Handlers) Deploy(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "deploy cannot be run for demo subscriptions")
 		return
 	}
 	defer lockDomain(id)()
@@ -191,7 +187,7 @@ func (h *Handlers) restartWorkersAfterDeploy(ctx context.Context, domainID int64
 }
 
 func (h *Handlers) DeployStatus(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, _, ok := h.lookup(r)
+	id, systemUser, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

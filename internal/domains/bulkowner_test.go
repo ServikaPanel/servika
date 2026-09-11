@@ -107,10 +107,10 @@ func (c *ownerConn) QueryContext(_ context.Context, query string, args []driver.
 		return &countRow{n: boolToInt(c.rec.ownsCustomer)}, nil
 	case strings.Contains(query, "COUNT(*) FROM customers WHERE id=?"):
 		return &countRow{n: 1}, nil // the target customer exists
-	case strings.Contains(query, "SELECT domain_name, system_user, is_demo"):
+	case strings.Contains(query, "SELECT domain_name, system_user"):
 		return &staticRows{
-			columns: []string{"domain_name", "system_user", "is_demo"},
-			rows:    [][]driver.Value{{"parent.example", "c_parent", int64(0)}},
+			columns: []string{"domain_name", "system_user"},
+			rows:    [][]driver.Value{{"parent.example", "c_parent"}},
 		}, nil
 	case strings.Contains(query, "FROM domains d JOIN customers c"):
 		// The reseller cascade's snapshot. One domain the cascade closed earlier

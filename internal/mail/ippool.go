@@ -211,13 +211,9 @@ func (h *Handlers) PoolDelete(w http.ResponseWriter, r *http.Request) {
 // DomainOutboundPut assigns a domain to a pool address.
 // PUT /domains/{id}/mail/outbound-ip
 func (h *Handlers) DomainOutboundPut(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	var req struct {

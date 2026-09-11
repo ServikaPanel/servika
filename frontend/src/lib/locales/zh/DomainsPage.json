@@ -30,7 +30,6 @@
   "sslExpires": "过期时间：{{date}}",
   "sslActive": "SSL 已启用",
   "sslSelfSigned": "self-signed 证书：访问者会看到浏览器安全警告。请在 SSL 页面签发 Let's Encrypt 证书。",
-  "demoBadge": "演示",
   "reseller": "分销商：{{name}}",
   "noPlan": "无",
   "subdomain": "子域",

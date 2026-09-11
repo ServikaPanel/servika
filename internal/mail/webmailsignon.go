@@ -35,13 +35,9 @@ const webmailTokenValiditySeconds = 120
 // WebmailToken mints a signon token for one mailbox.
 // POST /domains/{id}/mail/{mid}/webmail-token
 func (h *Handlers) WebmailToken(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	// The route carries the domain in {id}, so CustomerScope has already tied it

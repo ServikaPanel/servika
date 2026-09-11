@@ -30,7 +30,7 @@ const deliveryPageSize = 200
 // has already tied to the caller. Nothing here widens that: every filter narrows
 // an already-scoped query.
 func (h *Handlers) DeliveryLog(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

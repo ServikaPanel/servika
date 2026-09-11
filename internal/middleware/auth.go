@@ -34,55 +34,6 @@ var suspendedDomainLookup = func(ctx context.Context, domainID int64) (bool, err
 	return suspended == 1, err
 }
 
-var demoDomainLookup = func(ctx context.Context, domainID int64) (bool, error) {
-	if scopeDB == nil {
-		return false, nil
-	}
-	// Same resilience path as the suspension flag: a momentary database failure
-	// retries and then falls back to the flag last read for this domain, so a
-	// demo domain stays refused rather than becoming writable for the duration
-	// of the incident.
-	demo, err := readState(ctx, "demo:"+strconv.FormatInt(domainID, 10),
-		func(ctx context.Context) (int64, error) {
-			var flag int64
-			err := scopeDB.QueryRowContext(ctx,
-				`SELECT COALESCE(is_demo,0) FROM domains WHERE id=?`, domainID).
-				Scan(&flag)
-			return flag, err
-		})
-	return demo == 1, err
-}
-
-// EnforceDomainNotDemo refuses a WRITE against a demo subscription.
-//
-// is_demo is a property of the DOMAIN, not of the caller, so this refuses for
-// every role, exactly as the per-handler copies in internal/waf, internal/redis
-// and thirty other packages already do. CustomerScope enforces ownership and
-// suspension and never reads is_demo, so a package that forgets the guard gets
-// a fully working write path with nothing to show that anything is missing.
-// That is how the app installer, the nginx settings, remote MySQL access and
-// MTA-STS each ended up writable on a read-only subscription.
-//
-// It fails CLOSED: a flag that cannot be read refuses the write, because the
-// alternative is making every demo domain writable during a database incident.
-//
-// `what` names the subject so the message reads as a sentence, for example
-// "the nginx settings cannot be changed for a demo subscription". It writes the
-// HTTP error and returns false when the write must be refused; callers must
-// stop on false.
-func EnforceDomainNotDemo(w http.ResponseWriter, r *http.Request, domainID int64, what string) bool {
-	demo, err := demoDomainLookup(r.Context(), domainID)
-	if err != nil {
-		httpx.WriteError(w, http.StatusServiceUnavailable, "could not verify the subscription type")
-		return false
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, what+" cannot be changed for a demo subscription")
-		return false
-	}
-	return true
-}
-
 // RecordAudit writes one audit_log row naming the authenticated actor, their
 // address, what they changed and whether it took effect.
 //

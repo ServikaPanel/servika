@@ -484,13 +484,9 @@ func RemoveStoreForUser(systemUser string) error {
 // tenant resolves the domain and refuses the cases no file operation may run
 // for, so every handler above starts from the same answer.
 func (h *Handlers) tenant(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
-	id, systemUser, demo, ok := h.domain(r)
+	id, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return 0, "", false
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return 0, "", false
 	}
 	if !strings.HasPrefix(systemUser, "c_") {

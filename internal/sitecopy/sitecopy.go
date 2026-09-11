@@ -36,19 +36,18 @@ type Copy struct {
 	Date   string `json:"date"`
 }
 
-func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, demo, ok bool) {
+func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(is_demo,0) FROM domains WHERE id=?`, id).Scan(&systemUser, &isDemo); err != nil {
-		return id, "", false, false
+		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&systemUser); err != nil {
+		return id, "", false
 	}
-	return id, systemUser, isDemo == 1, true
+	return id, systemUser, true
 }
 
 // GET /domains/{id}/copy
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, ok := h.domain(r)
+	_, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -75,13 +74,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/copy creates a staging copy.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
-	domainID, systemUser, demo, ok := h.domain(r)
+	domainID, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
@@ -144,7 +139,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /domains/{id}/copy/{name}
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, ok := h.domain(r)
+	_, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

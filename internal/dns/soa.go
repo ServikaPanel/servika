@@ -95,13 +95,8 @@ func (h *Handlers) GetSOA(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) PutSOA(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var domainName string
-	var isDemo int
-	if err := h.DB.QueryRowContext(r.Context(), `SELECT domain_name, is_demo FROM domains WHERE id=?`, id).Scan(&domainName, &isDemo); err != nil {
+	if err := h.DB.QueryRowContext(r.Context(), `SELECT domain_name FROM domains WHERE id=?`, id).Scan(&domainName); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "sOA settings are read-only for demo subscriptions")
 		return
 	}
 	var soa SOA

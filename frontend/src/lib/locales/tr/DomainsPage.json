@@ -30,7 +30,6 @@
   "sslExpires": "Bitiş: {{date}}",
   "sslActive": "SSL etkin",
   "sslSelfSigned": "Self-signed sertifika: ziyaretçiler tarayıcıda güvenlik uyarısı görür. SSL sayfasından Let's Encrypt alın.",
-  "demoBadge": "DEMO",
   "reseller": "Bayi: {{name}}",
   "noPlan": "Yok",
   "subdomain": "ALT",

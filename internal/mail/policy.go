@@ -252,7 +252,7 @@ func evaluateSendPolicy(db *sql.DB, attrs map[string]string) string {
 
 // SendLimitsGet returns a mailbox's send limits and usage. GET /domains/{id}/mail/{mid}/send-limits
 func (h *Handlers) SendLimitsGet(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -318,13 +318,9 @@ func refusalAgainstPlan(plan PlanMailLimits, req SendLimits) string {
 
 // SendLimitsPut saves a mailbox's send limits. PUT /domains/{id}/mail/{mid}/send-limits
 func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	mid, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)

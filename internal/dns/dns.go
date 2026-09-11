@@ -53,16 +53,15 @@ func scan(rs interface{ Scan(...any) error }) (Record, error) {
 	return record, err
 }
 
-func (h *Handlers) lookup(r *http.Request) (string, bool, error) {
+func (h *Handlers) lookup(r *http.Request) (string, error) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var domainName string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, is_demo FROM domains WHERE id=?`, id).Scan(&domainName, &isDemo)
+		`SELECT domain_name FROM domains WHERE id=?`, id).Scan(&domainName)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, os.ErrNotExist
+		return "", os.ErrNotExist
 	}
-	return domainName, isDemo == 1, err
+	return domainName, err
 }
 
 // List returns all DNS records for a domain.
@@ -91,13 +90,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 // Create adds a DNS record to a domain.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	_, isDemo, err := h.lookup(r)
+	_, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNS records are read-only for demo subscriptions")
 		return
 	}
 	var record Record
@@ -152,13 +147,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	rid, _ := strconv.ParseInt(chi.URLParam(r, "rid"), 10, 64)
-	_, isDemo, err := h.lookup(r)
+	_, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNS records are read-only for demo subscriptions")
 		return
 	}
 	var record Record
@@ -205,13 +196,9 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	rid, _ := strconv.ParseInt(chi.URLParam(r, "rid"), 10, 64)
-	_, isDemo, err := h.lookup(r)
+	_, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNS records are read-only for demo subscriptions")
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(),
@@ -225,13 +212,9 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 // BulkDelete removes selected DNS records in one request.
 func (h *Handlers) BulkDelete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	_, isDemo, err := h.lookup(r)
+	_, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNS records are read-only for demo subscriptions")
 		return
 	}
 	var req struct {
@@ -271,13 +254,9 @@ func (h *Handlers) BulkDelete(w http.ResponseWriter, r *http.Request) {
 // BulkStatus enables or disables selected DNS records.
 func (h *Handlers) BulkStatus(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	_, isDemo, err := h.lookup(r)
+	_, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNS records are read-only for demo subscriptions")
 		return
 	}
 	var req struct {
@@ -323,13 +302,9 @@ func (h *Handlers) BulkStatus(w http.ResponseWriter, r *http.Request) {
 // ApplyTemplate inserts the default DNS records without duplicating existing records.
 func (h *Handlers) ApplyTemplate(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	domainName, isDemo, err := h.lookup(r)
+	domainName, err := h.lookup(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if isDemo {
-		httpx.WriteError(w, http.StatusForbidden, "dNS templates are unavailable for demo subscriptions")
 		return
 	}
 	var ipv4 string

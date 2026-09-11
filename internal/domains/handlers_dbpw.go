@@ -47,21 +47,15 @@ func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var dbName, dbUser string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT db.db_name, db.db_user, d.is_demo
-		 FROM db_accounts db JOIN domains d ON d.id=db.domain_id
-		 WHERE db.id=?`, dbid).Scan(&dbName, &dbUser, &isDemo)
+		`SELECT db.db_name, db.db_user FROM db_accounts db JOIN domains d ON d.id=db.domain_id
+		 WHERE db.id=?`, dbid).Scan(&dbName, &dbUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "database record not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "database passwords cannot be changed for demo subscriptions")
 		return
 	}
 

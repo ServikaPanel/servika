@@ -70,12 +70,11 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var systemUser, file, domainName, verification string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT d.system_user, d.domain_name, d.is_demo, b.file, COALESCE(b.verification,'') FROM backups b
+		`SELECT d.system_user, d.domain_name, b.file, COALESCE(b.verification,'') FROM backups b
 		 JOIN domains d ON d.id=b.domain_id
 		 WHERE b.id=? AND b.domain_id=?`, backupID, id).
-		Scan(&systemUser, &domainName, &isDemo, &file, &verification)
+		Scan(&systemUser, &domainName, &file, &verification)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "backup not found")
 		return
@@ -91,10 +90,6 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	if verification == "corrupt" && !req.AllowCorrupt {
 		httpx.WriteError(w, http.StatusConflict,
 			"this backup is recorded as corrupt; restore it only by confirming that explicitly")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "restore is unavailable for demo subscriptions")
 		return
 	}
 	if !validSystemUser(systemUser) {

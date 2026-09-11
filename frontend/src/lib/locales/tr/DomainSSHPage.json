@@ -26,8 +26,7 @@
     "disabledPrefix": "Devre dışı:",
     "currentPrefix": "Şu anki:",
     "disable": "SSH'ı Kapat",
-    "enable": "SSH'ı Aç",
-    "demoNotice": "Demo alan adı için SSH erişimi değiştirilemez."
+    "enable": "SSH'ı Aç"
   },
   "connection": {
     "title": "Bağlantı Bilgileri",

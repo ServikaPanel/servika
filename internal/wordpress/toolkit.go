@@ -47,7 +47,7 @@ func writeJSONArray(w http.ResponseWriter, raw []byte, err error) {
 
 // GET /domains/{id}/wordpress/status?dir= returns core version and updates, PHP, database size, and maintenance state.
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, _, ok := h.domain(r)
+	_, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -109,7 +109,7 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/wordpress/plugins?dir= lists plugins.
 func (h *Handlers) Plugins(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, _, ok := h.domain(r)
+	_, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -128,7 +128,7 @@ func (h *Handlers) Plugins(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/wordpress/themes?dir= lists themes.
 func (h *Handlers) Themes(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, _, ok := h.domain(r)
+	_, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -147,7 +147,7 @@ func (h *Handlers) Themes(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/wordpress/users?dir= lists users.
 func (h *Handlers) Users(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, _, ok := h.domain(r)
+	_, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -167,13 +167,9 @@ func (h *Handlers) Users(w http.ResponseWriter, r *http.Request) {
 // prepareMutation resolves the domain, demo state, and directory for mutations.
 // A false return means the error response has already been written.
 func (h *Handlers) prepareMutation(w http.ResponseWriter, r *http.Request, directory string) (systemUser, dir string, ok bool) {
-	_, systemUser, _, root, _, demo, found := h.domain(r)
+	_, systemUser, _, root, _, found := h.domain(r)
 	if !found {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return "", "", false
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return "", "", false
 	}
 	d, err := resolveDirectory(root, directory)

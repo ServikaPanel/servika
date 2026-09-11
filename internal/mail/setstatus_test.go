@@ -134,7 +134,7 @@ func clearStatusScript() *statusScript {
 		rows: map[string][]driver.Value{
 			// Each fragment must match ONE query, or map order (which is random)
 			// would answer a different query on every run.
-			"FROM domains WHERE id=?":              {"c_tenant", int64(0)},
+			"FROM domains WHERE id=?":              {"c_tenant"},
 			"SELECT email FROM mailboxes":          {"box@example.com"},
 			"SELECT spam_suspended_at IS NOT NULL": {false},
 		},

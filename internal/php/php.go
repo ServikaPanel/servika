@@ -679,7 +679,7 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	var demo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT is_demo FROM domains WHERE id=?`, id).Scan(&demo); err != nil {
+		`SELECT  FROM domains WHERE id=?`, id).Scan(); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}

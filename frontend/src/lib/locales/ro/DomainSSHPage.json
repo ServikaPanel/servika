@@ -26,8 +26,7 @@
     "disabledPrefix": "Dezactivat:",
     "currentPrefix": "Curent:",
     "disable": "Dezactivare SSH",
-    "enable": "Activare SSH",
-    "demoNotice": "Accesul SSH nu poate fi modificat pentru domeniul demo."
+    "enable": "Activare SSH"
   },
   "connection": {
     "title": "Detalii de conexiune",

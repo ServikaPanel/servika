@@ -47,7 +47,7 @@ var sieveFolderPattern = regexp.MustCompile(`^[A-Za-z0-9 _.-]{1,64}$`)
 
 // AutoresponderGet returns a mailbox vacation responder. GET /domains/{id}/mail/{mid}/autoresponder
 func (h *Handlers) AutoresponderGet(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -81,13 +81,9 @@ func (h *Handlers) AutoresponderGet(w http.ResponseWriter, r *http.Request) {
 
 // AutoresponderPut saves and compiles a mailbox vacation responder. PUT /domains/{id}/mail/{mid}/autoresponder
 func (h *Handlers) AutoresponderPut(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	mid, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)
@@ -142,13 +138,9 @@ func (h *Handlers) AutoresponderPut(w http.ResponseWriter, r *http.Request) {
 
 // AutoresponderDelete removes a mailbox vacation responder. DELETE /domains/{id}/mail/{mid}/autoresponder
 func (h *Handlers) AutoresponderDelete(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	mid, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)
@@ -170,7 +162,7 @@ func (h *Handlers) AutoresponderDelete(w http.ResponseWriter, r *http.Request) {
 
 // FilterList returns domain mailbox filters. GET /domains/{id}/mail/filters
 func (h *Handlers) FilterList(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -204,13 +196,9 @@ func (h *Handlers) FilterList(w http.ResponseWriter, r *http.Request) {
 
 // FilterCreate creates and compiles a mailbox filter. POST /domains/{id}/mail/filters
 func (h *Handlers) FilterCreate(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	var req MailFilter
@@ -253,13 +241,9 @@ func (h *Handlers) FilterCreate(w http.ResponseWriter, r *http.Request) {
 
 // FilterDelete removes and recompiles a mailbox filter. DELETE /domains/{id}/mail/filters/{fid}
 func (h *Handlers) FilterDelete(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	fid, _ := strconv.ParseInt(chi.URLParam(r, "fid"), 10, 64)

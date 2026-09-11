@@ -72,31 +72,30 @@ func composerBin() string { return config.ComposerBin() }
 // load resolves the domain and the directory composer must run in. A {sid} URL
 // parameter selects that subdomain's document root, so composer acts on the
 // subdomain's own dependencies instead of the parent domain's public_html.
-func (h *Handlers) load(r *http.Request) (id int64, systemUser, directory string, demo bool, ok bool) {
+func (h *Handlers) load(r *http.Request) (id int64, systemUser, directory string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).Scan(&systemUser, &isDemo); err != nil {
-		return id, "", "", false, false
+		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&systemUser); err != nil {
+		return id, "", "", false
 	}
 	directory = "/home/" + systemUser + "/public_html"
 	if raw := chi.URLParam(r, "sid"); raw != "" {
 		sid, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			return id, "", "", false, false
+			return id, "", "", false
 		}
 		scope, scopeOK := subdomain.ResolveScope(r.Context(), h.DB, id, sid)
 		if !scopeOK {
-			return id, "", "", false, false
+			return id, "", "", false
 		}
 		directory = scope.DocRoot
 	}
-	return id, systemUser, directory, isDemo == 1, true
+	return id, systemUser, directory, true
 }
 
 // GET /domains/{id}/composer, status (is composer installed, does composer.json exist)
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, directory, _, ok := h.load(r)
+	_, systemUser, directory, ok := h.load(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -127,13 +126,9 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/composer  body {"command":"install|update|dump-autoload|validate|require|remove","package":"vendor/pkg"}
 func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, directory, demo, ok := h.load(r)
+	_, systemUser, directory, ok := h.load(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "composer cannot run for a demo subscription")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {

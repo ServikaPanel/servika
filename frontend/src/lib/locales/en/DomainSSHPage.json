@@ -26,8 +26,7 @@
     "disabledPrefix": "Disabled:",
     "currentPrefix": "Current:",
     "disable": "Disable SSH",
-    "enable": "Enable SSH",
-    "demoNotice": "SSH access cannot be changed for the demo domain."
+    "enable": "Enable SSH"
   },
   "connection": {
     "title": "Connection Details",

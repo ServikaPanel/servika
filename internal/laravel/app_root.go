@@ -32,7 +32,7 @@ func laravelRootCandidates(systemUser string) []string {
 }
 
 func (h *Handlers) AppCandidates(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, _, ok := h.lookup(r)
+	id, systemUser, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -46,13 +46,9 @@ func (h *Handlers) AppCandidates(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SetAppRoot(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, demo, ok := h.lookup(r)
+	id, systemUser, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "application root cannot be changed for demo subscriptions")
 		return
 	}
 	var req struct {

@@ -53,18 +53,14 @@ type Handlers struct {
 func (h *Handlers) home(r *http.Request) (string, string, error) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var systemUser string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &isDemo)
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&systemUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", os.ErrNotExist
 	}
 	if err != nil {
 		return "", "", err
-	}
-	if isDemo == 1 {
-		return "", "", errDemo
 	}
 	if !managedSystemUserPattern.MatchString(systemUser) {
 		return "", "", errBadUser
@@ -73,7 +69,6 @@ func (h *Handlers) home(r *http.Request) (string, string, error) {
 }
 
 var (
-	errDemo       = errors.New("files cannot be managed for a demo subscription")
 	errBadUser    = errors.New("security: invalid system user")
 	errEscape     = errors.New("security: escape from home directory blocked")
 	errNotRegular = errors.New("not a regular file")
@@ -475,8 +470,6 @@ func statusFromErr(err error) int {
 	switch err {
 	case os.ErrNotExist:
 		return http.StatusNotFound
-	case errDemo:
-		return http.StatusForbidden
 	case errBadUser, errEscape:
 		return http.StatusBadRequest
 	}
@@ -489,8 +482,6 @@ func messageFromErr(err error) string {
 	switch err {
 	case os.ErrNotExist:
 		return "not found"
-	case errDemo:
-		return "not available for demo subscriptions"
 	case errBadUser, errEscape:
 		return "invalid path"
 	}

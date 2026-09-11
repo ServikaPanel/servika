@@ -19,7 +19,7 @@ import (
 // management page needs. The lookup is scoped to the parent domain so a tenant
 // cannot read a subdomain that belongs to another domain.
 func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, domainName, _, _, ok := h.parent(r)
+	id, systemUser, domainName, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -55,13 +55,9 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 // the database untouched. The rewrite is TLS-aware: an existing certificate keeps
 // the HTTPS vhost, so switching PHP never drops the site to plain HTTP.
 func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, parentPHP, demo, ok := h.parent(r)
+	id, systemUser, _, parentPHP, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available on a demo subscription")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {

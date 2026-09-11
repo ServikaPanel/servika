@@ -52,15 +52,14 @@ type Status struct {
 
 var localPartPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$`)
 
-func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, demo, ok bool) {
+func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(is_demo,0) FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &isDemo); err != nil {
-		return id, "", false, false
+		`SELECT system_user FROM domains WHERE id=?`, id).
+		Scan(&systemUser); err != nil {
+		return id, "", false
 	}
-	return id, systemUser, isDemo == 1, true
+	return id, systemUser, true
 }
 
 func (h *Handlers) audit(r *http.Request, action, target string, ok bool) {
@@ -73,14 +72,14 @@ func (h *Handlers) audit(r *http.Request, action, target string, ok bool) {
 
 // MailStatus reports whether native mail hosting is enabled for a domain.
 func (h *Handlers) MailStatus(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	var status, selector string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT status, dkim_selector FROM mail_domains WHERE domain_id=?`, id).Scan(&status, &selector)
+		`SELECT status, dkim_selector FROM mail_domains WHERE domain_id=?`, id).Scan(&status)
 	// Reported in both states. A domain that has never enabled mail needs it to
 	// know the button will not work; a domain that already has mailboxes needs it
 	// more, because there the stack going down means delivery has stopped.
@@ -93,13 +92,9 @@ func (h *Handlers) MailStatus(w http.ResponseWriter, r *http.Request) {
 
 // Enable enables native mail hosting for a domain.
 func (h *Handlers) Enable(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	// Stop here rather than after the fact. EnableDomain publishes MX, SPF, DKIM
@@ -128,13 +123,9 @@ func (h *Handlers) Enable(w http.ResponseWriter, r *http.Request) {
 
 // Disable disables native mail hosting for a domain without deleting mailboxes.
 func (h *Handlers) Disable(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	if err := DisableDomain(r.Context(), h.DB, id); err != nil {
@@ -152,13 +143,9 @@ func (h *Handlers) Disable(w http.ResponseWriter, r *http.Request) {
 // route of its own instead of a flag on that one: an accidental call must not be
 // reachable from the reversible path.
 func (h *Handlers) Purge(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, ok := h.domain(r)
+	id, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	if systemUser == "" {
@@ -188,7 +175,7 @@ func (h *Handlers) Purge(w http.ResponseWriter, r *http.Request) {
 
 // List returns mailboxes for a domain.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -220,13 +207,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 // Create creates a mailbox for a domain.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	var req struct {
@@ -329,13 +312,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 
 // Delete removes a mailbox row while preserving its Maildir data on disk.
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	mailboxID, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)
@@ -359,13 +338,9 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 // ResetPassword updates a mailbox password or generates a new one.
 func (h *Handlers) ResetPassword(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	mailboxID, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)
@@ -409,13 +384,9 @@ func (h *Handlers) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 // SetStatus changes a mailbox status.
 func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	mailboxID, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)

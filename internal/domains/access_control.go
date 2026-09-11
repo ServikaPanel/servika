@@ -36,7 +36,7 @@ var validIPAccessModes = map[string]bool{
 }
 
 func (h *Handlers) HotlinkStatus(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
 		return
 	}
@@ -59,12 +59,8 @@ func (h *Handlers) HotlinkStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SetHotlink(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "hotlink settings cannot be changed on demo subscriptions")
 		return
 	}
 	var req hotlinkSettings
@@ -97,7 +93,7 @@ func (h *Handlers) SetHotlink(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
 		return
 	}
@@ -133,12 +129,8 @@ func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SetIPRulesMode(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "IP rules cannot be changed on demo subscriptions")
 		return
 	}
 	var req struct {
@@ -160,12 +152,8 @@ func (h *Handlers) SetIPRulesMode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) AddIPRule(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "IP rules cannot be changed on demo subscriptions")
 		return
 	}
 	var req struct {
@@ -193,12 +181,8 @@ func (h *Handlers) AddIPRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteIPRule(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "IP rules cannot be changed on demo subscriptions")
 		return
 	}
 	ruleID, _ := strconv.ParseInt(chi.URLParam(r, "ruleID"), 10, 64)
@@ -213,22 +197,21 @@ func (h *Handlers) DeleteIPRule(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (h *Handlers) accessControlDomainInfo(w http.ResponseWriter, r *http.Request) (int64, string, string, bool, bool) {
+func (h *Handlers) accessControlDomainInfo(w http.ResponseWriter, r *http.Request) (int64, string, string, bool) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var systemUser, phpVersion string
-	var demo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(php_version,'8.3'), COALESCE(is_demo,0) FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &phpVersion, &demo)
+		`SELECT system_user, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &phpVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return 0, "", "", false, false
+		return 0, "", "", false
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return 0, "", "", false, false
+		return 0, "", "", false
 	}
-	return id, systemUser, phpVersion, demo == 1, true
+	return id, systemUser, phpVersion, true
 }
 
 func cleanIPCIDR(raw string) (string, error) {

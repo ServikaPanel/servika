@@ -56,7 +56,7 @@ func validSSLType(value string) (string, bool) {
 
 // SSLStatus reports whether a subdomain has certificate files and an HTTPS vhost.
 func (h *Handlers) SSLStatus(w http.ResponseWriter, r *http.Request) {
-	domainID, systemUser, parentDomain, _, _, ok := h.parent(r)
+	domainID, systemUser, parentDomain, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -78,13 +78,9 @@ func (h *Handlers) SSLStatus(w http.ResponseWriter, r *http.Request) {
 
 // SSLIssue installs a self-signed or Let's Encrypt certificate for a subdomain.
 func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
-	domainID, systemUser, parentDomain, _, demo, ok := h.parent(r)
+	domainID, systemUser, parentDomain, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !managedUserPattern.MatchString(systemUser) {
@@ -131,13 +127,9 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 
 // SSLRemove removes a subdomain certificate and restores its HTTP-only vhost.
 func (h *Handlers) SSLRemove(w http.ResponseWriter, r *http.Request) {
-	domainID, systemUser, parentDomain, _, demo, ok := h.parent(r)
+	domainID, systemUser, parentDomain, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !managedUserPattern.MatchString(systemUser) {

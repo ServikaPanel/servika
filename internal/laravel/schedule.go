@@ -24,13 +24,9 @@ func ensureLogDir(systemUser string) {
 func cronPath(id int64) string { return cronDir + "/servika-laravel-" + fmt.Sprint(id) }
 
 func (h *Handlers) Schedule(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "schedule cannot be managed for demo subscriptions")
 		return
 	}
 	var req struct {

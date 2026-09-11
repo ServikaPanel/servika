@@ -18,7 +18,7 @@ import (
 // certificate covers, so this card cannot suggest a name the client will warn
 // about.
 func (h *Handlers) ConnectionSettings(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

@@ -55,29 +55,28 @@ type Installation struct {
 // domain resolves the site the request targets. A {sid} URL parameter selects that
 // subdomain, replacing the site name and document root with the subdomain's own, so
 // WordPress is discovered and installed under the subdomain instead of public_html.
-func (h *Handlers) domain(r *http.Request) (id int64, systemUser, domainName, root string, ssl, demo, ok bool) {
+func (h *Handlers) domain(r *http.Request) (id int64, systemUser, domainName, root string, ssl, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var cert string
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, domain_name, COALESCE(cert_path,''), COALESCE(is_demo,0) FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &domainName, &cert, &isDemo); err != nil {
-		return id, "", "", "", false, false, false
+		`SELECT system_user, domain_name, COALESCE(cert_path,'') FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &domainName, &cert); err != nil {
+		return id, "", "", "", false, false
 	}
 	root = "/home/" + systemUser + "/public_html"
 	if raw := chi.URLParam(r, "sid"); raw != "" {
 		sid, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			return id, "", "", "", false, false, false
+			return id, "", "", "", false, false
 		}
 		scope, scopeOK := subdomain.ResolveScope(r.Context(), h.DB, id, sid)
 		if !scopeOK {
-			return id, "", "", "", false, false, false
+			return id, "", "", "", false, false
 		}
 		// A subdomain carries its own certificate state, so SSL comes from the scope.
-		return id, systemUser, scope.FQDN, scope.DocRoot, scope.HasTLS, isDemo == 1, true
+		return id, systemUser, scope.FQDN, scope.DocRoot, scope.HasTLS, true
 	}
-	return id, systemUser, domainName, root, cert != "", isDemo == 1, true
+	return id, systemUser, domainName, root, cert != "", true
 }
 
 const (
@@ -214,7 +213,7 @@ func scheme(ssl bool) string {
 
 // GET /domains/{id}/wordpress discovers installations in public_html and one directory level below.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, _, ok := h.domain(r)
+	_, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -412,13 +411,9 @@ func installAlreadyExists(target string) (string, bool) {
 
 // POST /domains/{id}/wordpress installs WordPress.
 func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, domainName, root, ssl, demo, ok := h.domain(r)
+	id, systemUser, domainName, root, ssl, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
@@ -573,13 +568,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/wordpress/update updates an installation from {dir}.
 func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, demo, ok := h.domain(r)
+	_, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	var updateRequest struct {
@@ -612,13 +603,9 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /domains/{id}/wordpress removes an installation from {dir, db_delete}.
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, root, _, demo, ok := h.domain(r)
+	id, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {

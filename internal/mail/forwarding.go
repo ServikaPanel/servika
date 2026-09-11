@@ -28,7 +28,7 @@ type Forwarding struct {
 // ForwardingGet returns a mailbox's forwarding.
 // GET /domains/{id}/mail/{mid}/forwarding
 func (h *Handlers) ForwardingGet(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -51,7 +51,7 @@ func (h *Handlers) ForwardingGet(w http.ResponseWriter, r *http.Request) {
 // ForwardingPut saves a mailbox's forwarding and recompiles its Sieve script.
 // PUT /domains/{id}/mail/{mid}/forwarding
 func (h *Handlers) ForwardingPut(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

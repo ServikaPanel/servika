@@ -69,7 +69,6 @@ const (
 )
 
 var (
-	errDemo    = errors.New("import is unavailable for demo subscriptions")
 	errBadUser = errors.New("the domain has no valid system user")
 
 	managedSystemUser = regexp.MustCompile(`^c_[A-Za-z0-9_]+$`)
@@ -97,17 +96,13 @@ var markerFiles = []string{
 // already enforced by middleware.CustomerScope on the route.
 func (h *Handlers) domain(r *http.Request) (id int64, home, systemUser string, err error) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	err = h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, is_demo FROM domains WHERE id=?`, id).Scan(&systemUser, &isDemo)
+		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&systemUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, "", "", os.ErrNotExist
 	}
 	if err != nil {
 		return 0, "", "", err
-	}
-	if isDemo == 1 {
-		return 0, "", "", errDemo
 	}
 	if !managedSystemUser.MatchString(systemUser) {
 		return 0, "", "", errBadUser
@@ -121,8 +116,6 @@ func statusFor(err error) int {
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		return http.StatusNotFound
-	case errors.Is(err, errDemo):
-		return http.StatusForbidden
 	case errors.Is(err, errBadUser):
 		return http.StatusBadRequest
 	}

@@ -258,9 +258,10 @@ func TestContainmentMovesAFindingBetweenTheTwoCounts(t *testing.T) {
 	}
 }
 
-// A control that can never succeed is worse than no control. Scan refuses a
-// demo subscription with 403, so the row says so instead.
-func TestADemoDomainIsNotOfferedAScan(t *testing.T) {
+// A control that can never succeed is worse than no control. The scanner only
+// walks a managed tenant home, so a row whose system user carries no c_ prefix
+// says so instead of offering a scan that always refuses.
+func TestADomainWithoutATenantUserIsNotOfferedAScan(t *testing.T) {
 	db := liveDB(t)
 	h := &Handlers{DB: db}
 	f := newQuarantineFixture(t, db)
@@ -274,12 +275,12 @@ func TestADemoDomainIsNotOfferedAScan(t *testing.T) {
 		t.Fatal("an ordinary domain is not offered a scan, so the flag proves nothing")
 	}
 
-	if _, err := db.Exec(`UPDATE domains SET is_demo=1 WHERE id=?`, f.domainA); err != nil {
-		t.Fatalf("mark the domain as demo: %v", err)
+	if _, err := db.Exec(`UPDATE domains SET system_user='legacy_site' WHERE id=?`, f.domainA); err != nil {
+		t.Fatalf("rewrite the system user: %v", err)
 	}
 	body = domainList(t, h, scopedRequest(middleware.RoleAdmin, f.adminID))
 	entry, _ = domainEntry(body.Entries, f.domainA)
 	if entry.Scannable {
-		t.Error("a demo domain is offered a scan the handler always refuses")
+		t.Error("a domain outside the managed tenant layout is offered a scan the worker cannot run")
 	}
 }

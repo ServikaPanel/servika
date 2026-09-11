@@ -25,10 +25,6 @@ func (h *Handlers) Resume(w http.ResponseWriter, r *http.Request) {
 	h.setSuspended(w, r, false)
 }
 
-// ErrDemoSuspend is returned by ApplyDomainSuspend for a demo subscription,
-// which can never be suspended. The reseller-wide cascade treats it as a skip.
-var ErrDemoSuspend = errors.New("demo subscriptions cannot be suspended")
-
 func (h *Handlers) setSuspended(w http.ResponseWriter, r *http.Request, suspended bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -38,10 +34,6 @@ func (h *Handlers) setSuspended(w http.ResponseWriter, r *http.Request, suspende
 	domainName, err := ApplyDomainSuspend(r.Context(), h.DB, id, suspended)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if errors.Is(err, ErrDemoSuspend) {
-		httpx.WriteError(w, http.StatusForbidden, "demo subscriptions cannot be suspended")
 		return
 	}
 	if err != nil {
@@ -139,18 +131,14 @@ func restoreSuspensionState(ctx context.Context, db *sql.DB, targets []suspensio
 // answers to it: it updates the domains rows, re-renders each vhost (rolling
 // every row back on failure), cascades the state to FTP accounts, mail domains
 // and mailboxes, and stops/starts the tenant runtime. It is HTTP-independent so both the handler and the reseller-wide
-// cascade can call it. Returns the domain name, ErrDemoSuspend for a demo
-// subscription, or sql.ErrNoRows when the domain is gone.
+// cascade can call it. Returns the domain name, or sql.ErrNoRows when the
+// domain is gone.
 func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended bool) (string, error) {
 	var domainName, systemUser string
-	var isDemo int
 	if err := db.QueryRowContext(ctx,
-		`SELECT domain_name, system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&domainName, &systemUser, &isDemo); err != nil {
+		`SELECT domain_name, system_user FROM domains WHERE id=?`, id).
+		Scan(&domainName, &systemUser); err != nil {
 		return "", err
-	}
-	if isDemo == 1 {
-		return domainName, ErrDemoSuspend
 	}
 	targets, err := suspensionTargets(ctx, db, id)
 	if err != nil {
@@ -231,9 +219,6 @@ func SuspendResellerDomains(ctx context.Context, db *sql.DB, resellerID int64, s
 			continue
 		}
 		if _, e := applySuspend(ctx, db, target.id, suspended); e != nil {
-			if errors.Is(e, ErrDemoSuspend) {
-				continue
-			}
 			failed++
 			log.Printf("reseller %d suspend cascade: domain %d: %v", resellerID, target.id, e)
 			continue

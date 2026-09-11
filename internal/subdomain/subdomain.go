@@ -51,15 +51,14 @@ type Sub struct {
 	SSLSource string `json:"ssl_source"`
 }
 
-func (h *Handlers) parent(r *http.Request) (id int64, systemUser, domainName, phpVersion string, demo, ok bool) {
+func (h *Handlers) parent(r *http.Request) (id int64, systemUser, domainName, phpVersion string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, domain_name, COALESCE(php_version,'8.3'), COALESCE(is_demo,0) FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &domainName, &phpVersion, &isDemo); err != nil {
-		return id, "", "", "", false, false
+		`SELECT system_user, domain_name, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &domainName, &phpVersion); err != nil {
+		return id, "", "", "", false
 	}
-	return id, systemUser, domainName, phpVersion, isDemo == 1, true
+	return id, systemUser, domainName, phpVersion, true
 }
 
 func docrootOf(systemUser, fqdn string) string { return "/home/" + systemUser + "/subdomains/" + fqdn }
@@ -111,7 +110,7 @@ func confPath(systemUser, subdomainName string) string {
 
 // GET /domains/{id}/subdomain lists subdomains.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, _, _, ok := h.parent(r)
+	id, systemUser, _, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -129,7 +128,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	out := []Sub{}
 	for rows.Next() {
 		var s Sub
-		if err := rows.Scan(&s.ID, &s.Subdomain, &s.FQDN, &s.PHPVersion, &s.CreatedAt); err == nil {
+		if err := rows.Scan(&s.ID, &s.Subdomain, &s.FQDN, &s.CreatedAt); err == nil {
 			s.DocRoot = docrootOf(systemUser, s.FQDN)
 			s.PHPLocked = phpLocked
 			s.SSL, s.SSLSource = sslState(systemUser, s.Subdomain, s.FQDN)
@@ -142,13 +141,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/subdomain creates a subdomain from {subdomain, php_version?}.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, domainName, parentPHP, demo, ok := h.parent(r)
+	id, systemUser, domainName, parentPHP, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
@@ -316,13 +311,9 @@ func withdrawSubdomainVhost(conf string) {
 
 // DELETE /domains/{id}/subdomain/{sid} removes a subdomain.
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, _, demo, ok := h.parent(r)
+	id, systemUser, _, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {

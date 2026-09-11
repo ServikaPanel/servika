@@ -26,8 +26,7 @@
     "disabledPrefix": "Desativado:",
     "currentPrefix": "Atual:",
     "disable": "Desativar SSH",
-    "enable": "Ativar SSH",
-    "demoNotice": "O acesso SSH não pode ser alterado para o domínio de demonstração."
+    "enable": "Ativar SSH"
   },
   "connection": {
     "title": "Detalhes de Ligação",

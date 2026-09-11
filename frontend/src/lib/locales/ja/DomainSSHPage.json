@@ -26,8 +26,7 @@
     "disabledPrefix": "無効:",
     "currentPrefix": "現在:",
     "disable": "SSH を無効化",
-    "enable": "SSH を有効化",
-    "demoNotice": "デモドメインでは SSH アクセスを変更できません。"
+    "enable": "SSH を有効化"
   },
   "connection": {
     "title": "接続情報",

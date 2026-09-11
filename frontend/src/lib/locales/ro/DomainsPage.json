@@ -30,7 +30,6 @@
   "sslExpires": "Expiră: {{date}}",
   "sslActive": "SSL activ",
   "sslSelfSigned": "Certificat self-signed: vizitatorii primesc un avertisment de securitate în browser. Emiteți unul Let's Encrypt din pagina SSL.",
-  "demoBadge": "DEMO",
   "reseller": "Reseller: {{name}}",
   "noPlan": "Niciunul",
   "subdomain": "SUB",

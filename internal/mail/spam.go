@@ -34,7 +34,7 @@ func defaultSpamSettings() SpamSettings {
 
 // SpamGet returns the domain's spam policy. GET /domains/{id}/mail/spam
 func (h *Handlers) SpamGet(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -58,13 +58,9 @@ func (h *Handlers) SpamGet(w http.ResponseWriter, r *http.Request) {
 
 // SpamPut saves and applies the domain's spam policy. PUT /domains/{id}/mail/spam
 func (h *Handlers) SpamPut(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "mail is unavailable for demo subscriptions")
 		return
 	}
 	var req SpamSettings

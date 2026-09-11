@@ -34,26 +34,20 @@ type LogFile struct {
 	Current bool   `json:"current"`
 }
 
-var errDemoLogsForbidden = errors.New("demo subscription logs cannot be managed")
-
 // lookup resolves the log name for the request. A {sid} URL parameter selects that
 // subdomain, whose vhost logs under its own FQDN, so the returned name addresses the
 // subdomain's files rather than the parent domain's.
 func (h *Handlers) lookup(r *http.Request) (string, string, error) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var domainName, systemUser string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, is_demo FROM domains WHERE id=?`, id).
-		Scan(&domainName, &systemUser, &isDemo)
+		`SELECT domain_name, system_user FROM domains WHERE id=?`, id).
+		Scan(&domainName, &systemUser)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", os.ErrNotExist
 	}
 	if err != nil {
 		return "", "", err
-	}
-	if isDemo == 1 {
-		return "", "", errDemoLogsForbidden
 	}
 	if raw := chi.URLParam(r, "sid"); raw != "" {
 		sid, convErr := strconv.ParseInt(raw, 10, 64)
@@ -88,9 +82,6 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, os.ErrNotExist) {
 			status = http.StatusNotFound
 			message = "domain not found"
-		} else if errors.Is(err, errDemoLogsForbidden) {
-			status = http.StatusForbidden
-			message = errDemoLogsForbidden.Error()
 		}
 		httpx.WriteError(w, status, message)
 		return
@@ -296,9 +287,6 @@ func writeLookupError(w http.ResponseWriter, err error) {
 	if errors.Is(err, os.ErrNotExist) {
 		status = http.StatusNotFound
 		message = "domain not found"
-	} else if errors.Is(err, errDemoLogsForbidden) {
-		status = http.StatusForbidden
-		message = errDemoLogsForbidden.Error()
 	}
 	httpx.WriteError(w, status, message)
 }

@@ -75,7 +75,7 @@ func (h *Handlers) AdminDomains(w http.ResponseWriter, r *http.Request) {
 	//
 	// status='finished' keeps a scan that is still running from being reported
 	// as the last one with nothing scanned yet.
-	query := `SELECT d.id, d.domain_name, d.system_user, COALESCE(d.is_demo, 0),
+	query := `SELECT d.id, d.domain_name, d.system_user,
 	                 s.finished_at, COALESCE(s.scanned, 0), COALESCE(s.skipped, 0),
 	                 (SELECT COUNT(*) FROM av_findings f
 	                    LEFT JOIN av_quarantine q
@@ -109,9 +109,8 @@ func (h *Handlers) AdminDomains(w http.ResponseWriter, r *http.Request) {
 	out := []DomainEntry{}
 	for rows.Next() {
 		var entry DomainEntry
-		var isDemo int
 		var lastScan sql.NullString
-		if err := rows.Scan(&entry.DomainID, &entry.Domain, &entry.SystemUser, &isDemo,
+		if err := rows.Scan(&entry.DomainID, &entry.Domain, &entry.SystemUser,
 			&lastScan, &entry.Scanned, &entry.Skipped,
 			&entry.Uncontained, &entry.Held); err != nil {
 			// A failed row is REPORTED, never skipped. A short list here reads as
@@ -125,7 +124,7 @@ func (h *Handlers) AdminDomains(w http.ResponseWriter, r *http.Request) {
 		// The c_ prefix is tested in Go rather than with a LIKE, because `_` is a
 		// LIKE wildcard: 'c\_%' would need escaping and 'c_%' matches any second
 		// character at all.
-		entry.Scannable = isDemo == 0 && strings.HasPrefix(entry.SystemUser, "c_")
+		entry.Scannable = strings.HasPrefix(entry.SystemUser, "c_")
 		out = append(out, entry)
 	}
 	if err := rows.Err(); err != nil {

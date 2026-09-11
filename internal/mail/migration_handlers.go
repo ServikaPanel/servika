@@ -21,7 +21,7 @@ const migrationRequestLimit = 8 << 10
 // Discover proposes servers the old mailbox might live on.
 // POST /domains/{id}/mail/migration/discover
 func (h *Handlers) Discover(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -59,7 +59,7 @@ func (h *Handlers) Discover(w http.ResponseWriter, r *http.Request) {
 // rather than after hours of copying.
 // POST /domains/{id}/mail/migration/verify
 func (h *Handlers) Verify(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -121,13 +121,9 @@ type migrationJob struct {
 // StartMigration begins copying a mailbox in from another server.
 // POST /domains/{id}/mail/{mid}/migration
 func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
-	id, _, demo, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "demo domains cannot migrate mail")
 		return
 	}
 	if !middleware.EnforceCustomerNotSuspended(w, r, id) {
@@ -198,7 +194,7 @@ func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
 // MigrationStatus reports the latest job for a mailbox.
 // GET /domains/{id}/mail/{mid}/migration
 func (h *Handlers) MigrationStatus(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -237,7 +233,7 @@ func (h *Handlers) MigrationStatus(w http.ResponseWriter, r *http.Request) {
 // CancelMigration stops a running copy.
 // DELETE /domains/{id}/mail/{mid}/migration
 func (h *Handlers) CancelMigration(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"servika/internal/httpx"
-	"servika/internal/middleware"
 	"servika/internal/provisioner"
 
 	"github.com/go-chi/chi/v5"
@@ -301,12 +300,6 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 	id, sid, _, ok := h.scope(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	// This write turns the security headers off, changes the FastCGI cache and
-	// injects free-text extra_directives before re-rendering the live vhost.
-	// CustomerScope enforces ownership and suspension, never is_demo.
-	if !middleware.EnforceDomainNotDemo(w, r, id, "the nginx settings") {
 		return
 	}
 	var req struct {

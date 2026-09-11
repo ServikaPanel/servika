@@ -62,9 +62,8 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	var domainID int64
 	var demo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT db.db_user, db.db_name, db.domain_id, d.is_demo
-		 FROM db_accounts db JOIN domains d ON d.id=db.domain_id
-		 WHERE db.id=?`, dbID).Scan(&dbUser, &dbName, &domainID, &demo)
+		`SELECT db.db_user, db.db_name, db.domain_id FROM db_accounts db JOIN domains d ON d.id=db.domain_id
+		 WHERE db.id=?`, dbID).Scan(&dbUser, &dbName, &domainID)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "database not found")
 		return

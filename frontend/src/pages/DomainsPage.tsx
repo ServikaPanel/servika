@@ -22,7 +22,7 @@ import {
 type Domain = {
   id: number; domain_name: string; system_user: string
   size_kb: number; traffic_kb: number; status: string; suspended?: boolean
-  php_version?: string; is_demo?: boolean
+  php_version?: string
   created_at?: string; plan_id?: number; plan_name?: string
   ssl?: boolean; ssl_expiry?: string; ssl_source?: string; reseller_name?: string
 }
@@ -585,7 +585,6 @@ export default function DomainsPage() {
                           trustedTitle={d.ssl_expiry ? t('sslExpires', { date: d.ssl_expiry }) : t('sslActive')}
                           selfSignedTitle={t('sslSelfSigned')}
                         />
-                        {d.is_demo && <span className="ml-1.5 text-[10px] uppercase tracking-wider bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded">{t('demoBadge')}</span>}
                       </div>
                     </td>
                     <td data-label={t('columns.systemUser')} className={responsiveTableCodeCellClass}>

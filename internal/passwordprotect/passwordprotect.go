@@ -93,15 +93,14 @@ type Record struct {
 	CreatedAt string `json:"created_at"`
 }
 
-func (h *Handlers) domain(r *http.Request) (id int64, systemUser, version string, demo, ok bool) {
+func (h *Handlers) domain(r *http.Request) (id int64, systemUser, version string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(php_version,'8.3'), COALESCE(is_demo,0) FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &version, &isDemo); err != nil {
-		return id, "", "", false, false
+		`SELECT system_user, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &version); err != nil {
+		return id, "", "", false
 	}
-	return id, systemUser, version, isDemo == 1, true
+	return id, systemUser, version, true
 }
 
 // scope resolves which document root the request targets. A {sid} URL parameter
@@ -127,7 +126,7 @@ func (h *Handlers) scope(r *http.Request, domainID int64) (subdomainID int64, ok
 
 // GET /domains/{id}/password-protection and the /subdomain/{sid} variant.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.domain(r)
+	id, _, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -160,13 +159,9 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 
 // POST /domains/{id}/password-protection {path, username, password}
 func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, version, demo, ok := h.domain(r)
+	id, systemUser, version, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
@@ -273,7 +268,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /domains/{id}/password-protection/{kid}
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, version, _, ok := h.domain(r)
+	id, systemUser, version, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

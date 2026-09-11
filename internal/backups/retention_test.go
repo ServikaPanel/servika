@@ -84,11 +84,11 @@ func (c *retentionConn) QueryContext(_ context.Context, query string, _ []driver
 	if strings.Contains(query, "FROM domains") && strings.Contains(query, "backup_freq") {
 		return &retentionRows{
 			columns: []string{"id", "domain_name", "system_user", "backup_freq", "backup_hour",
-				"backup_retention", "is_demo", "last_backup_at"},
+				"backup_retention", "last_backup_at"},
 			// The hour is never re-checked in Go, so the value only has to scan:
 			// the tick binds it into the WHERE clause, which this driver ignores.
 			values: [][]driver.Value{{int64(1), "example.com", "c_example", "daily", int64(3),
-				int64(7), int64(0), nil}},
+				int64(7), nil}},
 		}, nil
 	}
 	// The tick reads the system-wide settings before it looks for due domains.

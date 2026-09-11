@@ -72,7 +72,6 @@ type status struct {
 	SSHHost    string `json:"ssh_host"`
 	SSHPort    int    `json:"ssh_port"`
 	HasKey     bool   `json:"has_key"`
-	IsDemo     bool   `json:"is_demo"`
 }
 
 // validSystemUser restricts operations to panel-created c_<slug> users, preventing command injection
@@ -103,21 +102,20 @@ func hasKey(systemUser string) bool {
 	return err == nil && st.Size() > 0
 }
 
-func (h *Handlers) load(r *http.Request) (id int64, systemUser, domainName string, demo bool, ok bool) {
+func (h *Handlers) load(r *http.Request) (id int64, systemUser, domainName string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, domain_name, is_demo FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &domainName, &isDemo)
+		`SELECT system_user, domain_name FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &domainName)
 	if err != nil {
-		return id, "", "", false, false
+		return id, "", "", false
 	}
-	return id, systemUser, domainName, isDemo == 1, true
+	return id, systemUser, domainName, true
 }
 
 // GET /domains/{id}/ssh returns the current SSH access state.
 func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, domainName, demo, ok := h.load(r)
+	_, systemUser, domainName, ok := h.load(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -134,19 +132,14 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 		// refuses the connection.
 		SSHPort: system.FirstSSHPort(),
 		HasKey:  hasKey(systemUser),
-		IsDemo:  demo,
 	})
 }
 
 // PUT /domains/{id}/ssh changes the login shell from {"active": true|false}.
 func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, demo, ok := h.load(r)
+	id, systemUser, _, ok := h.load(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "sSH access cannot be changed for a demo subscription")
 		return
 	}
 	if !validSystemUser(systemUser) {
@@ -226,13 +219,9 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 
 // PUT /domains/{id}/ssh/key writes authorized_keys from {"key": "ssh-ed25519 ..."}.
 func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, demo, ok := h.load(r)
+	_, systemUser, _, ok := h.load(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "the SSH key cannot be changed for a demo subscription")
 		return
 	}
 	if !validSystemUser(systemUser) {

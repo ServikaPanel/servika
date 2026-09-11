@@ -31,6 +31,28 @@ var serverSwitches = []struct{ file, handler string }{
 	{"internal/firewall/geo.go", "DeleteGeo"},
 }
 
+// repositoryRootFrom walks up from this package to the directory holding
+// go.mod.
+func repositoryRootFrom(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("working directory: %v", err)
+	}
+	for range 8 {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatal("go.mod is not above this package")
+	return ""
+}
+
 func TestEveryServerWideSwitchRecordsWhoFlippedIt(t *testing.T) {
 	root := repositoryRootFrom(t)
 	var silent []string

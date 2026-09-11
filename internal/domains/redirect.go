@@ -38,12 +38,8 @@ func (h *Handlers) RedirectStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SetRedirect(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.redirectDomainInfo(w, r)
+	id, systemUser, phpVersion, ok := h.redirectDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "redirects cannot be changed on demo subscriptions")
 		return
 	}
 	var req domainRedirect
@@ -77,12 +73,8 @@ func (h *Handlers) SetRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteRedirect(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.redirectDomainInfo(w, r)
+	id, systemUser, phpVersion, ok := h.redirectDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "redirects cannot be changed on demo subscriptions")
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_redirects WHERE domain_id=?`, id); err != nil {
@@ -98,22 +90,21 @@ func (h *Handlers) DeleteRedirect(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (h *Handlers) redirectDomainInfo(w http.ResponseWriter, r *http.Request) (int64, string, string, bool, bool) {
+func (h *Handlers) redirectDomainInfo(w http.ResponseWriter, r *http.Request) (int64, string, string, bool) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var systemUser, phpVersion string
-	var demo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(php_version,'8.3'), COALESCE(is_demo,0) FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &phpVersion, &demo)
+		`SELECT system_user, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &phpVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return 0, "", "", false, false
+		return 0, "", "", false
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return 0, "", "", false, false
+		return 0, "", "", false
 	}
-	return id, systemUser, phpVersion, demo == 1, true
+	return id, systemUser, phpVersion, true
 }
 
 func (h *Handlers) applyRedirectVhost(id int64, systemUser, phpVersion string) error {
@@ -179,12 +170,8 @@ func (h *Handlers) WWWRedirectStatus(w http.ResponseWriter, r *http.Request) {
 // SetWWWRedirect — PUT /domains/{id}/www-redirect makes one hostname canonical and
 // answers the other with a 301.
 func (h *Handlers) SetWWWRedirect(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.redirectDomainInfo(w, r)
+	id, systemUser, phpVersion, ok := h.redirectDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "redirects cannot be changed on demo subscriptions")
 		return
 	}
 	var req struct {

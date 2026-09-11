@@ -37,7 +37,7 @@ type geoSettings struct {
 // separately, so the screen can disable the control and say why in the reader's
 // own language instead of letting the customer save a rule that refuses nobody.
 func (h *Handlers) GetGeo(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
 		return
 	}
@@ -87,12 +87,8 @@ func (h *Handlers) GetGeo(w http.ResponseWriter, r *http.Request) {
 
 // SetGeo replaces the domain's country policy.
 func (h *Handlers) SetGeo(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "country rules cannot be changed on demo subscriptions")
 		return
 	}
 	var request geoSettings
@@ -188,7 +184,7 @@ type rateLimitSettings struct {
 
 // GetRateLimit returns the domain's request ceiling and the rates it may pick.
 func (h *Handlers) GetRateLimit(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
 		return
 	}
@@ -208,12 +204,8 @@ func (h *Handlers) GetRateLimit(w http.ResponseWriter, r *http.Request) {
 
 // SetRateLimit stores the domain's request ceiling.
 func (h *Handlers) SetRateLimit(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, ok := h.accessControlDomainInfo(w, r)
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
 	if !ok {
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "the rate limit cannot be changed on demo subscriptions")
 		return
 	}
 	var request rateLimitSettings

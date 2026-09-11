@@ -72,10 +72,9 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var domainName, systemUser, phpVersion, backend string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, php_version, is_demo, COALESCE(web_backend,'php-fpm') FROM domains WHERE id=?`, id).
-		Scan(&domainName, &systemUser, &phpVersion, &isDemo, &backend)
+		`SELECT domain_name, system_user, php_version, COALESCE(web_backend,'php-fpm') FROM domains WHERE id=?`, id).
+		Scan(&domainName, &systemUser, &phpVersion, &backend)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -83,18 +82,13 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 	// Any other Scan error has to stop the request here. It cannot be checked
 	// further down because the switch below assigns to err, which would discard
 	// it; and continuing means calling the provisioner with an empty domain name
-	// and system user while isDemo still reads 0, so the demo guard above is
-	// bypassed as well.
+	// and system user.
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
 	if domainName == "" || systemUser == "" {
 		httpx.WriteError(w, http.StatusInternalServerError, "domain record is incomplete")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "SSL cannot be installed for demo subscriptions")
 		return
 	}
 
@@ -124,10 +118,9 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) SSLDisable(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var domainName, systemUser, phpVersion, backend string
-	var isDemo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, php_version, is_demo, COALESCE(web_backend,'php-fpm') FROM domains WHERE id=?`, id).
-		Scan(&domainName, &systemUser, &phpVersion, &isDemo, &backend)
+		`SELECT domain_name, system_user, php_version, COALESCE(web_backend,'php-fpm') FROM domains WHERE id=?`, id).
+		Scan(&domainName, &systemUser, &phpVersion, &backend)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -140,10 +133,6 @@ func (h *Handlers) SSLDisable(w http.ResponseWriter, r *http.Request) {
 	}
 	if domainName == "" || systemUser == "" {
 		httpx.WriteError(w, http.StatusInternalServerError, "domain record is incomplete")
-		return
-	}
-	if isDemo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "demo subscriptions cannot be modified")
 		return
 	}
 	if err := provisioner.DisableSSL(domainName, systemUser, phpVersion, backend); err != nil {

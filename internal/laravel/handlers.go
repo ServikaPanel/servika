@@ -30,15 +30,14 @@ type record struct {
 	LastDeployStatus string
 }
 
-func (h *Handlers) lookup(r *http.Request) (id int64, systemUser, phpVersion string, demo, ok bool) {
+func (h *Handlers) lookup(r *http.Request) (id int64, systemUser, phpVersion string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(php_version,'8.3'), is_demo FROM domains WHERE id=?`, id).
-		Scan(&systemUser, &phpVersion, &isDemo); err != nil {
-		return id, "", "", false, false
+		`SELECT system_user, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
+		Scan(&systemUser, &phpVersion); err != nil {
+		return id, "", "", false
 	}
-	return id, systemUser, phpVersion, isDemo == 1, true
+	return id, systemUser, phpVersion, true
 }
 
 func (h *Handlers) getRecord(ctx context.Context, id int64) record {
@@ -92,7 +91,7 @@ func maintenanceActive(appDir string) bool {
 }
 
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, _, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

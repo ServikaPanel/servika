@@ -12,7 +12,6 @@ type Status = {
   ssh_host: string
   ssh_port: number
   has_key: boolean
-  is_demo: boolean
 }
 
 export default function DomainSSHPage() {
@@ -114,18 +113,17 @@ export default function DomainSSHPage() {
               </p>
             </div>
             {status.active ? (
-              <button onClick={() => toggle(false)} disabled={isProcessing || status.is_demo}
+              <button onClick={() => toggle(false)} disabled={isProcessing}
                 className="shrink-0 px-4 py-2 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 text-sm font-medium rounded-lg">
                 {t('shell.disable')}
               </button>
             ) : (
-              <button onClick={() => toggle(true)} disabled={isProcessing || status.is_demo}
+              <button onClick={() => toggle(true)} disabled={isProcessing}
                 className="shrink-0 px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-lg">
                 {t('shell.enable')}
               </button>
             )}
           </div>
-          {status.is_demo && <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">{t('shell.demoNotice')}</p>}
         </div>
 
         {/* Connection details */}
@@ -164,7 +162,7 @@ export default function DomainSSHPage() {
           />
           <div className="mt-3 flex items-center justify-between">
             <p className="text-xs text-slate-400">{t('key.removeHint')}</p>
-            <button onClick={saveKey} disabled={isProcessing || status.is_demo}
+            <button onClick={saveKey} disabled={isProcessing}
               className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-lg">
               {t('key.save')}
             </button>

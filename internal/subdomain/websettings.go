@@ -155,7 +155,7 @@ func renderWebSettings(s nginxset.Settings, fqdn string, https bool) webRender {
 
 // GET /domains/{id}/subdomain/{sid}/web-backend reports the subdomain's backend.
 func (h *Handlers) GetWebBackend(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, _, ok := h.parent(r)
+	id, _, _, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -179,13 +179,9 @@ func (h *Handlers) GetWebBackend(w http.ResponseWriter, r *http.Request) {
 // PUT /domains/{id}/subdomain/{sid}/web-backend switches the subdomain between
 // serving PHP and serving static files only.
 func (h *Handlers) SetWebBackend(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, _, demo, ok := h.parent(r)
+	id, systemUser, _, _, ok := h.parent(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available on a demo subscription")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {

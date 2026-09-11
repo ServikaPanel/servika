@@ -30,13 +30,9 @@ func (h *Handlers) appDir(r *http.Request, id int64, systemUser string) (string,
 }
 
 func (h *Handlers) Artisan(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "artisan cannot be run for demo subscriptions")
 		return
 	}
 	var req struct {
@@ -82,13 +78,9 @@ var composerAllowed = map[string]bool{
 }
 
 func (h *Handlers) Composer(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, phpVersion, demo, ok := h.lookup(r)
+	id, systemUser, phpVersion, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "composer cannot be run for demo subscriptions")
 		return
 	}
 	if _, err := os.Stat(composerBin()); err != nil {
@@ -146,13 +138,9 @@ var npmAllowed = map[string]bool{"install": true, "ci": true, "run": true, "prun
 var reNpmScript = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:_-]*$`)
 
 func (h *Handlers) Npm(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, demo, ok := h.lookup(r)
+	id, systemUser, _, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "npm cannot be run for demo subscriptions")
 		return
 	}
 	var req struct {

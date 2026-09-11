@@ -107,14 +107,13 @@ type Finding struct {
 	DomainID int64 `json:"domain_id"`
 }
 
-func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, demo, ok bool) {
+func (h *Handlers) domain(r *http.Request) (id int64, systemUser string, ok bool) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var isDemo int
 	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT system_user, COALESCE(is_demo,0) FROM domains WHERE id=?`, id).Scan(&systemUser, &isDemo); err != nil {
-		return id, "", false, false
+		`SELECT system_user FROM domains WHERE id=?`, id).Scan(&systemUser); err != nil {
+		return id, "", false
 	}
-	return id, systemUser, isDemo == 1, true
+	return id, systemUser, true
 }
 
 func newestClamDB() string {
@@ -141,7 +140,7 @@ func engineName() string {
 
 // GET /domains/{id}/antivirus
 func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, _, ok := h.domain(r)
+	id, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -273,13 +272,9 @@ func (h *Handlers) findings(ctx context.Context, sid int64) []Finding {
 
 // POST /domains/{id}/antivirus/scan
 func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, demo, ok := h.domain(r)
+	id, systemUser, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "not available for demo subscriptions")
 		return
 	}
 	if !strings.HasPrefix(systemUser, "c_") {
@@ -357,7 +352,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 
 // GET /domains/{id}/antivirus/scan/{sid}
 func (h *Handlers) ScanStatus(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

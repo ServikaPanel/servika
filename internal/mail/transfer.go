@@ -73,7 +73,7 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 		httpx.LogR(r, "mailbox export: could not extend the socket deadline: %v", err)
 	}
 
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -134,7 +134,7 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 // reported here as data, so the screen can leave the option out, rather than
 // being discovered by a customer whose upload fails after it finished.
 func (h *Handlers) ImportFormats(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -157,7 +157,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 		httpx.LogR(r, "mailbox import: could not extend the socket deadline: %v", err)
 	}
 
-	id, _, _, ok := h.domain(r)
+	id, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

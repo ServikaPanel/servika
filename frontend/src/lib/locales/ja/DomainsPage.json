@@ -30,7 +30,6 @@
   "sslExpires": "有効期限: {{date}}",
   "sslActive": "SSL 有効",
   "sslSelfSigned": "self-signed 証明書です。訪問者にはブラウザのセキュリティ警告が表示されます。SSL ページから Let's Encrypt を発行してください。",
-  "demoBadge": "デモ",
   "reseller": "リセラー: {{name}}",
   "noPlan": "なし",
   "subdomain": "サブ",

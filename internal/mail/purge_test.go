@@ -94,8 +94,8 @@ func (c *purgeConn) QueryContext(_ context.Context, query string, _ []driver.Nam
 	c.recorder.record(query)
 	if strings.Contains(query, "system_user") && strings.Contains(query, "FROM domains WHERE id=?") {
 		return &recorderRows{
-			columns: []string{"system_user", "is_demo"},
-			values:  [][]driver.Value{{"c_example", int64(0)}},
+			columns: []string{"system_user"},
+			values:  [][]driver.Value{{"c_example"}},
 		}, nil
 	}
 	if strings.Contains(query, "COUNT(*) FROM mail_domains WHERE system_user=?") {

@@ -70,7 +70,7 @@ func (h *Handlers) lookupDomain(r *http.Request) (id int64, domainName, systemUs
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var demoValue int
 	err = h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, is_demo FROM domains WHERE id=?`, id).
+		`SELECT domain_name, system_user FROM domains WHERE id=?`, id).
 		Scan(&domainName, &systemUser, &demoValue)
 	demo = demoValue == 1
 	return

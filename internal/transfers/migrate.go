@@ -127,8 +127,8 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 		res, err := h.DB.ExecContext(ctx,
 			`INSERT INTO domains(domain_name, system_user, php_version, ssl_enabled, status, ipv4,
 			   ftp_host, ftp_user, db_host, db_user, db_name, web_root, web_backend,
-			   plan_id, customer_id, is_demo)
-			 VALUES(?,?,?,0,'passive',?,?,?, 'localhost',?,?,?, 'php-fpm', NULLIF(?,0), NULLIF(?,0), 0)`,
+			   plan_id, customer_id)
+			 VALUES(?,?,?,0,'passive',?,?,?, 'localhost',?,?,?, 'php-fpm', NULLIF(?,0), NULLIF(?,0))`,
 			domainName, systemUser, php, ipv4, ipv4, systemUser, dbUser, dbName, pr.WebRoot,
 			settings.PlanID, settings.CustomerID)
 		if err != nil {
