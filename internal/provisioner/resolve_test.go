@@ -178,23 +178,28 @@ func TestDiscoveryNamesJoinTheSANOnlyWhenTheyPointHere(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			stubResolver(t, tc.answer)
-			got := certSANHosts("example.com")
-			if len(got) != len(tc.want) {
-				t.Fatalf("SAN = %v, want %v", got, tc.want)
-			}
-			for i, host := range tc.want {
-				if got[i] != host {
-					t.Fatalf("SAN = %v, want %v", got, tc.want)
-				}
-			}
-			for _, host := range tc.wantNot {
-				for _, present := range got {
-					if present == host {
-						t.Errorf("%s was accepted into the SAN", host)
-					}
-				}
-			}
+			assertSANHosts(t, certSANHosts("example.com"), tc.want, tc.wantNot)
 		})
+	}
+}
+
+// assertSANHosts fails unless got is want in order and holds none of wantNot.
+func assertSANHosts(t *testing.T, got, want, wantNot []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("SAN = %v, want %v", got, want)
+	}
+	for i, host := range want {
+		if got[i] != host {
+			t.Fatalf("SAN = %v, want %v", got, want)
+		}
+	}
+	for _, host := range wantNot {
+		for _, present := range got {
+			if present == host {
+				t.Errorf("%s was accepted into the SAN", host)
+			}
+		}
 	}
 }
 

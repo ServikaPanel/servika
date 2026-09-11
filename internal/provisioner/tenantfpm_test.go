@@ -144,27 +144,10 @@ func valueOf(t *testing.T, unit, key string) int {
 // back to the hardened default, which already contains the floor.
 func TestAnEmptyDisableFunctionsStillCarriesTheMandatoryFloor(t *testing.T) {
 	// Empty df: shell stays open, but the LPE floor is present.
-	got := tenantDisableFunctions("")
-	for _, fn := range []string{"dl", "symlink", "link", "pcntl_exec", "posix_setuid"} {
-		if !containsFunction(got, fn) {
-			t.Errorf("empty df = %q, missing mandatory floor function %q", got, fn)
-		}
-	}
-	if containsFunction(got, "system") || containsFunction(got, "exec") {
-		t.Errorf("empty df = %q, shell category must stay open (toggle on)", got)
-	}
-	if got := tenantDisableFunctions("   "); !containsFunction(got, "symlink") {
-		t.Errorf("whitespace-only df = %q, want the mandatory floor", got)
-	}
+	assertAnEmptyDisableFunctionsKeepsTheShellOpen(t)
 
 	// A set value is preserved AND the floor is appended (deduped, order kept).
-	set := tenantDisableFunctions("exec,system")
-	if !containsFunction(set, "exec") || !containsFunction(set, "system") {
-		t.Errorf("a set value = %q, want the operator's functions preserved", set)
-	}
-	if !containsFunction(set, "dl") || !containsFunction(set, "symlink") {
-		t.Errorf("a set value = %q, want the mandatory floor appended", set)
-	}
+	assertASetDisableFunctionsGetsTheFloor(t)
 
 	// A value that already names a floor function does not duplicate it.
 	dedup := MergeMandatoryDisableFunctions("dl,exec")
@@ -179,6 +162,37 @@ func TestAnEmptyDisableFunctionsStillCarriesTheMandatoryFloor(t *testing.T) {
 	inj := tenantDisableFunctions("exec\nsystem")
 	if !containsFunction(inj, "symlink") || !containsFunction(inj, "exec") {
 		t.Errorf("a control-character injection = %q, want the hardened default with the floor", inj)
+	}
+}
+
+// assertAnEmptyDisableFunctionsKeepsTheShellOpen fails unless an empty or
+// whitespace-only value carries the floor and leaves the shell functions open.
+func assertAnEmptyDisableFunctionsKeepsTheShellOpen(t *testing.T) {
+	t.Helper()
+	got := tenantDisableFunctions("")
+	for _, fn := range []string{"dl", "symlink", "link", "pcntl_exec", "posix_setuid"} {
+		if !containsFunction(got, fn) {
+			t.Errorf("empty df = %q, missing mandatory floor function %q", got, fn)
+		}
+	}
+	if containsFunction(got, "system") || containsFunction(got, "exec") {
+		t.Errorf("empty df = %q, shell category must stay open (toggle on)", got)
+	}
+	if got := tenantDisableFunctions("   "); !containsFunction(got, "symlink") {
+		t.Errorf("whitespace-only df = %q, want the mandatory floor", got)
+	}
+}
+
+// assertASetDisableFunctionsGetsTheFloor fails unless a set value keeps the
+// operator's functions and gains the floor.
+func assertASetDisableFunctionsGetsTheFloor(t *testing.T) {
+	t.Helper()
+	set := tenantDisableFunctions("exec,system")
+	if !containsFunction(set, "exec") || !containsFunction(set, "system") {
+		t.Errorf("a set value = %q, want the operator's functions preserved", set)
+	}
+	if !containsFunction(set, "dl") || !containsFunction(set, "symlink") {
+		t.Errorf("a set value = %q, want the mandatory floor appended", set)
 	}
 }
 

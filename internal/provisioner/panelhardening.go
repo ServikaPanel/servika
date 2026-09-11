@@ -48,11 +48,7 @@ func HealPanelProxyTrustOnStartup() {
 	content := string(original)
 	hardenSecretVhostPerms() // secret must not leak: _panel.conf 0640 root:nginx
 
-	// Preserve an existing secret (no rotation on reboot); otherwise generate one.
-	secret := readProxySecret()
-	if secret == "" {
-		secret = httpx.NewProxySecret()
-	}
+	secret := panelProxySecret()
 	if secret == "" {
 		log.Printf("panel proxy-trust heal: could not generate a secret, skipped")
 		return
@@ -62,19 +58,8 @@ func HealPanelProxyTrustOnStartup() {
 	content = injectProxyTrust(content, wanted)
 
 	nginxChanged := content != string(original)
-	if nginxChanged {
-		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-		if e := os.WriteFile(panelVhostPath, []byte(content), 0o640); e != nil {
-			log.Printf("panel proxy-trust heal: could not write vhost: %v", e)
-			return
-		}
-		hardenSecretVhostPerms()
-		if output, e := tenantCommand("nginx", "-t").CombinedOutput(); e != nil {
-			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-			_ = os.WriteFile(panelVhostPath, original, 0o640) // ROLL BACK
-			log.Printf("panel proxy-trust heal: nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
-			return
-		}
+	if nginxChanged && !writeValidatedPanelVhost(content, original) {
+		return
 	}
 
 	// FAIL-SAFE: if X-Servika-Proxy was not actually injected (no X-Real-IP
@@ -84,16 +69,9 @@ func HealPanelProxyTrustOnStartup() {
 		log.Printf("panel proxy-trust heal: no X-Real-IP anchor, secret not written (fail-safe)")
 		return
 	}
-	if e := os.WriteFile(proxySecretPath, []byte(secret+"\n"), 0o600); e != nil {
-		log.Printf("panel proxy-trust heal: could not write secret: %v", e)
-		if nginxChanged {
-			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-			_ = os.WriteFile(panelVhostPath, original, 0o640)
-			_, _ = tenantCommand("systemctl", "reload", "nginx").CombinedOutput()
-		}
+	if !writeProxySecret(secret, original, nginxChanged) {
 		return
 	}
-	_ = os.Chmod(proxySecretPath, 0o600)
 
 	if nginxChanged {
 		if output, e := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); e != nil {
@@ -102,6 +80,51 @@ func HealPanelProxyTrustOnStartup() {
 		}
 	}
 	log.Printf("panel proxy-trust heal: X-Servika-Proxy + pma-redeem deny + slowloris timeout applied")
+}
+
+// panelProxySecret returns the secret the panel already uses, or a new one when
+// there is none; "" means none could be generated.
+func panelProxySecret() string {
+	// Preserve an existing secret (no rotation on reboot); otherwise generate one.
+	if secret := readProxySecret(); secret != "" {
+		return secret
+	}
+	return httpx.NewProxySecret()
+}
+
+// writeValidatedPanelVhost writes the hardened panel vhost and validates it,
+// putting the original back when nginx refuses it. It reports whether the new
+// vhost stands.
+func writeValidatedPanelVhost(content string, original []byte) bool {
+	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+	if e := os.WriteFile(panelVhostPath, []byte(content), 0o640); e != nil {
+		log.Printf("panel proxy-trust heal: could not write vhost: %v", e)
+		return false
+	}
+	hardenSecretVhostPerms()
+	if output, e := tenantCommand("nginx", "-t").CombinedOutput(); e != nil {
+		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+		_ = os.WriteFile(panelVhostPath, original, 0o640) // ROLL BACK
+		log.Printf("panel proxy-trust heal: nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
+		return false
+	}
+	return true
+}
+
+// writeProxySecret writes the secret nginx now sends. When it cannot be written,
+// a vhost this run changed is put back and nginx reloaded onto it.
+func writeProxySecret(secret string, original []byte, nginxChanged bool) bool {
+	if e := os.WriteFile(proxySecretPath, []byte(secret+"\n"), 0o600); e != nil {
+		log.Printf("panel proxy-trust heal: could not write secret: %v", e)
+		if nginxChanged {
+			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+			_ = os.WriteFile(panelVhostPath, original, 0o640)
+			_, _ = tenantCommand("systemctl", "reload", "nginx").CombinedOutput()
+		}
+		return false
+	}
+	_ = os.Chmod(proxySecretPath, 0o600)
+	return true
 }
 
 // injectProxyTrust applies the four vhost edits and returns the new content.

@@ -142,64 +142,100 @@ var forbiddenNginxDirectives = map[string]bool{
 // `add_header X-Test "#"; alias /etc/;` splits into two statements and the
 // alias is still caught, instead of being hidden inside a fake comment.
 func DangerousNginxDirective(directives string) string {
-	var current strings.Builder
-	var quote byte // 0, '"' or '\''
-	var statements []string
-	flush := func() {
-		if t := strings.TrimSpace(current.String()); t != "" {
-			statements = append(statements, t)
-		}
-		current.Reset()
-	}
-	raw := []byte(directives)
-	for i := 0; i < len(raw); i++ {
-		c := raw[i]
-		if quote != 0 {
-			if c == '\\' && i+1 < len(raw) { // escape: keep the next byte verbatim
-				current.WriteByte(c)
-				current.WriteByte(raw[i+1])
-				i++
-				continue
-			}
-			if c == quote {
-				quote = 0
-			}
-			current.WriteByte(c)
-			continue
-		}
-		switch c {
-		case '"', '\'':
-			quote = c
-			current.WriteByte(c)
-		case '#': // comment: skip to end of line
-			for i < len(raw) && raw[i] != '\n' {
-				i++
-			}
-		case ';', '{', '}', '\n':
-			flush()
-		default:
-			current.WriteByte(c)
-		}
-	}
-	flush()
-
-	for _, statement := range statements {
-		fields := strings.Fields(statement)
-		if len(fields) == 0 {
-			continue
-		}
-		// Strip quotes from the directive name too (nginx rejects a quoted
-		// directive name anyway, but the denylist must still see it): "alias" -> alias.
-		name := strings.ToLower(strings.Trim(fields[0], `"'`))
-		if forbiddenNginxDirectives[name] ||
-			strings.Contains(name, "_by_lua") ||
-			strings.HasPrefix(name, "lua_") ||
-			strings.HasPrefix(name, "js_") ||
-			strings.HasPrefix(name, "perl") {
+	for _, statement := range nginxStatements(directives) {
+		if name := nginxDirectiveName(statement); forbiddenDirectiveName(name) {
 			return name
 		}
 	}
 	return ""
+}
+
+// nginxTokenizer splits custom directives into statements with nginx quoting
+// and comment semantics.
+type nginxTokenizer struct {
+	current    strings.Builder
+	quote      byte // 0, '"' or '\''
+	statements []string
+}
+
+// nginxStatements returns the statements in directives, trimmed and non-empty.
+func nginxStatements(directives string) []string {
+	var z nginxTokenizer
+	raw := []byte(directives)
+	for i := 0; i < len(raw); i++ {
+		if z.quote != 0 {
+			i = z.quoted(raw, i)
+			continue
+		}
+		i = z.unquoted(raw, i)
+	}
+	z.flush()
+	return z.statements
+}
+
+func (z *nginxTokenizer) flush() {
+	if t := strings.TrimSpace(z.current.String()); t != "" {
+		z.statements = append(z.statements, t)
+	}
+	z.current.Reset()
+}
+
+// quoted consumes raw[i] inside a quoted string and returns the index of the
+// last byte it consumed.
+func (z *nginxTokenizer) quoted(raw []byte, i int) int {
+	c := raw[i]
+	if c == '\\' && i+1 < len(raw) { // escape: keep the next byte verbatim
+		z.current.WriteByte(c)
+		z.current.WriteByte(raw[i+1])
+		return i + 1
+	}
+	if c == z.quote {
+		z.quote = 0
+	}
+	z.current.WriteByte(c)
+	return i
+}
+
+// unquoted consumes raw[i] outside a quoted string and returns the index of the
+// last byte it consumed.
+func (z *nginxTokenizer) unquoted(raw []byte, i int) int {
+	c := raw[i]
+	switch c {
+	case '"', '\'':
+		z.quote = c
+		z.current.WriteByte(c)
+	case '#': // comment: skip to end of line
+		for i < len(raw) && raw[i] != '\n' {
+			i++
+		}
+	case ';', '{', '}', '\n':
+		z.flush()
+	default:
+		z.current.WriteByte(c)
+	}
+	return i
+}
+
+// nginxDirectiveName returns a statement's directive name in lower case, or ""
+// for a statement without one.
+func nginxDirectiveName(statement string) string {
+	fields := strings.Fields(statement)
+	if len(fields) == 0 {
+		return ""
+	}
+	// Strip quotes from the directive name too (nginx rejects a quoted
+	// directive name anyway, but the denylist must still see it): "alias" -> alias.
+	return strings.ToLower(strings.Trim(fields[0], `"'`))
+}
+
+// forbiddenDirectiveName reports whether a customer's directives may not name
+// this directive.
+func forbiddenDirectiveName(name string) bool {
+	return forbiddenNginxDirectives[name] ||
+		strings.Contains(name, "_by_lua") ||
+		strings.HasPrefix(name, "lua_") ||
+		strings.HasPrefix(name, "js_") ||
+		strings.HasPrefix(name, "perl")
 }
 
 // indentLines adds a prefix to each non-empty line to keep the nginx block readable.

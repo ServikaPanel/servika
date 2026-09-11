@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -294,50 +295,50 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 		   JOIN domains d ON d.id = r.domain_id
 		  WHERE COALESCE(d.geo_mode,'off') <> 'off'`)
 	if err == nil {
-		for rows.Next() {
-			var code string
-			if err := rows.Scan(&code); err != nil {
-				// A country missing from this set is never declared in the shared
-				// nginx file, so every domain asking for it renders a rule nginx
-				// cannot apply.
-				log.Printf("geo: skipping an unreadable per-domain country code: %v", err)
-				continue
-			}
-			if normalized := geoip.NormalizeCountry(code); normalized != "" {
-				seenCountry[normalized] = true
-			}
-		}
-		if err := rows.Err(); err != nil {
-			// A country missing from this set is never declared in the shared nginx
-			// file, so every domain asking for it renders a rule nginx cannot apply.
-			log.Printf("geo: could not read the per-domain country rules: %v", err)
-		}
-		_ = rows.Close()
+		addCountryCodes(seenCountry, rows,
+			"geo: skipping an unreadable per-domain country code", "geo: could not read the per-domain country rules")
 	}
 	// The firewall's own country blocks share the database but not the nginx
 	// file; they are collected here only so one download serves both.
 	if firewallRows, err := packageDB.Query(
 		`SELECT country_code FROM firewall_geo_rules WHERE enabled=1`); err == nil {
-		for firewallRows.Next() {
-			var code string
-			if err := firewallRows.Scan(&code); err != nil {
-				log.Printf("geo: skipping an unreadable firewall country code: %v", err)
-				continue
-			}
-			if normalized := geoip.NormalizeCountry(code); normalized != "" {
-				seenCountry[normalized] = true
-			}
-		}
-		if err := firewallRows.Err(); err != nil {
-			log.Printf("geo: could not read the firewall country rules: %v", err)
-		}
-		_ = firewallRows.Close()
+		addCountryCodes(seenCountry, firewallRows,
+			"geo: skipping an unreadable firewall country code", "geo: could not read the firewall country rules")
 	}
 	for code := range seenCountry {
 		countries = append(countries, code)
 	}
 	sort.Strings(countries)
+	return countries, usedRates()
+}
 
+// addCountryCodes adds every valid country code rows returns to seen, then closes
+// rows. A row that cannot be read is logged as skipped and a list cut short as
+// cutShort.
+func addCountryCodes(seen map[string]bool, rows *sql.Rows, skipped, cutShort string) {
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			// A country missing from this set is never declared in the shared
+			// nginx file, so every domain asking for it renders a rule nginx
+			// cannot apply.
+			log.Printf("%s: %v", skipped, err)
+			continue
+		}
+		if normalized := geoip.NormalizeCountry(code); normalized != "" {
+			seen[normalized] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		// A country missing from this set is never declared in the shared nginx
+		// file, so every domain asking for it renders a rule nginx cannot apply.
+		log.Printf("%s: %v", cutShort, err)
+	}
+	_ = rows.Close()
+}
+
+// usedRates collects every request rate a domain has chosen.
+func usedRates() (rates []int) {
 	seenRate := map[int]bool{}
 	if rateRows, err := packageDB.Query(
 		`SELECT DISTINCT rate_limit_rps FROM domains WHERE COALESCE(rate_limit_rps,0) > 0`); err == nil {
@@ -364,7 +365,7 @@ func usedCountriesAndRates() (countries []string, rates []int) {
 		rates = append(rates, rps)
 	}
 	sort.Ints(rates)
-	return countries, rates
+	return rates
 }
 
 // restorer puts a shared file back the way it was.

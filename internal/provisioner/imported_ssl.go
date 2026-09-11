@@ -19,32 +19,9 @@ var ErrImportedSSLInvalid = errors.New("invalid source SSL certificate")
 // into the system certificate directory. The caller updates the DB first and
 // then calls RerenderVhost, so concurrent vhost re-renders cannot overwrite SSL.
 func InstallImportedSSL(domainName string, certPEM, keyPEM []byte) (string, string, time.Time, error) {
-	if err := ValidateDomain(domainName); err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: %v", ErrImportedSSLInvalid, err)
-	}
-	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	leaf, err := importedLeaf(domainName, certPEM, keyPEM)
 	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: %s", ErrImportedSSLInvalid, keyPairProblem(certPEM, keyPEM))
-	}
-	if len(pair.Certificate) == 0 {
-		return "", "", time.Time{}, fmt.Errorf("%w: no certificate found", ErrImportedSSLInvalid)
-	}
-	leaf, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: certificate could not be parsed", ErrImportedSSLInvalid)
-	}
-	now := time.Now()
-	if leaf.NotBefore.After(now.Add(5 * time.Minute)) {
-		return "", "", time.Time{}, fmt.Errorf("%w: certificate is not yet valid", ErrImportedSSLInvalid)
-	}
-	if !leaf.NotAfter.After(now) {
-		return "", "", time.Time{}, fmt.Errorf("%w: certificate has expired", ErrImportedSSLInvalid)
-	}
-	if err := leaf.VerifyHostname(domainName); err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: certificate does not cover %s", ErrImportedSSLInvalid, domainName)
-	}
-	if len(leaf.ExtKeyUsage) > 0 && !hasServerAuth(leaf.ExtKeyUsage) {
-		return "", "", time.Time{}, fmt.Errorf("%w: certificate is not valid for server authentication", ErrImportedSSLInvalid)
+		return "", "", time.Time{}, err
 	}
 
 	sslDir := certSystemDir(domainName)
@@ -65,6 +42,48 @@ func InstallImportedSSL(domainName string, certPEM, keyPEM []byte) (string, stri
 		return "", "", time.Time{}, err
 	}
 	return certPath, keyPath, leaf.NotAfter, nil
+}
+
+// importedLeaf checks an imported certificate and key and returns the leaf
+// certificate. Every refusal wraps ErrImportedSSLInvalid.
+func importedLeaf(domainName string, certPEM, keyPEM []byte) (*x509.Certificate, error) {
+	if err := ValidateDomain(domainName); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrImportedSSLInvalid, err)
+	}
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrImportedSSLInvalid, keyPairProblem(certPEM, keyPEM))
+	}
+	if len(pair.Certificate) == 0 {
+		return nil, fmt.Errorf("%w: no certificate found", ErrImportedSSLInvalid)
+	}
+	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("%w: certificate could not be parsed", ErrImportedSSLInvalid)
+	}
+	if err := checkImportedLeaf(leaf, domainName); err != nil {
+		return nil, err
+	}
+	return leaf, nil
+}
+
+// checkImportedLeaf refuses a leaf that is not valid now, does not name the
+// domain, or is not for server authentication.
+func checkImportedLeaf(leaf *x509.Certificate, domainName string) error {
+	now := time.Now()
+	if leaf.NotBefore.After(now.Add(5 * time.Minute)) {
+		return fmt.Errorf("%w: certificate is not yet valid", ErrImportedSSLInvalid)
+	}
+	if !leaf.NotAfter.After(now) {
+		return fmt.Errorf("%w: certificate has expired", ErrImportedSSLInvalid)
+	}
+	if err := leaf.VerifyHostname(domainName); err != nil {
+		return fmt.Errorf("%w: certificate does not cover %s", ErrImportedSSLInvalid, domainName)
+	}
+	if len(leaf.ExtKeyUsage) > 0 && !hasServerAuth(leaf.ExtKeyUsage) {
+		return fmt.Errorf("%w: certificate is not valid for server authentication", ErrImportedSSLInvalid)
+	}
+	return nil
 }
 
 // keyPairProblem says WHY a certificate and a private key could not be loaded

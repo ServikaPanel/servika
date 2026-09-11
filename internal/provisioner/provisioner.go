@@ -107,23 +107,34 @@ func AbsoluteWebRoot(systemUser, subdirectory string) (string, error) {
 	if rel != "" {
 		abs = filepath.Clean(filepath.Join(base, rel))
 	}
-	if abs != base && !strings.HasPrefix(abs, base+string(os.PathSeparator)) {
+	if !withinWebRoot(abs, base) {
 		return "", fmt.Errorf("web root cannot leave public_html")
 	}
+	if symlinkLeavesWebRoot(abs, base) {
+		return "", fmt.Errorf("web root cannot leave public_html through a symlink")
+	}
+	return abs, nil
+}
+
+// withinWebRoot reports whether path is base or a path below it.
+func withinWebRoot(path, base string) bool {
+	return path == base || strings.HasPrefix(path, base+string(os.PathSeparator))
+}
+
+// symlinkLeavesWebRoot reports whether the deepest existing ancestor of abs
+// under base resolves to a path outside base.
+func symlinkLeavesWebRoot(abs, base string) bool {
 	check := abs
-	for check == base || strings.HasPrefix(check, base+string(os.PathSeparator)) {
+	for withinWebRoot(check, base) {
 		if real, err := filepath.EvalSymlinks(check); err == nil {
-			if real != base && !strings.HasPrefix(real, base+string(os.PathSeparator)) {
-				return "", fmt.Errorf("web root cannot leave public_html through a symlink")
-			}
-			break
+			return !withinWebRoot(real, base)
 		}
 		if check == base {
 			break
 		}
 		check = filepath.Dir(check)
 	}
-	return abs, nil
+	return false
 }
 
 // WebRootSubdirectory returns the public_html-relative subdirectory for a stored web root.
@@ -263,41 +274,23 @@ func healCacheZoneOnStartup() {
 }
 
 func ensureCacheZone() (bool, error) {
-	changed := false
 	zoneDir := cacheZoneDir()
 	zoneConf := cacheZoneConf()
-	tempConf := cacheZoneTempConf()
 	zoneBody := cacheZoneBody()
-	if err := os.MkdirAll(zoneDir, 0700); err != nil {
-		return false, fmt.Errorf("create cache directory: %w", err)
+	if err := prepareCacheZoneDir(zoneDir); err != nil {
+		return false, err
 	}
-	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
-	if err := os.Chmod(filepath.Dir(zoneDir), 0o755); err != nil {
-		return false, fmt.Errorf("set cache parent permissions: %w", err)
-	}
-	if uid, gid, err := uidGid(nginxAccount); err == nil {
-		if err := chown(zoneDir, uid, gid); err != nil {
-			return false, fmt.Errorf("set cache directory ownership: %w", err)
-		}
-	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = systemCommand("restorecon", "-R", zoneDir).CombinedOutput()
-
-	if _, err := os.Stat(tempConf); err == nil {
-		if err := os.Remove(tempConf); err != nil {
-			return false, fmt.Errorf("remove temporary cache zone configuration: %w", err)
-		}
-		changed = true
+	changed, err := removeIfPresent(cacheZoneTempConf(), "remove temporary cache zone configuration")
+	if err != nil {
+		return false, err
 	}
 
 	if cacheZoneDefinedElsewhere() {
-		if _, err := os.Stat(zoneConf); err == nil {
-			if err := os.Remove(zoneConf); err != nil {
-				return false, fmt.Errorf("remove duplicate managed cache zone configuration: %w", err)
-			}
-			changed = true
+		removed, err := removeIfPresent(zoneConf, "remove duplicate managed cache zone configuration")
+		if err != nil {
+			return false, err
 		}
-		return changed, nil
+		return changed || removed, nil
 	}
 
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
@@ -312,6 +305,38 @@ func ensureCacheZone() (bool, error) {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 	_, _ = systemCommand("restorecon", zoneConf).CombinedOutput()
 	return ensureCacheLogFormat() || true, nil
+}
+
+// prepareCacheZoneDir creates the cache directory, keeps its parent traversable
+// and hands the directory to nginx.
+func prepareCacheZoneDir(zoneDir string) error {
+	if err := os.MkdirAll(zoneDir, 0700); err != nil {
+		return fmt.Errorf("create cache directory: %w", err)
+	}
+	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
+	if err := os.Chmod(filepath.Dir(zoneDir), 0o755); err != nil {
+		return fmt.Errorf("set cache parent permissions: %w", err)
+	}
+	if uid, gid, err := uidGid(nginxAccount); err == nil {
+		if err := chown(zoneDir, uid, gid); err != nil {
+			return fmt.Errorf("set cache directory ownership: %w", err)
+		}
+	}
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+	_, _ = systemCommand("restorecon", "-R", zoneDir).CombinedOutput()
+	return nil
+}
+
+// removeIfPresent removes path when it exists and reports whether it did; a
+// removal that fails is described by what.
+func removeIfPresent(path, what string) (bool, error) {
+	if _, err := os.Stat(path); err != nil {
+		return false, nil
+	}
+	if err := os.Remove(path); err != nil {
+		return false, fmt.Errorf("%s: %w", what, err)
+	}
+	return true, nil
 }
 
 // ensureCacheLogFormat writes the log_format definition file for cache status
@@ -367,29 +392,9 @@ func purgeFastCGICache(domainName string) {
 			continue
 		}
 		// Cache hierarchy: <dir>/<one-char>/<two-char>/<cache-file>
-		oneCharDir := filepath.Join(dir, entry.Name())
-		oneLevel, _ := os.ReadDir(oneCharDir)
-		for _, one := range oneLevel {
-			if !one.IsDir() {
-				continue
-			}
-			twoCharDir := filepath.Join(oneCharDir, one.Name())
-			twoLevel, _ := os.ReadDir(twoCharDir)
-			for _, two := range twoLevel {
-				path := filepath.Join(twoCharDir, two.Name())
-				host, ok := cacheEntryHost(path)
-				if !ok {
-					unattributed++
-					continue
-				}
-				if !hosts[host] {
-					continue
-				}
-				if err := os.Remove(path); err == nil {
-					purged++
-				}
-			}
-		}
+		levelPurged, levelUnattributed := purgeCacheLevel(filepath.Join(dir, entry.Name()), hosts)
+		purged += levelPurged
+		unattributed += levelUnattributed
 	}
 	if purged > 0 {
 		log.Printf("fastcgi cache: purged %d entries (%s)", purged, domainName)
@@ -401,6 +406,35 @@ func purgeFastCGICache(domainName string) {
 		// file this reader does not understand.
 		log.Printf("fastcgi cache: %d entries left in place, their cache key could not be read", unattributed)
 	}
+}
+
+// purgeCacheLevel removes the entries under one first-level cache directory
+// that belong to hosts, and counts the entries removed and those whose cache
+// key could not be read.
+func purgeCacheLevel(oneCharDir string, hosts map[string]bool) (purged, unattributed int) {
+	oneLevel, _ := os.ReadDir(oneCharDir)
+	for _, one := range oneLevel {
+		if !one.IsDir() {
+			continue
+		}
+		twoCharDir := filepath.Join(oneCharDir, one.Name())
+		twoLevel, _ := os.ReadDir(twoCharDir)
+		for _, two := range twoLevel {
+			path := filepath.Join(twoCharDir, two.Name())
+			host, ok := cacheEntryHost(path)
+			if !ok {
+				unattributed++
+				continue
+			}
+			if !hosts[host] {
+				continue
+			}
+			if err := os.Remove(path); err == nil {
+				purged++
+			}
+		}
+	}
+	return purged, unattributed
 }
 
 // purgeHostSet is the set of host names whose cached pages one domain owns.
@@ -616,19 +650,8 @@ func readTenantCertificate(path string, expectedUID int) ([]byte, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	info, err := file.Stat()
-	if err != nil {
-		return nil, fmt.Errorf("inspect tenant certificate: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("tenant certificate is not a regular file")
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || int(stat.Uid) != expectedUID {
-		return nil, fmt.Errorf("tenant certificate owner does not match the tenant")
-	}
-	if info.Size() <= 0 || info.Size() > maxCertificateFileSize {
-		return nil, fmt.Errorf("tenant certificate size is invalid")
+	if err := checkTenantCertificateFile(file, expectedUID); err != nil {
+		return nil, err
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxCertificateFileSize+1))
 	if err != nil {
@@ -638,6 +661,26 @@ func readTenantCertificate(path string, expectedUID int) ([]byte, error) {
 		return nil, fmt.Errorf("tenant certificate exceeds the size limit")
 	}
 	return data, nil
+}
+
+// checkTenantCertificateFile refuses an open certificate that is not a regular
+// file the tenant owns, or whose size is not one a certificate has.
+func checkTenantCertificateFile(file *os.File, expectedUID int) error {
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("inspect tenant certificate: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("tenant certificate is not a regular file")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || int(stat.Uid) != expectedUID {
+		return fmt.Errorf("tenant certificate owner does not match the tenant")
+	}
+	if info.Size() <= 0 || info.Size() > maxCertificateFileSize {
+		return fmt.Errorf("tenant certificate size is invalid")
+	}
+	return nil
 }
 
 // fileChown hands an open certificate file to root. It is a variable so a test
@@ -711,60 +754,9 @@ func HealSSLCertPathsOnStartup() {
 
 	migrated := 0
 	for rows.Next() {
-		var id int64
-		var domainName, systemUser, phpVersion, oldCertPath, oldKeyPath string
-		if err := rows.Scan(&id, &domainName, &systemUser, &phpVersion, &oldCertPath, &oldKeyPath); err != nil {
-			log.Printf("SSL certificate path healing: row scan failed: %v", err)
-			continue
+		if migrateHomeCertificate(rows) {
+			migrated++
 		}
-		if ValidateDomain(domainName) != nil || !tenantUserPattern.MatchString(systemUser) {
-			log.Printf("SSL certificate path healing: refused invalid domain or tenant for domain ID %d", id)
-			continue
-		}
-		domainName = strings.ToLower(strings.TrimSpace(domainName))
-		expectedCertPath := filepath.Join(tenantHomeRoot, systemUser, "ssl", domainName+".crt")
-		expectedKeyPath := filepath.Join(tenantHomeRoot, systemUser, "ssl", domainName+".key")
-		if filepath.Clean(oldCertPath) != expectedCertPath || filepath.Clean(oldKeyPath) != expectedKeyPath {
-			log.Printf("SSL certificate path healing: refused unexpected tenant paths for %s", domainName)
-			continue
-		}
-		uid, _, err := uidGid(systemUser)
-		if err != nil {
-			log.Printf("SSL certificate path healing: resolve owner for %s: %v", domainName, err)
-			continue
-		}
-		sslDir, err := prepareCertificateDir(domainName)
-		if err != nil {
-			log.Printf("SSL certificate path healing: prepare directory for %s: %v", domainName, err)
-			continue
-		}
-		newCertPath := filepath.Join(sslDir, domainName+".crt")
-		newKeyPath := filepath.Join(sslDir, domainName+".key")
-		if err := copyTenantCertificate(oldCertPath, newCertPath, uid, 0644); err != nil {
-			log.Printf("SSL certificate path healing: migrate certificate for %s: %v", domainName, err)
-			continue
-		}
-		if err := copyTenantCertificate(oldKeyPath, newKeyPath, uid, 0600); err != nil {
-			log.Printf("SSL certificate path healing: migrate private key for %s: %v", domainName, err)
-			continue
-		}
-		_, _ = tenantCommand("restorecon", "-R", sslDir).CombinedOutput()
-
-		socket, err := PHPSocketFor(systemUser, phpVersion)
-		if err != nil {
-			log.Printf("SSL certificate path healing: resolve PHP socket for %s: %v", domainName, err)
-			continue
-		}
-		if err := applyVhostForDomain(packageDB, id, socket, phpVersion, &newCertPath, &newKeyPath); err != nil {
-			log.Printf("SSL certificate path healing: render vhost for %s: %v", domainName, err)
-			continue
-		}
-		if _, err := packageDB.Exec(`UPDATE domains SET cert_path=?, key_path=? WHERE id=?`, newCertPath, newKeyPath, id); err != nil {
-			log.Printf("SSL certificate path healing: update database for %s: %v", domainName, err)
-			continue
-		}
-		removeHomeCertificate(systemUser, domainName)
-		migrated++
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("SSL certificate path healing: row iteration failed: %v", err)
@@ -772,6 +764,99 @@ func HealSSLCertPathsOnStartup() {
 	if migrated > 0 {
 		log.Printf("SSL certificate path healing: migrated %d certificate sets", migrated)
 	}
+}
+
+// homeCertificateRow is one domain whose active certificate still lives in the
+// tenant home, with the uid that must own it there.
+type homeCertificateRow struct {
+	id                                 int64
+	domainName, systemUser, phpVersion string
+	certPath, keyPath                  string
+	uid                                int
+}
+
+// migrateHomeCertificate reads one row and moves its certificate into system
+// storage. It reports whether the certificate was moved.
+func migrateHomeCertificate(rows *sql.Rows) bool {
+	row, ok := readHomeCertificateRow(rows)
+	if !ok {
+		return false
+	}
+	newCertPath, newKeyPath, ok := copyHomeCertificate(row)
+	if !ok {
+		return false
+	}
+	return repointHomeCertificate(row, newCertPath, newKeyPath)
+}
+
+// readHomeCertificateRow reads one row and refuses a domain, a tenant or a pair
+// of paths the heal may not act on.
+func readHomeCertificateRow(rows *sql.Rows) (homeCertificateRow, bool) {
+	var row homeCertificateRow
+	if err := rows.Scan(&row.id, &row.domainName, &row.systemUser, &row.phpVersion, &row.certPath, &row.keyPath); err != nil {
+		log.Printf("SSL certificate path healing: row scan failed: %v", err)
+		return row, false
+	}
+	if ValidateDomain(row.domainName) != nil || !tenantUserPattern.MatchString(row.systemUser) {
+		log.Printf("SSL certificate path healing: refused invalid domain or tenant for domain ID %d", row.id)
+		return row, false
+	}
+	row.domainName = strings.ToLower(strings.TrimSpace(row.domainName))
+	expectedCertPath := filepath.Join(tenantHomeRoot, row.systemUser, "ssl", row.domainName+".crt")
+	expectedKeyPath := filepath.Join(tenantHomeRoot, row.systemUser, "ssl", row.domainName+".key")
+	if filepath.Clean(row.certPath) != expectedCertPath || filepath.Clean(row.keyPath) != expectedKeyPath {
+		log.Printf("SSL certificate path healing: refused unexpected tenant paths for %s", row.domainName)
+		return row, false
+	}
+	uid, _, err := uidGid(row.systemUser)
+	if err != nil {
+		log.Printf("SSL certificate path healing: resolve owner for %s: %v", row.domainName, err)
+		return row, false
+	}
+	row.uid = uid
+	return row, true
+}
+
+// copyHomeCertificate copies the tenant's certificate and key into system
+// storage and returns their new paths.
+func copyHomeCertificate(row homeCertificateRow) (string, string, bool) {
+	sslDir, err := prepareCertificateDir(row.domainName)
+	if err != nil {
+		log.Printf("SSL certificate path healing: prepare directory for %s: %v", row.domainName, err)
+		return "", "", false
+	}
+	newCertPath := filepath.Join(sslDir, row.domainName+".crt")
+	newKeyPath := filepath.Join(sslDir, row.domainName+".key")
+	if err := copyTenantCertificate(row.certPath, newCertPath, row.uid, 0644); err != nil {
+		log.Printf("SSL certificate path healing: migrate certificate for %s: %v", row.domainName, err)
+		return "", "", false
+	}
+	if err := copyTenantCertificate(row.keyPath, newKeyPath, row.uid, 0600); err != nil {
+		log.Printf("SSL certificate path healing: migrate private key for %s: %v", row.domainName, err)
+		return "", "", false
+	}
+	_, _ = tenantCommand("restorecon", "-R", sslDir).CombinedOutput()
+	return newCertPath, newKeyPath, true
+}
+
+// repointHomeCertificate renders the vhost from the copied certificate, records
+// the new paths and only then removes the home copy.
+func repointHomeCertificate(row homeCertificateRow, newCertPath, newKeyPath string) bool {
+	socket, err := PHPSocketFor(row.systemUser, row.phpVersion)
+	if err != nil {
+		log.Printf("SSL certificate path healing: resolve PHP socket for %s: %v", row.domainName, err)
+		return false
+	}
+	if err := applyVhostForDomain(packageDB, row.id, socket, row.phpVersion, &newCertPath, &newKeyPath); err != nil {
+		log.Printf("SSL certificate path healing: render vhost for %s: %v", row.domainName, err)
+		return false
+	}
+	if _, err := packageDB.Exec(`UPDATE domains SET cert_path=?, key_path=? WHERE id=?`, newCertPath, newKeyPath, row.id); err != nil {
+		log.Printf("SSL certificate path healing: update database for %s: %v", row.domainName, err)
+		return false
+	}
+	removeHomeCertificate(row.systemUser, row.domainName)
+	return true
 }
 
 // slugBodyMax is the longest slug body SlugFromDomain produces, and the ceiling
@@ -1802,22 +1887,7 @@ func writePoolValidated(systemUser, phpVersion string) (socket, service string, 
 // For the "apache" backend, it also writes the per-domain Apache vhost and reloads httpd.
 // When switching away from Apache, it removes the obsolete Apache vhost.
 func renderAndReload(opts VhostOpts, systemUser string) error {
-	// Use PHP-FPM as the default backend.
-	if opts.Backend == "" {
-		opts.Backend = "php-fpm"
-	}
-	// Preserve the isolated socket across every vhost rewrite, including SSL changes.
-	if TenantFPMActive(systemUser) {
-		opts.PHPSocket = tenantSocket(systemUser)
-	}
-	if !opts.Suspended && packageDB != nil {
-		var suspended int
-		_ = packageDB.QueryRow(
-			`SELECT COALESCE(suspended,0) FROM domains WHERE system_user=? AND parent_domain_id IS NULL LIMIT 1`, systemUser).
-			Scan(&suspended)
-		opts.Suspended = suspended == 1
-	}
-
+	opts = withRenderDefaults(opts, systemUser)
 	opts.SecHeaders = buildSecurityHeaders(opts)
 	opts.DenyBlocks = denyBlocksNginx
 	// WAF (ModSecurity) directive: computed from effective settings on every render.
@@ -1825,86 +1895,14 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	// buildModSec returns "" when WAF is off or the module is absent (doesn't break the vhost);
 	// when active it also refreshes the per-domain modsec conf — single source, self-healing.
 	if !opts.Suspended {
-		opts.ModSec = buildModSec(systemUser)
-		opts.IPRules = buildIPRules(opts.DomainName)
-		opts.MaintenanceBlock = buildMaintenanceBlock(opts.DomainName)
-		opts.GeoBlock, opts.RateLimit = domainProtection(opts.DomainName)
-		opts.HotlinkLocation = buildHotlink(opts.DomainName)
-		// Webmail only on the TLS vhost. On a domain without a certificate the
-		// block would carry mailbox passwords in the clear; the mail page keeps
-		// pointing such a domain at the panel's own HTTPS webmail instead.
-		if opts.SSL() {
-			opts.WebmailBlock = webmailBlock()
-			opts.AutoconfigBlock = autoconfigBlock()
-		}
-		// Applications are computed on every render for the same reason the WAF
-		// and IP rules are: the vhost is rewritten by ~30 unrelated call sites,
-		// none of which know an application exists.
-		if packageDB != nil {
-			var domainID int64
-			if err := packageDB.QueryRow(
-				`SELECT id FROM domains WHERE domain_name=? LIMIT 1`, opts.DomainName).Scan(&domainID); err == nil {
-				opts.AppBlocks, opts.AppOwnsRoot = AppProxyBlocks(packageDB, domainID, 0)
-			}
-		}
+		opts = withActiveBlocks(opts, systemUser)
 	}
-
-	if !opts.Suspended && opts.CustomVhostContent == "" && packageDB != nil {
-		var target string
-		var code int
-		if err := packageDB.QueryRow(
-			`SELECT target_url, status_code FROM domain_redirects WHERE domain_id=(SELECT id FROM domains WHERE domain_name=? LIMIT 1)`, opts.DomainName).
-			Scan(&target, &code); err == nil && strings.TrimSpace(target) != "" {
-			opts.RedirectTarget = target
-			opts.RedirectCode = code
-		}
-	}
-
-	// Canonical hostname redirect, read here so every caller keeps it: the setting is
-	// stored once and ~30 call sites (PHP version change, SSL renewal, WAF toggle)
-	// re-render the vhost without knowing about it. It applies only when none of the
-	// other three shapes is in play, because each of those already answers on apex
-	// and www together.
-	if !opts.Suspended && opts.CustomVhostContent == "" && opts.RedirectTarget == "" &&
-		opts.WWWRedirect == "" && packageDB != nil {
-		var mode string
-		if err := packageDB.QueryRow(
-			`SELECT COALESCE(www_redirect,'off') FROM domains WHERE system_user=? AND parent_domain_id IS NULL LIMIT 1`,
-			systemUser).Scan(&mode); err == nil {
-			opts.WWWRedirect = mode
-		}
-	}
-
-	tmpl := vhostTmpl
-	if opts.Suspended {
-		tmpl = suspendedVhostTmpl
-	} else if opts.RedirectTarget != "" {
-		tmpl = redirectVhostTmpl
-	}
-	// The other three shapes keep both hostnames on one server_name, so the canonical
-	// redirect must not remove one of them there.
-	if opts.Suspended || opts.RedirectTarget != "" || opts.CustomVhostContent != "" {
-		opts.WWWRedirect = ""
-	}
-	opts = withCertifiableCanonicalRedirect(opts, CertificateCoversHost)
-	var buf bytes.Buffer
-	if opts.CustomVhostContent != "" && !opts.Suspended {
-		buf.WriteString(strings.TrimSpace(opts.CustomVhostContent))
-		buf.WriteByte('\n')
-	} else {
-		if err := tmpl.Execute(&buf, opts); err != nil {
-			return fmt.Errorf("template render: %w", err)
-		}
-		if opts.RedirectFromHost() != "" {
-			if err := wwwRedirectTmpl.Execute(&buf, opts); err != nil {
-				return fmt.Errorf("canonical redirect render: %w", err)
-			}
-		}
-		if opts.discoveryEligible() || opts.mtaSTSEligible() {
-			if err := discoveryVhostTmpl.Execute(&buf, opts); err != nil {
-				return fmt.Errorf("auto-configuration vhost render: %w", err)
-			}
-		}
+	opts = withStoredDomainRedirect(opts)
+	opts = withStoredCanonicalRedirect(opts, systemUser)
+	opts = withShapeCanonicalRedirect(opts)
+	body, err := renderVhostBody(opts)
+	if err != nil {
+		return err
 	}
 	cfgPath := opts.ConfigPath
 	if cfgPath == "" {
@@ -1924,18 +1922,175 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	previousConfig, readErr := os.ReadFile(cfgPath)
 	hadPreviousConfig := readErr == nil
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-	if err := os.WriteFile(cfgPath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, body, 0644); err != nil {
 		return fmt.Errorf("write vhost: %w", err)
 	}
-	if _, err := ensureCacheZone(); err != nil {
+	sharedRestorers, err := prepareHTTPContext(opts)
+	if err != nil {
 		return err
+	}
+	if out, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
+		restoreFile(cfgPath, previousConfig, hadPreviousConfig)
+		restoreShared(sharedRestorers)
+		return fmt.Errorf("nginx -t failed: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	if out, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+		return fmt.Errorf("nginx reload: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	// Purge stale FastCGI cache entries for this domain so that cache TTL and
+	// enable/disable changes take effect immediately instead of serving old content.
+	purgeFastCGICache(opts.DomainName)
+	return syncApacheBackend(opts, systemUser)
+}
+
+// withRenderDefaults applies what every render starts from: the PHP-FPM backend
+// when none is set, the tenant's own socket when it runs its own master, and the
+// suspension stored for the domain.
+func withRenderDefaults(opts VhostOpts, systemUser string) VhostOpts {
+	// Use PHP-FPM as the default backend.
+	if opts.Backend == "" {
+		opts.Backend = "php-fpm"
+	}
+	// Preserve the isolated socket across every vhost rewrite, including SSL changes.
+	if TenantFPMActive(systemUser) {
+		opts.PHPSocket = tenantSocket(systemUser)
+	}
+	if !opts.Suspended && packageDB != nil {
+		var suspended int
+		_ = packageDB.QueryRow(
+			`SELECT COALESCE(suspended,0) FROM domains WHERE system_user=? AND parent_domain_id IS NULL LIMIT 1`, systemUser).
+			Scan(&suspended)
+		opts.Suspended = suspended == 1
+	}
+	return opts
+}
+
+// withActiveBlocks computes the blocks only a domain that is not suspended
+// carries: WAF, IP rules, maintenance, country and rate limits, hotlink
+// protection, webmail and auto-configuration on TLS, and application proxies.
+func withActiveBlocks(opts VhostOpts, systemUser string) VhostOpts {
+	opts.ModSec = buildModSec(systemUser)
+	opts.IPRules = buildIPRules(opts.DomainName)
+	opts.MaintenanceBlock = buildMaintenanceBlock(opts.DomainName)
+	opts.GeoBlock, opts.RateLimit = domainProtection(opts.DomainName)
+	opts.HotlinkLocation = buildHotlink(opts.DomainName)
+	// Webmail only on the TLS vhost. On a domain without a certificate the
+	// block would carry mailbox passwords in the clear; the mail page keeps
+	// pointing such a domain at the panel's own HTTPS webmail instead.
+	if opts.SSL() {
+		opts.WebmailBlock = webmailBlock()
+		opts.AutoconfigBlock = autoconfigBlock()
+	}
+	// Applications are computed on every render for the same reason the WAF
+	// and IP rules are: the vhost is rewritten by ~30 unrelated call sites,
+	// none of which know an application exists.
+	if packageDB != nil {
+		var domainID int64
+		if err := packageDB.QueryRow(
+			`SELECT id FROM domains WHERE domain_name=? LIMIT 1`, opts.DomainName).Scan(&domainID); err == nil {
+			opts.AppBlocks, opts.AppOwnsRoot = AppProxyBlocks(packageDB, domainID, 0)
+		}
+	}
+	return opts
+}
+
+// withStoredDomainRedirect reads the whole-domain redirect, which neither a
+// suspended domain nor a custom vhost carries.
+func withStoredDomainRedirect(opts VhostOpts) VhostOpts {
+	if !opts.Suspended && opts.CustomVhostContent == "" && packageDB != nil {
+		var target string
+		var code int
+		if err := packageDB.QueryRow(
+			`SELECT target_url, status_code FROM domain_redirects WHERE domain_id=(SELECT id FROM domains WHERE domain_name=? LIMIT 1)`, opts.DomainName).
+			Scan(&target, &code); err == nil && strings.TrimSpace(target) != "" {
+			opts.RedirectTarget = target
+			opts.RedirectCode = code
+		}
+	}
+	return opts
+}
+
+// withStoredCanonicalRedirect reads the canonical hostname redirect when the
+// caller did not set one.
+func withStoredCanonicalRedirect(opts VhostOpts, systemUser string) VhostOpts {
+	// Canonical hostname redirect, read here so every caller keeps it: the setting is
+	// stored once and ~30 call sites (PHP version change, SSL renewal, WAF toggle)
+	// re-render the vhost without knowing about it. It applies only when none of the
+	// other three shapes is in play, because each of those already answers on apex
+	// and www together.
+	if !opts.Suspended && opts.CustomVhostContent == "" && opts.RedirectTarget == "" &&
+		opts.WWWRedirect == "" && packageDB != nil {
+		var mode string
+		if err := packageDB.QueryRow(
+			`SELECT COALESCE(www_redirect,'off') FROM domains WHERE system_user=? AND parent_domain_id IS NULL LIMIT 1`,
+			systemUser).Scan(&mode); err == nil {
+			opts.WWWRedirect = mode
+		}
+	}
+	return opts
+}
+
+// withShapeCanonicalRedirect keeps the canonical redirect only where the vhost
+// shape and the installed certificate allow it.
+func withShapeCanonicalRedirect(opts VhostOpts) VhostOpts {
+	// The other three shapes keep both hostnames on one server_name, so the canonical
+	// redirect must not remove one of them there.
+	if opts.Suspended || opts.RedirectTarget != "" || opts.CustomVhostContent != "" {
+		opts.WWWRedirect = ""
+	}
+	return withCertifiableCanonicalRedirect(opts, CertificateCoversHost)
+}
+
+// vhostTemplateFor picks the template for the domain's shape.
+func vhostTemplateFor(opts VhostOpts) *template.Template {
+	if opts.Suspended {
+		return suspendedVhostTmpl
+	}
+	if opts.RedirectTarget != "" {
+		return redirectVhostTmpl
+	}
+	return vhostTmpl
+}
+
+// renderVhostBody renders the vhost file: a stored custom vhost as it was
+// written, otherwise the template for the domain's shape followed by the
+// canonical redirect and auto-configuration server blocks that apply.
+func renderVhostBody(opts VhostOpts) ([]byte, error) {
+	var buf bytes.Buffer
+	if opts.CustomVhostContent != "" && !opts.Suspended {
+		buf.WriteString(strings.TrimSpace(opts.CustomVhostContent))
+		buf.WriteByte('\n')
+		return buf.Bytes(), nil
+	}
+	if err := vhostTemplateFor(opts).Execute(&buf, opts); err != nil {
+		return nil, fmt.Errorf("template render: %w", err)
+	}
+	if opts.RedirectFromHost() != "" {
+		if err := wwwRedirectTmpl.Execute(&buf, opts); err != nil {
+			return nil, fmt.Errorf("canonical redirect render: %w", err)
+		}
+	}
+	if opts.discoveryEligible() || opts.mtaSTSEligible() {
+		if err := discoveryVhostTmpl.Execute(&buf, opts); err != nil {
+			return nil, fmt.Errorf("auto-configuration vhost render: %w", err)
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+// prepareHTTPContext writes the server-global http-context files a vhost may
+// name. A protection file that fails is rolled back here; the files it replaced
+// are returned so a failed validation can roll them back too.
+func prepareHTTPContext(opts VhostOpts) ([]restorer, error) {
+	if _, err := ensureCacheZone(); err != nil {
+		return nil, err
 	}
 	// The map must exist before a vhost references $connection_upgrade, or nginx
 	// rejects the whole configuration and the rollback below fires on a defect
 	// that is not in the vhost.
 	if opts.AppBlocks != "" {
 		if err := ensureUpgradeMap(); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	// The country and rate-limit declarations live in http context, so they have
@@ -1945,41 +2100,37 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	// take the whole server down at the next unrelated reload instead.
 	sharedRestorers, sharedErr := ensureProtectionConf()
 	if sharedErr != nil {
-		for _, saved := range sharedRestorers {
-			saved.restore()
-		}
-		return sharedErr
+		restoreShared(sharedRestorers)
+		return nil, sharedErr
 	}
-	if out, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
-		if hadPreviousConfig {
-			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-			_ = os.WriteFile(cfgPath, previousConfig, 0644)
-		} else {
-			_ = os.Remove(cfgPath)
-		}
-		for _, saved := range sharedRestorers {
-			saved.restore()
-		}
-		return fmt.Errorf("nginx -t failed: %s: %w", strings.TrimSpace(string(out)), err)
-	}
-	if out, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		return fmt.Errorf("nginx reload: %s: %w", strings.TrimSpace(string(out)), err)
-	}
-	// Purge stale FastCGI cache entries for this domain so that cache TTL and
-	// enable/disable changes take effect immediately instead of serving old content.
-	purgeFastCGICache(opts.DomainName)
+	return sharedRestorers, nil
+}
 
-	// Manage the Apache backend idempotently by writing or removing its vhost.
-	if opts.Backend == "apache" && !opts.Suspended {
-		if err := writeApacheVhost(opts, systemUser); err != nil {
-			return err
-		}
-	} else {
-		if err := deleteApacheVhostIfExists(systemUser); err != nil {
-			return err
-		}
+// restoreShared puts every shared file a render replaced back the way it was.
+func restoreShared(restorers []restorer) {
+	for _, saved := range restorers {
+		saved.restore()
 	}
-	return nil
+}
+
+// restoreFile puts back the content a failed step replaced at path, or removes
+// the file when the step created it.
+func restoreFile(path string, previous []byte, existed bool) {
+	if existed {
+		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+		_ = os.WriteFile(path, previous, 0644)
+		return
+	}
+	_ = os.Remove(path)
+}
+
+// syncApacheBackend manages the Apache backend idempotently by writing or
+// removing its vhost.
+func syncApacheBackend(opts VhostOpts, systemUser string) error {
+	if opts.Backend == "apache" && !opts.Suspended {
+		return writeApacheVhost(opts, systemUser)
+	}
+	return deleteApacheVhostIfExists(systemUser)
 }
 
 func Provision(domainName, phpVersion string) (*Result, error) {
@@ -2000,54 +2151,10 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 	}
 	home := tenantHomeRoot + "/" + systemUser
 
-	if !userExists(systemUser) {
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		out, err := systemCommand("useradd", "-m", "-d", home, "-s", "/usr/sbin/nologin", systemUser).CombinedOutput()
-		if err != nil && !strings.Contains(string(out), "already exists") {
-			return nil, fmt.Errorf("useradd: %s: %w", strings.TrimSpace(string(out)), err)
-		}
+	if err := createTenantAccount(systemUser, home); err != nil {
+		return nil, err
 	}
-
-	dirs := []string{"public_html", "logs", "tmp", "ssl", ".cron"}
-	for _, d := range dirs {
-		_ = os.MkdirAll(filepath.Join(home, d), 0750)
-	}
-
-	uid, gid, err := uidGid(systemUser)
-	if err == nil {
-		_ = filepath.Walk(home, func(p string, _ os.FileInfo, _ error) error {
-			// #nosec G122 -- operator provisioning of a tenant home tree, not tenant input; best-effort ownership fix.
-			_ = chown(p, uid, gid)
-			return nil
-		})
-	}
-
-	_ = filepath.Walk(filepath.Join(home, "public_html"), func(p string, info os.FileInfo, _ error) error {
-		if info == nil {
-			return nil
-		}
-		if info.IsDir() {
-			// #nosec G122 G302 -- operator provisioning of a tenant home tree, not tenant input; best-effort mode fix.
-			_ = os.Chmod(p, 0750)
-		} else {
-			// #nosec G122 G302 -- operator provisioning of a tenant home tree, not tenant input; best-effort mode fix.
-			_ = os.Chmod(p, 0644)
-		}
-		return nil
-	})
-	if err == nil {
-		hardenHomePerms(home, systemUser, uid, gid)
-	}
-
-	indexPath := filepath.Join(home, "public_html", "index.html")
-	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-	_ = os.WriteFile(indexPath, []byte(welcomeHTML(domainName)), 0644)
-	if err == nil {
-		_ = chown(indexPath, uid, gid)
-	}
-
-	// #nosec G204 G702 -- fixed binary (restorecon) with constant flag and internal home path (no shell); no tenant input.
-	_, _ = systemCommand("restorecon", "-R", home).CombinedOutput()
+	prepareTenantHome(domainName, systemUser, home)
 
 	// Write, validate, and activate the tenant PHP-FPM pool.
 	socket, _, err := writePoolValidated(systemUser, phpVersion)
@@ -2072,6 +2179,70 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 		PHPVersion: phpVersion,
 		PHPSocket:  socket,
 	}, nil
+}
+
+// createTenantAccount creates the tenant's Linux account unless it exists; an
+// account useradd reports as already existing is accepted.
+func createTenantAccount(systemUser, home string) error {
+	if userExists(systemUser) {
+		return nil
+	}
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+	out, err := systemCommand("useradd", "-m", "-d", home, "-s", "/usr/sbin/nologin", systemUser).CombinedOutput()
+	if err != nil && !strings.Contains(string(out), "already exists") {
+		return fmt.Errorf("useradd: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return nil
+}
+
+// prepareTenantHome creates the home's directories, hands the tree to the
+// tenant, sets the document root modes and isolation, writes the welcome page
+// and relabels the home. Every step is best effort.
+func prepareTenantHome(domainName, systemUser, home string) {
+	dirs := []string{"public_html", "logs", "tmp", "ssl", ".cron"}
+	for _, d := range dirs {
+		_ = os.MkdirAll(filepath.Join(home, d), 0750)
+	}
+
+	uid, gid, err := uidGid(systemUser)
+	if err == nil {
+		_ = filepath.Walk(home, func(p string, _ os.FileInfo, _ error) error {
+			// #nosec G122 -- operator provisioning of a tenant home tree, not tenant input; best-effort ownership fix.
+			_ = chown(p, uid, gid)
+			return nil
+		})
+	}
+
+	_ = filepath.Walk(filepath.Join(home, "public_html"), setDocumentRootMode)
+	if err == nil {
+		hardenHomePerms(home, systemUser, uid, gid)
+	}
+
+	indexPath := filepath.Join(home, "public_html", "index.html")
+	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+	_ = os.WriteFile(indexPath, []byte(welcomeHTML(domainName)), 0644)
+	if err == nil {
+		_ = chown(indexPath, uid, gid)
+	}
+
+	// #nosec G204 G702 -- fixed binary (restorecon) with constant flag and internal home path (no shell); no tenant input.
+	_, _ = systemCommand("restorecon", "-R", home).CombinedOutput()
+}
+
+// setDocumentRootMode gives a directory under the document root 0750 and a file
+// 0644.
+func setDocumentRootMode(p string, info os.FileInfo, _ error) error {
+	if info == nil {
+		return nil
+	}
+	if info.IsDir() {
+		// #nosec G122 G302 -- operator provisioning of a tenant home tree, not tenant input; best-effort mode fix.
+		_ = os.Chmod(p, 0750)
+	} else {
+		// #nosec G122 G302 -- operator provisioning of a tenant home tree, not tenant input; best-effort mode fix.
+		_ = os.Chmod(p, 0644)
+	}
+	return nil
 }
 
 // DeprovisionAddonDomain removes the host state an addon domain owns OUTSIDE the
@@ -2187,39 +2358,62 @@ func Deprovision(domainName, systemUser string) error {
 		log.Printf("deprovision %q: cannot tell whether the system user is shared, keeping it: %v", domainName, err)
 	}
 	if err != nil || len(siblings) > 0 {
-		if domainName != "" && ValidateDomain(domainName) == nil {
-			_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
-		}
-		_, _ = systemCommand("systemctl", "reload", "nginx").CombinedOutput()
-		purgeFastCGICache(domainName)
-		if err == nil {
-			log.Printf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
-				domainName, systemUser, len(siblings))
-		}
+		keepSharedSystemUser(domainName, systemUser, len(siblings), err)
 		return nil
 	}
 
 	cfgPath := nginxConfDir + "/dom_" + systemUser + ".conf"
 	_ = os.Remove(cfgPath)
-	subdomainVhosts, _ := filepath.Glob(nginxConfDir + "/sub_" + systemUser + "_*.conf")
-	for _, vhostPath := range subdomainVhosts {
-		_ = os.Remove(vhostPath)
-	}
-	TeardownTenantFPM(systemUser)
-	if domainName != "" && ValidateDomain(domainName) == nil {
-		_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
-	}
-	// Clean up per-domain WAF modsec confs (prevent orphans).
-	if reWafSK.MatchString(systemUser) {
-		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".conf"))
-		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".custom.conf"))
-	}
+	removeTenantHostConfig(domainName, systemUser)
 	_, _ = systemCommand("systemctl", "reload", "nginx").CombinedOutput()
 	purgeFastCGICache(domainName)
 
 	if !strings.HasPrefix(systemUser, "c_") {
 		return fmt.Errorf("security: refusing to delete a user without the c_ prefix")
 	}
+	removeTenantAccount(systemUser)
+	return nil
+}
+
+// keepSharedSystemUser removes only what belongs to the domain itself when its
+// system user still answers for another domain, or cannot be shown not to.
+func keepSharedSystemUser(domainName, systemUser string, siblings int, lookupErr error) {
+	removeDomainCertificates(domainName)
+	_, _ = systemCommand("systemctl", "reload", "nginx").CombinedOutput()
+	purgeFastCGICache(domainName)
+	if lookupErr == nil {
+		log.Printf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
+			domainName, systemUser, siblings)
+	}
+}
+
+// removeDomainCertificates removes the certificate directory of a domain whose
+// name is valid.
+func removeDomainCertificates(domainName string) {
+	if domainName != "" && ValidateDomain(domainName) == nil {
+		_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
+	}
+}
+
+// removeTenantHostConfig removes the tenant's subdomain vhosts, its own PHP-FPM
+// master, the domain's certificates and the per-domain WAF configuration.
+func removeTenantHostConfig(domainName, systemUser string) {
+	subdomainVhosts, _ := filepath.Glob(nginxConfDir + "/sub_" + systemUser + "_*.conf")
+	for _, vhostPath := range subdomainVhosts {
+		_ = os.Remove(vhostPath)
+	}
+	TeardownTenantFPM(systemUser)
+	removeDomainCertificates(domainName)
+	// Clean up per-domain WAF modsec confs (prevent orphans).
+	if reWafSK.MatchString(systemUser) {
+		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".conf"))
+		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".custom.conf"))
+	}
+}
+
+// removeTenantAccount deletes the tenant's crontabs and Linux account, with its
+// backups and PHP-FPM logs, and then its shared PHP-FPM pools.
+func removeTenantAccount(systemUser string) {
 	// userdel -r does not always remove the tenant crontab on AlmaLinux; drop it
 	// (and any suspended copy) explicitly so import rollback and normal domain
 	// deletion cannot leave orphaned jobs running.
@@ -2246,7 +2440,6 @@ func Deprovision(domainName, systemUser string) error {
 			_, _ = systemCommand("systemctl", "reload-or-restart", config.Service).CombinedOutput()
 		}
 	}
-	return nil
 }
 
 func SetPHPVersion(domainName, systemUser, newVersion, certPath, keyPath, sslSource, backend, webRoot string) (string, error) {
@@ -2356,15 +2549,11 @@ func EnableLetsEncrypt(domainName, systemUser, phpVersion, backend string) (cert
 	keyPath = filepath.Join(sslDir, domainName+".key")
 
 	// (1) Reuse-before-issue: skip a fresh issuance only when a valid real CA certificate exists.
-	if src, srcKey := reusableLetsEncryptCertificate(domainName, 30); src != "" {
-		if cp, kp, e := installToPKI(domainName, src, srcKey); e == nil {
-			if e := writeSSLVhost(domainName, systemUser, phpVersion, backend, cp, kp, "letsencrypt"); e != nil {
-				return "", "", IssueOutcome{}, e
-			}
-			removeHomeCertificate(systemUser, domainName)
-			log.Printf("ssl reuse: %s valid letsencrypt certificate found; fresh LE issuance skipped (rate-limit protection)", domainName)
-			return cp, kp, IssueOutcome{Real: true}, nil
+	if cp, kp, reused, e := reuseValidCertificate(domainName, systemUser, phpVersion, backend); reused {
+		if e != nil {
+			return "", "", IssueOutcome{}, e
 		}
+		return cp, kp, IssueOutcome{Real: true}, nil
 	}
 
 	// An apex that does not resolve cannot pass http-01, so calling acme.sh would
@@ -2384,20 +2573,6 @@ func EnableLetsEncrypt(domainName, systemUser, phpVersion, backend string) (cert
 	_ = os.MkdirAll("/var/www/_acme", 0755)
 	_, _ = tenantCommand("restorecon", "-R", "/var/www/_acme").CombinedOutput()
 
-	// --force removed: acme.sh does not re-issue when it already has a valid cert
-	// (rate-limit protection). It still renews inside the renewal window.
-	//
-	// www is added to the SAN only when DNS supports it (certSANHosts). If it is
-	// eligible yet issuance still fails (e.g. www regressed between the DNS probe
-	// and validation), retry apex-only before falling back to self-signed, because
-	// a www-only failure must not drop the apex to the fail-safe path.
-	buildIssueArgs := func(hosts []string) []string {
-		a := []string{"--issue", "--webroot", "/var/www/_acme"}
-		for _, host := range hosts {
-			a = append(a, "-d", host)
-		}
-		return append(a, "--keylength", "2048")
-	}
 	// Measure each name before asking the CA for it. Resolving here does not mean
 	// a name can answer http-01: a CDN in front, a filtered port 80, or another
 	// vhost claiming the name all resolve perfectly well and still fail
@@ -2418,20 +2593,83 @@ func EnableLetsEncrypt(domainName, systemUser, phpVersion, backend string) (cert
 			Skipped: skipped,
 		})
 	}
-	out, e := RunACMEIssue(buildIssueArgs(sanHosts)...)
+	if reason, failed := orderLetsEncryptCertificate(domainName, sanHosts); failed {
+		// FAIL-SAFE (no teardown): keep 443 alive with the existing/self-signed cert.
+		return sslFailSafe(domainName, systemUser, phpVersion, backend, reason.with(skipped))
+	}
+	if out, installed := installLetsEncryptCertificate(domainName, certPath, keyPath); !installed {
+		return sslFailSafe(domainName, systemUser, phpVersion, backend, sslReason{
+			Code:    sslReasonInstallFailed,
+			Detail:  summarizeSSLReason(out),
+			Skipped: skipped,
+		})
+	}
+	if err := serveLetsEncryptCertificate(domainName, systemUser, phpVersion, backend, sslDir, certPath, keyPath); err != nil {
+		return "", "", IssueOutcome{}, err
+	}
+	removeHomeCertificate(systemUser, domainName)
+	return certPath, keyPath, IssueOutcome{Real: true, Skipped: skipped}, nil
+}
+
+// reuseValidCertificate installs and serves a valid real certificate the acme.sh
+// store already holds. It reports whether one was installed; an error is a
+// render failure after the install.
+func reuseValidCertificate(domainName, systemUser, phpVersion, backend string) (string, string, bool, error) {
+	src, srcKey := reusableLetsEncryptCertificate(domainName, 30)
+	if src == "" {
+		return "", "", false, nil
+	}
+	cp, kp, e := installToPKI(domainName, src, srcKey)
+	if e != nil {
+		return "", "", false, nil
+	}
+	if e := writeSSLVhost(domainName, systemUser, phpVersion, backend, cp, kp, "letsencrypt"); e != nil {
+		return "", "", true, e
+	}
+	removeHomeCertificate(systemUser, domainName)
+	log.Printf("ssl reuse: %s valid letsencrypt certificate found; fresh LE issuance skipped (rate-limit protection)", domainName)
+	return cp, kp, true, nil
+}
+
+// letsEncryptIssueArgs are the acme.sh arguments that order a certificate for
+// hosts.
+//
+// --force removed: acme.sh does not re-issue when it already has a valid cert
+// (rate-limit protection). It still renews inside the renewal window.
+func letsEncryptIssueArgs(hosts []string) []string {
+	a := []string{"--issue", "--webroot", "/var/www/_acme"}
+	for _, host := range hosts {
+		a = append(a, "-d", host)
+	}
+	return append(a, "--keylength", "2048")
+}
+
+// orderLetsEncryptCertificate orders a certificate for sanHosts and returns the
+// classified failure when the order fails.
+//
+// www is added to the SAN only when DNS supports it (certSANHosts). If it is
+// eligible yet issuance still fails (e.g. www regressed between the DNS probe
+// and validation), retry apex-only before falling back to self-signed, because
+// a www-only failure must not drop the apex to the fail-safe path.
+func orderLetsEncryptCertificate(domainName string, sanHosts []string) (sslReason, bool) {
+	out, e := RunACMEIssue(letsEncryptIssueArgs(sanHosts)...)
 	// RENEW_SKIP means the store already holds a valid certificate for these hosts, so
 	// there is nothing to retry and nothing to fail over: fall through to install-cert and
 	// deploy what acme.sh already has. The reuse-before-issue check above only skips
 	// issuance above 30 days, so this window is reachable.
 	if e != nil && !IsACMERenewSkip(e) && len(sanHosts) > 1 {
 		log.Printf("acme issue with www failed for %s, retrying apex-only: %s", domainName, strings.TrimSpace(string(out)))
-		out, e = RunACMEIssue(buildIssueArgs([]string{domainName})...)
+		out, e = RunACMEIssue(letsEncryptIssueArgs([]string{domainName})...)
 	}
 	if e != nil && !IsACMERenewSkip(e) {
-		// FAIL-SAFE (no teardown): keep 443 alive with the existing/self-signed cert.
-		return sslFailSafe(domainName, systemUser, phpVersion, backend, classifySSLFailure(string(out)).with(skipped))
+		return classifySSLFailure(string(out)), true
 	}
+	return sslReason{}, false
+}
 
+// installLetsEncryptCertificate installs the ordered certificate at certPath and
+// keyPath with acme.sh install-cert, and returns acme.sh's output when it fails.
+func installLetsEncryptCertificate(domainName, certPath, keyPath string) (string, bool) {
 	// Install the certificate into the target paths with acme.sh install-cert.
 	insArgs := []string{
 		"--install-cert",
@@ -2442,20 +2680,18 @@ func EnableLetsEncrypt(domainName, systemUser, phpVersion, backend string) (cert
 		"--reloadcmd", "systemctl reload nginx",
 	}
 	if out, e := acmeCommand(insArgs...).CombinedOutput(); e != nil {
-		return sslFailSafe(domainName, systemUser, phpVersion, backend, sslReason{
-			Code:    sslReasonInstallFailed,
-			Detail:  summarizeSSLReason(string(out)),
-			Skipped: skipped,
-		})
+		return string(out), false
 	}
+	return "", true
+}
+
+// serveLetsEncryptCertificate hands the installed certificate to root and
+// renders the vhost onto it.
+func serveLetsEncryptCertificate(domainName, systemUser, phpVersion, backend, sslDir, certPath, keyPath string) error {
 	if err := applyCertificatePermissions(sslDir, certPath, keyPath); err != nil {
-		return "", "", IssueOutcome{}, err
+		return err
 	}
-	if e := writeSSLVhost(domainName, systemUser, phpVersion, backend, certPath, keyPath, "letsencrypt"); e != nil {
-		return "", "", IssueOutcome{}, e
-	}
-	removeHomeCertificate(systemUser, domainName)
-	return certPath, keyPath, IssueOutcome{Real: true, Skipped: skipped}, nil
+	return writeSSLVhost(domainName, systemUser, phpVersion, backend, certPath, keyPath, "letsencrypt")
 }
 
 // domainResolves reports whether a hostname has any address record. Refusing
@@ -2694,35 +2930,13 @@ func HealHomePerms() {
 	updated := 0
 	migrationSucceeded := aclAvailable()
 	for rows.Next() {
-		var systemUser string
-		if err := rows.Scan(&systemUser); err != nil {
-			// A dropped row is a tenant whose home permissions are never repaired,
-			// while the count reported at the end says the pass covered everything.
-			log.Printf("home permission heal: skipping an unreadable tenant row: %v", err)
-			continue
+		healed, succeeded := healTenantHome(rows, migrateExisting)
+		if healed {
+			updated++
 		}
-		// A stored name that fails the identifier rule is refused rather than
-		// dropped in silence, because every path below is built from it.
-		if !tenantUserPattern.MatchString(systemUser) {
-			log.Printf("home permission heal: refusing a tenant with an invalid system user")
-			continue
-		}
-		home := filepath.Join(tenantHomeRoot, systemUser)
-		info, err := os.Lstat(home)
-		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			continue
-		}
-		uid, gid, err := uidGid(systemUser)
-		if err != nil {
-			continue
-		}
-		if !hardenHomePerms(home, systemUser, uid, gid) {
+		if !succeeded {
 			migrationSucceeded = false
 		}
-		if migrateExisting && !hardenHomePermsRecursive(filepath.Join(home, "public_html"), systemUser) {
-			migrationSucceeded = false
-		}
-		updated++
 	}
 	if err := rows.Err(); err != nil {
 		log.Printf("heal tenant home permissions rows: %v", err)
@@ -2732,15 +2946,54 @@ func HealHomePerms() {
 		log.Printf("healed permissions for %d tenant homes", updated)
 	}
 	if migrateExisting && migrationSucceeded {
-		// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-		if err := os.MkdirAll(filepath.Dir(homeACLSentinel), 0755); err != nil {
-			log.Printf("heal tenant home permissions: could not create sentinel directory: %v", err)
-			return
-		}
-		// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-		if err := os.WriteFile(homeACLSentinel, []byte("done\n"), 0644); err != nil {
-			log.Printf("heal tenant home permissions: could not write sentinel: %v", err)
-		}
+		writeSentinel(homeACLSentinel, "heal tenant home permissions")
+	}
+}
+
+// healTenantHome reads one tenant row and isolates that tenant's home. It
+// reports whether a home was hardened, and whether nothing it did kept the ACL
+// migration from being recorded.
+func healTenantHome(rows *sql.Rows, migrateExisting bool) (healed, succeeded bool) {
+	var systemUser string
+	if err := rows.Scan(&systemUser); err != nil {
+		// A dropped row is a tenant whose home permissions are never repaired,
+		// while the count reported at the end says the pass covered everything.
+		log.Printf("home permission heal: skipping an unreadable tenant row: %v", err)
+		return false, true
+	}
+	// A stored name that fails the identifier rule is refused rather than
+	// dropped in silence, because every path below is built from it.
+	if !tenantUserPattern.MatchString(systemUser) {
+		log.Printf("home permission heal: refusing a tenant with an invalid system user")
+		return false, true
+	}
+	home := filepath.Join(tenantHomeRoot, systemUser)
+	info, err := os.Lstat(home)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return false, true
+	}
+	uid, gid, err := uidGid(systemUser)
+	if err != nil {
+		return false, true
+	}
+	succeeded = hardenHomePerms(home, systemUser, uid, gid)
+	if migrateExisting && !hardenHomePermsRecursive(filepath.Join(home, "public_html"), systemUser) {
+		succeeded = false
+	}
+	return true, succeeded
+}
+
+// writeSentinel records at path that a one-time repair went through for every
+// row, and logs a failure under logPrefix.
+func writeSentinel(path, logPrefix string) {
+	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		log.Printf("%s: could not create sentinel directory: %v", logPrefix, err)
+		return
+	}
+	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+	if err := os.WriteFile(path, []byte("done\n"), 0644); err != nil {
+		log.Printf("%s: could not write sentinel: %v", logPrefix, err)
 	}
 }
 
@@ -2875,6 +3128,21 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 	opts.BrowserCache = true
 	opts.BrowserCacheDays = 30
 
+	opts = withStoredNginxSettings(db, domainID, opts)
+	opts.MaxExecutionTime = storedMaxExecutionTime(db, domainID)
+	// Add protected-directory .htpasswd blocks regardless of whether nginx_settings has a row.
+	if pb := buildProtectedBlocks(db, domainID, 0, socket); pb != "" {
+		if opts.ExtraDirectives != "" {
+			opts.ExtraDirectives += "\n"
+		}
+		opts.ExtraDirectives += pb
+	}
+	return renderDomainVhost(opts, systemUser)
+}
+
+// withStoredNginxSettings applies the domain's nginx_settings row, when it has
+// one, over the defaults already in opts.
+func withStoredNginxSettings(db *sql.DB, domainID int64, opts VhostOpts) VhostOpts {
 	var b1, b2, b3, b4, b5, b6, b7, b8, bFC, bBC int
 	var maxAge, fastCgiCacheMinutes, browserCacheDays int
 	var extraDirectives, clientMaxBody string
@@ -2902,25 +3170,24 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 		opts.BrowserCache = bBC == 1
 		opts.BrowserCacheDays = browserCacheDays
 	}
-	// The FastCGI read timeout follows the domain's own max_execution_time, or
-	// nginx gives up before PHP does and the panel reports a limit no visitor
-	// ever reaches. A domain with no php_settings row gets the same default the
-	// panel shows it.
-	opts.MaxExecutionTime = phpdefaults.MaxExecutionTime
+	return opts
+}
+
+// storedMaxExecutionTime is the domain's own max_execution_time, or the panel
+// default when the domain has none.
+//
+// The FastCGI read timeout follows the domain's own max_execution_time, or
+// nginx gives up before PHP does and the panel reports a limit no visitor
+// ever reaches. A domain with no php_settings row gets the same default the
+// panel shows it.
+func storedMaxExecutionTime(db *sql.DB, domainID int64) int {
 	var maxExecutionTime int
 	if err := db.QueryRow(
 		`SELECT max_execution_time FROM php_settings WHERE domain_id=? AND subdomain_id=0`,
 		domainID).Scan(&maxExecutionTime); err == nil && maxExecutionTime > 0 {
-		opts.MaxExecutionTime = maxExecutionTime
+		return maxExecutionTime
 	}
-	// Add protected-directory .htpasswd blocks regardless of whether nginx_settings has a row.
-	if pb := buildProtectedBlocks(db, domainID, 0, socket); pb != "" {
-		if opts.ExtraDirectives != "" {
-			opts.ExtraDirectives += "\n"
-		}
-		opts.ExtraDirectives += pb
-	}
-	return renderDomainVhost(opts, systemUser)
+	return phpdefaults.MaxExecutionTime
 }
 
 // RerenderVhost resolves a domain's PHP socket and re-renders its vhost.
@@ -3062,20 +3329,36 @@ func healVhostsOnStartup() {
 		return
 	}
 
+	domains, ok := readHardeningDomains()
+	if !ok {
+		return
+	}
+
+	failed := 0
+	for _, item := range domains {
+		if !hardenDomainVhost(item) {
+			failed++
+		}
+	}
+	if failed != 0 {
+		log.Printf("vhost hardening: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
+		return
+	}
+	writeSentinel(vhostHardenSentinel, "vhost hardening")
+}
+
+// readHardeningDomains lists every domain for the hardening sweep. A list with
+// an unreadable row or cut short is refused, so the sweep runs again next time.
+func readHardeningDomains() ([]tenantFPMDomain, bool) {
 	rows, err := packageDB.Query(`SELECT id, system_user, php_version FROM domains`)
 	if err != nil {
 		log.Printf("vhost hardening: could not list domains: %v", err)
-		return
+		return nil, false
 	}
-	type domain struct {
-		id         int64
-		systemUser string
-		phpVersion string
-	}
-	var domains []domain
+	var domains []tenantFPMDomain
 	rowReadFailed := false
 	for rows.Next() {
-		var item domain
+		var item tenantFPMDomain
 		if err := rows.Scan(&item.id, &item.systemUser, &item.phpVersion); err != nil {
 			log.Printf("vhost hardening: could not read domain row: %v", err)
 			rowReadFailed = true
@@ -3087,57 +3370,49 @@ func healVhostsOnStartup() {
 	_ = rows.Close()
 	if rowsErr != nil {
 		log.Printf("vhost hardening: domain iteration failed: %v", rowsErr)
-		return
+		return nil, false
 	}
 	if rowReadFailed {
 		log.Printf("vhost hardening: at least one domain row could not be read, retry scheduled for next startup")
-		return
+		return nil, false
 	}
-
-	failed := 0
-	for _, item := range domains {
-		domainFailed := false
-		var socket string
-		if TenantFPMActive(item.systemUser) {
-			socket = tenantSocket(item.systemUser)
-		} else {
-			resolved, _, err := writePoolValidated(item.systemUser, item.phpVersion)
-			if err != nil {
-				log.Printf("vhost hardening: %s PHP pool update failed: %v", item.systemUser, err)
-				domainFailed = true
-				if fallback, resolveErr := sharedSocketPath(item.systemUser, item.phpVersion); resolveErr == nil {
-					resolved = fallback
-				}
-			}
-			socket = resolved
-			if socket == "" {
-				socket = "/run/php-fpm/" + item.systemUser + ".sock"
-			}
-		}
-		if err := ApplyVhostForDomain(packageDB, item.id, socket, item.phpVersion); err != nil {
-			log.Printf("vhost hardening: %s vhost update failed: %v", item.systemUser, err)
-			domainFailed = true
-		}
-		if domainFailed {
-			failed++
-		}
-	}
-	if failed != 0 {
-		log.Printf("vhost hardening: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
-		return
-	}
-
-	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-	if err := os.MkdirAll(filepath.Dir(vhostHardenSentinel), 0755); err != nil {
-		log.Printf("vhost hardening: could not create sentinel directory: %v", err)
-		return
-	}
-	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-	if err := os.WriteFile(vhostHardenSentinel, []byte("done\n"), 0644); err != nil {
-		log.Printf("vhost hardening: could not write sentinel: %v", err)
-	}
+	return domains, true
 }
 
+// hardenDomainVhost rewrites one domain's shared pool, when it runs on the
+// shared master, and its vhost. It reports whether both went through.
+func hardenDomainVhost(item tenantFPMDomain) bool {
+	domainFailed := false
+	var socket string
+	if TenantFPMActive(item.systemUser) {
+		socket = tenantSocket(item.systemUser)
+	} else {
+		socket, domainFailed = rewriteSharedPool(item)
+	}
+	if err := ApplyVhostForDomain(packageDB, item.id, socket, item.phpVersion); err != nil {
+		log.Printf("vhost hardening: %s vhost update failed: %v", item.systemUser, err)
+		domainFailed = true
+	}
+	return !domainFailed
+}
+
+// rewriteSharedPool rewrites a shared-master tenant's pool. It returns the socket
+// the vhost is rendered with and whether the pool rewrite failed.
+func rewriteSharedPool(item tenantFPMDomain) (string, bool) {
+	failed := false
+	resolved, _, err := writePoolValidated(item.systemUser, item.phpVersion)
+	if err != nil {
+		log.Printf("vhost hardening: %s PHP pool update failed: %v", item.systemUser, err)
+		failed = true
+		if fallback, resolveErr := sharedSocketPath(item.systemUser, item.phpVersion); resolveErr == nil {
+			resolved = fallback
+		}
+	}
+	if resolved == "" {
+		resolved = "/run/php-fpm/" + item.systemUser + ".sock"
+	}
+	return resolved, failed
+}
 func healPanelVhostHeadersOnStartup() {
 	original, err := os.ReadFile(panelVhostPath)
 	if err != nil {
@@ -3145,68 +3420,85 @@ func healPanelVhostHeadersOnStartup() {
 	}
 	content := string(original)
 	if strings.Contains(content, panelSecSentinel) {
-		updatedServerName := strings.Replace(content, "server_name _;", "server_name _servika_panel_;", 1)
-		if updatedServerName != content {
-			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-			if err := os.WriteFile(panelVhostPath, []byte(updatedServerName), 0644); err != nil {
-				log.Printf("panel security repair: could not update panel server name: %v", err)
-				return
-			}
-			if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
-				// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-				_ = os.WriteFile(panelVhostPath, original, 0644)
-				log.Printf("panel security repair: server name nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
-				return
-			}
-			if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-				// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-				_ = os.WriteFile(panelVhostPath, original, 0644)
-				log.Printf("panel security repair: server name nginx reload failed, vhost restored: %s", strings.TrimSpace(string(output)))
-				return
-			}
-			log.Printf("panel security repair: panel server name updated + nginx reloaded")
-			return
-		}
-		// Older v2 installs hardened the panel before the domain-preview iframe
-		// needed frame-src. Retrofit it even when the sentinel is present. The
-		// match is scoped to the strict SPA CSP (unique `script-src 'self';`) so
-		// the relaxed phpMyAdmin/Roundcube CSPs are left untouched; ReplaceAll
-		// covers both the server-level and `location /` copies at once.
-		const oldStrictCSP = "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'self'"
-		const newStrictCSP = "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src https: http:; frame-ancestors 'self'"
-		patched := strings.ReplaceAll(content, oldStrictCSP, newStrictCSP)
-		// object-src falls back to default-src, which is 'self', so a same-origin
-		// upload served back to the browser could still be embedded as a plugin
-		// object. Nothing the panel or phpMyAdmin serves needs one.
-		//
-		// The anchor covers the strict and the relaxed copies alike, and the
-		// replacement consumes it, so re-running finds nothing left to do.
-		const beforeObjectSrc = "frame-ancestors 'self'; base-uri 'self'"
-		const afterObjectSrc = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
-		patched = strings.ReplaceAll(patched, beforeObjectSrc, afterObjectSrc)
-		if patched == content {
-			return // already current
-		}
-		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-		if err := os.WriteFile(panelVhostPath, []byte(patched), 0644); err != nil {
-			log.Printf("panel security repair: could not update CSP: %v", err)
-			return
-		}
-		if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
-			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-			_ = os.WriteFile(panelVhostPath, original, 0644)
-			log.Printf("panel security repair: CSP nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
-			return
-		}
-		if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
-			_ = os.WriteFile(panelVhostPath, original, 0644)
-			log.Printf("panel security repair: CSP nginx reload failed, vhost restored: %s", strings.TrimSpace(string(output)))
-			return
-		}
-		log.Printf("panel security repair: CSP updated for the domain preview + nginx reloaded")
+		repairHardenedPanelVhost(content, original)
 		return
 	}
+	addPanelSecurityHeaders(content, original)
+}
+
+// panelVhostRepair names one repair of a hardened panel vhost in the lines it
+// logs.
+type panelVhostRepair struct {
+	writeFailure string
+	step         string
+	success      string
+}
+
+// repairHardenedPanelVhost gives a hardened panel vhost the panel's own server
+// name, or else retrofits frame-src and object-src into its policies.
+func repairHardenedPanelVhost(content string, original []byte) {
+	updatedServerName := strings.Replace(content, "server_name _;", "server_name _servika_panel_;", 1)
+	if updatedServerName != content {
+		applyPanelVhostRepair(updatedServerName, original, panelVhostRepair{
+			writeFailure: "could not update panel server name",
+			step:         "server name",
+			success:      "panel server name updated + nginx reloaded",
+		})
+		return
+	}
+	// Older v2 installs hardened the panel before the domain-preview iframe
+	// needed frame-src. Retrofit it even when the sentinel is present. The
+	// match is scoped to the strict SPA CSP (unique `script-src 'self';`) so
+	// the relaxed phpMyAdmin/Roundcube CSPs are left untouched; ReplaceAll
+	// covers both the server-level and `location /` copies at once.
+	const oldStrictCSP = "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'self'"
+	const newStrictCSP = "script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-src https: http:; frame-ancestors 'self'"
+	patched := strings.ReplaceAll(content, oldStrictCSP, newStrictCSP)
+	// object-src falls back to default-src, which is 'self', so a same-origin
+	// upload served back to the browser could still be embedded as a plugin
+	// object. Nothing the panel or phpMyAdmin serves needs one.
+	//
+	// The anchor covers the strict and the relaxed copies alike, and the
+	// replacement consumes it, so re-running finds nothing left to do.
+	const beforeObjectSrc = "frame-ancestors 'self'; base-uri 'self'"
+	const afterObjectSrc = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+	patched = strings.ReplaceAll(patched, beforeObjectSrc, afterObjectSrc)
+	if patched == content {
+		return // already current
+	}
+	applyPanelVhostRepair(patched, original, panelVhostRepair{
+		writeFailure: "could not update CSP",
+		step:         "CSP",
+		success:      "CSP updated for the domain preview + nginx reloaded",
+	})
+}
+
+// applyPanelVhostRepair writes a repaired panel vhost, validates and reloads it,
+// and puts the original back when either fails.
+func applyPanelVhostRepair(updated string, original []byte, repair panelVhostRepair) {
+	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
+		log.Printf("panel security repair: %s: %v", repair.writeFailure, err)
+		return
+	}
+	if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
+		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+		_ = os.WriteFile(panelVhostPath, original, 0644)
+		log.Printf("panel security repair: %s nginx -t failed, vhost restored: %s", repair.step, strings.TrimSpace(string(output)))
+		return
+	}
+	if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
+		_ = os.WriteFile(panelVhostPath, original, 0644)
+		log.Printf("panel security repair: %s nginx reload failed, vhost restored: %s", repair.step, strings.TrimSpace(string(output)))
+		return
+	}
+	log.Printf("panel security repair: %s", repair.success)
+}
+
+// addPanelSecurityHeaders inserts the security header block after the panel's
+// server name of a vhost never hardened, then validates and reloads nginx.
+func addPanelSecurityHeaders(content string, original []byte) {
 	anchor := "server_name _servika_panel_;"
 	anchorIndex := strings.Index(content, anchor)
 	if anchorIndex < 0 {

@@ -54,25 +54,55 @@ func healTLSVhostBlocksOnStartup() {
 		required = append(required, webmailMarker)
 	}
 
+	domains, ok := readBlockRepairDomains()
+	if !ok {
+		return
+	}
+	var outcomes [blockRepairFailed + 1]int
+	for _, item := range domains {
+		outcomes[repairTLSVhostBlocks(item, required)]++
+	}
+	if updated := outcomes[blockRepairUpdated]; updated > 0 {
+		log.Printf("vhost block repair: %d domain vhosts brought up to date", updated)
+	}
+	if failed := outcomes[blockRepairFailed]; failed > 0 {
+		log.Printf("vhost block repair: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
+	}
+}
+
+// blockRepairDomain is one domain whose vhost the block repair inspects.
+type blockRepairDomain struct {
+	id         int64
+	systemUser string
+	domainName string
+	parentID   sql.NullInt64
+	certPath   string
+	keyPath    string
+}
+
+// blockRepairOutcome is what the block repair did with one domain.
+type blockRepairOutcome int
+
+const (
+	blockRepairUnchanged blockRepairOutcome = iota
+	blockRepairUpdated
+	blockRepairFailed
+)
+
+// readBlockRepairDomains lists every domain. A row that cannot be read is
+// skipped; a list that cannot be read to the end is refused.
+func readBlockRepairDomains() ([]blockRepairDomain, bool) {
 	rows, err := packageDB.Query(
 		`SELECT id, system_user, domain_name, parent_domain_id,
 		        COALESCE(cert_path,''), COALESCE(key_path,'')
 		   FROM domains ORDER BY id`)
 	if err != nil {
 		log.Printf("vhost block repair: could not list domains: %v", err)
-		return
+		return nil, false
 	}
-	type domain struct {
-		id         int64
-		systemUser string
-		domainName string
-		parentID   sql.NullInt64
-		certPath   string
-		keyPath    string
-	}
-	var domains []domain
+	var domains []blockRepairDomain
 	for rows.Next() {
-		var item domain
+		var item blockRepairDomain
 		if err := rows.Scan(&item.id, &item.systemUser, &item.domainName, &item.parentID,
 			&item.certPath, &item.keyPath); err != nil {
 			log.Printf("vhost block repair: could not read domain row: %v", err)
@@ -84,50 +114,45 @@ func healTLSVhostBlocksOnStartup() {
 	_ = rows.Close()
 	if rowsErr != nil {
 		log.Printf("vhost block repair: domain iteration failed: %v", rowsErr)
-		return
+		return nil, false
 	}
+	return domains, true
+}
 
-	updated, failed := 0, 0
-	for _, item := range domains {
-		configPath := nginxConfDir + "/dom_" + item.systemUser + ".conf"
-		if item.parentID.Valid {
-			configPath = addonVhostConfigPath(item.systemUser, item.domainName)
-		}
-		// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-		content, err := os.ReadFile(configPath)
-		if err != nil {
-			continue // no vhost yet; the first render will carry the blocks
-		}
-		body := string(content)
-		// Both blocks are rendered onto the TLS vhost only, and only into the
-		// ordinary shape. Anything else can never gain them.
-		if !strings.Contains(body, "listen 443 ssl") || !strings.Contains(body, normalVhostMarker) {
-			continue
-		}
-		// The auto-configuration hostnames are conditional on the certificate
-		// naming them, so the marker is only expected where that holds. Adding it
-		// to the shared list would re-render every domain whose certificate omits
-		// the names on every boot, and never satisfy the check.
-		expected := required
-		if certValid(item.certPath, item.keyPath, 0, discoverySANHosts(item.domainName)...) {
-			expected = append(append([]string{}, required...), discoveryMarker)
-		}
-		if !missingAnyBlock(body, expected) {
-			continue
-		}
-		if err := rerenderVhost(packageDB, item.id); err != nil {
-			log.Printf("vhost block repair: %s vhost update failed: %v", item.domainName, err)
-			failed++
-			continue
-		}
-		updated++
+// repairTLSVhostBlocks re-renders one domain's vhost when it is an ordinary TLS
+// vhost missing a block it is expected to carry.
+func repairTLSVhostBlocks(item blockRepairDomain, required []string) blockRepairOutcome {
+	configPath := nginxConfDir + "/dom_" + item.systemUser + ".conf"
+	if item.parentID.Valid {
+		configPath = addonVhostConfigPath(item.systemUser, item.domainName)
 	}
-	if updated > 0 {
-		log.Printf("vhost block repair: %d domain vhosts brought up to date", updated)
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return blockRepairUnchanged // no vhost yet; the first render will carry the blocks
 	}
-	if failed > 0 {
-		log.Printf("vhost block repair: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
+	body := string(content)
+	// Both blocks are rendered onto the TLS vhost only, and only into the
+	// ordinary shape. Anything else can never gain them.
+	if !strings.Contains(body, "listen 443 ssl") || !strings.Contains(body, normalVhostMarker) {
+		return blockRepairUnchanged
 	}
+	// The auto-configuration hostnames are conditional on the certificate
+	// naming them, so the marker is only expected where that holds. Adding it
+	// to the shared list would re-render every domain whose certificate omits
+	// the names on every boot, and never satisfy the check.
+	expected := required
+	if certValid(item.certPath, item.keyPath, 0, discoverySANHosts(item.domainName)...) {
+		expected = append(append([]string{}, required...), discoveryMarker)
+	}
+	if !missingAnyBlock(body, expected) {
+		return blockRepairUnchanged
+	}
+	if err := rerenderVhost(packageDB, item.id); err != nil {
+		log.Printf("vhost block repair: %s vhost update failed: %v", item.domainName, err)
+		return blockRepairFailed
+	}
+	return blockRepairUpdated
 }
 
 // missingAnyBlock reports whether the vhost body lacks at least one of the

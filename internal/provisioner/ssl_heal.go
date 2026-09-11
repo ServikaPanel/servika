@@ -387,18 +387,47 @@ func HealSSLVhost443OnStartup() {
 	if packageDB == nil {
 		return
 	}
+	list, err := readSSLHealDomains()
+	if err != nil || len(list) == 0 {
+		return
+	}
+	var outcomes [sslHealFailed + 1]int
+	for _, x := range list {
+		outcomes[healSSLVhost443(x)]++
+	}
+	repaired, failed, healthy := outcomes[sslHealRepaired], outcomes[sslHealFailed], outcomes[sslHealHealthy]
+	if repaired > 0 || failed > 0 {
+		log.Printf("ssl 443 heal: %d repaired / %d failed / %d healthy (%d SSL domains total)", repaired, failed, healthy, len(list))
+	}
+}
+
+// sslHealDomain is one SSL-enabled domain the 443 heal inspects.
+type sslHealDomain struct {
+	id                                     int64
+	domainName, systemUser, php, cert, key string
+}
+
+// sslHealOutcome is what the 443 heal did with one domain.
+type sslHealOutcome int
+
+const (
+	sslHealSkipped sslHealOutcome = iota
+	sslHealHealthy
+	sslHealRepaired
+	sslHealFailed
+)
+
+// readSSLHealDomains lists the SSL-enabled domains. A row that cannot be read is
+// left out, and a list cut short is logged and returned as far as it was read.
+func readSSLHealDomains() ([]sslHealDomain, error) {
 	rows, err := packageDB.Query(`SELECT id, domain_name, system_user, COALESCE(php_version,'8.3'), COALESCE(cert_path,''), COALESCE(key_path,'')
 		FROM domains WHERE ssl_enabled=1`)
 	if err != nil {
-		return
+		return nil, err
 	}
-	type dom struct {
-		id                                     int64
-		domainName, systemUser, php, cert, key string
-	}
-	var list []dom
+	var list []sslHealDomain
 	for rows.Next() {
-		var x dom
+		var x sslHealDomain
 		if e := rows.Scan(&x.id, &x.domainName, &x.systemUser, &x.php, &x.cert, &x.key); e == nil {
 			list = append(list, x)
 		}
@@ -409,68 +438,85 @@ func HealSSLVhost443OnStartup() {
 		log.Printf("ssl heal: could not read the domain list: %v", err)
 	}
 	_ = rows.Close()
-	if len(list) == 0 {
-		return
-	}
-	var repaired, failed, healthy int
-	for _, x := range list {
-		if x.domainName == "" || ValidateDomain(x.domainName) != nil {
-			continue // path safety
-		}
-		// Addon domains keep their 443 block in their own conf; reading the parent's
-		// dom_<sk>.conf here would misjudge an SSL-enabled addon's health.
-		vpath := nginxConfDir + "/dom_" + x.systemUser + ".conf"
-		if _, isAddon := addonDomainInfo(x.domainName); isAddon {
-			vpath = addonVhostConfigPath(x.systemUser, x.domainName)
-		}
-		// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-		data, rerr := os.ReadFile(vpath)
-		has443 := rerr == nil && strings.Contains(string(data), "listen 443")
-		certPresent := certFileExists(x.cert) && certFileExists(x.key)
-		if has443 && certPresent {
-			healthy++
-			continue // healthy — leave untouched
-		}
+	return list, nil
+}
 
-		useCert, useKey := x.cert, x.key
-		// When the certificate files are missing, find/generate the best one and install it.
-		if !certPresent {
-			src, srcKey, _ := bestCertificate(x.domainName, 0)
-			if src == "" {
-				cp, kp, e := generateSelfSigned(x.domainName)
-				if e != nil {
-					log.Printf("ssl 443 heal: %s cert missing + self-signed generation failed: %v", x.domainName, e)
-					failed++
-					continue
-				}
-				src, srcKey = cp, kp
-			}
-			cp, kp, e := installToPKI(x.domainName, src, srcKey)
-			if e != nil {
-				log.Printf("ssl 443 heal: %s certificate install into /etc/pki failed: %v", x.domainName, e)
-				failed++
-				continue
-			}
-			useCert, useKey = cp, kp
-		}
-		// Repoint the DB (when changed) — applyVhostForDomain reads the cert from the DB.
-		if useCert != x.cert || useKey != x.key {
-			if _, e := packageDB.Exec(`UPDATE domains SET cert_path=?, key_path=? WHERE id=?`, useCert, useKey, x.id); e != nil {
-				log.Printf("ssl 443 heal: %s DB repoint failed: %v", x.domainName, e)
-				failed++
-				continue
-			}
-		}
-		socket, _ := PHPSocketFor(x.systemUser, x.php)
-		if e := applyVhostForDomain(packageDB, x.id, socket, x.php, nil, nil); e != nil {
-			log.Printf("ssl 443 heal: %s vhost 443 re-render failed (previous state preserved): %v", x.domainName, e)
-			failed++
-			continue
-		}
-		repaired++
-		log.Printf("ssl 443 heal: %s 443 block + certificate repaired", x.domainName)
+// healSSLVhost443 repairs one domain whose vhost lost its 443 block or whose
+// certificate files are gone, and leaves a healthy one untouched.
+func healSSLVhost443(x sslHealDomain) sslHealOutcome {
+	if x.domainName == "" || ValidateDomain(x.domainName) != nil {
+		return sslHealSkipped // path safety
 	}
-	if repaired > 0 || failed > 0 {
-		log.Printf("ssl 443 heal: %d repaired / %d failed / %d healthy (%d SSL domains total)", repaired, failed, healthy, len(list))
+	has443 := sslVhostHas443(x)
+	certPresent := certFileExists(x.cert) && certFileExists(x.key)
+	if has443 && certPresent {
+		return sslHealHealthy // healthy — leave untouched
 	}
+
+	useCert, useKey := x.cert, x.key
+	// When the certificate files are missing, find/generate the best one and install it.
+	if !certPresent {
+		cp, kp, ok := installBestCertificate(x.domainName)
+		if !ok {
+			return sslHealFailed
+		}
+		useCert, useKey = cp, kp
+	}
+	if !repointSSLCertificate(x, useCert, useKey) {
+		return sslHealFailed
+	}
+	socket, _ := PHPSocketFor(x.systemUser, x.php)
+	if e := applyVhostForDomain(packageDB, x.id, socket, x.php, nil, nil); e != nil {
+		log.Printf("ssl 443 heal: %s vhost 443 re-render failed (previous state preserved): %v", x.domainName, e)
+		return sslHealFailed
+	}
+	log.Printf("ssl 443 heal: %s 443 block + certificate repaired", x.domainName)
+	return sslHealRepaired
+}
+
+// sslVhostHas443 reports whether the domain's own vhost carries a 443 block.
+func sslVhostHas443(x sslHealDomain) bool {
+	// Addon domains keep their 443 block in their own conf; reading the parent's
+	// dom_<sk>.conf here would misjudge an SSL-enabled addon's health.
+	vpath := nginxConfDir + "/dom_" + x.systemUser + ".conf"
+	if _, isAddon := addonDomainInfo(x.domainName); isAddon {
+		vpath = addonVhostConfigPath(x.systemUser, x.domainName)
+	}
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	data, rerr := os.ReadFile(vpath)
+	return rerr == nil && strings.Contains(string(data), "listen 443")
+}
+
+// installBestCertificate puts the best certificate for a domain into system
+// storage, generating a self-signed one when none exists.
+func installBestCertificate(domainName string) (string, string, bool) {
+	src, srcKey, _ := bestCertificate(domainName, 0)
+	if src == "" {
+		cp, kp, e := generateSelfSigned(domainName)
+		if e != nil {
+			log.Printf("ssl 443 heal: %s cert missing + self-signed generation failed: %v", domainName, e)
+			return "", "", false
+		}
+		src, srcKey = cp, kp
+	}
+	cp, kp, e := installToPKI(domainName, src, srcKey)
+	if e != nil {
+		log.Printf("ssl 443 heal: %s certificate install into /etc/pki failed: %v", domainName, e)
+		return "", "", false
+	}
+	return cp, kp, true
+}
+
+// repointSSLCertificate records a changed certificate on the domain row, because
+// applyVhostForDomain reads the certificate from the database.
+func repointSSLCertificate(x sslHealDomain, useCert, useKey string) bool {
+	// Repoint the DB (when changed) — applyVhostForDomain reads the cert from the DB.
+	if useCert == x.cert && useKey == x.key {
+		return true
+	}
+	if _, e := packageDB.Exec(`UPDATE domains SET cert_path=?, key_path=? WHERE id=?`, useCert, useKey, x.id); e != nil {
+		log.Printf("ssl 443 heal: %s DB repoint failed: %v", x.domainName, e)
+		return false
+	}
+	return true
 }

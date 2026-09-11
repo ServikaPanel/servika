@@ -77,20 +77,8 @@ func WAFEffective(db *sql.DB, sk string) (active bool, engine string, paranoia i
 	if dEn.Valid {
 		enabled = int(dEn.Int64)
 	}
-	mode := strings.ToLower(strings.TrimSpace(pMode))
-	if dMode.Valid && strings.TrimSpace(dMode.String) != "" {
-		mode = strings.ToLower(strings.TrimSpace(dMode.String))
-	}
-	pl := pPL
-	if dPL.Valid && dPL.Int64 > 0 {
-		pl = int(dPL.Int64)
-	}
-	if pl < 1 {
-		pl = 1
-	}
-	if pl > 4 {
-		pl = 4
-	}
+	mode := wafMode(dMode, pMode)
+	pl := wafParanoia(dPL, pPL)
 	if enabled != 1 || mode == "off" || mode == "" {
 		return false, "", pl
 	}
@@ -99,6 +87,26 @@ func WAFEffective(db *sql.DB, sk string) (active bool, engine string, paranoia i
 		engine = "DetectionOnly"
 	}
 	return true, engine, pl
+}
+
+// wafMode is the domain's WAF mode when it states one, otherwise the plan's, in
+// lower case.
+func wafMode(domainMode sql.NullString, planMode string) string {
+	mode := strings.ToLower(strings.TrimSpace(planMode))
+	if domainMode.Valid && strings.TrimSpace(domainMode.String) != "" {
+		mode = strings.ToLower(strings.TrimSpace(domainMode.String))
+	}
+	return mode
+}
+
+// wafParanoia is the domain's paranoia level when it states one above zero,
+// otherwise the plan's, clamped to 1..4.
+func wafParanoia(domainLevel sql.NullInt64, planLevel int) int {
+	pl := planLevel
+	if domainLevel.Valid && domainLevel.Int64 > 0 {
+		pl = int(domainLevel.Int64)
+	}
+	return min(max(pl, 1), 4)
 }
 
 // wafDomainConfWrite generates /etc/nginx/modsec/domains/<sk>.conf (engine + paranoia).
@@ -193,23 +201,8 @@ func HealWAFOnStartup() {
 	defer func() { _ = rows.Close() }()
 	var activeCount int
 	for rows.Next() {
-		var sk string
-		if err := rows.Scan(&sk); err != nil {
-			// A dropped row is a tenant whose WAF configuration is never written and
-			// who is missing from the count reported below.
-			log.Printf("waf heal: skipping an unreadable domain row: %v", err)
-			continue
-		}
-		active, engine, paranoia := WAFEffective(packageDB, sk)
-		if !active {
-			continue
-		}
-		activeCount++
-		if !module {
-			continue // graceful: vhost render already skips WAF
-		}
-		if err := wafDomainConfWrite(sk, engine, paranoia); err != nil {
-			log.Printf("waf heal: %s conf write: %v", sk, err)
+		if refreshTenantWAF(rows, module) {
+			activeCount++
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -223,4 +216,28 @@ func HealWAFOnStartup() {
 	} else {
 		log.Printf("waf heal: module=%v, WAF-enabled domains=%d", module, activeCount)
 	}
+}
+
+// refreshTenantWAF reads one tenant row and refreshes the tenant's ModSecurity
+// configuration when its WAF is active and the module is loaded. It reports
+// whether the tenant's WAF is active.
+func refreshTenantWAF(rows *sql.Rows, module bool) bool {
+	var sk string
+	if err := rows.Scan(&sk); err != nil {
+		// A dropped row is a tenant whose WAF configuration is never written and
+		// who is missing from the count reported below.
+		log.Printf("waf heal: skipping an unreadable domain row: %v", err)
+		return false
+	}
+	active, engine, paranoia := WAFEffective(packageDB, sk)
+	if !active {
+		return false
+	}
+	if !module {
+		return true // graceful: vhost render already skips WAF
+	}
+	if err := wafDomainConfWrite(sk, engine, paranoia); err != nil {
+		log.Printf("waf heal: %s conf write: %v", sk, err)
+	}
+	return true
 }

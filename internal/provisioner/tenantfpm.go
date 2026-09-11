@@ -594,37 +594,74 @@ func waitForSocket(path string, timeout time.Duration) bool {
 
 // EnableTenantFPM moves a domain to an isolated PHP-FPM master service.
 func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) (string, error) {
+	config, phpVersion, err := tenantFPMConfig(systemUser, phpVersion)
+	if err != nil {
+		return "", err
+	}
+
+	firstInstall := !TenantFPMActive(systemUser)
+	if err := writeTenantMasterConfig(db, domainID, systemUser, config); err != nil {
+		return "", err
+	}
+	if err := installTenantUnit(db, domainID, systemUser, phpVersion, config); err != nil {
+		return "", err
+	}
+	if firstInstall {
+		if err := setSharedPoolAside(db, domainID, systemUser, phpVersion, config); err != nil {
+			return "", err
+		}
+	}
+	socket, err := startTenantMaster(db, domainID, systemUser, phpVersion)
+	if err != nil {
+		return "", err
+	}
+	if db != nil && domainID > 0 {
+		if err := ApplyVhostForDomain(db, domainID, socket, phpVersion); err != nil {
+			_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
+			return "", fmt.Errorf("render tenant nginx virtual host: %w", err)
+		}
+	}
+	return socket, nil
+}
+
+// tenantFPMConfig refuses a tenant master that cannot run, and returns the PHP
+// configuration it runs on and the normalized version.
+func tenantFPMConfig(systemUser, phpVersion string) (phpConfig, string, error) {
 	if !tenantUserPattern.MatchString(systemUser) {
-		return "", fmt.Errorf("invalid system user: %q", systemUser)
+		return phpConfig{}, "", fmt.Errorf("invalid system user: %q", systemUser)
 	}
 	phpVersion = normalizePHP(phpVersion)
 	config := phpMap[phpVersion]
 	if config.FPMBin == "" {
-		return "", fmt.Errorf("PHP-FPM binary is undefined for %s", phpVersion)
+		return phpConfig{}, "", fmt.Errorf("PHP-FPM binary is undefined for %s", phpVersion)
 	}
 	if _, err := os.Stat(config.FPMBin); err != nil {
-		return "", fmt.Errorf("PHP-FPM binary is unavailable for %s: %w", phpVersion, err)
+		return phpConfig{}, "", fmt.Errorf("PHP-FPM binary is unavailable for %s: %w", phpVersion, err)
 	}
 	if _, err := os.Stat(filepath.Join(tenantHomeRoot, systemUser)); err != nil {
-		return "", fmt.Errorf("tenant home is unavailable: %w", err)
+		return phpConfig{}, "", fmt.Errorf("tenant home is unavailable: %w", err)
 	}
+	return config, phpVersion, nil
+}
 
-	firstInstall := !TenantFPMActive(systemUser)
+// writeTenantMasterConfig writes the tenant's pool and global configuration and
+// validates them; a configuration php-fpm refuses puts the previous pool back.
+func writeTenantMasterConfig(db *sql.DB, domainID int64, systemUser string, config phpConfig) error {
 	configDir := tenantCfgDir(systemUser)
 	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return "", fmt.Errorf("create tenant configuration directory: %w", err)
+		return fmt.Errorf("create tenant configuration directory: %w", err)
 	}
 	// 0700, unlike the config and pool directories: this one holds whatever the
 	// tenant's PHP printed when it died, which routinely includes the contents of
 	// the application's own configuration. Refusing here rather than starting a
 	// master that cannot open its error log, which php-fpm treats as fatal.
 	if err := EnsureTenantFPMLogDir(); err != nil {
-		return "", err
+		return err
 	}
 
 	if err := migrateTenantPoolLayout(systemUser); err != nil {
-		return "", fmt.Errorf("migrate tenant pool layout: %w", err)
+		return fmt.Errorf("migrate tenant pool layout: %w", err)
 	}
 	poolPath := tenantMainPoolPath(systemUser)
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
@@ -632,12 +669,12 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 	WriteDebugShim(db, systemUser, domainID)
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(poolPath, []byte(renderTenantPool(db, systemUser, domainID)), 0644); err != nil {
-		return "", fmt.Errorf("write tenant pool: %w", err)
+		return fmt.Errorf("write tenant pool: %w", err)
 	}
 	globalPath := filepath.Join(configDir, "php-fpm.conf")
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(globalPath, []byte(renderTenantGlobalConfig(systemUser)), 0644); err != nil {
-		return "", fmt.Errorf("write tenant global configuration: %w", err)
+		return fmt.Errorf("write tenant global configuration: %w", err)
 	}
 	if output, err := tenantCommand(config.FPMBin, "-t", "-y", globalPath).CombinedOutput(); err != nil {
 		if readErr == nil {
@@ -646,28 +683,44 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 		} else {
 			_ = os.Remove(poolPath)
 		}
-		return "", fmt.Errorf("validate tenant PHP-FPM configuration: %s: %w", strings.TrimSpace(string(output)), err)
+		return fmt.Errorf("validate tenant PHP-FPM configuration: %s: %w", strings.TrimSpace(string(output)), err)
 	}
+	return nil
+}
+
+// installTenantUnit writes the tenant's unit and has systemd read it; a failed
+// reload sends the domain back to the shared master.
+func installTenantUnit(db *sql.DB, domainID int64, systemUser, phpVersion string, config phpConfig) error {
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(tenantUnitPath(systemUser), []byte(renderTenantUnit(systemUser, config.FPMBin)), 0644); err != nil {
-		return "", fmt.Errorf("write tenant service: %w", err)
+		return fmt.Errorf("write tenant service: %w", err)
 	}
 	if output, err := tenantCommand("systemctl", "daemon-reload").CombinedOutput(); err != nil {
 		_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
-		return "", fmt.Errorf("reload systemd units: %s: %w", strings.TrimSpace(string(output)), err)
+		return fmt.Errorf("reload systemd units: %s: %w", strings.TrimSpace(string(output)), err)
 	}
+	return nil
+}
 
-	if firstInstall {
-		sharedPool := filepath.Join(config.PoolDir, systemUser+".conf")
-		if _, err := os.Stat(sharedPool); err == nil {
-			if err := os.Rename(sharedPool, sharedPool+".bak"); err != nil {
-				_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
-				return "", fmt.Errorf("preserve shared PHP-FPM pool: %w", err)
-			}
-			_, _ = tenantCommand("systemctl", "reload-or-restart", config.Service).CombinedOutput()
-		}
+// setSharedPoolAside moves the domain's shared pool out of the shared master on
+// a first install, so both masters never serve the same pool.
+func setSharedPoolAside(db *sql.DB, domainID int64, systemUser, phpVersion string, config phpConfig) error {
+	sharedPool := filepath.Join(config.PoolDir, systemUser+".conf")
+	if _, err := os.Stat(sharedPool); err != nil {
+		return nil
 	}
+	if err := os.Rename(sharedPool, sharedPool+".bak"); err != nil {
+		_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
+		return fmt.Errorf("preserve shared PHP-FPM pool: %w", err)
+	}
+	_, _ = tenantCommand("systemctl", "reload-or-restart", config.Service).CombinedOutput()
+	return nil
+}
 
+// startTenantMaster enables and restarts the tenant's unit and waits for its
+// socket; a master that does not come up sends the domain back to the shared
+// master.
+func startTenantMaster(db *sql.DB, domainID int64, systemUser, phpVersion string) (string, error) {
 	if output, err := tenantCommand("systemctl", "enable", tenantUnitName(systemUser)).CombinedOutput(); err != nil {
 		_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
 		return "", fmt.Errorf("enable tenant PHP-FPM: %s: %w", strings.TrimSpace(string(output)), err)
@@ -679,19 +732,13 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 
 	ensureFPMSELinuxFcontext()
 	_, _ = tenantCommand("restorecon", "-R", tenantRunDir(systemUser)).CombinedOutput()
-	_, _ = tenantCommand("restorecon", "-R", configDir).CombinedOutput()
+	_, _ = tenantCommand("restorecon", "-R", tenantCfgDir(systemUser)).CombinedOutput()
 	socket := tenantSocket(systemUser)
 	if !socketAppears(socket, 6*time.Second) {
 		_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
 		return "", fmt.Errorf("tenant PHP-FPM socket was not created: %s", socket)
 	}
 	_, _ = tenantCommand("restorecon", socket).CombinedOutput()
-	if db != nil && domainID > 0 {
-		if err := ApplyVhostForDomain(db, domainID, socket, phpVersion); err != nil {
-			_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
-			return "", fmt.Errorf("render tenant nginx virtual host: %w", err)
-		}
-	}
 	return socket, nil
 }
 
@@ -760,21 +807,11 @@ func ApplySubdomainFPM(db *sql.DB, domainID, subdomainID int64, systemUser, docR
 	if output, err := tenantCommand(config.FPMBin, "-t", "-y", globalPath).CombinedOutput(); err != nil {
 		// Restore the previous state so a rejected pool cannot take the whole tenant
 		// master down on its next reload.
-		if readErr == nil {
-			// #nosec G306 G703 -- root-owned system integration file that its daemon must read; no secret stored here.
-			_ = os.WriteFile(poolPath, previous, 0644)
-		} else {
-			_ = os.Remove(poolPath)
-		}
+		restoreFile(poolPath, previous, readErr == nil)
 		return "", fmt.Errorf("validate subdomain pool: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	if output, err := tenantCommand("systemctl", "reload-or-restart", tenantUnitName(systemUser)).CombinedOutput(); err != nil {
-		if readErr == nil {
-			// #nosec G306 G703 -- root-owned system integration file that its daemon must read; no secret stored here.
-			_ = os.WriteFile(poolPath, previous, 0644)
-		} else {
-			_ = os.Remove(poolPath)
-		}
+		restoreFile(poolPath, previous, readErr == nil)
 		_, _ = tenantCommand("systemctl", "reload-or-restart", tenantUnitName(systemUser)).CombinedOutput()
 		return "", fmt.Errorf("reload tenant PHP-FPM: %s: %w", strings.TrimSpace(string(output)), err)
 	}
@@ -873,14 +910,27 @@ func EnsureTenantFPMOnStartup() {
 		log.Printf("tenant PHP-FPM startup check: %v", err)
 		return
 	}
-	type domain struct {
-		id         int64
-		systemUser string
-		phpVersion string
+	for _, item := range readTenantFPMDomains(rows) {
+		if TenantFPMActive(item.systemUser) {
+			ensureTenantMasterRunning(item)
+		}
 	}
-	var domains []domain
+}
+
+// tenantFPMDomain is one domain's id, system user and PHP version, as the tenant
+// PHP-FPM startup check and the vhost hardening sweep read them.
+type tenantFPMDomain struct {
+	id         int64
+	systemUser string
+	phpVersion string
+}
+
+// readTenantFPMDomains reads the domain list and closes rows. An unreadable row
+// is skipped, and a list cut short is logged and returned as far as it was read.
+func readTenantFPMDomains(rows *sql.Rows) []tenantFPMDomain {
+	var domains []tenantFPMDomain
 	for rows.Next() {
-		var item domain
+		var item tenantFPMDomain
 		if err := rows.Scan(&item.id, &item.systemUser, &item.phpVersion); err == nil {
 			domains = append(domains, item)
 		}
@@ -893,21 +943,23 @@ func EnsureTenantFPMOnStartup() {
 	if err := rows.Close(); err != nil {
 		log.Printf("tenant PHP-FPM startup rows: %v", err)
 	}
-	for _, item := range domains {
-		if !TenantFPMActive(item.systemUser) {
-			continue
-		}
-		// Config-drift repair: old provisions may have left pool files with
-		// unwritable error_log overrides that silently swallowed PHP fatals.
-		repairTenantPoolDrift(item.id, item.systemUser, item.phpVersion)
-		if output, _ := tenantCommand("systemctl", "is-active", tenantUnitName(item.systemUser)).CombinedOutput(); strings.TrimSpace(string(output)) == "active" {
-			continue
-		}
-		if output, err := tenantCommand("systemctl", "start", tenantUnitName(item.systemUser)).CombinedOutput(); err != nil {
-			log.Printf("tenant PHP-FPM startup failed for %s: %s", item.systemUser, strings.TrimSpace(string(output)))
-			if rollbackErr := RollbackToSharedFPM(packageDB, item.id, item.systemUser, item.phpVersion); rollbackErr != nil {
-				log.Printf("tenant PHP-FPM rollback failed for %s: %v", item.systemUser, rollbackErr)
-			}
+	return domains
+}
+
+// ensureTenantMasterRunning repairs one tenant's pool, starts its master when it
+// is not running, and sends the tenant back to the shared master when it will
+// not start.
+func ensureTenantMasterRunning(item tenantFPMDomain) {
+	// Config-drift repair: old provisions may have left pool files with
+	// unwritable error_log overrides that silently swallowed PHP fatals.
+	repairTenantPoolDrift(item.id, item.systemUser, item.phpVersion)
+	if output, _ := tenantCommand("systemctl", "is-active", tenantUnitName(item.systemUser)).CombinedOutput(); strings.TrimSpace(string(output)) == "active" {
+		return
+	}
+	if output, err := tenantCommand("systemctl", "start", tenantUnitName(item.systemUser)).CombinedOutput(); err != nil {
+		log.Printf("tenant PHP-FPM startup failed for %s: %s", item.systemUser, strings.TrimSpace(string(output)))
+		if rollbackErr := RollbackToSharedFPM(packageDB, item.id, item.systemUser, item.phpVersion); rollbackErr != nil {
+			log.Printf("tenant PHP-FPM rollback failed for %s: %v", item.systemUser, rollbackErr)
 		}
 	}
 }
@@ -921,14 +973,9 @@ func repairTenantPoolDrift(domainID int64, systemUser, phpVersion string) {
 	if packageDB == nil || systemUser == "" || !strings.HasPrefix(systemUser, "c_") {
 		return
 	}
-	configDir := tenantCfgDir(systemUser)
-	legacyMoved := false
-	if _, err := os.Stat(tenantLegacyPoolPath(systemUser)); err == nil {
-		if err := migrateTenantPoolLayout(systemUser); err != nil {
-			log.Printf("repairTenantPoolDrift: %s pool layout migration failed: %v", systemUser, err)
-			return
-		}
-		legacyMoved = true
+	legacyMoved, ok := moveLegacyTenantPool(systemUser)
+	if !ok {
+		return
 	}
 	poolPath := tenantMainPoolPath(systemUser)
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
@@ -945,12 +992,32 @@ func repairTenantPoolDrift(domainID int64, systemUser, phpVersion string) {
 	if config.FPMBin == "" {
 		return
 	}
+	rewriteTenantPool(systemUser, poolPath, current, expected, config)
+}
+
+// moveLegacyTenantPool moves a pool still in the single-file layout into pool.d.
+// It reports whether a pool was moved, and ok is false when the move failed.
+func moveLegacyTenantPool(systemUser string) (moved, ok bool) {
+	if _, err := os.Stat(tenantLegacyPoolPath(systemUser)); err != nil {
+		return false, true
+	}
+	if err := migrateTenantPoolLayout(systemUser); err != nil {
+		log.Printf("repairTenantPoolDrift: %s pool layout migration failed: %v", systemUser, err)
+		return false, false
+	}
+	return true, true
+}
+
+// rewriteTenantPool writes the expected pool and the global configuration,
+// validates them and reloads the master gracefully, putting the drifted pool
+// back when php-fpm refuses the new one.
+func rewriteTenantPool(systemUser, poolPath string, current []byte, expected string, config phpConfig) {
 	// Write the new pool config, validate, and rollback on failure.
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(poolPath, []byte(expected), 0644); err != nil {
 		return
 	}
-	globalPath := filepath.Join(configDir, "php-fpm.conf")
+	globalPath := filepath.Join(tenantCfgDir(systemUser), "php-fpm.conf")
 	// The global config must be rewritten in the same pass: an installation coming
 	// from the old layout still includes pool.conf, which no longer exists.
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
@@ -1165,40 +1232,68 @@ var shimOwnerUID, shimOwnerGID uint32
 
 func ensureRootDirAt(parentFd int, name string) (int, bool) {
 	for range 3 {
-		var st unix.Stat_t
-		serr := unix.Fstatat(parentFd, name, &st, unix.AT_SYMLINK_NOFOLLOW)
-		if serr == nil {
-			if st.Mode&unix.S_IFMT != unix.S_IFDIR || st.Uid != shimOwnerUID || st.Gid != shimOwnerGID {
-				// Symlink, file, or wrong owner -- unsafe, remove.
-				if removeAtRecursive(parentFd, name) != nil {
-					return -1, false
-				}
-				serr = unix.ENOENT
-			}
-		}
-		if serr == unix.ENOENT {
-			if e := unix.Mkdirat(parentFd, name, 0755); e != nil && e != unix.EEXIST {
-				return -1, false
-			}
-		} else if serr != nil {
+		fd, outcome := rootDirAttempt(parentFd, name)
+		switch outcome {
+		case rootDirReady:
+			return fd, true
+		case rootDirRefused:
 			return -1, false
 		}
-		fd, e := unix.Openat(parentFd, name,
-			unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_RDONLY|unix.O_CLOEXEC, 0)
-		if e != nil {
-			continue // symlink-swap race -- retry
-		}
-		var fst unix.Stat_t
-		if unix.Fstat(fd, &fst) != nil ||
-			fst.Mode&unix.S_IFMT != unix.S_IFDIR || fst.Uid != shimOwnerUID || fst.Gid != shimOwnerGID {
-			_ = unix.Close(fd)
-			_ = removeAtRecursive(parentFd, name)
-			continue
-		}
-		_ = unix.Fchmod(fd, 0755)
-		return fd, true
 	}
 	return -1, false
+}
+
+// rootDirOutcome is how one attempt to make the directory safe ended.
+type rootDirOutcome int
+
+const (
+	rootDirRetry rootDirOutcome = iota
+	rootDirReady
+	rootDirRefused
+)
+
+// rootDirAttempt makes one attempt: it clears an unsafe entry, creates the
+// directory when absent, and opens it without following a symlink.
+func rootDirAttempt(parentFd int, name string) (int, rootDirOutcome) {
+	if !prepareRootDirEntry(parentFd, name) {
+		return -1, rootDirRefused
+	}
+	fd, e := unix.Openat(parentFd, name,
+		unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_RDONLY|unix.O_CLOEXEC, 0)
+	if e != nil {
+		return -1, rootDirRetry // symlink-swap race -- retry
+	}
+	var fst unix.Stat_t
+	if unix.Fstat(fd, &fst) != nil ||
+		fst.Mode&unix.S_IFMT != unix.S_IFDIR || fst.Uid != shimOwnerUID || fst.Gid != shimOwnerGID {
+		_ = unix.Close(fd)
+		_ = removeAtRecursive(parentFd, name)
+		return -1, rootDirRetry
+	}
+	_ = unix.Fchmod(fd, 0755)
+	return fd, rootDirReady
+}
+
+// prepareRootDirEntry removes an entry at name that is a symlink, a file or a
+// directory with the wrong owner, and creates the directory when it is absent.
+// It reports false when neither can be done.
+func prepareRootDirEntry(parentFd int, name string) bool {
+	var st unix.Stat_t
+	serr := unix.Fstatat(parentFd, name, &st, unix.AT_SYMLINK_NOFOLLOW)
+	if serr == nil && (st.Mode&unix.S_IFMT != unix.S_IFDIR || st.Uid != shimOwnerUID || st.Gid != shimOwnerGID) {
+		// Symlink, file, or wrong owner -- unsafe, remove.
+		if removeAtRecursive(parentFd, name) != nil {
+			return false
+		}
+		serr = unix.ENOENT
+	}
+	if serr == unix.ENOENT {
+		if e := unix.Mkdirat(parentFd, name, 0755); e != nil && e != unix.EEXIST {
+			return false
+		}
+		return true
+	}
+	return serr == nil
 }
 
 // removeAtRecursive removes a file, symlink, or directory at dirfd-relative name

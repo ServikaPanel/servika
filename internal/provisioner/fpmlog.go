@@ -228,26 +228,13 @@ func migrateTenantFPMLogPaths() {
 }
 
 func migrateOneTenantFPMLogPath(systemUser, unitPath string) {
-	// #nosec G304 -- path is built from a validated tenant identifier under the root-owned systemd unit directory.
-	currentUnit, err := os.ReadFile(unitPath)
-	if err != nil {
+	m, ok := readTenantLogMigration(systemUser, unitPath)
+	if !ok {
 		return
 	}
-	fpmBinary := execStartBinary(string(currentUnit))
-	if fpmBinary == "" {
-		log.Printf("tenant PHP-FPM log migration: %s has no usable ExecStart", systemUser)
-		return
-	}
-	globalPath := filepath.Join(tenantCfgDir(systemUser), "php-fpm.conf")
-	// #nosec G304 -- path is built from a validated tenant identifier under the root-owned config directory.
-	currentGlobal, err := os.ReadFile(globalPath)
-	if err != nil {
-		return // No global config to repoint; EnableTenantFPM writes one.
-	}
-
-	wantedUnit := renderTenantUnit(systemUser, fpmBinary)
+	wantedUnit := renderTenantUnit(systemUser, m.fpmBinary)
 	wantedGlobal := renderTenantGlobalConfig(systemUser)
-	if string(currentUnit) == wantedUnit && string(currentGlobal) == wantedGlobal {
+	if string(m.unit) == wantedUnit && string(m.global) == wantedGlobal {
 		return
 	}
 
@@ -257,33 +244,77 @@ func migrateOneTenantFPMLogPath(systemUser, unitPath string) {
 	if _, err := os.Stat(tenantLogPath(systemUser)); os.IsNotExist(err) {
 		_ = os.Rename(legacyTenantLogPath(systemUser), tenantLogPath(systemUser))
 	}
+	m.apply(wantedUnit, wantedGlobal)
+}
 
-	restore := func() {
-		// #nosec G306 G703 -- root-owned system integration file that php-fpm and systemd must read; it carries no secret.
-		_ = os.WriteFile(globalPath, currentGlobal, 0644)
-		// #nosec G306 G703 -- root-owned system integration file that php-fpm and systemd must read; it carries no secret.
-		_ = os.WriteFile(unitPath, currentUnit, 0644)
-		_, _ = tenantCommand("systemctl", "daemon-reload").CombinedOutput()
+// tenantLogMigration is one installed tenant master's unit and global
+// configuration as they were on disk before the migration.
+type tenantLogMigration struct {
+	systemUser string
+	unitPath   string
+	globalPath string
+	fpmBinary  string
+	unit       []byte
+	global     []byte
+}
+
+// readTenantLogMigration reads a tenant master's unit and global configuration,
+// or reports that there is nothing the migration can repoint.
+func readTenantLogMigration(systemUser, unitPath string) (tenantLogMigration, bool) {
+	// #nosec G304 -- path is built from a validated tenant identifier under the root-owned systemd unit directory.
+	currentUnit, err := os.ReadFile(unitPath)
+	if err != nil {
+		return tenantLogMigration{}, false
 	}
+	fpmBinary := execStartBinary(string(currentUnit))
+	if fpmBinary == "" {
+		log.Printf("tenant PHP-FPM log migration: %s has no usable ExecStart", systemUser)
+		return tenantLogMigration{}, false
+	}
+	globalPath := filepath.Join(tenantCfgDir(systemUser), "php-fpm.conf")
+	// #nosec G304 -- path is built from a validated tenant identifier under the root-owned config directory.
+	currentGlobal, err := os.ReadFile(globalPath)
+	if err != nil {
+		return tenantLogMigration{}, false // No global config to repoint; EnableTenantFPM writes one.
+	}
+	return tenantLogMigration{
+		systemUser: systemUser, unitPath: unitPath, globalPath: globalPath,
+		fpmBinary: fpmBinary, unit: currentUnit, global: currentGlobal,
+	}, true
+}
 
+// restore puts both files back as they were and has systemd read the unit again.
+func (m tenantLogMigration) restore() {
+	// #nosec G306 G703 -- root-owned system integration file that php-fpm and systemd must read; it carries no secret.
+	_ = os.WriteFile(m.globalPath, m.global, 0644)
+	// #nosec G306 G703 -- root-owned system integration file that php-fpm and systemd must read; it carries no secret.
+	_ = os.WriteFile(m.unitPath, m.unit, 0644)
+	_, _ = tenantCommand("systemctl", "daemon-reload").CombinedOutput()
+}
+
+// apply writes the wanted global configuration and unit, validates them and
+// restarts the master, restoring both files when a step after the first write
+// fails.
+func (m tenantLogMigration) apply(wantedUnit, wantedGlobal string) {
+	systemUser := m.systemUser
 	// #nosec G306 -- root-owned system integration file that php-fpm must read; it carries no secret.
-	if err := os.WriteFile(globalPath, []byte(wantedGlobal), 0644); err != nil {
+	if err := os.WriteFile(m.globalPath, []byte(wantedGlobal), 0644); err != nil {
 		log.Printf("tenant PHP-FPM log migration: %s global config: %v", systemUser, err)
 		return
 	}
-	if output, err := tenantCommand(fpmBinary, "-t", "-y", globalPath).CombinedOutput(); err != nil {
-		restore()
+	if output, err := tenantCommand(m.fpmBinary, "-t", "-y", m.globalPath).CombinedOutput(); err != nil {
+		m.restore()
 		log.Printf("tenant PHP-FPM log migration: %s php-fpm -t failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return
 	}
 	// #nosec G306 -- root-owned system integration file that systemd must read; it carries no secret.
-	if err := os.WriteFile(unitPath, []byte(wantedUnit), 0644); err != nil {
-		restore()
+	if err := os.WriteFile(m.unitPath, []byte(wantedUnit), 0644); err != nil {
+		m.restore()
 		log.Printf("tenant PHP-FPM log migration: %s unit: %v", systemUser, err)
 		return
 	}
 	if output, err := tenantCommand("systemctl", "daemon-reload").CombinedOutput(); err != nil {
-		restore()
+		m.restore()
 		log.Printf("tenant PHP-FPM log migration: %s daemon-reload failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return
 	}
@@ -291,7 +322,7 @@ func migrateOneTenantFPMLogPath(systemUser, unitPath string) {
 	// namespace the unit gave the master, so the new directory would still be
 	// read-only to it.
 	if output, err := tenantCommand("systemctl", "restart", tenantUnitName(systemUser)).CombinedOutput(); err != nil {
-		restore()
+		m.restore()
 		_, _ = tenantCommand("systemctl", "restart", tenantUnitName(systemUser)).CombinedOutput()
 		log.Printf("tenant PHP-FPM log migration: %s restart failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return

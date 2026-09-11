@@ -77,11 +77,7 @@ func IssueMailCertificate(domain string) (MailCertificate, error) {
 	}
 	domain = strings.ToLower(strings.TrimSpace(domain))
 
-	hosts, dropped := validatedSANHosts(MailHostNames(domain))
-	skipped := map[string]string{}
-	for host, reason := range dropped {
-		skipped[host] = string(reason)
-	}
+	hosts, skipped := mailHostsThatAnswer(domain)
 	if len(hosts) == 0 {
 		return MailCertificate{Skipped: skipped},
 			fmt.Errorf("no mail hostname of %s could answer the ACME challenge", domain)
@@ -92,33 +88,8 @@ func IssueMailCertificate(domain string) (MailCertificate, error) {
 		return MailCertificate{Skipped: skipped}, err
 	}
 	certPath, keyPath, chainPath := MailCertificatePaths(domain)
-
-	args := []string{"--issue", "--webroot", acmeWebrootDir}
-	for _, host := range hosts {
-		args = append(args, "-d", host)
-	}
-	args = append(args, "--keylength", "2048")
-	if out, e := RunACMEIssue(args...); e != nil && !IsACMERenewSkip(e) {
-		return MailCertificate{Skipped: skipped},
-			fmt.Errorf("acme issue for the mail hostnames: %s", strings.TrimSpace(string(out)))
-	}
-
-	install := []string{
-		"--install-cert",
-		"-d", hosts[0],
-		"--cert-file", certPath,
-		"--key-file", keyPath,
-		"--fullchain-file", certPath,
-	}
-	if out, e := acmeCommand(install...).CombinedOutput(); e != nil {
-		return MailCertificate{Skipped: skipped},
-			fmt.Errorf("acme install-cert for the mail hostnames: %s", strings.TrimSpace(string(out)))
-	}
-	// acme.sh exiting zero is not proof that the files exist; a missing file here
-	// would be discovered later as a mail stack that will not start.
-	if !fileExists(certPath) || !fileExists(keyPath) {
-		return MailCertificate{Skipped: skipped},
-			fmt.Errorf("acme reported success but %s or %s was not written", certPath, keyPath)
+	if err := orderMailCertificate(hosts, certPath, keyPath); err != nil {
+		return MailCertificate{Skipped: skipped}, err
 	}
 	if err := applyCertificatePermissions(sslDir, certPath, keyPath); err != nil {
 		return MailCertificate{Skipped: skipped}, err
@@ -136,6 +107,48 @@ func IssueMailCertificate(domain string) (MailCertificate, error) {
 		result.ExpiresAt = notAfter.Format("2006-01-02")
 	}
 	return result, nil
+}
+
+// mailHostsThatAnswer returns the mail hostnames that can answer the ACME
+// challenge, and the reason code of every one that cannot.
+func mailHostsThatAnswer(domain string) ([]string, map[string]string) {
+	hosts, dropped := validatedSANHosts(MailHostNames(domain))
+	skipped := map[string]string{}
+	for host, reason := range dropped {
+		skipped[host] = string(reason)
+	}
+	return hosts, skipped
+}
+
+// orderMailCertificate orders a certificate for hosts and installs it at certPath
+// and keyPath. acme.sh answering that it already holds a valid certificate is
+// not a failure.
+func orderMailCertificate(hosts []string, certPath, keyPath string) error {
+	args := []string{"--issue", "--webroot", acmeWebrootDir}
+	for _, host := range hosts {
+		args = append(args, "-d", host)
+	}
+	args = append(args, "--keylength", "2048")
+	if out, e := RunACMEIssue(args...); e != nil && !IsACMERenewSkip(e) {
+		return fmt.Errorf("acme issue for the mail hostnames: %s", strings.TrimSpace(string(out)))
+	}
+
+	install := []string{
+		"--install-cert",
+		"-d", hosts[0],
+		"--cert-file", certPath,
+		"--key-file", keyPath,
+		"--fullchain-file", certPath,
+	}
+	if out, e := acmeCommand(install...).CombinedOutput(); e != nil {
+		return fmt.Errorf("acme install-cert for the mail hostnames: %s", strings.TrimSpace(string(out)))
+	}
+	// acme.sh exiting zero is not proof that the files exist; a missing file here
+	// would be discovered later as a mail stack that will not start.
+	if !fileExists(certPath) || !fileExists(keyPath) {
+		return fmt.Errorf("acme reported success but %s or %s was not written", certPath, keyPath)
+	}
+	return nil
 }
 
 // writeMailChain builds the single file Postfix wants behind its SNI table: the

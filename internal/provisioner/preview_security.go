@@ -21,34 +21,52 @@ func panelFrameAncestors() string {
 			sources = append(sources, s)
 		}
 	}
+	if ip := panelFrameIPv4(); ip != "" {
+		add("https://" + ip + ":8443")
+	}
+	if domain := panelFrameDomain(); domain != "" {
+		add("https://" + domain)
+		add("https://" + domain + ":8443")
+	}
+	return strings.Join(sources, " ")
+}
+
+// panelFrameIPv4 is the panel's public IPv4 address, or "" when neither the
+// environment, the interfaces nor the first domain row names one.
+func panelFrameIPv4() string {
 	// config answers the environment-and-interfaces half; the database fallback
 	// below stays here because config cannot reach the database.
 	ip := config.PublicIPv4()
-	if net.ParseIP(ip).To4() == nil {
-		ip = ""
-		if packageDB != nil {
-			var dbIP string
-			if err := packageDB.QueryRow(`SELECT COALESCE(ipv4,'') FROM domains WHERE ipv4<>'' ORDER BY id LIMIT 1`).Scan(&dbIP); err == nil {
-				if dbIP = strings.TrimSpace(dbIP); net.ParseIP(dbIP).To4() != nil {
-					ip = dbIP
-				}
-			}
-		}
+	if net.ParseIP(ip).To4() != nil {
+		return ip
 	}
-	if ip != "" {
-		add("https://" + ip + ":8443")
+	if packageDB == nil {
+		return ""
 	}
-	if packageDB != nil {
-		var domain, sslStatus string
-		if err := packageDB.QueryRow(`SELECT COALESCE(custom_domain,''), ssl_status FROM panel_settings WHERE id=1`).Scan(&domain, &sslStatus); err == nil {
-			domain = strings.ToLower(strings.TrimSpace(domain))
-			if domain != "" && sslStatus == "active" && ValidateDomain(domain) == nil {
-				add("https://" + domain)
-				add("https://" + domain + ":8443")
-			}
-		}
+	var dbIP string
+	if err := packageDB.QueryRow(`SELECT COALESCE(ipv4,'') FROM domains WHERE ipv4<>'' ORDER BY id LIMIT 1`).Scan(&dbIP); err != nil {
+		return ""
 	}
-	return strings.Join(sources, " ")
+	if dbIP = strings.TrimSpace(dbIP); net.ParseIP(dbIP).To4() != nil {
+		return dbIP
+	}
+	return ""
+}
+
+// panelFrameDomain is the panel's custom domain when its TLS is active, or "".
+func panelFrameDomain() string {
+	if packageDB == nil {
+		return ""
+	}
+	var domain, sslStatus string
+	if err := packageDB.QueryRow(`SELECT COALESCE(custom_domain,''), ssl_status FROM panel_settings WHERE id=1`).Scan(&domain, &sslStatus); err != nil {
+		return ""
+	}
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain != "" && sslStatus == "active" && ValidateDomain(domain) == nil {
+		return domain
+	}
+	return ""
 }
 
 // framePolicyHeader emits the enforced clickjacking policy as an nginx add_header

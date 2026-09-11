@@ -83,7 +83,13 @@ func (s *domainsStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if strings.Contains(s.query, "GROUP BY system_user") {
 		return s.grouped(), nil
 	}
-	var wantUser, exceptName string
+	wantUser, exceptName := domainsQueryArgs(args)
+	return s.matchingIDs(wantUser, exceptName), nil
+}
+
+// domainsQueryArgs takes the system user and the excluded domain name from the
+// string arguments, in that order.
+func domainsQueryArgs(args []driver.Value) (wantUser, exceptName string) {
 	for _, arg := range args {
 		if value, ok := arg.(string); ok {
 			if wantUser == "" {
@@ -95,6 +101,12 @@ func (s *domainsStmt) Query(args []driver.Value) (driver.Rows, error) {
 			}
 		}
 	}
+	return wantUser, exceptName
+}
+
+// matchingIDs answers the sibling lookup with the ids of the rows the query's own
+// conditions keep.
+func (s *domainsStmt) matchingIDs(wantUser, exceptName string) *domainsRows {
 	onlyTopLevel := strings.Contains(s.query, "parent_domain_id IS NULL")
 	excepts := strings.Contains(s.query, "domain_name<>?")
 
@@ -111,7 +123,7 @@ func (s *domainsStmt) Query(args []driver.Value) (driver.Rows, error) {
 		}
 		result.values = append(result.values, []driver.Value{row.id})
 	}
-	return result, nil
+	return result
 }
 
 // grouped answers the collision report the way MariaDB's GROUP BY would.

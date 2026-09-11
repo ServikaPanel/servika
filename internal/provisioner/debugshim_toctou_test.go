@@ -20,25 +20,11 @@ func TestInstallDebugShim_SymlinkAttackBlocked(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("root required (symlink/chown semantics)")
 	}
-	base := t.TempDir()
-	home := filepath.Join(base, "home")
-	if err := os.Mkdir(home, 0o710); err != nil {
-		t.Fatal(err)
-	}
+	base, home := debugShimHome(t)
 
 	// Victim directory: the attacker's symlink target. Chown to nobody so
 	// that any chown-to-root by a vulnerable code path is detected.
-	victim := filepath.Join(base, "victim")
-	if err := os.Mkdir(victim, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := unix.Chown(victim, 65534, 65534); err != nil {
-		t.Fatalf("victim chown nobody: %v", err)
-	}
-	sentinel := filepath.Join(victim, "keep.txt")
-	if err := os.WriteFile(sentinel, []byte("UNTOUCHED"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	victim, sentinel := nobodyOwnedVictimDirectory(t, base)
 
 	// Attack: home/.servika -> victim symlink (tenant would do this before debug is enabled).
 	servPath := filepath.Join(home, ".servika")
@@ -50,6 +36,47 @@ func TestInstallDebugShim_SymlinkAttackBlocked(t *testing.T) {
 	installDebugShim(home, "c_toctou_attack", []byte("<?php /* shim */"))
 
 	// (1) .servika is NO LONGER a symlink -- a real root:root directory.
+	assertRootOwnedServikaDirectory(t, servPath)
+	// (2) Victim is untouched: still nobody-owned, sentinel present, no shim leaked.
+	assertVictimDirectoryUntouched(t, victim, sentinel)
+	// (3) Shim was written to the REAL .servika directory, (4) by root.
+	assertShimWrittenByRoot(t, servPath)
+}
+
+// debugShimHome creates a tenant home under a new temporary directory and
+// returns the directory and the home.
+func debugShimHome(t *testing.T) (string, string) {
+	t.Helper()
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	if err := os.Mkdir(home, 0o710); err != nil {
+		t.Fatal(err)
+	}
+	return base, home
+}
+
+// nobodyOwnedVictimDirectory creates a nobody-owned directory holding a sentinel
+// file, and returns both paths.
+func nobodyOwnedVictimDirectory(t *testing.T, base string) (string, string) {
+	t.Helper()
+	victim := filepath.Join(base, "victim")
+	if err := os.Mkdir(victim, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Chown(victim, 65534, 65534); err != nil {
+		t.Fatalf("victim chown nobody: %v", err)
+	}
+	sentinel := filepath.Join(victim, "keep.txt")
+	if err := os.WriteFile(sentinel, []byte("UNTOUCHED"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return victim, sentinel
+}
+
+// assertRootOwnedServikaDirectory fails unless servPath is a real root:root
+// directory.
+func assertRootOwnedServikaDirectory(t *testing.T, servPath string) {
+	t.Helper()
 	var lst unix.Stat_t
 	if err := unix.Lstat(servPath, &lst); err != nil {
 		t.Fatalf(".servika lstat: %v", err)
@@ -63,8 +90,12 @@ func TestInstallDebugShim_SymlinkAttackBlocked(t *testing.T) {
 	if lst.Uid != 0 || lst.Gid != 0 {
 		t.Fatalf("FAIL: .servika is not root:root (uid=%d gid=%d)", lst.Uid, lst.Gid)
 	}
+}
 
-	// (2) Victim is untouched: still nobody-owned, sentinel present, no shim leaked.
+// assertVictimDirectoryUntouched fails when the victim lost its owner or its
+// sentinel, or received the shim.
+func assertVictimDirectoryUntouched(t *testing.T, victim, sentinel string) {
+	t.Helper()
 	var vst unix.Stat_t
 	if err := unix.Lstat(victim, &vst); err != nil {
 		t.Fatalf("victim lstat: %v", err)
@@ -78,16 +109,18 @@ func TestInstallDebugShim_SymlinkAttackBlocked(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(victim, "debug_prepend.php")); err == nil {
 		t.Fatal("FAIL: debug_prepend.php was written to victim -> arbitrary root-write")
 	}
+}
 
-	// (3) Shim was written to the REAL .servika directory.
+// assertShimWrittenByRoot fails unless the log and the shim exist in servPath
+// and root created the shim.
+func assertShimWrittenByRoot(t *testing.T, servPath string) {
+	t.Helper()
 	if _, err := os.Stat(filepath.Join(servPath, "php_debug.log")); err != nil {
 		t.Fatal("FAIL: php_debug.log not created in real .servika")
 	}
 	if _, err := os.Stat(filepath.Join(servPath, "debug_prepend.php")); err != nil {
 		t.Fatal("FAIL: debug_prepend.php not created in real .servika")
 	}
-
-	// (4) At least one file created by root.
 	var gst unix.Stat_t
 	if err := unix.Lstat(filepath.Join(servPath, "debug_prepend.php"), &gst); err != nil {
 		t.Fatal(err)
@@ -104,28 +137,12 @@ func TestInstallDebugShim_LogSymlinkAttackBlocked(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("root required (symlink/chown semantics)")
 	}
-	base := t.TempDir()
-	home := filepath.Join(base, "home")
-	if err := os.Mkdir(home, 0o710); err != nil {
-		t.Fatal(err)
-	}
+	base, home := debugShimHome(t)
 	// Create a valid .servika directory first (as ensureRootDirAt would).
-	servPath := filepath.Join(home, ".servika")
-	if err := os.Mkdir(servPath, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := unix.Chown(servPath, 0, 0); err != nil {
-		t.Fatal(err)
-	}
+	servPath := rootOwnedServikaDirectory(t, home)
 
 	// Victim file: symlink target.
-	victim := filepath.Join(base, "victim_log")
-	if err := os.WriteFile(victim, []byte{}, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := unix.Chown(victim, 65534, 65534); err != nil {
-		t.Fatal(err)
-	}
+	victim := nobodyOwnedVictimFile(t, base)
 
 	// Attack: php_debug.log -> victim symlink.
 	if err := os.Symlink(victim, filepath.Join(servPath, "php_debug.log")); err != nil {
@@ -153,17 +170,40 @@ func TestInstallDebugShim_LogSymlinkAttackBlocked(t *testing.T) {
 	}
 }
 
+// rootOwnedServikaDirectory creates a root:root .servika directory in home and
+// returns its path.
+func rootOwnedServikaDirectory(t *testing.T, home string) string {
+	t.Helper()
+	servPath := filepath.Join(home, ".servika")
+	if err := os.Mkdir(servPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Chown(servPath, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	return servPath
+}
+
+// nobodyOwnedVictimFile creates an empty nobody-owned file and returns its path.
+func nobodyOwnedVictimFile(t *testing.T, base string) string {
+	t.Helper()
+	victim := filepath.Join(base, "victim_log")
+	if err := os.WriteFile(victim, []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Chown(victim, 65534, 65534); err != nil {
+		t.Fatal(err)
+	}
+	return victim
+}
+
 // TestInstallDebugShim_TenantOwnedDir verifies that ensureRootDirAt rejects
 // a tenant-owned directory at .servika and replaces it with root:root.
 func TestInstallDebugShim_TenantOwnedDir(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("root required")
 	}
-	base := t.TempDir()
-	home := filepath.Join(base, "home")
-	if err := os.Mkdir(home, 0o710); err != nil {
-		t.Fatal(err)
-	}
+	_, home := debugShimHome(t)
 	// Tenant-owned .servika (e.g., created manually).
 	servPath := filepath.Join(home, ".servika")
 	if err := os.Mkdir(servPath, 0755); err != nil {

@@ -40,20 +40,7 @@ func TestTheNginxLockSerializesTwoWriters(t *testing.T) {
 // because the rollback rests on the content captured at the start still being
 // the correct previous content when the rollback runs.
 func TestTheRenderTakesTheLockBeforeItWritesAnything(t *testing.T) {
-	source, err := os.ReadFile("provisioner.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := string(source)
-	start := strings.Index(body, "func renderAndReload(")
-	if start < 0 {
-		t.Fatal("renderAndReload was renamed; these assertions have to follow it")
-	}
-	end := strings.Index(body[start:], "\nfunc ")
-	if end < 0 {
-		end = len(body) - start
-	}
-	render := body[start : start+end]
+	render := renderAndReloadSource(t)
 
 	lock := strings.Index(render, "nginxMu.Lock()")
 	write := strings.Index(render, "os.WriteFile(cfgPath")
@@ -73,6 +60,25 @@ func TestTheRenderTakesTheLockBeforeItWritesAnything(t *testing.T) {
 	if !strings.Contains(render, "defer nginxMu.Unlock()") {
 		t.Error("the lock is not held to the end of the sequence")
 	}
+}
+
+// renderAndReloadSource returns the source text of renderAndReload.
+func renderAndReloadSource(t *testing.T) string {
+	t.Helper()
+	source, err := os.ReadFile("provisioner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(source)
+	start := strings.Index(body, "func renderAndReload(")
+	if start < 0 {
+		t.Fatal("renderAndReload was renamed; these assertions have to follow it")
+	}
+	end := strings.Index(body[start:], "\nfunc ")
+	if end < 0 {
+		end = len(body) - start
+	}
+	return body[start : start+end]
 }
 
 // Both validators drop a probe file into the tree `nginx -t` reads, so each both

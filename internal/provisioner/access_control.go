@@ -31,6 +31,20 @@ func buildIPRules(domainName string) string {
 	if mode == "allow" {
 		directive = "allow"
 	}
+	lines, count := ipRuleLines(rows, domainID, directive)
+	if count == 0 {
+		return ""
+	}
+	out := "    # ---- IP access rules, managed by Servika ----\n" + lines
+	if mode == "allow" {
+		out += "    deny all;\n"
+	}
+	return out
+}
+
+// ipRuleLines renders every usable stored rule as one directive line and counts
+// the lines rendered.
+func ipRuleLines(rows *sql.Rows, domainID int64, directive string) (string, int) {
 	var builder strings.Builder
 	count := 0
 	for rows.Next() {
@@ -60,14 +74,7 @@ func buildIPRules(domainName string) string {
 		// list, and the rendered file gives no sign of it.
 		log.Printf("access control: could not read the IP rules for domain %d: %v", domainID, err)
 	}
-	if count == 0 {
-		return ""
-	}
-	out := "    # ---- IP access rules, managed by Servika ----\n" + builder.String()
-	if mode == "allow" {
-		out += "    deny all;\n"
-	}
-	return out
+	return builder.String(), count
 }
 
 func buildHotlink(domainName string) string {
