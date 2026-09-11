@@ -378,6 +378,7 @@ cd frontend
 npm install
 npm run dev        # Development server on :5185, proxies /api to VITE_API_PROXY
 npm run build      # Production build output in frontend/dist/
+npm test           # Component tests (Vitest, jsdom)
 ```
 
 Set `VITE_API_PROXY` to the backend address (defaults to `http://localhost:8080`):
