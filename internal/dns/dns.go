@@ -90,36 +90,14 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 // Create adds a DNS record to a domain.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	_, err := h.lookup(r)
-	if err != nil {
+	if _, err := h.lookup(r); err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	var record Record
-	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	record, ok := decodeRecordRequest(w, r)
+	if !ok {
 		return
 	}
-	record.Name = strings.TrimSpace(record.Name)
-	if record.Name == "" {
-		record.Name = "@"
-	}
-	record.Type = strings.ToUpper(strings.TrimSpace(record.Type))
-	if !validType(record.Type) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid DNS record type")
-		return
-	}
-	if !validRecordFields(record.Name, record.Value) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid DNS record")
-		return
-	}
-	if record.Name == "" {
-		record.Name = "@"
-	}
-	if record.TTL <= 0 {
-		record.TTL = 3600
-	}
-	record.Priority = normalizePriority(record.Type, record.Priority)
 	enabledValue := 0
 	if record.Enabled {
 		enabledValue = 1
@@ -141,6 +119,34 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, saved)
+}
+
+// decodeRecordRequest reads a record out of the request body and fills in its
+// defaults. It answers the client itself when the record cannot be stored.
+func decodeRecordRequest(w http.ResponseWriter, r *http.Request) (Record, bool) {
+	var record Record
+	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return record, false
+	}
+	record.Name = strings.TrimSpace(record.Name)
+	if record.Name == "" {
+		record.Name = "@"
+	}
+	record.Type = strings.ToUpper(strings.TrimSpace(record.Type))
+	if !validType(record.Type) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid DNS record type")
+		return record, false
+	}
+	if !validRecordFields(record.Name, record.Value) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid DNS record")
+		return record, false
+	}
+	if record.TTL <= 0 {
+		record.TTL = 3600
+	}
+	record.Priority = normalizePriority(record.Type, record.Priority)
+	return record, true
 }
 
 // Update replaces a DNS record for a domain.
@@ -338,57 +344,15 @@ func SeedDefaults(ctx context.Context, db *sql.DB, domainID int64, domainName, i
 		rows = builtinDefaults()
 	}
 	meta := LoadTemplateMeta(ctx, db)
-	selector := meta.DKIMSelector
 	ns1, ns2 := NameserverPair(ctx, db, domainID, domainName)
-
-	dkimTXT := ""
-	if meta.DKIMEnabled {
-		for _, row := range rows {
-			if row.Enabled && strings.Contains(row.Value, "{DKIM}") {
-				dkimTXT, err = ensureDKIM(ctx, db, domainID, domainName, selector)
-				if err != nil {
-					log.Printf("generate DKIM key domain=%d: %v", domainID, err)
-				}
-				break
-			}
-		}
-	}
+	values := seedValues{domainName: domainName, ipv4: ipv4, ipv6: ipv6, selector: meta.DKIMSelector, ns1: ns1, ns2: ns2}
+	values.dkim = seedDKIM(ctx, db, domainID, domainName, meta, rows)
 
 	added := 0
 	for _, row := range rows {
-		if !row.Enabled {
-			continue
+		if seedRecord(ctx, db, domainID, values, row, meta.DKIMEnabled) {
+			added++
 		}
-		if strings.Contains(row.Value, "{DKIM}") && (!meta.DKIMEnabled || dkimTXT == "") {
-			continue
-		}
-		// THE fail-closed rule for IPv6. A record that exists ONLY to carry the
-		// address is not written at all when there is no address. A AAAA
-		// pointing nowhere is worse than no AAAA: an IPv6-preferring client
-		// gets a dead site, and Let's Encrypt tries the AAAA FIRST, so
-		// certificate renewal stops too, silently, weeks later.
-		if ipv6 == "" && recordNeedsIPv6(row.Type, row.Value) {
-			continue
-		}
-		name := substituteTemplate(row.Name, domainName, ipv4, ipv6, selector, dkimTXT, ns1, ns2)
-		value := substituteTemplate(row.Value, domainName, ipv4, ipv6, selector, dkimTXT, ns1, ns2)
-		recordType := strings.ToUpper(strings.TrimSpace(row.Type))
-		var count int
-		_ = db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type=? AND value=?`,
-			domainID, name, recordType, value).Scan(&count)
-		if count > 0 {
-			continue
-		}
-		if _, err := db.ExecContext(ctx,
-			`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
-			 VALUES(?,?,?,?,?,?,1)`,
-			domainID, name, recordType, value, row.TTL, normalizePriority(recordType, row.Priority)); err != nil {
-			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("dns seed %s/%s: %v", name, recordType, err)
-			continue
-		}
-		added++
 	}
 	// When the nameserver lives INSIDE this zone (the provider's own domain),
 	// BIND must find the glue A record in the zone file or the zone does not
@@ -399,6 +363,79 @@ func SeedDefaults(ctx context.Context, db *sql.DB, domainID int64, domainName, i
 	}
 	seedSOAFromMeta(ctx, db, domainID, domainName, meta)
 	return added, nil
+}
+
+// seedValues carries everything a template row's placeholders resolve to.
+type seedValues struct {
+	domainName string
+	ipv4       string
+	ipv6       string
+	selector   string
+	dkim       string
+	ns1        string
+	ns2        string
+}
+
+// substitute fills in one template field from these values.
+func (v seedValues) substitute(text string) string {
+	return substituteTemplate(text, v.domainName, v.ipv4, v.ipv6, v.selector, v.dkim, v.ns1, v.ns2)
+}
+
+// seedDKIM returns the DKIM TXT value the template asks for, generating the key
+// on first use. It returns empty when no enabled row carries the placeholder.
+func seedDKIM(ctx context.Context, db *sql.DB, domainID int64, domainName string, meta TemplateMeta, rows []TemplateRow) string {
+	if !meta.DKIMEnabled {
+		return ""
+	}
+	for _, row := range rows {
+		if !row.Enabled || !strings.Contains(row.Value, "{DKIM}") {
+			continue
+		}
+		dkimTXT, err := ensureDKIM(ctx, db, domainID, domainName, meta.DKIMSelector)
+		if err != nil {
+			log.Printf("generate DKIM key domain=%d: %v", domainID, err)
+		}
+		return dkimTXT
+	}
+	return ""
+}
+
+// seedRecord writes one template row for a domain and reports whether it added
+// a record.
+func seedRecord(ctx context.Context, db *sql.DB, domainID int64, values seedValues, row TemplateRow, dkimEnabled bool) bool {
+	if !row.Enabled {
+		return false
+	}
+	if strings.Contains(row.Value, "{DKIM}") && (!dkimEnabled || values.dkim == "") {
+		return false
+	}
+	// THE fail-closed rule for IPv6. A record that exists ONLY to carry the
+	// address is not written at all when there is no address. A AAAA
+	// pointing nowhere is worse than no AAAA: an IPv6-preferring client
+	// gets a dead site, and Let's Encrypt tries the AAAA FIRST, so
+	// certificate renewal stops too, silently, weeks later.
+	if values.ipv6 == "" && recordNeedsIPv6(row.Type, row.Value) {
+		return false
+	}
+	name := values.substitute(row.Name)
+	value := values.substitute(row.Value)
+	recordType := strings.ToUpper(strings.TrimSpace(row.Type))
+	var count int
+	_ = db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type=? AND value=?`,
+		domainID, name, recordType, value).Scan(&count)
+	if count > 0 {
+		return false
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
+		 VALUES(?,?,?,?,?,?,1)`,
+		domainID, name, recordType, value, row.TTL, normalizePriority(recordType, row.Priority)); err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		log.Printf("dns seed %s/%s: %v", name, recordType, err)
+		return false
+	}
+	return true
 }
 
 // domainIPv6 returns the address this domain answers on over IPv6, or empty.

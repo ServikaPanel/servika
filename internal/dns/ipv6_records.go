@@ -101,34 +101,47 @@ func addIPv6Records(ctx context.Context, db *sql.DB, domainID int64, domainName,
 	}
 	meta := LoadTemplateMeta(ctx, db)
 	ns1, ns2 := NameserverPair(ctx, db, domainID, domainName)
+	values := seedValues{domainName: domainName, ipv6: next, selector: meta.DKIMSelector, ns1: ns1, ns2: ns2}
 
 	added := 0
 	for _, row := range rows {
-		if !row.Enabled || !strings.EqualFold(strings.TrimSpace(row.Type), "AAAA") {
-			continue
-		}
-		if !strings.Contains(row.Value, "{IP6}") {
-			continue // a fixed AAAA in the template is not this domain's address
-		}
-		name := substituteTemplate(row.Name, domainName, "", next, meta.DKIMSelector, "", ns1, ns2)
-		value := substituteTemplate(row.Value, domainName, "", next, meta.DKIMSelector, "", ns1, ns2)
-
-		var count int
-		if err := db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type='AAAA'`,
-			domainID, name).Scan(&count); err != nil {
+		wrote, err := addIPv6Record(ctx, db, domainID, values, row)
+		if err != nil {
 			return added, err
 		}
-		if count > 0 {
-			continue // the zone already answers for this name over IPv6
+		if wrote {
+			added++
 		}
-		if _, err := db.ExecContext(ctx,
-			`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
-			 VALUES(?,?,'AAAA',?,?,0,1)`,
-			domainID, name, value, row.TTL); err != nil {
-			return added, err
-		}
-		added++
 	}
 	return added, nil
+}
+
+// addIPv6Record writes one template row's AAAA record and reports whether the
+// zone gained it.
+func addIPv6Record(ctx context.Context, db *sql.DB, domainID int64, values seedValues, row TemplateRow) (bool, error) {
+	if !row.Enabled || !strings.EqualFold(strings.TrimSpace(row.Type), "AAAA") {
+		return false, nil
+	}
+	if !strings.Contains(row.Value, "{IP6}") {
+		return false, nil // a fixed AAAA in the template is not this domain's address
+	}
+	name := values.substitute(row.Name)
+	value := values.substitute(row.Value)
+
+	var count int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type='AAAA'`,
+		domainID, name).Scan(&count); err != nil {
+		return false, err
+	}
+	if count > 0 {
+		return false, nil // the zone already answers for this name over IPv6
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
+		 VALUES(?,?,'AAAA',?,?,0,1)`,
+		domainID, name, value, row.TTL); err != nil {
+		return false, err
+	}
+	return true, nil
 }

@@ -29,17 +29,20 @@ _sip._tcp	IN	SRV	10 5 5060 sip.example.com.
 	for _, r := range records {
 		byKey[r.Type+"|"+r.Name] = r
 	}
-	if r, ok := byKey["MX|@"]; !ok || r.Priority != 0 || r.Value != "mail.example.com" {
-		t.Fatalf("MX priority-0 not parsed correctly: %+v", r)
-	}
-	if r, ok := byKey["TXT|@"]; !ok || r.Value != "v=spf1 -all" {
-		t.Fatalf("TXT quote/comment not handled: %+v", r)
-	}
-	if r, ok := byKey["SRV|_sip._tcp"]; !ok || r.Priority != 10 || r.Value != "5 5060 sip.example.com" {
-		t.Fatalf("SRV not parsed correctly: %+v", r)
-	}
-	if r, ok := byKey["CNAME|www"]; !ok || r.Value != "example.com" {
-		t.Fatalf("CNAME trailing dot not trimmed: %+v", r)
+	for _, want := range []struct {
+		key      string
+		value    string
+		priority int
+	}{
+		{key: "MX|@", value: "mail.example.com"},
+		{key: "TXT|@", value: "v=spf1 -all"},
+		{key: "SRV|_sip._tcp", value: "5 5060 sip.example.com", priority: 10},
+		{key: "CNAME|www", value: "example.com"},
+	} {
+		record, ok := byKey[want.key]
+		if !ok || record.Value != want.value || record.Priority != want.priority {
+			t.Errorf("%s parsed as %+v, want value %q and priority %d", want.key, record, want.value, want.priority)
+		}
 	}
 }
 

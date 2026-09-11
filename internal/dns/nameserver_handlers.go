@@ -245,44 +245,16 @@ func MigrateNameserverRecords(ctx context.Context, db *sql.DB) (MigrationResult,
 // inside this zone needs an in-zone A record, one outside it leaves only the
 // vanity model's ns1/ns2 A records to clean up.
 func syncNameserverRecords(ctx context.Context, db *sql.DB, domainID int64, domainName, ns1, ns2 string) (bool, error) {
-	rows, err := db.QueryContext(ctx,
-		`SELECT value FROM dns_records WHERE domain_id=? AND type='NS' AND name='@'`, domainID)
+	current, err := currentNSRecords(ctx, db, domainID)
 	if err != nil {
 		return false, err
 	}
-	var current []string
-	for rows.Next() {
-		var value string
-		if err := rows.Scan(&value); err != nil {
-			_ = rows.Close()
-			return false, err
-		}
-		current = append(current, strings.ToLower(strings.TrimSuffix(value, ".")))
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return false, err
-	}
-	if err := rows.Close(); err != nil {
-		return false, err
-	}
+	nsCorrect := nsPairMatches(current, ns1, ns2)
 
-	wanted := map[string]bool{ns1: true, ns2: true}
-	nsCorrect := len(current) == 2
-	for _, value := range current {
-		if !wanted[value] {
-			nsCorrect = false
-		}
-	}
-
-	var soaPrimary string
-	err = db.QueryRowContext(ctx, `SELECT primary_ns FROM dns_soa WHERE domain_id=?`, domainID).Scan(&soaPrimary)
-	// A domain with no SOA row yet gets one from the template path, not here.
-	soaMissing := errors.Is(err, sql.ErrNoRows)
-	if err != nil && !soaMissing {
+	soaCorrect, err := soaNamesPrimary(ctx, db, domainID, ns1)
+	if err != nil {
 		return false, err
 	}
-	soaCorrect := soaMissing || strings.EqualFold(strings.TrimSuffix(soaPrimary, "."), ns1)
 
 	// Glue must be settled per domain: an in-zone nameserver needs an A record
 	// inside this very zone or BIND refuses to load it, while an out-of-zone one
@@ -299,27 +271,89 @@ func syncNameserverRecords(ctx context.Context, db *sql.DB, domainID int64, doma
 	if nsCorrect && soaCorrect && !glueChanged {
 		return false, nil
 	}
+	if err := writeNameserverRecords(ctx, db, domainID, ns1, ns2, nsCorrect, soaCorrect); err != nil {
+		return false, err
+	}
+	return true, nil
+}
 
+// currentNSRecords returns the apex NS values a zone publishes today, lowercased
+// and without their trailing dot.
+func currentNSRecords(ctx context.Context, db *sql.DB, domainID int64) ([]string, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT value FROM dns_records WHERE domain_id=? AND type='NS' AND name='@'`, domainID)
+	if err != nil {
+		return nil, err
+	}
+	var current []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		current = append(current, strings.ToLower(strings.TrimSuffix(value, ".")))
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return current, nil
+}
+
+// nsPairMatches reports whether the zone already publishes exactly the pair.
+func nsPairMatches(current []string, ns1, ns2 string) bool {
+	wanted := map[string]bool{ns1: true, ns2: true}
+	if len(current) != 2 {
+		return false
+	}
+	for _, value := range current {
+		if !wanted[value] {
+			return false
+		}
+	}
+	return true
+}
+
+// soaNamesPrimary reports whether the SOA already names the first nameserver.
+//
+// A domain with no SOA row yet gets one from the template path, not here.
+func soaNamesPrimary(ctx context.Context, db *sql.DB, domainID int64, ns1 string) (bool, error) {
+	var soaPrimary string
+	err := db.QueryRowContext(ctx, `SELECT primary_ns FROM dns_soa WHERE domain_id=?`, domainID).Scan(&soaPrimary)
+	soaMissing := errors.Is(err, sql.ErrNoRows)
+	if err != nil && !soaMissing {
+		return false, err
+	}
+	return soaMissing || strings.EqualFold(strings.TrimSuffix(soaPrimary, "."), ns1), nil
+}
+
+// writeNameserverRecords replaces whichever of the NS set and the SOA primary
+// does not name the pair.
+func writeNameserverRecords(ctx context.Context, db *sql.DB, domainID int64, ns1, ns2 string, nsCorrect, soaCorrect bool) error {
 	if !nsCorrect {
 		if _, err := db.ExecContext(ctx,
 			`DELETE FROM dns_records WHERE domain_id=? AND type='NS' AND name='@'`, domainID); err != nil {
-			return false, err
+			return err
 		}
 		for _, host := range []string{ns1, ns2} {
 			if _, err := db.ExecContext(ctx,
 				`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
 				 VALUES(?, '@', 'NS', ?, 86400, 0, 1)`, domainID, host); err != nil {
-				return false, err
+				return err
 			}
 		}
 	}
 	if !soaCorrect {
 		if _, err := db.ExecContext(ctx,
 			`UPDATE dns_soa SET primary_ns=? WHERE domain_id=?`, ns1, domainID); err != nil {
-			return false, err
+			return err
 		}
 	}
-	return true, nil
+	return nil
 }
 
 // GetDomainNameserver tells a customer where to point their domain. It is shown

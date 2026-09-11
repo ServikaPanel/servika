@@ -105,7 +105,25 @@ func (h *Handlers) PutSOA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ns1, _ := NameserverPair(r.Context(), h.DB, id, domainName)
-	defaults := defaultSOA(domainName, ns1)
+	fillSOADefaults(&soa, defaultSOA(domainName, ns1))
+	if _, err := h.DB.ExecContext(r.Context(),
+		`INSERT INTO dns_soa(domain_id, primary_ns, hostmaster, refresh, retry, expire, minimum, ttl)
+		 VALUES(?,?,?,?,?,?,?,?)
+		 ON DUPLICATE KEY UPDATE primary_ns=VALUES(primary_ns), hostmaster=VALUES(hostmaster),
+		   refresh=VALUES(refresh), retry=VALUES(retry), expire=VALUES(expire),
+		   minimum=VALUES(minimum), ttl=VALUES(ttl)`,
+		id, soa.PrimaryNS, soa.Hostmaster, soa.Refresh, soa.Retry, soa.Expire, soa.Minimum, soa.TTL); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not save SOA settings")
+		return
+	}
+	if err := writeZone(r.Context(), h.DB, id); err != nil {
+		httpx.LogR(r, "dns WriteZone(soa) domain=%d: %v", id, err)
+	}
+	httpx.WriteJSON(w, http.StatusOK, soa)
+}
+
+// fillSOADefaults replaces every field the request left empty or out of range.
+func fillSOADefaults(soa *SOA, defaults SOA) {
 	if soa.PrimaryNS = strings.TrimSpace(soa.PrimaryNS); soa.PrimaryNS == "" {
 		soa.PrimaryNS = defaults.PrimaryNS
 	}
@@ -127,18 +145,4 @@ func (h *Handlers) PutSOA(w http.ResponseWriter, r *http.Request) {
 	if soa.TTL <= 0 {
 		soa.TTL = defaults.TTL
 	}
-	if _, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO dns_soa(domain_id, primary_ns, hostmaster, refresh, retry, expire, minimum, ttl)
-		 VALUES(?,?,?,?,?,?,?,?)
-		 ON DUPLICATE KEY UPDATE primary_ns=VALUES(primary_ns), hostmaster=VALUES(hostmaster),
-		   refresh=VALUES(refresh), retry=VALUES(retry), expire=VALUES(expire),
-		   minimum=VALUES(minimum), ttl=VALUES(ttl)`,
-		id, soa.PrimaryNS, soa.Hostmaster, soa.Refresh, soa.Retry, soa.Expire, soa.Minimum, soa.TTL); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not save SOA settings")
-		return
-	}
-	if err := writeZone(r.Context(), h.DB, id); err != nil {
-		httpx.LogR(r, "dns WriteZone(soa) domain=%d: %v", id, err)
-	}
-	httpx.WriteJSON(w, http.StatusOK, soa)
 }

@@ -118,33 +118,38 @@ func TestSuggestedNameserverGuessesTheBrandDomain(t *testing.T) {
 // question, and getting it wrong takes a zone offline: BIND refuses to load a
 // zone whose in-bailiwick NS has no address record in the zone file.
 func TestInZoneLabelSeparatesGlueFromOutOfZoneNameservers(t *testing.T) {
-	// The provider's OWN domain: the NS is inside the zone, so glue is required.
-	if label, ok := inZoneLabel("ns1.provider.com", "provider.com"); !ok || label != "ns1" {
-		t.Errorf(`inZoneLabel("ns1.provider.com", "provider.com") = %q, %v; want "ns1", true`, label, ok)
+	cases := []struct {
+		name   string
+		nsHost string
+		zone   string
+		want   string
+		inZone bool
+	}{
+		// The provider's OWN domain: the NS is inside the zone, so glue is required.
+		{name: "the provider's own nameserver", nsHost: "ns1.provider.com", zone: "provider.com",
+			want: "ns1", inZone: true},
+		{name: "a deeper in-zone nameserver", nsHost: "ns1.dns.provider.com", zone: "provider.com",
+			want: "ns1.dns", inZone: true},
+		// A trailing dot is the zone-file spelling and must not change the answer.
+		{name: "a fully qualified nameserver", nsHost: "ns1.provider.com.", zone: "provider.com",
+			want: "ns1", inZone: true},
+		// A CUSTOMER domain: the NS is outside the zone, so glue is neither needed
+		// nor meaningful and writing one would pollute the customer's zone.
+		{name: "a customer domain", nsHost: "ns1.provider.com", zone: "customer.example"},
+		// A shared suffix must not read as containment.
+		{name: "a suffix lookalike", nsHost: "ns1.xprovider.com", zone: "provider.com"},
+		// A nameserver that IS the zone is the apex; its glue is the apex A record.
+		{name: "an apex nameserver", nsHost: "provider.com", zone: "provider.com", want: "@", inZone: true},
+		{name: "an empty nameserver", nsHost: "", zone: "provider.com"},
 	}
-	if label, ok := inZoneLabel("ns1.dns.provider.com", "provider.com"); !ok || label != "ns1.dns" {
-		t.Errorf("a deeper in-zone nameserver = %q, %v; want \"ns1.dns\", true", label, ok)
-	}
-	// A trailing dot is the zone-file spelling and must not change the answer.
-	if label, ok := inZoneLabel("ns1.provider.com.", "provider.com"); !ok || label != "ns1" {
-		t.Errorf("a fully qualified nameserver = %q, %v; want \"ns1\", true", label, ok)
-	}
-
-	// A CUSTOMER domain: the NS is outside the zone, so glue is neither needed
-	// nor meaningful and writing one would pollute the customer's zone.
-	if _, ok := inZoneLabel("ns1.provider.com", "customer.example"); ok {
-		t.Error("an out-of-zone nameserver was treated as in-zone")
-	}
-	// A shared suffix must not read as containment.
-	if _, ok := inZoneLabel("ns1.xprovider.com", "provider.com"); ok {
-		t.Error("a suffix lookalike was treated as in-zone")
-	}
-	// A nameserver that IS the zone is the apex; its glue is the apex A record.
-	if label, ok := inZoneLabel("provider.com", "provider.com"); !ok || label != "@" {
-		t.Errorf("an apex nameserver = %q, %v; want \"@\", true", label, ok)
-	}
-	if _, ok := inZoneLabel("", "provider.com"); ok {
-		t.Error("an empty nameserver was treated as in-zone")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			label, ok := inZoneLabel(tc.nsHost, tc.zone)
+			if ok != tc.inZone || label != tc.want {
+				t.Errorf("inZoneLabel(%q, %q) = %q, %v; want %q, %v",
+					tc.nsHost, tc.zone, label, ok, tc.want, tc.inZone)
+			}
+		})
 	}
 }
 

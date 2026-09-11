@@ -336,10 +336,7 @@ func (h *Handlers) GetTemplate(w http.ResponseWriter, r *http.Request) {
 
 // PutTemplate replaces the server-wide DNS template and metadata atomically.
 func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Records []TemplateRow `json:"records"`
-		Meta    TemplateMeta  `json:"meta"`
-	}
+	var req templateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -348,8 +345,46 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid DKIM selector")
 		return
 	}
-	for i := range req.Records {
-		record := &req.Records[i]
+	if !normalizeTemplateRecords(w, req.Records) {
+		return
+	}
+	setTemplateMetaDefaults(&req.Meta)
+
+	tx, err := h.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		httpx.LogR(r, "begin DNS template update: %v", err)
+		templateUpdateFailed(w)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	if !writeTemplate(w, r, tx, req) {
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		httpx.LogR(r, "commit DNS template update: %v", err)
+		templateUpdateFailed(w)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// templateRequest is the body of a template save.
+type templateRequest struct {
+	Records []TemplateRow `json:"records"`
+	Meta    TemplateMeta  `json:"meta"`
+}
+
+// templateUpdateFailed answers every failed step of a template save with the
+// one message the screen shows.
+func templateUpdateFailed(w http.ResponseWriter) {
+	httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
+}
+
+// normalizeTemplateRecords fills in the defaults of every row and reports
+// whether they are all storable. It answers the client itself when one is not.
+func normalizeTemplateRecords(w http.ResponseWriter, records []TemplateRow) bool {
+	for i := range records {
+		record := &records[i]
 		record.Type = strings.ToUpper(strings.TrimSpace(record.Type))
 		record.Name = strings.TrimSpace(record.Name)
 		if record.Name == "" {
@@ -357,7 +392,7 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		if !validRecordFields(record.Name, record.Value) || !validType(record.Type) {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid DNS template record")
-			return
+			return false
 		}
 		if record.TTL <= 0 {
 			record.TTL = 3600
@@ -367,19 +402,16 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		record.Priority = normalizePriority(record.Type, record.Priority)
 	}
-	setTemplateMetaDefaults(&req.Meta)
+	return true
+}
 
-	tx, err := h.DB.BeginTx(r.Context(), nil)
-	if err != nil {
-		httpx.LogR(r, "begin DNS template update: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
+// writeTemplate replaces every stored row and the metadata inside tx. It
+// reports the failure to the client itself, so the caller only stops.
+func writeTemplate(w http.ResponseWriter, r *http.Request, tx *sql.Tx, req templateRequest) bool {
 	if _, err := tx.ExecContext(r.Context(), `DELETE FROM dns_template`); err != nil {
 		httpx.LogR(r, "clear DNS template: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
-		return
+		templateUpdateFailed(w)
+		return false
 	}
 	for _, record := range req.Records {
 		enabled := 0
@@ -390,8 +422,8 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO dns_template(name,type,value,ttl,priority,sort_order,enabled) VALUES(?,?,?,?,?,?,?)`,
 			record.Name, record.Type, record.Value, record.TTL, record.Priority, record.SortOrder, enabled); err != nil {
 			httpx.LogR(r, "insert DNS template record: %v", err)
-			httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
-			return
+			templateUpdateFailed(w)
+			return false
 		}
 	}
 	dkimEnabled := 0
@@ -406,15 +438,10 @@ func (h *Handlers) PutTemplate(w http.ResponseWriter, r *http.Request) {
 		 dkim_selector=VALUES(dkim_selector), dkim_enabled=VALUES(dkim_enabled)`,
 		req.Meta.SOARefresh, req.Meta.SOARetry, req.Meta.SOAExpire, req.Meta.SOAMinimum, req.Meta.SOATTL, req.Meta.DKIMSelector, dkimEnabled); err != nil {
 		httpx.LogR(r, "update DNS template metadata: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
-		return
+		templateUpdateFailed(w)
+		return false
 	}
-	if err := tx.Commit(); err != nil {
-		httpx.LogR(r, "commit DNS template update: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not update DNS template")
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return true
 }
 
 func setTemplateMetaDefaults(meta *TemplateMeta) {

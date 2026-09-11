@@ -31,12 +31,33 @@ type MailDiscoveryResult struct {
 func ApplyMailDiscovery(ctx context.Context, db *sql.DB) (MailDiscoveryResult, error) {
 	var result MailDiscoveryResult
 
+	added, err := addMissingDiscoveryRows(ctx, db)
+	result.TemplateAdded = added
+	if err != nil {
+		return result, err
+	}
+
+	domainList, err := discoveryDomains(ctx, db)
+	if err != nil {
+		return result, err
+	}
+	for _, domain := range domainList {
+		result.Domains++
+		applyDiscoveryToDomain(ctx, db, domain, &result)
+	}
+	return result, nil
+}
+
+// addMissingDiscoveryRows tops up the stored template and reports how many rows
+// it added.
+func addMissingDiscoveryRows(ctx context.Context, db *sql.DB) (int, error) {
+	added := 0
 	for _, row := range MailDiscoveryRows() {
 		var count int
 		if err := db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM dns_template WHERE name=? AND type=? AND value=?`,
 			row.Name, row.Type, row.Value).Scan(&count); err != nil {
-			return result, err
+			return added, err
 		}
 		if count > 0 {
 			continue
@@ -48,57 +69,64 @@ func ApplyMailDiscovery(ctx context.Context, db *sql.DB) (MailDiscoveryResult, e
 		if _, err := db.ExecContext(ctx,
 			`INSERT INTO dns_template(name,type,value,ttl,priority,sort_order,enabled) VALUES(?,?,?,?,?,?,?)`,
 			row.Name, row.Type, row.Value, row.TTL, row.Priority, row.SortOrder, enabled); err != nil {
-			return result, err
+			return added, err
 		}
-		result.TemplateAdded++
+		added++
 	}
+	return added, nil
+}
 
+// discoveryDomain is one domain an apply run seeds.
+type discoveryDomain struct {
+	id   int64
+	name string
+	ipv4 string
+}
+
+// discoveryDomains lists every domain, oldest first.
+func discoveryDomains(ctx context.Context, db *sql.DB) ([]discoveryDomain, error) {
 	rows, err := db.QueryContext(ctx, `SELECT id, domain_name, COALESCE(ipv4,'') FROM domains ORDER BY id`)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
-	type domainRow struct {
-		id   int64
-		name string
-		ipv4 string
-	}
-	var domainList []domainRow
+	var domainList []discoveryDomain
 	for rows.Next() {
-		var row domainRow
+		var row discoveryDomain
 		if err := rows.Scan(&row.id, &row.name, &row.ipv4); err != nil {
 			_ = rows.Close()
-			return result, err
+			return nil, err
 		}
 		domainList = append(domainList, row)
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
-		return result, err
+		return nil, err
 	}
 	if err := rows.Close(); err != nil {
-		return result, err
+		return nil, err
 	}
+	return domainList, nil
+}
 
-	for _, domain := range domainList {
-		result.Domains++
-		added, err := seedDefaults(ctx, db, domain.id, domain.name, domain.ipv4)
-		if err != nil {
-			// Which domain failed goes to the log; the response carries a count,
-			// because one broken zone must not stop the rest from being fixed.
-			log.Printf("mail discovery records for domain %d: %v", domain.id, err)
-			result.Failed++
-			continue
-		}
-		if added == 0 {
-			continue // Already had them; no need to rewrite an unchanged zone.
-		}
-		result.RecordsAdded += added
-		if err := writeZone(ctx, db, domain.id); err != nil {
-			log.Printf("write zone after adding mail discovery records for domain %d: %v", domain.id, err)
-			result.Failed++
-		}
+// applyDiscoveryToDomain seeds one domain and rewrites its zone when the seed
+// added something.
+func applyDiscoveryToDomain(ctx context.Context, db *sql.DB, domain discoveryDomain, result *MailDiscoveryResult) {
+	added, err := seedDefaults(ctx, db, domain.id, domain.name, domain.ipv4)
+	if err != nil {
+		// Which domain failed goes to the log; the response carries a count,
+		// because one broken zone must not stop the rest from being fixed.
+		log.Printf("mail discovery records for domain %d: %v", domain.id, err)
+		result.Failed++
+		return
 	}
-	return result, nil
+	if added == 0 {
+		return // Already had them; no need to rewrite an unchanged zone.
+	}
+	result.RecordsAdded += added
+	if err := writeZone(ctx, db, domain.id); err != nil {
+		log.Printf("write zone after adding mail discovery records for domain %d: %v", domain.id, err)
+		result.Failed++
+	}
 }
 
 // MigrateMailDiscovery is the admin endpoint behind the apply run.

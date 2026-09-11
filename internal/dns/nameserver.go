@@ -171,66 +171,24 @@ func inZoneLabel(nsHost, domainName string) (string, bool) {
 // meaningful. So the decision is made per domain from where the hostname sits
 // relative to the zone, which a static template row cannot express.
 func SyncGlueRecords(ctx context.Context, db *sql.DB, domainID int64, domainName, ipv4, ns1, ns2 string) (bool, error) {
-	required := map[string]bool{}
-	for _, nsHost := range []string{ns1, ns2} {
-		if label, ok := inZoneLabel(nsHost, domainName); ok && label != "@" {
-			required[label] = true
-		}
-	}
+	required := requiredGlueLabels(domainName, ns1, ns2)
 	if len(required) > 0 && ipv4 == "" {
 		return false, fmt.Errorf("%w: %s", ErrGlueAddressMissing, domainName)
 	}
 
 	changed := false
 	for label := range required {
-		var current string
-		err := db.QueryRowContext(ctx,
-			`SELECT value FROM dns_records WHERE domain_id=? AND name=? AND type='A' LIMIT 1`,
-			domainID, label).Scan(&current)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			if _, execErr := db.ExecContext(ctx,
-				`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
-				 VALUES(?,?, 'A', ?, 3600, 0, 1)`, domainID, label, ipv4); execErr != nil {
-				return changed, execErr
-			}
+		labelChanged, err := ensureGlueRecord(ctx, db, domainID, label, ipv4)
+		if labelChanged {
 			changed = true
-		case err != nil:
+		}
+		if err != nil {
 			return changed, err
-		case current != ipv4:
-			if _, execErr := db.ExecContext(ctx,
-				`UPDATE dns_records SET value=? WHERE domain_id=? AND name=? AND type='A'`,
-				ipv4, domainID, label); execErr != nil {
-				return changed, execErr
-			}
-			changed = true
 		}
 	}
 
-	// Clean up only the literal ns1/ns2 names the vanity template used to
-	// create; a deeper in-zone label was never produced by the template, so
-	// removing arbitrary names here would delete records an operator added.
-	rows, err := db.QueryContext(ctx,
-		`SELECT name FROM dns_records WHERE domain_id=? AND type='A' AND name IN ('ns1','ns2')`, domainID)
+	stale, err := staleGlueNames(ctx, db, domainID, required)
 	if err != nil {
-		return changed, err
-	}
-	var stale []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			_ = rows.Close()
-			return changed, err
-		}
-		if !required[name] {
-			stale = append(stale, name)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return changed, err
-	}
-	if err := rows.Close(); err != nil {
 		return changed, err
 	}
 	for _, name := range stale {
@@ -241,4 +199,77 @@ func SyncGlueRecords(ctx context.Context, db *sql.DB, domainID int64, domainName
 		changed = true
 	}
 	return changed, nil
+}
+
+// requiredGlueLabels returns the labels that need a glue A record inside the
+// zone. A nameserver that IS the zone is left out: that glue is the apex A
+// record, which the template already owns.
+func requiredGlueLabels(domainName, ns1, ns2 string) map[string]bool {
+	required := map[string]bool{}
+	for _, nsHost := range []string{ns1, ns2} {
+		if label, ok := inZoneLabel(nsHost, domainName); ok && label != "@" {
+			required[label] = true
+		}
+	}
+	return required
+}
+
+// ensureGlueRecord writes or repoints one label's glue A record and reports
+// whether the zone changed.
+func ensureGlueRecord(ctx context.Context, db *sql.DB, domainID int64, label, ipv4 string) (bool, error) {
+	var current string
+	err := db.QueryRowContext(ctx,
+		`SELECT value FROM dns_records WHERE domain_id=? AND name=? AND type='A' LIMIT 1`,
+		domainID, label).Scan(&current)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if _, execErr := db.ExecContext(ctx,
+			`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
+			 VALUES(?,?, 'A', ?, 3600, 0, 1)`, domainID, label, ipv4); execErr != nil {
+			return false, execErr
+		}
+		return true, nil
+	case err != nil:
+		return false, err
+	case current != ipv4:
+		if _, execErr := db.ExecContext(ctx,
+			`UPDATE dns_records SET value=? WHERE domain_id=? AND name=? AND type='A'`,
+			ipv4, domainID, label); execErr != nil {
+			return false, execErr
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// staleGlueNames returns the vanity A records the zone no longer needs.
+//
+// Only the literal ns1/ns2 names the vanity template used to create are
+// reported; a deeper in-zone label was never produced by the template, so
+// removing arbitrary names here would delete records an operator added.
+func staleGlueNames(ctx context.Context, db *sql.DB, domainID int64, required map[string]bool) ([]string, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT name FROM dns_records WHERE domain_id=? AND type='A' AND name IN ('ns1','ns2')`, domainID)
+	if err != nil {
+		return nil, err
+	}
+	var stale []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if !required[name] {
+			stale = append(stale, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return stale, nil
 }

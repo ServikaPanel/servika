@@ -8,6 +8,7 @@
 package dns
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -108,28 +109,9 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var content []byte
-	r.Body = http.MaxBytesReader(w, r.Body, 2<<20) // a zone file is small
-	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
-		// #nosec G120 -- body is bounded by MaxBytesReader above, so parsing cannot exhaust memory.
-		if e := r.ParseMultipartForm(2 << 20); e != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "could not read the upload")
-			return
-		}
-		defer func() {
-			if r.MultipartForm != nil {
-				_ = r.MultipartForm.RemoveAll()
-			}
-		}()
-		f, _, e := r.FormFile("file")
-		if e != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "file field not found")
-			return
-		}
-		defer func() { _ = f.Close() }()
-		content, _ = io.ReadAll(f)
-	} else {
-		content, _ = io.ReadAll(r.Body)
+	content, read := readZoneUpload(w, r)
+	if !read {
+		return
 	}
 	if len(strings.TrimSpace(string(content))) == 0 {
 		httpx.WriteError(w, http.StatusBadRequest, "empty zone content")
@@ -151,13 +133,56 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	added, skipped, stored := importRecords(w, r, tx, id, records, replace)
+	if !stored {
+		return
+	}
+	writeImportedSOA(r, tx, id, soaParsed)
+	if e := tx.Commit(); e != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	h.writeImportResult(w, r, id, added, skipped, replace)
+}
+
+// readZoneUpload returns the zone text of the request, whether it came as a
+// multipart upload or as a plain body. It answers the client itself when the
+// upload cannot be read.
+func readZoneUpload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20) // a zone file is small
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		content, _ := io.ReadAll(r.Body)
+		return content, true
+	}
+	// #nosec G120 -- body is bounded by MaxBytesReader above, so parsing cannot exhaust memory.
+	if e := r.ParseMultipartForm(2 << 20); e != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "could not read the upload")
+		return nil, false
+	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+	f, _, e := r.FormFile("file")
+	if e != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "file field not found")
+		return nil, false
+	}
+	defer func() { _ = f.Close() }()
+	content, _ := io.ReadAll(f)
+	return content, true
+}
+
+// importRecords writes the parsed records inside tx and reports how many it
+// added and skipped. It answers the client itself when a statement fails.
+func importRecords(w http.ResponseWriter, r *http.Request, tx *sql.Tx, id int64, records []Record, replace bool) (added, skipped int, stored bool) {
 	if replace {
 		if _, e := tx.ExecContext(r.Context(), `DELETE FROM dns_records WHERE domain_id=?`, id); e != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not remove the existing records")
-			return
+			return 0, 0, false
 		}
 	}
-	added, skipped := 0, 0
 	for _, rec := range records {
 		if !replace {
 			var n int
@@ -174,25 +199,31 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 			 VALUES(?,?,?,?,?,?, 1)`,
 			id, rec.Name, rec.Type, rec.Value, rec.TTL, normalizePriority(rec.Type, rec.Priority)); e != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not add a record")
-			return
+			return added, skipped, false
 		}
 		added++
 	}
-	if soaParsed != nil {
-		_, _ = tx.ExecContext(r.Context(),
-			`INSERT INTO dns_soa(domain_id, primary_ns, hostmaster, refresh, retry, expire, minimum, ttl)
-			 VALUES(?,?,?,?,?,?,?,?)
-			 ON DUPLICATE KEY UPDATE primary_ns=VALUES(primary_ns), hostmaster=VALUES(hostmaster),
-			   refresh=VALUES(refresh), retry=VALUES(retry), expire=VALUES(expire),
-			   minimum=VALUES(minimum), ttl=VALUES(ttl)`,
-			id, soaParsed.PrimaryNS, soaParsed.Hostmaster, soaParsed.Refresh, soaParsed.Retry,
-			soaParsed.Expire, soaParsed.Minimum, soaParsed.TTL)
-	}
-	if e := tx.Commit(); e != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+	return added, skipped, true
+}
+
+// writeImportedSOA stores the SOA the uploaded zone carried, if it had one.
+func writeImportedSOA(r *http.Request, tx *sql.Tx, id int64, soaParsed *SOA) {
+	if soaParsed == nil {
 		return
 	}
+	_, _ = tx.ExecContext(r.Context(),
+		`INSERT INTO dns_soa(domain_id, primary_ns, hostmaster, refresh, retry, expire, minimum, ttl)
+		 VALUES(?,?,?,?,?,?,?,?)
+		 ON DUPLICATE KEY UPDATE primary_ns=VALUES(primary_ns), hostmaster=VALUES(hostmaster),
+		   refresh=VALUES(refresh), retry=VALUES(retry), expire=VALUES(expire),
+		   minimum=VALUES(minimum), ttl=VALUES(ttl)`,
+		id, soaParsed.PrimaryNS, soaParsed.Hostmaster, soaParsed.Refresh, soaParsed.Retry,
+		soaParsed.Expire, soaParsed.Minimum, soaParsed.TTL)
+}
 
+// writeImportResult rewrites the zone and answers with the counts. A zone the
+// validator refuses is reported as a warning, because the records are stored.
+func (h *Handlers) writeImportResult(w http.ResponseWriter, r *http.Request, id int64, added, skipped int, replace bool) {
 	zoneWarning := ""
 	if zerr := writeZone(r.Context(), h.DB, id); zerr != nil {
 		zoneWarning = "records saved but zone validation warned: " + zerr.Error()
@@ -211,116 +242,147 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 // comments, TXT quote joining, and MX/SRV priority. Unsupported or invalid lines
 // are skipped.
 func parseBindZone(text, domainName string) ([]Record, *SOA) {
-	origin := strings.TrimSuffix(domainName, ".") + "."
-	defaultTTL := 3600
-	var out []Record
-	var soa *SOA
-	lastName := "@"
-
-	for _, rawLine := range logicalLines(text) {
-		line := stripParens(rawLine) // comments were already removed in logicalLines
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if strings.HasPrefix(strings.TrimSpace(line), "$") {
-			f := strings.Fields(line)
-			switch strings.ToUpper(f[0]) {
-			case "$ORIGIN":
-				if len(f) >= 2 {
-					origin = f[1]
-					if !strings.HasSuffix(origin, ".") {
-						origin += "."
-					}
-				}
-			case "$TTL":
-				if len(f) >= 2 {
-					if n, e := strconv.Atoi(f[1]); e == nil {
-						defaultTTL = n
-					}
-				}
-			}
-			continue
-		}
-
-		// name: when the line starts with whitespace the previous name repeats;
-		// otherwise it is the first token.
-		var name, rest string
-		if line[0] == ' ' || line[0] == '\t' {
-			name = lastName
-			rest = strings.TrimLeft(line, " \t")
-		} else {
-			ff := strings.Fields(line)
-			name = ff[0]
-			rest = strings.TrimSpace(line[len(name):])
-		}
-		lastName = name
-		relativeName := relativeName(name, origin)
-
-		toks := strings.Fields(rest)
-		if len(toks) == 0 {
-			continue
-		}
-		// optional TTL + class (any order)
-		ttl := defaultTTL
-		i := 0
-		for i < len(toks) {
-			if n, e := strconv.Atoi(toks[i]); e == nil {
-				ttl = n
-				i++
-				continue
-			}
-			up := strings.ToUpper(toks[i])
-			if up == "IN" || up == "CH" || up == "HS" {
-				i++
-				continue
-			}
-			break
-		}
-		if i >= len(toks) {
-			continue
-		}
-		recType := strings.ToUpper(toks[i])
-		rdataToks := toks[i+1:]
-
-		if recType == "SOA" {
-			if s := parseSOARdata(rdataToks, ttl); s != nil {
-				soa = s
-			}
-			continue
-		}
-		if !validType(recType) || len(rdataToks) == 0 {
-			continue
-		}
-
-		rec := Record{Name: relativeName, Type: recType, TTL: ttl}
-		switch recType {
-		case "MX":
-			if len(rdataToks) >= 2 {
-				rec.Priority, _ = strconv.Atoi(rdataToks[0])
-				rec.Value = trimDot(rdataToks[1])
-			} else {
-				rec.Value = trimDot(rdataToks[0])
-			}
-		case "SRV":
-			if len(rdataToks) >= 4 {
-				rec.Priority, _ = strconv.Atoi(rdataToks[0])
-				rec.Value = rdataToks[1] + " " + rdataToks[2] + " " + trimDot(rdataToks[3])
-			} else {
-				rec.Value = strings.Join(rdataToks, " ")
-			}
-		case "TXT":
-			rec.Value = unquoteTXT(rdataToks)
-		case "CNAME", "NS", "PTR":
-			rec.Value = trimDot(rdataToks[0])
-		default:
-			rec.Value = strings.Join(rdataToks, " ")
-		}
-		if rec.Value == "" || strings.ContainsAny(rec.Value, "\r\n") || strings.ContainsAny(rec.Name, " \t\r\n") {
-			continue
-		}
-		out = append(out, rec)
+	parser := &zoneParse{
+		origin:     strings.TrimSuffix(domainName, ".") + ".",
+		defaultTTL: 3600,
+		lastName:   "@",
 	}
-	return out, soa
+	for _, rawLine := range logicalLines(text) {
+		parser.line(stripParens(rawLine)) // comments were already removed in logicalLines
+	}
+	return parser.out, parser.soa
+}
+
+// zoneParse carries the state one zone file builds up as it is read: the
+// current origin and TTL, the name a continuation line repeats, and what has
+// been parsed so far.
+type zoneParse struct {
+	origin     string
+	defaultTTL int
+	lastName   string
+	soa        *SOA
+	out        []Record
+}
+
+// line reads one logical line of the zone file.
+func (p *zoneParse) line(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
+	}
+	if p.directive(line) {
+		return
+	}
+	name, rest := p.splitName(line)
+	p.lastName = name
+
+	toks := strings.Fields(rest)
+	if len(toks) == 0 {
+		return
+	}
+	ttl, at := p.ttlAndClass(toks)
+	if at >= len(toks) {
+		return
+	}
+	p.record(relativeName(name, p.origin), strings.ToUpper(toks[at]), toks[at+1:], ttl)
+}
+
+// directive applies a $ORIGIN or $TTL line and reports whether the line was one.
+func (p *zoneParse) directive(line string) bool {
+	if !strings.HasPrefix(strings.TrimSpace(line), "$") {
+		return false
+	}
+	f := strings.Fields(line)
+	switch strings.ToUpper(f[0]) {
+	case "$ORIGIN":
+		if len(f) >= 2 {
+			p.origin = f[1]
+			if !strings.HasSuffix(p.origin, ".") {
+				p.origin += "."
+			}
+		}
+	case "$TTL":
+		if len(f) >= 2 {
+			if n, e := strconv.Atoi(f[1]); e == nil {
+				p.defaultTTL = n
+			}
+		}
+	}
+	return true
+}
+
+// splitName returns the record name and the rest of the line. When the line
+// starts with whitespace the previous name repeats; otherwise it is the first
+// token.
+func (p *zoneParse) splitName(line string) (name, rest string) {
+	if line[0] == ' ' || line[0] == '\t' {
+		return p.lastName, strings.TrimLeft(line, " \t")
+	}
+	ff := strings.Fields(line)
+	name = ff[0]
+	return name, strings.TrimSpace(line[len(name):])
+}
+
+// ttlAndClass reads the optional TTL and class tokens, in any order, and
+// returns the TTL to use with the index of the record type.
+func (p *zoneParse) ttlAndClass(toks []string) (ttl, at int) {
+	ttl = p.defaultTTL
+	for at < len(toks) {
+		if n, e := strconv.Atoi(toks[at]); e == nil {
+			ttl = n
+			at++
+			continue
+		}
+		up := strings.ToUpper(toks[at])
+		if up == "IN" || up == "CH" || up == "HS" {
+			at++
+			continue
+		}
+		break
+	}
+	return ttl, at
+}
+
+// record keeps one parsed record, or the SOA. A line the panel cannot store is
+// skipped rather than failing the whole file.
+func (p *zoneParse) record(name, recType string, rdataToks []string, ttl int) {
+	if recType == "SOA" {
+		if s := parseSOARdata(rdataToks, ttl); s != nil {
+			p.soa = s
+		}
+		return
+	}
+	if !validType(recType) || len(rdataToks) == 0 {
+		return
+	}
+	rec := Record{Name: name, Type: recType, TTL: ttl}
+	rec.Priority, rec.Value = rdataFields(recType, rdataToks)
+	if rec.Value == "" || strings.ContainsAny(rec.Value, "\r\n") || strings.ContainsAny(rec.Name, " \t\r\n") {
+		return
+	}
+	p.out = append(p.out, rec)
+}
+
+// rdataFields reads a record's priority and value out of its rdata tokens.
+func rdataFields(recType string, rdataToks []string) (priority int, value string) {
+	switch recType {
+	case "MX":
+		if len(rdataToks) >= 2 {
+			priority, _ = strconv.Atoi(rdataToks[0])
+			return priority, trimDot(rdataToks[1])
+		}
+		return 0, trimDot(rdataToks[0])
+	case "SRV":
+		if len(rdataToks) >= 4 {
+			priority, _ = strconv.Atoi(rdataToks[0])
+			return priority, rdataToks[1] + " " + rdataToks[2] + " " + trimDot(rdataToks[3])
+		}
+		return 0, strings.Join(rdataToks, " ")
+	case "TXT":
+		return 0, unquoteTXT(rdataToks)
+	case "CNAME", "NS", "PTR":
+		return 0, trimDot(rdataToks[0])
+	}
+	return 0, strings.Join(rdataToks, " ")
 }
 
 // parseSOARdata parses SOA rdata (mname rname serial refresh retry expire minimum).

@@ -162,26 +162,8 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 	if !zoneLeafName(domainName) {
 		return fmt.Errorf("invalid domain name for a zone file: %q", domainName)
 	}
-	rows, err := db.QueryContext(ctx,
-		`SELECT id, domain_id, name, type, value, ttl, priority, enabled,
-		   DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') FROM dns_records
-		 WHERE domain_id=? AND enabled=1 ORDER BY type, name`, domainID)
+	records, err := zoneRecords(ctx, db, domainID)
 	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-	records := make([]Record, 0)
-	for rows.Next() {
-		record, err := scan(rows)
-		if err != nil {
-			// A dropped row is a record that silently disappears from the zone this
-			// function is about to serve, so the write fails instead. Leaving the
-			// previous zone in place is the safe outcome; a short zone is not.
-			return err
-		}
-		records = append(records, record)
-	}
-	if err := rows.Err(); err != nil {
 		return err
 	}
 	if len(records) == 0 {
@@ -192,6 +174,51 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 		return err
 	}
 	zonePath := filepath.Join(zoneDirectory, domainName+".zone")
+	if err := replaceZoneFile(ctx, db, domainID, domainName, zonePath, records); err != nil {
+		return err
+	}
+	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with constant/internal args (no shell); no tenant input.
+	_, _ = zoneCommand("chown", "named:named", zonePath).CombinedOutput()
+	// #nosec G204 G702 -- fixed binary (restorecon) with internal zone path (no shell); no tenant input.
+	_, _ = zoneCommand("restorecon", zonePath).CombinedOutput()
+
+	if err := updateZoneIncludes(ctx, db); err != nil {
+		return err
+	}
+	reloadNamed()
+	return nil
+}
+
+// zoneRecords returns the enabled records the zone file must carry.
+func zoneRecords(ctx context.Context, db *sql.DB, domainID int64) ([]Record, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT id, domain_id, name, type, value, ttl, priority, enabled,
+		   DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') FROM dns_records
+		 WHERE domain_id=? AND enabled=1 ORDER BY type, name`, domainID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	records := make([]Record, 0)
+	for rows.Next() {
+		record, err := scan(rows)
+		if err != nil {
+			// A dropped row is a record that silently disappears from the zone this
+			// function is about to serve, so the write fails instead. Leaving the
+			// previous zone in place is the safe outcome; a short zone is not.
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// replaceZoneFile renders the zone beside the current one, refuses it when
+// named-checkzone does, and only then puts it in place.
+func replaceZoneFile(ctx context.Context, db *sql.DB, domainID int64, domainName, zonePath string, records []Record) error {
 	serial := strconv.FormatUint(uint64(nextSerial(readZoneSerial(zonePath))), 10)
 
 	soa := LoadSOA(ctx, db, domainID, domainName)
@@ -218,15 +245,6 @@ func WriteZone(ctx context.Context, db *sql.DB, domainID int64) error {
 		_ = os.Remove(tmpPath)
 		return err
 	}
-	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with constant/internal args (no shell); no tenant input.
-	_, _ = zoneCommand("chown", "named:named", zonePath).CombinedOutput()
-	// #nosec G204 G702 -- fixed binary (restorecon) with internal zone path (no shell); no tenant input.
-	_, _ = zoneCommand("restorecon", zonePath).CombinedOutput()
-
-	if err := updateZoneIncludes(ctx, db); err != nil {
-		return err
-	}
-	reloadNamed()
 	return nil
 }
 
