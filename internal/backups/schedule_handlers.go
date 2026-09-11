@@ -11,7 +11,7 @@ import (
 
 // GetSchedule returns a domain's backup schedule.
 func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -38,17 +38,13 @@ func (h *Handlers) GetSchedule(w http.ResponseWriter, r *http.Request) {
 
 // SetSchedule updates a domain's backup schedule.
 func (h *Handlers) SetSchedule(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "backup schedules are unavailable for demo subscriptions")
 		return
 	}
 	var s Schedule

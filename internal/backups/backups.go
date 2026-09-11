@@ -66,13 +66,11 @@ type Handlers struct {
 	DB *sql.DB
 }
 
-func (h *Handlers) lookupDomain(r *http.Request) (id int64, domainName, systemUser string, demo bool, err error) {
+func (h *Handlers) lookupDomain(r *http.Request) (id int64, domainName, systemUser string, err error) {
 	id, _ = strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	var demoValue int
 	err = h.DB.QueryRowContext(r.Context(),
 		`SELECT domain_name, system_user FROM domains WHERE id=?`, id).
-		Scan(&domainName, &systemUser, &demoValue)
-	demo = demoValue == 1
+		Scan(&domainName, &systemUser)
 	return
 }
 
@@ -234,17 +232,13 @@ func (s *scheduleFacts) retentionMax() int {
 
 // Create generates and stores a full domain backup.
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
-	id, domainName, systemUser, demo, err := h.lookupDomain(r)
+	id, domainName, systemUser, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "backups are unavailable for demo subscriptions")
 		return
 	}
 	if !validSystemUser(systemUser) {
@@ -354,7 +348,7 @@ func (h *Handlers) backupTask(id int64, release func(), domainName, systemUser, 
 // Progress handles GET /domains/{id}/backups/progress: the running (or
 // just-finished) backup/restore status the customer page polls every 1.5s.
 func (h *Handlers) Progress(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if err != nil {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return

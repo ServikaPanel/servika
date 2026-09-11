@@ -15,7 +15,7 @@ import (
 
 // GetDestination returns a domain's backup destination with its password hidden.
 func (h *Handlers) GetDestination(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -56,17 +56,13 @@ type destinationRequest struct {
 
 // PutDestination creates or updates a domain's backup destination.
 func (h *Handlers) PutDestination(w http.ResponseWriter, r *http.Request) {
-	id, _, _, demo, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
-		return
-	}
-	if demo {
-		httpx.WriteError(w, http.StatusForbidden, "backup destinations are unavailable for demo subscriptions")
 		return
 	}
 	var req destinationRequest
@@ -195,7 +191,7 @@ func (h *Handlers) PutDestination(w http.ResponseWriter, r *http.Request) {
 
 // DeleteDestination deletes a domain's backup destination.
 func (h *Handlers) DeleteDestination(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -214,7 +210,7 @@ func (h *Handlers) DeleteDestination(w http.ResponseWriter, r *http.Request) {
 
 // TestDestination tests supplied destination settings or the stored destination.
 func (h *Handlers) TestDestination(w http.ResponseWriter, r *http.Request) {
-	id, _, _, _, err := h.lookupDomain(r)
+	id, _, _, err := h.lookupDomain(r)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
