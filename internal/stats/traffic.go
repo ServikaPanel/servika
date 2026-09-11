@@ -3,6 +3,7 @@ package stats
 import (
 	"bufio"
 	"database/sql"
+	"errors"
 	"log"
 	"os"
 	"regexp"
@@ -16,6 +17,10 @@ import (
 const trafficJobName = "stats: traffic aggregator"
 
 var trafficDomainPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$`)
+
+// trafficLogRoot is a seam so a test can point the aggregator at a temporary
+// access log instead of the host's. nginx writes the real ones here.
+var trafficLogRoot = "/var/log/nginx/"
 
 // StartTrafficAggregator periodically aggregates nginx traffic for every domain.
 func StartTrafficAggregator(db *sql.DB, every time.Duration) {
@@ -72,7 +77,7 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 		log.Printf("traffic rejected unsafe domain name for domain=%d", domainID)
 		return false
 	}
-	logPath := "/var/log/nginx/" + domainName + ".access.log"
+	logPath := trafficLogRoot + domainName + ".access.log"
 	info, err := os.Stat(logPath)
 	if err != nil {
 		refreshTrafficKB(db, domainID)
@@ -81,11 +86,27 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 	size := info.Size()
 
 	// `offset` is backticked because OFFSET is a reserved word from MariaDB 10.6
-	// onward. Unquoted it is a parse error, and the error is discarded here, so
-	// the cursor would silently read as zero and every pass would count the whole
-	// access log again on top of what it had already stored.
+	// onward. Unquoted it is a parse error.
+	//
+	// The error is NOT discarded, and that is the whole point. sql.ErrNoRows is
+	// the legitimate first pass and means "start at zero"; anything else means
+	// the cursor could not be read, and starting at zero there re-parses the
+	// entire access log and ADDS it on top of what is already stored, because
+	// the merge below is `bytes=bytes+VALUES(bytes)`. That figure is not
+	// cosmetic: it becomes domains.traffic_kb, which a reseller's contracted
+	// traffic ceiling is measured against, so one transient read failure could
+	// push a reseller over a quota they never used, for the rest of the month,
+	// with nothing in the journal saying so.
 	var offset, previousSize int64
-	_ = db.QueryRow("SELECT `offset`, `size` FROM domain_traffic_cursor WHERE domain_id=?", domainID).Scan(&offset, &previousSize)
+	switch err := db.QueryRow("SELECT `offset`, `size` FROM domain_traffic_cursor WHERE domain_id=?",
+		domainID).Scan(&offset, &previousSize); {
+	case errors.Is(err, sql.ErrNoRows):
+		// No cursor yet: this domain has never been counted, so zero is right.
+	case err != nil:
+		// #nosec G706 -- an integer domain id and a MariaDB driver error for a parameterized statement; no tenant string reaches the log.
+		log.Printf("traffic cursor read domain=%d: %v; this domain is not accounted this pass", domainID, err)
+		return false
+	}
 	start := offset
 	if size < offset || size < previousSize {
 		start = 0
@@ -98,13 +119,20 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	file, err := os.Open(logPath)
 	if err != nil {
+		// #nosec G706 -- an integer domain id and an os error naming a path built from a validated domain name; no raw tenant string reaches the log.
+		log.Printf("traffic log open domain=%d: %v; this domain is not accounted this pass", domainID, err)
 		return false
 	}
 	defer func() { _ = file.Close() }()
 	if start > 0 {
 		if _, err := file.Seek(start, 0); err != nil {
-			start = 0
-			_, _ = file.Seek(0, 0)
+			// Rewinding re-counts the whole log on top of what is stored, for
+			// the same reason the cursor read above must not fail silently. Stop
+			// instead: a pass skipped is recoverable, a doubled figure is not.
+			// #nosec G706 -- an integer domain id, an integer offset and an os error; no tenant string reaches the log.
+			log.Printf("traffic log seek domain=%d offset=%d: %v; this domain is not accounted this pass",
+				domainID, start, err)
+			return false
 		}
 	}
 
