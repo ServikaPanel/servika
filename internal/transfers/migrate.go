@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -19,12 +18,6 @@ import (
 	"time"
 
 	"servika/internal/credentials"
-	"servika/internal/dns"
-	"servika/internal/domainblock"
-	"servika/internal/phpversion"
-	"servika/internal/provisioner"
-	"servika/internal/resourcelimit"
-	"servika/internal/sqlimport"
 )
 
 // MigrationResult reports what one account migration produced.
@@ -62,7 +55,7 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	// The live migration is the one creation path with no HTTP response of its
 	// own, so it asks the same question directly. A read failure refuses here
 	// too: the migration needs this database in the next statement anyway.
-	switch blocked, _, err := domainblock.Blocked(ctx, h.DB, domainName); {
+	switch blocked, _, err := blockedDomain(ctx, h.DB, domainName); {
 	case err != nil:
 		return nil, fmt.Errorf("banned domain list: %w", err)
 	case blocked:
@@ -112,7 +105,7 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 			return nil, err
 		}
 		logf("creating the system account (php %s)...", php)
-		pr, err := provisioner.Provision(domainName, php)
+		pr, err := provisionAccount(domainName, php)
 		if err != nil {
 			return nil, fmt.Errorf("provisioning: %w", err)
 		}
@@ -132,20 +125,20 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 			domainName, systemUser, php, ipv4, ipv4, systemUser, dbUser, dbName, pr.WebRoot,
 			settings.PlanID, settings.CustomerID)
 		if err != nil {
-			_ = provisioner.Deprovision(domainName, systemUser)
+			_ = deprovisionAccount(domainName, systemUser)
 			return nil, fmt.Errorf("domain record: %w", err)
 		}
 		result.DomainID, _ = res.LastInsertId()
 
 		limitCtx, limitCancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		if err := resourcelimit.ApplyAll(limitCtx, h.DB, result.DomainID); err != nil {
+		if err := applyResourceLimits(limitCtx, h.DB, result.DomainID); err != nil {
 			logf("warning: resource limits could not be applied: %v", err)
 			result.Warnings = append(result.Warnings, "resource limits could not be applied")
 		}
 		limitCancel()
 
 		if uid, gid, err := lookupUIDGID(systemUser); err == nil {
-			if err := credentials.FTPCreate(h.DB, result.DomainID, systemUser,
+			if err := createFTPAccount(h.DB, result.DomainID, systemUser,
 				credentials.RandomPassword(16), uid, gid); err != nil {
 				logf("warning: the FTP account could not be created: %v", err)
 			}
@@ -159,7 +152,7 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 		}
 		logf("an error occurred — rolling back the created account...")
 		_, _ = h.DB.Exec(`DELETE FROM domains WHERE id=?`, result.DomainID)
-		_ = provisioner.Deprovision(domainName, systemUser)
+		_ = deprovisionAccount(domainName, systemUser)
 	}()
 
 	// --- 2. Files ----------------------------------------------------------
@@ -245,7 +238,7 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 		// for the DNS cutover. importSourceSSL logged the outcome and any warning.
 	} else if settings.SSL {
 		logf("requesting an SSL certificate...")
-		certPath, keyPath, sslOutcome, sslErr := provisioner.EnableLetsEncrypt(
+		certPath, keyPath, sslOutcome, sslErr := enableLetsEncrypt(
 			domainName, systemUser, installedPHPOrClosest(php), "php-fpm")
 		if certPath != "" {
 			sourceName := "self-signed"
@@ -365,13 +358,13 @@ func (h *Handlers) migrateDatabases(ctx context.Context, source *RemoteSource, a
 		logf("database: %s -> %s", sourceDB, targetName)
 
 		if !userCreated {
-			if err := credentials.MySQLCreateDB(h.DB, result.DomainID, targetName, targetUser, dbPass); err != nil {
+			if err := createMySQLDB(h.DB, result.DomainID, targetName, targetUser, dbPass); err != nil {
 				logf("warning: %s could not be created: %v", targetName, err)
 				failed = append(failed, sourceDB)
 				continue
 			}
 			userCreated = true
-		} else if err := credentials.MySQLCreateDBForUser(h.DB, result.DomainID, targetName, targetUser); err != nil {
+		} else if err := createMySQLDBForUser(h.DB, result.DomainID, targetName, targetUser); err != nil {
 			logf("warning: %s could not be created: %v", targetName, err)
 			failed = append(failed, sourceDB)
 			continue
@@ -665,7 +658,7 @@ func (h *Handlers) copyDatabase(ctx context.Context, source *RemoteSource, sourc
 	// `mysql -e "CREATE USER ... IDENTIFIED BY '<pass>'"`, which publishes it
 	// through /proc/<pid>/cmdline for the life of that client.
 	filter := &dumpFilter{}
-	if err := sqlimport.Import(ctx, targetDB,
+	if err := importSQLDump(ctx, targetDB,
 		filter.Wrap(io.LimitReader(gz, maxDumpExpandedBytes))); err != nil {
 		return fmt.Errorf("import: %s", truncate(sanitizeRemoteError(err.Error()), 200))
 	}
@@ -948,7 +941,7 @@ func (h *Handlers) migrateDNS(ctx context.Context, source *RemoteSource, domainI
 	domainName string, logf func(string, ...any)) (int, error) {
 
 	serverIP := migrationSourceIPv4(h.DB)
-	if _, err := dns.SeedDefaults(ctx, h.DB, domainID, domainName, serverIP); err != nil {
+	if _, err := seedDNSDefaults(ctx, h.DB, domainID, domainName, serverIP); err != nil {
 		logf("warning: the DNS defaults could not be written: %v", err)
 	}
 
@@ -974,7 +967,7 @@ func (h *Handlers) migrateDNS(ctx context.Context, source *RemoteSource, domainI
 		}
 	}
 	if len(records) == 0 {
-		if err := dns.WriteZone(ctx, h.DB, domainID); err != nil {
+		if err := writeDNSZone(ctx, h.DB, domainID); err != nil {
 			return 0, err
 		}
 		return 0, fmt.Errorf("the source DNS records could not be read")
@@ -1052,7 +1045,7 @@ func (h *Handlers) migrateDNS(ctx context.Context, source *RemoteSource, domainI
 			added++
 		}
 	}
-	if err := dns.WriteZone(ctx, h.DB, domainID); err != nil {
+	if err := writeDNSZone(ctx, h.DB, domainID); err != nil {
 		return added, fmt.Errorf("the zone could not be written: %w", err)
 	}
 	logf("DNS: %d record(s) migrated", added)
@@ -1267,7 +1260,7 @@ func stripOuterParens(s string) string {
 // downgrading a request for "8" or "8.1" to 7.4 would break PHP 8 code.
 func installedPHPOrClosest(requested string) string {
 	var installed []string
-	for _, v := range phpversion.AllVersions() {
+	for _, v := range phpVersions() {
 		if v.Loaded {
 			installed = append(installed, v.Version)
 		}
@@ -1339,7 +1332,9 @@ func splitPHPVersion(s string) (int, int) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const migrationBackupRoot = "/var/lib/servika/migration-backup"
+// migrationBackupRoot is where a rewritten configuration's original is kept. It
+// is a variable so a test can point the backup at a temporary directory.
+var migrationBackupRoot = "/var/lib/servika/migration-backup"
 
 func writeConfigBackup(webRoot, rel string, raw []byte) error {
 	// filepath.Base alone is not enough: Base("/home/x/..") is "..", which would
@@ -1361,7 +1356,7 @@ func writeConfigBackup(webRoot, rel string, raw []byte) error {
 }
 
 func lookupUIDGID(systemUser string) (int, int, error) {
-	u, err := user.Lookup(systemUser)
+	u, err := lookupSystemUser(systemUser)
 	if err != nil {
 		return 0, 0, err
 	}

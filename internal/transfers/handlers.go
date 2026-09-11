@@ -21,13 +21,11 @@ import (
 	"strings"
 
 	"servika/internal/archivex"
-	"servika/internal/credentials"
 	"servika/internal/cron"
 	"servika/internal/domains"
 	"servika/internal/httpx"
 	"servika/internal/mail"
 	"servika/internal/provisioner"
-	"servika/internal/sqlimport"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -41,7 +39,7 @@ const commandPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bi
 
 func newTransferCommand(ctx context.Context, name string, arguments ...string) *exec.Cmd {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	command := exec.CommandContext(ctx, name, arguments...)
+	command := commandContext(ctx, name, arguments...)
 	command.Env = []string{"PATH=" + commandPath, "HOME=/root"}
 	return command
 }
@@ -222,7 +220,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 		// domains.Create); each additional one is created and attached to the
 		// same DB user, so rollback via domains.Delete drops them all.
 		if i > 0 {
-			if err := credentials.MySQLCreateDBForUser(h.DB, created.ID, m.Target, created.DBUser); err != nil {
+			if err := createMySQLDBForUser(h.DB, created.ID, m.Target, created.DBUser); err != nil {
 				httpx.WriteError(w, http.StatusInternalServerError, "could not create the additional database: "+err.Error())
 				return
 			}
@@ -277,7 +275,7 @@ func (h *Handlers) importSSL(r *http.Request, extras archiveExtras, inv Inventor
 	if err != nil {
 		return false, "", "", err
 	}
-	certPath, keyPath, expires, err := provisioner.InstallImportedSSL(targetDomain, certPEM, keyPEM)
+	certPath, keyPath, expires, err := installImportedSSL(targetDomain, certPEM, keyPEM)
 	if errors.Is(err, provisioner.ErrImportedSSLInvalid) {
 		return false, "", err.Error() + "; SSL was not transferred.", nil
 	}
@@ -289,7 +287,7 @@ func (h *Handlers) importSSL(r *http.Request, extras archiveExtras, inv Inventor
 		certPath, keyPath, expires, domainID); err != nil {
 		return false, "", "", err
 	}
-	if err := provisioner.RerenderVhost(h.DB, domainID); err != nil {
+	if err := rerenderVhost(h.DB, domainID); err != nil {
 		return false, "", "", err
 	}
 	return true, expires.UTC().Format("2006-01-02"), "", nil
@@ -394,7 +392,7 @@ func (h *Handlers) importCron(r *http.Request, inv Inventory, domainID int64, ta
 		})
 		req := domainRequest(r, http.MethodPost, "/cron", domainID, bytes.NewReader(body))
 		rr := httptest.NewRecorder()
-		h.Cron.Create(rr, req)
+		createCronJob(h.Cron, rr, req)
 		if rr.Code != http.StatusCreated {
 			return 0, fmt.Errorf("job %d: %s", created+1, strings.TrimSpace(rr.Body.String()))
 		}
@@ -507,7 +505,7 @@ func (h *Handlers) provisionDomain(w http.ResponseWriter, r *http.Request, inv I
 		WithContext(r.Context())
 	cr.Header.Set("Content-Type", "application/json")
 	cw := httptest.NewRecorder()
-	h.Domains.Create(cw, cr)
+	createDomain(h.Domains, cw, cr)
 	if cw.Code != http.StatusCreated {
 		copyRecorded(w, cw)
 		return createdDomain{}, false
@@ -544,7 +542,7 @@ func (h *Handlers) rollbackDomain(r *http.Request, id int64) {
 	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, rc)
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/domains/"+strconv.FormatInt(id, 10), nil).
 		WithContext(ctx)
-	h.Domains.Delete(httptest.NewRecorder(), req)
+	deleteDomain(h.Domains, httptest.NewRecorder(), req)
 }
 
 // restoreWeb extracts the archive's public_html subtree into the freshly
@@ -657,7 +655,7 @@ func (h *Handlers) restoreDatabases(ctx context.Context, archivePath, root strin
 // line instead; it still drops the schema-selection lines, now openly as a
 // compatibility measure rather than as a defence.
 func pipeDumpToMySQL(ctx context.Context, dump io.Reader, targetDB string) error {
-	return sqlimport.Import(ctx, targetDB, dump)
+	return importSQLDump(ctx, targetDB, dump)
 }
 
 // importMail provisions the domain's mail infrastructure, recreates each source
@@ -672,7 +670,7 @@ func (h *Handlers) importMail(r *http.Request, archivePath string, extras archiv
 	if h.Mail == nil {
 		return nil, 0, errors.New("mail provider is not ready")
 	}
-	if err := mail.EnableDomain(r.Context(), h.DB, domainID); err != nil {
+	if err := enableMailDomain(r.Context(), h.DB, domainID); err != nil {
 		return nil, 0, err
 	}
 	creds := make([]MailCredential, 0, len(inv.Mailboxes))
@@ -681,7 +679,7 @@ func (h *Handlers) importMail(r *http.Request, archivePath string, extras archiv
 		body, _ := json.Marshal(map[string]string{"local_part": local})
 		req := domainRequest(r, http.MethodPost, "/mail", domainID, bytes.NewReader(body))
 		rr := httptest.NewRecorder()
-		h.Mail.Create(rr, req)
+		createMailbox(h.Mail, rr, req)
 		if rr.Code != http.StatusCreated {
 			return nil, 0, fmt.Errorf("mailbox %s: %s", local, strings.TrimSpace(rr.Body.String()))
 		}
@@ -707,7 +705,7 @@ func (h *Handlers) importMail(r *http.Request, archivePath string, extras archiv
 		body, _ := json.Marshal(map[string]string{"local_part": a.Local, "destination": a.Destination})
 		req := domainRequest(r, http.MethodPost, "/mail/aliases", domainID, bytes.NewReader(body))
 		rr := httptest.NewRecorder()
-		h.Mail.CreateAlias(rr, req)
+		createMailAlias(h.Mail, rr, req)
 		if rr.Code == http.StatusCreated {
 			created++
 			continue

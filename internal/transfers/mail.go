@@ -12,8 +12,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-
-	"servika/internal/mail"
 )
 
 // migrateMail provisions the domain's mail infrastructure, recreates each
@@ -39,7 +37,7 @@ func (h *Handlers) migrateMail(ctx context.Context, source *RemoteSource, accoun
 	if len(locals) == 0 && len(aliases) == 0 {
 		return 0, nil, warnings, nil
 	}
-	if err := mail.EnableDomain(ctx, h.DB, domainID); err != nil {
+	if err := enableMailDomain(ctx, h.DB, domainID); err != nil {
 		return 0, nil, warnings, err
 	}
 
@@ -69,7 +67,7 @@ func (h *Handlers) migrateMail(ctx context.Context, source *RemoteSource, accoun
 func (h *Handlers) provisionMailbox(ctx context.Context, domainID int64, local, domainName string, logf func(string, ...any)) (bool, *MailCredential, error) {
 	body, _ := json.Marshal(map[string]string{"local_part": local})
 	rr := httptest.NewRecorder()
-	h.Mail.Create(rr, mailRequest(ctx, http.MethodPost, "/mail", domainID, bytes.NewReader(body)))
+	createMailbox(h.Mail, rr, mailRequest(ctx, http.MethodPost, "/mail", domainID, bytes.NewReader(body)))
 	switch rr.Code {
 	case http.StatusCreated:
 		var result MailCredential
@@ -118,7 +116,7 @@ func (h *Handlers) provisionAliases(ctx context.Context, domainID int64, aliases
 	for _, a := range aliases {
 		body, _ := json.Marshal(map[string]string{"local_part": a.Local, "destination": a.Destination})
 		rr := httptest.NewRecorder()
-		h.Mail.CreateAlias(rr, mailRequest(ctx, http.MethodPost, "/mail/aliases", domainID, bytes.NewReader(body)))
+		createMailAlias(h.Mail, rr, mailRequest(ctx, http.MethodPost, "/mail/aliases", domainID, bytes.NewReader(body)))
 		if rr.Code != http.StatusCreated && rr.Code != http.StatusConflict {
 			label := a.Local
 			if label == "" {

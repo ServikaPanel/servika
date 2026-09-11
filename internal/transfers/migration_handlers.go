@@ -282,7 +282,7 @@ func (h *Handlers) MigrationStart(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.DB.Exec(`DELETE FROM migration_sessions WHERE id=?`, in.SessionID)
 	}
 
-	go h.runMigrationJob(ctx, jobID, source, valid, in.Settings)
+	go runMigration(h, ctx, jobID, source, valid, in.Settings)
 
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "total": len(valid)})
 }
@@ -346,7 +346,7 @@ func (h *Handlers) runMigrationJob(ctx context.Context, jobID int64, source *Rem
 			`UPDATE migration_items SET status='running', started_at=NOW() WHERE job_id=? AND domain_name=?`,
 			jobID, account.DomainName)
 
-		result, err := h.MigrateAccount(ctx, source, account, settings, logf)
+		result, err := migrateAccount(h, ctx, source, account, settings, logf)
 		if err != nil && ctx.Err() != nil {
 			// When the cancellation lands during the last account the loop never
 			// returns to its ctx check, so the job used to close as 'failed' with

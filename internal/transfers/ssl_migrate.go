@@ -25,7 +25,7 @@ func (h *Handlers) importSourceSSL(ctx context.Context, source *RemoteSource, ac
 		logf("SSL: the source has no usable certificate; trying Let's Encrypt")
 		return false
 	}
-	certPath, keyPath, expires, err := provisioner.InstallImportedSSL(domainName, certPEM, keyPEM)
+	certPath, keyPath, expires, err := installImportedSSL(domainName, certPEM, keyPEM)
 	if err != nil {
 		logf("SSL: the source certificate is not usable (%v); trying Let's Encrypt", err)
 		return false
@@ -38,7 +38,7 @@ func (h *Handlers) importSourceSSL(ctx context.Context, source *RemoteSource, ac
 		logf("SSL: the imported certificate could not be recorded: %v", err)
 		return false
 	}
-	if err := provisioner.RerenderVhost(h.DB, domainID); err != nil {
+	if err := rerenderVhost(h.DB, domainID); err != nil {
 		logf("SSL: the vhost could not be re-rendered after import: %v", err)
 		return false
 	}
