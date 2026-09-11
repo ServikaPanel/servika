@@ -22,7 +22,6 @@ import (
 
 	"servika/internal/files"
 	"servika/internal/httpx"
-	"servika/internal/middleware"
 	"servika/internal/phpdefaults"
 	"servika/internal/phpversion"
 	"servika/internal/provisioner"
@@ -697,24 +696,17 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		version = req.PHPVersion
 	}
 
-	// disable_functions is an ISOLATION control, so only an admin may change it.
-	// A customer or reseller (or a hijacked customer session) could otherwise send
-	// disable_functions="" and open system/exec/shell_exec in their own PHP, a
-	// proven isolation escape. For a non-admin the incoming value is IGNORED: the
-	// stored value is kept, or the hardened default when no row exists yet. This
-	// runs BEFORE sanitizeSettings so a non-admin's value is never even validated,
-	// and it fails closed (a missing claim is treated as non-admin). The tenant
-	// PHP-FPM mandatory floor is applied at render time regardless.
-	if claims := middleware.ClaimsFrom(r); claims == nil || claims.Role != middleware.RoleAdmin {
-		var current sql.NullString
-		_ = h.DB.QueryRowContext(r.Context(),
-			`SELECT disable_functions FROM php_settings WHERE domain_id=? AND subdomain_id=?`, id, sid).Scan(&current)
-		if current.Valid {
-			req.Settings.DisableFunctions = current.String
-		} else {
-			req.Settings.DisableFunctions = Defaults().DisableFunctions
-		}
-	}
+	// The isolation controls are admin-only. A customer or reseller (or a
+	// hijacked customer session) could otherwise send disable_functions="" and
+	// open system/exec/shell_exec in their own PHP, or open_basedir="/" and
+	// remove the jail entirely. The panel already refuses every one of these ini
+	// keys in the free-text extra_directives box; this is the same rule applied
+	// to the dedicated fields of the same request, which used to bypass it.
+	//
+	// For a non-admin the incoming values are IGNORED: the stored ones are kept,
+	// or the hardened defaults when no row exists yet. The tenant PHP-FPM
+	// mandatory floor is applied at render time regardless.
+	keepIsolationFields(r.Context(), h.DB, r, id, sid, &req.Settings)
 
 	sanitized, err := sanitizeSettings(req.Settings)
 	if err != nil {
