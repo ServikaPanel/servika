@@ -192,19 +192,7 @@ func ioSetPropertyArgs(l Limits) []string {
 
 // clearKernelIOLimits removes stale live limits that systemd empty assignments may retain.
 func clearKernelIOLimits(systemUser string, l Limits) {
-	clears := make([]string, 0, 4)
-	if l.IOReadMBps <= 0 {
-		clears = append(clears, "rbps=max")
-	}
-	if l.IOWriteMBps <= 0 {
-		clears = append(clears, "wbps=max")
-	}
-	if l.IOReadIOPS <= 0 {
-		clears = append(clears, "riops=max")
-	}
-	if l.IOWriteIOPS <= 0 {
-		clears = append(clears, "wiops=max")
-	}
+	clears := unsetIOMetrics(l)
 	if len(clears) == 0 {
 		return
 	}
@@ -231,6 +219,25 @@ func clearKernelIOLimits(systemUser string, l Limits) {
 		// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(ioMaxPath, []byte(fields[0]+suffix), 0644)
 	}
+}
+
+// unsetIOMetrics names the kernel io.max keys the plan does not limit, in the
+// form that clears them.
+func unsetIOMetrics(l Limits) []string {
+	clears := make([]string, 0, 4)
+	if l.IOReadMBps <= 0 {
+		clears = append(clears, "rbps=max")
+	}
+	if l.IOWriteMBps <= 0 {
+		clears = append(clears, "wbps=max")
+	}
+	if l.IOReadIOPS <= 0 {
+		clears = append(clears, "riops=max")
+	}
+	if l.IOWriteIOPS <= 0 {
+		clears = append(clears, "wiops=max")
+	}
+	return clears
 }
 
 // DeleteSystemdSlice removes the systemd slice and tears down its live state.
@@ -672,14 +679,8 @@ func governorScanOnce(ctx context.Context, db *sql.DB) {
 		return
 	}
 	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		queryID, idErr := strconv.Atoi(strings.TrimSpace(fields[0]))
-		user := strings.TrimSpace(fields[1])
-		seconds, secondsErr := strconv.Atoi(strings.TrimSpace(fields[2]))
-		if idErr != nil || secondsErr != nil || seconds <= 0 || !governedMySQLAccount(user) {
+		queryID, user, seconds, ok := governedProcess(line)
+		if !ok {
 			continue
 		}
 
@@ -704,33 +705,33 @@ func governorScanOnce(ctx context.Context, db *sql.DB) {
 	}
 }
 
+// governedProcess reads one PROCESSLIST line and reports whether it names a
+// running query of an account this panel governs.
+func governedProcess(line string) (queryID int, user string, seconds int, ok bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 3 {
+		return 0, "", 0, false
+	}
+	queryID, idErr := strconv.Atoi(strings.TrimSpace(fields[0]))
+	user = strings.TrimSpace(fields[1])
+	seconds, secondsErr := strconv.Atoi(strings.TrimSpace(fields[2]))
+	if idErr != nil || secondsErr != nil || seconds <= 0 || !governedMySQLAccount(user) {
+		return 0, "", 0, false
+	}
+	return queryID, user, seconds, true
+}
+
 // ApplyAll applies systemd slice, tenant PHP-FPM, XFS, and MySQL limits from a domain's plan.
 func ApplyAll(ctx context.Context, db *sql.DB, domainID int64) error {
-	var systemUser, phpVersion string
-	var planID sql.NullInt64
-	if err := db.QueryRowContext(ctx,
-		`SELECT system_user, COALESCE(php_version,'8.3'), plan_id
-		 FROM domains WHERE id=?`, domainID).
-		Scan(&systemUser, &phpVersion, &planID); err != nil {
+	systemUser, phpVersion, planID, err := domainPlanRow(ctx, db, domainID)
+	if err != nil {
 		return err
 	}
 	if systemUser == "" {
 		return fmt.Errorf("system_user is empty")
 	}
 	if !planID.Valid {
-		if tenantFPMActive(systemUser) {
-			if err := rollbackToSharedFPM(db, domainID, systemUser, phpVersion); err != nil {
-				return fmt.Errorf("rollback tenant PHP-FPM: %w", err)
-			}
-		}
-		_ = deleteSlice(systemUser)
-		// Even without a plan, apply DEFAULT disk/inode quota (CloudLinux parity:
-		// never leave tenants unlimited). When the filesystem is noquota,
-		// DomainQuotaApply skips silently (never an error).
-		if err := applyDomainQuota(ctx, db, domainID); err != nil {
-			log.Printf("quota (no plan) %s: %v", systemUser, err)
-		}
-		return nil
+		return removeEnforcement(ctx, db, domainID, systemUser, phpVersion)
 	}
 
 	l, err := planLimits(ctx, db, domainID)
@@ -745,6 +746,40 @@ func ApplyAll(ctx context.Context, db *sql.DB, domainID int64) error {
 		domainID, calculatePMMaxChildren(l)); err != nil {
 		return fmt.Errorf("store PHP-FPM worker limit: %w", err)
 	}
+	applyTenantLimits(ctx, db, domainID, systemUser, phpVersion, l)
+	return nil
+}
+
+// domainPlanRow reads the tenant, its PHP version and its plan assignment.
+func domainPlanRow(ctx context.Context, db *sql.DB, domainID int64) (systemUser, phpVersion string, planID sql.NullInt64, err error) {
+	err = db.QueryRowContext(ctx,
+		`SELECT system_user, COALESCE(php_version,'8.3'), plan_id
+		 FROM domains WHERE id=?`, domainID).
+		Scan(&systemUser, &phpVersion, &planID)
+	return systemUser, phpVersion, planID, err
+}
+
+// removeEnforcement takes a domain that has no plan back to the shared service
+// and drops its slice.
+func removeEnforcement(ctx context.Context, db *sql.DB, domainID int64, systemUser, phpVersion string) error {
+	if tenantFPMActive(systemUser) {
+		if err := rollbackToSharedFPM(db, domainID, systemUser, phpVersion); err != nil {
+			return fmt.Errorf("rollback tenant PHP-FPM: %w", err)
+		}
+	}
+	_ = deleteSlice(systemUser)
+	// Even without a plan, apply DEFAULT disk/inode quota (CloudLinux parity:
+	// never leave tenants unlimited). When the filesystem is noquota,
+	// DomainQuotaApply skips silently (never an error).
+	if err := applyDomainQuota(ctx, db, domainID); err != nil {
+		log.Printf("quota (no plan) %s: %v", systemUser, err)
+	}
+	return nil
+}
+
+// applyTenantLimits applies the host-side limits of a planned domain. Each one
+// is independent, so a failure is reported and the rest still run.
+func applyTenantLimits(ctx context.Context, db *sql.DB, domainID int64, systemUser, phpVersion string, l Limits) {
 	if _, err := enableTenantFPM(db, domainID, systemUser, phpVersion); err != nil {
 		log.Printf("tenant PHP-FPM %s: %v", systemUser, err)
 	}
@@ -754,7 +789,6 @@ func ApplyAll(ctx context.Context, db *sql.DB, domainID int64) error {
 	if err := applyMySQLLimits(ctx, db, domainID, l); err != nil {
 		log.Printf("mysql governor %s: %v", systemUser, err)
 	}
-	return nil
 }
 
 func nonzero(v, def int) int {
@@ -828,44 +862,17 @@ func HealTenantFPM(ctx context.Context, db *sql.DB) {
 	if db == nil {
 		return
 	}
-	rows, err := db.QueryContext(ctx,
-		`SELECT id, system_user, COALESCE(php_version,'8.3'), domain_name
-		 FROM domains WHERE plan_id IS NOT NULL ORDER BY id`)
-	if err != nil {
-		log.Printf("tenant PHP-FPM healing could not list domains: %v", err)
+	domains, ok := plannedDomains(ctx, db)
+	if !ok {
 		return
 	}
 
-	type domain struct {
-		id         int64
-		systemUser string
-		phpVersion string
-		domainName string
-	}
-	var domains []domain
-	for rows.Next() {
-		var item domain
-		if err := rows.Scan(&item.id, &item.systemUser, &item.phpVersion, &item.domainName); err != nil {
-			log.Printf("tenant PHP-FPM healing skipped an unreadable domain row: %v", err)
-			continue
-		}
-		domains = append(domains, item)
-	}
-	if err := rows.Err(); err != nil {
-		log.Printf("tenant PHP-FPM healing stopped while reading domains: %v", err)
-		_ = rows.Close()
-		return
-	}
-	if err := rows.Close(); err != nil {
-		log.Printf("tenant PHP-FPM healing could not close domain rows: %v", err)
-		return
-	}
-
-	var migrated, alreadyActive, rolledBack int
+	var counts healingCounts
 	for _, item := range domains {
 		select {
 		case <-ctx.Done():
-			log.Printf("tenant PHP-FPM healing canceled: migrated=%d active=%d rolled_back=%d", migrated, alreadyActive, rolledBack)
+			log.Printf("tenant PHP-FPM healing canceled: migrated=%d active=%d rolled_back=%d",
+				counts.migrated, counts.alreadyActive, counts.rolledBack)
 			return
 		default:
 		}
@@ -878,39 +885,97 @@ func HealTenantFPM(ctx context.Context, db *sql.DB) {
 			} else {
 				log.Printf("tenant PHP-FPM healing reasserted limits for active tenant %s without restarting it", item.systemUser)
 			}
-			alreadyActive++
+			counts.alreadyActive++
 			continue
 		}
-
-		baseline := probeHTTPS(item.domainName)
-		if err := applyAllLimits(ctx, db, item.id); err != nil {
-			log.Printf("tenant PHP-FPM healing failed to apply limits for %s: %v", item.systemUser, err)
-		}
-		if !tenantFPMActive(item.systemUser) {
-			log.Printf("tenant PHP-FPM healing left %s on the shared service after cutover failure", item.systemUser)
-			continue
-		}
-
-		select {
-		case <-ctx.Done():
+		if !cutoverTenant(ctx, db, item, &counts) {
 			return
-		case <-time.After(cutoverSettle):
 		}
-		active := serviceActive("php-fpm-" + item.systemUser + ".service")
-		post := probeHTTPS(item.domainName)
-		if !active || tenantCutoverRegressed(baseline, post) {
-			log.Printf("tenant PHP-FPM healing is rolling back %s: active=%v baseline=%d post=%d", item.systemUser, active, baseline, post)
-			if err := rollbackToSharedFPM(db, item.id, item.systemUser, item.phpVersion); err != nil {
-				log.Printf("tenant PHP-FPM healing rollback failed for %s: %v", item.systemUser, err)
-			}
-			_ = deleteSlice(item.systemUser)
-			rolledBack++
+	}
+	log.Printf("tenant PHP-FPM healing completed: migrated=%d active_reasserted=%d rolled_back=%d planned=%d",
+		counts.migrated, counts.alreadyActive, counts.rolledBack, len(domains))
+}
+
+// healingDomain is one planned domain healing may migrate.
+type healingDomain struct {
+	id         int64
+	systemUser string
+	phpVersion string
+	domainName string
+}
+
+// healingCounts is what the run reports when it finishes.
+type healingCounts struct {
+	migrated      int
+	alreadyActive int
+	rolledBack    int
+}
+
+// plannedDomains reads every domain with a plan. It reports false when the list
+// could not be read whole, because a partial run would report a migration it
+// did not attempt.
+func plannedDomains(ctx context.Context, db *sql.DB) ([]healingDomain, bool) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT id, system_user, COALESCE(php_version,'8.3'), domain_name
+		 FROM domains WHERE plan_id IS NOT NULL ORDER BY id`)
+	if err != nil {
+		log.Printf("tenant PHP-FPM healing could not list domains: %v", err)
+		return nil, false
+	}
+	var domains []healingDomain
+	for rows.Next() {
+		var item healingDomain
+		if err := rows.Scan(&item.id, &item.systemUser, &item.phpVersion, &item.domainName); err != nil {
+			log.Printf("tenant PHP-FPM healing skipped an unreadable domain row: %v", err)
 			continue
 		}
-		log.Printf("tenant PHP-FPM healing completed cutover for %s: baseline=%d post=%d", item.systemUser, baseline, post)
-		migrated++
+		domains = append(domains, item)
 	}
-	log.Printf("tenant PHP-FPM healing completed: migrated=%d active_reasserted=%d rolled_back=%d planned=%d", migrated, alreadyActive, rolledBack, len(domains))
+	if err := rows.Err(); err != nil {
+		log.Printf("tenant PHP-FPM healing stopped while reading domains: %v", err)
+		_ = rows.Close()
+		return nil, false
+	}
+	if err := rows.Close(); err != nil {
+		log.Printf("tenant PHP-FPM healing could not close domain rows: %v", err)
+		return nil, false
+	}
+	return domains, true
+}
+
+// cutoverTenant moves one domain to its own PHP-FPM service and undoes the move
+// when the site answers worse than it did before. It reports false when the
+// context ended during the settle wait, which stops the whole run without a
+// report line.
+func cutoverTenant(ctx context.Context, db *sql.DB, item healingDomain, counts *healingCounts) bool {
+	baseline := probeHTTPS(item.domainName)
+	if err := applyAllLimits(ctx, db, item.id); err != nil {
+		log.Printf("tenant PHP-FPM healing failed to apply limits for %s: %v", item.systemUser, err)
+	}
+	if !tenantFPMActive(item.systemUser) {
+		log.Printf("tenant PHP-FPM healing left %s on the shared service after cutover failure", item.systemUser)
+		return true
+	}
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(cutoverSettle):
+	}
+	active := serviceActive("php-fpm-" + item.systemUser + ".service")
+	post := probeHTTPS(item.domainName)
+	if !active || tenantCutoverRegressed(baseline, post) {
+		log.Printf("tenant PHP-FPM healing is rolling back %s: active=%v baseline=%d post=%d", item.systemUser, active, baseline, post)
+		if err := rollbackToSharedFPM(db, item.id, item.systemUser, item.phpVersion); err != nil {
+			log.Printf("tenant PHP-FPM healing rollback failed for %s: %v", item.systemUser, err)
+		}
+		_ = deleteSlice(item.systemUser)
+		counts.rolledBack++
+		return true
+	}
+	log.Printf("tenant PHP-FPM healing completed cutover for %s: baseline=%d post=%d", item.systemUser, baseline, post)
+	counts.migrated++
+	return true
 }
 
 // HealQuotaOnStartup re-asserts effective XFS user quota (override > plan > default) for ALL
@@ -922,35 +987,59 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 	if db == nil {
 		return
 	}
-	if !quotaFSCompatible() {
-		sentinelDelete()
-		var total int
-		_ = db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM domains WHERE system_user LIKE 'c\_%'`).Scan(&total)
-		log.Printf("quota heal: 0 tenants / %d skipped (root filesystem is not XFS; XFS user quota unavailable)", total)
-		return
-	}
-	// Quota enforcement is off: write the reboot-required sentinel (UI visibility) +
-	// single log + exit.
-	if acc, enf := quotaActive(); !enf {
-		sentinelWrite()
-		var total int
-		_ = db.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM domains WHERE system_user LIKE 'c\_%'`).Scan(&total)
-		if acc {
-			log.Printf("quota heal: 0 tenants / %d skipped (XFS accounting on but enforcement OFF — uqnoenforce? limits NOT enforced; sentinel written)", total)
-		} else {
-			log.Printf("quota heal: 0 tenants / %d skipped (fs noquota — single reboot required; sentinel written)", total)
-		}
+	if !quotaEnforceable(ctx, db) {
 		return
 	}
 	// Enforcement is active → remove the stale post-reboot warning (idempotent).
 	sentinelDelete()
+	ids, ok := tenantIDs(ctx, db)
+	if !ok {
+		return
+	}
+	applyTenantQuotas(ctx, db, ids)
+}
+
+// quotaEnforceable reports whether XFS user quota can be enforced now. When it
+// cannot, it writes or removes the reboot sentinel and logs the single skip
+// line the caller would otherwise have to repeat.
+func quotaEnforceable(ctx context.Context, db *sql.DB) bool {
+	if !quotaFSCompatible() {
+		sentinelDelete()
+		log.Printf("quota heal: 0 tenants / %d skipped (root filesystem is not XFS; XFS user quota unavailable)", tenantCount(ctx, db))
+		return false
+	}
+	// Quota enforcement is off: write the reboot-required sentinel (UI visibility) +
+	// single log + exit.
+	acc, enf := quotaActive()
+	if enf {
+		return true
+	}
+	sentinelWrite()
+	total := tenantCount(ctx, db)
+	if acc {
+		log.Printf("quota heal: 0 tenants / %d skipped (XFS accounting on but enforcement OFF — uqnoenforce? limits NOT enforced; sentinel written)", total)
+	} else {
+		log.Printf("quota heal: 0 tenants / %d skipped (fs noquota — single reboot required; sentinel written)", total)
+	}
+	return false
+}
+
+// tenantCount counts the tenants a skipped run would have covered.
+func tenantCount(ctx context.Context, db *sql.DB) int {
+	var total int
+	_ = db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM domains WHERE system_user LIKE 'c\_%'`).Scan(&total)
+	return total
+}
+
+// tenantIDs reads every tenant domain id. It reports false only when the query
+// itself failed, because then there is no list to walk.
+func tenantIDs(ctx context.Context, db *sql.DB) ([]int64, bool) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT id FROM domains WHERE system_user LIKE 'c\_%' ORDER BY id`)
 	if err != nil {
 		log.Printf("quota heal: could not read domain list: %v", err)
-		return
+		return nil, false
 	}
 	var ids []int64
 	for rows.Next() {
@@ -969,7 +1058,12 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 		log.Printf("quota heal: could not read the tenant list: %v", err)
 	}
 	_ = rows.Close()
+	return ids, true
+}
 
+// applyTenantQuotas applies the effective quota of every tenant and reports the
+// run.
+func applyTenantQuotas(ctx context.Context, db *sql.DB, ids []int64) {
 	var applied, skipped int
 	for _, id := range ids {
 		select {
