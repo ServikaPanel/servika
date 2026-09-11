@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 
@@ -47,7 +46,7 @@ func ensureUpgradeMap() error {
 		return fmt.Errorf("write the upgrade map: %w", err)
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
-	_, _ = exec.Command("restorecon", path).CombinedOutput()
+	_, _ = systemCommand("restorecon", path).CombinedOutput()
 	return nil
 }
 

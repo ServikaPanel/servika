@@ -57,11 +57,11 @@ func TestTheRenderTakesTheLockBeforeItWritesAnything(t *testing.T) {
 
 	lock := strings.Index(render, "nginxMu.Lock()")
 	write := strings.Index(render, "os.WriteFile(cfgPath")
-	test := strings.Index(render, `exec.Command("nginx", "-t")`)
+	test := strings.Index(render, `systemCommand("nginx", "-t")`)
 	if lock < 0 || write < 0 || test < 0 {
 		t.Fatal("the lock, the vhost write or the validation is missing from renderAndReload")
 	}
-	if !strings.Contains(render, `exec.Command("systemctl", "reload", "nginx")`) {
+	if !strings.Contains(render, `systemCommand("systemctl", "reload", "nginx")`) {
 		t.Fatal("the reload is missing from renderAndReload")
 	}
 	if lock > write {

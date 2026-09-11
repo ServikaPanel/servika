@@ -151,6 +151,61 @@ func TestAPurgeWithNoDomainRemovesNothing(t *testing.T) {
 	}
 }
 
+// Anything that is not part of the zone's two-level hierarchy is stepped over
+// rather than read as a cache entry, and the domain's own entry still goes.
+func TestAPurgeStepsOverWhatIsNotACacheEntry(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("SERVIKA_NGINX_CACHE_DIR", root)
+
+	ours := writeCacheEntry(t, root, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa777", "httpsGETexample.com/")
+	topStray := filepath.Join(root, "stray-at-the-top")
+	levelOneStray := filepath.Join(filepath.Dir(filepath.Dir(ours)), "stray-at-level-one")
+	for _, stray := range []string{topStray, levelOneStray} {
+		if err := os.WriteFile(stray, []byte("not a cache entry"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", filepath.Base(stray), err)
+		}
+	}
+
+	purgeFastCGICache("example.com")
+
+	if _, err := os.Stat(ours); err == nil {
+		t.Error("the domain's own entry survived its purge")
+	}
+	for _, stray := range []string{topStray, levelOneStray} {
+		if _, err := os.Stat(stray); err != nil {
+			t.Errorf("%s was removed by the purge", filepath.Base(stray))
+		}
+	}
+}
+
+// A zone that does not exist, or that is not a directory, is a purge with
+// nothing to do: nothing is created and nothing is removed.
+func TestAPurgeOfAMissingOrUnreadableZoneDoesNothing(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "absent")
+		t.Setenv("SERVIKA_NGINX_CACHE_DIR", missing)
+
+		purgeFastCGICache("example.com")
+
+		if _, err := os.Stat(missing); !os.IsNotExist(err) {
+			t.Errorf("the purge created the zone directory: %v", err)
+		}
+	})
+	t.Run("not a directory", func(t *testing.T) {
+		zone := filepath.Join(t.TempDir(), "zone")
+		if err := os.WriteFile(zone, []byte("not a directory"), 0o600); err != nil {
+			t.Fatalf("write the zone file: %v", err)
+		}
+		t.Setenv("SERVIKA_NGINX_CACHE_DIR", zone)
+
+		purgeFastCGICache("example.com")
+
+		if content, err := os.ReadFile(zone); err != nil || string(content) != "not a directory" {
+			t.Errorf("the purge touched a zone path that is a file: %q, %v", content, err)
+		}
+	})
+}
+
 // The zone is shared by every tenant, which is why attribution is needed at all.
 func TestTheCacheZoneIsSharedByEveryVhost(t *testing.T) {
 	body := cacheZoneBody()

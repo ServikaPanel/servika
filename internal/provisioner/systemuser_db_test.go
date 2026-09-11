@@ -303,7 +303,7 @@ func TestTheSiblingCheckRunsBeforeAnyHostTeardown(t *testing.T) {
 	body = body[start:]
 
 	check := strings.Index(body, "OtherTopLevelDomainsUsing(systemUser, domainName)")
-	firstRemoval := strings.Index(body, `cfgPath := "/etc/nginx/conf.d/dom_"`)
+	firstRemoval := strings.Index(body, `cfgPath := nginxConfDir + "/dom_"`)
 	switch {
 	case check < 0:
 		t.Fatal("Deprovision no longer asks whether the system user is shared")

@@ -13,8 +13,9 @@ import (
 
 // legacyTenantLogDir is where a tenant's PHP-FPM error log lived before it
 // moved. Nothing writes there any more; only teardown still names it, so a
-// tenant deleted after an upgrade does not leave its old log behind.
-const legacyTenantLogDir = "/var/log/php-fpm"
+// tenant deleted after an upgrade does not leave its old log behind. It is a
+// variable so a test can point it at a writable directory.
+var legacyTenantLogDir = "/var/log/php-fpm"
 
 // fpmLogSELinuxType is the only type the targeted policy lets php-fpm create a
 // file under; see EnsureTenantFPMLogDir.

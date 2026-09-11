@@ -18,6 +18,11 @@ import "os"
 // prefix match. cPanel reserves the same name.
 const roundcubeRoot = "/opt/roundcube/public_html"
 
+// webmailInstallRoot is the directory whose presence means Roundcube is
+// installed. It is a variable so a test can decide that; nothing outside tests
+// changes it, and the rendered block keeps naming roundcubeRoot.
+var webmailInstallRoot = roundcubeRoot
+
 // webmailNginx is the block added to a domain's own vhost.
 //
 // It mirrors the panel's block in assets/nginx/_panel.conf, which was built
@@ -80,7 +85,7 @@ const webmailNginx = `
 // webmailBlock returns the nginx block when Roundcube is installed, and an empty
 // string otherwise, so a host without webmail does not get a dead path that
 // answers 404 on every vhost.
-func webmailBlock() string { return webmailBlockFor(roundcubeRoot) }
+func webmailBlock() string { return webmailBlockFor(webmailInstallRoot) }
 
 func webmailBlockFor(root string) string {
 	if info, err := os.Stat(root); err != nil || !info.IsDir() {
@@ -91,6 +96,6 @@ func webmailBlockFor(root string) string {
 
 // webmailInstalled reports whether Roundcube is present on this host.
 func webmailInstalled() bool {
-	info, err := os.Stat(roundcubeRoot)
+	info, err := os.Stat(webmailInstallRoot)
 	return err == nil && info.IsDir()
 }

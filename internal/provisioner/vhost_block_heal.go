@@ -23,6 +23,15 @@ const (
 // reload nginx for nothing on every boot.
 const normalVhostMarker = "# ---- Deny CGI and interpreter scripts ----"
 
+// nginxConfDir is where the domain vhosts live, and rerenderVhost is what the
+// repair calls for a domain whose vhost lacks a block. Both are variables so a
+// test can put vhost files in a writable directory and observe which domains are
+// re-rendered; nothing outside tests changes them.
+var (
+	nginxConfDir  = "/etc/nginx/conf.d"
+	rerenderVhost = RerenderVhost
+)
+
 // healTLSVhostBlocksOnStartup writes the blocks that are computed at render time
 // into the vhosts of domains that already existed before those blocks did.
 //
@@ -80,7 +89,7 @@ func healTLSVhostBlocksOnStartup() {
 
 	updated, failed := 0, 0
 	for _, item := range domains {
-		configPath := "/etc/nginx/conf.d/dom_" + item.systemUser + ".conf"
+		configPath := nginxConfDir + "/dom_" + item.systemUser + ".conf"
 		if item.parentID.Valid {
 			configPath = addonVhostConfigPath(item.systemUser, item.domainName)
 		}
@@ -106,7 +115,7 @@ func healTLSVhostBlocksOnStartup() {
 		if !missingAnyBlock(body, expected) {
 			continue
 		}
-		if err := RerenderVhost(packageDB, item.id); err != nil {
+		if err := rerenderVhost(packageDB, item.id); err != nil {
 			log.Printf("vhost block repair: %s vhost update failed: %v", item.domainName, err)
 			failed++
 			continue

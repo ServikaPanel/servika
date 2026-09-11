@@ -23,7 +23,10 @@ import (
 	"strings"
 )
 
-const (
+// The ModSecurity paths are variables so a test can put a module, an nginx.conf
+// and writable configuration directories behind them; nothing outside tests
+// changes them.
+var (
 	wafModsecDir  = "/etc/nginx/modsec"
 	wafDomainsDir = "/etc/nginx/modsec/domains"
 	wafModulePath = "/usr/lib64/nginx/modules/ngx_http_modsecurity_module.so"

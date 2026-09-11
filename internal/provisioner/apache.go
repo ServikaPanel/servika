@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"text/template"
 )
@@ -57,8 +56,12 @@ var apacheVhostTmpl = template.Must(template.New("a").Parse(`# {{.DomainName}} â
 </VirtualHost>
 `))
 
+// apacheConfDir is where Apache reads per-domain vhosts. It is a variable so a
+// test can put a writable directory behind it; nothing outside tests changes it.
+var apacheConfDir = "/etc/httpd/conf.d"
+
 func apacheVhostPath(systemUser string) string {
-	return "/etc/httpd/conf.d/dom_" + systemUser + ".conf"
+	return apacheConfDir + "/dom_" + systemUser + ".conf"
 }
 
 func writeApacheVhost(opts VhostOpts, systemUser string) error {
@@ -85,10 +88,10 @@ func deleteApacheVhostIfExists(systemUser string) error {
 }
 
 func apacheTestReload() error {
-	if out, err := exec.Command("httpd", "-t").CombinedOutput(); err != nil {
+	if out, err := systemCommand("httpd", "-t").CombinedOutput(); err != nil {
 		return fmt.Errorf("httpd -t failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	if out, err := exec.Command("systemctl", "reload-or-restart", "httpd").CombinedOutput(); err != nil {
+	if out, err := systemCommand("systemctl", "reload-or-restart", "httpd").CombinedOutput(); err != nil {
 		return fmt.Errorf("httpd reload: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil

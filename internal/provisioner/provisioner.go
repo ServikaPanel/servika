@@ -64,9 +64,21 @@ log_format ` + cacheLogFormatName + ` '$upstream_cache_status';
 `
 }
 
+// tenantHomeRoot is where tenant homes live. It is a variable so a test can put
+// a real directory tree behind it; nothing outside tests changes it.
+var tenantHomeRoot = "/home"
+
+// nginxMainConf is nginx's main configuration file and nginxAccount the account
+// nginx runs as. They are variables so a test can put a readable file and an
+// existing account behind them; nothing outside tests changes them.
+var (
+	nginxMainConf = "/etc/nginx/nginx.conf"
+	nginxAccount  = "nginx"
+)
+
 // PublicHTML returns the default tenant document root.
 func PublicHTML(systemUser string) string {
-	return filepath.Join("/home", systemUser, "public_html")
+	return filepath.Join(tenantHomeRoot, systemUser, "public_html")
 }
 
 // SafeWebRootSubdirectory validates a document-root path relative to public_html.
@@ -263,13 +275,13 @@ func ensureCacheZone() (bool, error) {
 	if err := os.Chmod(filepath.Dir(zoneDir), 0o755); err != nil {
 		return false, fmt.Errorf("set cache parent permissions: %w", err)
 	}
-	if uid, gid, err := uidGid("nginx"); err == nil {
-		if err := os.Chown(zoneDir, uid, gid); err != nil {
+	if uid, gid, err := uidGid(nginxAccount); err == nil {
+		if err := chown(zoneDir, uid, gid); err != nil {
 			return false, fmt.Errorf("set cache directory ownership: %w", err)
 		}
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("restorecon", "-R", zoneDir).CombinedOutput()
+	_, _ = systemCommand("restorecon", "-R", zoneDir).CombinedOutput()
 
 	if _, err := os.Stat(tempConf); err == nil {
 		if err := os.Remove(tempConf); err != nil {
@@ -298,7 +310,7 @@ func ensureCacheZone() (bool, error) {
 		return false, fmt.Errorf("write cache zone configuration: %w", err)
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("restorecon", zoneConf).CombinedOutput()
+	_, _ = systemCommand("restorecon", zoneConf).CombinedOutput()
 	return ensureCacheLogFormat() || true, nil
 }
 
@@ -318,7 +330,7 @@ func ensureCacheLogFormat() bool {
 		return false
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_, _ = exec.Command("restorecon", logFormatConf).CombinedOutput()
+	_, _ = systemCommand("restorecon", logFormatConf).CombinedOutput()
 	return true
 }
 
@@ -489,8 +501,8 @@ func cacheKeyHost(key string) (string, bool) {
 }
 
 func cacheZoneDefinedElsewhere() bool {
-	files := []string{"/etc/nginx/nginx.conf"}
-	if extra, err := filepath.Glob("/etc/nginx/conf.d/*.conf"); err == nil {
+	files := []string{nginxMainConf}
+	if extra, err := filepath.Glob(nginxConfDir + "/*.conf"); err == nil {
 		files = append(files, extra...)
 	}
 	for _, filename := range files {
@@ -549,6 +561,10 @@ func certSystemDir(domainName string) string {
 	return filepath.Join(certSystemBaseDir(), domainName)
 }
 
+// chown hands certificate files to root. It is a variable so a test can run the
+// certificate paths without root; nothing outside tests changes it.
+var chown = os.Chown
+
 func prepareCertificateDir(domainName string) (string, error) {
 	if err := ValidateDomain(domainName); err != nil {
 		return "", err
@@ -558,7 +574,7 @@ func prepareCertificateDir(domainName string) (string, error) {
 	if err := os.MkdirAll(sslDir, 0755); err != nil {
 		return "", fmt.Errorf("create certificate directory: %w", err)
 	}
-	if err := os.Chown(sslDir, 0, 0); err != nil {
+	if err := chown(sslDir, 0, 0); err != nil {
 		return "", fmt.Errorf("set certificate directory ownership: %w", err)
 	}
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
@@ -577,7 +593,7 @@ func applyCertificatePermissions(sslDir, certPath, keyPath string) error {
 		{path: certPath, mode: 0644},
 		{path: keyPath, mode: 0600},
 	} {
-		if err := os.Chown(item.path, 0, 0); err != nil {
+		if err := chown(item.path, 0, 0); err != nil {
 			return fmt.Errorf("set certificate ownership: %w", err)
 		}
 		if err := os.Chmod(item.path, item.mode); err != nil {
@@ -624,6 +640,10 @@ func readTenantCertificate(path string, expectedUID int) ([]byte, error) {
 	return data, nil
 }
 
+// fileChown hands an open certificate file to root. It is a variable so a test
+// can install certificates without root; nothing outside tests changes it.
+var fileChown = (*os.File).Chown
+
 func writeSystemCertificate(path string, data []byte, mode os.FileMode) error {
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".servika-certificate-*")
 	if err != nil {
@@ -644,7 +664,7 @@ func writeSystemCertificate(path string, data []byte, mode os.FileMode) error {
 		_ = temporary.Close()
 		return fmt.Errorf("sync temporary certificate: %w", err)
 	}
-	if err := temporary.Chown(0, 0); err != nil {
+	if err := fileChown(temporary, 0, 0); err != nil {
 		_ = temporary.Close()
 		return fmt.Errorf("set temporary certificate ownership: %w", err)
 	}
@@ -670,7 +690,7 @@ func removeHomeCertificate(systemUser, domainName string) {
 		return
 	}
 	domainName = strings.ToLower(strings.TrimSpace(domainName))
-	sslDir := filepath.Join("/home", systemUser, "ssl")
+	sslDir := filepath.Join(tenantHomeRoot, systemUser, "ssl")
 	_ = os.Remove(filepath.Join(sslDir, domainName+".crt"))
 	_ = os.Remove(filepath.Join(sslDir, domainName+".key"))
 }
@@ -702,8 +722,8 @@ func HealSSLCertPathsOnStartup() {
 			continue
 		}
 		domainName = strings.ToLower(strings.TrimSpace(domainName))
-		expectedCertPath := filepath.Join("/home", systemUser, "ssl", domainName+".crt")
-		expectedKeyPath := filepath.Join("/home", systemUser, "ssl", domainName+".key")
+		expectedCertPath := filepath.Join(tenantHomeRoot, systemUser, "ssl", domainName+".crt")
+		expectedKeyPath := filepath.Join(tenantHomeRoot, systemUser, "ssl", domainName+".key")
 		if filepath.Clean(oldCertPath) != expectedCertPath || filepath.Clean(oldKeyPath) != expectedKeyPath {
 			log.Printf("SSL certificate path healing: refused unexpected tenant paths for %s", domainName)
 			continue
@@ -1761,7 +1781,7 @@ func writePoolValidated(systemUser, phpVersion string) (socket, service string, 
 	}
 	if config.FPMBin != "" {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		if output, err := exec.Command(config.FPMBin, "-t").CombinedOutput(); err != nil {
+		if output, err := systemCommand(config.FPMBin, "-t").CombinedOutput(); err != nil {
 			if hadPreviousPool {
 				// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 				_ = os.WriteFile(poolPath, previousPool, 0644)
@@ -1772,7 +1792,7 @@ func writePoolValidated(systemUser, phpVersion string) (socket, service string, 
 		}
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if output, err := exec.Command("systemctl", "reload-or-restart", service).CombinedOutput(); err != nil {
+	if output, err := systemCommand("systemctl", "reload-or-restart", service).CombinedOutput(); err != nil {
 		return "", "", fmt.Errorf("php-fpm (%s) reload: %s: %w", service, strings.TrimSpace(string(output)), err)
 	}
 	return socket, service, nil
@@ -1888,7 +1908,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	}
 	cfgPath := opts.ConfigPath
 	if cfgPath == "" {
-		cfgPath = "/etc/nginx/conf.d/dom_" + systemUser + ".conf"
+		cfgPath = nginxConfDir + "/dom_" + systemUser + ".conf"
 	}
 	// Everything from here to the reload is one sequence: it writes this vhost,
 	// rewrites server-global http-context files, validates the WHOLE conf.d tree
@@ -1930,7 +1950,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 		}
 		return sharedErr
 	}
-	if out, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
+	if out, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
 		if hadPreviousConfig {
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 			_ = os.WriteFile(cfgPath, previousConfig, 0644)
@@ -1942,7 +1962,7 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 		}
 		return fmt.Errorf("nginx -t failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	if out, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+	if out, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 		return fmt.Errorf("nginx reload: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	// Purge stale FastCGI cache entries for this domain so that cache TTL and
@@ -1978,11 +1998,11 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("allocate system user: %w", err)
 	}
-	home := "/home/" + systemUser
+	home := tenantHomeRoot + "/" + systemUser
 
 	if !userExists(systemUser) {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		out, err := exec.Command("useradd", "-m", "-d", home, "-s", "/usr/sbin/nologin", systemUser).CombinedOutput()
+		out, err := systemCommand("useradd", "-m", "-d", home, "-s", "/usr/sbin/nologin", systemUser).CombinedOutput()
 		if err != nil && !strings.Contains(string(out), "already exists") {
 			return nil, fmt.Errorf("useradd: %s: %w", strings.TrimSpace(string(out)), err)
 		}
@@ -1997,7 +2017,7 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 	if err == nil {
 		_ = filepath.Walk(home, func(p string, _ os.FileInfo, _ error) error {
 			// #nosec G122 -- operator provisioning of a tenant home tree, not tenant input; best-effort ownership fix.
-			_ = os.Chown(p, uid, gid)
+			_ = chown(p, uid, gid)
 			return nil
 		})
 	}
@@ -2023,11 +2043,11 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	_ = os.WriteFile(indexPath, []byte(welcomeHTML(domainName)), 0644)
 	if err == nil {
-		_ = os.Chown(indexPath, uid, gid)
+		_ = chown(indexPath, uid, gid)
 	}
 
 	// #nosec G204 G702 -- fixed binary (restorecon) with constant flag and internal home path (no shell); no tenant input.
-	_, _ = exec.Command("restorecon", "-R", home).CombinedOutput()
+	_, _ = systemCommand("restorecon", "-R", home).CombinedOutput()
 
 	// Write, validate, and activate the tenant PHP-FPM pool.
 	socket, _, err := writePoolValidated(systemUser, phpVersion)
@@ -2036,7 +2056,7 @@ func Provision(domainName, phpVersion string) (*Result, error) {
 	}
 
 	// Create the initial vhost without SSL.
-	if err := renderAndReload(VhostOpts{
+	if err := renderDomainVhost(VhostOpts{
 		DomainName: domainName,
 		WebRoot:    PublicHTML(systemUser),
 		PHPSocket:  socket,
@@ -2170,7 +2190,7 @@ func Deprovision(domainName, systemUser string) error {
 		if domainName != "" && ValidateDomain(domainName) == nil {
 			_ = os.RemoveAll(certSystemDir(strings.ToLower(strings.TrimSpace(domainName))))
 		}
-		_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
+		_, _ = systemCommand("systemctl", "reload", "nginx").CombinedOutput()
 		purgeFastCGICache(domainName)
 		if err == nil {
 			log.Printf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
@@ -2179,9 +2199,9 @@ func Deprovision(domainName, systemUser string) error {
 		return nil
 	}
 
-	cfgPath := "/etc/nginx/conf.d/dom_" + systemUser + ".conf"
+	cfgPath := nginxConfDir + "/dom_" + systemUser + ".conf"
 	_ = os.Remove(cfgPath)
-	subdomainVhosts, _ := filepath.Glob("/etc/nginx/conf.d/sub_" + systemUser + "_*.conf")
+	subdomainVhosts, _ := filepath.Glob(nginxConfDir + "/sub_" + systemUser + "_*.conf")
 	for _, vhostPath := range subdomainVhosts {
 		_ = os.Remove(vhostPath)
 	}
@@ -2194,7 +2214,7 @@ func Deprovision(domainName, systemUser string) error {
 		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".conf"))
 		_ = os.Remove(filepath.Join(wafDomainsDir, systemUser+".custom.conf"))
 	}
-	_, _ = exec.Command("systemctl", "reload", "nginx").CombinedOutput()
+	_, _ = systemCommand("systemctl", "reload", "nginx").CombinedOutput()
 	purgeFastCGICache(domainName)
 
 	if !strings.HasPrefix(systemUser, "c_") {
@@ -2203,11 +2223,11 @@ func Deprovision(domainName, systemUser string) error {
 	// userdel -r does not always remove the tenant crontab on AlmaLinux; drop it
 	// (and any suspended copy) explicitly so import rollback and normal domain
 	// deletion cannot leave orphaned jobs running.
-	_ = os.Remove(filepath.Join("/var/spool/cron", systemUser))
-	_ = os.Remove(filepath.Join("/var/lib/servika/cron-suspended", systemUser))
+	_ = os.Remove(filepath.Join(cronSpoolDir, systemUser))
+	_ = os.Remove(filepath.Join(suspendedCronDir, systemUser))
 	if userExists(systemUser) {
 		// #nosec G204 G702 -- fixed binary (userdel) with separate args (no shell); systemUser is validated before exec.
-		_, _ = exec.Command("userdel", "-r", systemUser).CombinedOutput()
+		_, _ = systemCommand("userdel", "-r", systemUser).CombinedOutput()
 		// Orphan cleanup: userdel -r removes the home dir, but these live outside
 		// it, so they survived and accumulated after every domain deletion or
 		// import rollback.
@@ -2223,7 +2243,7 @@ func Deprovision(domainName, systemUser string) error {
 		if _, err := os.Stat(p); err == nil {
 			_ = os.Remove(p)
 			// #nosec G204 G702 -- fixed binary (systemctl) with constant/internal args (no shell); no tenant shell input.
-			_, _ = exec.Command("systemctl", "reload-or-restart", config.Service).CombinedOutput()
+			_, _ = systemCommand("systemctl", "reload-or-restart", config.Service).CombinedOutput()
 		}
 	}
 	return nil
@@ -2466,13 +2486,18 @@ func DisableSSL(domainName, systemUser, phpVersion, backend string) error {
 	return renderAndReload(opts, systemUser)
 }
 
+// lookupUser resolves a Linux account. It is a variable so a test can answer for
+// a tenant account that does not exist on the test host; nothing outside tests
+// changes it.
+var lookupUser = user.Lookup
+
 func userExists(username string) bool {
-	_, err := user.Lookup(username)
+	_, err := lookupUser(username)
 	return err == nil
 }
 
 func uidGid(username string) (int, int, error) {
-	account, err := user.Lookup(username)
+	account, err := lookupUser(username)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -2521,10 +2546,16 @@ func ensureArchiveTools() {
 	})
 }
 
-const homeACLSentinel = "/var/lib/servika/.home_acl_v1_done"
+// homeACLSentinel marks the one-time recursive ACL migration as done, and
+// lookPath finds a host tool. Both are variables so a test can decide them;
+// nothing outside tests changes them.
+var (
+	homeACLSentinel = "/var/lib/servika/.home_acl_v1_done"
+	lookPath        = exec.LookPath
+)
 
 func aclAvailable() bool {
-	_, err := exec.LookPath("setfacl")
+	_, err := lookPath("setfacl")
 	return err == nil
 }
 
@@ -2555,7 +2586,7 @@ func nginxCanRead(publicHTML string) bool {
 // inherit the nginx group, which is what the default ACL does in the other model.
 func applyLegacyHomePerms(home string, uid, nginxGID int) {
 	publicHTML := filepath.Join(home, "public_html")
-	_ = os.Chown(home, uid, nginxGID)
+	_ = chown(home, uid, nginxGID)
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 	_ = os.Chmod(home, 0710)
 	// -h -P: act on a symlink itself and never descend through one, so a planted
@@ -2576,10 +2607,10 @@ func hardenHomePerms(home, systemUser string, uid, gid int) bool {
 		return false
 	}
 	if aclAvailable() {
-		_ = os.Chown(home, uid, gid)
+		_ = chown(home, uid, gid)
 		// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 		_ = os.Chmod(home, 0710)
-		_ = os.Chown(publicHTML, uid, gid)
+		_ = chown(publicHTML, uid, gid)
 		// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 		_ = os.Chmod(publicHTML, 0750)
 		if output, err := tenantCommand("setfacl", "-m", "u:nginx:--x", home).CombinedOutput(); err != nil {
@@ -2602,7 +2633,7 @@ func hardenHomePerms(home, systemUser string, uid, gid int) bool {
 		log.Printf("tenant home permissions: ACLs are ineffective on this filesystem for %s, using the nginx group instead (0710/0750 preserved)", systemUser)
 	}
 
-	if _, nginxGID, err := uidGid("nginx"); err == nil {
+	if _, nginxGID, err := uidGid(nginxAccount); err == nil {
 		applyLegacyHomePerms(home, uid, nginxGID)
 		return false
 	}
@@ -2618,7 +2649,7 @@ func managedPublicHTML(path, systemUser string) bool {
 	if !tenantUserPattern.MatchString(systemUser) {
 		return false
 	}
-	expected := filepath.Join("/home", systemUser, "public_html")
+	expected := filepath.Join(tenantHomeRoot, systemUser, "public_html")
 	if filepath.Clean(path) != expected {
 		return false
 	}
@@ -2676,7 +2707,7 @@ func HealHomePerms() {
 			log.Printf("home permission heal: refusing a tenant with an invalid system user")
 			continue
 		}
-		home := filepath.Join("/home", systemUser)
+		home := filepath.Join(tenantHomeRoot, systemUser)
 		info, err := os.Lstat(home)
 		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			continue
@@ -2717,9 +2748,14 @@ func tenantCommand(name string, args ...string) *exec.Cmd {
 	return tenantCommandContext(context.Background(), name, args...)
 }
 
+// commandContext builds every command tenantCommandContext runs. It is a
+// variable so a test can record the argv and stand in for systemctl, nginx and
+// php-fpm; nothing outside tests changes it.
+var commandContext = exec.CommandContext
+
 func tenantCommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
 	// #nosec G204 G702 -- fixed/config binary with separate args (no shell); callers pass validated tenant input.
-	command := exec.CommandContext(ctx, name, args...)
+	command := commandContext(ctx, name, args...)
 	command.Env = []string{
 		"PATH=/usr/sbin:/usr/bin:/sbin:/bin",
 		"LANG=C",
@@ -2738,13 +2774,20 @@ func acmeCommandContext(ctx context.Context, args ...string) *exec.Cmd {
 	return command
 }
 
+// cronSpoolDir is where cronie reads each account's crontab, and suspendedCronDir
+// where a suspended tenant's crontab waits. They are variables so a test can put
+// writable directories behind them; nothing outside tests changes them.
+var (
+	cronSpoolDir     = "/var/spool/cron"
+	suspendedCronDir = "/var/lib/servika/cron-suspended"
+)
+
 // SuspendUserRuntime disables or restores cron execution and terminates managed tenant processes.
 func SuspendUserRuntime(systemUser string, suspended bool) {
 	if !tenantUserPattern.MatchString(systemUser) {
 		return
 	}
-	const suspendedCronDir = "/var/lib/servika/cron-suspended"
-	cronSpool := filepath.Join("/var/spool/cron", systemUser)
+	cronSpool := filepath.Join(cronSpoolDir, systemUser)
 	storedCron := filepath.Join(suspendedCronDir, systemUser)
 
 	if suspended {
@@ -2760,7 +2803,7 @@ func SuspendUserRuntime(systemUser string, suspended bool) {
 	}
 
 	if _, err := os.Stat(storedCron); err == nil {
-		if err := os.MkdirAll("/var/spool/cron", 0700); err != nil {
+		if err := os.MkdirAll(cronSpoolDir, 0700); err != nil {
 			log.Printf("resume tenant runtime: create cron spool for %s: %v", systemUser, err)
 			return
 		}
@@ -2801,7 +2844,7 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 	}
 
 	webRoot = SafeWebRoot(systemUser, webRoot)
-	configPath := "/etc/nginx/conf.d/dom_" + systemUser + ".conf"
+	configPath := nginxConfDir + "/dom_" + systemUser + ".conf"
 	if parentDomainID.Valid {
 		configPath = addonVhostConfigPath(systemUser, domainName)
 		webRoot = safeAddonWebRoot(systemUser, domainName, webRoot)
@@ -2877,7 +2920,7 @@ func applyVhostForDomain(db *sql.DB, domainID int64, socket, phpVersion string, 
 		}
 		opts.ExtraDirectives += pb
 	}
-	return renderAndReload(opts, systemUser)
+	return renderDomainVhost(opts, systemUser)
 }
 
 // RerenderVhost resolves a domain's PHP socket and re-renders its vhost.
@@ -2980,7 +3023,7 @@ func buildProtectedBlocks(db *sql.DB, domainID, subdomainID int64, socket string
 	return b.String()
 }
 
-const (
+var (
 	// vhostHardenSentinel gates the sweep below, which is the ONLY thing that
 	// re-renders an existing tenant's FPM pool and vhost after an update. A
 	// change to either template therefore reaches a fresh install only, unless
@@ -2999,10 +3042,17 @@ const (
 	// RenderPool now writes php_admin_flag[opcache.enable] from the stored setting,
 	// so an operator turning OPcache off in the panel reaches the pool. Own-master
 	// tenants again receive it through repairTenantPoolDrift.
+	//
+	// It is a variable so a test can put the sentinel in a temporary directory;
+	// nothing outside tests changes it.
 	vhostHardenSentinel = "/var/lib/servika/.vhost_hardening_v5_done"
-	panelVhostPath      = "/etc/nginx/conf.d/_panel.conf"
-	panelSecSentinel    = "# SERVIKA-PANEL-SEC v2"
 )
+
+const panelSecSentinel = "# SERVIKA-PANEL-SEC v2"
+
+// panelVhostPath is the panel's own nginx vhost. It is a variable so a test can
+// point the panel heals at a writable file; nothing outside tests changes it.
+var panelVhostPath = "/etc/nginx/conf.d/_panel.conf"
 
 func healVhostsOnStartup() {
 	if packageDB == nil {
@@ -3102,13 +3152,13 @@ func healPanelVhostHeadersOnStartup() {
 				log.Printf("panel security repair: could not update panel server name: %v", err)
 				return
 			}
-			if output, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
+			if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
 				// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 				_ = os.WriteFile(panelVhostPath, original, 0644)
 				log.Printf("panel security repair: server name nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
 				return
 			}
-			if output, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+			if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 				// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 				_ = os.WriteFile(panelVhostPath, original, 0644)
 				log.Printf("panel security repair: server name nginx reload failed, vhost restored: %s", strings.TrimSpace(string(output)))
@@ -3142,13 +3192,13 @@ func healPanelVhostHeadersOnStartup() {
 			log.Printf("panel security repair: could not update CSP: %v", err)
 			return
 		}
-		if output, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
+		if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 			_ = os.WriteFile(panelVhostPath, original, 0644)
 			log.Printf("panel security repair: CSP nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
 			return
 		}
-		if output, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+		if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 			_ = os.WriteFile(panelVhostPath, original, 0644)
 			log.Printf("panel security repair: CSP nginx reload failed, vhost restored: %s", strings.TrimSpace(string(output)))
@@ -3191,13 +3241,13 @@ func healPanelVhostHeadersOnStartup() {
 		log.Printf("panel security repair: could not write vhost: %v", err)
 		return
 	}
-	if output, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
+	if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(panelVhostPath, original, 0644)
 		log.Printf("panel security repair: nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
 		return
 	}
-	if output, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+	if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 		log.Printf("panel security repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
 }

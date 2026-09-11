@@ -18,7 +18,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
+// tenantUnitDir and tenantCfgRoot are variables so a test can put a writable
+// directory behind them; nothing outside tests changes them.
+var (
 	tenantUnitDir = "/etc/systemd/system"
 	tenantCfgRoot = "/etc/php-fpm-tenant"
 )
@@ -574,6 +576,11 @@ WantedBy=multi-user.target
 `, systemUser, systemUser, fpmBinary, tenantCfgDir(systemUser), systemUser, systemUser, systemUser, tenantLogDir(), mtaBindLines())
 }
 
+// socketAppears waits for a PHP-FPM master to create its socket. It is a
+// variable so a test can answer without a running master; nothing outside tests
+// changes it.
+var socketAppears = waitForSocket
+
 func waitForSocket(path string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -598,7 +605,7 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 	if _, err := os.Stat(config.FPMBin); err != nil {
 		return "", fmt.Errorf("PHP-FPM binary is unavailable for %s: %w", phpVersion, err)
 	}
-	if _, err := os.Stat(filepath.Join("/home", systemUser)); err != nil {
+	if _, err := os.Stat(filepath.Join(tenantHomeRoot, systemUser)); err != nil {
 		return "", fmt.Errorf("tenant home is unavailable: %w", err)
 	}
 
@@ -674,7 +681,7 @@ func EnableTenantFPM(db *sql.DB, domainID int64, systemUser, phpVersion string) 
 	_, _ = tenantCommand("restorecon", "-R", tenantRunDir(systemUser)).CombinedOutput()
 	_, _ = tenantCommand("restorecon", "-R", configDir).CombinedOutput()
 	socket := tenantSocket(systemUser)
-	if !waitForSocket(socket, 6*time.Second) {
+	if !socketAppears(socket, 6*time.Second) {
 		_ = RollbackToSharedFPM(db, domainID, systemUser, phpVersion)
 		return "", fmt.Errorf("tenant PHP-FPM socket was not created: %s", socket)
 	}
@@ -772,7 +779,7 @@ func ApplySubdomainFPM(db *sql.DB, domainID, subdomainID int64, systemUser, docR
 		return "", fmt.Errorf("reload tenant PHP-FPM: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	socket := tenantSubSocket(systemUser, subdomainID)
-	if !waitForSocket(socket, 6*time.Second) {
+	if !socketAppears(socket, 6*time.Second) {
 		_ = os.Remove(poolPath)
 		_, _ = tenantCommand("systemctl", "reload-or-restart", tenantUnitName(systemUser)).CombinedOutput()
 		return "", fmt.Errorf("subdomain PHP-FPM socket was not created: %s", socket)
@@ -1151,12 +1158,17 @@ func clearUnsafeEntryAt(parentFd int, name string) {
 // If the entry is a symlink, file, or tenant-owned directory, it is treated as unsafe,
 // recursively removed (symlink-safe), and recreated. Uses O_NOFOLLOW open + fd-based
 // Fstat to close the TOCTOU final-step race. Idempotent. Returns the dir fd on success.
+// shimOwnerUID and shimOwnerGID are the owner the .servika directory must have;
+// their zero value is root. They are variables so a test that is not root can
+// exercise the checks; nothing outside tests changes them.
+var shimOwnerUID, shimOwnerGID uint32
+
 func ensureRootDirAt(parentFd int, name string) (int, bool) {
 	for range 3 {
 		var st unix.Stat_t
 		serr := unix.Fstatat(parentFd, name, &st, unix.AT_SYMLINK_NOFOLLOW)
 		if serr == nil {
-			if st.Mode&unix.S_IFMT != unix.S_IFDIR || st.Uid != 0 || st.Gid != 0 {
+			if st.Mode&unix.S_IFMT != unix.S_IFDIR || st.Uid != shimOwnerUID || st.Gid != shimOwnerGID {
 				// Symlink, file, or wrong owner -- unsafe, remove.
 				if removeAtRecursive(parentFd, name) != nil {
 					return -1, false
@@ -1178,7 +1190,7 @@ func ensureRootDirAt(parentFd int, name string) (int, bool) {
 		}
 		var fst unix.Stat_t
 		if unix.Fstat(fd, &fst) != nil ||
-			fst.Mode&unix.S_IFMT != unix.S_IFDIR || fst.Uid != 0 || fst.Gid != 0 {
+			fst.Mode&unix.S_IFMT != unix.S_IFDIR || fst.Uid != shimOwnerUID || fst.Gid != shimOwnerGID {
 			_ = unix.Close(fd)
 			_ = removeAtRecursive(parentFd, name)
 			continue

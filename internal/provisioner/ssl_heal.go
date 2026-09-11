@@ -163,6 +163,17 @@ func reusableLetsEncryptCertificate(domain string, minDays int) (certPath, keyPa
 	return certPath, keyPath
 }
 
+// certificateSourceOwner is the owner a certificate being installed must carry,
+// systemCommand builds the commands this package runs without the tenant
+// environment, and renderDomainVhost is the render every SSL path ends in. All
+// three are variables so a test can run an installation without root, openssl
+// or nginx; nothing outside tests changes them.
+var (
+	certificateSourceOwner = 0
+	systemCommand          = exec.Command
+	renderDomainVhost      = renderAndReload
+)
+
 // installToPKI copies srcCert/srcKey into /etc/pki/servika/<domain>/ (cert 0644,
 // key 0600, root-owned, restorecon -> cert_t). When the source is already the target,
 // only permissions/context are applied (idempotent). Returns the target cert/key paths.
@@ -174,12 +185,12 @@ func installToPKI(domain, srcCert, srcKey string) (certPath, keyPath string, err
 	certPath = filepath.Join(sslDir, domain+".crt")
 	keyPath = filepath.Join(sslDir, domain+".key")
 	if srcCert != certPath {
-		if err := copyTenantCertificate(srcCert, certPath, 0, 0644); err != nil {
+		if err := copyTenantCertificate(srcCert, certPath, certificateSourceOwner, 0644); err != nil {
 			return "", "", fmt.Errorf("copy certificate: %w", err)
 		}
 	}
 	if srcKey != keyPath {
-		if err := copyTenantCertificate(srcKey, keyPath, 0, 0600); err != nil {
+		if err := copyTenantCertificate(srcKey, keyPath, certificateSourceOwner, 0600); err != nil {
 			return "", "", fmt.Errorf("copy key: %w", err)
 		}
 	}
@@ -218,7 +229,7 @@ func generateSelfSigned(domain string) (certPath, keyPath string, err error) {
 		"-addext", "subjectAltName=" + strings.Join(sanNames, ","),
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if out, e := exec.Command("openssl", args...).CombinedOutput(); e != nil {
+	if out, e := systemCommand("openssl", args...).CombinedOutput(); e != nil {
 		return "", "", fmt.Errorf("openssl: %s: %w", strings.TrimSpace(string(out)), e)
 	}
 	if err := applyCertificatePermissions(sslDir, certPath, keyPath); err != nil {
@@ -250,7 +261,7 @@ func writeSSLVhost(domainName, systemUser, phpVersion, backend, certPath, keyPat
 		opts.ConfigPath = addonVhostConfigPath(systemUser, domainName)
 		opts.WebRoot = safeAddonWebRoot(systemUser, domainName, wr)
 	}
-	return renderAndReload(opts, systemUser)
+	return renderDomainVhost(opts, systemUser)
 }
 
 // sslFailSafe keeps 443 alive when LE issuance fails (including 429) — it never drops
@@ -408,7 +419,7 @@ func HealSSLVhost443OnStartup() {
 		}
 		// Addon domains keep their 443 block in their own conf; reading the parent's
 		// dom_<sk>.conf here would misjudge an SSL-enabled addon's health.
-		vpath := "/etc/nginx/conf.d/dom_" + x.systemUser + ".conf"
+		vpath := nginxConfDir + "/dom_" + x.systemUser + ".conf"
 		if _, isAddon := addonDomainInfo(x.domainName); isAddon {
 			vpath = addonVhostConfigPath(x.systemUser, x.domainName)
 		}

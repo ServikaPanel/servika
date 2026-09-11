@@ -39,6 +39,10 @@ func TestDangerousNginxDirectiveRejectsPrivilegedOperations(t *testing.T) {
 		{name: "quoted hash does not hide alias", directives: `add_header X-Test "#"; alias /etc/;`, want: "alias"},
 		{name: "hash inside quotes is literal", directives: `add_header X-Marker "a#b safe";`, want: ""},
 		{name: "quoted directive name still caught", directives: `"alias" /etc/;`, want: "alias"},
+		// A backslash keeps the next byte inside the string, so the `;` and the
+		// `alias` after an escaped quote are literal and the real statement after
+		// the closing quote is the one inspected.
+		{name: "escaped quote keeps the string open", directives: `add_header X-Test "a\";alias"; root /srv;`, want: "root"},
 	}
 
 	for _, test := range tests {
@@ -462,6 +466,39 @@ func TestReadTenantCertificateRejectsSymlink(t *testing.T) {
 
 	if _, err := readTenantCertificate(link, os.Getuid()); err == nil {
 		t.Fatal("readTenantCertificate() accepted a symlink")
+	}
+}
+
+// Anything but a regular, certificate-sized file is refused, each with the
+// reason that names what was wrong.
+func TestReadTenantCertificateRejectsWhatIsNotACertificateFile(t *testing.T) {
+	directory := t.TempDir()
+	empty := filepath.Join(directory, "empty.crt")
+	oversized := filepath.Join(directory, "oversized.crt")
+	for _, path := range []string{empty, oversized} {
+		if err := os.WriteFile(path, nil, 0600); err != nil {
+			t.Fatalf("write %s: %v", filepath.Base(path), err)
+		}
+	}
+	if err := os.Truncate(oversized, maxCertificateFileSize+1); err != nil {
+		t.Fatalf("grow the oversized fixture: %v", err)
+	}
+
+	cases := []struct {
+		name, path, reason string
+	}{
+		{"a directory", directory, "not a regular file"},
+		{"an empty file", empty, "size is invalid"},
+		{"a file over the size limit", oversized, "size is invalid"},
+		{"a missing file", filepath.Join(directory, "missing.crt"), "open tenant certificate"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := readTenantCertificate(tc.path, os.Getuid())
+			if err == nil || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("readTenantCertificate() error = %v, want one naming %q", err, tc.reason)
+			}
+		})
 	}
 }
 

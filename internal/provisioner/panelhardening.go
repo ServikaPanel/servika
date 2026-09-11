@@ -8,14 +8,18 @@ import (
 	"servika/internal/httpx"
 )
 
-const (
-	panelProxyTrustSentinel = "# SERVIKA-PANEL-PROXY-TRUST v1"
-	panelSecLimitsPath      = "/etc/nginx/conf.d/00-servika-seclimits.conf"
+const panelProxyTrustSentinel = "# SERVIKA-PANEL-PROXY-TRUST v1"
+
+// panelSecLimitsPath and proxySecretPath are variables so a test can point the
+// heal at a writable directory; nothing outside tests changes them.
+var (
+	panelSecLimitsPath = "/etc/nginx/conf.d/00-servika-seclimits.conf"
+	proxySecretPath    = httpx.ProxySecretPath
 )
 
 // readProxySecret returns the persistent secret (>=32 chars), or "".
 func readProxySecret() string {
-	b, err := os.ReadFile(httpx.ProxySecretPath)
+	b, err := os.ReadFile(proxySecretPath)
 	if err != nil {
 		return ""
 	}
@@ -80,7 +84,7 @@ func HealPanelProxyTrustOnStartup() {
 		log.Printf("panel proxy-trust heal: no X-Real-IP anchor, secret not written (fail-safe)")
 		return
 	}
-	if e := os.WriteFile(httpx.ProxySecretPath, []byte(secret+"\n"), 0o600); e != nil {
+	if e := os.WriteFile(proxySecretPath, []byte(secret+"\n"), 0o600); e != nil {
 		log.Printf("panel proxy-trust heal: could not write secret: %v", e)
 		if nginxChanged {
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
@@ -89,7 +93,7 @@ func HealPanelProxyTrustOnStartup() {
 		}
 		return
 	}
-	_ = os.Chmod(httpx.ProxySecretPath, 0o600)
+	_ = os.Chmod(proxySecretPath, 0o600)
 
 	if nginxChanged {
 		if output, e := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); e != nil {

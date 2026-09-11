@@ -157,7 +157,7 @@ func writeMailChain(chainPath, certPath, keyPath string) error {
 	if err := os.WriteFile(tmp, body, 0o600); err != nil {
 		return fmt.Errorf("write the mail chain: %w", err)
 	}
-	if err := os.Chown(tmp, 0, 0); err != nil {
+	if err := chown(tmp, 0, 0); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("set the mail chain ownership: %w", err)
 	}
