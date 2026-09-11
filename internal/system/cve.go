@@ -116,10 +116,29 @@ func cveLabel(sev string) string {
 // not raw line count.
 func cveScan() *CveSummary {
 	s := &CveSummary{LastScan: time.Now().Format("2006-01-02 15:04")}
-	// CVE list line: "CVE-2025-68724  Important/Sec. kernel-...x86_64"
-	sevOf := map[string]string{} // cveID → highest severity label
-	pkgOf := map[string]string{} // cveID → example package at that severity
-	for ln := range strings.SplitSeq(cveShell(150*time.Second, "-q", "updateinfo", "list", "cves"), "\n") {
+	sevOf, pkgOf := highestSeverityPerCve(cveShell(150*time.Second, "-q", "updateinfo", "list", "cves"))
+	criticalIDs, importantIDs := countCveSeverities(s, sevOf)
+	// Top list: critical first (sorted by ID), then important — at most 10 (deterministic).
+	sort.Strings(criticalIDs)
+	sort.Strings(importantIDs)
+	for _, id := range append(criticalIDs, importantIDs...) {
+		if len(s.TopCves) >= 10 {
+			break
+		}
+		s.TopCves = append(s.TopCves, CveEntry{ID: id, Severity: sevOf[id], Package: pkgOf[id]})
+	}
+	s.TotalAdvisories = advisoryTotal(cveShell(60*time.Second, "-q", "updateinfo", "--summary"))
+	return s
+}
+
+// highestSeverityPerCve reads the listing and keeps, for each CVE, the highest
+// severity it was reported at and an example package at that severity.
+//
+// CVE list line: "CVE-2025-68724  Important/Sec. kernel-...x86_64"
+func highestSeverityPerCve(listing string) (sevOf, pkgOf map[string]string) {
+	sevOf = map[string]string{}
+	pkgOf = map[string]string{}
+	for ln := range strings.SplitSeq(listing, "\n") {
 		f := strings.Fields(ln)
 		if len(f) < 3 || !strings.HasPrefix(f[0], "CVE-") {
 			continue
@@ -133,8 +152,12 @@ func cveScan() *CveSummary {
 			pkgOf[id] = pkg
 		}
 	}
-	// Unique CVE counts + collect for priority-sorted top list.
-	var criticalIDs, importantIDs []string
+	return sevOf, pkgOf
+}
+
+// countCveSeverities fills in the unique counts and collects the ids the top
+// list is built from.
+func countCveSeverities(s *CveSummary, sevOf map[string]string) (criticalIDs, importantIDs []string) {
 	for id, sev := range sevOf {
 		s.TotalCves++
 		switch sev {
@@ -150,28 +173,26 @@ func cveScan() *CveSummary {
 			s.Low++
 		}
 	}
-	// Top list: critical first (sorted by ID), then important — at most 10 (deterministic).
-	sort.Strings(criticalIDs)
-	sort.Strings(importantIDs)
-	for _, id := range append(criticalIDs, importantIDs...) {
-		if len(s.TopCves) >= 10 {
-			break
-		}
-		s.TopCves = append(s.TopCves, CveEntry{ID: id, Severity: sevOf[id], Package: pkgOf[id]})
-	}
-	// Total advisory count (summary): "    15 Security notice(s)"
-	for ln := range strings.SplitSeq(cveShell(60*time.Second, "-q", "updateinfo", "--summary"), "\n") {
+	return criticalIDs, importantIDs
+}
+
+// advisoryTotal reads the advisory count out of the summary: "    15 Security
+// notice(s)". The per-severity lines end the same way, so a line naming one is
+// not the total.
+func advisoryTotal(summary string) int {
+	total := 0
+	for ln := range strings.SplitSeq(summary, "\n") {
 		t := strings.TrimSpace(ln)
 		if strings.HasSuffix(t, "Security notice(s)") &&
 			!strings.Contains(t, "Critical") && !strings.Contains(t, "Important") &&
 			!strings.Contains(t, "Moderate") && !strings.Contains(t, "Low") {
 			var n int
 			if _, err := fmt.Sscanf(t, "%d", &n); err == nil {
-				s.TotalAdvisories = n
+				total = n
 			}
 		}
 	}
-	return s
+	return total
 }
 
 // CveStatus — GET /system/cve : cached summary (refresh=1 to force re-scan).

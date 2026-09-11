@@ -48,17 +48,30 @@ func validateHostname(raw string) (string, error) {
 		return "", errors.New("localhost cannot be used as a hostname")
 	}
 	for label := range strings.SplitSeq(name, ".") {
-		if len(label) == 0 || len(label) > 63 ||
-			label[0] == '-' || label[len(label)-1] == '-' {
-			return "", errors.New("invalid hostname label")
-		}
-		for _, r := range label {
-			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
-				return "", errors.New("hostname may contain only letters, digits, hyphens, and dots")
-			}
+		if err := validateLabel(label); err != nil {
+			return "", err
 		}
 	}
 	return name, nil
+}
+
+// validateLabel checks one dot-separated part of a hostname: 1-63 characters,
+// no leading or trailing hyphen, and nothing outside the RFC 1123 set.
+func validateLabel(label string) error {
+	if len(label) == 0 || len(label) > 63 ||
+		label[0] == '-' || label[len(label)-1] == '-' {
+		return errors.New("invalid hostname label")
+	}
+	for _, r := range label {
+		if !validLabelRune(r) {
+			return errors.New("hostname may contain only letters, digits, hyphens, and dots")
+		}
+	}
+	return nil
+}
+
+func validLabelRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-'
 }
 
 // atomicWrite writes content to a temp file in the destination directory and

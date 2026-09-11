@@ -80,27 +80,42 @@ func kernelcareStatus() KcStatus {
 	// patch-info: patches loaded when exit 0 + non-empty; extract CVEs.
 	if pi, pc := kcShell(15*time.Second, "--patch-info"); pc == 0 && strings.TrimSpace(pi) != "" {
 		kc.Active = true
-		seen := map[string]bool{}
-		for _, tok := range strings.FieldsFunc(pi, func(r rune) bool {
-			return r == ' ' || r == '\n' || r == '\t' || r == ',' || r == ';' || r == '(' || r == ')'
-		}) {
-			if strings.HasPrefix(tok, "CVE-") && !seen[tok] {
-				seen[tok] = true
-				kc.PatchedCves = append(kc.PatchedCves, tok)
-			}
-		}
+		kc.PatchedCves = patchedCves(pi)
 	}
 
-	// registration status: --info output without "unregistered/not registered/no key" → registered.
 	info, _ := kcShell(10*time.Second, "--info")
+	kc.Registered = agentRegistered(info)
+	return kc
+}
+
+// cveSeparators are the characters the agent puts between the CVE ids in its
+// patch report.
+const cveSeparators = " \n\t,;()"
+
+// patchedCves lists each CVE the loaded patches close, once.
+func patchedCves(patchInfo string) []string {
+	seen := map[string]bool{}
+	var cves []string
+	for _, tok := range strings.FieldsFunc(patchInfo, func(r rune) bool {
+		return strings.ContainsRune(cveSeparators, r)
+	}) {
+		if strings.HasPrefix(tok, "CVE-") && !seen[tok] {
+			seen[tok] = true
+			cves = append(cves, tok)
+		}
+	}
+	return cves
+}
+
+// agentRegistered reads the registration state: --info output without
+// "unregistered/not registered/no key" → registered.
+func agentRegistered(info string) bool {
 	low := strings.ToLower(info)
-	kc.Registered = strings.TrimSpace(info) != "" &&
+	return strings.TrimSpace(info) != "" &&
 		!strings.Contains(low, "unregistered") &&
 		!strings.Contains(low, "not registered") &&
 		!strings.Contains(low, "no key") &&
 		!strings.Contains(low, "no valid key")
-
-	return kc
 }
 
 // KernelcareStatusHandler — GET /system/kernelcare : agent state (for polling).

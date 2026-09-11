@@ -292,17 +292,54 @@ func ReadDisk(mount string) (DiskUsage, error) {
 	}, nil
 }
 
-func ReadDisks() []DiskUsage {
-	skipFS := map[string]bool{
-		"proc": true, "sysfs": true, "devtmpfs": true, "tmpfs": true,
-		"devpts": true, "cgroup": true, "cgroup2": true, "pstore": true,
-		"bpf": true, "tracefs": true, "debugfs": true, "configfs": true,
-		"securityfs": true, "fusectl": true, "mqueue": true, "hugetlbfs": true,
-		"binfmt_misc": true, "autofs": true, "rpc_pipefs": true, "nfsd": true,
-		"selinuxfs": true, "fuse.gvfsd-fuse": true, "overlay": true, "squashfs": true,
-		"ramfs": true,
+// skippedFilesystems and skippedMountPrefixes name the mounts that are not a
+// disk a hosting account can fill: kernel interfaces, memory-backed trees and
+// the per-container layers a runtime keeps under its own root.
+var skippedFilesystems = map[string]bool{
+	"proc": true, "sysfs": true, "devtmpfs": true, "tmpfs": true,
+	"devpts": true, "cgroup": true, "cgroup2": true, "pstore": true,
+	"bpf": true, "tracefs": true, "debugfs": true, "configfs": true,
+	"securityfs": true, "fusectl": true, "mqueue": true, "hugetlbfs": true,
+	"binfmt_misc": true, "autofs": true, "rpc_pipefs": true, "nfsd": true,
+	"selinuxfs": true, "fuse.gvfsd-fuse": true, "overlay": true, "squashfs": true,
+	"ramfs": true,
+}
+
+var skippedMountPrefixes = []string{"/proc", "/sys", "/dev", "/run", "/var/lib/docker", "/var/lib/containers", "/snap", "/home/jails"}
+
+// usableMount reads one /proc/mounts line and reports whether it names a disk
+// worth measuring. It records what it accepted in seen and seenDev, so a later
+// line for the same mount or the same block device is refused.
+func usableMount(line string, seen, seenDev map[string]bool) (mount, fs string, ok bool) {
+	parts := strings.Fields(line)
+	if len(parts) < 3 {
+		return "", "", false
 	}
-	skipPrefix := []string{"/proc", "/sys", "/dev", "/run", "/var/lib/docker", "/var/lib/containers", "/snap", "/home/jails"}
+	dev, mount, fs := parts[0], parts[1], parts[2]
+	if skippedFilesystems[fs] {
+		return "", "", false
+	}
+	for _, p := range skippedMountPrefixes {
+		if strings.HasPrefix(mount, p+"/") || mount == p {
+			return "", "", false
+		}
+	}
+	if seen[mount] {
+		return "", "", false
+	}
+	seen[mount] = true
+	// Remove duplicate bind-mounted devices. Jail home mounts share the root device and
+	// would report its size again, so list each physical block device only once.
+	if strings.HasPrefix(dev, "/dev/") {
+		if seenDev[dev] {
+			return "", "", false
+		}
+		seenDev[dev] = true
+	}
+	return mount, fs, true
+}
+
+func ReadDisks() []DiskUsage {
 	f, err := os.Open(procMounts)
 	if err != nil {
 		return nil
@@ -312,32 +349,9 @@ func ReadDisks() []DiskUsage {
 	seenDev := map[string]bool{} // Track duplicate /dev devices created by bind mounts.
 	out := []DiskUsage{}
 	if err := scanLines(f, func(line string) bool {
-		parts := strings.Fields(line)
-		if len(parts) < 3 {
+		mount, fs, ok := usableMount(line, seen, seenDev)
+		if !ok {
 			return true
-		}
-		dev := parts[0]
-		mount := parts[1]
-		fs := parts[2]
-		if skipFS[fs] {
-			return true
-		}
-		for _, p := range skipPrefix {
-			if strings.HasPrefix(mount, p+"/") || mount == p {
-				return true
-			}
-		}
-		if seen[mount] {
-			return true
-		}
-		seen[mount] = true
-		// Remove duplicate bind-mounted devices. Jail home mounts share the root device and
-		// would report its size again, so list each physical block device only once.
-		if strings.HasPrefix(dev, "/dev/") {
-			if seenDev[dev] {
-				return true
-			}
-			seenDev[dev] = true
 		}
 		d, err := readDiskUsage(mount)
 		if err != nil {
@@ -363,27 +377,22 @@ type networkSnapshot struct {
 	t      time.Time
 }
 
-func ReadNetwork() NetworkUsage {
-	f, err := os.Open(procNetDev)
-	if err != nil {
-		return NetworkUsage{}
-	}
-	defer func() { _ = f.Close() }()
-	type rec struct {
-		name   string
-		rx, tx int64
-	}
-	var stats []rec
-	if err := scanLines(f, func(line string) bool {
+type interfaceCounter struct {
+	name   string
+	rx, tx int64
+}
+
+// readInterfaceCounters reads the byte counters of every interface that carries
+// the server's own traffic.
+func readInterfaceCounters(r io.Reader) ([]interfaceCounter, error) {
+	var stats []interfaceCounter
+	err := scanLines(r, func(line string) bool {
 		name, after, found := strings.Cut(line, ":")
 		if !found {
 			return true
 		}
 		name = strings.TrimSpace(name)
-		if name == "lo" || strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "br-") ||
-			strings.HasPrefix(name, "docker") || strings.HasPrefix(name, "tap") ||
-			strings.HasPrefix(name, "tun") || strings.HasPrefix(name, "wg") ||
-			strings.HasPrefix(name, "virbr") || strings.HasPrefix(name, "vnet") {
+		if name == "lo" || virtualInterface(name) {
 			return true
 		}
 		fld := strings.Fields(after)
@@ -392,16 +401,20 @@ func ReadNetwork() NetworkUsage {
 		}
 		rx, _ := strconv.ParseInt(fld[0], 10, 64)
 		tx, _ := strconv.ParseInt(fld[8], 10, 64)
-		stats = append(stats, rec{name: name, rx: rx, tx: tx})
+		stats = append(stats, interfaceCounter{name: name, rx: rx, tx: tx})
 		return true
-	}); err != nil {
-		return NetworkUsage{}
+	})
+	if err != nil {
+		return nil, err
 	}
-	if len(stats) == 0 {
-		return NetworkUsage{}
-	}
-	sort.Slice(stats, func(i, j int) bool { return stats[i].rx > stats[j].rx })
-	primary := stats[0]
+	return stats, nil
+}
+
+// interfaceRate turns the counters into a per-second rate against the previous
+// reading of the same interface. The first reading has nothing to compare
+// against and reports zero, and a counter that went backwards (a reset or a
+// renamed interface) reports zero rather than a negative rate.
+func interfaceRate(primary interfaceCounter) NetworkUsage {
 	now := time.Now()
 	networkMu.Lock()
 	defer networkMu.Unlock()
@@ -427,6 +440,20 @@ func ReadNetwork() NetworkUsage {
 	}
 }
 
+func ReadNetwork() NetworkUsage {
+	f, err := os.Open(procNetDev)
+	if err != nil {
+		return NetworkUsage{}
+	}
+	defer func() { _ = f.Close() }()
+	stats, err := readInterfaceCounters(f)
+	if err != nil || len(stats) == 0 {
+		return NetworkUsage{}
+	}
+	sort.Slice(stats, func(i, j int) bool { return stats[i].rx > stats[j].rx })
+	return interfaceRate(stats[0])
+}
+
 func ReadUptime() int64 {
 	data, err := os.ReadFile("/proc/uptime")
 	if err != nil {
@@ -450,43 +477,76 @@ func primaryIP() string {
 		return ""
 	}
 	for _, iface := range ifaces {
-		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
-			continue
-		}
-		n := iface.Name
-		if strings.HasPrefix(n, "veth") || strings.HasPrefix(n, "br-") ||
-			strings.HasPrefix(n, "docker") || strings.HasPrefix(n, "tap") ||
-			strings.HasPrefix(n, "tun") || strings.HasPrefix(n, "wg") ||
-			strings.HasPrefix(n, "virbr") || strings.HasPrefix(n, "vnet") {
+		if !usableInterface(iface) {
 			continue
 		}
 		addrs, err := netAddrs(iface)
 		if err != nil {
 			continue
 		}
-		for _, a := range addrs {
-			if ipnet, ok := a.(*net.IPNet); ok {
-				ip := ipnet.IP.To4()
-				if ip == nil {
-					continue
-				}
-				if ip.IsPrivate() || ip.IsLoopback() {
-					continue
-				}
-				return ip.String()
-			}
+		if ip := publicIPv4(addrs); ip != "" {
+			return ip
 		}
 	}
+	// Nothing public: fall back to any address that is not loopback, so a panel
+	// behind NAT still reports an address rather than none.
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
 		addrs, _ := netAddrs(iface)
-		for _, a := range addrs {
-			if ipnet, ok := a.(*net.IPNet); ok {
-				if ip := ipnet.IP.To4(); ip != nil && !ip.IsLoopback() {
-					return ip.String()
-				}
+		if ip := anyIPv4(addrs); ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
+// virtualInterfacePrefixes name the interfaces a container runtime, a VPN or a
+// bridge creates. Their traffic and their addresses are not the server's own.
+var virtualInterfacePrefixes = []string{"veth", "br-", "docker", "tap", "tun", "wg", "virbr", "vnet"}
+
+func virtualInterface(name string) bool {
+	for _, prefix := range virtualInterfacePrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// usableInterface reports whether an interface can carry the server's own
+// address: it must be up, not the loopback and not a virtual one.
+func usableInterface(iface net.Interface) bool {
+	if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+		return false
+	}
+	return !virtualInterface(iface.Name)
+}
+
+// publicIPv4 returns the first routable IPv4 address of an interface.
+func publicIPv4(addrs []net.Addr) string {
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok {
+			ip := ipnet.IP.To4()
+			if ip == nil {
+				continue
+			}
+			if ip.IsPrivate() || ip.IsLoopback() {
+				continue
+			}
+			return ip.String()
+		}
+	}
+	return ""
+}
+
+// anyIPv4 returns the first IPv4 address that is not the loopback.
+func anyIPv4(addrs []net.Addr) string {
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok {
+			if ip := ipnet.IP.To4(); ip != nil && !ip.IsLoopback() {
+				return ip.String()
 			}
 		}
 	}
