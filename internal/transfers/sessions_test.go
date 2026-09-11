@@ -22,9 +22,7 @@ import (
 // false), and a sealed value round-trips ONLY under the same host, because the
 // host is the AES-GCM AAD. A blob copied to another host must not decrypt.
 func TestSealForHostIsHostBound(t *testing.T) {
-	if err := secret.Init([]byte("test-key-that-is-long-enough-32b!")); err != nil {
-		t.Fatalf("secret init: %v", err)
-	}
+	initSecret(t)
 
 	empty, err := sealForHost("", "src.example.com")
 	if err != nil {

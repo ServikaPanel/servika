@@ -69,24 +69,8 @@ func (h *Handlers) Analyze(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "a multipart body is required")
 		return
 	}
-	var f *multipart.Part
-	for {
-		part, err := mr.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "could not read the upload or the size limit was exceeded")
-			return
-		}
-		if part.FormName() == "archive" {
-			f = part
-			break
-		}
-		_ = part.Close()
-	}
-	if f == nil {
-		httpx.WriteError(w, http.StatusBadRequest, "a cPanel .tar.gz backup is required in the archive field")
+	f, ok := uploadedArchivePart(w, mr)
+	if !ok {
 		return
 	}
 	defer func() { _ = f.Close() }()
@@ -105,6 +89,28 @@ func (h *Handlers) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, inv)
+}
+
+// uploadedArchivePart streams the multipart body up to its archive part. It
+// writes the refusal itself and returns false when the body cannot be read or
+// holds no archive part.
+func uploadedArchivePart(w http.ResponseWriter, mr *multipart.Reader) (*multipart.Part, bool) {
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "could not read the upload or the size limit was exceeded")
+			return nil, false
+		}
+		if part.FormName() == "archive" {
+			return part, true
+		}
+		_ = part.Close()
+	}
+	httpx.WriteError(w, http.StatusBadRequest, "a cPanel .tar.gz backup is required in the archive field")
+	return nil, false
 }
 
 type importResponse struct {
@@ -159,36 +165,13 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	if r.MultipartForm != nil {
 		defer func() { _ = r.MultipartForm.RemoveAll() }()
 	}
-	f, _, err := r.FormFile("archive")
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "the archive field is required")
+	tmpPath, ok := saveUploadedArchive(w, r)
+	if !ok {
 		return
 	}
-	defer func() { _ = f.Close() }()
-
-	tmp, err := os.CreateTemp("", "servika-cpanel-*.tar.gz")
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not create a temporary archive")
-		return
-	}
-	tmpPath := tmp.Name()
 	defer func() { _ = os.Remove(tmpPath) }()
-	_, copyErr := io.Copy(tmp, f)
-	closeErr := tmp.Close() // close on the error path too, or the fd leaks
-	if copyErr != nil || closeErr != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "could not save the archive")
-		return
-	}
-	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	src, err := os.Open(tmpPath)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not open the archive")
-		return
-	}
-	inv, err := AnalyzeCPanel(src)
-	_ = src.Close()
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+	inv, ok := analyzeSavedArchive(w, tmpPath)
+	if !ok {
 		return
 	}
 	created, ok := h.provisionDomain(w, r, inv)
@@ -202,18 +185,110 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	response, ok := h.restoreAccount(w, r, tmpPath, inv, created)
+	if !ok {
+		return
+	}
+	committed = true
+	httpx.WriteJSON(w, http.StatusCreated, response)
+}
+
+// saveUploadedArchive copies the archive field into a temporary file and
+// returns its path. It writes the refusal itself and returns false on any
+// failure, with no temporary file left behind.
+func saveUploadedArchive(w http.ResponseWriter, r *http.Request) (string, bool) {
+	f, _, err := r.FormFile("archive")
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "the archive field is required")
+		return "", false
+	}
+	defer func() { _ = f.Close() }()
+
+	tmp, err := os.CreateTemp("", "servika-cpanel-*.tar.gz")
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not create a temporary archive")
+		return "", false
+	}
+	tmpPath := tmp.Name()
+	_, copyErr := io.Copy(tmp, f)
+	closeErr := tmp.Close() // close on the error path too, or the fd leaks
+	if copyErr != nil || closeErr != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "could not save the archive")
+		_ = os.Remove(tmpPath)
+		return "", false
+	}
+	return tmpPath, true
+}
+
+// analyzeSavedArchive inventories the saved archive. It writes the refusal
+// itself and returns false when the archive cannot be opened or read.
+func analyzeSavedArchive(w http.ResponseWriter, tmpPath string) (Inventory, bool) {
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	src, err := os.Open(tmpPath)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not open the archive")
+		return Inventory{}, false
+	}
+	inv, err := AnalyzeCPanel(src)
+	_ = src.Close()
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return Inventory{}, false
+	}
+	return inv, true
+}
+
+// restoreAccount restores the saved archive's web files, databases, mail, cron
+// jobs and certificate into the created domain and returns the import response.
+// It writes the refusal itself and returns false at the first step that fails,
+// and the caller then rolls the domain back.
+func (h *Handlers) restoreAccount(w http.ResponseWriter, r *http.Request, tmpPath string, inv Inventory, created createdDomain) (importResponse, bool) {
 	// Read the archive's small helper members (the SSL pair plus the alias table)
 	// in a single pass; none of the steps below rescan the archive.
 	extras, err := readArchiveExtras(tmpPath, inv)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not read archive helper files: "+err.Error())
-		return
+		return importResponse{}, false
 	}
 
 	if err := h.restoreWeb(r.Context(), tmpPath, inv.ArchiveRoot, created.SystemUser); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer web files: "+err.Error())
-		return
+		return importResponse{}, false
 	}
+	dbMaps, ok := h.restoreImportDatabases(w, r, tmpPath, inv, created)
+	if !ok {
+		return importResponse{}, false
+	}
+	mailCreds, aliasCount, err := h.importMail(r, tmpPath, extras, inv, created.ID, created.DomainName, created.SystemUser)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer email: "+err.Error())
+		return importResponse{}, false
+	}
+	cronCount, err := h.importCron(r, inv, created.ID, created.SystemUser)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer cron jobs: "+err.Error())
+		return importResponse{}, false
+	}
+	sslImported, sslExpires, sslWarning, err := h.importSSL(r, extras, inv, created.ID, created.DomainName)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the SSL certificate: "+err.Error())
+		return importResponse{}, false
+	}
+	skipped := []string{}
+	if sslWarning != "" {
+		skipped = append(skipped, sslWarning)
+	}
+	return importResponse{
+		OK: true, DomainID: created.ID, Domain: created.DomainName,
+		SystemUser: created.SystemUser, WebFiles: inv.WebFiles,
+		Databases: dbMaps, Mailboxes: mailCreds, Aliases: aliasCount, CronJobs: cronCount,
+		SSLImported: sslImported, SSLExpires: sslExpires, Source: inv, Skipped: skipped,
+	}, true
+}
+
+// restoreImportDatabases creates the additional databases and imports every
+// dump. It writes the refusal itself and returns false when either step fails.
+func (h *Handlers) restoreImportDatabases(w http.ResponseWriter, r *http.Request, tmpPath string, inv Inventory, created createdDomain) ([]DBMap, bool) {
 	dbMaps := databaseMappings(inv.Databases, created.SystemUser, created.DBName, created.DBUser)
 	for i, m := range dbMaps {
 		// The first database reuses the domain's default DB (created by
@@ -222,7 +297,7 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 		if i > 0 {
 			if err := createMySQLDBForUser(h.DB, created.ID, m.Target, created.DBUser); err != nil {
 				httpx.WriteError(w, http.StatusInternalServerError, "could not create the additional database: "+err.Error())
-				return
+				return nil, false
 			}
 		}
 	}
@@ -230,34 +305,9 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	// gzip decompress per database (gzip has no random access).
 	if err := h.restoreDatabases(r.Context(), tmpPath, inv.ArchiveRoot, dbMaps); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the database: "+err.Error())
-		return
+		return nil, false
 	}
-	mailCreds, aliasCount, err := h.importMail(r, tmpPath, extras, inv, created.ID, created.DomainName, created.SystemUser)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer email: "+err.Error())
-		return
-	}
-	cronCount, err := h.importCron(r, inv, created.ID, created.SystemUser)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer cron jobs: "+err.Error())
-		return
-	}
-	sslImported, sslExpires, sslWarning, err := h.importSSL(r, extras, inv, created.ID, created.DomainName)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the SSL certificate: "+err.Error())
-		return
-	}
-	skipped := []string{}
-	if sslWarning != "" {
-		skipped = append(skipped, sslWarning)
-	}
-	committed = true
-	httpx.WriteJSON(w, http.StatusCreated, importResponse{
-		OK: true, DomainID: created.ID, Domain: created.DomainName,
-		SystemUser: created.SystemUser, WebFiles: inv.WebFiles,
-		Databases: dbMaps, Mailboxes: mailCreds, Aliases: aliasCount, CronJobs: cronCount,
-		SSLImported: sslImported, SSLExpires: sslExpires, Source: inv, Skipped: skipped,
-	})
+	return dbMaps, true
 }
 
 // importSSL installs the source account's leaf certificate (plus CA bundle when
@@ -611,9 +661,24 @@ func (h *Handlers) restoreDatabases(ctx context.Context, archivePath, root strin
 		return err
 	}
 	defer func() { _ = gz.Close() }()
-	tr := tar.NewReader(gz)
-	remaining := len(targets)
-	for remaining > 0 {
+	if err := importMappedDumps(ctx, tar.NewReader(gz), targets); err != nil {
+		return err
+	}
+	if len(targets) > 0 {
+		missing := make([]string, 0, len(targets))
+		for _, targetDB := range targets {
+			missing = append(missing, targetDB)
+		}
+		sort.Strings(missing)
+		return fmt.Errorf("the SQL dump was not found in the archive: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// importMappedDumps imports each mapped dump as the archive reaches it and
+// removes it from targets, so the targets left afterwards were never found.
+func importMappedDumps(ctx context.Context, tr *tar.Reader, targets map[string]string) error {
+	for len(targets) > 0 {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
@@ -626,18 +691,9 @@ func (h *Handlers) restoreDatabases(ctx context.Context, archivePath, root strin
 			continue
 		}
 		delete(targets, path.Clean(hdr.Name))
-		remaining--
 		if err := pipeDumpToMySQL(ctx, tr, targetDB); err != nil {
 			return err
 		}
-	}
-	if remaining > 0 {
-		missing := make([]string, 0, remaining)
-		for _, targetDB := range targets {
-			missing = append(missing, targetDB)
-		}
-		sort.Strings(missing)
-		return fmt.Errorf("the SQL dump was not found in the archive: %s", strings.Join(missing, ", "))
 	}
 	return nil
 }
@@ -673,33 +729,61 @@ func (h *Handlers) importMail(r *http.Request, archivePath string, extras archiv
 	if err := enableMailDomain(r.Context(), h.DB, domainID); err != nil {
 		return nil, 0, err
 	}
-	creds := make([]MailCredential, 0, len(inv.Mailboxes))
-	locals := make([]string, 0, len(inv.Mailboxes))
-	for _, local := range inv.Mailboxes {
+	creds, locals, err := h.importMailboxes(r, domainID, inv.Mailboxes)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := h.restoreImportedMailboxes(r.Context(), archivePath, inv, locals, sk); err != nil {
+		return nil, 0, err
+	}
+	created, err := h.importAliases(r, domainID, readAliases(extras, inv.PrimaryDomain, targetDomain))
+	if err != nil {
+		return nil, 0, err
+	}
+	return creds, created, nil
+}
+
+// importMailboxes creates each source mailbox through the mail handler with a
+// fresh password, and returns the credentials and the local parts created.
+func (h *Handlers) importMailboxes(r *http.Request, domainID int64, mailboxes []string) ([]MailCredential, []string, error) {
+	creds := make([]MailCredential, 0, len(mailboxes))
+	locals := make([]string, 0, len(mailboxes))
+	for _, local := range mailboxes {
 		body, _ := json.Marshal(map[string]string{"local_part": local})
 		req := domainRequest(r, http.MethodPost, "/mail", domainID, bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		createMailbox(h.Mail, rr, req)
 		if rr.Code != http.StatusCreated {
-			return nil, 0, fmt.Errorf("mailbox %s: %s", local, strings.TrimSpace(rr.Body.String()))
+			return nil, nil, fmt.Errorf("mailbox %s: %s", local, strings.TrimSpace(rr.Body.String()))
 		}
 		var result struct {
 			Email    string `json:"email"`
 			Password string `json:"password"`
 		}
 		if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
-			return nil, 0, err
+			return nil, nil, err
 		}
 		creds = append(creds, MailCredential{Email: result.Email, Password: result.Password})
 		locals = append(locals, local)
 	}
-	if inv.PrimaryDomain != "" && len(locals) > 0 {
-		if err := h.restoreMailboxes(r.Context(), archivePath, inv.ArchiveRoot, inv.PrimaryDomain, locals, sk); err != nil {
-			return nil, 0, fmt.Errorf("mailbox messages: %w", err)
-		}
-	}
+	return creds, locals, nil
+}
 
-	aliases := readAliases(extras, inv.PrimaryDomain, targetDomain)
+// restoreImportedMailboxes extracts the messages of the created mailboxes when
+// the archive names the domain they were kept under.
+func (h *Handlers) restoreImportedMailboxes(ctx context.Context, archivePath string, inv Inventory, locals []string, sk string) error {
+	if inv.PrimaryDomain == "" || len(locals) == 0 {
+		return nil
+	}
+	if err := h.restoreMailboxes(ctx, archivePath, inv.ArchiveRoot, inv.PrimaryDomain, locals, sk); err != nil {
+		return fmt.Errorf("mailbox messages: %w", err)
+	}
+	return nil
+}
+
+// importAliases recreates each forwarder through the mail handler and returns
+// how many were created; the first refusal stops the import.
+func (h *Handlers) importAliases(r *http.Request, domainID int64, aliases []aliasImport) (int, error) {
 	created := 0
 	for _, a := range aliases {
 		body, _ := json.Marshal(map[string]string{"local_part": a.Local, "destination": a.Destination})
@@ -710,9 +794,9 @@ func (h *Handlers) importMail(r *http.Request, archivePath string, extras archiv
 			created++
 			continue
 		}
-		return nil, 0, fmt.Errorf("alias %s: %s", a.Local, strings.TrimSpace(rr.Body.String()))
+		return 0, fmt.Errorf("alias %s: %s", a.Local, strings.TrimSpace(rr.Body.String()))
 	}
-	return creds, created, nil
+	return created, nil
 }
 
 // domainRequest builds an in-process request carrying the chi URL param `id`
@@ -799,41 +883,57 @@ func readAliases(extras archiveExtras, sourceDomain, targetDomain string) []alia
 func parseAliasBody(body []byte, sourceDomain, targetDomain string) []aliasImport {
 	out := []aliasImport{}
 	for line := range strings.SplitSeq(string(body), "\n") {
-		p := strings.SplitN(strings.TrimSpace(line), ":", 2)
-		if len(p) != 2 {
-			continue
-		}
-		source := strings.TrimSpace(p[0])
-		destRaw := strings.TrimSpace(p[1])
-		if source == "" || destRaw == "" || strings.HasPrefix(destRaw, ":") || strings.HasPrefix(destRaw, "|") {
-			continue
-		}
-		local := strings.TrimSuffix(strings.ToLower(source), "@"+strings.ToLower(sourceDomain))
-		if local == "*" {
-			local = ""
-		}
-		if local != "" && !localPartRE.MatchString(local) {
-			continue
-		}
-		var dests []string
-		for d := range strings.SplitSeq(destRaw, ",") {
-			d = strings.ToLower(strings.TrimSpace(d))
-			if d == "" {
-				continue
-			}
-			if !strings.Contains(d, "@") && localPartRE.MatchString(d) {
-				d += "@" + targetDomain
-			}
-			d = strings.ReplaceAll(d, "@"+strings.ToLower(sourceDomain), "@"+targetDomain)
-			if strings.Contains(d, "@") {
-				dests = append(dests, d)
-			}
-		}
-		if len(dests) > 0 {
-			out = append(out, aliasImport{Local: local, Destination: strings.Join(dests, ",")})
+		if alias, ok := parseAliasLine(line, sourceDomain, targetDomain); ok {
+			out = append(out, alias)
 		}
 	}
 	return out
+}
+
+// parseAliasLine reads one `local: dest[,dest2]` line, or false for a line that
+// is not a forwarder Servika can host.
+func parseAliasLine(line, sourceDomain, targetDomain string) (aliasImport, bool) {
+	p := strings.SplitN(strings.TrimSpace(line), ":", 2)
+	if len(p) != 2 {
+		return aliasImport{}, false
+	}
+	source := strings.TrimSpace(p[0])
+	destRaw := strings.TrimSpace(p[1])
+	if source == "" || destRaw == "" || strings.HasPrefix(destRaw, ":") || strings.HasPrefix(destRaw, "|") {
+		return aliasImport{}, false
+	}
+	local := strings.TrimSuffix(strings.ToLower(source), "@"+strings.ToLower(sourceDomain))
+	if local == "*" {
+		local = ""
+	}
+	if local != "" && !localPartRE.MatchString(local) {
+		return aliasImport{}, false
+	}
+	dests := aliasDestinations(destRaw, sourceDomain, targetDomain)
+	if len(dests) == 0 {
+		return aliasImport{}, false
+	}
+	return aliasImport{Local: local, Destination: strings.Join(dests, ",")}, true
+}
+
+// aliasDestinations rewrites each destination onto the target domain: a bare
+// local part joins the target domain, and only an address is kept.
+func aliasDestinations(destRaw, sourceDomain, targetDomain string) []string {
+	var dests []string
+	for d := range strings.SplitSeq(destRaw, ",") {
+		d = strings.ToLower(strings.TrimSpace(d))
+		if d == "" {
+			continue
+		}
+		if !strings.Contains(d, "@") && localPartRE.MatchString(d) {
+			d += "@" + targetDomain
+		}
+		d = strings.ReplaceAll(d, "@"+strings.ToLower(sourceDomain), "@"+targetDomain)
+		if strings.Contains(d, "@") {
+			dests = append(dests, d)
+		}
+	}
+	return dests
 }
 
 var errMemberNotFound = errors.New("archive member not found")
@@ -867,27 +967,35 @@ func readSmallTarMembers(archivePath string, wants []string) (map[string][]byte,
 		return nil, err
 	}
 	defer func() { _ = gz.Close() }()
-	tr := tar.NewReader(gz)
+	if err := collectTarMembers(tar.NewReader(gz), wanted, found); err != nil {
+		return nil, err
+	}
+	return found, nil
+}
+
+// collectTarMembers reads each wanted regular member into found, keyed by the
+// name it was requested under, and stops once every one is found.
+func collectTarMembers(tr *tar.Reader, wanted map[string]string, found map[string][]byte) error {
 	for len(found) < len(wanted) {
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return err
 		}
 		req, ok := wanted[path.Clean(hdr.Name)]
 		if !ok || hdr.Typeflag != tar.TypeReg {
 			continue
 		}
 		if hdr.Size > maxMetadataBytes {
-			return nil, ErrArchiveTooLarge
+			return ErrArchiveTooLarge
 		}
 		body, err := io.ReadAll(io.LimitReader(tr, maxMetadataBytes))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		found[req] = body
 	}
-	return found, nil
+	return nil
 }

@@ -162,45 +162,61 @@ func parseDiscoveryBlocks(out string) []RemoteAccount {
 			if currentAccount == "" {
 				continue
 			}
-			parts := strings.Split(strings.TrimPrefix(line, "###DOM:"), "|")
-			if len(parts) < 5 {
-				continue
+			if account, ok := discoveredDomain(currentAccount, databases, strings.TrimPrefix(line, "###DOM:")); ok {
+				result = append(result, account)
 			}
-			domain := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(parts[0], ".")))
-			if domain == "" || !reRemoteDomain.MatchString(domain) || !strings.Contains(domain, ".") {
-				continue
-			}
-			root := strings.TrimSpace(parts[1])
-			if !validRemotePath(root) {
-				continue
-			}
-			var sizeMB int64
-			_, _ = fmt.Sscanf(strings.TrimSpace(parts[3]), "%d", &sizeMB)
-			isMain := strings.TrimSpace(parts[4]) == "main"
-
-			account := RemoteAccount{
-				SourceAccount: currentAccount,
-				DomainName:    domain,
-				WebRoot:       root,
-				PHPVersion:    normalizeRemotePHP(parts[2]),
-				SizeMB:        sizeMB,
-			}
-			// Databases go to the MAIN domain ONLY. Giving the account-wide list
-			// to addon domains too would migrate the same database repeatedly.
-			if isMain {
-				for name := range strings.SplitSeq(databases, ",") {
-					name = strings.TrimSpace(name)
-					if name != "" && reRemoteDBName.MatchString(name) && !remoteSystemDB(name) {
-						account.Databases = append(account.Databases, name)
-					}
-				}
-			} else {
-				account.Note = "addon domain — the database migrates with the main domain"
-			}
-			result = append(result, account)
 		}
 	}
 	return result
+}
+
+// discoveredDomain reads one ###DOM: block of an account, or false when the
+// block is short or its domain or document root fails the allowlist.
+func discoveredDomain(sourceAccount, databases, block string) (RemoteAccount, bool) {
+	parts := strings.Split(block, "|")
+	if len(parts) < 5 {
+		return RemoteAccount{}, false
+	}
+	domain := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(parts[0], ".")))
+	if domain == "" || !reRemoteDomain.MatchString(domain) || !strings.Contains(domain, ".") {
+		return RemoteAccount{}, false
+	}
+	root := strings.TrimSpace(parts[1])
+	if !validRemotePath(root) {
+		return RemoteAccount{}, false
+	}
+	var sizeMB int64
+	_, _ = fmt.Sscanf(strings.TrimSpace(parts[3]), "%d", &sizeMB)
+	isMain := strings.TrimSpace(parts[4]) == "main"
+
+	account := RemoteAccount{
+		SourceAccount: sourceAccount,
+		DomainName:    domain,
+		WebRoot:       root,
+		PHPVersion:    normalizeRemotePHP(parts[2]),
+		SizeMB:        sizeMB,
+	}
+	// Databases go to the MAIN domain ONLY. Giving the account-wide list
+	// to addon domains too would migrate the same database repeatedly.
+	if isMain {
+		account.Databases = accountDatabases(databases)
+	} else {
+		account.Note = "addon domain — the database migrates with the main domain"
+	}
+	return account, true
+}
+
+// accountDatabases keeps the account-wide database names that pass the
+// allowlist and are not system databases.
+func accountDatabases(databases string) []string {
+	var names []string
+	for name := range strings.SplitSeq(databases, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" && reRemoteDBName.MatchString(name) && !remoteSystemDB(name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // validRemotePath checks a remote docroot: absolute, no traversal, no shell

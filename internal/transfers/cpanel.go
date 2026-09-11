@@ -70,12 +70,11 @@ func AnalyzeCPanel(src io.Reader) (Inventory, error) {
 	defer func() { _ = gz.Close() }()
 
 	tr := tar.NewReader(gz)
-	inv := Inventory{Provider: "cpanel", Databases: []string{}, DNSZones: []string{}, Mailboxes: []string{}, CronJobs: []CronJob{}, Warnings: []string{}}
-	dbSet := map[string]bool{}
-	dnsSet := map[string]bool{}
-	seenCPanel := false
-	var cronBody string
-
+	s := &cpanelScan{
+		inv:    Inventory{Provider: "cpanel", Databases: []string{}, DNSZones: []string{}, Mailboxes: []string{}, CronJobs: []CronJob{}, Warnings: []string{}},
+		dbSet:  map[string]bool{},
+		dnsSet: map[string]bool{},
+	}
 	for {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -84,76 +83,130 @@ func AnalyzeCPanel(src io.Reader) (Inventory, error) {
 		if err != nil {
 			return Inventory{}, fmt.Errorf("could not read tar stream: %w", err)
 		}
-		inv.EntryCount++
-		if inv.EntryCount > maxArchiveEntries || h.Size < 0 || inv.ExpandedBytes > maxExpandedBytes-h.Size {
-			return Inventory{}, ErrArchiveTooLarge
-		}
-		inv.ExpandedBytes += h.Size
-		if unsafeMember(h) {
-			return Inventory{}, fmt.Errorf("%w: %q", ErrUnsafeArchive, h.Name)
-		}
-
-		clean := cleanMember(h.Name)
-		root, rel := splitArchiveRoot(clean)
-		if inv.ArchiveRoot == "" && root != "" {
-			inv.ArchiveRoot = root
-		}
-		if strings.HasPrefix(rel, "cp/") || rel == "cp" || strings.HasPrefix(rel, "homedir/") {
-			seenCPanel = true
-		}
-
-		switch {
-		case strings.HasPrefix(rel, "homedir/public_html/") && h.Typeflag == tar.TypeReg:
-			inv.WebFiles++
-			inv.WebBytes += h.Size
-		case strings.HasPrefix(rel, "homedir/mail/") && h.Typeflag == tar.TypeReg:
-			inv.MailFiles++
-		case rel == "cron" || strings.HasPrefix(rel, "cron/"):
-			inv.CronPresent = true
-		case isSSLCertificateMember(rel) && h.Typeflag == tar.TypeReg:
-			inv.SSLCerts++
-		case strings.HasPrefix(rel, "mysql/") && strings.HasSuffix(strings.ToLower(rel), ".sql"):
-			name := strings.TrimSuffix(path.Base(rel), path.Ext(rel))
-			if name != "" && !dbSet[name] {
-				dbSet[name] = true
-				inv.Databases = append(inv.Databases, name)
-			}
-		case strings.HasPrefix(rel, "dnszones/") && h.Typeflag == tar.TypeReg:
-			name := strings.TrimSuffix(path.Base(rel), path.Ext(rel))
-			if domainRE.MatchString(name) && !dnsSet[name] {
-				dnsSet[name] = true
-				inv.DNSZones = append(inv.DNSZones, strings.ToLower(name))
-			}
-		}
-
-		if h.Typeflag == tar.TypeReg && h.Size <= maxMetadataBytes {
-			switch {
-			case rel == "cp/backup_user" || rel == "cp/username":
-				if b, e := io.ReadAll(io.LimitReader(tr, maxMetadataBytes)); e == nil {
-					inv.Username = strings.TrimSpace(string(b))
-				}
-			case strings.HasPrefix(rel, "cp/userdata/") && strings.HasSuffix(rel, "/main"):
-				if b, e := io.ReadAll(io.LimitReader(tr, maxMetadataBytes)); e == nil {
-					parseMainMetadata(&inv, string(b), rel)
-				}
-			case strings.HasPrefix(rel, "homedir/etc/") && strings.HasSuffix(rel, "/shadow"):
-				if b, e := io.ReadAll(io.LimitReader(tr, maxMetadataBytes)); e == nil {
-					parseMailboxNames(&inv, string(b))
-				}
-			case strings.HasPrefix(rel, "va/"):
-				if b, e := io.ReadAll(io.LimitReader(tr, maxMetadataBytes)); e == nil {
-					inv.AliasCount += countAliases(string(b))
-				}
-			case rel == "cron":
-				if b, e := io.ReadAll(io.LimitReader(tr, maxMetadataBytes)); e == nil {
-					cronBody = string(b)
-				}
-			}
+		if err := s.member(tr, h); err != nil {
+			return Inventory{}, err
 		}
 	}
-	if !seenCPanel {
+	if !s.seenCPanel {
 		return Inventory{}, ErrNotCPanel
 	}
+	s.finish()
+	return s.inv, nil
+}
+
+// cpanelScan is the state one pass over a cPanel archive builds up.
+type cpanelScan struct {
+	inv        Inventory
+	dbSet      map[string]bool
+	dnsSet     map[string]bool
+	seenCPanel bool
+	cronBody   string
+}
+
+// member takes one archive member into the inventory: it enforces the size and
+// safety limits, counts what the member is, and reads the metadata it carries.
+func (s *cpanelScan) member(tr *tar.Reader, h *tar.Header) error {
+	s.inv.EntryCount++
+	if s.inv.EntryCount > maxArchiveEntries || h.Size < 0 || s.inv.ExpandedBytes > maxExpandedBytes-h.Size {
+		return ErrArchiveTooLarge
+	}
+	s.inv.ExpandedBytes += h.Size
+	if unsafeMember(h) {
+		return fmt.Errorf("%w: %q", ErrUnsafeArchive, h.Name)
+	}
+
+	rel := s.place(h.Name)
+	s.count(rel, h)
+	if h.Typeflag == tar.TypeReg && h.Size <= maxMetadataBytes {
+		s.readMetadata(tr, rel)
+	}
+	return nil
+}
+
+// place returns a member's path below the archive root, recording the root and
+// whether the member marks a cPanel backup.
+func (s *cpanelScan) place(name string) string {
+	root, rel := splitArchiveRoot(cleanMember(name))
+	if s.inv.ArchiveRoot == "" && root != "" {
+		s.inv.ArchiveRoot = root
+	}
+	if strings.HasPrefix(rel, "cp/") || rel == "cp" || strings.HasPrefix(rel, "homedir/") {
+		s.seenCPanel = true
+	}
+	return rel
+}
+
+// count adds a member to the web, mail, cron or certificate total it belongs to,
+// and hands any other member to countNamed.
+func (s *cpanelScan) count(rel string, h *tar.Header) {
+	regular := h.Typeflag == tar.TypeReg
+	switch {
+	case strings.HasPrefix(rel, "homedir/public_html/") && regular:
+		s.inv.WebFiles++
+		s.inv.WebBytes += h.Size
+	case strings.HasPrefix(rel, "homedir/mail/") && regular:
+		s.inv.MailFiles++
+	case rel == "cron" || strings.HasPrefix(rel, "cron/"):
+		s.inv.CronPresent = true
+	case isSSLCertificateMember(rel) && regular:
+		s.inv.SSLCerts++
+	default:
+		s.countNamed(rel, regular)
+	}
+}
+
+// countNamed adds a database dump or a DNS zone the first time its name is seen.
+func (s *cpanelScan) countNamed(rel string, regular bool) {
+	switch {
+	case strings.HasPrefix(rel, "mysql/") && strings.HasSuffix(strings.ToLower(rel), ".sql"):
+		name := strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+		if name != "" && !s.dbSet[name] {
+			s.dbSet[name] = true
+			s.inv.Databases = append(s.inv.Databases, name)
+		}
+	case strings.HasPrefix(rel, "dnszones/") && regular:
+		name := strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+		if domainRE.MatchString(name) && !s.dnsSet[name] {
+			s.dnsSet[name] = true
+			s.inv.DNSZones = append(s.inv.DNSZones, strings.ToLower(name))
+		}
+	}
+}
+
+// readMetadata reads a small metadata member's body into the inventory.
+func (s *cpanelScan) readMetadata(tr *tar.Reader, rel string) {
+	apply := s.metadataReader(rel)
+	if apply == nil {
+		return
+	}
+	if b, e := io.ReadAll(io.LimitReader(tr, maxMetadataBytes)); e == nil {
+		apply(string(b))
+	}
+}
+
+// metadataReader returns what a metadata member's body sets: the account name,
+// the main domain, the mailbox list, the forwarder count or the crontab. It
+// returns nil for a member that carries no metadata.
+func (s *cpanelScan) metadataReader(rel string) func(body string) {
+	switch {
+	case rel == "cp/backup_user" || rel == "cp/username":
+		return func(body string) { s.inv.Username = strings.TrimSpace(body) }
+	case strings.HasPrefix(rel, "cp/userdata/") && strings.HasSuffix(rel, "/main"):
+		return func(body string) { parseMainMetadata(&s.inv, body, rel) }
+	case strings.HasPrefix(rel, "homedir/etc/") && strings.HasSuffix(rel, "/shadow"):
+		return func(body string) { parseMailboxNames(&s.inv, body) }
+	case strings.HasPrefix(rel, "va/"):
+		return func(body string) { s.inv.AliasCount += countAliases(body) }
+	case rel == "cron":
+		return func(body string) { s.cronBody = body }
+	}
+	return nil
+}
+
+// finish adds the warnings a completed scan calls for, parses the crontab and
+// sorts the lists.
+func (s *cpanelScan) finish() {
+	inv := &s.inv
 	if inv.PrimaryDomain == "" && len(inv.DNSZones) > 0 {
 		inv.PrimaryDomain = inv.DNSZones[0]
 		inv.Warnings = append(inv.Warnings, "Primary domain was inferred from a DNS zone rather than account metadata.")
@@ -164,9 +217,9 @@ func AnalyzeCPanel(src io.Reader) (Inventory, error) {
 	if inv.WebFiles == 0 {
 		inv.Warnings = append(inv.Warnings, "No web files were found under public_html.")
 	}
-	if cronBody != "" {
+	if s.cronBody != "" {
 		var skipped int
-		inv.CronJobs, skipped = parseCronJobs(cronBody)
+		inv.CronJobs, skipped = parseCronJobs(s.cronBody)
 		if skipped > 0 {
 			inv.Warnings = append(inv.Warnings, fmt.Sprintf("%d cron line(s) are unsupported and will not be transferred.", skipped))
 		}
@@ -174,7 +227,6 @@ func AnalyzeCPanel(src io.Reader) (Inventory, error) {
 	sort.Strings(inv.Databases)
 	sort.Strings(inv.DNSZones)
 	sort.Strings(inv.Mailboxes)
-	return inv, nil
 }
 
 // isSSLCertificateMember reports whether a member is a source SSL certificate.

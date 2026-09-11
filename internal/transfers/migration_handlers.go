@@ -170,105 +170,14 @@ func (h *Handlers) MigrationStart(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 
-	var in startInput
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+	in, source, valid, ok := h.readStartRequest(w, r)
+	if !ok {
 		return
 	}
-	source := in.source()
-	// Resume a saved session: when the operator did not re-type the credentials,
-	// decrypt the stored ones SERVER-SIDE. The password never travelled back to
-	// the browser, so this is the only place it re-enters the flow.
-	if source.Password == "" && source.Key == "" && in.SessionID > 0 {
-		pass, key, err := h.loadSessionCredentials(r.Context(), in.SessionID, source.Host)
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "the saved credentials could not be used: "+err.Error())
-			return
-		}
-		source.Password, source.Key = pass, key
-	}
-	if err := source.Validate(); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+	jobID, ok := h.recordMigrationJob(w, r, in, source, valid)
+	if !ok {
 		return
 	}
-	if len(in.Selected) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "no account was selected")
-		return
-	}
-	if len(in.Selected) > 500 {
-		httpx.WriteError(w, http.StatusBadRequest, "at most 500 sites can be migrated at once")
-		return
-	}
-	mode := "bulk"
-	if in.Mode == "single" || len(in.Selected) == 1 {
-		mode = "single"
-	}
-	// Filter the accounts again — this is remote-sourced data.
-	var valid []RemoteAccount
-	for _, account := range in.Selected {
-		account.DomainName = strings.ToLower(strings.TrimSpace(account.DomainName))
-		if !reRemoteDomain.MatchString(account.DomainName) || !strings.Contains(account.DomainName, ".") {
-			continue
-		}
-		if account.SourceAccount != "" && !reRemoteAccount.MatchString(account.SourceAccount) {
-			continue
-		}
-		valid = append(valid, account)
-	}
-	if len(valid) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "no valid account was found")
-		return
-	}
-
-	settingsJSON, _ := json.Marshal(in.Settings)
-	claims := middleware.ClaimsFrom(r)
-	var actorID int64
-	actor := ""
-	if claims != nil {
-		actorID, actor = claims.UserID, claims.Username
-	}
-
-	// Credentials are encrypted at rest, bound to the host so a stolen row
-	// cannot be replayed against a different server.
-	encryptedPassword := ""
-	if source.Password != "" {
-		v, err := secret.EncryptWith(source.Password, source.Host)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "the credentials could not be stored")
-			return
-		}
-		encryptedPassword = v
-	}
-	encryptedKey := ""
-	if source.Key != "" {
-		v, err := secret.EncryptWith(source.Key, source.Host)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "the credentials could not be stored")
-			return
-		}
-		encryptedKey = v
-	}
-
-	res, err := h.DB.Exec(
-		`INSERT INTO migration_jobs(source_type, source_host, source_port, source_user,
-		   source_password, source_key, mode, status, total, settings, started_by, started_at)
-		 VALUES(?,?,?,?,?,?,?, 'running', ?, ?, ?, NOW())`,
-		source.Type, source.Host, source.Port, source.User, encryptedPassword, encryptedKey,
-		mode, len(valid), string(settingsJSON), actor)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "the job record could not be created")
-		return
-	}
-	jobID, _ := res.LastInsertId()
-
-	for _, account := range valid {
-		_, _ = h.DB.Exec(
-			`INSERT INTO migration_items(job_id, source_account, domain_name, status)
-			 VALUES(?,?,?, 'pending')`, jobID, account.SourceAccount, account.DomainName)
-	}
-
-	auth.WriteAudit(h.DB, actorID, actor, httpx.AuditIP(r), "migration.start",
-		fmt.Sprintf("%s@%s (%d sites)", source.Type, source.Host, len(valid)), true)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	migrationMu.Lock()
@@ -287,47 +196,143 @@ func (h *Handlers) MigrationStart(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "total": len(valid)})
 }
 
+// readStartRequest decodes a start request, opens a saved session's credentials
+// when none were typed, validates the source and keeps the valid accounts. It
+// writes the refusal itself and returns false when the request cannot start a job.
+func (h *Handlers) readStartRequest(w http.ResponseWriter, r *http.Request) (startInput, *RemoteSource, []RemoteAccount, bool) {
+	var in startInput
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&in); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+		return in, nil, nil, false
+	}
+	source := in.source()
+	// Resume a saved session: when the operator did not re-type the credentials,
+	// decrypt the stored ones SERVER-SIDE. The password never travelled back to
+	// the browser, so this is the only place it re-enters the flow.
+	if source.Password == "" && source.Key == "" && in.SessionID > 0 {
+		pass, key, err := h.loadSessionCredentials(r.Context(), in.SessionID, source.Host)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "the saved credentials could not be used: "+err.Error())
+			return in, nil, nil, false
+		}
+		source.Password, source.Key = pass, key
+	}
+	if err := source.Validate(); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, err.Error())
+		return in, nil, nil, false
+	}
+	valid, ok := selectedAccounts(w, in.Selected)
+	return in, source, valid, ok
+}
+
+// selectedAccounts keeps the picked accounts whose domain and account name pass
+// the allowlist. It writes the refusal itself and returns false when the
+// selection is empty, too large, or holds no valid account.
+func selectedAccounts(w http.ResponseWriter, selected []RemoteAccount) ([]RemoteAccount, bool) {
+	if len(selected) == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "no account was selected")
+		return nil, false
+	}
+	if len(selected) > 500 {
+		httpx.WriteError(w, http.StatusBadRequest, "at most 500 sites can be migrated at once")
+		return nil, false
+	}
+	// Filter the accounts again — this is remote-sourced data.
+	var valid []RemoteAccount
+	for _, account := range selected {
+		account.DomainName = strings.ToLower(strings.TrimSpace(account.DomainName))
+		if !reRemoteDomain.MatchString(account.DomainName) || !strings.Contains(account.DomainName, ".") {
+			continue
+		}
+		if account.SourceAccount != "" && !reRemoteAccount.MatchString(account.SourceAccount) {
+			continue
+		}
+		valid = append(valid, account)
+	}
+	if len(valid) == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "no valid account was found")
+		return nil, false
+	}
+	return valid, true
+}
+
+// recordMigrationJob seals the credentials, writes the job and one item per
+// account, and audits the start. It writes the refusal itself and returns false
+// when the job record cannot be created.
+func (h *Handlers) recordMigrationJob(w http.ResponseWriter, r *http.Request, in startInput, source *RemoteSource, valid []RemoteAccount) (int64, bool) {
+	mode := "bulk"
+	if in.Mode == "single" || len(in.Selected) == 1 {
+		mode = "single"
+	}
+	settingsJSON, _ := json.Marshal(in.Settings)
+	claims := middleware.ClaimsFrom(r)
+	var actorID int64
+	actor := ""
+	if claims != nil {
+		actorID, actor = claims.UserID, claims.Username
+	}
+
+	encryptedPassword, encryptedKey, err := sealSourceCredentials(source)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the credentials could not be stored")
+		return 0, false
+	}
+
+	res, err := h.DB.Exec(
+		`INSERT INTO migration_jobs(source_type, source_host, source_port, source_user,
+		   source_password, source_key, mode, status, total, settings, started_by, started_at)
+		 VALUES(?,?,?,?,?,?,?, 'running', ?, ?, ?, NOW())`,
+		source.Type, source.Host, source.Port, source.User, encryptedPassword, encryptedKey,
+		mode, len(valid), string(settingsJSON), actor)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the job record could not be created")
+		return 0, false
+	}
+	jobID, _ := res.LastInsertId()
+
+	for _, account := range valid {
+		_, _ = h.DB.Exec(
+			`INSERT INTO migration_items(job_id, source_account, domain_name, status)
+			 VALUES(?,?,?, 'pending')`, jobID, account.SourceAccount, account.DomainName)
+	}
+
+	auth.WriteAudit(h.DB, actorID, actor, httpx.AuditIP(r), "migration.start",
+		fmt.Sprintf("%s@%s (%d sites)", source.Type, source.Host, len(valid)), true)
+	return jobID, true
+}
+
+// sealSourceCredentials encrypts the password and the key for storage. An empty
+// credential stays empty.
+func sealSourceCredentials(source *RemoteSource) (string, string, error) {
+	// Credentials are encrypted at rest, bound to the host so a stolen row
+	// cannot be replayed against a different server.
+	encryptedPassword := ""
+	if source.Password != "" {
+		v, err := secret.EncryptWith(source.Password, source.Host)
+		if err != nil {
+			return "", "", err
+		}
+		encryptedPassword = v
+	}
+	encryptedKey := ""
+	if source.Key != "" {
+		v, err := secret.EncryptWith(source.Key, source.Host)
+		if err != nil {
+			return "", "", err
+		}
+		encryptedKey = v
+	}
+	return encryptedPassword, encryptedKey, nil
+}
+
 // runMigrationJob is the job runner goroutine.
 func (h *Handlers) runMigrationJob(ctx context.Context, jobID int64, source *RemoteSource,
 	accounts []RemoteAccount, settings MigrationSettings) {
 
-	defer func() {
-		if rec := recover(); rec != nil {
-			// A panic value can carry a line break, which would forge a second
-			// log line; sanitizeRemoteError collapses it to one line.
-			detail := sanitizeRemoteError(fmt.Sprintf("%v", rec))
-			// #nosec G706 -- sanitizeRemoteError already replaces every CR and LF with a space, so the value cannot forge a log line.
-			log.Printf("migration: panic (job=%d): %s", jobID, detail)
-			_, _ = h.DB.Exec(
-				`UPDATE migration_jobs SET status='failed', error_text=?, finished_at=NOW() WHERE id=?`,
-				"unexpected error: "+detail, jobID)
-		}
-		migrationMu.Lock()
-		activeJobID, activeJobCancel = 0, nil
-		migrationMu.Unlock()
-		// Clear the credentials from the database — the job is over.
-		_, _ = h.DB.Exec(
-			`UPDATE migration_jobs SET source_password=NULL, source_key=NULL, credentials_cleared=1 WHERE id=?`,
-			jobID)
-		source.Password, source.Key = "", ""
-	}()
+	defer h.closeMigrationJob(jobID, source)
 
-	_ = os.MkdirAll(config.LogDir(), 0o750)
-	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	logFile, err := os.OpenFile(migrationLogPath(jobID), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		log.Printf("migration: the log file could not be opened: %v", err)
-	}
-	logf := func(format string, args ...any) {
-		line := fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
-		if logFile != nil {
-			_, _ = logFile.WriteString(line)
-			_ = logFile.Sync()
-		}
-	}
-	if logFile != nil {
-		defer func() { _ = logFile.Close() }()
-	}
+	logf, closeLog := openMigrationLog(jobID)
+	defer closeLog()
 
 	logf("migration started — source %s (%s), %d site(s)", source.Host, source.Type, len(accounts))
 
@@ -392,6 +397,55 @@ func (h *Handlers) runMigrationJob(ctx context.Context, jobID int64, source *Rem
 	_, _ = h.DB.Exec(
 		`UPDATE migration_jobs SET status=?, completed=?, failed=?, finished_at=NOW() WHERE id=?`,
 		status, done, failed, jobID)
+}
+
+// closeMigrationJob runs when the job runner returns or panics. It is deferred
+// directly so its recover sees the panic: a panic is recorded as the job's
+// failure, then the slot is freed and the credentials are cleared.
+func (h *Handlers) closeMigrationJob(jobID int64, source *RemoteSource) {
+	if rec := recover(); rec != nil {
+		// A panic value can carry a line break, which would forge a second
+		// log line; sanitizeRemoteError collapses it to one line.
+		detail := sanitizeRemoteError(fmt.Sprintf("%v", rec))
+		// #nosec G706 -- sanitizeRemoteError already replaces every CR and LF with a space, so the value cannot forge a log line.
+		log.Printf("migration: panic (job=%d): %s", jobID, detail)
+		_, _ = h.DB.Exec(
+			`UPDATE migration_jobs SET status='failed', error_text=?, finished_at=NOW() WHERE id=?`,
+			"unexpected error: "+detail, jobID)
+	}
+	migrationMu.Lock()
+	activeJobID, activeJobCancel = 0, nil
+	migrationMu.Unlock()
+	// Clear the credentials from the database — the job is over.
+	_, _ = h.DB.Exec(
+		`UPDATE migration_jobs SET source_password=NULL, source_key=NULL, credentials_cleared=1 WHERE id=?`,
+		jobID)
+	source.Password, source.Key = "", ""
+}
+
+// openMigrationLog opens the job's log file and returns the line writer and the
+// function that closes the file. A log that cannot be opened is reported once,
+// and its lines are dropped.
+func openMigrationLog(jobID int64) (func(string, ...any), func()) {
+	_ = os.MkdirAll(config.LogDir(), 0o750)
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	logFile, err := os.OpenFile(migrationLogPath(jobID), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		log.Printf("migration: the log file could not be opened: %v", err)
+	}
+	logf := func(format string, args ...any) {
+		line := fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
+		if logFile != nil {
+			_, _ = logFile.WriteString(line)
+			_ = logFile.Sync()
+		}
+	}
+	closeLog := func() {
+		if logFile != nil {
+			_ = logFile.Close()
+		}
+	}
+	return logf, closeLog
 }
 
 // ---------------------------------------------------------------------------

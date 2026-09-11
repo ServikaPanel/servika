@@ -53,20 +53,20 @@ func TestAnalyzeCPanelInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Provider != "cpanel" || got.Username != "demo" || got.PrimaryDomain != "example.com" {
+	if [3]string{got.Provider, got.Username, got.PrimaryDomain} != [3]string{"cpanel", "demo", "example.com"} {
 		t.Fatalf("unexpected identity: %+v", got)
 	}
-	if got.WebFiles != 1 || len(got.Databases) != 1 || got.MailFiles != 1 || !got.CronPresent {
+	if [3]int{got.WebFiles, len(got.Databases), got.MailFiles} != [3]int{1, 1, 1} || !got.CronPresent {
 		t.Fatalf("unexpected inventory: %+v", got)
 	}
-	if len(got.Mailboxes) != 2 || got.AliasCount != 1 {
+	if [2]int{len(got.Mailboxes), got.AliasCount} != [2]int{2, 1} {
 		t.Fatalf("unexpected mail inventory: %+v", got)
 	}
 	if got.SSLCerts != 1 {
 		t.Fatalf("unexpected SSL inventory: %+v", got)
 	}
-	if len(got.CronJobs) != 1 || got.CronJobs[0].Minute != "*/5" ||
-		got.CronJobs[0].Command != "/usr/bin/php /home/demo/public_html/wp-cron.php" {
+	if len(got.CronJobs) != 1 ||
+		[2]string{got.CronJobs[0].Minute, got.CronJobs[0].Command} != [2]string{"*/5", "/usr/bin/php /home/demo/public_html/wp-cron.php"} {
 		t.Fatalf("unexpected cron inventory: %+v", got)
 	}
 	if !strings.Contains(strings.Join(got.Warnings, " "), "2 cron line") {

@@ -47,250 +47,353 @@ func (h *Handlers) MigrateAccount(ctx context.Context, source *RemoteSource, acc
 	ctx, cancel := context.WithTimeout(ctx, accountTimeout)
 	defer cancel()
 
-	result := &MigrationResult{}
-	domainName := strings.ToLower(strings.TrimSpace(account.DomainName))
-	if !reRemoteDomain.MatchString(domainName) || !strings.Contains(domainName, ".") {
-		return nil, fmt.Errorf("invalid domain name")
+	m := &accountMigration{h: h, source: source, account: account, settings: settings,
+		result: &MigrationResult{}, logf: logf,
+		domainName: strings.ToLower(strings.TrimSpace(account.DomainName))}
+	if err := m.checkDomain(ctx); err != nil {
+		return nil, err
 	}
-	// The live migration is the one creation path with no HTTP response of its
-	// own, so it asks the same question directly. A read failure refuses here
-	// too: the migration needs this database in the next statement anyway.
-	switch blocked, _, err := blockedDomain(ctx, h.DB, domainName); {
-	case err != nil:
-		return nil, fmt.Errorf("banned domain list: %w", err)
-	case blocked:
-		return nil, fmt.Errorf("'%s' may not be added to this server", domainName)
-	}
-
-	// --- 1. Target check ---------------------------------------------------
-	var existingID int64
-	var existingUser, existingRoot string
-	err := h.DB.QueryRowContext(ctx,
-		`SELECT id, system_user, COALESCE(web_root,'') FROM domains WHERE domain_name=?`,
-		domainName).Scan(&existingID, &existingUser, &existingRoot)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("target check: %w", err)
-	}
-	created := false
-	var systemUser, webRoot string
-	php := settings.TargetPHP
-	if php == "" {
-		php = account.PHPVersion
-	}
-	if php == "" {
-		php = "8.3"
-	}
-
-	if existingID > 0 {
-		if !settings.Overwrite {
-			return nil, fmt.Errorf("'%s' already exists on this server (overwrite is off)", domainName)
-		}
-		result.DomainID, systemUser = existingID, existingUser
-		// The document root can be a sub-directory (for example a Laravel
-		// .../public_html/public). Writing to public_html would publish nothing.
-		webRoot = existingRoot
-		if webRoot == "" {
-			webRoot = filepath.Join("/home", systemUser, "public_html")
-		}
-		logf("found an existing domain on this server, writing over it (id=%d, root=%s)", existingID, webRoot)
-	} else {
-		requested := php
-		php = installedPHPOrClosest(php)
-		if php != requested {
-			logf("warning: source PHP %s is not installed here, using %s instead", requested, php)
-			result.Warnings = append(result.Warnings,
-				fmt.Sprintf("PHP %s is not installed, provisioned with %s", requested, php))
-		}
-		if err := h.validateMigrationOwner(ctx, settings.CustomerID); err != nil {
-			return nil, err
-		}
-		logf("creating the system account (php %s)...", php)
-		pr, err := provisionAccount(domainName, php)
-		if err != nil {
-			return nil, fmt.Errorf("provisioning: %w", err)
-		}
-		systemUser = pr.SystemUser
-		webRoot = pr.WebRoot
-		created = true
-
-		dbUser, dbName := systemUser+"_db", systemUser+"_main"
-		ipv4 := migrationSourceIPv4(h.DB)
-		// status='passive': when the process dies half way (panel restart) a
-		// half-migrated domain must not look active. Success flips it to 'active'.
-		res, err := h.DB.ExecContext(ctx,
-			`INSERT INTO domains(domain_name, system_user, php_version, ssl_enabled, status, ipv4,
-			   ftp_host, ftp_user, db_host, db_user, db_name, web_root, web_backend,
-			   plan_id, customer_id)
-			 VALUES(?,?,?,0,'passive',?,?,?, 'localhost',?,?,?, 'php-fpm', NULLIF(?,0), NULLIF(?,0))`,
-			domainName, systemUser, php, ipv4, ipv4, systemUser, dbUser, dbName, pr.WebRoot,
-			settings.PlanID, settings.CustomerID)
-		if err != nil {
-			_ = deprovisionAccount(domainName, systemUser)
-			return nil, fmt.Errorf("domain record: %w", err)
-		}
-		result.DomainID, _ = res.LastInsertId()
-
-		limitCtx, limitCancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		if err := applyResourceLimits(limitCtx, h.DB, result.DomainID); err != nil {
-			logf("warning: resource limits could not be applied: %v", err)
-			result.Warnings = append(result.Warnings, "resource limits could not be applied")
-		}
-		limitCancel()
-
-		if uid, gid, err := lookupUIDGID(systemUser); err == nil {
-			if err := createFTPAccount(h.DB, result.DomainID, systemUser,
-				credentials.RandomPassword(16), uid, gid); err != nil {
-				logf("warning: the FTP account could not be created: %v", err)
-			}
-		}
+	if err := m.prepareTarget(ctx); err != nil {
+		return nil, err
 	}
 
 	succeeded := false
 	defer func() {
-		if succeeded || !created {
+		if succeeded || !m.created {
 			return
 		}
 		logf("an error occurred — rolling back the created account...")
-		_, _ = h.DB.Exec(`DELETE FROM domains WHERE id=?`, result.DomainID)
-		_ = deprovisionAccount(domainName, systemUser)
+		_, _ = h.DB.Exec(`DELETE FROM domains WHERE id=?`, m.result.DomainID)
+		_ = deprovisionAccount(m.domainName, m.systemUser)
 	}()
 
+	if err := m.migrateData(ctx); err != nil {
+		return nil, err
+	}
+
+	if m.created {
+		_, _ = h.DB.ExecContext(ctx, `UPDATE domains SET status='active' WHERE id=?`, m.result.DomainID)
+	}
+	succeeded = true
+	return m.result, nil
+}
+
+// accountMigration carries one account migration: its inputs, the target account
+// the steps write into, and the result the steps build up.
+type accountMigration struct {
+	h        *Handlers
+	source   *RemoteSource
+	account  RemoteAccount
+	settings MigrationSettings
+	result   *MigrationResult
+	logf     func(string, ...any)
+
+	domainName string
+	systemUser string
+	webRoot    string
+	php        string
+	// created is set once this migration provisions the account, so a failure
+	// after that point removes the account again.
+	created bool
+}
+
+// checkDomain refuses a domain name that is invalid or on the banned list.
+func (m *accountMigration) checkDomain(ctx context.Context) error {
+	if !reRemoteDomain.MatchString(m.domainName) || !strings.Contains(m.domainName, ".") {
+		return fmt.Errorf("invalid domain name")
+	}
+	// The live migration is the one creation path with no HTTP response of its
+	// own, so it asks the same question directly. A read failure refuses here
+	// too: the migration needs this database in the next statement anyway.
+	switch blocked, _, err := blockedDomain(ctx, m.h.DB, m.domainName); {
+	case err != nil:
+		return fmt.Errorf("banned domain list: %w", err)
+	case blocked:
+		return fmt.Errorf("'%s' may not be added to this server", m.domainName)
+	}
+	return nil
+}
+
+// prepareTarget finds the existing domain to write over, or provisions a new
+// account when this server does not have the domain.
+func (m *accountMigration) prepareTarget(ctx context.Context) error {
+	// --- 1. Target check ---------------------------------------------------
+	var existingID int64
+	var existingUser, existingRoot string
+	err := m.h.DB.QueryRowContext(ctx,
+		`SELECT id, system_user, COALESCE(web_root,'') FROM domains WHERE domain_name=?`,
+		m.domainName).Scan(&existingID, &existingUser, &existingRoot)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("target check: %w", err)
+	}
+	m.php = m.settings.TargetPHP
+	if m.php == "" {
+		m.php = m.account.PHPVersion
+	}
+	if m.php == "" {
+		m.php = "8.3"
+	}
+
+	if existingID <= 0 {
+		return m.provisionNewAccount(ctx)
+	}
+	if !m.settings.Overwrite {
+		return fmt.Errorf("'%s' already exists on this server (overwrite is off)", m.domainName)
+	}
+	m.result.DomainID, m.systemUser = existingID, existingUser
+	// The document root can be a sub-directory (for example a Laravel
+	// .../public_html/public). Writing to public_html would publish nothing.
+	m.webRoot = existingRoot
+	if m.webRoot == "" {
+		m.webRoot = filepath.Join("/home", m.systemUser, "public_html")
+	}
+	m.logf("found an existing domain on this server, writing over it (id=%d, root=%s)", existingID, m.webRoot)
+	return nil
+}
+
+// provisionNewAccount creates the system account and the passive domain row,
+// then applies the resource limits and creates the FTP account.
+func (m *accountMigration) provisionNewAccount(ctx context.Context) error {
+	requested := m.php
+	m.php = installedPHPOrClosest(m.php)
+	if m.php != requested {
+		m.logf("warning: source PHP %s is not installed here, using %s instead", requested, m.php)
+		m.result.Warnings = append(m.result.Warnings,
+			fmt.Sprintf("PHP %s is not installed, provisioned with %s", requested, m.php))
+	}
+	if err := m.h.validateMigrationOwner(ctx, m.settings.CustomerID); err != nil {
+		return err
+	}
+	m.logf("creating the system account (php %s)...", m.php)
+	pr, err := provisionAccount(m.domainName, m.php)
+	if err != nil {
+		return fmt.Errorf("provisioning: %w", err)
+	}
+	m.systemUser = pr.SystemUser
+	m.webRoot = pr.WebRoot
+	m.created = true
+
+	dbUser, dbName := m.systemUser+"_db", m.systemUser+"_main"
+	ipv4 := migrationSourceIPv4(m.h.DB)
+	// status='passive': when the process dies half way (panel restart) a
+	// half-migrated domain must not look active. Success flips it to 'active'.
+	res, err := m.h.DB.ExecContext(ctx,
+		`INSERT INTO domains(domain_name, system_user, php_version, ssl_enabled, status, ipv4,
+			   ftp_host, ftp_user, db_host, db_user, db_name, web_root, web_backend,
+			   plan_id, customer_id)
+			 VALUES(?,?,?,0,'passive',?,?,?, 'localhost',?,?,?, 'php-fpm', NULLIF(?,0), NULLIF(?,0))`,
+		m.domainName, m.systemUser, m.php, ipv4, ipv4, m.systemUser, dbUser, dbName, pr.WebRoot,
+		m.settings.PlanID, m.settings.CustomerID)
+	if err != nil {
+		_ = deprovisionAccount(m.domainName, m.systemUser)
+		return fmt.Errorf("domain record: %w", err)
+	}
+	m.result.DomainID, _ = res.LastInsertId()
+
+	m.applyLimits()
+	m.createFTP()
+	return nil
+}
+
+// applyLimits applies the resource limits to the new domain; a failure is a
+// warning.
+func (m *accountMigration) applyLimits() {
+	limitCtx, limitCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer limitCancel()
+	if err := applyResourceLimits(limitCtx, m.h.DB, m.result.DomainID); err != nil {
+		m.logf("warning: resource limits could not be applied: %v", err)
+		m.result.Warnings = append(m.result.Warnings, "resource limits could not be applied")
+	}
+}
+
+// createFTP creates the new system user's FTP account. A user that cannot be
+// looked up gets none, and a failure is logged.
+func (m *accountMigration) createFTP() {
+	uid, gid, err := lookupUIDGID(m.systemUser)
+	if err != nil {
+		return
+	}
+	if err := createFTPAccount(m.h.DB, m.result.DomainID, m.systemUser,
+		credentials.RandomPassword(16), uid, gid); err != nil {
+		m.logf("warning: the FTP account could not be created: %v", err)
+	}
+}
+
+// migrateData runs the files, databases, DNS, SSL and mail steps in that order.
+// A files or database failure stops the migration; the later steps only add
+// warnings.
+func (m *accountMigration) migrateData(ctx context.Context) error {
+	if err := m.files(ctx); err != nil {
+		return err
+	}
+	if err := m.databases(ctx); err != nil {
+		return err
+	}
+	if m.settings.DNS {
+		m.dns(ctx)
+	}
+	if m.settings.SSL {
+		m.ssl(ctx)
+	}
+	if m.settings.Mail {
+		m.mail(ctx)
+	}
+	return nil
+}
+
+// files copies the source web root into the target web root.
+func (m *accountMigration) files(ctx context.Context) error {
 	// --- 2. Files ----------------------------------------------------------
 	// A hosting-less domain (a redirect-only subdomain) has no web root of its own.
 	// Discovery leaves it empty rather than falling back to the main domain's
 	// document root, so skip the files step with a visible warning here instead of
 	// pulling the wrong tree or aborting the whole account.
-	if settings.Files && strings.TrimSpace(account.WebRoot) == "" {
-		logf("no web root for this domain (redirect or hosting-less); files not migrated")
-		result.Warnings = append(result.Warnings,
-			"files were not migrated: this domain has no web root of its own (it may be a redirect subdomain)")
-	} else if settings.Files {
-		remote := strings.TrimSpace(account.WebRoot)
-		if !validRemotePath(remote) {
-			return nil, fmt.Errorf("the source web root is invalid")
-		}
-		if err := os.MkdirAll(webRoot, 0o750); err != nil {
-			return nil, fmt.Errorf("target directory: %w", err)
-		}
-		logf("copying files: %s -> %s", remote, webRoot)
-		if _, err := source.RsyncPull(ctx, remote+"/", webRoot+"/",
-			"--exclude=.git/", "--exclude=*.sock", "--exclude=.cpanel/"); err != nil {
-			return nil, fmt.Errorf("file transfer: %w", err)
-		}
-		if size, err := directorySize(webRoot); err == nil {
-			result.FileBytes = size
-		}
-		_ = newTransferCommand(ctx, "chown", "-R", systemUser+":"+systemUser, webRoot).Run()
-		_ = newTransferCommand(ctx, "restorecon", "-RF", webRoot).Run()
-		logf("files done (%.1f MB)", float64(result.FileBytes)/(1024*1024))
+	if !m.settings.Files {
+		return nil
 	}
+	remote := strings.TrimSpace(m.account.WebRoot)
+	if remote == "" {
+		m.logf("no web root for this domain (redirect or hosting-less); files not migrated")
+		m.result.Warnings = append(m.result.Warnings,
+			"files were not migrated: this domain has no web root of its own (it may be a redirect subdomain)")
+		return nil
+	}
+	if !validRemotePath(remote) {
+		return fmt.Errorf("the source web root is invalid")
+	}
+	if err := os.MkdirAll(m.webRoot, 0o750); err != nil {
+		return fmt.Errorf("target directory: %w", err)
+	}
+	m.logf("copying files: %s -> %s", remote, m.webRoot)
+	if _, err := m.source.RsyncPull(ctx, remote+"/", m.webRoot+"/",
+		"--exclude=.git/", "--exclude=*.sock", "--exclude=.cpanel/"); err != nil {
+		return fmt.Errorf("file transfer: %w", err)
+	}
+	if size, err := directorySize(m.webRoot); err == nil {
+		m.result.FileBytes = size
+	}
+	_ = newTransferCommand(ctx, "chown", "-R", m.systemUser+":"+m.systemUser, m.webRoot).Run()
+	_ = newTransferCommand(ctx, "restorecon", "-RF", m.webRoot).Run()
+	m.logf("files done (%.1f MB)", float64(m.result.FileBytes)/(1024*1024))
+	return nil
+}
 
+// databases moves the site's databases and points its configuration at them.
+func (m *accountMigration) databases(ctx context.Context) error {
 	// --- 3. Databases ------------------------------------------------------
+	m.account.Databases = m.databaseNames()
+	switch {
+	case m.settings.Databases && len(m.account.Databases) > 0:
+		mapping, dbPass, keptOriginal, dbErr := m.h.migrateDatabases(ctx, m.source, m.account, m.systemUser, m.webRoot, m.result, m.logf)
+		if dbErr != nil {
+			// A silent success here would publish the customer's site with an
+			// EMPTY database, so the whole item must fail.
+			return dbErr
+		}
+		// Nothing to rewrite when the databases kept their own name, user and
+		// password: the configuration already describes the connection that now
+		// exists, and rewriting it would only risk breaking a file that is correct.
+		if !keptOriginal {
+			if n := rewriteSiteConfigs(m.webRoot, mapping, dbPass, m.logf); n > 0 {
+				m.logf("%d configuration file(s) updated (database connection)", n)
+			}
+		}
+	case m.settings.Databases:
+		// A database was requested but none was found, even in the config. Say
+		// so, or the item reads as a success with the SQL silently missing.
+		m.logf("warning: no database was found on the source for this site; SQL was not migrated")
+		m.result.Warnings = append(m.result.Warnings,
+			"no database migrated: the source has no database for this site (an addon/subdomain's database migrates with the main domain, or discovery could not see it)")
+	}
+	return nil
+}
+
+// databaseNames returns the databases to move: discovery's list, or the names
+// read from the copied configuration when discovery found none.
+func (m *accountMigration) databaseNames() []string {
 	// Backup discovery: the source enumeration assigns an account's databases to
 	// the MAIN domain only (see discovery.go), and a Plesk query can come back
 	// empty, so an addon or subdomain reaches here with no database at all. The
 	// real name is written in the COPIED configuration and is the same on the
 	// source, so read it from there and dump it. Without this the item is marked
 	// done with the SQL silently missing.
-	if settings.Databases && settings.Files && len(account.Databases) == 0 {
-		if found := configDBNames(webRoot); len(found) > 0 {
-			logf("discovery found no database; %d name(s) read from configuration: %v", len(found), found)
-			account.Databases = found
+	if m.settings.Databases && m.settings.Files && len(m.account.Databases) == 0 {
+		if found := configDBNames(m.webRoot); len(found) > 0 {
+			m.logf("discovery found no database; %d name(s) read from configuration: %v", len(found), found)
+			return found
 		}
 	}
-	switch {
-	case settings.Databases && len(account.Databases) > 0:
-		mapping, dbPass, keptOriginal, dbErr := h.migrateDatabases(ctx, source, account, systemUser, webRoot, result, logf)
-		if dbErr != nil {
-			// A silent success here would publish the customer's site with an
-			// EMPTY database, so the whole item must fail.
-			return nil, dbErr
-		}
-		// Nothing to rewrite when the databases kept their own name, user and
-		// password: the configuration already describes the connection that now
-		// exists, and rewriting it would only risk breaking a file that is correct.
-		if !keptOriginal {
-			if n := rewriteSiteConfigs(webRoot, mapping, dbPass, logf); n > 0 {
-				logf("%d configuration file(s) updated (database connection)", n)
-			}
-		}
-	case settings.Databases:
-		// A database was requested but none was found, even in the config. Say
-		// so, or the item reads as a success with the SQL silently missing.
-		logf("warning: no database was found on the source for this site; SQL was not migrated")
-		result.Warnings = append(result.Warnings,
-			"no database migrated: the source has no database for this site (an addon/subdomain's database migrates with the main domain, or discovery could not see it)")
-	}
+	return m.account.Databases
+}
 
+// dns merges the source zone into the domain's zone; a failure leaves the
+// default template in place with a warning.
+func (m *accountMigration) dns(ctx context.Context) {
 	// --- 4. DNS ------------------------------------------------------------
-	if settings.DNS {
-		n, err := h.migrateDNS(ctx, source, result.DomainID, domainName, logf)
-		if err != nil {
-			logf("warning: DNS could not be migrated (default template used): %v", err)
-			result.Warnings = append(result.Warnings, "DNS was created from the default template")
-		}
-		result.DNSCount = n
+	n, err := m.h.migrateDNS(ctx, m.source, m.result.DomainID, m.domainName, m.logf)
+	if err != nil {
+		m.logf("warning: DNS could not be migrated (default template used): %v", err)
+		m.result.Warnings = append(m.result.Warnings, "DNS was created from the default template")
 	}
+	m.result.DNSCount = n
+}
 
+// ssl imports the source certificate, or else requests one from Let's Encrypt.
+func (m *accountMigration) ssl(ctx context.Context) {
 	// --- 5. SSL ------------------------------------------------------------
-	if settings.SSL && h.importSourceSSL(ctx, source, account, result.DomainID, domainName, logf, result) {
+	if m.h.importSourceSSL(ctx, m.source, m.account, m.result.DomainID, m.domainName, m.logf, m.result) {
 		// The source's own certificate was copied; HTTPS is ready without waiting
 		// for the DNS cutover. importSourceSSL logged the outcome and any warning.
-	} else if settings.SSL {
-		logf("requesting an SSL certificate...")
-		certPath, keyPath, sslOutcome, sslErr := enableLetsEncrypt(
-			domainName, systemUser, installedPHPOrClosest(php), "php-fpm")
-		if certPath != "" {
-			sourceName := "self-signed"
-			if sslOutcome.Real {
-				sourceName = "letsencrypt"
-			}
-			_, _ = h.DB.ExecContext(ctx,
-				`UPDATE domains SET ssl_enabled=1, ssl_source=?, cert_path=?, key_path=? WHERE id=?`,
-				sourceName, certPath, keyPath, result.DomainID)
-			logf("SSL: %s", sourceName)
-			if !sslOutcome.Real {
-				warning := "SSL is self-signed, renew it once DNS points at this server"
-				if sslOutcome.Reason != "" {
-					warning += " (" + sslOutcome.Reason + ")"
-				}
-				result.Warnings = append(result.Warnings, warning)
-			}
-		} else {
-			logf("warning: SSL could not be obtained: %v", sslErr)
-			result.Warnings = append(result.Warnings, "SSL could not be obtained")
-		}
+		return
 	}
+	m.logf("requesting an SSL certificate...")
+	certPath, keyPath, sslOutcome, sslErr := enableLetsEncrypt(
+		m.domainName, m.systemUser, installedPHPOrClosest(m.php), "php-fpm")
+	if certPath == "" {
+		m.logf("warning: SSL could not be obtained: %v", sslErr)
+		m.result.Warnings = append(m.result.Warnings, "SSL could not be obtained")
+		return
+	}
+	sourceName := "self-signed"
+	if sslOutcome.Real {
+		sourceName = "letsencrypt"
+	}
+	_, _ = m.h.DB.ExecContext(ctx,
+		`UPDATE domains SET ssl_enabled=1, ssl_source=?, cert_path=?, key_path=? WHERE id=?`,
+		sourceName, certPath, keyPath, m.result.DomainID)
+	m.logf("SSL: %s", sourceName)
+	if !sslOutcome.Real {
+		warning := "SSL is self-signed, renew it once DNS points at this server"
+		if sslOutcome.Reason != "" {
+			warning += " (" + sslOutcome.Reason + ")"
+		}
+		m.result.Warnings = append(m.result.Warnings, warning)
+	}
+}
 
+// mail moves the mailboxes and their messages; a mail failure is a warning.
+func (m *accountMigration) mail(ctx context.Context) {
 	// --- 6. Mail (mailboxes + Maildir data) --------------------------------
 	// After web, database, DNS and SSL so a mail failure does not roll back a
 	// working site: the domain is already provisioned, and a lost mailbox is a
 	// warning, not a reason to undo the whole migration.
-	if settings.Mail {
-		logf("Mail: discovering source mailboxes...")
-		n, creds, warns, mailErr := h.migrateMail(ctx, source, account, result.DomainID, systemUser, logf)
-		result.Warnings = append(result.Warnings, warns...)
-		if mailErr != nil {
-			logf("warning: mail could not be migrated: %v", mailErr)
-			result.Warnings = append(result.Warnings, "mail could not be migrated")
-		} else {
-			result.MailCount = n
-			if n > 0 {
-				logf("Mail: %d mailbox(es) migrated", n)
-			}
-			// Fresh passwords for the operator to hand out; the source password is
-			// never reused. The migration log is admin-only.
-			for _, c := range creds {
-				logf("Mail: new credential %s / %s", c.Email, c.Password)
-			}
-		}
+	m.logf("Mail: discovering source mailboxes...")
+	n, creds, warns, mailErr := m.h.migrateMail(ctx, m.source, m.account, m.result.DomainID, m.systemUser, m.logf)
+	m.result.Warnings = append(m.result.Warnings, warns...)
+	if mailErr != nil {
+		m.logf("warning: mail could not be migrated: %v", mailErr)
+		m.result.Warnings = append(m.result.Warnings, "mail could not be migrated")
+		return
 	}
-
-	if created {
-		_, _ = h.DB.ExecContext(ctx, `UPDATE domains SET status='active' WHERE id=?`, result.DomainID)
+	m.result.MailCount = n
+	if n > 0 {
+		m.logf("Mail: %d mailbox(es) migrated", n)
 	}
-	succeeded = true
-	return result, nil
+	// Fresh passwords for the operator to hand out; the source password is
+	// never reused. The migration log is admin-only.
+	for _, c := range creds {
+		m.logf("Mail: new credential %s / %s", c.Email, c.Password)
+	}
 }
 
 // validateMigrationOwner checks that the customer the migrated site is assigned
@@ -357,18 +460,12 @@ func (h *Handlers) migrateDatabases(ctx context.Context, source *RemoteSource, a
 		}
 		logf("database: %s -> %s", sourceDB, targetName)
 
-		if !userCreated {
-			if err := createMySQLDB(h.DB, result.DomainID, targetName, targetUser, dbPass); err != nil {
-				logf("warning: %s could not be created: %v", targetName, err)
-				failed = append(failed, sourceDB)
-				continue
-			}
-			userCreated = true
-		} else if err := createMySQLDBForUser(h.DB, result.DomainID, targetName, targetUser); err != nil {
+		if err := h.createTargetDB(result.DomainID, targetName, targetUser, dbPass, userCreated); err != nil {
 			logf("warning: %s could not be created: %v", targetName, err)
 			failed = append(failed, sourceDB)
 			continue
 		}
+		userCreated = true
 
 		if err := h.copyDatabase(ctx, source, sourceDB, targetName); err != nil {
 			logf("ERROR: %s could not be copied: %v", sourceDB, err)
@@ -383,6 +480,15 @@ func (h *Handlers) migrateDatabases(ctx context.Context, source *RemoteSource, a
 		return mapping, dbPass, keepOriginal, fmt.Errorf("database migration failed: %s", strings.Join(failed, ", "))
 	}
 	return mapping, dbPass, keepOriginal, nil
+}
+
+// createTargetDB creates one target database. The first one also creates the
+// database user with its password; each later one is attached to that user.
+func (h *Handlers) createTargetDB(domainID int64, name, user, password string, userCreated bool) error {
+	if !userCreated {
+		return createMySQLDB(h.DB, domainID, name, user, password)
+	}
+	return createMySQLDBForUser(h.DB, domainID, name, user)
 }
 
 // keepOriginalIdentity reports the source site's own database user and password
@@ -411,19 +517,29 @@ func (h *Handlers) keepOriginalIdentity(ctx context.Context, account RemoteAccou
 	if h.dbUserExists(ctx, user) {
 		return "", "", false
 	}
-	if len(account.Databases) == 0 {
+	if !h.databasesKeepTheirNames(ctx, account.Databases) {
 		return "", "", false
 	}
-	for _, name := range account.Databases {
+	return user, password, true
+}
+
+// databasesKeepTheirNames reports whether every source database can be created
+// here under its own name: there is at least one, and each is a valid identifier
+// that is neither a system database nor a schema this server already holds.
+func (h *Handlers) databasesKeepTheirNames(ctx context.Context, databases []string) bool {
+	if len(databases) == 0 {
+		return false
+	}
+	for _, name := range databases {
 		if !reRemoteDBName.MatchString(name) || !credentials.ValidDBIdentifier(name) ||
 			remoteSystemDBs[strings.ToLower(name)] {
-			return "", "", false
+			return false
 		}
 		if !h.dbNameAvailable(ctx, name) {
-			return "", "", false
+			return false
 		}
 	}
-	return user, password, true
+	return true
 }
 
 // dbUserExists reports whether a local MySQL account of this name is already
@@ -533,35 +649,11 @@ func matchesKey(key string, names []string) bool {
 // truncation collapsed two different source databases onto one target and
 // dropped one of them silently.
 func (h *Handlers) uniqueTargetDB(ctx context.Context, systemUser, sourceDB, sourceAccount string) (string, error) {
-	suffix := sourceDB
-	if sourceAccount != "" && strings.HasPrefix(sourceDB, sourceAccount+"_") {
-		suffix = strings.TrimPrefix(sourceDB, sourceAccount+"_")
-	}
-	suffix = strings.Map(func(r rune) rune {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
-			return r
-		}
-		return '_'
-	}, suffix)
-	if suffix == "" {
-		suffix = "db"
-	}
-	base := systemUser + "_" + suffix
+	base := systemUser + "_" + targetDBSuffix(sourceDB, sourceAccount)
 	for i := range 50 {
-		candidate := base
-		if i > 0 {
-			candidate = fmt.Sprintf("%s_%d", base, i+1)
-		}
-		if len(candidate) > 64 {
-			cut := 64 - len(candidate) + len(base)
-			if cut < 1 {
-				return "", fmt.Errorf("name too long")
-			}
-			candidate = base[:cut]
-			if i > 0 {
-				candidate = fmt.Sprintf("%s_%d", base[:cut-2], i+1)
-			}
+		candidate, err := targetDBCandidate(base, i)
+		if err != nil {
+			return "", err
 		}
 		// Uniqueness must be checked against BOTH the real schema AND the panel
 		// record (db_accounts): MySQLCreateDB hits the db_accounts.db_name UNIQUE
@@ -576,6 +668,46 @@ func (h *Handlers) uniqueTargetDB(ctx context.Context, systemUser, sourceDB, sou
 		}
 	}
 	return "", fmt.Errorf("could not build a unique database name")
+}
+
+// targetDBSuffix is the source database name without the source account prefix,
+// with every character outside [A-Za-z0-9_] folded into an underscore.
+func targetDBSuffix(sourceDB, sourceAccount string) string {
+	suffix := sourceDB
+	if sourceAccount != "" && strings.HasPrefix(sourceDB, sourceAccount+"_") {
+		suffix = strings.TrimPrefix(sourceDB, sourceAccount+"_")
+	}
+	suffix = strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+			return r
+		}
+		return '_'
+	}, suffix)
+	if suffix == "" {
+		suffix = "db"
+	}
+	return suffix
+}
+
+// targetDBCandidate returns the i-th name to try: the base, then the base with a
+// counter, cut to fit the 64-character identifier limit.
+func targetDBCandidate(base string, i int) (string, error) {
+	candidate := base
+	if i > 0 {
+		candidate = fmt.Sprintf("%s_%d", base, i+1)
+	}
+	if len(candidate) > 64 {
+		cut := 64 - len(candidate) + len(base)
+		if cut < 1 {
+			return "", fmt.Errorf("name too long")
+		}
+		candidate = base[:cut]
+		if i > 0 {
+			candidate = fmt.Sprintf("%s_%d", base[:cut-2], i+1)
+		}
+	}
+	return candidate, nil
 }
 
 const (
@@ -605,6 +737,19 @@ func (h *Handlers) copyDatabase(ctx context.Context, source *RemoteSource, sourc
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
 
+	if err := downloadDump(ctx, source, sourceDB, tmp); err != nil {
+		return err
+	}
+	st, err := os.Stat(tmpName)
+	if err != nil || st.Size() == 0 {
+		return fmt.Errorf("the dump came back empty")
+	}
+	return importDownloadedDump(ctx, tmpName, targetDB)
+}
+
+// downloadDump writes the source database's gzip dump into tmp over SSH and
+// closes tmp on every path.
+func downloadDump(ctx context.Context, source *RemoteSource, sourceDB string, tmp *os.File) error {
 	// The source MySQL admin client needs credentials on Plesk/DirectAdmin; a
 	// credential-less mysqldump is refused there with 1045 (mysqlAdminAuth).
 	dumpEnv, dumpUser := source.mysqlAdminAuth()
@@ -635,13 +780,14 @@ func (h *Handlers) copyDatabase(ctx context.Context, source *RemoteSource, sourc
 	if runErr != nil {
 		return fmt.Errorf("dump: %s", truncate(sanitizeRemoteError(stderr.String(), source.Password), 200))
 	}
-	st, err := os.Stat(tmpName)
-	if err != nil || st.Size() == 0 {
-		return fmt.Errorf("the dump came back empty")
-	}
+	return nil
+}
 
+// importDownloadedDump imports the downloaded gzip dump into targetDB and
+// requires the completion marker mysqldump writes at its end.
+func importDownloadedDump(ctx context.Context, dumpPath, targetDB string) error {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-	f, err := os.Open(tmpName)
+	f, err := os.Open(dumpPath)
 	if err != nil {
 		return err
 	}
@@ -754,30 +900,11 @@ func rewriteSiteConfigs(webRoot string, mapping map[string]dbTarget, newPass str
 
 	count := 0
 	for _, rel := range configCandidates {
-		path := filepath.Join(webRoot, rel)
-		st, err := os.Lstat(path)
-		if err != nil || !st.Mode().IsRegular() || st.Size() > 4<<20 {
+		path, raw, st, ok := readSiteConfig(webRoot, rel)
+		if !ok {
 			continue
 		}
-		// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		updated := string(raw)
-		for _, key := range dbNameKeys {
-			updated = replaceKeyValueFromMap(updated, key, nameMap)
-		}
-		if targetUser != "" {
-			for _, key := range dbUserKeys {
-				updated = replaceKeyValue(updated, key, targetUser)
-			}
-		}
-		if newPass != "" {
-			for _, key := range dbPassKeys {
-				updated = replaceKeyValue(updated, key, newPass)
-			}
-		}
+		updated := rewriteConfigText(string(raw), nameMap, targetUser, newPass)
 		if updated == string(raw) {
 			continue
 		}
@@ -791,6 +918,26 @@ func rewriteSiteConfigs(webRoot string, mapping map[string]dbTarget, newPass str
 		}
 	}
 	return count
+}
+
+// rewriteConfigText replaces the database name, user and password values in one
+// configuration's text; an empty user or password leaves that value as it is.
+func rewriteConfigText(text string, nameMap map[string]string, targetUser, newPass string) string {
+	updated := text
+	for _, key := range dbNameKeys {
+		updated = replaceKeyValueFromMap(updated, key, nameMap)
+	}
+	if targetUser != "" {
+		for _, key := range dbUserKeys {
+			updated = replaceKeyValue(updated, key, targetUser)
+		}
+	}
+	if newPass != "" {
+		for _, key := range dbPassKeys {
+			updated = replaceKeyValue(updated, key, newPass)
+		}
+	}
+	return updated
 }
 
 // writeFileAtomically writes a temporary file in the same directory and renames
@@ -890,25 +1037,13 @@ func configDBNames(webRoot string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, rel := range configCandidates {
-		path := filepath.Join(webRoot, rel)
-		st, err := os.Lstat(path)
-		if err != nil || !st.Mode().IsRegular() || st.Size() > 4<<20 {
-			continue
-		}
-		// #nosec G304 -- path is a fixed configuration path joined onto the migration's own web root; tenant file reads go through safeio (openat2), not this call.
-		raw, err := os.ReadFile(path)
-		if err != nil {
+		_, raw, _, ok := readSiteConfig(webRoot, rel)
+		if !ok {
 			continue
 		}
 		for line := range strings.SplitSeq(string(raw), "\n") {
-			m := reConfigKeyLine.FindStringSubmatch(line)
-			if m == nil || !isDBNameKey(m[2]) {
-				continue
-			}
-			value, _ := extractConfigValue(m[3])
-			value = strings.TrimSpace(value)
-			if value == "" || seen[value] || !reRemoteDBName.MatchString(value) ||
-				remoteSystemDBs[strings.ToLower(value)] {
+			value := configDBNameValue(line)
+			if value == "" || seen[value] {
 				continue
 			}
 			seen[value] = true
@@ -916,6 +1051,38 @@ func configDBNames(webRoot string) []string {
 		}
 	}
 	return out
+}
+
+// readSiteConfig reads one candidate configuration under the web root and
+// returns its path, its content and its file information. A path that is
+// missing, not a regular file, over 4 MiB or unreadable is skipped.
+func readSiteConfig(webRoot, rel string) (string, []byte, os.FileInfo, bool) {
+	path := filepath.Join(webRoot, rel)
+	st, err := os.Lstat(path)
+	if err != nil || !st.Mode().IsRegular() || st.Size() > 4<<20 {
+		return "", nil, nil, false
+	}
+	// #nosec G304 -- path is a fixed configuration path joined onto the migration's own web root; tenant file reads go through safeio (openat2), not this call.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, nil, false
+	}
+	return path, raw, st, true
+}
+
+// configDBNameValue returns the database name a configuration line assigns, or
+// an empty string when the line names none that may become a mysqldump argument.
+func configDBNameValue(line string) string {
+	m := reConfigKeyLine.FindStringSubmatch(line)
+	if m == nil || !isDBNameKey(m[2]) {
+		return ""
+	}
+	value, _ := extractConfigValue(m[3])
+	value = strings.TrimSpace(value)
+	if !reRemoteDBName.MatchString(value) || remoteSystemDBs[strings.ToLower(value)] {
+		return ""
+	}
+	return value
 }
 
 // isDBNameKey reports whether a configuration key holds a database name.
@@ -945,6 +1112,31 @@ func (h *Handlers) migrateDNS(ctx context.Context, source *RemoteSource, domainI
 		logf("warning: the DNS defaults could not be written: %v", err)
 	}
 
+	records := readSourceRecords(ctx, source, domainName)
+	if len(records) == 0 {
+		if err := writeDNSZone(ctx, h.DB, domainID); err != nil {
+			return 0, err
+		}
+		return 0, fmt.Errorf("the source DNS records could not be read")
+	}
+
+	merge := &dnsMerge{h: h, domainID: domainID, serverIP: serverIP,
+		oldIP: sourceZoneIPv4(records, source.Host), cleared: map[string]bool{}}
+	added := 0
+	for _, rec := range records {
+		if merge.add(ctx, rec) {
+			added++
+		}
+	}
+	if err := writeDNSZone(ctx, h.DB, domainID); err != nil {
+		return added, fmt.Errorf("the zone could not be written: %w", err)
+	}
+	logf("DNS: %d record(s) migrated", added)
+	return added, nil
+}
+
+// readSourceRecords reads the domain's records from the source server.
+func readSourceRecords(ctx context.Context, source *RemoteSource, domainName string) []zoneRecord {
 	quoted := shellQuote(domainName)
 	var records []zoneRecord
 
@@ -966,90 +1158,104 @@ func (h *Handlers) migrateDNS(ctx context.Context, source *RemoteSource, domainI
 			records = parseZoneFile(raw, domainName)
 		}
 	}
-	if len(records) == 0 {
-		if err := writeDNSZone(ctx, h.DB, domainID); err != nil {
-			return 0, err
-		}
-		return 0, fmt.Errorf("the source DNS records could not be read")
-	}
+	return records
+}
 
-	oldIP := ""
+// sourceZoneIPv4 is the address the source zone served at its apex, or the
+// source host when no apex record names one and the host is an IP address.
+func sourceZoneIPv4(records []zoneRecord, sourceHost string) string {
 	for _, rec := range records {
 		if rec.Type == "A" && rec.Name == "@" {
-			oldIP = rec.Value
-			break
+			return rec.Value
 		}
 	}
-	if oldIP == "" && net.ParseIP(source.Host) != nil {
-		oldIP = source.Host
+	if net.ParseIP(sourceHost) != nil {
+		return sourceHost
 	}
+	return ""
+}
 
-	added := 0
-	cleared := map[string]bool{}
-	for _, rec := range records {
-		if rec.Type == "AAAA" || rec.Type == "NS" {
-			continue // the old IPv6 is invalid and NS must be the panel's own servers
-		}
-		value := rec.Value
-		if rec.Type == "A" && (value == oldIP || rec.Name == "@" || rec.Name == "www") {
-			value = serverIP
-		}
-		key := rec.Name + "|" + rec.Type
-		switch {
-		case rec.Type == "CNAME":
-			// A CNAME must be the ONLY record for a name (RFC 1034): no A or TXT
-			// may share it. Records such as the seeded "www A" are removed too,
-			// otherwise named-checkzone REJECTS the zone with "CNAME and other data".
-			if !cleared[rec.Name+"|*"] {
-				_, _ = h.DB.ExecContext(ctx,
-					`DELETE FROM dns_records WHERE domain_id=? AND name=?`, domainID, rec.Name)
-				cleared[rec.Name+"|*"] = true
-			}
-		case sourceWinsTypes[rec.Type]:
-			// When the source supplies records for this (name, type), clear the
-			// panel default once and then add ALL of the source records.
-			if !cleared[key] {
-				_, _ = h.DB.ExecContext(ctx,
-					`DELETE FROM dns_records WHERE domain_id=? AND name=? AND type=?`,
-					domainID, rec.Name, rec.Type)
-				cleared[key] = true
-			}
-		default:
-			// Do not add another record to a name that already holds a CNAME.
-			var cname int
-			_ = h.DB.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type='CNAME'`,
-				domainID, rec.Name).Scan(&cname)
-			if cname > 0 {
-				continue
-			}
-			var existing int
-			_ = h.DB.QueryRowContext(ctx,
-				`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type=?`,
-				domainID, rec.Name, rec.Type).Scan(&existing)
-			if existing > 0 {
-				continue
-			}
-		}
-		var duplicate int
-		_ = h.DB.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type=? AND value=?`,
-			domainID, rec.Name, rec.Type, value).Scan(&duplicate)
-		if duplicate > 0 {
-			continue
-		}
-		if _, err := h.DB.ExecContext(ctx,
-			`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
+// dnsMerge adds source records to a seeded zone and remembers which defaults it
+// has already cleared.
+type dnsMerge struct {
+	h               *Handlers
+	domainID        int64
+	serverIP, oldIP string
+	cleared         map[string]bool
+}
+
+// add merges one source record and reports whether it was inserted.
+func (m *dnsMerge) add(ctx context.Context, rec zoneRecord) bool {
+	if rec.Type == "AAAA" || rec.Type == "NS" {
+		return false // the old IPv6 is invalid and NS must be the panel's own servers
+	}
+	value := rec.Value
+	if rec.Type == "A" && (value == m.oldIP || rec.Name == "@" || rec.Name == "www") {
+		value = m.serverIP
+	}
+	if !m.makeRoom(ctx, rec) {
+		return false
+	}
+	var duplicate int
+	_ = m.h.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type=? AND value=?`,
+		m.domainID, rec.Name, rec.Type, value).Scan(&duplicate)
+	if duplicate > 0 {
+		return false
+	}
+	_, err := m.h.DB.ExecContext(ctx,
+		`INSERT INTO dns_records(domain_id, name, type, value, ttl, priority, enabled)
 			 VALUES(?,?,?,?,?,?,1)`,
-			domainID, rec.Name, rec.Type, value, rec.TTL, rec.Priority); err == nil {
-			added++
+		m.domainID, rec.Name, rec.Type, value, rec.TTL, rec.Priority)
+	return err == nil
+}
+
+// makeRoom prepares the zone for one source record: a CNAME clears its name once
+// and a source-wins type clears the default once. It returns false for any
+// other record whose name cannot take it.
+func (m *dnsMerge) makeRoom(ctx context.Context, rec zoneRecord) bool {
+	key := rec.Name + "|" + rec.Type
+	switch {
+	case rec.Type == "CNAME":
+		// A CNAME must be the ONLY record for a name (RFC 1034): no A or TXT
+		// may share it. Records such as the seeded "www A" are removed too,
+		// otherwise named-checkzone REJECTS the zone with "CNAME and other data".
+		if !m.cleared[rec.Name+"|*"] {
+			_, _ = m.h.DB.ExecContext(ctx,
+				`DELETE FROM dns_records WHERE domain_id=? AND name=?`, m.domainID, rec.Name)
+			m.cleared[rec.Name+"|*"] = true
 		}
+	case sourceWinsTypes[rec.Type]:
+		// When the source supplies records for this (name, type), clear the
+		// panel default once and then add ALL of the source records.
+		if !m.cleared[key] {
+			_, _ = m.h.DB.ExecContext(ctx,
+				`DELETE FROM dns_records WHERE domain_id=? AND name=? AND type=?`,
+				m.domainID, rec.Name, rec.Type)
+			m.cleared[key] = true
+		}
+	default:
+		return m.nameIsFree(ctx, rec)
 	}
-	if err := writeDNSZone(ctx, h.DB, domainID); err != nil {
-		return added, fmt.Errorf("the zone could not be written: %w", err)
+	return true
+}
+
+// nameIsFree reports whether a record may join its name: the name holds no CNAME
+// and no record of the same type yet.
+func (m *dnsMerge) nameIsFree(ctx context.Context, rec zoneRecord) bool {
+	// Do not add another record to a name that already holds a CNAME.
+	var cname int
+	_ = m.h.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type='CNAME'`,
+		m.domainID, rec.Name).Scan(&cname)
+	if cname > 0 {
+		return false
 	}
-	logf("DNS: %d record(s) migrated", added)
-	return added, nil
+	var existing int
+	_ = m.h.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM dns_records WHERE domain_id=? AND name=? AND type=?`,
+		m.domainID, rec.Name, rec.Type).Scan(&existing)
+	return existing == 0
 }
 
 type zoneRecord struct {
@@ -1074,30 +1280,10 @@ func parsePleskDNS(raw, domainName string) []zoneRecord {
 		if !migratableRecordTypes[recordType] {
 			continue
 		}
-		name := strings.TrimSuffix(fields[0], ".")
-		name = strings.TrimSuffix(name, "."+domainName)
-		if name == domainName || name == "" {
-			name = "@"
-		}
-		priority := 0
-		var value string
-		switch recordType {
-		case "MX":
-			if len(fields) < 4 {
-				continue
-			}
-			priority, _ = strconv.Atoi(fields[2])
-			value = strings.TrimSuffix(fields[3], ".")
-		case "SRV":
-			if len(fields) < 6 {
-				continue
-			}
-			priority, _ = strconv.Atoi(fields[2])
-			value = fields[3] + " " + fields[4] + " " + strings.TrimSuffix(fields[5], ".")
-		case "CNAME":
-			value = strings.TrimSuffix(fields[2], ".")
-		default: // A, TXT, CAA
-			value = strings.Join(fields[2:], " ")
+		name := relativeRecordName(fields[0], domainName)
+		priority, value, ok := pleskRecordValue(recordType, fields)
+		if !ok {
+			continue
 		}
 		if value == "" || len(value) > 2048 || len(name) > 100 {
 			continue
@@ -1107,6 +1293,40 @@ func parsePleskDNS(raw, domainName string) []zoneRecord {
 	return out
 }
 
+// relativeRecordName turns an owner name into the form the panel stores: the
+// zone's own domain becomes "@", and a name inside it loses the domain suffix.
+func relativeRecordName(name, domainName string) string {
+	name = strings.TrimSuffix(name, ".")
+	name = strings.TrimSuffix(name, "."+domainName)
+	if name == domainName || name == "" {
+		name = "@"
+	}
+	return name
+}
+
+// pleskRecordValue reads the priority and the value of one Plesk record, or
+// false when a record of this type is too short to carry them.
+func pleskRecordValue(recordType string, fields []string) (int, string, bool) {
+	switch recordType {
+	case "MX":
+		if len(fields) < 4 {
+			return 0, "", false
+		}
+		priority, _ := strconv.Atoi(fields[2])
+		return priority, strings.TrimSuffix(fields[3], "."), true
+	case "SRV":
+		if len(fields) < 6 {
+			return 0, "", false
+		}
+		priority, _ := strconv.Atoi(fields[2])
+		return priority, fields[3] + " " + fields[4] + " " + strings.TrimSuffix(fields[5], "."), true
+	case "CNAME":
+		return 0, strings.TrimSuffix(fields[2], "."), true
+	default: // A, TXT, CAA
+		return 0, strings.Join(fields[2:], " "), true
+	}
+}
+
 // parseZoneFile converts BIND zone text into records.
 //
 // Comment stripping must be QUOTE AWARE: ';' is DATA inside DMARC, DKIM and SPF
@@ -1114,87 +1334,117 @@ func parsePleskDNS(raw, domainName string) []zoneRecord {
 // ("v=DKIM1;" "p=MIG...") are joined back together.
 func parseZoneFile(raw, domainName string) []zoneRecord {
 	var out []zoneRecord
-	lastName := "@"
-	parenDepth := 0
-
+	p := &zoneParser{domainName: domainName, lastName: "@"}
 	for rawLine := range strings.SplitSeq(raw, "\n") {
-		line := stripZoneComment(rawLine)
-		if parenDepth > 0 {
-			parenDepth += strings.Count(line, "(") - strings.Count(line, ")")
-			continue // body of a multi-line block such as SOA
+		if rec, ok := p.line(rawLine); ok {
+			out = append(out, rec)
 		}
-		if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "$") {
-			continue
-		}
-		if strings.Contains(strings.ToUpper(line), "SOA") {
-			parenDepth += strings.Count(line, "(") - strings.Count(line, ")")
-			continue
-		}
-		if open := strings.Count(line, "(") - strings.Count(line, ")"); open > 0 {
-			parenDepth += open
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		name := lastName
-		i := 0
-		if !strings.HasPrefix(rawLine, " ") && !strings.HasPrefix(rawLine, "\t") {
-			name = fields[0]
-			i = 1
-		}
-		ttl := 3600
-		for ; i < len(fields); i++ {
-			if strings.EqualFold(fields[i], "IN") {
-				continue
-			}
-			if n, err := strconv.Atoi(fields[i]); err == nil {
-				ttl = n
-				continue
-			}
-			break
-		}
-		if i >= len(fields) {
-			continue
-		}
-		recordType := strings.ToUpper(fields[i])
-
-		// The name must be normalised even for an unsupported type, otherwise the
-		// next indented line is attributed to the WRONG owner.
-		normalized := strings.TrimSuffix(name, ".")
-		normalized = strings.TrimSuffix(normalized, "."+domainName)
-		if normalized == domainName || normalized == "" {
-			normalized = "@"
-		}
-		lastName = normalized
-
-		if !migratableRecordTypes[recordType] {
-			continue
-		}
-		rest := fields[i+1:]
-		if len(rest) == 0 {
-			continue
-		}
-		priority := 0
-		if recordType == "MX" || recordType == "SRV" {
-			if n, err := strconv.Atoi(rest[0]); err == nil {
-				priority = n
-				rest = rest[1:]
-			}
-		}
-		if len(rest) == 0 {
-			continue
-		}
-		// Parenthesised rdata that completes on one line: ( "v=DKIM1;" "p=MIG..." )
-		value := joinQuotedParts(stripOuterParens(strings.Join(rest, " ")))
-		if value == "" || len(value) > 500 || len(normalized) > 100 {
-			continue
-		}
-		out = append(out, zoneRecord{Name: normalized, Type: recordType, Value: value, TTL: ttl, Priority: priority})
 	}
 	return out
+}
+
+// zoneParser carries what one zone line leaves for the next: the owner an
+// indented line inherits and the depth of an open parenthesised block.
+type zoneParser struct {
+	domainName string
+	lastName   string
+	parenDepth int
+}
+
+// line reads one zone line and returns its record, or false for a line that
+// holds no migratable record.
+func (p *zoneParser) line(rawLine string) (zoneRecord, bool) {
+	line := stripZoneComment(rawLine)
+	if p.skipsBlock(line) {
+		return zoneRecord{}, false
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 3 {
+		return zoneRecord{}, false
+	}
+	name, ttl, i := p.owner(rawLine, fields)
+	if i >= len(fields) {
+		return zoneRecord{}, false
+	}
+	recordType := strings.ToUpper(fields[i])
+
+	// The name must be normalised even for an unsupported type, otherwise the
+	// next indented line is attributed to the WRONG owner.
+	normalized := relativeRecordName(name, p.domainName)
+	p.lastName = normalized
+
+	if !migratableRecordTypes[recordType] {
+		return zoneRecord{}, false
+	}
+	priority, value, ok := zoneRecordValue(recordType, fields[i+1:])
+	if !ok || value == "" || len(value) > 500 || len(normalized) > 100 {
+		return zoneRecord{}, false
+	}
+	return zoneRecord{Name: normalized, Type: recordType, Value: value, TTL: ttl, Priority: priority}, true
+}
+
+// skipsBlock reports whether a line is consumed without a record: the body of a
+// multi-line block, a blank or $ directive line, or a line that opens a block.
+func (p *zoneParser) skipsBlock(line string) bool {
+	if p.parenDepth > 0 {
+		p.parenDepth += strings.Count(line, "(") - strings.Count(line, ")")
+		return true // body of a multi-line block such as SOA
+	}
+	if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "$") {
+		return true
+	}
+	if strings.Contains(strings.ToUpper(line), "SOA") {
+		p.parenDepth += strings.Count(line, "(") - strings.Count(line, ")")
+		return true
+	}
+	if open := strings.Count(line, "(") - strings.Count(line, ")"); open > 0 {
+		p.parenDepth += open
+		return true
+	}
+	return false
+}
+
+// owner returns a line's owner name, its TTL and the index of its type field.
+// An indented line inherits the previous owner.
+func (p *zoneParser) owner(rawLine string, fields []string) (string, int, int) {
+	name := p.lastName
+	i := 0
+	if !strings.HasPrefix(rawLine, " ") && !strings.HasPrefix(rawLine, "\t") {
+		name = fields[0]
+		i = 1
+	}
+	ttl := 3600
+	for ; i < len(fields); i++ {
+		if strings.EqualFold(fields[i], "IN") {
+			continue
+		}
+		if n, err := strconv.Atoi(fields[i]); err == nil {
+			ttl = n
+			continue
+		}
+		break
+	}
+	return name, ttl, i
+}
+
+// zoneRecordValue reads the priority of an MX or SRV record and the value of any
+// record from the fields after its type, or false when no value remains.
+func zoneRecordValue(recordType string, rest []string) (int, string, bool) {
+	if len(rest) == 0 {
+		return 0, "", false
+	}
+	priority := 0
+	if recordType == "MX" || recordType == "SRV" {
+		if n, err := strconv.Atoi(rest[0]); err == nil {
+			priority = n
+			rest = rest[1:]
+		}
+	}
+	if len(rest) == 0 {
+		return 0, "", false
+	}
+	// Parenthesised rdata that completes on one line: ( "v=DKIM1;" "p=MIG..." )
+	return priority, joinQuotedParts(stripOuterParens(strings.Join(rest, " "))), true
 }
 
 // stripZoneComment drops everything from the first ';' that is outside quotes.
@@ -1259,12 +1509,7 @@ func stripOuterParens(s string) string {
 // version is missing here. Inside the same MAJOR release it looks UPWARDS first:
 // downgrading a request for "8" or "8.1" to 7.4 would break PHP 8 code.
 func installedPHPOrClosest(requested string) string {
-	var installed []string
-	for _, v := range phpVersions() {
-		if v.Loaded {
-			installed = append(installed, v.Version)
-		}
-	}
+	installed := loadedPHPVersions()
 	if len(installed) == 0 || requested == "" {
 		return requested
 	}
@@ -1273,53 +1518,60 @@ func installedPHPOrClosest(requested string) string {
 	}
 	wantMajor, wantMinor := splitPHPVersion(requested)
 	// 1) Same major release — first >= requested, otherwise the highest one below.
-	var sameUp, sameDown string
-	for _, v := range installed {
-		major, minor := splitPHPVersion(v)
-		if major != wantMajor {
-			continue
-		}
-		if minor >= wantMinor {
-			if sameUp == "" {
-				sameUp = v
-			} else if _, upMinor := splitPHPVersion(sameUp); minor < upMinor {
-				sameUp = v
-			}
-		} else if sameDown == "" {
-			sameDown = v
-		} else if _, downMinor := splitPHPVersion(sameDown); minor > downMinor {
-			sameDown = v
-		}
-	}
-	if sameUp != "" {
-		return sameUp
-	}
-	if sameDown != "" {
-		return sameDown
+	sameMajor := func(major, _ int) bool { return major == wantMajor }
+	atOrAboveMinor := func(_, minor int) bool { return minor >= wantMinor }
+	if v := nearestPHP(installed, sameMajor, atOrAboveMinor); v != "" {
+		return v
 	}
 	// 2) Different major release — the closest higher one, otherwise the closest lower.
-	var higher, lower string
-	for _, v := range installed {
-		major, minor := splitPHPVersion(v)
-		if major > wantMajor || (major == wantMajor && minor > wantMinor) {
-			if higher == "" {
-				higher = v
-			} else if hMajor, hMinor := splitPHPVersion(higher); major < hMajor || (major == hMajor && minor < hMinor) {
-				higher = v
-			}
-		} else if lower == "" {
-			lower = v
-		} else if lMajor, lMinor := splitPHPVersion(lower); major > lMajor || (major == lMajor && minor > lMinor) {
-			lower = v
-		}
-	}
-	if higher != "" {
-		return higher
-	}
-	if lower != "" {
-		return lower
+	anyMajor := func(int, int) bool { return true }
+	aboveWanted := func(major, minor int) bool { return phpVersionAbove(major, minor, wantMajor, wantMinor) }
+	if v := nearestPHP(installed, anyMajor, aboveWanted); v != "" {
+		return v
 	}
 	return requested
+}
+
+// loadedPHPVersions lists the PHP versions installed and loaded on this server.
+func loadedPHPVersions() []string {
+	var installed []string
+	for _, v := range phpVersions() {
+		if v.Loaded {
+			installed = append(installed, v.Version)
+		}
+	}
+	return installed
+}
+
+// nearestPHP returns the lowest installed version on the upper side of the
+// wanted one, otherwise the highest on the lower side, or an empty string when
+// no version passes keep. above decides the side; of two equal versions the
+// first listed wins.
+func nearestPHP(installed []string, keep, above func(major, minor int) bool) string {
+	var up, down string
+	var upMajor, upMinor, downMajor, downMinor int
+	for _, v := range installed {
+		major, minor := splitPHPVersion(v)
+		if !keep(major, minor) {
+			continue
+		}
+		if above(major, minor) {
+			if up == "" || phpVersionAbove(upMajor, upMinor, major, minor) {
+				up, upMajor, upMinor = v, major, minor
+			}
+		} else if down == "" || phpVersionAbove(major, minor, downMajor, downMinor) {
+			down, downMajor, downMinor = v, major, minor
+		}
+	}
+	if up != "" {
+		return up
+	}
+	return down
+}
+
+// phpVersionAbove reports whether major.minor is above otherMajor.otherMinor.
+func phpVersionAbove(major, minor, otherMajor, otherMinor int) bool {
+	return major > otherMajor || (major == otherMajor && minor > otherMinor)
 }
 
 func splitPHPVersion(s string) (int, int) {

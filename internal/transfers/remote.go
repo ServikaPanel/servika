@@ -93,28 +93,54 @@ func (s *RemoteSource) Validate() error {
 	if !validSourceTypes[s.Type] {
 		return fmt.Errorf("invalid source panel type")
 	}
-	host := strings.TrimSpace(s.Host)
-	if host == "" || len(host) > 253 || strings.HasPrefix(host, "-") {
-		return fmt.Errorf("source server address is invalid")
-	}
-	// Must be an IP address or a host name.
-	if net.ParseIP(host) == nil && !reRemoteHost.MatchString(host) {
-		return fmt.Errorf("source server address is invalid")
+	host, err := validRemoteHost(s.Host)
+	if err != nil {
+		return err
 	}
 	s.Host = host
 
 	if s.Port <= 0 || s.Port > 65535 {
 		return fmt.Errorf("SSH port is invalid")
 	}
-	user := strings.TrimSpace(s.User)
+	user, err := validRemoteUser(s.User)
+	if err != nil {
+		return err
+	}
+	s.User = user
+
+	return s.validateCredentials()
+}
+
+// validRemoteHost trims the source address and refuses one that could be read
+// as a flag or is neither an IP address nor a host name.
+func validRemoteHost(raw string) (string, error) {
+	host := strings.TrimSpace(raw)
+	if host == "" || len(host) > 253 || strings.HasPrefix(host, "-") {
+		return "", fmt.Errorf("source server address is invalid")
+	}
+	// Must be an IP address or a host name.
+	if net.ParseIP(host) == nil && !reRemoteHost.MatchString(host) {
+		return "", fmt.Errorf("source server address is invalid")
+	}
+	return host, nil
+}
+
+// validRemoteUser trims the SSH user, defaults it to root, and refuses one that
+// could be read as a flag or is not a user name.
+func validRemoteUser(raw string) (string, error) {
+	user := strings.TrimSpace(raw)
 	if user == "" {
 		user = "root"
 	}
 	if strings.HasPrefix(user, "-") || !reRemoteUser.MatchString(user) {
-		return fmt.Errorf("SSH user name is invalid")
+		return "", fmt.Errorf("SSH user name is invalid")
 	}
-	s.User = user
+	return user, nil
+}
 
+// validateCredentials requires a password or a key and refuses a password the
+// sshpass environment value cannot carry.
+func (s *RemoteSource) validateCredentials() error {
 	if s.Password == "" && strings.TrimSpace(s.Key) == "" {
 		return fmt.Errorf("a password or an SSH key is required")
 	}
