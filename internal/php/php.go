@@ -677,16 +677,6 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	var demo int
-	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT  FROM domains WHERE id=?`, id).Scan(); err != nil {
-		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if demo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "PHP settings are fixed for demo subscriptions")
-		return
-	}
 	if req.PHPVersion != "" && req.PHPVersion != version {
 		if _, ok := versionInfo(req.PHPVersion); !ok {
 			httpx.WriteError(w, http.StatusBadRequest, "unsupported PHP version")
