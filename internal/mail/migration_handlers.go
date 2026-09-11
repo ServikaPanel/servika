@@ -118,6 +118,10 @@ type migrationJob struct {
 	FinishedAt    string `json:"finished_at"`
 }
 
+// verifyRemoteLogin is the sign-in StartMigration proves before it queues a copy.
+// It is a variable so a test can answer it without a remote IMAP server.
+var verifyRemoteLogin = VerifyLogin
+
 // StartMigration begins copying a mailbox in from another server.
 // POST /domains/{id}/mail/{mid}/migration
 func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +162,7 @@ func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
 	// The login is proved here as well as in the wizard, because the wizard's
 	// verification is a separate request and nothing stops this one arriving on
 	// its own with a password that was never checked.
-	if accepted, reason := VerifyLogin(r.Context(), host, request.Port, request.Security, request.Username, request.Password); !accepted {
+	if accepted, reason := verifyRemoteLogin(r.Context(), host, request.Port, request.Security, request.Username, request.Password); !accepted {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "the remote server refused the sign-in", "reason": reason})
 		return
 	}

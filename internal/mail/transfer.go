@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"servika/internal/config"
-	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
 )
@@ -283,7 +282,7 @@ func (s *maildirSink) rollback() (int, error) {
 		failures error
 	)
 	for _, curDir := range s.folders {
-		names, err := files.ListNamesBeneath(s.layout.home, curDir)
+		names, err := listNamesBeneath(s.layout.home, curDir)
 		if err != nil {
 			failures = errors.Join(failures, fmt.Errorf("list %s: %w", curDir, err))
 			continue
@@ -292,7 +291,7 @@ func (s *maildirSink) rollback() (int, error) {
 			if !strings.HasPrefix(name, prefix) {
 				continue
 			}
-			if err := files.RemoveAllBeneath(s.layout.home, curDir+"/"+name); err != nil {
+			if err := removeAllBeneath(s.layout.home, curDir+"/"+name); err != nil {
 				failures = errors.Join(failures, fmt.Errorf("remove %s: %w", name, err))
 				continue
 			}

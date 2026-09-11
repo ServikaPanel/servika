@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -21,10 +20,15 @@ import (
 // wholesale, so the operator's own entries above and below are never touched and
 // removing every pool address returns the files to what they were.
 
-const (
+// The two files the routing apply rewrites. They are variables so a test can
+// point the apply at a temporary directory.
+var (
 	masterConfigPath    = "/etc/postfix/master.cf"
 	senderTransportPath = "/etc/postfix/servika_sender_transport"
-	transportParam      = "sender_dependent_default_transport_maps"
+)
+
+const (
+	transportParam = "sender_dependent_default_transport_maps"
 
 	blockBegin = "# BEGIN servika outbound addresses -- managed by the panel, do not edit"
 	blockEnd   = "# END servika outbound addresses"
@@ -41,7 +45,7 @@ var routingApplyMu sync.Mutex
 func ApplyOutboundRouting(ctx context.Context, db *sql.DB) error {
 	routingApplyMu.Lock()
 	defer routingApplyMu.Unlock()
-	if _, err := exec.LookPath("postconf"); err != nil {
+	if _, err := lookPath("postconf"); err != nil {
 		return fmt.Errorf("postfix is not installed")
 	}
 

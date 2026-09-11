@@ -303,7 +303,7 @@ var ErrSieveUnavailable = errors.New("dovecot-pigeonhole is not installed")
 // ApplyMailboxSieve regenerates and compiles the mailbox's ~/.dovecot.sieve script
 // from its enabled filters and autoresponder, then activates the compiled binary.
 func ApplyMailboxSieve(ctx context.Context, db *sql.DB, mailboxID int64) error {
-	if _, err := exec.LookPath("sievec"); err != nil {
+	if _, err := lookPath("sievec"); err != nil {
 		return ErrSieveUnavailable
 	}
 	var maildir, email, systemUser string
@@ -390,7 +390,7 @@ if header :contains "X-Spam" "Yes" {
 		return err
 	}
 
-	return compileSieve(ctx, home, rel, out.Bytes(), systemUser)
+	return compileMailboxSieve(ctx, home, rel, out.Bytes(), systemUser)
 }
 
 // maildirJail splits a stored mailbox directory into the tenant home that
@@ -413,6 +413,11 @@ func maildirJail(systemUser, maildir string) (home, rel string, err error) {
 	}
 	return home, rel, nil
 }
+
+// compileMailboxSieve is the compile-and-publish step ApplyMailboxSieve ends
+// with. It is a variable so a test can read the generated script without sievec
+// or a tenant home.
+var compileMailboxSieve = compileSieve
 
 // compileSieve compiles the script in a root-owned staging directory and then
 // publishes the source and the compiled binary into the mailbox through openat2.

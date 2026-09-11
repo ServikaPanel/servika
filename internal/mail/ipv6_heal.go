@@ -33,6 +33,11 @@ var postfixIPv6Settings = []struct{ key, value string }{
 	{"smtp_balance_inet_protocols", "yes"},
 }
 
+// postfixMainCf is the Postfix configuration the IPv6 repair reads. It is a
+// package variable so a test can point the repair at a temporary file, for the
+// reason the Dovecot paths are.
+var postfixMainCf = "/etc/postfix/main.cf"
+
 // dovecotListenLine is what the Servika drop-in must carry. `listen = [::]`
 // alone serves IPv6 ONLY on most systems, so both forms are named.
 const dovecotListenLine = "listen = *, ::"
@@ -51,14 +56,14 @@ func HealMailIPv6(ctx context.Context) {
 // healPostfixIPv6 writes the three delivery settings when any is missing.
 func healPostfixIPv6(ctx context.Context) {
 	// #nosec G304 -- fixed system configuration path, never built from request input.
-	content, err := os.ReadFile("/etc/postfix/main.cf")
+	content, err := os.ReadFile(postfixMainCf)
 	if err != nil {
 		return // no Postfix here
 	}
 	if !strings.Contains(string(content), "servika-mail") {
 		return // a Postfix this panel did not configure; leave it alone
 	}
-	if _, err := exec.LookPath("postconf"); err != nil {
+	if _, err := lookPath("postconf"); err != nil {
 		return
 	}
 
@@ -76,14 +81,14 @@ func healPostfixIPv6(ctx context.Context) {
 	defer cancel()
 	for _, setting := range missing {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); every argument comes from the package-level table above, never from a request.
-		if out, err := exec.CommandContext(applyCtx, "postconf", "-e", setting).CombinedOutput(); err != nil {
+		if out, err := execCommandContext(applyCtx, "postconf", "-e", setting).CombinedOutput(); err != nil {
 			// #nosec G706 -- the operand is postconf output, not client-controlled input.
 			log.Printf("mail ipv6 heal: could not set %q: %v: %s", setting, err, strings.TrimSpace(string(out)))
 			return
 		}
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
-	if out, err := exec.CommandContext(applyCtx, "postfix", "check").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(applyCtx, "postfix", "check").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is postfix output, not client-controlled input.
 		log.Printf("mail ipv6 heal: postfix refused the settings: %v: %s", err, strings.TrimSpace(string(out)))
 		return
@@ -91,7 +96,7 @@ func healPostfixIPv6(ctx context.Context) {
 	// inet_protocols is one of the few settings a reload does NOT pick up:
 	// Postfix binds its listeners at start, so the master has to come back.
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
-	if out, err := exec.CommandContext(applyCtx, "systemctl", "restart", "postfix").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(applyCtx, "systemctl", "restart", "postfix").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is systemctl output, not client-controlled input.
 		log.Printf("mail ipv6 heal: could not restart postfix: %v: %s", err, strings.TrimSpace(string(out)))
 		return

@@ -17,6 +17,18 @@ import (
 // cannot log in as its own customer. Writing the files is also what lets the
 // copy set ownership correctly.
 
+// The safe-write primitives the Maildir code reaches. They are variables so a
+// test can record the writes without a tenant home: the real ones need openat2
+// and a Linux user that owns the directory.
+var (
+	mkdirAllBeneath   = files.MkdirAllBeneath
+	chmodBeneath      = files.ChmodBeneath
+	restoreconBeneath = files.RestoreconBeneath
+	streamIntoBeneath = files.StreamIntoBeneath
+	listNamesBeneath  = files.ListNamesBeneath
+	removeAllBeneath  = files.RemoveAllBeneath
+)
+
 // mailboxMaildir composes a mailbox's message store, with the trailing slash
 // Dovecot and Postfix both expect on a Maildir path.
 //
@@ -47,13 +59,13 @@ func createMaildir(systemUser, maildir string) error {
 	if !inside || rel == "" {
 		return fmt.Errorf("maildir is outside the tenant home")
 	}
-	if err := files.MkdirAllBeneath(home, rel, systemUser); err != nil {
+	if err := mkdirAllBeneath(home, rel, systemUser); err != nil {
 		return err
 	}
-	if err := files.ChmodBeneath(home, rel, 0o700); err != nil {
+	if err := chmodBeneath(home, rel, 0o700); err != nil {
 		return err
 	}
-	files.RestoreconBeneath(home, rel)
+	restoreconBeneath(home, rel)
 	return nil
 }
 
@@ -166,7 +178,7 @@ func (layout maildirLayout) ensureFolder(subdir string) (string, error) {
 		base = layout.root + "/" + subdir
 	}
 	for _, name := range []string{"cur", "new", "tmp"} {
-		if err := files.MkdirAllBeneath(layout.home, base+"/"+name, layout.systemUser); err != nil {
+		if err := mkdirAllBeneath(layout.home, base+"/"+name, layout.systemUser); err != nil {
 			return "", fmt.Errorf("create %s: %w", name, err)
 		}
 	}
@@ -180,7 +192,7 @@ func (layout maildirLayout) ensureFolder(subdir string) (string, error) {
 // overwrites its earlier attempt instead of delivering everything a second time.
 func (layout maildirLayout) writeMessage(curDir, unique string, flags []string, body io.Reader) (int64, error) {
 	name := fmt.Sprintf("%d.%s%s", stableStamp, unique, maildirInfo(flags))
-	return files.StreamIntoBeneath(layout.home, curDir+"/"+name, body, layout.systemUser)
+	return streamIntoBeneath(layout.home, curDir+"/"+name, body, layout.systemUser)
 }
 
 // stableStamp is the leading field of every generated Maildir name. Only the

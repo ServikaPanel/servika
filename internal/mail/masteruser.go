@@ -63,6 +63,19 @@ passdb {
 }
 `
 
+// masterPasswdTarget and masterConfTarget are the two files writeMasterUser
+// installs. They are variables so a test can point the write at a temporary
+// directory; the constants stay the source of truth, because masterConf names
+// the password file inside its own text.
+var (
+	masterPasswdTarget = masterPasswdFile
+	masterConfTarget   = masterConfPath
+)
+
+// chownFile hands a file to an owner. It is a variable because only root may give
+// a file to uid 0, and a test does not run as root.
+var chownFile = os.Chown
+
 // HealMasterUser writes the master passdb and its password file when a master
 // password is configured, and removes both when it is not.
 //
@@ -86,48 +99,48 @@ func HealMasterUser(ctx context.Context) {
 }
 
 func writeMasterUser(ctx context.Context, hash string) error {
-	if _, err := exec.LookPath("doveconf"); err != nil {
+	if _, err := lookPath("doveconf"); err != nil {
 		return nil // Dovecot is not installed on this host
 	}
 	line := masterUserName + ":" + hash + "\n"
 
 	// The password file is the credential. 0600 and root-owned, written through a
 	// temporary file so Dovecot can never read a half-written one.
-	tmp := masterPasswdFile + ".new"
+	tmp := masterPasswdTarget + ".new"
 	// #nosec G306 G703 -- fixed system path from a constant; this file holds the master credential, hence 0600.
 	if err := os.WriteFile(tmp, []byte(line), 0o600); err != nil {
 		return fmt.Errorf("write the master password file: %w", err)
 	}
-	if err := os.Chown(tmp, 0, 0); err != nil {
+	if err := chownFile(tmp, 0, 0); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("set the master password file ownership: %w", err)
 	}
-	if err := os.Rename(tmp, masterPasswdFile); err != nil {
+	if err := os.Rename(tmp, masterPasswdTarget); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("install the master password file: %w", err)
 	}
 
 	// #nosec G304 -- fixed system path from a constant, not from any request value.
-	previous, previousErr := os.ReadFile(masterConfPath)
+	previous, previousErr := os.ReadFile(masterConfTarget)
 	if previousErr == nil && string(previous) == masterConf {
 		return nil // already in place; nothing to validate or reload
 	}
 	// #nosec G306 G703 -- fixed system path from a constant; the Dovecot daemon must read it and it names a file rather than holding the credential.
-	if err := os.WriteFile(masterConfPath, []byte(masterConf), 0o644); err != nil {
+	if err := os.WriteFile(masterConfTarget, []byte(masterConf), 0o644); err != nil {
 		return fmt.Errorf("write the master passdb drop-in: %w", err)
 	}
-	if out, err := exec.CommandContext(ctx, "doveconf", "-n").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "doveconf", "-n").CombinedOutput(); err != nil {
 		// Roll back rather than leave Dovecot with a file it refuses: that would
 		// stop authentication for every mailbox on the server, not just webmail.
 		if previousErr == nil {
 			// #nosec G306 G703 -- restoring the file this function just replaced, at the same fixed system path.
-			_ = os.WriteFile(masterConfPath, previous, 0o644)
+			_ = os.WriteFile(masterConfTarget, previous, 0o644)
 		} else {
-			_ = os.Remove(masterConfPath)
+			_ = os.Remove(masterConfTarget)
 		}
 		return fmt.Errorf("doveconf rejected the master passdb, it was rolled back: %s", strings.TrimSpace(string(out)))
 	}
-	if out, err := exec.CommandContext(ctx, "systemctl", "reload", "dovecot").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "systemctl", "reload", "dovecot").CombinedOutput(); err != nil {
 		return fmt.Errorf("reload dovecot: %s", strings.TrimSpace(string(out)))
 	}
 	log.Printf("mail master user configured for panel-initiated webmail sessions")
