@@ -51,8 +51,8 @@ type DomainEntry struct {
 	Uncontained int `json:"uncontained"`
 	Held        int `json:"held"`
 	// Scannable says whether the scan button can succeed at all. Scan refuses a
-	// demo subscription with 403 and a system user outside the c_ namespace with
-	// 400, and drawing a control that always fails is worse than drawing none.
+	// system user outside the c_ namespace with 400, and drawing a control that
+	// always fails is worse than drawing none.
 	Scannable bool `json:"scannable"`
 }
 

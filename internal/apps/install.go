@@ -84,10 +84,6 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	if s.Demo {
-		httpx.WriteError(w, http.StatusForbidden, "applications cannot be managed for a demo subscription")
-		return
-	}
 	app, ok := h.loadApp(r, s)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "application not found")

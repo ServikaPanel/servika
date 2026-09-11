@@ -32,8 +32,14 @@ import (
 // match this file's own source and the scan would report itself.
 var deadPolicyColumn = "is" + "_" + "demo"
 
-// deadPolicyIdentifiers are the Go spellings the removed guards used.
-var deadPolicyIdentifiers = []string{"isDemo", "IsDemo"}
+// deadPolicyIdentifiers are the Go spellings the removed guards used. The short
+// ones are listed as well: with only the long ones here, a lookup that still
+// scanned into demoValue and handlers that still refused on demo and Demo passed
+// this test, and two of them failed every request they served.
+var deadPolicyIdentifiers = []string{"isDemo", "IsDemo", "demo", "Demo", "demoValue"}
+
+// deadPolicyRefusal is the phrase the removed refusals answered with.
+var deadPolicyRefusal = "demo" + " " + "subscription"
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
@@ -74,7 +80,7 @@ func goFileMentions(t *testing.T, path string) bool {
 		case token.EOF:
 			return false
 		case token.STRING:
-			if strings.Contains(literal, deadPolicyColumn) {
+			if strings.Contains(literal, deadPolicyColumn) || strings.Contains(literal, deadPolicyRefusal) {
 				return true
 			}
 		case token.IDENT:

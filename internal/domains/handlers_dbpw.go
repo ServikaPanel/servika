@@ -23,7 +23,7 @@ type setDBPwReq struct {
 }
 
 // SetDatabasePassword handles PUT /api/v1/databases/:dbid/password.
-// It generates a random password when the request body is empty and rejects demo subscriptions.
+// It generates a random password when the request body is empty.
 func (h *Handlers) SetDatabasePassword(w http.ResponseWriter, r *http.Request) {
 	dbid, _ := strconv.ParseInt(chi.URLParam(r, "dbid"), 10, 64)
 	var req setDBPwReq

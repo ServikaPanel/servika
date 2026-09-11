@@ -60,7 +60,6 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	// cleartext tenant password into every panel database dump.
 	var dbUser, dbName string
 	var domainID int64
-	var demo int
 	err := h.DB.QueryRowContext(r.Context(),
 		`SELECT db.db_user, db.db_name, db.domain_id FROM db_accounts db JOIN domains d ON d.id=db.domain_id
 		 WHERE db.id=?`, dbID).Scan(&dbUser, &dbName, &domainID)
@@ -80,10 +79,6 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	// Apply the same suspended-domain check here so a suspended customer cannot mint a
 	// phpMyAdmin signon token that bypasses the suspension boundary.
 	if !middleware.EnforceCustomerNotSuspended(w, r, domainID) {
-		return
-	}
-	if demo == 1 {
-		httpx.WriteError(w, http.StatusForbidden, "phpMyAdmin is unavailable for demo subscriptions")
 		return
 	}
 

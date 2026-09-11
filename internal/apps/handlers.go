@@ -27,7 +27,6 @@ type scope struct {
 	DomainID   int64
 	SystemUser string
 	PHPVersion string
-	Demo       bool
 }
 
 // lookup reads the domain named in the URL. Ownership of that domain is already
@@ -35,14 +34,12 @@ type scope struct {
 func (h *Handlers) lookup(r *http.Request) (scope, bool) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	var s scope
-	var demo int
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT system_user, COALESCE(php_version,'8.3') FROM domains WHERE id=?`, id).
 		Scan(&s.SystemUser, &s.PHPVersion); err != nil {
 		return scope{}, false
 	}
 	s.DomainID = id
-	s.Demo = demo == 1
 	if !ValidSystemUser(s.SystemUser) {
 		return scope{}, false
 	}
@@ -171,10 +168,6 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	if s.Demo {
-		httpx.WriteError(w, http.StatusForbidden, "applications cannot be managed for a demo subscription")
-		return
-	}
 	var req appRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -270,10 +263,6 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	if s.Demo {
-		httpx.WriteError(w, http.StatusForbidden, "applications cannot be managed for a demo subscription")
-		return
-	}
 	app, ok := h.loadApp(r, s)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "application not found")
@@ -355,10 +344,6 @@ func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
 	s, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if s.Demo {
-		httpx.WriteError(w, http.StatusForbidden, "applications cannot be managed for a demo subscription")
 		return
 	}
 	app, ok := h.loadApp(r, s)
@@ -471,10 +456,6 @@ func (h *Handlers) EnvWrite(w http.ResponseWriter, r *http.Request) {
 	s, ok := h.lookup(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
-		return
-	}
-	if s.Demo {
-		httpx.WriteError(w, http.StatusForbidden, "applications cannot be managed for a demo subscription")
 		return
 	}
 	app, ok := h.loadApp(r, s)

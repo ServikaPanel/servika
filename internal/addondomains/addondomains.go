@@ -55,7 +55,6 @@ type parentDomain struct {
 	WebRoot    string
 	CustomerID *int64
 	PlanID     *int64
-	Demo       bool
 }
 
 func scanAddon(rs interface{ Scan(...any) error }) (AddonDomain, error) {
@@ -70,7 +69,6 @@ func scanAddon(rs interface{ Scan(...any) error }) (AddonDomain, error) {
 func (h *Handlers) parent(ctx context.Context, id int64) (parentDomain, error) {
 	var p parentDomain
 	var customerID, planID sql.NullInt64
-	var demo int
 	err := h.DB.QueryRowContext(ctx,
 		`SELECT id, domain_name, system_user, COALESCE(php_version,'8.3'), COALESCE(web_root,''), customer_id, plan_id FROM domains WHERE id=? AND parent_domain_id IS NULL`, id).
 		Scan(&p.ID, &p.DomainName, &p.SystemUser, &p.PHPVersion, &p.WebRoot, &customerID, &planID)
@@ -85,7 +83,6 @@ func (h *Handlers) parent(ctx context.Context, id int64) (parentDomain, error) {
 		v := planID.Int64
 		p.PlanID = &v
 	}
-	p.Demo = demo == 1
 	return p, nil
 }
 
@@ -132,10 +129,6 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	if parent.Demo {
-		httpx.WriteError(w, http.StatusForbidden, "addon domains cannot be added to demo subscriptions")
 		return
 	}
 
@@ -284,7 +277,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 
 func Cleanup(ctx context.Context, db *sql.DB, addonID int64) (string, error) {
 	var domainName, systemUser, webRoot string
-	var parentID, demo, parked int
+	var parentID, parked int
 	err := db.QueryRowContext(ctx,
 		`SELECT domain_name, system_user, COALESCE(web_root,''), COALESCE(parent_domain_id,0), COALESCE(parked,0) FROM domains WHERE id=?`, addonID).
 		Scan(&domainName, &systemUser, &webRoot, &parentID, &parked)
@@ -294,18 +287,16 @@ func Cleanup(ctx context.Context, db *sql.DB, addonID int64) (string, error) {
 	if parentID == 0 {
 		return "", errors.New("domain is not an addon domain")
 	}
-	if demo == 0 {
-		_ = credentials.MySQLDropAllForDomain(db, addonID)
-		if err := provisioner.DeprovisionAddonDomain(domainName, systemUser); err != nil {
-			log.Printf("addon domain deprovision warn (%s): %v", domainName, err)
-		}
-		// The document root is removed HERE, beside prepareDocRoot, so the two
-		// halves of the same path cannot drift apart again: the mkdir has always
-		// gone through openat2 while the removal was a string check inside the
-		// provisioner, which cannot import internal/files.
-		if parked == 0 {
-			removeDocRoot(systemUser, domainName, webRoot)
-		}
+	_ = credentials.MySQLDropAllForDomain(db, addonID)
+	if err := provisioner.DeprovisionAddonDomain(domainName, systemUser); err != nil {
+		log.Printf("addon domain deprovision warn (%s): %v", domainName, err)
+	}
+	// The document root is removed HERE, beside prepareDocRoot, so the two
+	// halves of the same path cannot drift apart again: the mkdir has always
+	// gone through openat2 while the removal was a string check inside the
+	// provisioner, which cannot import internal/files.
+	if parked == 0 {
+		removeDocRoot(systemUser, domainName, webRoot)
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM domain_traffic WHERE domain_id=?`, addonID); err != nil {
 		log.Printf("addon domain traffic cleanup warn (%d): %v", addonID, err)
@@ -316,10 +307,8 @@ func Cleanup(ctx context.Context, db *sql.DB, addonID int64) (string, error) {
 	if _, err := db.ExecContext(ctx, `DELETE FROM domains WHERE id=?`, addonID); err != nil {
 		return "", err
 	}
-	if demo == 0 {
-		if err := dns.DeleteZone(ctx, db, domainName); err != nil {
-			log.Printf("DNS DeleteZone warn (%s): %v", domainName, err)
-		}
+	if err := dns.DeleteZone(ctx, db, domainName); err != nil {
+		log.Printf("DNS DeleteZone warn (%s): %v", domainName, err)
 	}
 	return domainName, nil
 }

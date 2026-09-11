@@ -204,8 +204,7 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 
 // SuspendResellerDomains applies the suspend/resume state to every domain owned
 // by a reseller's customers (domains.customer_id -> customers.owner_user_id).
-// A demo subscription is skipped; other per-domain failures are counted and
-// logged but do not stop the sweep. Servika already cascades the reseller's
+// A per-domain failure is counted and logged but does not stop the sweep. Servika already cascades the reseller's
 // customer panel logins in users.SetStatus and blocks new domain creation while
 // the customer login is suspended (EnforceCustomerNotSuspended), so no separate
 // lock is needed to stop a domain being created mid-sweep and escaping suspension.
