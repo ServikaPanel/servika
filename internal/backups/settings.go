@@ -313,41 +313,29 @@ func pushGlobalAsync(db *sql.DB, domainID, backupID int64, localPath, fileName s
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
 		s := readBackupSettings(ctx, db)
-		if !s.RemoteEnabled || strings.TrimSpace(s.RemoteHost) == "" {
+		if !s.offsiteConfigured() {
 			return
 		}
 		// Named as a key problem rather than reported as the destination refusing
 		// the login, which is what sending the ciphertext produced.
 		if err := s.usablePassword(); err != nil {
-			short := truncateError(err.Error())
-			markGlobalStatus(db, "failed", short)
-			notifyUploadFailed(ctx, db, domainID, backupID, short)
+			failGlobalUpload(ctx, db, domainID, backupID, err.Error())
 			return
 		}
 		if err := ensureGlobalHostKey(ctx, db, s); err != nil {
-			short := truncateError(err.Error())
-			markGlobalStatus(db, "failed", short)
-			notifyUploadFailed(ctx, db, domainID, backupID, short)
+			failGlobalUpload(ctx, db, domainID, backupID, err.Error())
 			return
 		}
 		d := s.destination()
 		d.RemoteDir = joinRemotePath(s.RemoteDir, remoteDateDir(fileName))
 		if err := uploadToRemote(ctx, db, d, localPath, fileName); err != nil {
-			short := truncateError(err.Error())
-			markGlobalStatus(db, "failed", short)
-			notifyUploadFailed(ctx, db, domainID, backupID, short)
+			failGlobalUpload(ctx, db, domainID, backupID, err.Error())
 			// #nosec G706 -- logged values are integer IDs and error output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup global upload domain=%d: %v", domainID, err)
 			return
 		}
-		localSize := int64(-1)
-		// #nosec G703 -- localPath is an internal backup archive path under BackupRoot derived from a validSystemUser-checked identifier.
-		if fi, e := os.Stat(localPath); e == nil {
-			localSize = fi.Size()
-		}
-		rs := remoteSize(ctx, db, d, fileName)
-		if localSize > 0 && rs > 0 && rs != localSize {
-			msg := fmt.Sprintf("remote size mismatch (local=%d remote=%d): the upload was incomplete", localSize, rs)
+		msg, rs := uploadSizeMismatch(ctx, db, d, localPath, fileName)
+		if msg != "" {
 			markGlobalStatus(db, "failed", msg)
 			notifyUploadFailed(ctx, db, domainID, backupID, msg)
 			// #nosec G706 -- logged values are integer IDs and a template-derived size message; no raw tenant string with CR/LF reaches the log.
@@ -358,14 +346,34 @@ func pushGlobalAsync(db *sql.DB, domainID, backupID int64, localPath, fileName s
 		// Delete the local copy only when it is verified off-site (rs > 0). The DB
 		// row stays, so the operator still sees which backup they have.
 		if s.DeleteLocal && backupID > 0 && rs > 0 {
-			// #nosec G703 -- localPath is an internal backup archive path under BackupRoot derived from a validSystemUser-checked identifier.
-			if err := os.Remove(localPath); err == nil {
-				_, _ = db.Exec(`UPDATE backups SET notes=CONCAT(notes,' `+movedOffSiteMark+`') WHERE id=?`, backupID)
-				// #nosec G706 -- logged values are template-derived names; no raw tenant string with CR/LF reaches the log.
-				log.Printf("backup global: %s moved off-site, local copy removed", fileName)
-			}
+			removeOffSiteLocalCopy(db, backupID, localPath, fileName)
 		}
 	}()
+}
+
+// offsiteConfigured reports whether the system-wide off-site destination is on
+// and names a host.
+func (s *BackupSettings) offsiteConfigured() bool {
+	return s.RemoteEnabled && strings.TrimSpace(s.RemoteHost) != ""
+}
+
+// failGlobalUpload records a failed system-wide upload on the singleton row and
+// in a domain-scoped alert.
+func failGlobalUpload(ctx context.Context, db *sql.DB, domainID, backupID int64, reason string) {
+	short := truncateError(reason)
+	markGlobalStatus(db, "failed", short)
+	notifyUploadFailed(ctx, db, domainID, backupID, short)
+}
+
+// removeOffSiteLocalCopy deletes a local archive whose off-site copy is verified
+// and marks its row.
+func removeOffSiteLocalCopy(db *sql.DB, backupID int64, localPath, fileName string) {
+	// #nosec G703 -- localPath is an internal backup archive path under BackupRoot derived from a validSystemUser-checked identifier.
+	if err := os.Remove(localPath); err == nil {
+		_, _ = db.Exec(`UPDATE backups SET notes=CONCAT(notes,' `+movedOffSiteMark+`') WHERE id=?`, backupID)
+		// #nosec G706 -- logged values are template-derived names; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup global: %s moved off-site, local copy removed", fileName)
+	}
 }
 
 // truncateError bounds an error string stored in a VARCHAR(512) column.

@@ -59,6 +59,22 @@ func TestWriteAndApplyDBUsers(t *testing.T) {
 	if n := writeDBUsers(bg, dir, []string{testDB}); n != 1 {
 		t.Fatalf("accounts written = %d, want 1", n)
 	}
+	assertUsersFile(t, dir)
+
+	// Drop the user, then bring it back from the archive.
+	if err := mysqlExec(bg, "DROP USER '"+testUser+"'@'localhost';"); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	if userExists(t) {
+		t.Fatal("negative control: the user was not dropped, the rest is meaningless")
+	}
+	assertUserApplied(t, bg, dir)
+}
+
+// assertUsersFile checks that the archive's account file creates the user, grants
+// it the database and is readable by its owner alone.
+func assertUsersFile(t *testing.T, dir string) {
+	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(dir, dbUsersFileName))
 	if err != nil {
 		t.Fatalf("file unreadable: %v", err)
@@ -75,14 +91,12 @@ func TestWriteAndApplyDBUsers(t *testing.T) {
 	if fi.Mode().Perm() != 0600 {
 		t.Fatalf("mode = %v, want 0600", fi.Mode().Perm())
 	}
+}
 
-	// Drop the user, then bring it back from the archive.
-	if err := mysqlExec(bg, "DROP USER '"+testUser+"'@'localhost';"); err != nil {
-		t.Fatalf("drop user: %v", err)
-	}
-	if userExists(t) {
-		t.Fatal("negative control: the user was not dropped, the rest is meaningless")
-	}
+// assertUserApplied applies the account file and checks that the user and its
+// password came back.
+func assertUserApplied(t *testing.T, bg context.Context, dir string) {
+	t.Helper()
 	n, err := applyDBUsers(bg, dir, map[string]bool{testDB: true})
 	if err != nil || n == 0 {
 		t.Fatalf("apply: n=%d err=%v", n, err)
@@ -112,11 +126,7 @@ func TestGlobalGrantRefused(t *testing.T) {
 	dir := t.TempDir()
 	writeDBUsers(bg, dir, []string{testDB})
 	raw, _ := os.ReadFile(filepath.Join(dir, dbUsersFileName))
-	for l := range strings.SplitSeq(string(raw), "\n") {
-		if strings.HasPrefix(l, "GRANT") && strings.Contains(l, "ON *.*") && !strings.Contains(l, "USAGE ON *.*") {
-			t.Fatalf("global privilege leaked into the archive: %s", l)
-		}
-	}
+	assertNoGlobalGrantInArchive(t, string(raw))
 
 	// (b) Read side: inject a global grant into the file by hand; it must not apply.
 	path := filepath.Join(dir, dbUsersFileName)
@@ -134,7 +144,25 @@ func TestGlobalGrantRefused(t *testing.T) {
 	}
 	out, _ := exec.Command("mysql", "-N", "-B", "-e",
 		"SHOW GRANTS FOR '"+testUser+"'@'localhost'").Output()
-	for l := range strings.SplitSeq(string(out), "\n") {
+	assertGrantsStayScoped(t, string(out))
+}
+
+// assertNoGlobalGrantInArchive fails when the account file carries a grant on
+// every database other than bare USAGE.
+func assertNoGlobalGrantInArchive(t *testing.T, content string) {
+	t.Helper()
+	for l := range strings.SplitSeq(content, "\n") {
+		if strings.HasPrefix(l, "GRANT") && strings.Contains(l, "ON *.*") && !strings.Contains(l, "USAGE ON *.*") {
+			t.Fatalf("global privilege leaked into the archive: %s", l)
+		}
+	}
+}
+
+// assertGrantsStayScoped fails when SHOW GRANTS lists a global privilege or a
+// grant on a database outside the allowlist.
+func assertGrantsStayScoped(t *testing.T, grants string) {
+	t.Helper()
+	for l := range strings.SplitSeq(grants, "\n") {
 		if strings.Contains(l, "ON *.*") && !strings.Contains(l, "USAGE ON *.*") {
 			t.Fatalf("injected global privilege WAS applied: %s", l)
 		}

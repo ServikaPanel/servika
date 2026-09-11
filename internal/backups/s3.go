@@ -48,17 +48,9 @@ var s3HTTPClient = &http.Client{
 func s3Endpoint(d *Destination) (*url.URL, error) {
 	raw := strings.TrimSpace(d.Endpoint)
 	if raw == "" {
-		if d.Type == "b2" {
-			return nil, fmt.Errorf("a Backblaze S3 endpoint is required")
-		}
-		region := d.Region
-		if region == "" {
-			region = "us-east-1"
-		}
-		if region == "us-east-1" {
-			raw = "https://s3.amazonaws.com"
-		} else {
-			raw = "https://s3." + region + ".amazonaws.com"
+		var err error
+		if raw, err = defaultS3Endpoint(d); err != nil {
+			return nil, err
 		}
 	}
 	u, err := url.Parse(raw)
@@ -70,6 +62,22 @@ func s3Endpoint(d *Destination) (*url.URL, error) {
 	}
 	u.Path = strings.TrimSuffix(u.Path, "/")
 	return u, nil
+}
+
+// defaultS3Endpoint is the AWS endpoint of the destination's region. Backblaze
+// has no default, so its endpoint has to be given.
+func defaultS3Endpoint(d *Destination) (string, error) {
+	if d.Type == "b2" {
+		return "", fmt.Errorf("a Backblaze S3 endpoint is required")
+	}
+	region := d.Region
+	if region == "" {
+		region = "us-east-1"
+	}
+	if region == "us-east-1" {
+		return "https://s3.amazonaws.com", nil
+	}
+	return "https://s3." + region + ".amazonaws.com", nil
 }
 
 func s3RequestURL(d *Destination, objectName string) (*url.URL, error) {

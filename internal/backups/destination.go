@@ -224,16 +224,7 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 // that never went off-site still answers "missing" rather than reaching for a
 // file that was never written.
 func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int64, systemUser, file string) error {
-	// Both components are read from the panel's own rows, but this function is
-	// the one gate every read path (restore, contents, download) passes through,
-	// so the check is made here rather than trusted from each caller.
-	//
-	// filepath.Base(file) != file rejects a separator and any deeper path, but it
-	// does NOT reject the exact value ".." or ".", because Base returns those
-	// unchanged. Either one resolves the join back to a directory rather than an
-	// archive, so they are refused by name.
-	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file ||
-		file == ".." || file == "." {
+	if !safeArchiveName(systemUser, file) {
 		return errors.New("invalid backup file")
 	}
 	abs := filepath.Join(backupRoot(), systemUser, file)
@@ -242,43 +233,25 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 	expected := expectedBackupSize(ctx, db, backupID, domainID)
 	// The digest is read here, once, and applied to whichever destination answers.
 	digest := expectedBackupDigest(ctx, db, backupID, domainID)
-	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
-	if fi, err := os.Lstat(abs); err == nil && fi.Mode().IsRegular() {
-		// Existing is not enough; it must be COMPLETE. A download killed mid-flight
-		// (deploy, crash, OOM) can leave a half file under the final name, and a
-		// restore would trust it and run against a truncated archive. A size
-		// mismatch deletes the leftover and re-fetches.
-		if expected <= 0 || fi.Size() == expected {
-			return nil
-		}
-		// #nosec G706 -- logged values are integer IDs, a validated file name and sizes; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup restore domain=%d: local copy of %s is incomplete (%d/%d bytes), refetching", domainID, file, fi.Size(), expected)
-		// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
-		_ = os.Remove(abs)
+	if localArchiveComplete(abs, expected, domainID, file) {
+		return nil
 	}
 	dir := filepath.Join(backupRoot(), systemUser)
 	// #nosec G703 -- dir derives from backupRoot() and a validSystemUser-checked identifier.
 	_ = os.MkdirAll(dir, 0700)
 	// First try the domain's OWN destination, when the row records a successful
 	// per-domain upload.
-	var remoteStatus string
-	if err := db.QueryRowContext(ctx,
-		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
-		Scan(&remoteStatus); err == nil && remoteStatus == "successful" {
-		if d, e := readDestination(ctx, db, domainID); e == nil && d != nil {
-			if downloadFromRemote(ctx, db, d, file, abs) == nil {
-				verifyErr := verifyFetched(abs, expected, digest)
-				if verifyErr == nil {
-					return nil
-				}
-				// #nosec G706 -- logged values are integer IDs, a validated file name and error text; no raw tenant string with CR/LF reaches the log.
-				log.Printf("backup restore domain=%d: the copy of %s from the domain destination was refused: %v", domainID, file, verifyErr)
-			}
+	if fetchedFromDomainDestination(ctx, db, domainID, backupID, file, abs) {
+		verifyErr := verifyFetched(abs, expected, digest)
+		if verifyErr == nil {
+			return nil
 		}
+		// #nosec G706 -- logged values are integer IDs, a validated file name and error text; no raw tenant string with CR/LF reaches the log.
+		log.Printf("backup restore domain=%d: the copy of %s from the domain destination was refused: %v", domainID, file, verifyErr)
 	}
 	// Then the SYSTEM-WIDE destination, which is where a delete-local backup lives.
 	s := readBackupSettings(ctx, db)
-	if s.RemoteEnabled && strings.TrimSpace(s.RemoteHost) != "" {
+	if s.offsiteConfigured() {
 		// A credential the panel cannot open is not a missing backup. Saying so
 		// here rather than falling through matters most during a recovery, where
 		// "backup file is missing on disk" sends the operator looking for an
@@ -286,11 +259,8 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 		if err := s.usablePassword(); err != nil {
 			return err
 		}
-		// Do not download onto a disk that is already low.
-		if s.MinFreeGB > 0 {
-			if free, e := diskFreeGB(backupRoot()); e == nil && free < float64(s.MinFreeGB) {
-				return errors.New("the backup is off-site but there is not enough disk to fetch it")
-			}
+		if err := offsiteFetchRoom(s); err != nil {
+			return err
 		}
 		if err := fetchGlobalRemote(ctx, db, s, file, abs); err == nil {
 			verifyErr := verifyFetched(abs, expected, digest)
@@ -305,6 +275,71 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 		}
 	}
 	return errors.New("backup file is missing on disk")
+}
+
+// safeArchiveName reports whether a backup row's system user and file name can
+// name an archive under the backup root.
+//
+// Both components are read from the panel's own rows, but ensureLocalArchive is
+// the one gate every read path (restore, contents, download) passes through, so
+// the check is made there rather than trusted from each caller.
+//
+// filepath.Base(file) != file rejects a separator and any deeper path, but it
+// does NOT reject the exact value ".." or ".", because Base returns those
+// unchanged. Either one resolves the join back to a directory rather than an
+// archive, so they are refused by name.
+func safeArchiveName(systemUser, file string) bool {
+	return restorableFile(systemUser, file) && file != ".." && file != "."
+}
+
+// localArchiveComplete reports whether the local archive is present and whole. A
+// copy of the wrong size is removed, so a fetch replaces it.
+func localArchiveComplete(abs string, expected, domainID int64, file string) bool {
+	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
+	fi, err := os.Lstat(abs)
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	// Existing is not enough; it must be COMPLETE. A download killed mid-flight
+	// (deploy, crash, OOM) can leave a half file under the final name, and a
+	// restore would trust it and run against a truncated archive. A size
+	// mismatch deletes the leftover and re-fetches.
+	if expected <= 0 || fi.Size() == expected {
+		return true
+	}
+	// #nosec G706 -- logged values are integer IDs, a validated file name and sizes; no raw tenant string with CR/LF reaches the log.
+	log.Printf("backup restore domain=%d: local copy of %s is incomplete (%d/%d bytes), refetching", domainID, file, fi.Size(), expected)
+	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
+	_ = os.Remove(abs)
+	return false
+}
+
+// fetchedFromDomainDestination downloads the archive from the domain's own
+// destination when the row records a successful upload to it, and reports
+// whether a copy arrived.
+func fetchedFromDomainDestination(ctx context.Context, db *sql.DB, domainID, backupID int64, file, abs string) bool {
+	var remoteStatus string
+	if err := db.QueryRowContext(ctx,
+		`SELECT remote_status FROM backups WHERE id=? AND domain_id=?`, backupID, domainID).
+		Scan(&remoteStatus); err != nil || remoteStatus != "successful" {
+		return false
+	}
+	d, e := readDestination(ctx, db, domainID)
+	if e != nil || d == nil {
+		return false
+	}
+	return downloadFromRemote(ctx, db, d, file, abs) == nil
+}
+
+// offsiteFetchRoom refuses to download onto a disk that is already low.
+func offsiteFetchRoom(s *BackupSettings) error {
+	if s.MinFreeGB <= 0 {
+		return nil
+	}
+	if free, e := diskFreeGB(backupRoot()); e == nil && free < float64(s.MinFreeGB) {
+		return errors.New("the backup is off-site but there is not enough disk to fetch it")
+	}
+	return nil
 }
 
 // expectedBackupSize returns the recorded archive size for a backup, or 0 when it
@@ -682,49 +717,55 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 		return err
 	}
 	if d.Type == "sftp" {
-		// The connection test is the first thing that touches a new destination,
-		// so it is where the host key gets pinned.
-		key, err := ensureHostKey(ctx, db, d)
-		if err != nil {
-			return err
-		}
-		knownHosts, cleanup, err := knownHostsFile(key)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-		// Force password authentication through sshpass and disable public-key fallback.
-		// This ensures the supplied user password is actually valid.
-		// Pass the user with -l and the host after --, so neither can be
-		// interpreted as an ssh option (closes ProxyCommand-style arg injection
-		// via a username or host beginning with "-").
-		// -e reads the password from SSHPASS instead of argv, matching
-		// internal/transfers; -p published it to every local account.
-		args := []string{
-			"-e",
-			"ssh",
-			"-p", fmt.Sprintf("%d", d.Port),
-			"-l", d.Username,
-			"-o", "ConnectTimeout=10",
-			"-o", "PreferredAuthentications=password",
-			"-o", "PubkeyAuthentication=no",
-			"-o", "BatchMode=no",
-		}
-		args = append(args, sshHostKeyOptions(knownHosts, hostKeyAlias(d.Host, d.Port))...)
-		// The vetted address, not the name: ssh would otherwise resolve the name
-		// a THIRD time, after netguard and after ssh-keyscan, and the connection
-		// test is the path a customer can drive at will.
-		args = append(args, "--", dialTarget(d), "true")
-		out, err := sshpassCommand(ctx, d, args...).CombinedOutput()
-		if err != nil {
-			short := strings.TrimSpace(string(out))
-			if short == "" {
-				short = err.Error()
-			}
-			return fmt.Errorf("%s", short)
-		}
-		return nil
+		return testSFTPConnection(ctx, db, d)
 	}
+	return testFTPConnection(ctx, d)
+}
+
+// testSFTPConnection pins the destination's host key and tries a password login
+// over ssh.
+func testSFTPConnection(ctx context.Context, db *sql.DB, d *Destination) error {
+	// The connection test is the first thing that touches a new destination,
+	// so it is where the host key gets pinned.
+	key, err := ensureHostKey(ctx, db, d)
+	if err != nil {
+		return err
+	}
+	knownHosts, cleanup, err := knownHostsFile(key)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	// Force password authentication through sshpass and disable public-key fallback.
+	// This ensures the supplied user password is actually valid.
+	// Pass the user with -l and the host after --, so neither can be
+	// interpreted as an ssh option (closes ProxyCommand-style arg injection
+	// via a username or host beginning with "-").
+	// -e reads the password from SSHPASS instead of argv, matching
+	// internal/transfers; -p published it to every local account.
+	args := []string{
+		"-e",
+		"ssh",
+		"-p", fmt.Sprintf("%d", d.Port),
+		"-l", d.Username,
+		"-o", "ConnectTimeout=10",
+		"-o", "PreferredAuthentications=password",
+		"-o", "PubkeyAuthentication=no",
+		"-o", "BatchMode=no",
+	}
+	args = append(args, sshHostKeyOptions(knownHosts, hostKeyAlias(d.Host, d.Port))...)
+	// The vetted address, not the name: ssh would otherwise resolve the name
+	// a THIRD time, after netguard and after ssh-keyscan, and the connection
+	// test is the path a customer can drive at will.
+	args = append(args, "--", dialTarget(d), "true")
+	if out, err := sshpassCommand(ctx, d, args...).CombinedOutput(); err != nil {
+		return connectionTestError(out, err)
+	}
+	return nil
+}
+
+// testFTPConnection lists the FTP root over TLS with the supplied credentials.
+func testFTPConnection(ctx context.Context, d *Destination) error {
 	// Use curl to list the FTP root with the supplied credentials. The credentials
 	// arrive through `--config -` on stdin rather than `--user`, which put them in
 	// argv where every local account could read them.
@@ -743,15 +784,20 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 	}
 	cmd := newRestoreCommand(ctx, "curl", args...)
 	cmd.Stdin = strings.NewReader(curlCredentialConfig(d.Username, d.Password))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		short := strings.TrimSpace(string(out))
-		if short == "" {
-			short = err.Error()
-		}
-		return fmt.Errorf("%s", short)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return connectionTestError(out, err)
 	}
 	return nil
+}
+
+// connectionTestError reports what the connection test's command printed, or
+// its exit status when it printed nothing.
+func connectionTestError(out []byte, err error) error {
+	short := strings.TrimSpace(string(out))
+	if short == "" {
+		short = err.Error()
+	}
+	return fmt.Errorf("%s", short)
 }
 
 // pushToDestinationAsync: triggers a background upload after the backup is created successfully.
@@ -828,15 +874,8 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 		}
 		_, _ = db.Exec(`UPDATE backups SET remote_status='uploading', remote_error='' WHERE id=?`, backupID)
 		if err := uploadToRemote(ctx, db, d, localPath, fileName); err != nil {
-			short := err.Error()
-			if len(short) > 500 {
-				short = short[:500]
-			}
-			_, _ = db.Exec(`UPDATE backup_destinations
-				SET last_status='failed', last_error=?, last_upload=NOW() WHERE domain_id=?`,
-				short, domainID)
-			_, _ = db.Exec(`UPDATE backups SET remote_status='failed', remote_error=? WHERE id=?`,
-				short, backupID)
+			short := truncateError(err.Error())
+			failDestinationUpload(db, domainID, backupID, short)
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup destination upload domain=%d: %v", domainID, err)
 			notifyUploadFailed(ctx, db, domainID, backupID, short)
@@ -844,38 +883,60 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 		}
 		// Verify the object arrived whole. lftp and S3 can report a transfer
 		// complete while the stored object is short (a dropped connection, a full
-		// remote disk). Only a POSITIVE mismatch is a failure: an unreadable
-		// remote size returns -1 and is not treated as corruption, so a transient
-		// read never flags a good upload.
-		localSize := int64(-1)
-		// #nosec G703 -- localPath is an internal backup archive path under BackupRoot derived from a validSystemUser-checked identifier.
-		if fi, e := os.Stat(localPath); e == nil {
-			localSize = fi.Size()
-		}
-		if rs := remoteSize(ctx, db, d, fileName); localSize > 0 && rs > 0 && rs != localSize {
-			short := fmt.Sprintf("remote size mismatch (local=%d remote=%d): the upload was incomplete", localSize, rs)
-			_, _ = db.Exec(`UPDATE backup_destinations
-				SET last_status='failed', last_error=?, last_upload=NOW() WHERE domain_id=?`,
-				short, domainID)
-			_, _ = db.Exec(`UPDATE backups SET remote_status='failed', remote_error=? WHERE id=?`,
-				short, backupID)
+		// remote disk).
+		if short, _ := uploadSizeMismatch(ctx, db, d, localPath, fileName); short != "" {
+			failDestinationUpload(db, domainID, backupID, short)
 			// #nosec G706 -- logged values are integer IDs and a template-derived size message; no raw tenant string with CR/LF reaches the log.
 			log.Printf("backup destination upload domain=%d: %s", domainID, short)
 			notifyUploadFailed(ctx, db, domainID, backupID, short)
 			return
 		}
-		_, _ = db.Exec(`UPDATE backup_destinations
-			SET last_status='successful', last_error='', last_upload=NOW() WHERE domain_id=?`,
-			domainID)
-		remoteKey := strings.Trim(strings.TrimSpace(d.RemoteDir), "/")
-		if remoteKey != "" {
-			remoteKey += "/"
-		}
-		remoteKey += fileName
-		_, _ = db.Exec(`UPDATE backups
-			SET remote_status='successful', remote_key=?, remote_error='' WHERE id=?`,
-			remoteKey, backupID)
-		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup destination upload domain=%d successful: %s", domainID, fileName)
+		recordDestinationUpload(db, domainID, backupID, d.RemoteDir, fileName)
 	}()
+}
+
+// uploadSizeMismatch compares the uploaded object's size with the local file's.
+// It returns the failure message when both sizes are known and differ, and the
+// remote size either way. Only a POSITIVE mismatch is a failure: an unreadable
+// remote size returns -1 and is not treated as corruption, so a transient read
+// never flags a good upload.
+func uploadSizeMismatch(ctx context.Context, db *sql.DB, d *Destination, localPath, fileName string) (string, int64) {
+	localSize := int64(-1)
+	// #nosec G703 -- localPath is an internal backup archive path under BackupRoot derived from a validSystemUser-checked identifier.
+	if fi, e := os.Stat(localPath); e == nil {
+		localSize = fi.Size()
+	}
+	rs := remoteSize(ctx, db, d, fileName)
+	if localSize > 0 && rs > 0 && rs != localSize {
+		return fmt.Sprintf("remote size mismatch (local=%d remote=%d): the upload was incomplete", localSize, rs), rs
+	}
+	return "", rs
+}
+
+// failDestinationUpload records a failed upload on the destination row and on
+// the backup row.
+func failDestinationUpload(db *sql.DB, domainID, backupID int64, short string) {
+	_, _ = db.Exec(`UPDATE backup_destinations
+				SET last_status='failed', last_error=?, last_upload=NOW() WHERE domain_id=?`,
+		short, domainID)
+	_, _ = db.Exec(`UPDATE backups SET remote_status='failed', remote_error=? WHERE id=?`,
+		short, backupID)
+}
+
+// recordDestinationUpload records a verified upload and the object key it was
+// stored under.
+func recordDestinationUpload(db *sql.DB, domainID, backupID int64, remoteDir, fileName string) {
+	_, _ = db.Exec(`UPDATE backup_destinations
+			SET last_status='successful', last_error='', last_upload=NOW() WHERE domain_id=?`,
+		domainID)
+	remoteKey := strings.Trim(strings.TrimSpace(remoteDir), "/")
+	if remoteKey != "" {
+		remoteKey += "/"
+	}
+	remoteKey += fileName
+	_, _ = db.Exec(`UPDATE backups
+			SET remote_status='successful', remote_key=?, remote_error='' WHERE id=?`,
+		remoteKey, backupID)
+	// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+	log.Printf("backup destination upload domain=%d successful: %s", domainID, fileName)
 }

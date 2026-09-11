@@ -89,7 +89,7 @@ func TestADomainNeverBackedUpIsDueAtOnce(t *testing.T) {
 // The scheduler must not filter by the current hour in SQL any more: that is
 // what made a domain eligible during one tick a day with no catch-up.
 func TestTheQueryNoLongerMatchesTheHourExactly(t *testing.T) {
-	tick := backupsFunction(t, readBackupsSource(t, "schedule.go"), "func tickOnce(")
+	tick := backupsFunction(t, readBackupsSource(t, "schedule.go"), "func dueDomains(")
 	if strings.Contains(tick, "COALESCE(backup_hour,3) = ?") {
 		t.Error("the due query still matches the backup hour exactly")
 	}

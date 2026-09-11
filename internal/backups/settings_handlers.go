@@ -43,6 +43,12 @@ func validateBackupSettings(s *BackupSettings) string {
 	if !s.RemoteEnabled {
 		return ""
 	}
+	return validateRemoteSettings(s)
+}
+
+// validateRemoteSettings checks the off-site destination fields of settings that
+// turn it on.
+func validateRemoteSettings(s *BackupSettings) string {
 	if !validGlobalRemoteType(s.RemoteType) {
 		return "remote_type must be ftp or sftp"
 	}

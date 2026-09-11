@@ -18,7 +18,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -77,7 +76,7 @@ func classifyIntegrity(stored, current string, readErr error, offsite bool) (ver
 // row to carry the moved-off-site note.
 func backupMovedOffSite(db *sql.DB, file string) bool {
 	s := readBackupSettings(context.Background(), db)
-	if !s.RemoteEnabled || strings.TrimSpace(s.RemoteHost) == "" {
+	if !s.offsiteConfigured() {
 		return false
 	}
 	var n int
@@ -109,6 +108,37 @@ func integrityScanDue() bool {
 // verdict on the row. Only a TRANSITION into 'corrupt' raises an alert, so a
 // backup that stays corrupt across scans is not re-reported every day.
 func verifyBackupIntegrity(db *sql.DB) {
+	list, ok := integrityCheckList(db)
+	if !ok {
+		return
+	}
+
+	corrupt, remote := 0, 0
+	for _, k := range list {
+		switch recordIntegrity(db, k) {
+		case "remote":
+			remote++
+		case "corrupt":
+			corrupt++
+		}
+	}
+	if corrupt > 0 {
+		log.Printf("backup integrity scan: %d/%d newest backups CORRUPT (%d off-site, not scanned)", corrupt, len(list), remote)
+	} else {
+		log.Printf("backup integrity scan: %d clean (%d off-site, not scanned)", len(list)-remote, remote)
+	}
+}
+
+// integrityRecord is the newest checksummed archive of one domain.
+type integrityRecord struct {
+	id, domainID int64
+	user, file   string
+	storedSHA    string
+}
+
+// integrityCheckList reads the newest checksummed archive of every domain. A
+// query that cannot run answers no list at all.
+func integrityCheckList(db *sql.DB) ([]integrityRecord, bool) {
 	rows, err := db.Query(`
 		SELECT b.id, b.domain_id, d.system_user, b.file, b.sha256
 		FROM backups b
@@ -117,16 +147,11 @@ func verifyBackupIntegrity(db *sql.DB) {
 		  ON x.mid = b.id`)
 	if err != nil {
 		log.Printf("backup integrity scan query: %v", err)
-		return
+		return nil, false
 	}
-	type record struct {
-		id, domainID int64
-		user, file   string
-		storedSHA    string
-	}
-	var list []record
+	var list []integrityRecord
 	for rows.Next() {
-		var k record
+		var k integrityRecord
 		if err := rows.Scan(&k.id, &k.domainID, &k.user, &k.file, &k.storedSHA); err != nil {
 			// A dropped row is an archive that is never integrity-checked, so a
 			// corrupt one keeps reading as verified.
@@ -141,38 +166,34 @@ func verifyBackupIntegrity(db *sql.DB) {
 		log.Printf("backups: could not read the integrity check list: %v", err)
 	}
 	_ = rows.Close()
+	return list, true
+}
 
-	corrupt, remote := 0, 0
-	for _, k := range list {
-		if !validSystemUser(k.user) {
-			continue
-		}
-		path := filepath.Join(backupRoot(), k.user, k.file)
-		current, rerr := fileSHA256(path)
-		offsite := errors.Is(rerr, os.ErrNotExist) && backupMovedOffSite(db, k.file)
-		verification, alertKey := classifyIntegrity(k.storedSHA, current, rerr, offsite)
-		switch verification {
-		case "remote":
-			remote++
-			// Do not overwrite a corrupt verdict with 'remote'.
-			_, _ = db.Exec(`UPDATE backups SET verification='remote' WHERE id=? AND verification<>'corrupt'`, k.id)
-		case "corrupt":
-			corrupt++
-			res, _ := db.Exec(`UPDATE backups SET verification='corrupt' WHERE id=? AND verification<>'corrupt'`, k.id)
-			if res != nil {
-				if n, _ := res.RowsAffected(); n > 0 {
-					notifyIntegrity(db, k.domainID, k.id, k.file, alertKey)
-				}
+// recordIntegrity re-hashes one archive, records the verdict and returns it. An
+// archive whose system user is invalid is skipped and answers "".
+func recordIntegrity(db *sql.DB, k integrityRecord) string {
+	if !validSystemUser(k.user) {
+		return ""
+	}
+	path := filepath.Join(backupRoot(), k.user, k.file)
+	current, rerr := fileSHA256(path)
+	offsite := errors.Is(rerr, os.ErrNotExist) && backupMovedOffSite(db, k.file)
+	verification, alertKey := classifyIntegrity(k.storedSHA, current, rerr, offsite)
+	switch verification {
+	case "remote":
+		// Do not overwrite a corrupt verdict with 'remote'.
+		_, _ = db.Exec(`UPDATE backups SET verification='remote' WHERE id=? AND verification<>'corrupt'`, k.id)
+	case "corrupt":
+		res, _ := db.Exec(`UPDATE backups SET verification='corrupt' WHERE id=? AND verification<>'corrupt'`, k.id)
+		if res != nil {
+			if n, _ := res.RowsAffected(); n > 0 {
+				notifyIntegrity(db, k.domainID, k.id, k.file, alertKey)
 			}
-		default:
-			_, _ = db.Exec(`UPDATE backups SET verification='ok' WHERE id=?`, k.id)
 		}
+	default:
+		_, _ = db.Exec(`UPDATE backups SET verification='ok' WHERE id=?`, k.id)
 	}
-	if corrupt > 0 {
-		log.Printf("backup integrity scan: %d/%d newest backups CORRUPT (%d off-site, not scanned)", corrupt, len(list), remote)
-	} else {
-		log.Printf("backup integrity scan: %d clean (%d off-site, not scanned)", len(list)-remote, remote)
-	}
+	return verification
 }
 
 // notifyIntegrity writes one domain-scoped critical alert when a backup turns

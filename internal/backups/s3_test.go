@@ -42,7 +42,10 @@ func TestS3RequestURLVirtualHost(t *testing.T) {
 	}
 }
 
-func TestS3UploadDownloadDelete(t *testing.T) {
+// fakeS3Server answers signed requests the way an S3 bucket does for one object,
+// and records the method of each request.
+func fakeS3Server(t *testing.T) (*httptest.Server, *[]string) {
+	t.Helper()
 	var methods []string
 	var stored []byte
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +62,12 @@ func TestS3UploadDownloadDelete(t *testing.T) {
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
+	return server, &methods
+}
+
+func TestS3UploadDownloadDelete(t *testing.T) {
+	server, methods := fakeS3Server(t)
 	// The fake endpoint is on loopback, which the SSRF guard refuses by design.
 	// This is the operator opt-out the guard documents, used here for the same
 	// reason an operator would: the target really is on a private network.
@@ -95,8 +103,8 @@ func TestS3UploadDownloadDelete(t *testing.T) {
 	if err := deleteS3Object(ctx, d, "one.tar.gz"); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(methods, ",") != "HEAD,PUT,GET,DELETE" {
-		t.Fatalf("methods = %v", methods)
+	if strings.Join(*methods, ",") != "HEAD,PUT,GET,DELETE" {
+		t.Fatalf("methods = %v", *methods)
 	}
 }
 

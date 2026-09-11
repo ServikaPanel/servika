@@ -32,6 +32,13 @@ func TestTheJobListIsNarrowedForEveryoneButAnAdmin(t *testing.T) {
 	if filter == "" {
 		t.Fatal("a reseller reads every job on the server")
 	}
+	assertResellerJobFilter(t, filter, args)
+}
+
+// assertResellerJobFilter checks the reseller's job filter against user 7,
+// "agency".
+func assertResellerJobFilter(t *testing.T, filter string, args []any) {
+	t.Helper()
 	// The two ways a job may be theirs: it produced one of their archives, or
 	// they started it. Both have to be present, or one class of job disappears.
 	if !strings.Contains(filter, "EXISTS") || !strings.Contains(filter, "b.job_id=j.id") {

@@ -55,6 +55,16 @@ type restoreRequest struct {
 	AllowCorrupt bool `json:"allow_corrupt"`
 }
 
+// httpRefusal is the status and message a handler step gives up with.
+type httpRefusal struct {
+	status  int
+	message string
+}
+
+func (refusal *httpRefusal) write(w http.ResponseWriter) {
+	httpx.WriteError(w, refusal.status, refusal.message)
+}
+
 // Restore handles POST /api/v1/domains/:id/backups/:bid/restore.
 // Granular restore: full / files only / databases only / selected files / one database.
 // The defaults are NON-DESTRUCTIVE: full and files do not delete files missing from
@@ -79,35 +89,22 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 		req.Mode = "full"
 	}
 
-	var systemUser, file, domainName, verification string
-	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT d.system_user, d.domain_name, b.file, COALESCE(b.verification,'') FROM backups b
-		 JOIN domains d ON d.id=b.domain_id
-		 WHERE b.id=? AND b.domain_id=?`, backupID, id).
-		Scan(&systemUser, &domainName, &file, &verification)
-	if errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusNotFound, "backup not found")
-		return
-	}
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+	source, refusal := h.lookupRestoreSource(r, id, backupID)
+	if refusal != nil {
+		refusal.write(w)
 		return
 	}
 	// The integrity scan already hashed this archive and recorded that it does not
 	// match, and raised a critical notification about it. Applying it over a live
 	// site anyway ignores the panel's own evidence, so it takes an explicit
 	// override.
-	if verification == "corrupt" && !req.AllowCorrupt {
+	if source.verification == "corrupt" && !req.AllowCorrupt {
 		httpx.WriteError(w, http.StatusConflict,
 			"this backup is recorded as corrupt; restore it only by confirming that explicitly")
 		return
 	}
-	if !validSystemUser(systemUser) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid system user")
-		return
-	}
-	if file == "" || filepath.Base(file) != file {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid backup file")
+	if refusal := source.invalid(); refusal != nil {
+		refusal.write(w)
 		return
 	}
 	// Reject a restore while another backup/restore runs for this domain, then
@@ -125,154 +122,24 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	defer release()
 	progressStart(id, "restore", stagePreparing, 0)
-	defer func() {
-		if progressActive(id) {
-			progressFinish(id, "", fmt.Errorf("the restore did not complete"))
-		}
-	}()
+	defer finishUnfinishedRestore(id)
 
-	// Fetch the archive from the off-site destination when the local copy is
-	// gone, so a pruned-but-uploaded backup is still restorable.
-	progressStage(id, stageDownloading, 0)
-	if err := ensureLocalArchive(r.Context(), h.DB, id, backupID, systemUser, file); err != nil {
-		httpx.WriteError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	abs := filepath.Join(backupRoot(), systemUser, file)
-	archiveType := archivex.DetectType(abs)
-	if archiveType == archivex.TypeUnknown || archiveType == archivex.TypeRAR {
-		httpx.WriteError(w, http.StatusBadRequest, "unsupported backup archive")
-		return
-	}
-	archiveInfo, err := os.Lstat(abs)
-	if err != nil || !archiveInfo.Mode().IsRegular() {
-		httpx.WriteError(w, http.StatusNotFound, "backup file not found")
-		return
-	}
-
-	// Quota-friendly staging: extract ONLY the members the mode needs, as root, into
-	// the panel temp dir (TMPDIR, persistent disk) so a second copy of the tenant home
-	// never counts against the tenant quota. extractMembersRoot pre-scans members and
-	// rejects jail escapes before any extraction.
-	allMembers, _ := listArchiveMembers(abs)
-	members := membersForMode(req.Mode, systemUser, allMembers, req.Paths)
-	if len(members) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "the backup has no content for this restore mode")
-		return
-	}
-	tmpDir, err := os.MkdirTemp("", "servika-restore-*")
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not prepare backup restore")
-		return
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-	progressStage(id, stageExtracting, 0)
-	if _, err := extractMembersRoot(r.Context(), abs, tmpDir, members); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid backup archive")
+	tmpDir, cleanup, refusal := stageRestore(r.Context(), h.DB, id, backupID, source, req)
+	defer cleanup()
+	if refusal != nil {
+		refusal.write(w)
 		return
 	}
 
 	result := map[string]any{
 		"ok":          true,
 		"mode":        req.Mode,
-		"domain_name": domainName,
-		"file":        file,
+		"domain_name": source.domainName,
+		"file":        source.file,
 	}
-
-	switch req.Mode {
-	case "full":
-		progressStage(id, stageRestoringHome, 0)
-		if err := restoreHome(r.Context(), tmpDir, systemUser, req.Clean); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not restore the home directory")
-			return
-		}
-		progressStage(id, stageImportingDB, 0)
-		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, "")
-		result["databases"] = dbResults
-		restored, _, failed, summary := dbSummary(dbResults)
-		if failed > 0 {
-			httpx.WriteError(w, http.StatusInternalServerError,
-				"files were restored but a database import failed — "+summary)
-			return
-		}
-		// Zero databases restored is NOT success: the site files came back but
-		// nothing it connects to did. The test is on `restored`, never on
-		// `skipped > 0`, which encodes one SYMPTOM (an empty ownership whitelist
-		// skipping every database) rather than the invariant. An archive that
-		// carried no dump at all reports skipped=0 too, and that is exactly what a
-		// backup whose dumps failed produces, so the old guard passed it as a
-		// successful full recovery.
-		if restored == 0 {
-			httpx.WriteError(w, http.StatusInternalServerError,
-				"files were restored but no database was restored — "+summary)
-			return
-		}
-		result["warning"] = overwriteWarning(req.Clean)
-
-	case "files":
-		progressStage(id, stageRestoringHome, 0)
-		if err := restoreHome(r.Context(), tmpDir, systemUser, req.Clean); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not restore the home directory")
-			return
-		}
-		result["warning"] = overwriteWarning(req.Clean)
-
-	case "database":
-		progressStage(id, stageImportingDB, 0)
-		dbResults := restoreAllDBs(r.Context(), h.DB, id, tmpDir, systemUser, strings.TrimSpace(req.DB))
-		result["databases"] = dbResults
-		restored, skipped, failed, summary := dbSummary(dbResults)
-		if failed > 0 {
-			httpx.WriteError(w, http.StatusInternalServerError, "a database import failed — "+summary)
-			return
-		}
-		// Reporting a database-only restore that restored nothing as success is the
-		// exact failure this guards: the whitelist was empty and every database was
-		// skipped, yet the job read as done.
-		if restored == 0 {
-			if skipped == 0 {
-				httpx.WriteError(w, http.StatusBadRequest, "the backup has no database to restore")
-			} else {
-				httpx.WriteError(w, http.StatusBadRequest, "no database was restored — "+summary)
-			}
-			return
-		}
-		result["warning"] = fmt.Sprintf("%d database(s) restored — %s", restored, summary)
-
-	case "file":
-		if len(req.Paths) == 0 {
-			httpx.WriteError(w, http.StatusBadRequest, "no file was selected for restore")
-			return
-		}
-		count, folder, err := restoreSelected(r.Context(), tmpDir, systemUser, req.Paths, req.Target)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not restore the selected files")
-			return
-		}
-		result["file_count"] = count
-		if folder != "" {
-			result["target_folder"] = folder
-			result["warning"] = "The selected files were extracted into " + folder + "/; existing files were kept."
-		} else {
-			result["warning"] = "The selected files were written back to their original locations."
-		}
-
-	case "db":
-		if strings.TrimSpace(req.DB) == "" {
-			httpx.WriteError(w, http.StatusBadRequest, "no database was selected")
-			return
-		}
-		message, err := restoreOneDB(r.Context(), h.DB, id, tmpDir, systemUser,
-			strings.TrimSpace(req.DB), strings.TrimSpace(req.TargetDB))
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		result["databases"] = message
-
-	default:
-		httpx.WriteError(w, http.StatusBadRequest, "invalid restore mode")
+	run := restoreRun{db: h.DB, id: id, tmpDir: tmpDir, systemUser: source.systemUser, req: req, result: result}
+	if refusal := run.apply(r.Context()); refusal != nil {
+		refusal.write(w)
 		return
 	}
 
@@ -280,6 +147,260 @@ func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
 	// error returns above).
 	progressFinish(id, "", nil)
 	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+// finishUnfinishedRestore closes a progress record the restore left open, which
+// only an error return does.
+func finishUnfinishedRestore(id int64) {
+	if progressActive(id) {
+		progressFinish(id, "", fmt.Errorf("the restore did not complete"))
+	}
+}
+
+// restoreSource is the backup row a restore reads from.
+type restoreSource struct {
+	systemUser, domainName, file, verification string
+}
+
+// lookupRestoreSource reads the backup row, scoped to the domain in the URL.
+func (h *Handlers) lookupRestoreSource(r *http.Request, id, backupID int64) (restoreSource, *httpRefusal) {
+	var source restoreSource
+	err := h.DB.QueryRowContext(r.Context(),
+		`SELECT d.system_user, d.domain_name, b.file, COALESCE(b.verification,'') FROM backups b
+		 JOIN domains d ON d.id=b.domain_id
+		 WHERE b.id=? AND b.domain_id=?`, backupID, id).
+		Scan(&source.systemUser, &source.domainName, &source.file, &source.verification)
+	if errors.Is(err, sql.ErrNoRows) {
+		return source, &httpRefusal{http.StatusNotFound, "backup not found"}
+	}
+	if err != nil {
+		return source, &httpRefusal{http.StatusInternalServerError, "internal server error"}
+	}
+	return source, nil
+}
+
+// invalid refuses a row whose identifiers cannot safely name a path.
+func (source restoreSource) invalid() *httpRefusal {
+	if !validSystemUser(source.systemUser) {
+		return &httpRefusal{http.StatusBadRequest, "invalid system user"}
+	}
+	if source.file == "" || filepath.Base(source.file) != source.file {
+		return &httpRefusal{http.StatusBadRequest, "invalid backup file"}
+	}
+	return nil
+}
+
+// stageRestore fetches the archive when only its off-site copy is left and
+// extracts the members the mode needs into a new staging directory. cleanup
+// removes that directory and is safe to call when none was made.
+func stageRestore(ctx context.Context, db *sql.DB, id, backupID int64, source restoreSource, req restoreRequest) (string, func(), *httpRefusal) {
+	noop := func() {}
+	// Fetch the archive from the off-site destination when the local copy is
+	// gone, so a pruned-but-uploaded backup is still restorable.
+	progressStage(id, stageDownloading, 0)
+	if err := ensureLocalArchive(ctx, db, id, backupID, source.systemUser, source.file); err != nil {
+		return "", noop, &httpRefusal{http.StatusNotFound, err.Error()}
+	}
+
+	abs := filepath.Join(backupRoot(), source.systemUser, source.file)
+	if refusal := restorableArchive(abs); refusal != nil {
+		return "", noop, refusal
+	}
+
+	tmpDir, cleanup, failure := stageMembers(ctx, abs, source.systemUser, req.Mode, req.Paths,
+		func() { progressStage(id, stageExtracting, 0) })
+	if failure != stagedOK {
+		return "", cleanup, &httpRefusal{failure.status(), failure.message()}
+	}
+	return tmpDir, cleanup, nil
+}
+
+// stageFailure names the step at which staging an archive's members stopped.
+type stageFailure int
+
+const (
+	stagedOK stageFailure = iota
+	stageNoContent
+	stageNoTempDir
+	stageBadArchive
+)
+
+// message is what a restore answers when staging stopped at f.
+func (f stageFailure) message() string {
+	switch f {
+	case stageNoContent:
+		return "the backup has no content for this restore mode"
+	case stageNoTempDir:
+		return "could not prepare backup restore"
+	default:
+		return "invalid backup archive"
+	}
+}
+
+// status is the HTTP status the single-domain restore answers f with.
+func (f stageFailure) status() int {
+	if f == stageNoTempDir {
+		return http.StatusInternalServerError
+	}
+	return http.StatusBadRequest
+}
+
+// stageMembers extracts the members a mode needs from abs into a new staging
+// directory. beforeExtract runs once the directory exists. cleanup removes the
+// directory and is safe to call when none was made.
+//
+// Quota-friendly staging: extract ONLY the members the mode needs, as root, into
+// the panel temp dir (TMPDIR, persistent disk) so a second copy of the tenant home
+// never counts against the tenant quota. extractMembersRoot pre-scans members and
+// rejects jail escapes before any extraction.
+func stageMembers(ctx context.Context, abs, systemUser, mode string, paths []string, beforeExtract func()) (string, func(), stageFailure) {
+	noop := func() {}
+	allMembers, _ := listArchiveMembers(abs)
+	members := membersForMode(mode, systemUser, allMembers, paths)
+	if len(members) == 0 {
+		return "", noop, stageNoContent
+	}
+	tmpDir, err := os.MkdirTemp("", "servika-restore-*")
+	if err != nil {
+		return "", noop, stageNoTempDir
+	}
+	cleanup := func() { _ = os.RemoveAll(tmpDir) }
+	beforeExtract()
+	if _, err := extractMembersRoot(ctx, abs, tmpDir, members); err != nil {
+		return "", cleanup, stageBadArchive
+	}
+	return tmpDir, cleanup, stagedOK
+}
+
+// restorableArchive refuses an archive of a type restore cannot read, or a path
+// that is not a regular file.
+func restorableArchive(abs string) *httpRefusal {
+	archiveType := archivex.DetectType(abs)
+	if archiveType == archivex.TypeUnknown || archiveType == archivex.TypeRAR {
+		return &httpRefusal{http.StatusBadRequest, "unsupported backup archive"}
+	}
+	archiveInfo, err := os.Lstat(abs)
+	if err != nil || !archiveInfo.Mode().IsRegular() {
+		return &httpRefusal{http.StatusNotFound, "backup file not found"}
+	}
+	return nil
+}
+
+// restoreRun is one single-domain restore over its staged archive.
+type restoreRun struct {
+	db         *sql.DB
+	id         int64
+	tmpDir     string
+	systemUser string
+	req        restoreRequest
+	result     map[string]any
+}
+
+// apply runs the chosen mode and adds its outcome to the answer.
+func (run restoreRun) apply(ctx context.Context) *httpRefusal {
+	switch run.req.Mode {
+	case "full":
+		return run.full(ctx)
+	case "files":
+		return run.files(ctx)
+	case "database":
+		return run.databases(ctx)
+	case "file":
+		return run.selectedFiles(ctx)
+	case "db":
+		return run.oneDatabase(ctx)
+	default:
+		return &httpRefusal{http.StatusBadRequest, "invalid restore mode"}
+	}
+}
+
+func (run restoreRun) full(ctx context.Context) *httpRefusal {
+	progressStage(run.id, stageRestoringHome, 0)
+	if err := restoreHome(ctx, run.tmpDir, run.systemUser, run.req.Clean); err != nil {
+		return &httpRefusal{http.StatusInternalServerError, "could not restore the home directory"}
+	}
+	progressStage(run.id, stageImportingDB, 0)
+	dbResults := restoreAllDBs(ctx, run.db, run.id, run.tmpDir, run.systemUser, "")
+	run.result["databases"] = dbResults
+	restored, _, failed, summary := dbSummary(dbResults)
+	if failed > 0 {
+		return &httpRefusal{http.StatusInternalServerError,
+			"files were restored but a database import failed — " + summary}
+	}
+	// Zero databases restored is NOT success: the site files came back but
+	// nothing it connects to did. The test is on `restored`, never on
+	// `skipped > 0`, which encodes one SYMPTOM (an empty ownership whitelist
+	// skipping every database) rather than the invariant. An archive that
+	// carried no dump at all reports skipped=0 too, and that is exactly what a
+	// backup whose dumps failed produces, so the old guard passed it as a
+	// successful full recovery.
+	if restored == 0 {
+		return &httpRefusal{http.StatusInternalServerError,
+			"files were restored but no database was restored — " + summary}
+	}
+	run.result["warning"] = overwriteWarning(run.req.Clean)
+	return nil
+}
+
+func (run restoreRun) files(ctx context.Context) *httpRefusal {
+	progressStage(run.id, stageRestoringHome, 0)
+	if err := restoreHome(ctx, run.tmpDir, run.systemUser, run.req.Clean); err != nil {
+		return &httpRefusal{http.StatusInternalServerError, "could not restore the home directory"}
+	}
+	run.result["warning"] = overwriteWarning(run.req.Clean)
+	return nil
+}
+
+func (run restoreRun) databases(ctx context.Context) *httpRefusal {
+	progressStage(run.id, stageImportingDB, 0)
+	dbResults := restoreAllDBs(ctx, run.db, run.id, run.tmpDir, run.systemUser, strings.TrimSpace(run.req.DB))
+	run.result["databases"] = dbResults
+	restored, skipped, failed, summary := dbSummary(dbResults)
+	if failed > 0 {
+		return &httpRefusal{http.StatusInternalServerError, "a database import failed — " + summary}
+	}
+	// Reporting a database-only restore that restored nothing as success is the
+	// exact failure this guards: the whitelist was empty and every database was
+	// skipped, yet the job read as done.
+	if restored == 0 {
+		if skipped == 0 {
+			return &httpRefusal{http.StatusBadRequest, "the backup has no database to restore"}
+		}
+		return &httpRefusal{http.StatusBadRequest, "no database was restored — " + summary}
+	}
+	run.result["warning"] = fmt.Sprintf("%d database(s) restored — %s", restored, summary)
+	return nil
+}
+
+func (run restoreRun) selectedFiles(ctx context.Context) *httpRefusal {
+	if len(run.req.Paths) == 0 {
+		return &httpRefusal{http.StatusBadRequest, "no file was selected for restore"}
+	}
+	count, folder, err := restoreSelected(ctx, run.tmpDir, run.systemUser, run.req.Paths, run.req.Target)
+	if err != nil {
+		return &httpRefusal{http.StatusInternalServerError, "could not restore the selected files"}
+	}
+	run.result["file_count"] = count
+	if folder != "" {
+		run.result["target_folder"] = folder
+		run.result["warning"] = "The selected files were extracted into " + folder + "/; existing files were kept."
+	} else {
+		run.result["warning"] = "The selected files were written back to their original locations."
+	}
+	return nil
+}
+
+func (run restoreRun) oneDatabase(ctx context.Context) *httpRefusal {
+	if strings.TrimSpace(run.req.DB) == "" {
+		return &httpRefusal{http.StatusBadRequest, "no database was selected"}
+	}
+	message, err := restoreOneDB(ctx, run.db, run.id, run.tmpDir, run.systemUser,
+		strings.TrimSpace(run.req.DB), strings.TrimSpace(run.req.TargetDB))
+	if err != nil {
+		return &httpRefusal{http.StatusBadRequest, err.Error()}
+	}
+	run.result["databases"] = message
+	return nil
 }
 
 // overwriteWarning describes what the chosen file-restore strategy did.

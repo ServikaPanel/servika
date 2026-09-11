@@ -94,9 +94,9 @@ func TestTheConnectionTestDialsThePinnedAddressUnderTheNamesAlias(t *testing.T) 
 		t.Fatal(err)
 	}
 	body := string(source)
-	start := strings.Index(body, "func testConnection(")
+	start := strings.Index(body, "func testSFTPConnection(")
 	if start < 0 {
-		t.Fatal("testConnection is missing from destination.go")
+		t.Fatal("testSFTPConnection is missing from destination.go")
 	}
 	end := strings.Index(body[start:], "\nfunc ")
 	if end < 0 {

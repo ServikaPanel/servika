@@ -141,27 +141,7 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		schedule.add(frequency, hour, retention)
-		s := SummaryRow{DomainID: id, DomainName: domainName}
-		var latestModification time.Time
-		if entries, e := os.ReadDir(filepath.Join(backupRoot(), systemUser)); e == nil {
-			for _, en := range entries {
-				if en.IsDir() || !strings.HasSuffix(en.Name(), ".tar.gz") {
-					continue
-				}
-				fi, e2 := en.Info()
-				if e2 != nil {
-					continue
-				}
-				s.Count++
-				s.TotalBytes += fi.Size()
-				if fi.ModTime().After(latestModification) {
-					latestModification = fi.ModTime()
-				}
-			}
-		}
-		if !latestModification.IsZero() {
-			s.LastBackup = latestModification.Format("2006-01-02 15:04")
-		}
+		s := summarizeDomainBackups(id, domainName, systemUser)
 		out = append(out, s)
 		totalBytes += s.TotalBytes
 		totalBackups += s.Count
@@ -180,6 +160,34 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 		"retention_min":     schedule.retentionMin(),
 		"retention_max":     schedule.retentionMax(),
 	})
+}
+
+// summarizeDomainBackups counts a domain's archives on disk and dates the newest.
+func summarizeDomainBackups(id int64, domainName, systemUser string) SummaryRow {
+	s := SummaryRow{DomainID: id, DomainName: domainName}
+	entries, err := os.ReadDir(filepath.Join(backupRoot(), systemUser))
+	if err != nil {
+		return s
+	}
+	var latestModification time.Time
+	for _, en := range entries {
+		if en.IsDir() || !strings.HasSuffix(en.Name(), ".tar.gz") {
+			continue
+		}
+		fi, e2 := en.Info()
+		if e2 != nil {
+			continue
+		}
+		s.Count++
+		s.TotalBytes += fi.Size()
+		if fi.ModTime().After(latestModification) {
+			latestModification = fi.ModTime()
+		}
+	}
+	if !latestModification.IsZero() {
+		s.LastBackup = latestModification.Format("2006-01-02 15:04")
+	}
+	return s
 }
 
 // scheduleFacts collects what the domains actually say about their automatic

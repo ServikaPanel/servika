@@ -75,59 +75,11 @@ func tickOnce(db *sql.DB) {
 	// before: there was no way to turn every automatic backup off at once, and a
 	// backup was written without checking free space, so backups could fill the
 	// root disk and take the panel and every site down.
-	settings := readBackupSettings(ctx, db)
-	if !settings.Enabled {
-		return
-	}
-	if reason := diskGate(settings); reason != "" {
-		notifyDiskGate(db, reason)
+	if !scheduledBackupsAllowed(ctx, db) {
 		return
 	}
 
-	// Every scheduled domain is read, and the due test is made in Go below.
-	//
-	// The query used to match the configured backup hour against the current one,
-	// which made a domain eligible during ONE tick a day and nothing ever caught
-	// up. Two things routinely eat that tick: the pass is
-	// serial and each domain gets its own 25-minute budget, so a server with
-	// dozens of tenants runs the 03:00 pass well past 04:00 and the hour-4 and
-	// hour-5 domains are skipped for the whole night; and the panel being
-	// restarted during a domain's hour loses the same day. Nothing reported it,
-	// because the job row records the domains that DID run.
-	//
-	// There are dozens of domains, not thousands, so reading them all and
-	// deciding here costs nothing and keeps the whole rule in one place.
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, domain_name, system_user,
-		       COALESCE(backup_freq,'none'), COALESCE(backup_hour,3),
-		       COALESCE(backup_retention,7),
-		       UNIX_TIMESTAMP(last_backup_at)
-		FROM domains
-		WHERE COALESCE(backup_freq,'none') != 'none'`)
-	if err != nil {
-		log.Printf("backup scheduler tick query: %v", err)
-		return
-	}
-	defer func() { _ = rows.Close() }()
-
-	var due []dueDomain
-	for rows.Next() {
-		var d dueDomain
-		var lastTs sql.NullInt64
-		if err := rows.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.Frequency, &d.Hour, &d.Retention, &lastTs); err != nil {
-			log.Printf("backup scheduler scan: %v", err)
-			continue
-		}
-		if backupDue(now, d.Hour, d.Frequency, lastTs) {
-			due = append(due, d)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		// A domain missing from this list is simply not backed up tonight, and the
-		// only sign is a gap in its archive list weeks later.
-		log.Printf("backup scheduler: could not read the due domain list: %v", err)
-	}
-
+	due := dueDomains(ctx, db, now)
 	if len(due) == 0 {
 		return
 	}
@@ -135,14 +87,7 @@ func tickOnce(db *sql.DB) {
 
 	// Group the whole nightly run into one 'scheduled' job so the panel shows a single
 	// row with progress instead of one unrelated record per domain.
-	var jobID int64
-	if res, err := db.Exec(
-		`INSERT INTO backup_jobs(type, operation, status, total, started_by)
-		 VALUES('scheduled','backup','running',?,'system')`, len(due)); err == nil {
-		jobID, _ = res.LastInsertId()
-	} else {
-		log.Printf("backup scheduler: could not open job row: %v", err)
-	}
+	jobID := openScheduledJob(db, len(due))
 
 	// The nightly pass registers its cancel function like every other bulk job.
 	// Without it StopJob found nothing to cancel, took the branch written for a row
@@ -166,9 +111,7 @@ func tickOnce(db *sql.DB) {
 			stopped = true
 			break
 		}
-		if _, err := db.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, d.DomainName, jobID); err != nil {
-			log.Printf("backup scheduler: progress update failed: %v", err)
-		}
+		markScheduledActive(db, jobID, d.DomainName)
 		size, err := runOneBackup(jobCtx, db, d, jobID)
 		if err != nil {
 			if jobCtx.Err() != nil {
@@ -202,6 +145,92 @@ func tickOnce(db *sql.DB) {
 		}
 	}
 	finishJobStopped(db, jobID, succeeded, failed, stopped)
+}
+
+// scheduledBackupsAllowed applies the master switch and the disk guard, and
+// alerts once a day when the guard refuses.
+func scheduledBackupsAllowed(ctx context.Context, db *sql.DB) bool {
+	settings := readBackupSettings(ctx, db)
+	if !settings.Enabled {
+		return false
+	}
+	if reason := diskGate(settings); reason != "" {
+		notifyDiskGate(db, reason)
+		return false
+	}
+	return true
+}
+
+// dueDomains reads every domain with automatic backups on and keeps the ones
+// that are due at now.
+//
+// Every scheduled domain is read, and the due test is made in Go below.
+//
+// The query used to match the configured backup hour against the current one,
+// which made a domain eligible during ONE tick a day and nothing ever caught
+// up. Two things routinely eat that tick: the pass is
+// serial and each domain gets its own 25-minute budget, so a server with
+// dozens of tenants runs the 03:00 pass well past 04:00 and the hour-4 and
+// hour-5 domains are skipped for the whole night; and the panel being
+// restarted during a domain's hour loses the same day. Nothing reported it,
+// because the job row records the domains that DID run.
+//
+// There are dozens of domains, not thousands, so reading them all and
+// deciding here costs nothing and keeps the whole rule in one place.
+func dueDomains(ctx context.Context, db *sql.DB, now time.Time) []dueDomain {
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, domain_name, system_user,
+		       COALESCE(backup_freq,'none'), COALESCE(backup_hour,3),
+		       COALESCE(backup_retention,7),
+		       UNIX_TIMESTAMP(last_backup_at)
+		FROM domains
+		WHERE COALESCE(backup_freq,'none') != 'none'`)
+	if err != nil {
+		log.Printf("backup scheduler tick query: %v", err)
+		return nil
+	}
+	defer func() { _ = rows.Close() }()
+
+	var due []dueDomain
+	for rows.Next() {
+		var d dueDomain
+		var lastTs sql.NullInt64
+		if err := rows.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.Frequency, &d.Hour, &d.Retention, &lastTs); err != nil {
+			log.Printf("backup scheduler scan: %v", err)
+			continue
+		}
+		if backupDue(now, d.Hour, d.Frequency, lastTs) {
+			due = append(due, d)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		// A domain missing from this list is simply not backed up tonight, and the
+		// only sign is a gap in its archive list weeks later.
+		log.Printf("backup scheduler: could not read the due domain list: %v", err)
+	}
+	return due
+}
+
+// openScheduledJob inserts the nightly run's job row and returns its id, or 0
+// when the row cannot be written.
+func openScheduledJob(db *sql.DB, total int) int64 {
+	var jobID int64
+	if res, err := db.Exec(
+		`INSERT INTO backup_jobs(type, operation, status, total, started_by)
+		 VALUES('scheduled','backup','running',?,'system')`, total); err == nil {
+		jobID, _ = res.LastInsertId()
+	} else {
+		log.Printf("backup scheduler: could not open job row: %v", err)
+	}
+	return jobID
+}
+
+// markScheduledActive records the domain the nightly run is working on. A failed
+// write is logged, because the run itself goes on.
+func markScheduledActive(db *sql.DB, jobID int64, domainName string) {
+	if err := setActiveDomain(db, jobID, domainName); err != nil {
+		log.Printf("backup scheduler: progress update failed: %v", err)
+	}
 }
 
 // runOneBackup creates a scheduled backup for one domain, tags it with the nightly

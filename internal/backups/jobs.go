@@ -158,16 +158,9 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	}
 	defer release()
 
-	var systemUser, file, verification string
-	err := db.QueryRowContext(ctx,
-		`SELECT d.system_user, b.file, COALESCE(b.verification,'') FROM backups b
-		 JOIN domains d ON d.id=b.domain_id WHERE b.id=? AND b.domain_id=?`, backupID, domainID).
-		Scan(&systemUser, &file, &verification)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("backup not found")
-	}
+	systemUser, file, verification, err := coreRestoreSource(ctx, db, domainID, backupID)
 	if err != nil {
-		return "", fmt.Errorf("backup lookup failed")
+		return "", err
 	}
 	// A bulk job carries no per-item override, so an archive the integrity scan
 	// recorded as corrupt is refused outright here. The single-domain endpoint is
@@ -175,68 +168,103 @@ func restoreCore(ctx context.Context, db *sql.DB, domainID, backupID int64, mode
 	if verification == "corrupt" {
 		return "", fmt.Errorf("this backup is recorded as corrupt; restore it from the domain's own backup page to confirm that")
 	}
-	if !validSystemUser(systemUser) || file == "" || filepath.Base(file) != file {
+	if !restorableFile(systemUser, file) {
 		return "", fmt.Errorf("invalid backup file")
 	}
-	// Fetch the archive from the off-site destination when the local copy was
-	// pruned or removed, so a backup that uploaded successfully stays restorable.
-	if err := ensureLocalArchive(ctx, db, domainID, backupID, systemUser, file); err != nil {
-		return "", err
-	}
-	abs := filepath.Join(backupRoot(), systemUser, file)
-	allMembers, _ := listArchiveMembers(abs)
-	members := membersForMode(mode, systemUser, allMembers, nil)
-	if len(members) == 0 {
-		return "", fmt.Errorf("the backup has no content for this restore mode")
-	}
-	tmpDir, err := os.MkdirTemp("", "servika-restore-*")
+	tmpDir, cleanup, err := stageCoreRestore(ctx, db, domainID, backupID, systemUser, file, mode)
+	defer cleanup()
 	if err != nil {
-		return "", fmt.Errorf("could not prepare backup restore")
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-	if _, err := extractMembersRoot(ctx, abs, tmpDir, members); err != nil {
-		return "", fmt.Errorf("invalid backup archive")
+		return "", err
 	}
 
 	switch mode {
 	case "full":
-		if err := restoreHome(ctx, tmpDir, systemUser, clean); err != nil {
-			return "", fmt.Errorf("the home directory could not be restored")
-		}
-		restored, _, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
-		if failed > 0 {
-			return "", fmt.Errorf("files were restored but %d database import(s) failed — %s", failed, summary)
-		}
-		// The test is on `restored` alone, never on `skipped > 0`: an archive that
-		// carried no dump at all reports skipped=0 too, so that guard passed a
-		// recovery in which nothing the site connects to came back, and the bulk
-		// job counted the domain in `succeeded`.
-		if restored == 0 {
-			return "", fmt.Errorf("files were restored but no database was restored — %s", summary)
-		}
-		return fmt.Sprintf("restored files and %d database(s)", restored), nil
+		return coreFullRestore(ctx, db, domainID, tmpDir, systemUser, clean)
 	case "files":
 		if err := restoreHome(ctx, tmpDir, systemUser, clean); err != nil {
 			return "", fmt.Errorf("the home directory could not be restored")
 		}
 		return "restored files", nil
 	case "database":
-		restored, skipped, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
-		if failed > 0 {
-			return "", fmt.Errorf("%d database import(s) failed — %s", failed, summary)
-		}
-		// Zero databases restored is not success. Previously this returned
-		// "restored databases" even when the whitelist was empty and every database
-		// was skipped, so the job read as done with nothing restored.
-		if restored == 0 {
-			if skipped == 0 {
-				return "", fmt.Errorf("the backup has no database to restore")
-			}
-			return "", fmt.Errorf("no database was restored — %s", summary)
-		}
-		return fmt.Sprintf("restored %d database(s)", restored), nil
+		return coreDatabaseRestore(ctx, db, domainID, tmpDir, systemUser)
 	}
 	return "", fmt.Errorf("invalid restore mode")
+}
+
+// coreRestoreSource reads the backup row a bulk restore item names.
+func coreRestoreSource(ctx context.Context, db *sql.DB, domainID, backupID int64) (systemUser, file, verification string, err error) {
+	err = db.QueryRowContext(ctx,
+		`SELECT d.system_user, b.file, COALESCE(b.verification,'') FROM backups b
+		 JOIN domains d ON d.id=b.domain_id WHERE b.id=? AND b.domain_id=?`, backupID, domainID).
+		Scan(&systemUser, &file, &verification)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", "", fmt.Errorf("backup not found")
+	}
+	if err != nil {
+		return "", "", "", fmt.Errorf("backup lookup failed")
+	}
+	return systemUser, file, verification, nil
+}
+
+// restorableFile reports whether a backup row's system user and file name can
+// safely name the archive path.
+func restorableFile(systemUser, file string) bool {
+	return validSystemUser(systemUser) && file != "" && filepath.Base(file) == file
+}
+
+// stageCoreRestore fetches the archive when only its off-site copy is left and
+// extracts the members the mode needs. cleanup removes the staging directory and
+// is safe to call when none was made.
+func stageCoreRestore(ctx context.Context, db *sql.DB, domainID, backupID int64, systemUser, file, mode string) (string, func(), error) {
+	noop := func() {}
+	// Fetch the archive from the off-site destination when the local copy was
+	// pruned or removed, so a backup that uploaded successfully stays restorable.
+	if err := ensureLocalArchive(ctx, db, domainID, backupID, systemUser, file); err != nil {
+		return "", noop, err
+	}
+	abs := filepath.Join(backupRoot(), systemUser, file)
+	tmpDir, cleanup, failure := stageMembers(ctx, abs, systemUser, mode, nil, func() {})
+	if failure != stagedOK {
+		return "", cleanup, errors.New(failure.message())
+	}
+	return tmpDir, cleanup, nil
+}
+
+// coreFullRestore restores the home and every database of a staged archive.
+func coreFullRestore(ctx context.Context, db *sql.DB, domainID int64, tmpDir, systemUser string, clean bool) (string, error) {
+	if err := restoreHome(ctx, tmpDir, systemUser, clean); err != nil {
+		return "", fmt.Errorf("the home directory could not be restored")
+	}
+	restored, _, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
+	if failed > 0 {
+		return "", fmt.Errorf("files were restored but %d database import(s) failed — %s", failed, summary)
+	}
+	// The test is on `restored` alone, never on `skipped > 0`: an archive that
+	// carried no dump at all reports skipped=0 too, so that guard passed a
+	// recovery in which nothing the site connects to came back, and the bulk
+	// job counted the domain in `succeeded`.
+	if restored == 0 {
+		return "", fmt.Errorf("files were restored but no database was restored — %s", summary)
+	}
+	return fmt.Sprintf("restored files and %d database(s)", restored), nil
+}
+
+// coreDatabaseRestore restores every database of a staged archive.
+func coreDatabaseRestore(ctx context.Context, db *sql.DB, domainID int64, tmpDir, systemUser string) (string, error) {
+	restored, skipped, failed, summary := dbSummary(restoreAllDBs(ctx, db, domainID, tmpDir, systemUser, ""))
+	if failed > 0 {
+		return "", fmt.Errorf("%d database import(s) failed — %s", failed, summary)
+	}
+	// Zero databases restored is not success. Previously this returned
+	// "restored databases" even when the whitelist was empty and every database
+	// was skipped, so the job read as done with nothing restored.
+	if restored == 0 {
+		if skipped == 0 {
+			return "", fmt.Errorf("the backup has no database to restore")
+		}
+		return "", fmt.Errorf("no database was restored — %s", summary)
+	}
+	return fmt.Sprintf("restored %d database(s)", restored), nil
 }
 
 // scopedDomains returns the in-scope domains, optionally narrowed to ids. The
@@ -388,9 +416,7 @@ func (h *Handlers) StartBackupJob(w http.ResponseWriter, r *http.Request) {
 				stopped = true
 				break
 			}
-			if _, err := h.DB.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, d.DomainName, jobID); err != nil {
-				httpx.LogR(r, "backup job %d: progress update failed: %v", jobID, err)
-			}
+			h.markActiveDomain(r, "backup", jobID, d.DomainName)
 			ctx, cancel := context.WithTimeout(jobCtx, 20*time.Minute)
 			size, _, err := backupOneDomain(ctx, h.DB, d.ID, d.SystemUser, "full", "Bulk backup", jobID)
 			cancel()
@@ -547,6 +573,31 @@ type JobItem struct {
 // produced; a restore job returns the stored per-domain results.
 func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(chi.URLParam(r, "jid"), 10, 64)
+	j, detail, refusal := h.jobHeader(r, jobID)
+	if refusal != nil {
+		refusal.write(w)
+		return
+	}
+	redactJobForScope(r, &j)
+
+	resp := map[string]any{"job": j}
+	if j.Operation == "restore" {
+		resp["results"] = restoreJobResults(detail)
+		httpx.WriteJSON(w, http.StatusOK, resp)
+		return
+	}
+
+	items, refusal := h.jobItems(r, jobID)
+	if refusal != nil {
+		refusal.write(w)
+		return
+	}
+	resp["domains"] = items
+	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+// jobHeader reads one job row and its stored detail.
+func (h *Handlers) jobHeader(r *http.Request, jobID int64) (Job, sql.NullString, *httpRefusal) {
 	var j Job
 	var detail sql.NullString
 	// The header is scoped exactly like the list. Without it the item list below
@@ -563,26 +614,26 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 			&j.Failed, &j.SizeBytes, &j.ActiveDomain, &j.RestoreMode, &j.StartedBy,
 			&j.StartedAt, &j.FinishedAt, &detail)
 	if errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusNotFound, "backup job not found")
-		return
+		return j, detail, &httpRefusal{http.StatusNotFound, "backup job not found"}
 	}
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
-		return
+		return j, detail, &httpRefusal{http.StatusInternalServerError, "internal server error"}
 	}
-	redactJobForScope(r, &j)
+	return j, detail, nil
+}
 
-	resp := map[string]any{"job": j}
-	if j.Operation == "restore" {
-		var results any
-		if detail.Valid && detail.String != "" {
-			_ = json.Unmarshal([]byte(detail.String), &results)
-		}
-		resp["results"] = results
-		httpx.WriteJSON(w, http.StatusOK, resp)
-		return
+// restoreJobResults decodes the per-domain results a restore job stored, or
+// nil when it stored none.
+func restoreJobResults(detail sql.NullString) any {
+	var results any
+	if detail.Valid && detail.String != "" {
+		_ = json.Unmarshal([]byte(detail.String), &results)
 	}
+	return results
+}
 
+// jobItems lists the archives a backup job produced.
+func (h *Handlers) jobItems(r *http.Request, jobID int64) ([]JobItem, *httpRefusal) {
 	// Scope the item list so a reseller only sees its own domains' archives.
 	cond, itemArgs := middleware.ScopeSQL(r, "d")
 	itemQuery := `SELECT b.id, b.domain_id, d.domain_name, d.system_user, b.size_b, b.type
@@ -596,8 +647,7 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	// #nosec G701 G202 -- cond is a constant ScopeSQL fragment with a literal alias; every value is bound.
 	rows, err := h.DB.QueryContext(r.Context(), itemQuery+` ORDER BY d.domain_name`, itemArgs...)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not list job items")
-		return
+		return nil, &httpRefusal{http.StatusInternalServerError, "could not list job items"}
 	}
 	defer func() { _ = rows.Close() }()
 	items := []JobItem{}
@@ -612,11 +662,9 @@ func (h *Handlers) JobDetail(w http.ResponseWriter, r *http.Request) {
 	if err := rows.Err(); err != nil {
 		// A short item list beside the job's own counts reads as a job that
 		// produced fewer archives than it did.
-		httpx.WriteError(w, http.StatusInternalServerError, "job detail read failed")
-		return
+		return nil, &httpRefusal{http.StatusInternalServerError, "job detail read failed"}
 	}
-	resp["domains"] = items
-	httpx.WriteJSON(w, http.StatusOK, resp)
+	return items, nil
 }
 
 // StopJob handles POST /admin/backups/jobs/{jid}/stop and stops a running bulk
@@ -689,58 +737,14 @@ func mayStopJob(r *http.Request, startedBy string) bool {
 // StartRestoreJob handles POST /admin/backups/restore and restores several domains in
 // one tracked job. Only coarse modes are accepted here.
 func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Mode  string `json:"mode"`
-		Clean bool   `json:"clean"`
-		Items []struct {
-			DomainID int64 `json:"domain_id"`
-			BackupID int64 `json:"backup_id"`
-		} `json:"items"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	req, refusal := decodeRestoreJob(r)
+	if refusal != nil {
+		refusal.write(w)
 		return
 	}
-	req.Mode = strings.TrimSpace(req.Mode)
-	if req.Mode == "" {
-		req.Mode = "full"
-	}
-	if req.Mode != "full" && req.Mode != "files" && req.Mode != "database" {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid restore mode")
-		return
-	}
-	if len(req.Items) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "no item was selected for restore")
-		return
-	}
-
-	// Resolve the requested domains through the scope filter, so out-of-scope ids
-	// are dropped instead of restored.
-	ids := make([]int64, 0, len(req.Items))
-	for _, it := range req.Items {
-		ids = append(ids, it.DomainID)
-	}
-	allowed, err := h.scopedDomains(r, ids)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not resolve domains")
-		return
-	}
-	names := map[int64]string{}
-	for _, d := range allowed {
-		names[d.ID] = d.DomainName
-	}
-	type restoreItem struct {
-		domainID, backupID int64
-		domainName         string
-	}
-	items := []restoreItem{}
-	for _, it := range req.Items {
-		if name, ok := names[it.DomainID]; ok {
-			items = append(items, restoreItem{it.DomainID, it.BackupID, name})
-		}
-	}
-	if len(items) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "no valid item was selected")
+	items, refusal := h.restoreJobItems(r, req)
+	if refusal != nil {
+		refusal.write(w)
 		return
 	}
 
@@ -758,50 +762,132 @@ func (h *Handlers) StartRestoreJob(w http.ResponseWriter, r *http.Request) {
 			jobCancel()
 			unregisterJob(jobID)
 		}()
-		type result struct {
-			DomainID   int64  `json:"domain_id"`
-			DomainName string `json:"domain_name"`
-			Status     string `json:"status"`
-			Message    string `json:"message"`
-		}
-		results := []result{}
-		succeeded, failed := 0, 0
-		stopped := false
-		for _, it := range items {
-			if jobCtx.Err() != nil {
-				stopped = true
-				break
-			}
-			if _, err := h.DB.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, it.domainName, jobID); err != nil {
-				httpx.LogR(r, "restore job %d: progress update failed: %v", jobID, err)
-			}
-			ctx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
-			message, err := restoreCore(ctx, h.DB, it.domainID, it.backupID, req.Mode, req.Clean)
-			cancel()
-			if err != nil && jobCtx.Err() != nil {
-				stopped = true
-				break
-			}
-			entry := result{DomainID: it.domainID, DomainName: it.domainName}
-			if err != nil {
-				failed++
-				entry.Status = "failed"
-				entry.Message = err.Error()
-			} else {
-				succeeded++
-				entry.Status = "done"
-				entry.Message = message
-			}
-			results = append(results, entry)
-			payload, _ := json.Marshal(results)
-			if _, err := h.DB.Exec(
-				`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, detail=? WHERE id=?`,
-				succeeded+failed, succeeded, failed, string(payload), jobID); err != nil {
-				httpx.LogR(r, "restore job %d: progress update failed: %v", jobID, err)
-			}
-		}
-		finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
+		h.runRestoreJob(jobCtx, r, jobID, req, items)
 	})
 
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "job_id": jobID, "total": len(items)})
+}
+
+// restoreJobRequest is the bulk restore body.
+type restoreJobRequest struct {
+	Mode  string `json:"mode"`
+	Clean bool   `json:"clean"`
+	Items []struct {
+		DomainID int64 `json:"domain_id"`
+		BackupID int64 `json:"backup_id"`
+	} `json:"items"`
+}
+
+// restoreJobItem is one in-scope domain a bulk restore works on.
+type restoreJobItem struct {
+	domainID, backupID int64
+	domainName         string
+}
+
+// restoreJobResult is one domain's outcome in a restore job's detail.
+type restoreJobResult struct {
+	DomainID   int64  `json:"domain_id"`
+	DomainName string `json:"domain_name"`
+	Status     string `json:"status"`
+	Message    string `json:"message"`
+}
+
+// decodeRestoreJob reads the bulk restore body. Only coarse modes are accepted.
+func decodeRestoreJob(r *http.Request) (restoreJobRequest, *httpRefusal) {
+	var req restoreJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return req, &httpRefusal{http.StatusBadRequest, "invalid request body"}
+	}
+	req.Mode = strings.TrimSpace(req.Mode)
+	if req.Mode == "" {
+		req.Mode = "full"
+	}
+	if req.Mode != "full" && req.Mode != "files" && req.Mode != "database" {
+		return req, &httpRefusal{http.StatusBadRequest, "invalid restore mode"}
+	}
+	if len(req.Items) == 0 {
+		return req, &httpRefusal{http.StatusBadRequest, "no item was selected for restore"}
+	}
+	return req, nil
+}
+
+// restoreJobItems resolves the requested domains through the scope filter, so
+// out-of-scope ids are dropped instead of restored.
+func (h *Handlers) restoreJobItems(r *http.Request, req restoreJobRequest) ([]restoreJobItem, *httpRefusal) {
+	ids := make([]int64, 0, len(req.Items))
+	for _, it := range req.Items {
+		ids = append(ids, it.DomainID)
+	}
+	allowed, err := h.scopedDomains(r, ids)
+	if err != nil {
+		return nil, &httpRefusal{http.StatusInternalServerError, "could not resolve domains"}
+	}
+	names := map[int64]string{}
+	for _, d := range allowed {
+		names[d.ID] = d.DomainName
+	}
+	items := []restoreJobItem{}
+	for _, it := range req.Items {
+		if name, ok := names[it.DomainID]; ok {
+			items = append(items, restoreJobItem{it.DomainID, it.BackupID, name})
+		}
+	}
+	if len(items) == 0 {
+		return nil, &httpRefusal{http.StatusBadRequest, "no valid item was selected"}
+	}
+	return items, nil
+}
+
+// runRestoreJob is the bulk restore's background body: one restore per item,
+// with every result so far kept in the job detail.
+func (h *Handlers) runRestoreJob(jobCtx context.Context, r *http.Request, jobID int64, req restoreJobRequest, items []restoreJobItem) {
+	results := []restoreJobResult{}
+	succeeded, failed := 0, 0
+	stopped := false
+	for _, it := range items {
+		if jobCtx.Err() != nil {
+			stopped = true
+			break
+		}
+		h.markActiveDomain(r, "restore", jobID, it.domainName)
+		ctx, cancel := context.WithTimeout(jobCtx, 30*time.Minute)
+		message, err := restoreCore(ctx, h.DB, it.domainID, it.backupID, req.Mode, req.Clean)
+		cancel()
+		if err != nil && jobCtx.Err() != nil {
+			stopped = true
+			break
+		}
+		entry := restoreJobResult{DomainID: it.domainID, DomainName: it.domainName}
+		if err != nil {
+			failed++
+			entry.Status = "failed"
+			entry.Message = err.Error()
+		} else {
+			succeeded++
+			entry.Status = "done"
+			entry.Message = message
+		}
+		results = append(results, entry)
+		payload, _ := json.Marshal(results)
+		if _, err := h.DB.Exec(
+			`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, detail=? WHERE id=?`,
+			succeeded+failed, succeeded, failed, string(payload), jobID); err != nil {
+			httpx.LogR(r, "restore job %d: progress update failed: %v", jobID, err)
+		}
+	}
+	finishJobStopped(h.DB, jobID, succeeded, failed, stopped)
+}
+
+// markActiveDomain records the domain a bulk job is working on. A failed write
+// is logged, because the job itself goes on.
+func (h *Handlers) markActiveDomain(r *http.Request, operation string, jobID int64, domainName string) {
+	if err := setActiveDomain(h.DB, jobID, domainName); err != nil {
+		httpx.LogR(r, "%s job %d: progress update failed: %v", operation, jobID, err)
+	}
+}
+
+// setActiveDomain records the domain a job is working on.
+func setActiveDomain(db *sql.DB, jobID int64, domainName string) error {
+	_, err := db.Exec(`UPDATE backup_jobs SET active_domain=? WHERE id=?`, domainName, jobID)
+	return err
 }
