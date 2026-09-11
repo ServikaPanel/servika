@@ -46,7 +46,9 @@ func (h *Handlers) QueueList(w http.ResponseWriter, r *http.Request) {
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		httpx.WriteError(w, http.StatusServiceUnavailable, "could not read the Postfix queue: "+err.Error())
+		// #nosec G706 -- the exec error names the binary, not a tenant string.
+		log.Printf("mail queue start: %v", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "could not read the Postfix queue")
 		return
 	}
 	out := make([]QueueMessage, 0)

@@ -133,7 +133,7 @@ func (h *Handlers) AutoresponderPut(w http.ResponseWriter, r *http.Request) {
 		} else {
 			_, _ = h.DB.Exec(`DELETE FROM mail_autoresponders WHERE mailbox_id=?`, mid)
 		}
-		httpx.WriteError(w, http.StatusServiceUnavailable, "could not apply Sieve: "+err.Error())
+		writeApplyFailure(w, "apply sieve mailbox", mid, "could not apply the mail rules", err)
 		return
 	}
 	h.audit(r, "mail.autoresponder.update", strconv.FormatInt(mid, 10), true)
@@ -161,7 +161,7 @@ func (h *Handlers) AutoresponderDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ApplyMailboxSieve(r.Context(), h.DB, mid); err != nil {
-		httpx.WriteError(w, http.StatusServiceUnavailable, err.Error())
+		writeApplyFailure(w, "apply sieve mailbox", mid, "could not apply the mail rules", err)
 		return
 	}
 	h.audit(r, "mail.autoresponder.delete", strconv.FormatInt(mid, 10), true)
@@ -244,7 +244,7 @@ func (h *Handlers) FilterCreate(w http.ResponseWriter, r *http.Request) {
 	fid, _ := res.LastInsertId()
 	if err := ApplyMailboxSieve(r.Context(), h.DB, req.MailboxID); err != nil {
 		_, _ = h.DB.Exec(`DELETE FROM mail_filters WHERE id=?`, fid)
-		httpx.WriteError(w, http.StatusServiceUnavailable, "could not apply Sieve: "+err.Error())
+		writeApplyFailure(w, "apply sieve mailbox", req.MailboxID, "could not apply the mail rules", err)
 		return
 	}
 	h.audit(r, "mail.filter.create", strconv.FormatInt(fid, 10), true)
@@ -274,7 +274,7 @@ func (h *Handlers) FilterDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ApplyMailboxSieve(r.Context(), h.DB, mid); err != nil {
-		httpx.WriteError(w, http.StatusServiceUnavailable, err.Error())
+		writeApplyFailure(w, "apply sieve mailbox", mid, "could not apply the mail rules", err)
 		return
 	}
 	h.audit(r, "mail.filter.delete", strconv.FormatInt(fid, 10), true)
@@ -311,11 +311,16 @@ func (h *Handlers) mailboxBelongs(ctx context.Context, domainID, mailboxID int64
 	return n == 1
 }
 
+// ErrSieveUnavailable says the host has no Sieve compiler. It is the one apply
+// failure whose text is safe to hand to the mailbox owner, so it is a sentinel
+// rather than an ad-hoc string.
+var ErrSieveUnavailable = errors.New("dovecot-pigeonhole is not installed")
+
 // ApplyMailboxSieve regenerates and compiles the mailbox's ~/.dovecot.sieve script
 // from its enabled filters and autoresponder, then activates the compiled binary.
 func ApplyMailboxSieve(ctx context.Context, db *sql.DB, mailboxID int64) error {
 	if _, err := exec.LookPath("sievec"); err != nil {
-		return fmt.Errorf("dovecot-pigeonhole is not installed")
+		return ErrSieveUnavailable
 	}
 	var maildir, email, systemUser string
 	if err := db.QueryRowContext(ctx, `

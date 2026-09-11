@@ -103,7 +103,7 @@ func (h *Handlers) SpamPut(w http.ResponseWriter, r *http.Request) {
 			_, _ = h.DB.Exec(`DELETE FROM mail_spam_settings WHERE domain_id=?`, id)
 		}
 		_ = ApplyRspamdSettings(h.DB)
-		httpx.WriteError(w, http.StatusServiceUnavailable, "could not apply Rspamd policy: "+err.Error())
+		writeApplyFailure(w, "apply rspamd policy domain", id, "could not apply the spam policy", err)
 		return
 	}
 	h.audit(r, "mail.spam.update", strconv.FormatInt(id, 10), true)
@@ -131,13 +131,18 @@ func readSpamSettings(ctx context.Context, db *sql.DB, domainID int64) (SpamSett
 	return s, err == nil, err
 }
 
+// ErrRspamdUnavailable says the host has no Rspamd. It is the one apply failure
+// whose text is safe to hand to the domain owner, so it is a sentinel rather
+// than an ad-hoc string.
+var ErrRspamdUnavailable = errors.New("rspamadm is not installed")
+
 // ApplyRspamdSettings atomically regenerates the settings module configuration.
 // The previous file remains in place when rspamadm rejects the candidate.
 func ApplyRspamdSettings(db *sql.DB) error {
 	rspamdApplyMu.Lock()
 	defer rspamdApplyMu.Unlock()
 	if _, err := exec.LookPath("rspamadm"); err != nil {
-		return fmt.Errorf("rspamadm is not installed")
+		return ErrRspamdUnavailable
 	}
 	rows, err := db.Query(`
 		SELECT s.domain_id, d.domain_name, s.greylist_score, s.add_header_score, s.reject_score
