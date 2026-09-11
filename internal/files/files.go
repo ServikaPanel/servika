@@ -421,6 +421,12 @@ func (h *Handlers) Upload(w http.ResponseWriter, r *http.Request) {
 			_ = r.MultipartForm.RemoveAll()
 		}
 	}()
+	storeUpload(w, r, home, systemUser, rel)
+}
+
+// storeUpload writes the uploaded file into the tenant's tree and answers. It
+// reports the failure to the client itself, so the caller only stops.
+func storeUpload(w http.ResponseWriter, r *http.Request, home, systemUser, rel string) {
 	file, fh, err := r.FormFile("file")
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request")

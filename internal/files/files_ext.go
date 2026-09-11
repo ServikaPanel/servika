@@ -234,144 +234,186 @@ func (h *Handlers) Extract(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if !extractableArchive(w, r, home, req.Path) {
+		return
+	}
+	target, ready := h.extractTarget(w, home, systemUser, req)
+	if !ready {
+		return
+	}
+	pins, pinned := pinExtraction(w, home, target, req.Path)
+	if !pinned {
+		return
+	}
+	// The two pinned descriptors are closed here on every synchronous path and on
+	// every error. The asynchronous archive branch hands them off and its
+	// goroutine closes them instead, because the pinned paths must stay valid
+	// until the extractor it starts has read them.
+	defer pins.closeUnlessHandedOff()
+
+	lowerPath := strings.ToLower(req.Path)
+	if strings.HasSuffix(lowerPath, ".gz") && archivex.DetectType(lowerPath) == archivex.TypeUnknown {
+		h.extractGzip(w, r, home, systemUser, target, req.Path, pins)
+		return
+	}
+	h.extractArchive(w, req, target, systemUser, lowerPath, pins)
+}
+
+// extractableArchive reports whether the path names a regular file the panel
+// may unpack, and answers the client itself when it does not.
+//
+// The three outcomes are kept apart. A path that is missing or refused is the
+// caller's, and statusFromPathErr already words that; anything else is the
+// server's and has to say 500 and leave a line behind, because a fault
+// reported as bad input is one nobody goes looking for. Collapsing them into
+// a single 400 is how a helper that failed on every call once passed for a
+// missing file.
+func extractableArchive(w http.ResponseWriter, r *http.Request, home, path string) bool {
 	// Symlink-safe stat of the archive: reject non-regular files without a racy
 	// path-based os.Lstat that a tenant could redirect via an intermediate symlink.
-	//
-	// The three outcomes are kept apart. A path that is missing or refused is the
-	// caller's, and statusFromPathErr already words that; anything else is the
-	// server's and has to say 500 and leave a line behind, because a fault
-	// reported as bad input is one nobody goes looking for. Collapsing them into
-	// a single 400 is how a helper that failed on every call once passed for a
-	// missing file.
-	info, err := statBeneath(home, req.Path)
+	info, err := statBeneath(home, path)
 	if err != nil {
 		status := statusFromPathErr(err)
 		if status == http.StatusInternalServerError {
 			// #nosec G706 -- the logged path is relClean-normalised and the error is the kernel's; no raw tenant string with CR/LF reaches the log.
-			httpx.LogR(r, "extract: could not stat %q: %v", relClean(req.Path), err)
+			httpx.LogR(r, "extract: could not stat %q: %v", relClean(path), err)
 		}
 		httpx.WriteError(w, status, "operation failed")
-		return
+		return false
 	}
 	if !info.Mode().IsRegular() {
 		httpx.WriteError(w, http.StatusBadRequest, "path is not a regular file")
-		return
+		return false
 	}
+	return true
+}
 
+// extractTarget returns the directory the archive unpacks into, creating it
+// symlink-safe (which rejects symlink components and chowns new directories to
+// the tenant). This replaces the racy os.MkdirAll + chown on a resolved string
+// that a tenant could swap for a symlink escaping home.
+func (h *Handlers) extractTarget(w http.ResponseWriter, home, systemUser string, req extractReq) (string, bool) {
 	target := req.Target
 	if target == "" {
 		target = filepath.Dir(req.Path)
 	}
-	// Create the target directory symlink-safe (rejects symlink components and chowns
-	// new directories to the tenant), replacing the racy os.MkdirAll + chown on a
-	// resolved string that a tenant could swap for a symlink escaping home.
 	if err := mkdirAllBeneath(home, target, systemUser); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return "", false
+	}
+	return target, true
+}
+
+// extractPins carries the two symlink-safe descriptors an extraction runs
+// against and their kernel-resolved paths, so no component can be raced after
+// this point. handedOff records that a job took ownership of them.
+type extractPins struct {
+	archiveFd     *os.File
+	targetFd      *os.File
+	archivePinned string
+	targetPinned  string
+	handedOff     bool
+}
+
+func (p *extractPins) closeUnlessHandedOff() {
+	if p.handedOff {
 		return
 	}
-	// Pin the target directory through a symlink-safe fd. Its kernel-resolved
-	// /proc/self/fd path is used for the tenant extraction and the final restorecon,
-	// so intermediate components can no longer be raced after this point.
+	_ = p.archiveFd.Close()
+	_ = p.targetFd.Close()
+}
+
+// pinExtraction opens the target directory and the archive through symlink-safe
+// descriptors. Their /proc/self/fd paths are what the external tools are given.
+func pinExtraction(w http.ResponseWriter, home, target, path string) (*extractPins, bool) {
 	targetFd, err := openReadBeneath(home, target)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
-		return
+		return nil, false
 	}
-	targetPinned := "/proc/self/fd/" + strconv.Itoa(int(targetFd.Fd()))
-
-	// Resolve the archive through a symlink-safe fd and use its pinned path so the
-	// external decompressors read the validated inode, not a raced one.
-	archiveFd, err := openReadBeneath(home, req.Path)
+	archiveFd, err := openReadBeneath(home, path)
 	if err != nil {
 		_ = targetFd.Close()
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
-		return
+		return nil, false
 	}
-	archivePinned := "/proc/self/fd/" + strconv.Itoa(int(archiveFd.Fd()))
+	return &extractPins{
+		archiveFd:     archiveFd,
+		targetFd:      targetFd,
+		archivePinned: "/proc/self/fd/" + strconv.Itoa(int(archiveFd.Fd())),
+		targetPinned:  "/proc/self/fd/" + strconv.Itoa(int(targetFd.Fd())),
+	}, true
+}
 
-	// The two pinned descriptors are closed here on every synchronous path and on
-	// every error. The asynchronous archive branch sets handedOff and its goroutine
-	// closes them instead, because the pinned paths must stay valid until the
-	// extractor it starts has read them.
-	handedOff := false
-	defer func() {
-		if !handedOff {
-			_ = archiveFd.Close()
-			_ = targetFd.Close()
-		}
-	}()
-
-	lowerPath := strings.ToLower(req.Path)
-	if strings.HasSuffix(lowerPath, ".gz") && archivex.DetectType(lowerPath) == archivex.TypeUnknown {
-		gzipLeaf := strings.TrimSuffix(filepath.Base(req.Path), ".gz")
-		// Create the gzip output symlink-safe beneath the pinned target directory.
-		gzipRelative := filepath.Join(target, gzipLeaf)
-		gzipOutput, err := openAt2Beneath(home, gzipRelative, syscall.O_CREAT|syscall.O_WRONLY|syscall.O_TRUNC, 0644)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-			return
-		}
-		command := fileCommand(r.Context(), "gunzip", "-k", "-c", archivePinned)
-		command.Stdout = gzipOutput
-		runErr := command.Run()
-		if runErr == nil {
-			// Chown the decompressed file to the tenant on the pinned inode.
-			fchownRestoreFd(home, gzipOutput, systemUser)
-		}
-		closeErr := gzipOutput.Close()
-		if runErr != nil || closeErr != nil {
-			_ = removeAllBeneath(home, gzipRelative)
-			httpx.WriteError(w, http.StatusBadRequest, "invalid gzip file")
-			return
-		}
-	} else {
-		// Decided from the REAL relative path and carried to the extractor. The
-		// pinned /proc/self/fd path has no filename suffix, and archivex used to
-		// derive the format from one, which refused every archive as unsupported.
-		archiveType := archivex.DetectType(lowerPath)
-		if archiveType == archivex.TypeUnknown {
-			httpx.WriteError(w, http.StatusBadRequest, "unsupported format (zip, rar, tar, tar.gz/tgz, tar.bz2, tar.xz, gz)")
-			return
-		}
-		// Extract as the tenant into the pinned target directory. Extraction runs
-		// under the tenant uid, so it cannot escalate; the pinned target prevents a
-		// raced symlink from redirecting the destination the panel selected. Limits
-		// reject a decompression bomb before the extractor runs.
-		//
-		// A large archive extracts for longer than the router's 300-second request
-		// timeout, so this runs in a goroutine that OWNS the pinned descriptors and
-		// the page polls the progress endpoint. The goroutine uses a background
-		// context, never the request's, which is cancelled the moment this handler
-		// returns.
-		limits := archivex.Limits{MaxTotalBytes: maxExtractBytes, MaxMembers: maxExtractMembers}
-		jobID, err := newExtractJobID()
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-			return
-		}
-		job := &extractJob{systemUser: systemUser, state: extractRunning}
-		extractJobs.Store(jobID, job)
-		handedOff = true
-		// #nosec G118 -- the request context is cancelled when this handler returns the job id, which would kill the extraction; runExtractJob deliberately uses a background context with its own timeout.
-		go startExtractJob(job, archiveFd, targetFd, archivePinned, targetPinned, systemUser, archiveType, limits)
-		httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
-			"ok":     true,
-			"job_id": jobID,
-			"path":   req.Path,
-			"target": target,
-		})
-		return
-	}
-
-	// The gzip branch above is quick and stays synchronous, so it relabels and
-	// answers here. The asynchronous archive branch relabels in its goroutine.
-	if _, err := fileCommand(r.Context(), "restorecon", "-R", targetPinned).CombinedOutput(); err != nil {
+// extractGzip decompresses a plain .gz file beside itself and answers. A single
+// compressed file is quick, so it stays inside the request and relabels here;
+// the asynchronous archive branch relabels in its goroutine.
+func (h *Handlers) extractGzip(w http.ResponseWriter, r *http.Request, home, systemUser, target, path string, pins *extractPins) {
+	gzipLeaf := strings.TrimSuffix(filepath.Base(path), ".gz")
+	// Create the gzip output symlink-safe beneath the pinned target directory.
+	gzipRelative := filepath.Join(target, gzipLeaf)
+	gzipOutput, err := openAt2Beneath(home, gzipRelative, syscall.O_CREAT|syscall.O_WRONLY|syscall.O_TRUNC, 0644)
+	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
-
+	command := fileCommand(r.Context(), "gunzip", "-k", "-c", pins.archivePinned)
+	command.Stdout = gzipOutput
+	runErr := command.Run()
+	if runErr == nil {
+		// Chown the decompressed file to the tenant on the pinned inode.
+		fchownRestoreFd(home, gzipOutput, systemUser)
+	}
+	closeErr := gzipOutput.Close()
+	if runErr != nil || closeErr != nil {
+		_ = removeAllBeneath(home, gzipRelative)
+		httpx.WriteError(w, http.StatusBadRequest, "invalid gzip file")
+		return
+	}
+	if _, err := fileCommand(r.Context(), "restorecon", "-R", pins.targetPinned).CombinedOutput(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":     true,
+		"path":   path,
+		"target": target,
+	})
+}
+
+// extractArchive starts the extraction as a job and answers with its id.
+//
+// Extraction runs under the tenant uid, so it cannot escalate; the pinned
+// target prevents a raced symlink from redirecting the destination the panel
+// selected. Limits reject a decompression bomb before the extractor runs.
+//
+// A large archive extracts for longer than the router's 300-second request
+// timeout, so this runs in a goroutine that OWNS the pinned descriptors and the
+// page polls the progress endpoint. The goroutine uses a background context,
+// never the request's, which is cancelled the moment this handler returns.
+func (h *Handlers) extractArchive(w http.ResponseWriter, req extractReq, target, systemUser, lowerPath string, pins *extractPins) {
+	// Decided from the REAL relative path and carried to the extractor. The
+	// pinned /proc/self/fd path has no filename suffix, and archivex used to
+	// derive the format from one, which refused every archive as unsupported.
+	archiveType := archivex.DetectType(lowerPath)
+	if archiveType == archivex.TypeUnknown {
+		httpx.WriteError(w, http.StatusBadRequest, "unsupported format (zip, rar, tar, tar.gz/tgz, tar.bz2, tar.xz, gz)")
+		return
+	}
+	limits := archivex.Limits{MaxTotalBytes: maxExtractBytes, MaxMembers: maxExtractMembers}
+	jobID, err := newExtractJobID()
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
+	job := &extractJob{systemUser: systemUser, state: extractRunning}
+	extractJobs.Store(jobID, job)
+	pins.handedOff = true
+	// #nosec G118 -- the request context is cancelled when this handler returns the job id, which would kill the extraction; runExtractJob deliberately uses a background context with its own timeout.
+	go startExtractJob(job, pins.archiveFd, pins.targetFd, pins.archivePinned, pins.targetPinned, systemUser, archiveType, limits)
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
+		"ok":     true,
+		"job_id": jobID,
 		"path":   req.Path,
 		"target": target,
 	})
@@ -493,31 +535,14 @@ func (h *Handlers) Archive(w http.ResponseWriter, r *http.Request) {
 	if req.Format == "" {
 		req.Format = "zip"
 	}
-	// The archive is written into a directory resolved symlink-safe, and the tool is
-	// given the kernel's own path for it so the entry names stay meaningful.
 	outputRel := relClean(req.OutputPath)
-	if err := mkdirAllBeneath(home, filepath.Dir(outputRel), systemUser); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+	outputAbs, ready := archiveOutput(w, home, systemUser, outputRel)
+	if !ready {
 		return
 	}
-	outputParent, err := realPathBeneath(home, filepath.Dir(outputRel))
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+	sources, resolved := archiveSources(w, home, req.Resources)
+	if !resolved {
 		return
-	}
-	outputAbs := filepath.Join(outputParent, filepath.Base(outputRel))
-
-	// Every source is resolved before the tool starts. A source that cannot be
-	// resolved fails the request: dropping it would hand back an archive silently
-	// missing what was asked for.
-	sources := make([]string, 0, len(req.Resources))
-	for _, resource := range req.Resources {
-		resourceAbs, err := realPathBeneath(home, resource)
-		if err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid request")
-			return
-		}
-		sources = append(sources, resourceAbs)
 	}
 
 	// The tool runs under the tenant uid. That is the boundary that matters here:
@@ -536,11 +561,49 @@ func (h *Handlers) Archive(w http.ResponseWriter, r *http.Request) {
 	// cannot be redirected by one.
 	_, _ = fileCommand(r.Context(), "restorecon", outputAbs).CombinedOutput()
 
-	// The archive exists either way, so a failure here is not the request's.
-	// But size is OMITTED rather than sent as 0: an archive that was written and
-	// one whose size could not be read are different facts, and zero reads as
-	// the first. The failure is logged because nothing else would record it.
-	response := map[string]any{"ok": true, "output_path": req.OutputPath}
+	answerArchive(w, r, home, outputRel, req.OutputPath)
+}
+
+// archiveOutput resolves where the archive is written. The directory is created
+// symlink-safe, and the tool is given the kernel's own path for it so the entry
+// names stay meaningful.
+func archiveOutput(w http.ResponseWriter, home, systemUser, outputRel string) (string, bool) {
+	if err := mkdirAllBeneath(home, filepath.Dir(outputRel), systemUser); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+		return "", false
+	}
+	outputParent, err := realPathBeneath(home, filepath.Dir(outputRel))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+		return "", false
+	}
+	return filepath.Join(outputParent, filepath.Base(outputRel)), true
+}
+
+// archiveSources resolves every source before the tool starts. A source that
+// cannot be resolved fails the request: dropping it would hand back an archive
+// silently missing what was asked for.
+func archiveSources(w http.ResponseWriter, home string, resources []string) ([]string, bool) {
+	sources := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		resourceAbs, err := realPathBeneath(home, resource)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid request")
+			return nil, false
+		}
+		sources = append(sources, resourceAbs)
+	}
+	return sources, true
+}
+
+// answerArchive reports the archive and its size.
+//
+// The archive exists either way, so a failure here is not the request's. But
+// size is OMITTED rather than sent as 0: an archive that was written and one
+// whose size could not be read are different facts, and zero reads as the
+// first. The failure is logged because nothing else would record it.
+func answerArchive(w http.ResponseWriter, r *http.Request, home, outputRel, outputPath string) {
+	response := map[string]any{"ok": true, "output_path": outputPath}
 	if info, err := statBeneath(home, outputRel); err != nil {
 		// #nosec G706 -- the logged path is relClean-normalised and the error is the kernel's; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "archive: created %q but could not read its size: %v", outputRel, err)
@@ -667,56 +730,76 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	searchCtx, cancelSearch := context.WithTimeout(r.Context(), searchTimeout)
 	defer cancelSearch()
 	out, _ := fileCommand(searchCtx, "find", searchArgs(fdBase, pattern)...).Output()
-	relBase := "/" + strings.Trim(relClean(rel), "/")
+	results := searchResults(string(out), fdBase, "/"+strings.Trim(relClean(rel), "/"))
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"content": results, "total": len(results), "q": q,
+	})
+}
+
+// searchResults turns what find printed into entries, capped at what one page
+// can hold: the whole array is rendered on the panel's heap, which every
+// customer shares.
+func searchResults(out, fdBase, relBase string) []Entry {
 	results := []Entry{}
-	for ln := range strings.SplitSeq(string(out), "\n") {
-		if ln == "" {
+	for ln := range strings.SplitSeq(out, "\n") {
+		entry, ok := searchEntry(ln, fdBase, relBase)
+		if !ok {
 			continue
 		}
-		parts := strings.SplitN(ln, "\t", 4)
-		if len(parts) < 4 {
-			continue
-		}
-		absp := parts[0]
-		size := int64(0)
-		for _, c := range parts[1] {
-			if c < '0' || c > '9' {
-				break
-			}
-			size = size*10 + int64(c-'0')
-		}
-		ftype := "file"
-		switch parts[2] {
-		case "d":
-			ftype = "folder"
-		case "l":
-			ftype = "symlink"
-		}
-		// Rebase the /proc/self/fd/N-prefixed path back to a home-relative path.
-		suffix := strings.TrimPrefix(absp, fdBase)
-		relativePath := filepath.Clean(relBase + "/" + strings.TrimPrefix(suffix, "/"))
-		if relativePath == "" {
-			relativePath = "/"
-		}
-		info, _ := os.Lstat(absp)
-		mode, permissions, owner, group := "", "", "", ""
-		var changedAt string
-		if info != nil {
-			mode, permissions, owner, group = fileMetadata(info)
-			changedAt = info.ModTime().UTC().Format("2006-01-02T15:04:05Z")
-		}
-		results = append(results, Entry{
-			Name: filepath.Base(absp), Path: filepath.ToSlash(relativePath),
-			Type: ftype, SizeBytes: size, Mode: mode, Permissions: permissions,
-			Owner: owner, Group: group, Changed: changedAt,
-		})
+		results = append(results, entry)
 		if len(results) >= 500 {
 			break
 		}
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"content": results, "total": len(results), "q": q,
-	})
+	return results
+}
+
+// searchEntry reads one printed line. A line that does not carry every field is
+// skipped rather than guessed at.
+func searchEntry(line, fdBase, relBase string) (Entry, bool) {
+	if line == "" {
+		return Entry{}, false
+	}
+	parts := strings.SplitN(line, "\t", 4)
+	if len(parts) < 4 {
+		return Entry{}, false
+	}
+	absp := parts[0]
+	ftype := "file"
+	switch parts[2] {
+	case "d":
+		ftype = "folder"
+	case "l":
+		ftype = "symlink"
+	}
+	// Rebase the /proc/self/fd/N-prefixed path back to a home-relative path.
+	suffix := strings.TrimPrefix(absp, fdBase)
+	relativePath := filepath.Clean(relBase + "/" + strings.TrimPrefix(suffix, "/"))
+	if relativePath == "" {
+		relativePath = "/"
+	}
+	entry := Entry{
+		Name: filepath.Base(absp), Path: filepath.ToSlash(relativePath),
+		Type: ftype, SizeBytes: leadingDigits(parts[1]),
+	}
+	if info, _ := os.Lstat(absp); info != nil {
+		entry.Mode, entry.Permissions, entry.Owner, entry.Group = fileMetadata(info)
+		entry.Changed = info.ModTime().UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return entry, true
+}
+
+// leadingDigits reads the size find printed, stopping at the first character
+// that is not one.
+func leadingDigits(field string) int64 {
+	size := int64(0)
+	for _, c := range field {
+		if c < '0' || c > '9' {
+			break
+		}
+		size = size*10 + int64(c-'0')
+	}
+	return size
 }
 
 // ResetPermissions resets ownership and permissions across the tenant's

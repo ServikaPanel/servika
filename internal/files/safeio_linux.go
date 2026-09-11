@@ -488,25 +488,36 @@ func mkdirAllBeneath(home, rel, sk string) error {
 		if part == "" || part == "." {
 			continue
 		}
-		created := false
-		if err := unix.Mkdirat(dirfd, part, 0755); err == nil {
-			created = true
-		} else if err != unix.EEXIST {
-			_ = unix.Close(dirfd) // dir fd release: Close error not actionable
-			return err
-		}
-		nfd, err := unix.Openat(dirfd, part, dirOpenFlags, 0)
-		_ = unix.Close(dirfd) // walk to child: parent dir fd release, not actionable
+		child, err := mkdirStep(dirfd, part, tenantOwner{uid: uid, gid: gid, known: haveIDs})
 		if err != nil {
 			return err
 		}
-		dirfd = nfd
-		if created && haveIDs {
-			_ = unix.Fchown(dirfd, uid, gid)
-		}
+		dirfd = child
 	}
 	_ = unix.Close(dirfd) // dir fd release: Close error not actionable
 	return nil
+}
+
+// mkdirStep creates one component below dirfd and returns the descriptor of the
+// child. It takes ownership of dirfd, which is closed on every path, and a
+// symlink component is REJECTED by the O_NOFOLLOW open.
+func mkdirStep(dirfd int, part string, owner tenantOwner) (int, error) {
+	created := false
+	if err := unix.Mkdirat(dirfd, part, 0755); err == nil {
+		created = true
+	} else if err != unix.EEXIST {
+		_ = unix.Close(dirfd) // dir fd release: Close error not actionable
+		return -1, err
+	}
+	child, err := unix.Openat(dirfd, part, dirOpenFlags, 0)
+	_ = unix.Close(dirfd) // walk to child: parent dir fd release, not actionable
+	if err != nil {
+		return -1, err
+	}
+	if created && owner.known {
+		_ = unix.Fchown(child, owner.uid, owner.gid)
+	}
+	return child, nil
 }
 
 // renameBeneath is a symlink-safe rename/move. Source and destination PARENTs are
@@ -544,33 +555,39 @@ func removeAllBeneath(home, rel string) error {
 // removeAt recursively deletes name relative to dirfd (all operations relative to
 // pinned fds, O_NOFOLLOW → symlinks never followed, jail escape impossible).
 func removeAt(dirfd int, name string) error {
-	if err := unix.Unlinkat(dirfd, name, 0); err == nil {
+	switch err := unix.Unlinkat(dirfd, name, 0); {
+	case err == nil, err == unix.ENOENT:
 		return nil
-	} else if err == unix.ENOENT {
-		return nil
-	} else if err != unix.EISDIR && err != unix.EPERM && err != unix.ENOTEMPTY {
+	case err != unix.EISDIR && err != unix.EPERM && err != unix.ENOTEMPTY:
 		return err
 	}
 	cfd, err := unix.Openat(dirfd, name, dirOpenFlags, 0)
 	if err != nil {
 		return err
 	}
-	names, rerr := readdirnamesFd(cfd)
-	if rerr != nil {
-		_ = unix.Close(cfd) // dir fd release: Close error not actionable
-		return rerr
+	err = removeChildren(cfd)
+	_ = unix.Close(cfd) // dir fd release: Close error not actionable
+	if err != nil {
+		return err
+	}
+	return unix.Unlinkat(dirfd, name, unix.AT_REMOVEDIR)
+}
+
+// removeChildren deletes everything inside one pinned directory.
+func removeChildren(dirfd int) error {
+	names, err := readdirnamesFd(dirfd)
+	if err != nil {
+		return err
 	}
 	for _, n := range names {
 		if n == "." || n == ".." {
 			continue
 		}
-		if e := removeAt(cfd, n); e != nil {
-			_ = unix.Close(cfd) // dir fd release: Close error not actionable
+		if e := removeAt(dirfd, n); e != nil {
 			return e
 		}
 	}
-	_ = unix.Close(cfd) // dir fd release: Close error not actionable
-	return unix.Unlinkat(dirfd, name, unix.AT_REMOVEDIR)
+	return nil
 }
 
 // readdirnamesFd lists a raw dir fd by duplicating it and reading via os.File.
@@ -613,49 +630,72 @@ func copyEntryAt(sdir int, sname string, ddir int, dname string, uid, gid int, h
 	if err := unix.Fstatat(sdir, sname, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return err
 	}
+	owner := tenantOwner{uid: uid, gid: gid, known: haveIDs}
 	switch st.Mode & unix.S_IFMT {
 	case unix.S_IFDIR:
-		if err := unix.Mkdirat(ddir, dname, st.Mode&0o777); err != nil && err != unix.EEXIST {
-			return err
-		}
-		ncd, err := unix.Openat(ddir, dname, dirOpenFlags, 0)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = unix.Close(ncd) }() // dest dir fd release: Close error not actionable
-		if haveIDs {
-			_ = unix.Fchown(ncd, uid, gid)
-		}
-		nsd, err := unix.Openat(sdir, sname, dirOpenFlags, 0)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = unix.Close(nsd) }() // src dir fd release: Close error not actionable
-		names, rerr := readdirnamesFd(nsd)
-		if rerr != nil {
-			return rerr
-		}
-		for _, n := range names {
-			if n == "." || n == ".." {
-				continue
-			}
-			if e := copyEntryAt(nsd, n, ncd, n, uid, gid, haveIDs); e != nil {
-				return e
-			}
-		}
-		return nil
+		return copyDirAt(sdir, sname, ddir, dname, st.Mode&0o777, owner)
 	case unix.S_IFLNK:
-		target, err := readlinkAt(sdir, sname)
-		if err != nil {
-			return err
-		}
-		_ = unix.Unlinkat(ddir, dname, 0)
-		return unix.Symlinkat(target, ddir, dname)
+		return copyLinkAt(sdir, sname, ddir, dname)
 	case unix.S_IFREG:
 		return copyRegAt(sdir, sname, ddir, dname, st.Mode&0o777, uid, gid, haveIDs)
-	default:
-		return nil // skip special files
 	}
+	return nil // skip special files
+}
+
+// tenantOwner is the account new entries are chowned to, when the system user
+// resolves to one.
+type tenantOwner struct {
+	uid, gid int
+	known    bool
+}
+
+// copyDirAt recreates one directory and copies everything inside it.
+func copyDirAt(sdir int, sname string, ddir int, dname string, perm uint32, owner tenantOwner) error {
+	if err := unix.Mkdirat(ddir, dname, perm); err != nil && err != unix.EEXIST {
+		return err
+	}
+	ncd, err := unix.Openat(ddir, dname, dirOpenFlags, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unix.Close(ncd) }() // dest dir fd release: Close error not actionable
+	if owner.known {
+		_ = unix.Fchown(ncd, owner.uid, owner.gid)
+	}
+	nsd, err := unix.Openat(sdir, sname, dirOpenFlags, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = unix.Close(nsd) }() // src dir fd release: Close error not actionable
+	return copyDirEntries(nsd, ncd, owner)
+}
+
+// copyDirEntries copies every entry of one pinned directory into another.
+func copyDirEntries(sdir, ddir int, owner tenantOwner) error {
+	names, rerr := readdirnamesFd(sdir)
+	if rerr != nil {
+		return rerr
+	}
+	for _, n := range names {
+		if n == "." || n == ".." {
+			continue
+		}
+		if e := copyEntryAt(sdir, n, ddir, n, owner.uid, owner.gid, owner.known); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// copyLinkAt recreates a symlink AS a link. Reading through it is what would
+// copy the content of whatever it points at, as root.
+func copyLinkAt(sdir int, sname string, ddir int, dname string) error {
+	target, err := readlinkAt(sdir, sname)
+	if err != nil {
+		return err
+	}
+	_ = unix.Unlinkat(ddir, dname, 0)
+	return unix.Symlinkat(target, ddir, dname)
 }
 
 func readlinkAt(dirfd int, name string) (string, error) {
