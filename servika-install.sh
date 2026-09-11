@@ -682,7 +682,17 @@ SQL
   [ -f /opt/phpmyadmin/sql/create_tables.sql ] && mysql -u root phpmyadmin < /opt/phpmyadmin/sql/create_tables.sql 2>/dev/null
 fi
 [ -f "$A/phpmyadmin/pma-signon.php" ] && cp "$A/phpmyadmin/pma-signon.php" /opt/servika/pma-signon/ 2>/dev/null
-openssl rand -hex 32 > /etc/servika/pma-internal.token
+# Same rule as the config.inc.php write above: the umask applies at CREATION, so
+# the file is never world-readable, not even for the moment between the
+# redirection and the chmod below. Root's umask on AlmaLinux is 022, so a bare
+# redirect creates the file 0644 and holds the full token there for the lifetime
+# of the openssl process. Every c_* tenant has a shell on this host, and this
+# token is one of the two factors guarding the exchange of a signon token for a
+# tenant's live MariaDB user and password.
+#
+# The chmod stays: a umask cannot fix a file that already exists with the wrong
+# mode, which is the case on every re-run.
+( umask 027; openssl rand -hex 32 > /etc/servika/pma-internal.token )
 chown root:apache /etc/servika/pma-internal.token
 chmod 0640 /etc/servika/pma-internal.token
 install -m 0644 "$A/php-fpm/phpmyadmin.conf" /etc/php-fpm.d/phpmyadmin.conf || die "the phpMyAdmin PHP-FPM pool could not be installed"
