@@ -2,6 +2,7 @@ package domains
 
 import (
 	"database/sql/driver"
+	"maps"
 	"reflect"
 	"testing"
 	"time"
@@ -98,9 +99,7 @@ func assertSSLSteps(t *testing.T, view SSLProgressView, want []sslStepWant) {
 func assertSSLResult(t *testing.T, view SSLProgressView, want map[string]any, expires time.Duration) {
 	t.Helper()
 	got := map[string]any{}
-	for key, value := range view.Result {
-		got[key] = value
-	}
+	maps.Copy(got, view.Result)
 	if expires > 0 {
 		assertExpiryDate(t, got["expires_at"], expires)
 		delete(got, "expires_at")
@@ -126,9 +125,7 @@ func TestSSLInstallRecordsEachStep(t *testing.T) {
 	leResult := func(extra map[string]any) map[string]any {
 		result := map[string]any{"requested_type": SSLSourceLetsEncrypt, "type": SSLSourceLetsEncrypt,
 			"cert": "/etc/ssl/le.crt", "key": "/etc/ssl/le.key"}
-		for key, value := range extra {
-			result[key] = value
-		}
+		maps.Copy(result, extra)
 		return result
 	}
 	letsEncrypt := sslIssueReq{Type: SSLSourceLetsEncrypt}
