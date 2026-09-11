@@ -74,7 +74,17 @@ fi
 # Add the default administrator entry when absent while preserving tenant ACLs.
 ACLF=/etc/valkey/users.acl
 if [ ! -f "$ACLF" ] || ! grep -q '^user default ' "$ACLF"; then
-  printf 'user default on >%s ~* &* +@all\n' "$ADMIN" > "$ACLF"
+  # The umask is applied at CREATION, so the file is never world-readable, not
+  # even for the moment between the redirection and the chmod below. Root's
+  # umask on AlmaLinux is 022, so a bare redirect creates the file 0644 and
+  # holds the administrator password there for the lifetime of the write. That
+  # account carries `~* &* +@all`, which is full administrative control of the
+  # cache including every tenant's keyspace, and every c_* tenant has a shell
+  # on this host.
+  #
+  # The chmod below stays: a umask cannot fix a file that already exists with
+  # the wrong mode.
+  ( umask 077; printf 'user default on >%s ~* &* +@all\n' "$ADMIN" > "$ACLF" )
   log "users.acl created"
 fi
 chown valkey:valkey "$ACLF" 2>/dev/null; chmod 640 "$ACLF"

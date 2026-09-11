@@ -20,6 +20,42 @@ var secretFiles = []string{
 	"/opt/phpmyadmin/config.inc.php",
 }
 
+// opsSecretWrites are the same defect in the setup scripts, listed as the script
+// and the path it redirects into. The Postfix maps are written in a loop over a
+// variable name, so the target there is the loop's expression rather than a
+// literal path.
+var opsSecretWrites = []struct{ script, target, holds string }{
+	{"../../assets/ops/servika-mail-setup", `"/etc/postfix/${f}"`,
+		"the mailro password, which has SELECT on panel.mailboxes"},
+	{"../../assets/ops/servika-mail-setup", "/etc/dovecot/dovecot-sql.conf.ext",
+		"the mailro password"},
+	{"../../assets/ops/servika-mail-setup", "/opt/roundcube/config/config.inc.php",
+		"the Roundcube database password and des_key"},
+	{"../../assets/ops/servika-redis-setup.sh", `"$ACLF"`,
+		"the Valkey default account password, which carries ~* &* +@all"},
+}
+
+// The setup scripts relied on a trailing chmod for confidentiality and never
+// considered the window between open(O_CREAT) and it. An operator re-runs
+// servika-mail-setup to repair mail, so the window opens again on a host that
+// already has tenants on it.
+func TestTheOpsScriptsCreateEveryCredentialFileUnderAUmask(t *testing.T) {
+	for _, write := range opsSecretWrites {
+		lines := strings.Split(readScript(t, write.script), "\n")
+		at := redirectLines(lines, write.target)
+		if len(at) == 0 {
+			t.Errorf("%s no longer writes %s; this list is out of date", write.script, write.target)
+			continue
+		}
+		for _, line := range at {
+			if !umaskGuards(lines, line) {
+				t.Errorf("%s creates %s by a bare redirect on line %d, so %s is world-readable "+
+					"until the later chmod runs", write.script, write.target, line+1, write.holds)
+			}
+		}
+	}
+}
+
 // guardWindow is how many lines before the redirect may carry the umask. The
 // config.inc.php write opens its subshell on one line and redirects on the
 // next, so the guard is not always on the same line as the `>`.
@@ -28,7 +64,10 @@ const guardWindow = 3
 // redirectLines returns the 1-based line numbers of every shell redirect into
 // path.
 func redirectLines(lines []string, path string) []int {
-	pattern := regexp.MustCompile(`>\s*` + regexp.QuoteMeta(path) + `\b`)
+	// The terminator is any character a path cannot continue with, so
+	// /etc/postfix/x does not match /etc/postfix/xy. It is not \b: several of
+	// these targets end in a quote or a brace, which \b does not follow.
+	pattern := regexp.MustCompile(`>\s*` + regexp.QuoteMeta(path) + `(?:[^A-Za-z0-9._/-]|$)`)
 	var at []int
 	for i, line := range lines {
 		if pattern.MatchString(line) {

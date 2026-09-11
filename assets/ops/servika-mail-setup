@@ -232,8 +232,17 @@ SQL
 log "mailro user has SELECT access to mail tables"
 
 echo "════ Postfix virtual mailbox maps ════"
+# The umask is applied at CREATION, so the file is never world-readable, not
+# even for the moment between the redirection and the chmod below. Root's umask
+# on AlmaLinux is 022, so a bare redirect creates the file 0644 and holds the
+# mailro password there for the lifetime of the writing process. That account
+# has SELECT on panel.mailboxes, which is every mailbox password hash on the
+# server, and every c_* tenant has a shell here.
+#
+# The chmod stays: a umask cannot fix a file that already exists with the wrong
+# mode, which is the case on every re-run.
 for f in mysql-virtual-domains.cf mysql-virtual-mailboxes.cf mysql-virtual-uid.cf mysql-virtual-gid.cf mysql-virtual-aliases.cf; do
-  sed "s/__SERVIKA_MAIL_DB_PASS__/${DBPASS}/" "$TMPL/postfix/${f}.tmpl" > "/etc/postfix/${f}"
+  ( umask 077; sed "s/__SERVIKA_MAIL_DB_PASS__/${DBPASS}/" "$TMPL/postfix/${f}.tmpl" > "/etc/postfix/${f}" )
   chown root:postfix "/etc/postfix/${f}"
   chmod 640 "/etc/postfix/${f}"
 done
@@ -278,7 +287,9 @@ if ! grep -qE '^submission[[:space:]]+inet' /etc/postfix/master.cf; then
 fi
 
 echo "════ Dovecot SQL auth and drop-in config ════"
-sed "s/__SERVIKA_MAIL_DB_PASS__/${DBPASS}/" "$TMPL/dovecot/dovecot-sql.conf.ext.tmpl" > /etc/dovecot/dovecot-sql.conf.ext
+# Same umask rule as the Postfix maps above: this file carries the same mailro
+# password, and a bare redirect would publish it for the lifetime of the write.
+( umask 077; sed "s/__SERVIKA_MAIL_DB_PASS__/${DBPASS}/" "$TMPL/dovecot/dovecot-sql.conf.ext.tmpl" > /etc/dovecot/dovecot-sql.conf.ext )
 chown root:dovecot /etc/dovecot/dovecot-sql.conf.ext
 chmod 640 /etc/dovecot/dovecot-sql.conf.ext
 cp "$TMPL/dovecot/10-servika-mail.conf.tmpl" /etc/dovecot/conf.d/10-servika-mail.conf
@@ -464,8 +475,11 @@ SQL
   fi
 
   mkdir -p /opt/roundcube/config
-  sed -e "s/__SERVIKA_ROUNDCUBE_DB_PASS__/${RCDBPASS}/" -e "s/__SERVIKA_ROUNDCUBE_DES_KEY__/${RCDESKEY}/" \
-    "$TMPL/roundcube/config.inc.php.tmpl" > /opt/roundcube/config/config.inc.php
+  # Same umask rule as the Postfix maps above. This file carries the Roundcube
+  # database password and the des_key, which decrypts the IMAP credentials
+  # Roundcube keeps in its sessions.
+  ( umask 077; sed -e "s/__SERVIKA_ROUNDCUBE_DB_PASS__/${RCDBPASS}/" -e "s/__SERVIKA_ROUNDCUBE_DES_KEY__/${RCDESKEY}/" \
+    "$TMPL/roundcube/config.inc.php.tmpl" > /opt/roundcube/config/config.inc.php )
   chown root:apache /opt/roundcube/config/config.inc.php
   chmod 640 /opt/roundcube/config/config.inc.php
 
