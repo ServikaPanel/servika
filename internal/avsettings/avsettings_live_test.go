@@ -61,7 +61,7 @@ func TestTheSettingsRowSurvivesARoundTrip(t *testing.T) {
 	t.Cleanup(func() { sliceCommand = restore })
 
 	want := Settings{
-		RuleEngine: true, LocationHeuristics: false, WPIntegrity: true,
+		RuleEngine: true, LocationHeuristics: false,
 		CriticalThreshold: 77, AutoQuarantine: true,
 		Scope: ScopeServer, ExcludedPaths: "/var/lib/mysql\n/proc",
 		CPUPercent: 175, RAMMB: 512, IOWeight: 33, CPUWeight: 21,

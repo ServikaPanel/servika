@@ -45,7 +45,6 @@ const MinCriticalThreshold = 20
 type Settings struct {
 	RuleEngine         bool   `json:"rule_engine"`
 	LocationHeuristics bool   `json:"location_heuristics"`
-	WPIntegrity        bool   `json:"wp_integrity"`
 	CriticalThreshold  int    `json:"critical_threshold"`
 	AutoQuarantine     bool   `json:"auto_quarantine"`
 	Scope              string `json:"scope"`
@@ -378,12 +377,12 @@ func PathExcluded(list []string, path string) bool {
 // Read loads the single settings row.
 func Read(ctx context.Context, db *sql.DB) (Settings, error) {
 	var s Settings
-	err := db.QueryRowContext(ctx, `SELECT rule_engine, location_heuristics, wp_integrity,
+	err := db.QueryRowContext(ctx, `SELECT rule_engine, location_heuristics,
 		critical_threshold, auto_quarantine, scope, excluded_paths,
 		cpu_percent, ram_mb, io_weight, cpu_weight, scheduled_scan, scheduled_hour,
 		realtime, scan_workers, file_rate_per_sec, process_monitor
 		FROM av_settings WHERE id=1`).
-		Scan(&s.RuleEngine, &s.LocationHeuristics, &s.WPIntegrity,
+		Scan(&s.RuleEngine, &s.LocationHeuristics,
 			&s.CriticalThreshold, &s.AutoQuarantine, &s.Scope, &s.ExcludedPaths,
 			&s.CPUPercent, &s.RAMMB, &s.IOWeight, &s.CPUWeight, &s.ScheduledScan, &s.ScheduledHour,
 			&s.Realtime, &s.ScanWorkers, &s.FileRatePerSec, &s.ProcessMonitor)
@@ -473,12 +472,12 @@ func (s Settings) Validate(c Capacity) error {
 // shows up only as a setting that saves and reads back as its zero value.
 func writeRow(ctx context.Context, db *sql.DB, s Settings) error {
 	_, err := db.ExecContext(ctx, `UPDATE av_settings SET
-		rule_engine=?, location_heuristics=?, wp_integrity=?,
+		rule_engine=?, location_heuristics=?,
 		critical_threshold=?, auto_quarantine=?, scope=?, excluded_paths=?,
 		cpu_percent=?, ram_mb=?, io_weight=?, cpu_weight=?, scheduled_scan=?, scheduled_hour=?,
 		realtime=?, scan_workers=?, file_rate_per_sec=?, process_monitor=?
 		WHERE id=1`,
-		s.RuleEngine, s.LocationHeuristics, s.WPIntegrity,
+		s.RuleEngine, s.LocationHeuristics,
 		s.CriticalThreshold, s.AutoQuarantine, s.Scope, s.ExcludedPaths,
 		s.CPUPercent, s.RAMMB, s.IOWeight, s.CPUWeight, s.ScheduledScan, s.ScheduledHour,
 		s.Realtime, s.ScanWorkers, s.FileRatePerSec, s.ProcessMonitor)
