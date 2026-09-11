@@ -7,7 +7,8 @@
   "title": "WordPress Toolkit",
   "subtitle": "Gestione versiones, complementos, temas y usuarios en un solo lugar.",
   "loading": "Cargando…",
-  "actions": { "new": "Nuevo WordPress" },
+  "actions": { "new": "Nuevo WordPress",
+    "retry": "Reintentar" },
   "empty": {
     "title": "Aún no existe ninguna instalación de WordPress en este dominio",
     "subtitle": "Instálelo con un clic usando el formulario de abajo."
@@ -41,7 +42,8 @@
     "activated": "{{name}} activado.",
     "deactivated": "{{name}} desactivado."
   },
-  "errors": { "installFailed": "La instalación falló", "operationFailed": "La operación falló", "resetFailed": "No se pudo restablecer la contraseña", "removeFailed": "No se pudo eliminar la instalación" },
+  "errors": { "installFailed": "La instalación falló", "operationFailed": "La operación falló", "resetFailed": "No se pudo restablecer la contraseña", "removeFailed": "No se pudo eliminar la instalación",
+    "listUnavailable": "No se pudo cargar esta lista." },
   "output": { "title": "Salida de la operación" },
   "btn": { "processing": "Procesando…" },
   "packages": {

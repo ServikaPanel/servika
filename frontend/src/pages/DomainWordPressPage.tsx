@@ -16,11 +16,18 @@ type Status = { version: string; update_available: boolean; target_version: stri
 type Package = { name: string; status: string; version: string; update: string; update_version: string }
 type User = { ID: number; user_login: string; user_email: string; display_name: string; roles: string }
 
+// A list that could not be loaded is NOT an empty list. Drawing [] for a refused
+// request tells the customer "no plugins, no updates pending", which is the one
+// answer this screen must never invent, and it also latched: the tab guards
+// refetch only while the state is null, so an empty array froze the wrong answer
+// in place for the life of the page.
+type Loaded<T> = T[] | 'failed' | null
+
 export default function DomainWordPressPage() {
   const { t } = useTranslation('DomainWordPressPage')
   const report = useReportError()
   const { id, base, isSubdomain, backHref, backLabel } = useResourceScope()
-  const [items, setItems] = useState<Install[]>([])
+  const [items, setItems] = useState<Install[] | 'failed'>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [installing, setInstalling] = useState(false)
@@ -45,8 +52,13 @@ export default function DomainWordPressPage() {
   // refreshes that follow an install or removal.
   const fetchInstalls = useCallback(() => {
     if (!id) return
-    api.get<Install[]>(`${base}/wordpress`).then(r => setItems(r.data || [])).catch(() => setItems([])).finally(() => setLoading(false))
-  }, [id, base])
+    api.get<Install[]>(`${base}/wordpress`)
+      .then(r => setItems(r.data || []))
+      // Not [] here: an empty list opens the install form with no way to close
+      // it, for a document root that may already carry WordPress.
+      .catch(err => { setItems('failed'); report('wordpressInstalls')(err) })
+      .finally(() => setLoading(false))
+  }, [id, base, report])
 
   const list = useCallback(() => {
     setLoading(true)
@@ -68,7 +80,9 @@ export default function DomainWordPressPage() {
     finally { setInstalling(false) }
   }
 
-  const emptyState = !loading && items.length === 0
+  const listFailed = items === 'failed'
+  const installations = listFailed ? [] : items
+  const emptyState = !loading && !listFailed && installations.length === 0
 
   return (
     <div className="w-full px-6 py-6">
@@ -96,6 +110,8 @@ export default function DomainWordPressPage() {
 
       {loading ? (
         <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 p-10 text-center text-sm text-slate-400">{t('loading')}</div>
+      ) : listFailed ? (
+        <LoadFailed onRetry={list} />
       ) : emptyState ? (
         <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-12 text-center mb-5">
           <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-3"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
@@ -104,7 +120,7 @@ export default function DomainWordPressPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {items.map(k => <Toolkit key={k.dir} base={base} installation={k} onChange={list} />)}
+          {installations.map(k => <Toolkit key={k.dir} base={base} installation={k} onChange={list} />)}
         </div>
       )}
 
@@ -128,14 +144,15 @@ const TAB_KEYS: ToolkitTab[] = ['overview', 'extensions', 'themes', 'users']
 
 function Toolkit({ base, installation, onChange }: { base: string; installation: Install; onChange: () => void }) {
   const { t } = useTranslation('DomainWordPressPage')
+  const report = useReportError()
   const { confirm, notify } = useDialog()
   const dir = installation.dir
   const isRoot = dir === '/ (root)'
   const [tab, setTab] = useState<ToolkitTab>('overview')
   const [status, setStatus] = useState<Status | null>(null)
-  const [extensions, setPlugins] = useState<Package[] | null>(null)
-  const [themes, setThemes] = useState<Package[] | null>(null)
-  const [users, setUsers] = useState<User[] | null>(null)
+  const [extensions, setPlugins] = useState<Loaded<Package>>(null)
+  const [themes, setThemes] = useState<Loaded<Package>>(null)
+  const [users, setUsers] = useState<Loaded<User>>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -150,12 +167,21 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
   }, [base, dir])
   useEffect(() => { loadStatus() }, [loadStatus])
 
+  // 'failed' rather than [] on a rejection: the update badges are counted from
+  // these arrays, so an empty one reports zero pending updates for a site that
+  // may be running outdated plugins.
+  //
+  // The three states are in the dependency list, so putting one back to null is
+  // what triggers its refetch. That is how the retry works and how
+  // invalidatePackages works after an update; with only `tab` here, neither did,
+  // and the table sat on "loading" until the page was reloaded. Neither a loaded
+  // array nor 'failed' is null, so the guards keep this from looping.
   useEffect(() => {
-    if (tab === 'extensions' && extensions === null) api.get<Package[]>(`${base}/wordpress/plugins`, qp).then(r => setPlugins(r.data || [])).catch(() => setPlugins([]))
-    if (tab === 'themes' && themes === null) api.get<Package[]>(`${base}/wordpress/themes`, qp).then(r => setThemes(r.data || [])).catch(() => setThemes([]))
-    if (tab === 'users' && users === null) api.get<User[]>(`${base}/wordpress/users`, qp).then(r => setUsers(r.data || [])).catch(() => setUsers([]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
+    const params = { params: { dir } }
+    if (tab === 'extensions' && extensions === null) api.get<Package[]>(`${base}/wordpress/plugins`, params).then(r => setPlugins(r.data || [])).catch(err => { setPlugins('failed'); report('wordpressPlugins')(err) })
+    if (tab === 'themes' && themes === null) api.get<Package[]>(`${base}/wordpress/themes`, params).then(r => setThemes(r.data || [])).catch(err => { setThemes('failed'); report('wordpressThemes')(err) })
+    if (tab === 'users' && users === null) api.get<User[]>(`${base}/wordpress/users`, params).then(r => setUsers(r.data || [])).catch(err => { setUsers('failed'); report('wordpressUsers')(err) })
+  }, [tab, extensions, themes, users, base, dir, report])
 
   async function run(key: string, request: () => Promise<{ output?: string }>, successMessage: string, after?: () => void) {
     setBusy(key); setError(null); setSuccess(null); setOutput(null)
@@ -249,9 +275,11 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
     finally { setBusy(null) }
   }
 
-  const pluginUpdates = (extensions || []).filter(p => p.update === 'available').length
-  const themeUpdates = (themes || []).filter(p => p.update === 'available').length
-  const badge: Record<string, number> = { extensions: pluginUpdates, themes: themeUpdates }
+  // A tab whose list failed contributes no badge, which is honest: the count is
+  // unknown, not zero.
+  const countUpdates = (list: Loaded<Package>) =>
+    Array.isArray(list) ? list.filter(p => p.update === 'available').length : 0
+  const badge: Record<string, number> = { extensions: countUpdates(extensions), themes: countUpdates(themes) }
 
   return (
     <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 overflow-hidden">
@@ -320,14 +348,14 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
         )}
 
         {tab === 'extensions' && (
-          <PackageTable type="plugin" items={extensions} busy={busy}
+          <PackageTable type="plugin" items={extensions} busy={busy} onRetry={() => setPlugins(null)}
             onUpdateAll={() => packageAll('plugin')} onUpdate={(p) => updatePackage('plugin', p.name)} onToggle={pluginToggle} />
         )}
         {tab === 'themes' && (
-          <PackageTable type="theme" items={themes} busy={busy}
+          <PackageTable type="theme" items={themes} busy={busy} onRetry={() => setThemes(null)}
             onUpdateAll={() => packageAll('theme')} onUpdate={(p) => updatePackage('theme', p.name)} onActivate={activateTheme} />
         )}
-        {tab === 'users' && <UserList items={users} busy={busy} onReset={resetPassword} />}
+        {tab === 'users' && <UserList items={users} busy={busy} onReset={resetPassword} onRetry={() => setUsers(null)} />}
 
         {tab !== 'overview' && output && <Output text={output} />}
       </div>
@@ -338,6 +366,22 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
 }
 
 // ================= Components =================
+
+// LoadFailed stands where a list would be. It says the list is unknown rather
+// than empty, and it is the only way back: the tab guards refetch on null, so
+// nothing else clears a failed load short of reloading the page.
+function LoadFailed({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <div className="rounded-2xl border border-dashed border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-900/10 p-6 text-center">
+      <p className="text-sm text-amber-700 dark:text-amber-300">{t('errors.listUnavailable')}</p>
+      <button onClick={onRetry}
+        className="mt-3 text-xs px-4 py-1.5 rounded-full border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition">
+        {t('actions.retry')}
+      </button>
+    </div>
+  )
+}
 
 function Metric({ label, v, pill }: { label: string; v: string; pill?: { t: string; c: 'green' | 'amber' | 'red' } }) {
   return (
@@ -384,11 +428,12 @@ function Output({ text }: { text: string }) {
   )
 }
 
-function PackageTable({ type, items, busy, onUpdateAll, onUpdate, onToggle, onActivate }: {
-  type: 'plugin' | 'theme'; items: Package[] | null; busy: string | null
+function PackageTable({ type, items, busy, onRetry, onUpdateAll, onUpdate, onToggle, onActivate }: {
+  type: 'plugin' | 'theme'; items: Loaded<Package>; busy: string | null; onRetry: () => void
   onUpdateAll: () => void; onUpdate: (p: Package) => void; onToggle?: (p: Package) => void; onActivate?: (p: Package) => void
 }) {
   const { t } = useTranslation('DomainWordPressPage')
+  if (items === 'failed') return <LoadFailed onRetry={onRetry} />
   if (items === null) return <div className="text-sm text-slate-400 py-4">{t('packages.loading')}</div>
   if (items.length === 0) return <div className="text-sm text-slate-400 py-4">{type === 'plugin' ? t('packages.noPlugins') : t('packages.noThemes')}</div>
   const updatable = items.filter(p => p.update === 'available').length
@@ -429,8 +474,9 @@ function PackageTable({ type, items, busy, onUpdateAll, onUpdate, onToggle, onAc
   )
 }
 
-function UserList({ items, busy, onReset }: { items: User[] | null; busy: string | null; onReset: (u: User) => void }) {
+function UserList({ items, busy, onReset, onRetry }: { items: Loaded<User>; busy: string | null; onReset: (u: User) => void; onRetry: () => void }) {
   const { t } = useTranslation('DomainWordPressPage')
+  if (items === 'failed') return <LoadFailed onRetry={onRetry} />
   if (items === null) return <div className="text-sm text-slate-400 py-4">{t('usersTab.loading')}</div>
   if (items.length === 0) return <div className="text-sm text-slate-400 py-4">{t('usersTab.empty')}</div>
   return (

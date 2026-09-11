@@ -8,7 +8,8 @@
   "subtitle": "Gestisci versioni, plugin, temi e utenti in un unico posto.",
   "loading": "Caricamento…",
   "actions": {
-    "new": "Nuovo WordPress"
+    "new": "Nuovo WordPress",
+    "retry": "Riprova"
   },
   "empty": {
     "title": "Non esiste ancora alcuna installazione WordPress su questo dominio",
@@ -64,7 +65,8 @@
     "installFailed": "Installazione non riuscita",
     "operationFailed": "Operazione non riuscita",
     "resetFailed": "Impossibile reimpostare la password",
-    "removeFailed": "Impossibile rimuovere l'installazione"
+    "removeFailed": "Impossibile rimuovere l'installazione",
+    "listUnavailable": "Impossibile caricare questo elenco."
   },
   "output": {
     "title": "Output dell'operazione"

@@ -8,7 +8,8 @@
   "subtitle": "バージョン、プラグイン、テーマ、ユーザーを一か所で管理します。",
   "loading": "読み込み中…",
   "actions": {
-    "new": "新規 WordPress"
+    "new": "新規 WordPress",
+    "retry": "再試行"
   },
   "empty": {
     "title": "このドメインにはまだ WordPress のインストールがありません",
@@ -64,7 +65,8 @@
     "installFailed": "インストールに失敗しました",
     "operationFailed": "操作に失敗しました",
     "resetFailed": "パスワードをリセットできませんでした",
-    "removeFailed": "インストールを削除できませんでした"
+    "removeFailed": "インストールを削除できませんでした",
+    "listUnavailable": "この一覧を読み込めませんでした。"
   },
   "output": {
     "title": "操作の出力"

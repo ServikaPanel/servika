@@ -8,7 +8,8 @@
   "subtitle": "Spravujte verze, pluginy, šablony a uživatele na jednom místě.",
   "loading": "Načítání…",
   "actions": {
-    "new": "Nový WordPress"
+    "new": "Nový WordPress",
+    "retry": "Zkusit znovu"
   },
   "empty": {
     "title": "Na této doméně zatím neexistuje žádná instalace WordPress",
@@ -64,7 +65,8 @@
     "installFailed": "Instalace se nezdařila",
     "operationFailed": "Operace se nezdařila",
     "resetFailed": "Heslo nelze obnovit",
-    "removeFailed": "Instalaci nelze odebrat"
+    "removeFailed": "Instalaci nelze odebrat",
+    "listUnavailable": "Tento seznam se nepodařilo načíst."
   },
   "output": {
     "title": "Výstup operace"

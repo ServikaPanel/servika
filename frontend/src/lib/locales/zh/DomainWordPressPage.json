@@ -8,7 +8,8 @@
   "subtitle": "在一处管理版本、插件、主题和用户。",
   "loading": "加载中…",
   "actions": {
-    "new": "新建 WordPress"
+    "new": "新建 WordPress",
+    "retry": "重试"
   },
   "empty": {
     "title": "此域名尚无 WordPress 安装",
@@ -64,7 +65,8 @@
     "installFailed": "安装失败",
     "operationFailed": "操作失败",
     "resetFailed": "无法重置密码",
-    "removeFailed": "无法移除安装"
+    "removeFailed": "无法移除安装",
+    "listUnavailable": "无法加载此列表。"
   },
   "output": {
     "title": "操作输出"

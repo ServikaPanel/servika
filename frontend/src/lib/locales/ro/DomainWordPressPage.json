@@ -8,7 +8,8 @@
   "subtitle": "Gestionați versiuni, pluginuri, teme și utilizatori într-un singur loc.",
   "loading": "Se încarcă…",
   "actions": {
-    "new": "WordPress nou"
+    "new": "WordPress nou",
+    "retry": "Reîncearcă"
   },
   "empty": {
     "title": "Încă nu există nicio instalare WordPress pe acest domeniu",
@@ -64,7 +65,8 @@
     "installFailed": "Instalarea a eșuat",
     "operationFailed": "Operațiunea a eșuat",
     "resetFailed": "Nu s-a putut reseta parola",
-    "removeFailed": "Nu s-a putut elimina instalarea"
+    "removeFailed": "Nu s-a putut elimina instalarea",
+    "listUnavailable": "Această listă nu a putut fi încărcată."
   },
   "output": {
     "title": "Rezultat operațiune"

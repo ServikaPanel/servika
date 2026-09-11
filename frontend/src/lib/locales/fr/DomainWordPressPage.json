@@ -8,7 +8,8 @@
   "subtitle": "Gérez les versions, les extensions, les thèmes et les utilisateurs au même endroit.",
   "loading": "Chargement…",
   "actions": {
-    "new": "Nouveau WordPress"
+    "new": "Nouveau WordPress",
+    "retry": "Réessayer"
   },
   "empty": {
     "title": "Aucune installation WordPress n'existe encore sur ce domaine",
@@ -64,7 +65,8 @@
     "installFailed": "Échec de l'installation",
     "operationFailed": "Échec de l'opération",
     "resetFailed": "Impossible de réinitialiser le mot de passe",
-    "removeFailed": "Impossible de supprimer l'installation"
+    "removeFailed": "Impossible de supprimer l'installation",
+    "listUnavailable": "Cette liste n’a pas pu être chargée."
   },
   "output": {
     "title": "Sortie de l'opération"

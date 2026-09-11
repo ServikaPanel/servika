@@ -33,6 +33,10 @@
     "mailAddressPool": "送信元アドレスのプール",
     "appRuntimes": "アプリケーションの runtime",
     "subdomains": "サブドメイン",
-    "maintenance": "メンテナンスモード"
+    "maintenance": "メンテナンスモード",
+    "wordpressInstalls": "WordPress のインストール",
+    "wordpressPlugins": "WordPress のプラグイン",
+    "wordpressThemes": "WordPress のテーマ",
+    "wordpressUsers": "WordPress のユーザー"
   }
 }

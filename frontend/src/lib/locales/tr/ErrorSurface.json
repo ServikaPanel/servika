@@ -33,6 +33,10 @@
     "mailAddressPool": "giden adres havuzu",
     "appRuntimes": "uygulama runtime'ları",
     "subdomains": "alt alan adları",
-    "maintenance": "bakım modu"
+    "maintenance": "bakım modu",
+    "wordpressInstalls": "WordPress kurulumları",
+    "wordpressPlugins": "WordPress plugin listesi",
+    "wordpressThemes": "WordPress temaları",
+    "wordpressUsers": "WordPress kullanıcıları"
   }
 }

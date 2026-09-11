@@ -33,6 +33,10 @@
     "mailAddressPool": "发信地址池",
     "appRuntimes": "应用 runtime",
     "subdomains": "子域名",
-    "maintenance": "维护模式"
+    "maintenance": "维护模式",
+    "wordpressInstalls": "WordPress 安装",
+    "wordpressPlugins": "WordPress 插件",
+    "wordpressThemes": "WordPress 主题",
+    "wordpressUsers": "WordPress 用户"
   }
 }

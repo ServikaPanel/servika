@@ -33,6 +33,10 @@
     "mailAddressPool": "fond odchozích adres",
     "appRuntimes": "běhová prostředí aplikací",
     "subdomains": "subdomény",
-    "maintenance": "režim údržby"
+    "maintenance": "režim údržby",
+    "wordpressInstalls": "instalace WordPressu",
+    "wordpressPlugins": "pluginy WordPressu",
+    "wordpressThemes": "šablony WordPressu",
+    "wordpressUsers": "uživatelé WordPressu"
   }
 }

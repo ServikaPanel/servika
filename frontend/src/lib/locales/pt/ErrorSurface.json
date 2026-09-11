@@ -33,6 +33,10 @@
     "mailAddressPool": "conjunto de endereços de saída",
     "appRuntimes": "runtimes de aplicação",
     "subdomains": "subdomínios",
-    "maintenance": "o modo de manutenção"
+    "maintenance": "o modo de manutenção",
+    "wordpressInstalls": "instalações do WordPress",
+    "wordpressPlugins": "plugins do WordPress",
+    "wordpressThemes": "temas do WordPress",
+    "wordpressUsers": "utilizadores do WordPress"
   }
 }

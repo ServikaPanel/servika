@@ -8,7 +8,8 @@
   "subtitle": "Sürümleri, eklentileri, temaları ve kullanıcıları tek yerden yönetin.",
   "loading": "Yükleniyor…",
   "actions": {
-    "new": "Yeni WordPress"
+    "new": "Yeni WordPress",
+    "retry": "Yeniden dene"
   },
   "empty": {
     "title": "Bu alan adında henüz WordPress kurulumu yok",
@@ -64,7 +65,8 @@
     "installFailed": "Kurulum başarısız oldu",
     "operationFailed": "İşlem başarısız oldu",
     "resetFailed": "Parola sıfırlanamadı",
-    "removeFailed": "Kurulum kaldırılamadı"
+    "removeFailed": "Kurulum kaldırılamadı",
+    "listUnavailable": "Bu liste yüklenemedi."
   },
   "output": {
     "title": "İşlem çıktısı"

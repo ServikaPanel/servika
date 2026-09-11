@@ -33,6 +33,10 @@
     "mailAddressPool": "outbound address pool",
     "appRuntimes": "application runtimes",
     "subdomains": "subdomains",
-    "maintenance": "maintenance mode"
+    "maintenance": "maintenance mode",
+    "wordpressInstalls": "WordPress installations",
+    "wordpressPlugins": "WordPress plugins",
+    "wordpressThemes": "WordPress themes",
+    "wordpressUsers": "WordPress users"
   }
 }

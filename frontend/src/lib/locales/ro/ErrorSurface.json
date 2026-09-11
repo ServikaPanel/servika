@@ -33,6 +33,10 @@
     "mailAddressPool": "grupul de adrese de trimitere",
     "appRuntimes": "runtime-uri de aplicație",
     "subdomains": "subdomenii",
-    "maintenance": "modul mentenanță"
+    "maintenance": "modul mentenanță",
+    "wordpressInstalls": "instalări WordPress",
+    "wordpressPlugins": "pluginuri WordPress",
+    "wordpressThemes": "teme WordPress",
+    "wordpressUsers": "utilizatori WordPress"
   }
 }

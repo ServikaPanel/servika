@@ -8,7 +8,8 @@
   "subtitle": "Manage versions, plugins, themes, and users in one place.",
   "loading": "Loading…",
   "actions": {
-    "new": "New WordPress"
+    "new": "New WordPress",
+    "retry": "Try again"
   },
   "empty": {
     "title": "No WordPress installation exists on this domain yet",
@@ -64,7 +65,8 @@
     "installFailed": "Installation failed",
     "operationFailed": "Operation failed",
     "resetFailed": "Could not reset password",
-    "removeFailed": "Could not remove installation"
+    "removeFailed": "Could not remove installation",
+    "listUnavailable": "This list could not be loaded."
   },
   "output": {
     "title": "Operation output"
