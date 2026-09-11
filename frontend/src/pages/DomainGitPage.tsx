@@ -12,7 +12,12 @@ import { ICON } from '@/components/iconPaths'
 type Domain = { id: number; domain_name: string; system_user: string; ipv4: string }
 type Repo = {
   id: number; domain_id: number; repo_url: string; branch: string; target_dir: string;
-  deploy_key_pub: string; webhook_secret: string; last_sync?: string; last_commit?: string; last_status: string; created_at: string
+  // webhook_secret is the URL path token, webhook_signing_key is the HMAC key.
+  // They are two independent values on purpose: the URL is written to the nginx
+  // access log on every delivery, so reusing it as the signing key would make
+  // the signature prove nothing beyond the URL.
+  deploy_key_pub: string; webhook_secret: string; webhook_signing_key: string
+  last_sync?: string; last_commit?: string; last_status: string; created_at: string
 }
 type GHConn = {
   missing?: boolean
@@ -385,7 +390,7 @@ export default function DomainGitPage() {
                 <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">{t('webhook.hintPre')}<code className="font-mono">application/json</code>{t('webhook.hintPost')}</p>
                 <div className="space-y-2">
                   <Row e={t('webhook.payloadUrl')} d={`http://${domain?.ipv4 || ''}:8443/api/v1/git-webhook/${repo.webhook_secret}`} onCopy={copy} />
-                  <Row e={t('webhook.secret')} d={repo.webhook_secret} onCopy={copy} />
+                  <Row e={t('webhook.secret')} d={repo.webhook_signing_key} onCopy={copy} />
                   <Row e={t('webhook.contentType')} d={t('webhook.contentTypeValue')} />
                   <Row e={t('webhook.events')} d={t('webhook.eventsValue')} />
                 </div>

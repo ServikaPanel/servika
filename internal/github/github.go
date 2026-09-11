@@ -387,19 +387,36 @@ func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", req.Repo)
 
 	// Create or update the git_repos record.
-	var existingSecret string
+	// The URL path token and the HMAC key are two INDEPENDENT values. They used
+	// to be one column, which meant anyone who learned the delivery URL also
+	// held the signing key and could forge a valid signature for any body; the
+	// URL is written to the nginx access log on every delivery, so it is not a
+	// secret in practice.
+	//
+	// A row that still carries the pre-separation pair (the migration backfilled
+	// the key from the token so no configured webhook broke) gets a fresh
+	// independent key HERE, because this call re-registers the hook at GitHub in
+	// the same request and can therefore rotate without leaving a delivery
+	// signing with a value the panel no longer accepts.
+	var existingSecret, existingKey string
 	_ = h.DB.QueryRowContext(r.Context(),
-		`SELECT COALESCE(webhook_secret,'') FROM git_repos WHERE domain_id=?`, id).Scan(&existingSecret)
+		`SELECT COALESCE(webhook_secret,''), COALESCE(webhook_signing_key,'') FROM git_repos WHERE domain_id=?`,
+		id).Scan(&existingSecret, &existingKey)
 	secret := existingSecret
 	if secret == "" {
 		secret = randomHex(20)
 	}
+	signingKey := existingKey
+	if signingKey == "" || signingKey == secret {
+		signingKey = randomHex(32)
+	}
 	if _, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, last_status)
-		 VALUES(?,?,?,?, '', ?, 'pending')
+		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_signing_key, last_status)
+		 VALUES(?,?,?,?, '', ?,?, 'pending')
 		 ON DUPLICATE KEY UPDATE repo_url=VALUES(repo_url), branch=VALUES(branch),
-		   target_dir=VALUES(target_dir), webhook_secret=VALUES(webhook_secret)`,
-		id, cloneURL, req.Branch, req.TargetDir, secret); err != nil {
+		   target_dir=VALUES(target_dir), webhook_secret=VALUES(webhook_secret),
+		   webhook_signing_key=VALUES(webhook_signing_key)`,
+		id, cloneURL, req.Branch, req.TargetDir, secret, signingKey); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
@@ -434,7 +451,9 @@ func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
 		hook := ghHook{Name: "web", Active: true, Events: []string{"push"}}
 		hook.Config.URL = hookURL
 		hook.Config.ContentType = "json"
-		hook.Config.Secret = secret
+		// NOT `secret`: that value is the URL path segment, which GitHub sends in
+		// the clear on every delivery and nginx writes to its access log.
+		hook.Config.Secret = signingKey
 		hook.Config.InsecureSSL = "0" // Require GitHub to verify the panel TLS certificate.
 		body, st, err := ghCall(r.Context(), "POST", "/repos/"+req.Repo+"/hooks", pat, hook)
 		if err != nil || (st != 201 && st != 200) {

@@ -32,17 +32,23 @@ import (
 )
 
 type Repo struct {
-	ID            int64  `json:"id"`
-	DomainID      int64  `json:"domain_id"`
-	RepoURL       string `json:"repo_url"`
-	Branch        string `json:"branch"`
-	TargetDir     string `json:"target_dir"`
-	DeployKeyPub  string `json:"deploy_key_pub"`
+	ID           int64  `json:"id"`
+	DomainID     int64  `json:"domain_id"`
+	RepoURL      string `json:"repo_url"`
+	Branch       string `json:"branch"`
+	TargetDir    string `json:"target_dir"`
+	DeployKeyPub string `json:"deploy_key_pub"`
+	// WebhookSecret is the URL path token. It only LOCATES the repository and is
+	// not a credential: nginx records the full request line for every delivery.
 	WebhookSecret string `json:"webhook_secret"`
-	LastSync      string `json:"last_sync,omitempty"`
-	LastCommit    string `json:"last_commit,omitempty"`
-	LastStatus    string `json:"last_status"`
-	CreatedAt     string `json:"created_at"`
+	// WebhookSigningKey is the HMAC-SHA256 key. It must never equal
+	// WebhookSecret, or the signature proves nothing beyond the URL it exists to
+	// backstop.
+	WebhookSigningKey string `json:"webhook_signing_key"`
+	LastSync          string `json:"last_sync,omitempty"`
+	LastCommit        string `json:"last_commit,omitempty"`
+	LastStatus        string `json:"last_status"`
+	CreatedAt         string `json:"created_at"`
 }
 
 type Handlers struct {
@@ -50,7 +56,7 @@ type Handlers struct {
 }
 
 const selectAll = `SELECT id, domain_id, repo_url, branch, target_dir,
-  deploy_key_pub, webhook_secret,
+  deploy_key_pub, webhook_secret, webhook_signing_key,
   COALESCE(DATE_FORMAT(last_sync,'%Y-%m-%d %H:%i'),''),
   last_commit, last_status,
   DATE_FORMAT(created_at,'%Y-%m-%d %H:%i')
@@ -59,7 +65,8 @@ const selectAll = `SELECT id, domain_id, repo_url, branch, target_dir,
 func scan(rs interface{ Scan(...any) error }) (Repo, error) {
 	var r Repo
 	err := rs.Scan(&r.ID, &r.DomainID, &r.RepoURL, &r.Branch, &r.TargetDir,
-		&r.DeployKeyPub, &r.WebhookSecret, &r.LastSync, &r.LastCommit, &r.LastStatus, &r.CreatedAt)
+		&r.DeployKeyPub, &r.WebhookSecret, &r.WebhookSigningKey,
+		&r.LastSync, &r.LastCommit, &r.LastStatus, &r.CreatedAt)
 	// Redact any embedded credentials (e.g. a GitHub PAT in https://<pat>@github.com/...)
 	// before the Repo is serialized to an API response. The DB keeps the full URL for
 	// cloning; only the response value is scrubbed.
@@ -562,13 +569,19 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
+	// Two INDEPENDENT values. The path token only locates the repository and is
+	// written to the nginx access log on every delivery; the signing key is the
+	// credential that proves the body came from the configured remote. Deriving
+	// one from the other, or reusing one for both, makes the signature prove
+	// nothing beyond the URL.
 	secret := randomHex(20)
+	signingKey := randomHex(32)
 	res, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, last_status)
-		 VALUES(?,?,?,?,?,?, 'pending')
+		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_signing_key, last_status)
+		 VALUES(?,?,?,?,?,?,?, 'pending')
 		 ON DUPLICATE KEY UPDATE repo_url=VALUES(repo_url), branch=VALUES(branch),
 		   target_dir=VALUES(target_dir), deploy_key_pub=VALUES(deploy_key_pub)`,
-		id, req.RepoURL, req.Branch, req.TargetDir, pub, secret)
+		id, req.RepoURL, req.Branch, req.TargetDir, pub, secret, signingKey)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
@@ -665,11 +678,11 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var gid, domainID int64
-	var systemUser, repoURL, branch, targetDir, webhookSecret string
+	var systemUser, repoURL, branch, targetDir, signingKey string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT g.id, g.domain_id, d.system_user, g.repo_url, g.branch, g.target_dir, g.webhook_secret
+		`SELECT g.id, g.domain_id, d.system_user, g.repo_url, g.branch, g.target_dir, g.webhook_signing_key
 		 FROM git_repos g JOIN domains d ON d.id=g.domain_id
-		 WHERE g.webhook_secret=? LIMIT 1`, secret).Scan(&gid, &domainID, &systemUser, &repoURL, &branch, &targetDir, &webhookSecret)
+		 WHERE g.webhook_secret=? LIMIT 1`, secret).Scan(&gid, &domainID, &systemUser, &repoURL, &branch, &targetDir, &signingKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "secret did not match")
 		return
@@ -679,9 +692,20 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the GitHub HMAC-SHA256 signature before running any pull. The URL
-	// secret only locates the repo; the signature proves the request came from
-	// GitHub (which signs the body with the same secret set at hook creation).
+	// Verify the HMAC-SHA256 signature before running any pull. The URL token
+	// only locates the repository; the signature proves the body came from the
+	// configured remote.
+	//
+	// The key is a SEPARATE column from the path token. They used to be one
+	// value, which meant anyone who learned the URL could forge a signature for
+	// any body, and the URL is written to the nginx access log on every
+	// delivery. An empty key is refused rather than falling back to the token:
+	// a fallback would restore exactly the property this separation removes.
+	if signingKey == "" {
+		httpx.WriteError(w, http.StatusServiceUnavailable,
+			"this repository has no webhook signing key; reconnect it from the panel")
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // webhook body over 1MB is abuse
 	body, rerr := io.ReadAll(r.Body)
 	if rerr != nil {
@@ -693,7 +717,7 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusUnauthorized, "signature required")
 		return
 	}
-	if !validGitHubSignature(webhookSecret, body, sig) {
+	if !validGitHubSignature(signingKey, body, sig) {
 		httpx.WriteError(w, http.StatusUnauthorized, "signature verification failed")
 		return
 	}
