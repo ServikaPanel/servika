@@ -51,13 +51,20 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	dbID, _ := strconv.ParseInt(chi.URLParam(r, "dbId"), 10, 64)
 
 	// Read database details and join the domain for the demo check.
-	var dbUser, dbPassword, dbName string
+	//
+	// The PASSWORD is deliberately not read here. The token stores a reference to
+	// this account and Redeem opens the sealed column at redemption time, so the
+	// credential never exists in a second place at rest. Copying the decrypted
+	// value into the token row defeated the at-rest encryption of that column for
+	// every database whose owner ever opened phpMyAdmin, and put a reusable
+	// cleartext tenant password into every panel database dump.
+	var dbUser, dbName string
 	var domainID int64
 	var demo int
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT db.db_user, db.db_pass_plain, db.db_name, db.domain_id, d.is_demo
+		`SELECT db.db_user, db.db_name, db.domain_id, d.is_demo
 		 FROM db_accounts db JOIN domains d ON d.id=db.domain_id
-		 WHERE db.id=?`, dbID).Scan(&dbUser, &dbPassword, &dbName, &domainID, &demo)
+		 WHERE db.id=?`, dbID).Scan(&dbUser, &dbName, &domainID, &demo)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "database not found")
 		return
@@ -68,15 +75,6 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if !middleware.DomainOwnedBy(r, domainID) {
 		httpx.WriteError(w, http.StatusNotFound, "database not found")
-		return
-	}
-	// db_pass_plain is encrypted at rest (bound to db_user). Decrypt to the real
-	// password before minting the short-lived signon token. Legacy plaintext rows
-	// pass through unchanged.
-	if pw, derr := credentials.DecryptDBPass(dbUser, dbPassword); derr == nil {
-		dbPassword = pw
-	} else {
-		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
 		return
 	}
 	// This route is keyed by dbId, so CustomerScope (which reads "id") cannot gate it.
@@ -101,17 +99,18 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	// with a server-local NOW() makes a fresh token look already expired on hosts whose MySQL
 	// session timezone is not UTC, so the cleanup below deletes it instantly and redeem 404s.
 	_, err = h.DB.ExecContext(r.Context(),
-		`INSERT INTO pma_tokens(token, domain_id, db_user, db_pass, db_name, expires_at)
+		`INSERT INTO pma_tokens(token, domain_id, db_account_id, db_user, db_name, expires_at)
 		 VALUES(?,?,?,?,?, DATE_ADD(NOW(), INTERVAL 120 SECOND))`,
-		token, domainID, dbUser, dbPassword, dbName)
+		token, domainID, dbID, dbUser, dbName)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
 		return
 	}
 
-	// Delete expired and used tokens on each request.
-	_, _ = h.DB.ExecContext(r.Context(),
-		`DELETE FROM pma_tokens WHERE expires_at < NOW() OR used=1`)
+	// Delete expired and used tokens on each request. This is a convenience, not
+	// the cleanup: it only runs when somebody mints the NEXT token, so on a panel
+	// where nobody does the rows survive. StartTokenSweep is what bounds them.
+	_, _ = h.DB.ExecContext(r.Context(), sweepStatement)
 
 	// The token is delivered to pma-signon.php in a POST body, never in a URL, so it
 	// cannot leak through browser history, proxy access logs, or Referer headers.
@@ -140,14 +139,20 @@ func (h *Handlers) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var dbUser, dbPassword, dbName string
+	var dbUser, dbName, storedPassword string
 	var used, expired int
 	// Evaluate expiry with the MySQL clock so it matches how expires_at was written and how
 	// the consume UPDATE below compares it. A Go-side comparison can reject a valid token.
+	//
+	// The password comes from db_accounts through the token's reference, not from
+	// the token row: the token carries no credential at all. The join is INNER,
+	// so a token whose account was deleted in the two-minute window answers "not
+	// found" rather than serving a stale credential.
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT db_user, db_pass, db_name, used, (expires_at < NOW())
-		 FROM pma_tokens WHERE token=?`, req.Token).
-		Scan(&dbUser, &dbPassword, &dbName, &used, &expired)
+		`SELECT t.db_user, t.db_name, a.db_pass_plain, t.used, (t.expires_at < NOW())
+		 FROM pma_tokens t JOIN db_accounts a ON a.id=t.db_account_id
+		 WHERE t.token=?`, req.Token).
+		Scan(&dbUser, &dbName, &storedPassword, &used, &expired)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "token not found")
 		return
@@ -174,6 +179,15 @@ func (h *Handlers) Redeem(w http.ResponseWriter, r *http.Request) {
 	consumed, err := result.RowsAffected()
 	if err != nil || consumed != 1 {
 		httpx.WriteError(w, http.StatusGone, "token is no longer valid")
+		return
+	}
+
+	// db_pass_plain is sealed at rest, bound to db_user. Decrypting happens HERE,
+	// after the token is consumed, so a failed decrypt cannot be used to probe
+	// the same token twice. A legacy plaintext row passes through unchanged.
+	dbPassword, derr := credentials.DecryptDBPass(dbUser, storedPassword)
+	if derr != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
 		return
 	}
 

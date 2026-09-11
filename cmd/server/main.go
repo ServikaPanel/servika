@@ -479,6 +479,11 @@ func main() {
 	// without a retention pass the table grows for the life of the installation.
 	notifications.StartPrune(context.Background(), d)
 
+	// phpMyAdmin signon tokens were only ever deleted as a side effect of minting
+	// the next one, so on a panel where nobody does that the last rows survive
+	// for the life of the installation and ride into every database dump.
+	pma.StartTokenSweep(context.Background(), d)
+
 	// The signed malware rule package, if this build carries a signing key. The
 	// PANEL is the only process that fetches: the scan worker runs inside
 	// servika-av.slice with nested deadlines and the watcher's unit is sandboxed
