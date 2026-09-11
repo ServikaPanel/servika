@@ -308,14 +308,18 @@ func readLocations(reader *zip.Reader) (map[string]string, error) {
 
 	countries := make(map[string]string, 512)
 	for {
-		row, err := records.Read()
-		if errors.Is(err, io.EOF) {
+		// A malformed row is skipped; a broken stream ends the member with a
+		// reported failure. Treating both as "skip" spun for ever, because
+		// csv.Read returns a stream error on every call and io.EOF never
+		// arrives. See nextRecord.
+		row, done, fatal := nextRecord(records)
+		if fatal != nil {
+			return nil, fmt.Errorf("read the country list: %w", fatal)
+		}
+		if done {
 			break
 		}
-		if err != nil {
-			// One malformed row must not discard a database that is otherwise
-			// usable: this is a third-party file and the alternative is no
-			// country blocking at all until MaxMind's next release.
+		if row == nil {
 			continue
 		}
 		if idColumn >= len(row) || codeColumn >= len(row) {
@@ -359,11 +363,14 @@ func writeNetworks(reader *zip.Reader, memberName, target string, countries map[
 	var body strings.Builder
 	written := 0
 	for {
-		row, err := records.Read()
-		if errors.Is(err, io.EOF) {
+		row, done, fatal := nextRecord(records)
+		if fatal != nil {
+			return fmt.Errorf("read %s: %w", memberName, fatal)
+		}
+		if done {
 			break
 		}
-		if err != nil {
+		if row == nil {
 			continue
 		}
 		if networkColumn >= len(row) {
