@@ -14,13 +14,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/user"
 	"strconv"
 	"strings"
 	"time"
 
 	"servika/internal/avsettings"
-	"servika/internal/chains"
 	"servika/internal/db"
 	"servika/internal/notifications"
 
@@ -36,9 +34,6 @@ const (
 	// procRecordTTL bounds how long a fork record lives, so a missed EXIT event
 	// cannot grow pidTable without limit.
 	procRecordTTL = 5 * time.Minute
-	// procSweepInterval is how often the stale throttle and pid records are
-	// dropped, which is what keeps both maps from being a memory-DoS vector.
-	procSweepInterval = 30 * time.Second
 	// procPidTableCap is a hard ceiling on tracked pids, a second guard beside
 	// the TTL sweep.
 	procPidTableCap = 200000
@@ -46,6 +41,11 @@ const (
 	// one tenant's exec flood cannot drown the root agent in NSS and DB lookups.
 	procRateBurst = 5
 )
+
+// procSweepInterval is how often the stale throttle and pid records are dropped,
+// which is what keeps both maps from being a memory-DoS vector. It is a variable
+// so a test can make every read sweep.
+var procSweepInterval = 30 * time.Second
 
 // runProcWatcher opens the database, checks the gate, subscribes to the exec
 // stream and reports suspicious execs until stopped. It ENDS with a nil error
@@ -105,7 +105,7 @@ func (w *procWatcher) loop(fd int) {
 	buf := make([]byte, 16384)
 	lastSweep := time.Now()
 	for {
-		n, from, err := unix.Recvfrom(fd, buf, 0)
+		n, from, err := recvNetlink(fd, buf, 0)
 		if err != nil {
 			if errors.Is(err, unix.EINTR) || errors.Is(err, unix.ENOBUFS) || errors.Is(err, unix.EAGAIN) {
 				if errors.Is(err, unix.ENOBUFS) {
@@ -181,14 +181,14 @@ func (w *procWatcher) handleEvent(ev procEvent) {
 // evaluate enriches one exec'd PID from /proc, scores it, and reports it when it
 // is a tenant process crossing the threshold.
 func (w *procWatcher) evaluate(pid int) {
-	exe := procExe(pid)
-	cmdline := procCmdline(pid)
-	uid := procUID(pid)
+	exe := readProcExe(pid)
+	cmdline := readProcCmdline(pid)
+	uid := readProcUID(pid)
 
 	// If this process IS a web server, mark it web in the table so the children
 	// it forks after this point inherit the web-ancestor flag, even a php-fpm
 	// worker respawned mid-session.
-	if _, comm := procStat(pid); isWebServer(exe, comm) {
+	if _, comm := readProcStat(pid); isWebServer(exe, comm) {
 		if rec := w.pidTable[pid]; rec != nil {
 			rec.web = true
 		} else if len(w.pidTable) < procPidTableCap {
@@ -247,7 +247,7 @@ func (w *procWatcher) evaluate(pid int) {
 	if finding.score >= procScoreCritical {
 		level = notifications.LevelCritical
 	}
-	chains.WriteEvent(w.db, domainID, "process", stageForCode(finding.code), level, "", exeClean(exe), pid, "av_proc", 0)
+	writeChainEvent(w.db, domainID, "process", stageForCode(finding.code), level, "", exeClean(exe), pid, "av_proc", 0)
 }
 
 // stageForCode maps a process reason code to its kill-chain stage: a downloader
@@ -296,7 +296,7 @@ func (w *procWatcher) notify(domainID int64, f procFinding) {
 		event.Message = fmt.Sprintf("A web process ran a suspicious command on %s.", name)
 		event.Params = map[string]any{"domain": name}
 	}
-	if err := notifications.Write(ctx, w.db, event); err != nil {
+	if err := writeNotification(ctx, w.db, event); err != nil {
 		log.Printf("process watcher: the alert for domain %d could not be written: %v", domainID, err)
 	}
 }
@@ -376,7 +376,7 @@ func (w *procWatcher) usernameFor(uid int) string {
 		return name
 	}
 	name := ""
-	if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+	if u, err := lookupUserID(strconv.Itoa(uid)); err == nil {
 		name = u.Username
 	}
 	w.uidName[uid] = name

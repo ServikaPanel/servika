@@ -128,7 +128,7 @@ func sweepRequest(s avsettings.Settings) ScanRequest {
 // answer a refusal before it starts a goroutine while the scheduler simply skips
 // the hour.
 func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
-	result, confined, err := Scan(ctx, req, "sweep-"+strconv.FormatInt(sid, 10))
+	result, confined, err := scanTree(ctx, req, "sweep-"+strconv.FormatInt(sid, 10))
 	if err != nil {
 		// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
 		log.Printf("antivirus: sweep %d could not run: %v", sid, err)

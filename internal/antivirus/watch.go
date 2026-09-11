@@ -35,7 +35,6 @@ import (
 	"servika/internal/avsettings"
 	"servika/internal/chains"
 	"servika/internal/config"
-	"servika/internal/db"
 )
 
 const watchFlag = "av-watch"
@@ -61,7 +60,7 @@ func runWatcher() error {
 	if dsn == "" {
 		return errors.New("SERVIKA_DB_DSN is required")
 	}
-	handle, err := db.Open(dsn)
+	handle, err := openWatchDB(dsn)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
@@ -74,11 +73,11 @@ func runWatcher() error {
 	// watcher does not fetch: its unit is sandboxed for reading tenant trees,
 	// and the panel is the only process that writes this file. A failure leaves
 	// the built-in set running, so it is reported and not fatal.
-	if err := LoadRulesFromDisk(); err != nil && !errors.Is(err, ErrRuleKeyAbsent) && !os.IsNotExist(err) {
+	if err := loadPackagedRules(); err != nil && !errors.Is(err, ErrRuleKeyAbsent) && !os.IsNotExist(err) {
 		log.Printf("antivirus watcher: packaged rules not in use: %v", err)
 	}
 
-	w, err := newWatcher(ctx, handle)
+	w, err := startWatcher(ctx, handle)
 	if err != nil {
 		if errors.Is(err, errWatchDisabled) {
 			log.Print("antivirus watcher: real-time watching is off in the antivirus settings")
@@ -86,7 +85,7 @@ func runWatcher() error {
 		}
 		return err
 	}
-	if err := w.run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := watchFiles(w, ctx); err != nil && !errors.Is(err, context.Canceled) {
 		if errors.Is(err, errWatchDisabled) {
 			log.Print("antivirus watcher: real-time watching is off in the antivirus settings")
 			return nil

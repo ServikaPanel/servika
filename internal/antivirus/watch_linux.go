@@ -54,8 +54,9 @@ const pollTimeoutMS = 1000
 //
 // A threshold or a layer changed on the settings screen has to reach a process
 // that may have been running for weeks, and restarting the watcher to apply one
-// is a window in which nothing is watched at all.
-const settingsRefresh = time.Minute
+// is a window in which nothing is watched at all. It is a variable so a test can
+// make the refresh come due at once.
+var settingsRefresh = time.Minute
 
 // refresh re-reads the settings. A read that FAILS keeps the settings the
 // watcher already has: a database hiccup must not silently turn a detection
@@ -78,12 +79,12 @@ func (w *watcher) refresh(ctx context.Context) error {
 func (w *watcher) run(ctx context.Context) error {
 	roots := w.current().ScanRoots()
 
-	fd, err := unix.FanotifyInit(unix.FAN_CLASS_NOTIF|unix.FAN_CLOEXEC,
+	fd, err := fanotifyInit(unix.FAN_CLASS_NOTIF|unix.FAN_CLOEXEC,
 		unix.O_RDONLY|unix.O_LARGEFILE)
 	if err != nil {
 		return fmt.Errorf("fanotify_init: %w (CAP_SYS_ADMIN is required)", err)
 	}
-	defer func() { _ = unix.Close(fd) }()
+	defer func() { _ = closeFD(fd) }()
 
 	for _, root := range roots {
 		// FAN_MARK_FILESYSTEM, never FAN_MARK_MOUNT, and the reason is the
@@ -107,7 +108,7 @@ func (w *watcher) run(ctx context.Context) error {
 		// It needs Linux 4.20. AlmaLinux 9 is on 5.14 and AlmaLinux 10 on 6.12,
 		// so a failure here is reported rather than downgraded to a mount mark:
 		// the downgrade is the silent blindness above.
-		if err := unix.FanotifyMark(fd, unix.FAN_MARK_ADD|unix.FAN_MARK_FILESYSTEM,
+		if err := fanotifyMark(fd, unix.FAN_MARK_ADD|unix.FAN_MARK_FILESYSTEM,
 			unix.FAN_CLOSE_WRITE, unix.AT_FDCWD, root); err != nil {
 			return fmt.Errorf("fanotify_mark %s: %w (FAN_MARK_FILESYSTEM needs Linux 4.20 or newer)", root, err)
 		}
@@ -143,7 +144,7 @@ func (w *watcher) run(ctx context.Context) error {
 		default:
 		}
 
-		ready, err := unix.Poll([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, pollTimeoutMS)
+		ready, err := pollFDs([]unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}, pollTimeoutMS)
 		if err != nil {
 			if errors.Is(err, unix.EINTR) {
 				continue
@@ -153,7 +154,7 @@ func (w *watcher) run(ctx context.Context) error {
 		if ready == 0 {
 			continue
 		}
-		n, err := unix.Read(fd, buf)
+		n, err := readFD(fd, buf)
 		if err != nil {
 			if errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN) {
 				continue

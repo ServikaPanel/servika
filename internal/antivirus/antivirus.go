@@ -281,7 +281,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid user")
 		return
 	}
-	root := "/home/" + systemUser + "/public_html"
+	root := tenantHomeBase + systemUser + "/public_html"
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	if _, err := os.Stat(root); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "public_html not found")
@@ -319,7 +319,7 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		defer slot.Release()
 		ctx, cancel := context.WithTimeout(context.Background(), parentBudget)
 		defer cancel()
-		result, confined, err := Scan(ctx, req, strconv.FormatInt(sid, 10))
+		result, confined, err := scanTree(ctx, req, strconv.FormatInt(sid, 10))
 		if err != nil {
 			// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
 			httpx.LogR(r, "antivirus: scan %d could not run: %v", sid, err)

@@ -217,7 +217,7 @@ func (h *Handlers) quarantineFinding(domainID int64, systemUser string, findingI
 	if err != nil {
 		return reasonQuarantineFail
 	}
-	size, err := contain(home, rel, systemUser, rowID)
+	size, err := containInHome(home, rel, systemUser, rowID)
 	if err != nil {
 		// The row describes a containment that did not happen, so it goes.
 		_, _ = h.DB.Exec(`DELETE FROM av_quarantine WHERE id=?`, rowID)
