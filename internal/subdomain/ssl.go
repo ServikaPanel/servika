@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/provisioner"
 
@@ -113,26 +114,10 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	certPath, keyPath := certificatePaths(systemUser, fqdn)
-	if err := os.MkdirAll(sslDirectory(systemUser), 0o750); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not prepare certificate directory")
-		return
-	}
-
-	if certificateType == "letsencrypt" {
-		err = issueLetsEncrypt(fqdn, certPath, keyPath)
-	} else {
-		err = issueSelfSigned(fqdn, certPath, keyPath)
-	}
-	if err != nil {
+	if err := issueAndPublish(systemUser, fqdn, certificateType); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "SSL installation failed")
 		return
 	}
-	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
-	_ = os.Chmod(keyPath, 0o640)
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("chown", "-R", systemUser+":"+systemUser, sslDirectory(systemUser)).Run()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", "-R", sslDirectory(systemUser)).Run()
 
 	protected := provisioner.ProtectedBlocks(h.DB, domainID, subdomainID, socket)
 	web := loadWebRender(r.Context(), h.DB, domainID, subdomainID, fqdn, true)
@@ -175,9 +160,12 @@ func (h *Handlers) SSLRemove(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not disable SSL")
 		return
 	}
-	certPath, keyPath := certificatePaths(systemUser, fqdn)
-	_ = os.Remove(certPath)
-	_ = os.Remove(keyPath)
+	// Beneath the home, not by path: os.Remove does not follow a symlink at the
+	// FINAL component, but it does follow one at `ssl`, so a tenant who made
+	// that a link had root delete files under whatever it pointed at.
+	home := filepath.Join("/home", systemUser)
+	_ = files.RemoveAllBeneath(home, sslRelPath(fqdn, ".crt"))
+	_ = files.RemoveAllBeneath(home, sslRelPath(fqdn, ".key"))
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
