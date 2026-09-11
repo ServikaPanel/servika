@@ -114,15 +114,7 @@ func TestMissingPostfixIsRefused(t *testing.T) {
 // A configuration Postfix will not start with takes mail down for every domain
 // on the server, so a rejected change has to leave the previous one running.
 func TestRejectedSettingsAreRolledBack(t *testing.T) {
-	recorded := stubPostfix(t, func(name string, args ...string) ([]byte, error) {
-		if name == "postfix" && len(args) > 0 && args[0] == "check" {
-			return []byte("bad parameter"), errors.New("exit status 1")
-		}
-		if name == "postconf" && len(args) > 1 && args[0] == "-h" {
-			return []byte("10240000"), nil
-		}
-		return nil, nil
-	})
+	recorded := stubPostfix(t, refuseCheckWithStoredSize)
 
 	err := applyPostfixSettings(ServerSettings{MaxMessageSizeMB: 25}, nil)
 	if err == nil {
@@ -139,6 +131,18 @@ func TestRejectedSettingsAreRolledBack(t *testing.T) {
 	if strings.Count(joined, "postfix reload") == 0 {
 		t.Error("the rollback never reloaded, so the restored value is not running")
 	}
+}
+
+// refuseCheckWithStoredSize answers postfix check with a refusal and reports a
+// stored message size, so the rollback has a value to restore.
+func refuseCheckWithStoredSize(name string, args ...string) ([]byte, error) {
+	if name == "postfix" && len(args) > 0 && args[0] == "check" {
+		return []byte("bad parameter"), errors.New("exit status 1")
+	}
+	if name == "postconf" && len(args) > 1 && args[0] == "-h" {
+		return []byte("10240000"), nil
+	}
+	return nil, nil
 }
 
 // The whole point is that the change reaches the running server, not just

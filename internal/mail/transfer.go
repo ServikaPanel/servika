@@ -168,40 +168,12 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-
-	// A migration writes into the same Maildir. Two writers would interleave
-	// folders and neither count would mean anything afterwards.
-	busy, err := migrationInFlight(r.Context(), h.DB, mailboxID)
-	if err != nil {
-		// #nosec G706 -- integer id only.
-		httpx.LogR(r, "check migrations for mailbox=%d: %v", mailboxID, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox state could not be read")
+	layout, ok := h.importTarget(w, r, mailboxID)
+	if !ok {
 		return
 	}
-	if busy {
-		httpx.WriteJSON(w, http.StatusConflict, map[string]any{
-			"error": "a migration is already writing into this mailbox", "reason": "migration_already_running",
-		})
-		return
-	}
-
-	layout, _, err := h.mailboxLayout(r.Context(), mailboxID)
-	if err != nil {
-		// #nosec G706 -- integer id only.
-		httpx.LogR(r, "locate mailbox=%d for import: %v", mailboxID, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be located on disk")
-		return
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes)
-	reader, err := r.MultipartReader()
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "a multipart body is required")
-		return
-	}
-	part, err := uploadPart(reader)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "a file is required in the file field")
+	part, ok := importUpload(w, r)
+	if !ok {
 		return
 	}
 	defer func() { _ = part.Close() }()
@@ -211,34 +183,8 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 
 	sink := &maildirSink{layout: layout, token: fmt.Sprintf("import-%d", time.Now().UnixNano())}
 	name := part.FileName()
-	switch {
-	case isTarName(name):
-		err = importMaildirTar(part, sink)
-	case strings.HasSuffix(strings.ToLower(name), ".pst"):
-		err = h.importPST(ctx, layout, part, sink)
-	default:
-		// mbox has no required suffix and is what every remaining exporter
-		// produces, so it is the fallback rather than a named case.
-		err = importMbox("INBOX", part, sink)
-	}
-	if err != nil {
-		// #nosec G706 -- integer id and the unpack error.
-		httpx.LogR(r, "import into mailbox=%d: %v", mailboxID, err)
-		// Everything this attempt wrote is taken out again. Keeping it would put
-		// the customer in a worse place than an empty mailbox: the only way to
-		// finish the import is to upload the whole archive again, and that writes
-		// a second copy of every message the failed attempt already delivered.
-		removed, rollbackErr := sink.rollback()
-		if rollbackErr != nil {
-			// #nosec G706 -- integer id and a filesystem error.
-			httpx.LogR(r, "import into mailbox=%d: rollback left files behind: %v", mailboxID, rollbackErr)
-		}
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
-			"error": "the upload could not be unpacked", "reason": reasonForImport(err),
-			// Reported rather than swallowed: a rollback that could not finish
-			// means a retry WILL duplicate, and the operator has to know.
-			"removed": removed, "rollback_incomplete": rollbackErr != nil,
-		})
+	if err := h.unpackImport(ctx, layout, name, part, sink); err != nil {
+		writeImportFailure(w, r, mailboxID, sink, err)
 		return
 	}
 
@@ -246,6 +192,89 @@ func (h *Handlers) Import(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "messages": sink.messages, "bytes": sink.bytes,
 		"folders": sink.folderCount(),
+	})
+}
+
+// importTarget refuses a mailbox a migration is writing into and resolves where
+// the import writes. It writes the refusal and reports false when the request
+// must stop.
+func (h *Handlers) importTarget(w http.ResponseWriter, r *http.Request, mailboxID int64) (maildirLayout, bool) {
+	// A migration writes into the same Maildir. Two writers would interleave
+	// folders and neither count would mean anything afterwards.
+	busy, err := migrationInFlight(r.Context(), h.DB, mailboxID)
+	if err != nil {
+		// #nosec G706 -- integer id only.
+		httpx.LogR(r, "check migrations for mailbox=%d: %v", mailboxID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox state could not be read")
+		return maildirLayout{}, false
+	}
+	if busy {
+		httpx.WriteJSON(w, http.StatusConflict, map[string]any{
+			"error": "a migration is already writing into this mailbox", "reason": "migration_already_running",
+		})
+		return maildirLayout{}, false
+	}
+
+	layout, _, err := h.mailboxLayout(r.Context(), mailboxID)
+	if err != nil {
+		// #nosec G706 -- integer id only.
+		httpx.LogR(r, "locate mailbox=%d for import: %v", mailboxID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the mailbox could not be located on disk")
+		return maildirLayout{}, false
+	}
+	return layout, true
+}
+
+// importUpload bounds the body and returns its file part. It writes the refusal
+// and reports false when the request must stop.
+func importUpload(w http.ResponseWriter, r *http.Request) (*multipart.Part, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes)
+	reader, err := r.MultipartReader()
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "a multipart body is required")
+		return nil, false
+	}
+	part, err := uploadPart(reader)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "a file is required in the file field")
+		return nil, false
+	}
+	return part, true
+}
+
+// unpackImport reads the upload in the format its name names.
+func (h *Handlers) unpackImport(ctx context.Context, layout maildirLayout, name string, part io.Reader, sink *maildirSink) error {
+	switch {
+	case isTarName(name):
+		return importMaildirTar(part, sink)
+	case strings.HasSuffix(strings.ToLower(name), ".pst"):
+		return h.importPST(ctx, layout, part, sink)
+	default:
+		// mbox has no required suffix and is what every remaining exporter
+		// produces, so it is the fallback rather than a named case.
+		return importMbox("INBOX", part, sink)
+	}
+}
+
+// writeImportFailure logs the failure, takes out what the attempt wrote and
+// answers with the reason and the outcome of that rollback.
+func writeImportFailure(w http.ResponseWriter, r *http.Request, mailboxID int64, sink *maildirSink, err error) {
+	// #nosec G706 -- integer id and the unpack error.
+	httpx.LogR(r, "import into mailbox=%d: %v", mailboxID, err)
+	// Everything this attempt wrote is taken out again. Keeping it would put
+	// the customer in a worse place than an empty mailbox: the only way to
+	// finish the import is to upload the whole archive again, and that writes
+	// a second copy of every message the failed attempt already delivered.
+	removed, rollbackErr := sink.rollback()
+	if rollbackErr != nil {
+		// #nosec G706 -- integer id and a filesystem error.
+		httpx.LogR(r, "import into mailbox=%d: rollback left files behind: %v", mailboxID, rollbackErr)
+	}
+	httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
+		"error": "the upload could not be unpacked", "reason": reasonForImport(err),
+		// Reported rather than swallowed: a rollback that could not finish
+		// means a retry WILL duplicate, and the operator has to know.
+		"removed": removed, "rollback_incomplete": rollbackErr != nil,
 	})
 }
 
@@ -457,46 +486,62 @@ func importMbox(folder string, source io.Reader, sink *maildirSink) error {
 // mailbox on disk.
 func forEachMboxMessage(source io.Reader, emit func(body []byte) error) error {
 	reader := bufio.NewReaderSize(source, 64<<10)
-	var message bytes.Buffer
-	flush := func() error {
-		if message.Len() == 0 {
-			return nil
-		}
-		body := bytes.TrimRight(message.Bytes(), "\n")
-		message.Reset()
-		if len(body) == 0 {
-			return nil
-		}
-		return emit(body)
-	}
-
+	split := &mboxSplit{emit: emit}
 	for {
 		line, err := reader.ReadBytes('\n')
 		if len(line) > 0 {
-			switch {
-			case bytes.HasPrefix(line, []byte("From ")):
-				if flushErr := flush(); flushErr != nil {
-					return flushErr
-				}
-				// The separator carries the envelope sender and the delivery date,
-				// not the message. Keeping it would put a line that is not a header
-				// above the headers of every message after the first.
-				line = nil
-			case bytes.HasPrefix(line, []byte(">From ")):
-				line = line[1:]
+			if lineErr := split.add(line); lineErr != nil {
+				return lineErr
 			}
-			if message.Len()+len(line) > maxImportMessageBytes {
-				return errMessageTooLarge
-			}
-			message.Write(line)
 		}
 		if errors.Is(err, io.EOF) {
-			return flush()
+			return split.flush()
 		}
 		if err != nil {
 			return err
 		}
 	}
+}
+
+// mboxSplit gathers the lines of the message being read.
+type mboxSplit struct {
+	message bytes.Buffer
+	emit    func(body []byte) error
+}
+
+// add takes one line: a separator ends the message before it, an escaped
+// separator loses its escape, and a message past the size limit is refused.
+func (s *mboxSplit) add(line []byte) error {
+	switch {
+	case bytes.HasPrefix(line, []byte("From ")):
+		if flushErr := s.flush(); flushErr != nil {
+			return flushErr
+		}
+		// The separator carries the envelope sender and the delivery date,
+		// not the message. Keeping it would put a line that is not a header
+		// above the headers of every message after the first.
+		line = nil
+	case bytes.HasPrefix(line, []byte(">From ")):
+		line = line[1:]
+	}
+	if s.message.Len()+len(line) > maxImportMessageBytes {
+		return errMessageTooLarge
+	}
+	s.message.Write(line)
+	return nil
+}
+
+// flush emits the gathered message, unless it holds nothing but line breaks.
+func (s *mboxSplit) flush() error {
+	if s.message.Len() == 0 {
+		return nil
+	}
+	body := bytes.TrimRight(s.message.Bytes(), "\n")
+	s.message.Reset()
+	if len(body) == 0 {
+		return nil
+	}
+	return s.emit(body)
 }
 
 // importPST converts an Outlook export and feeds the result through the mbox

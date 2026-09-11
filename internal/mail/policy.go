@@ -141,9 +141,56 @@ func reportUnansweredPolicyRequest(attrs map[string]string, err error) {
 }
 
 func evaluateSendPolicy(db *sql.DB, attrs map[string]string) string {
+	request, ok := readPolicyRequest(attrs)
+	if !ok {
+		return "DUNNO"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return "DUNNO"
+	}
+	defer func() { _ = tx.Rollback() }()
+	sender, verdict := lockSendingMailbox(ctx, tx, request.email)
+	if verdict != "" {
+		return verdict
+	}
+	if verdict := sender.readSentCounts(ctx, tx); verdict != "" {
+		return verdict
+	}
+	// Server-wide ceilings sit above the per-mailbox ones. They are read inside
+	// the same transaction as the counts, so a limit an operator has just lowered
+	// takes effect on the very next message rather than after a restart.
+	server, serverErr := ReadServerSettings(ctx, db)
+	if serverErr != nil {
+		// Failing open here would let a compromised account through exactly when
+		// the database is unhealthy, which is not when to relax a ceiling.
+		log.Printf("mail policy could not read the server settings: %v", serverErr)
+		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
+	}
+	if verdict := serverCeilingVerdict(ctx, tx, server, sender, request); verdict != "" {
+		return verdict
+	}
+	if sender.exceeds(request.recipients) {
+		return suspendForSendLimit(ctx, tx, sender, request)
+	}
+	return recordAcceptedSend(ctx, tx, sender, request)
+}
+
+// policyRequest is what Postfix asked about one message.
+type policyRequest struct {
+	email      string
+	recipients int
+	clientIP   string
+}
+
+// readPolicyRequest reads the sender, the recipient count and the client
+// address, and reports false when there is no authenticated sender to judge.
+func readPolicyRequest(attrs map[string]string) (policyRequest, bool) {
 	email := strings.ToLower(strings.TrimSpace(attrs["sasl_username"]))
 	if email == "" {
-		return "DUNNO"
+		return policyRequest{}, false
 	}
 	recipients, _ := strconv.Atoi(attrs["recipient_count"])
 	if recipients < 1 {
@@ -156,92 +203,112 @@ func evaluateSendPolicy(db *sql.DB, attrs map[string]string) string {
 	if len(clientIP) > 45 || net.ParseIP(clientIP) == nil {
 		clientIP = ""
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return "DUNNO"
-	}
-	defer func() { _ = tx.Rollback() }()
-	var mailboxID, domainID int64
-	var status string
-	var hourLimit, dayLimit int
-	err = tx.QueryRowContext(ctx, `SELECT id, domain_id, status, send_limit_hour, send_limit_day
+	return policyRequest{email: email, recipients: recipients, clientIP: clientIP}, true
+}
+
+// policySender is the mailbox a message is sent from, as its row and its send
+// log stand inside the policy transaction.
+type policySender struct {
+	mailboxID, domainID int64
+	status              string
+	hourLimit, dayLimit int
+	sentHour, sentDay   int
+}
+
+// lockSendingMailbox reads the sending mailbox FOR UPDATE and returns the verdict
+// when it may not send at all.
+func lockSendingMailbox(ctx context.Context, tx *sql.Tx, email string) (policySender, string) {
+	var sender policySender
+	err := tx.QueryRowContext(ctx, `SELECT id, domain_id, status, send_limit_hour, send_limit_day
 		FROM mailboxes WHERE email=? FOR UPDATE`, email).
-		Scan(&mailboxID, &domainID, &status, &hourLimit, &dayLimit)
+		Scan(&sender.mailboxID, &sender.domainID, &sender.status, &sender.hourLimit, &sender.dayLimit)
 	if err != nil {
-		return "DUNNO"
+		return sender, "DUNNO"
 	}
-	if status != "active" {
-		return "REJECT 5.7.1 Mail account is not active"
+	if sender.status != "active" {
+		return sender, "REJECT 5.7.1 Mail account is not active"
 	}
-	// The per-mailbox counts DEFER on a read failure, for the same reason the
-	// server-settings read below does and ceilingCount does. Discarded, both
-	// totals stayed at 0, the exceeded test could never be true, and the mailbox
-	// was never suspended: the one layer meant to catch a compromised account was
-	// off for as long as mail_send_log could not be read, which is exactly the
-	// state a mass-mailing burst against that table produces.
-	var sentHour, sentDay int
+	return sender, ""
+}
+
+// readSentCounts reads the mailbox's own hourly and daily totals.
+//
+// The per-mailbox counts DEFER on a read failure, for the same reason the
+// server-settings read below does and ceilingCount does. Discarded, both
+// totals stayed at 0, the exceeded test could never be true, and the mailbox
+// was never suspended: the one layer meant to catch a compromised account was
+// off for as long as mail_send_log could not be read, which is exactly the
+// state a mass-mailing burst against that table produces.
+func (sender *policySender) readSentCounts(ctx context.Context, tx *sql.Tx) string {
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
-		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`, mailboxID).Scan(&sentHour); err != nil {
+		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`, sender.mailboxID).Scan(&sender.sentHour); err != nil {
 		// #nosec G706 -- the logged values are a validated mailbox id and an error string; no raw tenant string with CR/LF reaches the log.
-		log.Printf("mail policy could not read the hourly send count for mailbox %d: %v", mailboxID, err)
+		log.Printf("mail policy could not read the hourly send count for mailbox %d: %v", sender.mailboxID, err)
 		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
-		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 DAY`, mailboxID).Scan(&sentDay); err != nil {
+		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 DAY`, sender.mailboxID).Scan(&sender.sentDay); err != nil {
 		// #nosec G706 -- the logged values are a validated mailbox id and an error string; no raw tenant string with CR/LF reaches the log.
-		log.Printf("mail policy could not read the daily send count for mailbox %d: %v", mailboxID, err)
+		log.Printf("mail policy could not read the daily send count for mailbox %d: %v", sender.mailboxID, err)
 		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
 	}
-	// Server-wide ceilings sit above the per-mailbox ones. They are read inside
-	// the same transaction as the counts, so a limit an operator has just lowered
-	// takes effect on the very next message rather than after a restart.
-	server, serverErr := ReadServerSettings(ctx, db)
-	if serverErr != nil {
-		// Failing open here would let a compromised account through exactly when
-		// the database is unhealthy, which is not when to relax a ceiling.
-		log.Printf("mail policy could not read the server settings: %v", serverErr)
-		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
-	}
+	return ""
+}
+
+// serverCeilingVerdict applies the server-wide hourly ceilings for the domain
+// and for the sending connection.
+func serverCeilingVerdict(ctx context.Context, tx *sql.Tx, server ServerSettings, sender policySender, request policyRequest) string {
 	domainSent := ceilingCount(ctx, tx,
 		`SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
 		  WHERE domain_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`,
-		server.DomainSendLimitHour, domainID)
+		server.DomainSendLimitHour, sender.domainID)
 	clientSent := 0
-	if clientIP != "" {
+	if request.clientIP != "" {
 		clientSent = ceilingCount(ctx, tx,
 			`SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
 			  WHERE client_ip=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`,
-			server.ClientSendLimitHour, clientIP)
+			server.ClientSendLimitHour, request.clientIP)
 	}
-	if server.DomainSendLimitHour > 0 && domainSent+recipients > server.DomainSendLimitHour {
+	if server.DomainSendLimitHour > 0 && domainSent+request.recipients > server.DomainSendLimitHour {
 		// The domain ceiling is a rate limit on the whole domain, not a signal
 		// that one mailbox was taken over, so nothing is suspended: the sender is
 		// told to come back rather than locked out.
 		return "DEFER_IF_PERMIT 4.7.1 Domain hourly send limit reached; try again later"
 	}
-	if server.ClientSendLimitHour > 0 && clientSent+recipients > server.ClientSendLimitHour {
+	if server.ClientSendLimitHour > 0 && clientSent+request.recipients > server.ClientSendLimitHour {
 		return "DEFER_IF_PERMIT 4.7.1 Hourly send limit for this connection reached; try again later"
 	}
+	return ""
+}
 
-	exceeded := (hourLimit > 0 && sentHour+recipients > hourLimit) ||
-		(dayLimit > 0 && sentDay+recipients > dayLimit)
-	if exceeded {
-		_, _ = tx.ExecContext(ctx, `UPDATE mailboxes
-			SET status='suspended', spam_suspended_at=NOW() WHERE id=?`, mailboxID)
-		_, _ = tx.ExecContext(ctx, `INSERT INTO mail_send_log(mailbox_id,domain_id,ok,recipient_count,client_ip)
-			VALUES(?,?,0,?,?)`, mailboxID, domainID, recipients, clientIP)
-		_ = tx.Commit()
-		// The suspension reaches Postfix immediately (this server re-reads the
-		// row per message) but not IMAP, whose passdb answer is cached.
-		FlushAuthCache(ctx, email)
-		log.Printf("mail spam protection: %s auto-suspended (hour=%d/%d day=%d/%d)",
-			email, sentHour, hourLimit, sentDay, dayLimit)
-		return "REJECT 5.7.1 Send limit exceeded; account suspended for security"
-	}
+// exceeds reports whether the message passes the mailbox's hourly or daily
+// limit.
+func (sender policySender) exceeds(recipients int) bool {
+	return (sender.hourLimit > 0 && sender.sentHour+recipients > sender.hourLimit) ||
+		(sender.dayLimit > 0 && sender.sentDay+recipients > sender.dayLimit)
+}
+
+// suspendForSendLimit suspends a mailbox that passed its own limit, logs the
+// refused message and commits.
+func suspendForSendLimit(ctx context.Context, tx *sql.Tx, sender policySender, request policyRequest) string {
+	email := request.email
+	_, _ = tx.ExecContext(ctx, `UPDATE mailboxes
+			SET status='suspended', spam_suspended_at=NOW() WHERE id=?`, sender.mailboxID)
+	_, _ = tx.ExecContext(ctx, `INSERT INTO mail_send_log(mailbox_id,domain_id,ok,recipient_count,client_ip)
+			VALUES(?,?,0,?,?)`, sender.mailboxID, sender.domainID, request.recipients, request.clientIP)
+	_ = tx.Commit()
+	// The suspension reaches Postfix immediately (this server re-reads the
+	// row per message) but not IMAP, whose passdb answer is cached.
+	FlushAuthCache(ctx, email)
+	log.Printf("mail spam protection: %s auto-suspended (hour=%d/%d day=%d/%d)",
+		email, sender.sentHour, sender.hourLimit, sender.sentDay, sender.dayLimit)
+	return "REJECT 5.7.1 Send limit exceeded; account suspended for security"
+}
+
+// recordAcceptedSend logs a message the mailbox may send and commits.
+func recordAcceptedSend(ctx context.Context, tx *sql.Tx, sender policySender, request policyRequest) string {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO mail_send_log(mailbox_id,domain_id,ok,recipient_count,client_ip)
-		VALUES(?,?,1,?,?)`, mailboxID, domainID, recipients, clientIP); err != nil {
+		VALUES(?,?,1,?,?)`, sender.mailboxID, sender.domainID, request.recipients, request.clientIP); err != nil {
 		return "DUNNO"
 	}
 	if err := tx.Commit(); err != nil {
@@ -325,10 +392,7 @@ func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	mid, _ := strconv.ParseInt(chi.URLParam(r, "mid"), 10, 64)
 	var req SendLimits
-	if json.NewDecoder(r.Body).Decode(&req) != nil ||
-		req.HourLimit < 0 || req.HourLimit > 100000 ||
-		req.DayLimit < 0 || req.DayLimit > 100000 ||
-		(req.HourLimit > 0 && req.DayLimit > 0 && req.HourLimit > req.DayLimit) {
+	if json.NewDecoder(r.Body).Decode(&req) != nil || invalidSendLimits(req) {
 		httpx.WriteError(w, http.StatusBadRequest, "limits must be 0-100000; the hourly limit may not exceed the daily limit")
 		return
 	}
@@ -339,14 +403,8 @@ func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
 	// A customer may lower its own limits, never raise them past the plan and
 	// never to 0, which the policy server reads as unlimited.
 	operator := isMailOperator(r)
-	if !operator {
-		if reason, err := h.refuseAbovePlan(r.Context(), id, req); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not read the plan's mail limits")
-			return
-		} else if reason != "" {
-			httpx.WriteError(w, http.StatusForbidden, reason)
-			return
-		}
+	if !operator && !h.sendLimitsWithinPlan(w, r, id, req) {
+		return
 	}
 	// send_limits_manual is what stops the next plan change from undoing this,
 	// because the plan realignment skips a mailbox somebody has tuned by hand.
@@ -365,6 +423,29 @@ func (h *Handlers) SendLimitsPut(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit(r, "mail.send_limits.update", strconv.FormatInt(mid, 10), true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// invalidSendLimits reports a limit outside 0-100000, or an hourly limit above
+// the daily one.
+func invalidSendLimits(req SendLimits) bool {
+	return req.HourLimit < 0 || req.HourLimit > 100000 ||
+		req.DayLimit < 0 || req.DayLimit > 100000 ||
+		(req.HourLimit > 0 && req.DayLimit > 0 && req.HourLimit > req.DayLimit)
+}
+
+// sendLimitsWithinPlan refuses a customer's limits the plan does not allow. It
+// writes the refusal and reports false when the request must stop.
+func (h *Handlers) sendLimitsWithinPlan(w http.ResponseWriter, r *http.Request, domainID int64, req SendLimits) bool {
+	reason, err := h.refuseAbovePlan(r.Context(), domainID, req)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read the plan's mail limits")
+		return false
+	}
+	if reason != "" {
+		httpx.WriteError(w, http.StatusForbidden, reason)
+		return false
+	}
+	return true
 }
 
 // ceilingCount runs a counting query only when the ceiling it feeds is actually

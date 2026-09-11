@@ -75,43 +75,13 @@ func (h *Handlers) ForwardingPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !request.Enabled || len(request.Destinations) == 0 {
-		if _, err := h.DB.ExecContext(r.Context(),
-			`DELETE FROM mail_forwarding WHERE mailbox_id=?`, mailboxID); err != nil {
-			// #nosec G706 -- integer id only.
-			httpx.LogR(r, "clear forwarding mailbox=%d: %v", mailboxID, err)
-			httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
-			return
-		}
-		h.applyForwardingSieve(r.Context(), w, mailboxID, Forwarding{})
-		h.audit(r, "mail.forwarding.clear", "", true)
+		h.clearForwarding(w, r, mailboxID)
 		return
 	}
 
-	destinations, reason := normalizeDestinations(request.Destinations)
-	if reason != "" {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
-			"error": "the destinations are not usable", "reason": reason,
-		})
+	destinations, ok := h.forwardingDestinations(w, r, mailboxID, request.Destinations)
+	if !ok {
 		return
-	}
-
-	// Forwarding to the mailbox's own address is a loop, and the panel is the
-	// only place that can see it before the mail server does.
-	var email string
-	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT email FROM mailboxes WHERE id=?`, mailboxID).Scan(&email); err != nil {
-		// #nosec G706 -- integer id only.
-		httpx.LogR(r, "read mailbox=%d: %v", mailboxID, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
-		return
-	}
-	for _, destination := range destinations {
-		if strings.EqualFold(destination, email) {
-			httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
-				"error": "a mailbox cannot forward to itself", "reason": "forwarding_loop",
-			})
-			return
-		}
 	}
 
 	if _, err := h.DB.ExecContext(r.Context(),
@@ -127,6 +97,52 @@ func (h *Handlers) ForwardingPut(w http.ResponseWriter, r *http.Request) {
 	h.applyForwardingSieve(r.Context(), w, mailboxID,
 		Forwarding{Enabled: true, Destinations: destinations, KeepCopy: request.KeepCopy})
 	h.audit(r, "mail.forwarding.set", strings.Join(destinations, ","), true)
+}
+
+// clearForwarding removes the mailbox's forwarding and recompiles its rules.
+func (h *Handlers) clearForwarding(w http.ResponseWriter, r *http.Request, mailboxID int64) {
+	if _, err := h.DB.ExecContext(r.Context(),
+		`DELETE FROM mail_forwarding WHERE mailbox_id=?`, mailboxID); err != nil {
+		// #nosec G706 -- integer id only.
+		httpx.LogR(r, "clear forwarding mailbox=%d: %v", mailboxID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
+		return
+	}
+	h.applyForwardingSieve(r.Context(), w, mailboxID, Forwarding{})
+	h.audit(r, "mail.forwarding.clear", "", true)
+}
+
+// forwardingDestinations normalises the list and refuses one that is unusable or
+// forwards the mailbox to itself. It writes the refusal and reports false when
+// the request must stop.
+func (h *Handlers) forwardingDestinations(w http.ResponseWriter, r *http.Request, mailboxID int64, input []string) ([]string, bool) {
+	destinations, reason := normalizeDestinations(input)
+	if reason != "" {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
+			"error": "the destinations are not usable", "reason": reason,
+		})
+		return nil, false
+	}
+
+	// Forwarding to the mailbox's own address is a loop, and the panel is the
+	// only place that can see it before the mail server does.
+	var email string
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT email FROM mailboxes WHERE id=?`, mailboxID).Scan(&email); err != nil {
+		// #nosec G706 -- integer id only.
+		httpx.LogR(r, "read mailbox=%d: %v", mailboxID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not save the forwarding")
+		return nil, false
+	}
+	for _, destination := range destinations {
+		if strings.EqualFold(destination, email) {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{
+				"error": "a mailbox cannot forward to itself", "reason": "forwarding_loop",
+			})
+			return nil, false
+		}
+	}
+	return destinations, true
 }
 
 // applyForwardingSieve recompiles the script and answers.

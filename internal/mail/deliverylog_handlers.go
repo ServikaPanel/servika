@@ -1,7 +1,9 @@
 package mail
 
 import (
+	"context"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -36,54 +38,89 @@ func (h *Handlers) DeliveryLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	query, args, limit, reason := deliveryLogQuery(id, r.URL.Query())
+	if reason != "" {
+		httpx.WriteError(w, http.StatusBadRequest, reason)
+		return
+	}
+
+	out, err := h.readDeliveryEntries(r.Context(), query, args, limit)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read the delivery log")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+// deliveryLogQuery builds the domain-scoped query and its bound values from the
+// filters, and returns the reason a filter is refused.
+func deliveryLogQuery(domainID int64, values url.Values) (string, []any, int, string) {
 	query := `SELECT DATE_FORMAT(ts,'%Y-%m-%d %H:%i:%s'), direction, sender, recipient, status, reason
 	            FROM mail_delivery_log WHERE domain_id = ?`
-	args := []any{id}
+	args := []any{domainID}
 
-	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
+	clauses, clauseArgs, reason := deliveryLogFilters(values)
+	if reason != "" {
+		return "", nil, 0, reason
+	}
+	limit, reason := deliveryLogLimit(values.Get("limit"))
+	if reason != "" {
+		return "", nil, 0, reason
+	}
+	query += clauses + ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(append(args, clauseArgs...), limit)
+	return query, args, limit, ""
+}
+
+// deliveryLogFilters turns the status, direction and search parameters into
+// clauses with bound values. Every clause narrows the already-scoped query.
+func deliveryLogFilters(values url.Values) (string, []any, string) {
+	var clauses string
+	var args []any
+	if status := strings.TrimSpace(values.Get("status")); status != "" {
 		if !knownStatuses[status] && status != "rejected" {
-			httpx.WriteError(w, http.StatusBadRequest, "unknown status filter")
-			return
+			return "", nil, "unknown status filter"
 		}
-		query += ` AND status = ?`
+		clauses += ` AND status = ?`
 		args = append(args, status)
 	}
-	if direction := strings.TrimSpace(r.URL.Query().Get("direction")); direction != "" {
+	if direction := strings.TrimSpace(values.Get("direction")); direction != "" {
 		if direction != "in" && direction != "out" {
-			httpx.WriteError(w, http.StatusBadRequest, "direction must be in or out")
-			return
+			return "", nil, "direction must be in or out"
 		}
-		query += ` AND direction = ?`
+		clauses += ` AND direction = ?`
 		args = append(args, direction)
 	}
-	if search := strings.TrimSpace(r.URL.Query().Get("search")); search != "" {
+	if search := strings.TrimSpace(values.Get("search")); search != "" {
 		if len(search) > maxAddressLen {
-			httpx.WriteError(w, http.StatusBadRequest, "search term is too long")
-			return
+			return "", nil, "search term is too long"
 		}
 		// LIKE wildcards are escaped so a search for "%" means the character, not
 		// "match everything", and cannot turn into a table scan by accident.
 		pattern := "%" + escapeLike(search) + "%"
-		query += ` AND (sender LIKE ? ESCAPE '\\' OR recipient LIKE ? ESCAPE '\\')`
+		clauses += ` AND (sender LIKE ? ESCAPE '\\' OR recipient LIKE ? ESCAPE '\\')`
 		args = append(args, pattern, pattern)
 	}
+	return clauses, args, ""
+}
 
-	limit := deliveryPageSize
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > deliveryPageSize {
-			httpx.WriteError(w, http.StatusBadRequest, "limit must be between 1 and 200")
-			return
-		}
-		limit = parsed
+// deliveryLogLimit reads the page size, one page when it is absent.
+func deliveryLogLimit(raw string) (int, string) {
+	if raw == "" {
+		return deliveryPageSize, ""
 	}
-	query += ` ORDER BY ts DESC, id DESC LIMIT ?`
-	args = append(args, limit)
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed < 1 || parsed > deliveryPageSize {
+		return 0, "limit must be between 1 and 200"
+	}
+	return parsed, ""
+}
 
-	rows, err := h.DB.QueryContext(r.Context(), query, args...)
+// readDeliveryEntries runs the query and reads every row it answers.
+func (h *Handlers) readDeliveryEntries(ctx context.Context, query string, args []any, limit int) ([]DeliveryEntry, error) {
+	rows, err := h.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read the delivery log")
-		return
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -92,16 +129,14 @@ func (h *Handlers) DeliveryLog(w http.ResponseWriter, r *http.Request) {
 		var entry DeliveryEntry
 		if err := rows.Scan(&entry.Timestamp, &entry.Direction, &entry.Sender,
 			&entry.Recipient, &entry.Status, &entry.Reason); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not read the delivery log")
-			return
+			return nil, err
 		}
 		out = append(out, entry)
 	}
 	if err := rows.Err(); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read the delivery log")
-		return
+		return nil, err
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	return out, nil
 }
 
 // escapeLike neutralises the LIKE metacharacters so the term is matched

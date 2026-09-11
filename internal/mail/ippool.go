@@ -224,40 +224,12 @@ func (h *Handlers) DomainOutboundPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value := strings.TrimSpace(req.IP)
-	if value != "" {
-		// Only an address that is in the pool and enabled may be assigned. A
-		// domain pointed at anything else would name a transport that does not
-		// exist, and Postfix defers rather than falling back.
-		var enabled int
-		if err := h.DB.QueryRowContext(r.Context(),
-			`SELECT enabled FROM mail_ip_pool WHERE ip=?`, value).Scan(&enabled); err != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "that address is not in the pool")
-			return
-		}
-		if enabled != 1 {
-			httpx.WriteError(w, http.StatusBadRequest, "that address is disabled")
-			return
-		}
-	}
-	result, err := h.DB.ExecContext(r.Context(),
-		`UPDATE mail_domains SET outbound_ip=? WHERE domain_id=?`, value, id)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not save the outbound address")
+	if reason := h.outboundAddressRefusal(r.Context(), value); reason != "" {
+		httpx.WriteError(w, http.StatusBadRequest, reason)
 		return
 	}
-	if affected, err := result.RowsAffected(); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not save the outbound address")
+	if !h.saveOutboundAddress(w, r, id, value) {
 		return
-	} else if affected == 0 {
-		// Zero rows means either mail is not enabled for the domain or the value
-		// is unchanged. Only the first is an error the caller can act on.
-		var exists int
-		_ = h.DB.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM mail_domains WHERE domain_id=?`, id).Scan(&exists)
-		if exists == 0 {
-			httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
-			return
-		}
 	}
 	if err := ApplyOutboundRouting(r.Context(), h.DB); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "postfix rejected the routing and it was rolled back")
@@ -265,6 +237,52 @@ func (h *Handlers) DomainOutboundPut(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit(r, "mail.outbound_ip.update", value, true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "ip": value})
+}
+
+// outboundAddressRefusal returns why an address may not be assigned, or an empty
+// reason. The empty address is the server default and always may be.
+func (h *Handlers) outboundAddressRefusal(ctx context.Context, value string) string {
+	if value == "" {
+		return ""
+	}
+	// Only an address that is in the pool and enabled may be assigned. A
+	// domain pointed at anything else would name a transport that does not
+	// exist, and Postfix defers rather than falling back.
+	var enabled int
+	if err := h.DB.QueryRowContext(ctx,
+		`SELECT enabled FROM mail_ip_pool WHERE ip=?`, value).Scan(&enabled); err != nil {
+		return "that address is not in the pool"
+	}
+	if enabled != 1 {
+		return "that address is disabled"
+	}
+	return ""
+}
+
+// saveOutboundAddress writes the assignment. It writes the refusal and reports
+// false when the request must stop.
+func (h *Handlers) saveOutboundAddress(w http.ResponseWriter, r *http.Request, domainID int64, value string) bool {
+	result, err := h.DB.ExecContext(r.Context(),
+		`UPDATE mail_domains SET outbound_ip=? WHERE domain_id=?`, value, domainID)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not save the outbound address")
+		return false
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not save the outbound address")
+		return false
+	} else if affected == 0 {
+		// Zero rows means either mail is not enabled for the domain or the value
+		// is unchanged. Only the first is an error the caller can act on.
+		var exists int
+		_ = h.DB.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM mail_domains WHERE domain_id=?`, domainID).Scan(&exists)
+		if exists == 0 {
+			httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
+			return false
+		}
+	}
+	return true
 }
 
 // addressIsLocal reports whether the address is configured on an interface of
@@ -342,27 +360,8 @@ func boolToInt(value bool) int {
 // poolAddressesForRouting returns the enabled pool addresses and the domains
 // assigned to each, which is everything the Postfix configuration needs.
 func poolAddressesForRouting(ctx context.Context, db *sql.DB) ([]string, map[string]string, error) {
-	rows, err := db.QueryContext(ctx, `SELECT ip FROM mail_ip_pool WHERE enabled=1 ORDER BY ip`)
+	addresses, err := enabledPoolAddresses(ctx, db)
 	if err != nil {
-		return nil, nil, err
-	}
-	var addresses []string
-	for rows.Next() {
-		var value string
-		if err := rows.Scan(&value); err != nil {
-			_ = rows.Close()
-			return nil, nil, err
-		}
-		if net.ParseIP(value) == nil {
-			continue // never write a transport that cannot bind
-		}
-		addresses = append(addresses, value)
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return nil, nil, err
-	}
-	if err := rows.Close(); err != nil {
 		return nil, nil, err
 	}
 
@@ -393,6 +392,34 @@ func poolAddressesForRouting(ctx context.Context, db *sql.DB) ([]string, map[str
 		assignments[domain] = value
 	}
 	return addresses, assignments, domainRows.Err()
+}
+
+// enabledPoolAddresses reads the enabled pool addresses that parse as an IP.
+func enabledPoolAddresses(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT ip FROM mail_ip_pool WHERE enabled=1 ORDER BY ip`)
+	if err != nil {
+		return nil, err
+	}
+	var addresses []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if net.ParseIP(value) == nil {
+			continue // never write a transport that cannot bind
+		}
+		addresses = append(addresses, value)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	return addresses, nil
 }
 
 // validRoutingDomain rejects anything that is not a plain hostname, because the

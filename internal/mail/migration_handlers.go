@@ -137,7 +137,34 @@ func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	remote, ok := decodeMigrationRemote(w, r)
+	if !ok {
+		return
+	}
 
+	// The login is proved here as well as in the wizard, because the wizard's
+	// verification is a separate request and nothing stops this one arriving on
+	// its own with a password that was never checked.
+	if accepted, reason := verifyRemoteLogin(r.Context(), remote.Host, remote.Port, remote.Security, remote.Username, remote.Password); !accepted {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "the remote server refused the sign-in", "reason": reason})
+		return
+	}
+
+	jobID, err := startMigrationJob(h.DB, mailboxID, remote)
+	if migrationStartRefused(w, r, mailboxID, err) {
+		return
+	}
+
+	h.audit(r, "mail.migration.start", remote.Username+" @ "+remote.Host, true)
+	// 202: the copy has been ACCEPTED, not started. Only four run at a time, so
+	// saying "running" here would be a guess the status endpoint then contradicts.
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"id": jobID, "status": "queued"})
+}
+
+// decodeMigrationRemote reads the remote account from the body and refuses one
+// that cannot be dialled or signed in to. It writes the refusal and reports false
+// when the request must stop.
+func decodeMigrationRemote(w http.ResponseWriter, r *http.Request) (RemoteAccount, bool) {
 	var request struct {
 		Host     string `json:"host"`
 		Port     int    `json:"port"`
@@ -147,52 +174,44 @@ func (h *Handlers) StartMigration(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, migrationRequestLimit)).Decode(&request); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request")
-		return
+		return RemoteAccount{}, false
 	}
 	host := strings.ToLower(strings.TrimSpace(request.Host))
 	if !isDiscoverableDomain(host) || !validPort(request.Port) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid server address")
-		return
+		return RemoteAccount{}, false
 	}
 	if request.Username == "" || request.Password == "" {
 		httpx.WriteError(w, http.StatusBadRequest, "credentials are required")
-		return
+		return RemoteAccount{}, false
 	}
-
-	// The login is proved here as well as in the wizard, because the wizard's
-	// verification is a separate request and nothing stops this one arriving on
-	// its own with a password that was never checked.
-	if accepted, reason := verifyRemoteLogin(r.Context(), host, request.Port, request.Security, request.Username, request.Password); !accepted {
-		httpx.WriteJSON(w, http.StatusBadRequest, map[string]any{"error": "the remote server refused the sign-in", "reason": reason})
-		return
-	}
-
-	jobID, err := startMigrationJob(h.DB, mailboxID, RemoteAccount{
+	return RemoteAccount{
 		Host: host, Port: request.Port, Security: request.Security,
 		Username: request.Username, Password: request.Password,
-	})
+	}, true
+}
+
+// migrationStartRefused answers a start that could not be queued and reports
+// whether it did.
+func migrationStartRefused(w http.ResponseWriter, r *http.Request, mailboxID int64, err error) bool {
 	switch {
 	case errors.Is(err, ErrMigrationRunning):
 		httpx.WriteJSON(w, http.StatusConflict, map[string]any{
 			"error": "a migration is already running for this mailbox", "reason": "migration_already_running",
 		})
-		return
+		return true
 	case errors.Is(err, ErrTooManyMigrations):
 		httpx.WriteJSON(w, http.StatusTooManyRequests, map[string]any{
 			"error": "too many migrations are already waiting", "reason": "too_many_migrations",
 		})
-		return
+		return true
 	case err != nil:
 		// #nosec G706 -- integer ids only; the remote host is not logged here.
 		httpx.LogR(r, "start mail migration mailbox=%d: %v", mailboxID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not start the migration")
-		return
+		return true
 	}
-
-	h.audit(r, "mail.migration.start", request.Username+" @ "+host, true)
-	// 202: the copy has been ACCEPTED, not started. Only four run at a time, so
-	// saying "running" here would be a guess the status endpoint then contradicts.
-	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"id": jobID, "status": "queued"})
+	return false
 }
 
 // MigrationStatus reports the latest job for a mailbox.

@@ -170,16 +170,21 @@ func validateServerSettings(req *ServerSettings) ([]string, error) {
 	// this endpoint produces.
 	zones, err := dnsbl.ValidateZones(req.DNSBLZones)
 	if err != nil {
-		var zoneErr *dnsbl.ZoneError
-		if errors.As(err, &zoneErr) && zoneErr.TooMany {
-			return nil, fmt.Errorf("at most %d blocklist zones are allowed", dnsbl.MaxZones)
-		}
-		if errors.As(err, &zoneErr) {
-			return nil, fmt.Errorf("%q is not a valid blocklist zone name", zoneErr.Zone)
-		}
-		return nil, err
+		return nil, zoneValidationError(err)
 	}
 	return zones, nil
+}
+
+// zoneValidationError words a refused zone list.
+func zoneValidationError(err error) error {
+	zoneErr, isZoneErr := errors.AsType[*dnsbl.ZoneError](err)
+	if isZoneErr && zoneErr.TooMany {
+		return fmt.Errorf("at most %d blocklist zones are allowed", dnsbl.MaxZones)
+	}
+	if isZoneErr {
+		return fmt.Errorf("%q is not a valid blocklist zone name", zoneErr.Zone)
+	}
+	return err
 }
 
 // postfixCommand is a seam so the tests can exercise the apply logic without a

@@ -205,15 +205,7 @@ func TestPurgeDeletesEveryNonCascadingTableInOneTransaction(t *testing.T) {
 	if commit < 0 {
 		t.Fatalf("the transaction was not committed: %v", steps)
 	}
-	for _, table := range []string{
-		"mail_aliases", "mail_send_log", "mail_spam_settings",
-		"mail_delivery_log", "webmail_tokens",
-	} {
-		want := "DELETE FROM " + table + " WHERE domain_id=?"
-		if !containsStep(steps, want) {
-			t.Errorf("%s was never deleted; its rows would survive the purge", table)
-		}
-	}
+	assertEveryNonCascadingTableDeleted(t, steps)
 	mailDomains := indexOfStep(steps, "DELETE FROM mail_domains WHERE domain_id=?")
 	if mailDomains < 0 {
 		t.Fatalf("mail_domains was never deleted: %v", steps)
@@ -223,6 +215,21 @@ func TestPurgeDeletesEveryNonCascadingTableInOneTransaction(t *testing.T) {
 	}
 	if !recorder.diskRan {
 		t.Error("the files were never removed")
+	}
+}
+
+// assertEveryNonCascadingTableDeleted checks the tables that hang off
+// domains(id), which nothing deletes on the panel's behalf.
+func assertEveryNonCascadingTableDeleted(t *testing.T, steps []string) {
+	t.Helper()
+	for _, table := range []string{
+		"mail_aliases", "mail_send_log", "mail_spam_settings",
+		"mail_delivery_log", "webmail_tokens",
+	} {
+		want := "DELETE FROM " + table + " WHERE domain_id=?"
+		if !containsStep(steps, want) {
+			t.Errorf("%s was never deleted; its rows would survive the purge", table)
+		}
 	}
 }
 

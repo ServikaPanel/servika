@@ -273,23 +273,12 @@ func copyMailbox(ctx context.Context, db *sql.DB, jobID, mailboxID int64, remote
 	defer func() { _ = client.Close() }()
 
 	if err := client.Login(remote.Username, remote.Password).Wait(); err != nil {
-		if code := providerHint(remote.Host, remote.Username); code != "" {
-			return &ReasonError{Code: code, Err: err}
-		}
-		return &ReasonError{Code: ReasonAuthFailed, Err: err}
+		return loginFailure(remote, err)
 	}
 
-	folders, err := client.List("", "*", nil).Collect()
+	selectable, err := selectableFolders(client)
 	if err != nil {
-		return &ReasonError{Code: ReasonUnreachable, Err: err}
-	}
-
-	selectable := make([]*imap.ListData, 0, len(folders))
-	for _, folder := range folders {
-		if hasAttr(folder.Attrs, imap.MailboxAttrNoSelect) || hasAttr(folder.Attrs, imap.MailboxAttrNonExistent) {
-			continue
-		}
-		selectable = append(selectable, folder)
+		return err
 	}
 	setCounter(ctx, db, jobID, "folders_total", len(selectable))
 
@@ -303,6 +292,32 @@ func copyMailbox(ctx context.Context, db *sql.DB, jobID, mailboxID int64, remote
 		setCounter(ctx, db, jobID, "folders_done", index+1)
 	}
 	return nil
+}
+
+// loginFailure turns a refused sign-in into its reason, naming a provider that
+// refuses passwords outright.
+func loginFailure(remote RemoteAccount, err error) error {
+	if code := providerHint(remote.Host, remote.Username); code != "" {
+		return &ReasonError{Code: code, Err: err}
+	}
+	return &ReasonError{Code: ReasonAuthFailed, Err: err}
+}
+
+// selectableFolders lists the remote folders a copy can open.
+func selectableFolders(client *imapclient.Client) ([]*imap.ListData, error) {
+	folders, err := client.List("", "*", nil).Collect()
+	if err != nil {
+		return nil, &ReasonError{Code: ReasonUnreachable, Err: err}
+	}
+
+	selectable := make([]*imap.ListData, 0, len(folders))
+	for _, folder := range folders {
+		if hasAttr(folder.Attrs, imap.MailboxAttrNoSelect) || hasAttr(folder.Attrs, imap.MailboxAttrNonExistent) {
+			continue
+		}
+		selectable = append(selectable, folder)
+	}
+	return selectable, nil
 }
 
 func hasAttr(attrs []imap.MailboxAttr, want imap.MailboxAttr) bool {
@@ -371,41 +386,53 @@ func copyBatch(ctx context.Context, client *imapclient.Client, layout maildirLay
 		if message == nil {
 			break
 		}
-
-		var (
-			uid   uint32
-			flags []string
-		)
-		for {
-			item := message.Next()
-			if item == nil {
-				break
-			}
-			switch data := item.(type) {
-			case imapclient.FetchItemDataUID:
-				uid = uint32(data.UID)
-			case imapclient.FetchItemDataFlags:
-				flags = flags[:0]
-				for _, flag := range data.Flags {
-					flags = append(flags, string(flag))
-				}
-			case imapclient.FetchItemDataBodySection:
-				// Streamed rather than buffered: a mailbox can hold messages
-				// larger than the panel's whole memory budget.
-				size, err := layout.writeMessage(curDir,
-					fmt.Sprintf("servika-%d-%d", jobID, uid), flags, data.Literal)
-				if err != nil {
-					return copied, written, err
-				}
-				copied++
-				written += size
-			}
+		stored, size, err := storeFetchedMessage(message, layout, curDir, jobID)
+		copied += stored
+		written += size
+		if err != nil {
+			return copied, written, err
 		}
 	}
 	if err := fetch.Close(); err != nil {
 		return copied, written, &ReasonError{Code: ReasonUnreachable, Err: err}
 	}
 	return copied, written, nil
+}
+
+// storeFetchedMessage writes the body of one fetched message under the job and
+// its UID, with the flags that arrived before the body.
+func storeFetchedMessage(message *imapclient.FetchMessageData, layout maildirLayout, curDir string, jobID int64) (int, int64, error) {
+	var (
+		uid     uint32
+		flags   []string
+		copied  int
+		written int64
+	)
+	for {
+		item := message.Next()
+		if item == nil {
+			return copied, written, nil
+		}
+		switch data := item.(type) {
+		case imapclient.FetchItemDataUID:
+			uid = uint32(data.UID)
+		case imapclient.FetchItemDataFlags:
+			flags = flags[:0]
+			for _, flag := range data.Flags {
+				flags = append(flags, string(flag))
+			}
+		case imapclient.FetchItemDataBodySection:
+			// Streamed rather than buffered: a mailbox can hold messages
+			// larger than the panel's whole memory budget.
+			size, err := layout.writeMessage(curDir,
+				fmt.Sprintf("servika-%d-%d", jobID, uid), flags, data.Literal)
+			if err != nil {
+				return copied, written, err
+			}
+			copied++
+			written += size
+		}
+	}
 }
 
 // layoutFor resolves where a mailbox's files belong.
@@ -537,35 +564,10 @@ func HealMigrationJobs(db *sql.DB) {
 
 	var resumed, abandoned int
 	for rows.Next() {
-		var (
-			job    pendingMigration
-			sealed string
-		)
-		if err := rows.Scan(&job.id, &job.mailboxID, &job.remote.Host, &job.remote.Port,
-			&job.remote.Security, &job.remote.Username, &sealed); err != nil {
-			log.Printf("mail migration resume: a row could not be read: %v", err)
-			continue
-		}
-		// A credential that will not open is the end of that job: the key was
-		// rotated, the row predates the column, or it was tampered with. It is
-		// closed rather than left queued for ever, and the reason code is the one
-		// the screen already renders.
-		password, err := secret.DecryptWith(sealed, job.remote.Host)
-		if sealed == "" || err != nil {
-			abandonMigration(ctx, db, job.id)
-			abandoned++
-			continue
-		}
-		job.remote.Password = password
-
-		select {
-		case migrationQueue <- job:
+		switch resumeMigrationRow(ctx, db, rows) {
+		case resumeQueued:
 			resumed++
-		default:
-			// More unfinished work than the wait list holds. The rest are closed
-			// rather than silently dropped, so nothing claims to be queued while
-			// no worker will ever reach it.
-			abandonMigration(ctx, db, job.id)
+		case resumeClosed:
 			abandoned++
 		}
 	}
@@ -574,6 +576,50 @@ func HealMigrationJobs(db *sql.DB) {
 	}
 	if resumed > 0 || abandoned > 0 {
 		log.Printf("mail migration resume: %d job(s) requeued, %d closed as interrupted", resumed, abandoned)
+	}
+}
+
+// resumeOutcome is what the resume did with one unfinished job.
+type resumeOutcome int
+
+const (
+	resumeSkipped resumeOutcome = iota
+	resumeQueued
+	resumeClosed
+)
+
+// resumeMigrationRow reads one unfinished job and puts it back on the queue, or
+// closes it when its credential will not open or the wait list is full.
+func resumeMigrationRow(ctx context.Context, db *sql.DB, rows *sql.Rows) resumeOutcome {
+	var (
+		job    pendingMigration
+		sealed string
+	)
+	if err := rows.Scan(&job.id, &job.mailboxID, &job.remote.Host, &job.remote.Port,
+		&job.remote.Security, &job.remote.Username, &sealed); err != nil {
+		log.Printf("mail migration resume: a row could not be read: %v", err)
+		return resumeSkipped
+	}
+	// A credential that will not open is the end of that job: the key was
+	// rotated, the row predates the column, or it was tampered with. It is
+	// closed rather than left queued for ever, and the reason code is the one
+	// the screen already renders.
+	password, err := secret.DecryptWith(sealed, job.remote.Host)
+	if sealed == "" || err != nil {
+		abandonMigration(ctx, db, job.id)
+		return resumeClosed
+	}
+	job.remote.Password = password
+
+	select {
+	case migrationQueue <- job:
+		return resumeQueued
+	default:
+		// More unfinished work than the wait list holds. The rest are closed
+		// rather than silently dropped, so nothing claims to be queued while
+		// no worker will ever reach it.
+		abandonMigration(ctx, db, job.id)
+		return resumeClosed
 	}
 }
 

@@ -92,26 +92,15 @@ func (h *Handlers) AutoresponderPut(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	req.Subject = strings.TrimSpace(req.Subject)
-	req.Body = strings.TrimSpace(req.Body)
-	if req.Subject == "" || req.Body == "" || len(req.Subject) > 255 || len(req.Body) > 10000 {
-		httpx.WriteError(w, http.StatusBadRequest, "subject and a message up to 10,000 characters are required")
-		return
-	}
-	if req.IntervalDays < 1 || req.IntervalDays > 30 {
-		httpx.WriteError(w, http.StatusBadRequest, "reply interval must be 1-30 days")
+	if reason := validateAutoresponder(&req); reason != "" {
+		httpx.WriteError(w, http.StatusBadRequest, reason)
 		return
 	}
 	if !h.mailboxBelongs(r.Context(), id, mid) {
 		httpx.WriteError(w, http.StatusNotFound, "mailbox not found")
 		return
 	}
-	var oldEnabled int
-	var oldSubject, oldBody string
-	var oldDays int
-	oldErr := h.DB.QueryRowContext(r.Context(), `SELECT enabled,subject_text,body_text,interval_days
-		FROM mail_autoresponders WHERE mailbox_id=?`, mid).
-		Scan(&oldEnabled, &oldSubject, &oldBody, &oldDays)
+	previous := h.readAutoresponderRow(r.Context(), mid)
 	_, err := h.DB.ExecContext(r.Context(), `
 		INSERT INTO mail_autoresponders(mailbox_id, domain_id, enabled, subject_text, body_text, interval_days)
 		VALUES(?,?,?,?,?,?)
@@ -123,17 +112,55 @@ func (h *Handlers) AutoresponderPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := ApplyMailboxSieve(r.Context(), h.DB, mid); err != nil {
-		if oldErr == nil {
-			_, _ = h.DB.Exec(`UPDATE mail_autoresponders SET enabled=?,subject_text=?,body_text=?,
-				interval_days=? WHERE mailbox_id=?`, oldEnabled, oldSubject, oldBody, oldDays, mid)
-		} else {
-			_, _ = h.DB.Exec(`DELETE FROM mail_autoresponders WHERE mailbox_id=?`, mid)
-		}
+		h.restoreAutoresponder(mid, previous)
 		writeApplyFailure(w, "apply sieve mailbox", mid, "could not apply the mail rules", err)
 		return
 	}
 	h.audit(r, "mail.autoresponder.update", strconv.FormatInt(mid, 10), true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// validateAutoresponder trims the subject and the message and returns why the
+// responder cannot be saved, or an empty reason.
+func validateAutoresponder(req *Autoresponder) string {
+	req.Subject = strings.TrimSpace(req.Subject)
+	req.Body = strings.TrimSpace(req.Body)
+	if req.Subject == "" || req.Body == "" || len(req.Subject) > 255 || len(req.Body) > 10000 {
+		return "subject and a message up to 10,000 characters are required"
+	}
+	if req.IntervalDays < 1 || req.IntervalDays > 30 {
+		return "reply interval must be 1-30 days"
+	}
+	return ""
+}
+
+// autoresponderRow is a responder as it was stored before a save.
+type autoresponderRow struct {
+	found         bool
+	enabled, days int
+	subject, body string
+}
+
+// readAutoresponderRow reads the stored responder, so a failed apply can put it
+// back.
+func (h *Handlers) readAutoresponderRow(ctx context.Context, mailboxID int64) autoresponderRow {
+	var row autoresponderRow
+	err := h.DB.QueryRowContext(ctx, `SELECT enabled,subject_text,body_text,interval_days
+		FROM mail_autoresponders WHERE mailbox_id=?`, mailboxID).
+		Scan(&row.enabled, &row.subject, &row.body, &row.days)
+	row.found = err == nil
+	return row
+}
+
+// restoreAutoresponder puts back the responder a failed apply replaced, or
+// removes the new one when there was none.
+func (h *Handlers) restoreAutoresponder(mailboxID int64, previous autoresponderRow) {
+	if previous.found {
+		_, _ = h.DB.Exec(`UPDATE mail_autoresponders SET enabled=?,subject_text=?,body_text=?,
+				interval_days=? WHERE mailbox_id=?`, previous.enabled, previous.subject, previous.body, previous.days, mailboxID)
+	} else {
+		_, _ = h.DB.Exec(`DELETE FROM mail_autoresponders WHERE mailbox_id=?`, mailboxID)
+	}
 }
 
 // AutoresponderDelete removes a mailbox vacation responder. DELETE /domains/{id}/mail/{mid}/autoresponder
@@ -272,13 +299,18 @@ func validateFilter(f MailFilter) error {
 	if f.MatchField != "from" && f.MatchField != "to" && f.MatchField != "subject" {
 		return errors.New("invalid match field")
 	}
-	switch f.ActionType {
+	return validateFilterAction(f.ActionType, f.ActionValue)
+}
+
+// validateFilterAction checks the action and the value it acts on.
+func validateFilterAction(actionType, actionValue string) error {
+	switch actionType {
 	case "move":
-		if !sieveFolderPattern.MatchString(f.ActionValue) {
+		if !sieveFolderPattern.MatchString(actionValue) {
 			return errors.New("invalid target folder")
 		}
 	case "redirect":
-		if !destinationEmailPattern.MatchString(strings.ToLower(f.ActionValue)) {
+		if !destinationEmailPattern.MatchString(strings.ToLower(actionValue)) {
 			return errors.New("invalid redirect address")
 		}
 	case "discard":
@@ -326,6 +358,23 @@ if header :contains "X-Spam" "Yes" {
   stop;
 }
 `)
+	if err := writeSieveFilters(ctx, db, mailboxID, &out); err != nil {
+		return err
+	}
+	// Forwarding comes after the filters, so a filter that files a message and
+	// stops still wins, and before the vacation reply, which is not a delivery.
+	if err := writeSieveForwarding(ctx, db, mailboxID, &out); err != nil {
+		return err
+	}
+	if err := writeSieveVacation(ctx, db, mailboxID, &out); err != nil {
+		return err
+	}
+
+	return compileMailboxSieve(ctx, home, rel, out.Bytes(), systemUser)
+}
+
+// writeSieveFilters appends one rule per enabled filter, in priority order.
+func writeSieveFilters(ctx context.Context, db *sql.DB, mailboxID int64, out *bytes.Buffer) error {
 	rows, err := db.QueryContext(ctx, `
 		SELECT match_field, match_value, action_type, action_value
 		FROM mail_filters WHERE mailbox_id=? AND enabled=1 ORDER BY priority_n,id`, mailboxID)
@@ -338,17 +387,7 @@ if header :contains "X-Spam" "Yes" {
 			_ = rows.Close()
 			return err
 		}
-		header := map[string]string{"from": "From", "to": "To", "subject": "Subject"}[field]
-		fmt.Fprintf(&out, "\nif header :contains %s %s {\n", sieveQuote(header), sieveQuote(value))
-		switch action {
-		case "move":
-			fmt.Fprintf(&out, "  fileinto :create %s;\n", sieveQuote(actionValue))
-		case "redirect":
-			fmt.Fprintf(&out, "  redirect %s;\n", sieveQuote(actionValue))
-		case "discard":
-			out.WriteString("  discard;\n")
-		}
-		out.WriteString("  stop;\n}\n")
+		writeSieveFilter(out, field, value, action, actionValue)
 	}
 	if err := rows.Err(); err != nil {
 		// The scan path above already fails the write. A query that broke half way
@@ -358,39 +397,61 @@ if header :contains "X-Spam" "Yes" {
 		return err
 	}
 	_ = rows.Close()
+	return nil
+}
 
-	// Forwarding comes after the filters, so a filter that files a message and
-	// stops still wins, and before the vacation reply, which is not a delivery.
+// writeSieveFilter appends the rule for one filter.
+func writeSieveFilter(out *bytes.Buffer, field, value, action, actionValue string) {
+	header := map[string]string{"from": "From", "to": "To", "subject": "Subject"}[field]
+	fmt.Fprintf(out, "\nif header :contains %s %s {\n", sieveQuote(header), sieveQuote(value))
+	switch action {
+	case "move":
+		fmt.Fprintf(out, "  fileinto :create %s;\n", sieveQuote(actionValue))
+	case "redirect":
+		fmt.Fprintf(out, "  redirect %s;\n", sieveQuote(actionValue))
+	case "discard":
+		out.WriteString("  discard;\n")
+	}
+	out.WriteString("  stop;\n}\n")
+}
+
+// writeSieveForwarding appends the forwarding redirects, and the discard that
+// keeps no local copy.
+func writeSieveForwarding(ctx context.Context, db *sql.DB, mailboxID int64, out *bytes.Buffer) error {
 	forwarding, err := readForwarding(ctx, db, mailboxID)
 	if err != nil {
 		return err
 	}
-	if forwarding.Enabled {
-		out.WriteString("\n# Forwarding.\n")
-		for _, destination := range forwarding.Destinations {
-			fmt.Fprintf(&out, "redirect %s;\n", sieveQuote(destination))
-		}
-		if !forwarding.KeepCopy {
-			// Without this Sieve still delivers locally, so "do not keep a copy"
-			// has to be said explicitly or the mailbox keeps filling up.
-			out.WriteString("discard;\n")
-		}
+	if !forwarding.Enabled {
+		return nil
 	}
+	out.WriteString("\n# Forwarding.\n")
+	for _, destination := range forwarding.Destinations {
+		fmt.Fprintf(out, "redirect %s;\n", sieveQuote(destination))
+	}
+	if !forwarding.KeepCopy {
+		// Without this Sieve still delivers locally, so "do not keep a copy"
+		// has to be said explicitly or the mailbox keeps filling up.
+		out.WriteString("discard;\n")
+	}
+	return nil
+}
 
+// writeSieveVacation appends the vacation reply when the responder is enabled.
+func writeSieveVacation(ctx context.Context, db *sql.DB, mailboxID int64, out *bytes.Buffer) error {
 	var enabled int
 	var subject, body string
 	var days int
-	err = db.QueryRowContext(ctx, `SELECT enabled, subject_text, body_text, interval_days
+	err := db.QueryRowContext(ctx, `SELECT enabled, subject_text, body_text, interval_days
 		FROM mail_autoresponders WHERE mailbox_id=?`, mailboxID).
 		Scan(&enabled, &subject, &body, &days)
 	if err == nil && enabled == 1 {
-		fmt.Fprintf(&out, "\nvacation :days %d :subject %s text:\n%s\n.\n;\n",
+		fmt.Fprintf(out, "\nvacation :days %d :subject %s text:\n%s\n.\n;\n",
 			days, sieveQuote(subject), sieveMultiline(body))
 	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-
-	return compileMailboxSieve(ctx, home, rel, out.Bytes(), systemUser)
+	return nil
 }
 
 // maildirJail splits a stored mailbox directory into the tenant home that

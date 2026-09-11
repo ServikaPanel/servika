@@ -212,40 +212,12 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	var req struct {
-		LocalPart string `json:"local_part"`
-		Password  string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	localPart, password, ok := decodeMailboxRequest(w, r)
+	if !ok {
 		return
 	}
-	localPart := strings.ToLower(strings.TrimSpace(req.LocalPart))
-	if !localPartPattern.MatchString(localPart) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid mailbox name")
-		return
-	}
-	if req.Password == "" {
-		req.Password = credentials.RandomPassword(20)
-	}
-	if !credentials.ValidPassword(req.Password) {
-		httpx.WriteError(w, http.StatusBadRequest, "password contains invalid characters")
-		return
-	}
-
-	var mailDomainID int64
-	var domainName, maildirRoot, systemUser string
-	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT id, domain_name, maildir_root, system_user FROM mail_domains WHERE domain_id=? AND status='active'`, id).
-		Scan(&mailDomainID, &domainName, &maildirRoot, &systemUser)
-	if errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
-		return
-	}
-	if err != nil {
-		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		httpx.LogR(r, "read mail domain=%d: %v", id, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read mail domain")
+	target, ok := h.activeMailDomain(w, r, id)
+	if !ok {
 		return
 	}
 	// The plan gate is a COUNT followed by a separate INSERT, and the unique key
@@ -259,26 +231,20 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	unlock := sync.OnceFunc(quota.LockCustomerForDomain(r.Context(), h.DB, id))
 	defer unlock()
 	if err := quota.CheckMailboxAllowed(r.Context(), h.DB, id); err != nil {
-		if le, ok := errors.AsType[*quota.LimitError](err); ok {
-			httpx.WriteError(w, http.StatusForbidden, le.Message)
-			return
-		}
-		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		httpx.LogR(r, "mailbox quota check for domain %d: %v", id, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
+		writeMailboxQuotaRefusal(w, r, id, err)
 		return
 	}
 
-	email := localPart + "@" + domainName
-	hash, err := HashPassword(req.Password)
+	email := localPart + "@" + target.domainName
+	hash, err := HashPassword(password)
 	if err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "hash mailbox password domain=%d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not prepare mailbox password")
 		return
 	}
-	maildir := mailboxMaildir(maildirRoot, domainName, localPart)
-	if err := createMaildir(systemUser, maildir); err != nil {
+	maildir := mailboxMaildir(target.maildirRoot, target.domainName, localPart)
+	if err := createMaildir(target.systemUser, maildir); err != nil {
 		// #nosec G706 -- logged values are a filepath.Join of a template-derived root, a validated domain name and a validated local part, plus an error string; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "create Maildir %q: %v", maildir, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create mailbox storage")
@@ -297,7 +263,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		 VALUES(?,?,?,?,?,?,?,
 		   IF(? > 0, ?, DEFAULT(send_limit_hour)),
 		   IF(? > 0, ?, DEFAULT(send_limit_day)))`,
-		id, mailDomainID, localPart, email, hash, maildir, limits.QuotaBytes,
+		id, target.mailDomainID, localPart, email, hash, maildir, limits.QuotaBytes,
 		limits.SendLimitHour, limits.SendLimitHour,
 		limits.SendLimitDay, limits.SendLimitDay)
 	if err != nil {
@@ -307,7 +273,72 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	unlock()
 	mailboxID, _ := res.LastInsertId()
 	h.audit(r, "mail.create", email, true)
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": mailboxID, "email": email, "password": req.Password})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": mailboxID, "email": email, "password": password})
+}
+
+// decodeMailboxRequest reads the new mailbox's local part and password, and
+// generates a password when none is given. It writes the refusal and reports
+// false when the request must stop.
+func decodeMailboxRequest(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	var req struct {
+		LocalPart string `json:"local_part"`
+		Password  string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return "", "", false
+	}
+	localPart := strings.ToLower(strings.TrimSpace(req.LocalPart))
+	if !localPartPattern.MatchString(localPart) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid mailbox name")
+		return "", "", false
+	}
+	if req.Password == "" {
+		req.Password = credentials.RandomPassword(20)
+	}
+	if !credentials.ValidPassword(req.Password) {
+		httpx.WriteError(w, http.StatusBadRequest, "password contains invalid characters")
+		return "", "", false
+	}
+	return localPart, req.Password, true
+}
+
+// mailDomainTarget is the active mail domain a new mailbox is created under.
+type mailDomainTarget struct {
+	mailDomainID                        int64
+	domainName, maildirRoot, systemUser string
+}
+
+// activeMailDomain reads the domain's active mail domain. It writes the refusal
+// and reports false when the request must stop.
+func (h *Handlers) activeMailDomain(w http.ResponseWriter, r *http.Request, id int64) (mailDomainTarget, bool) {
+	var target mailDomainTarget
+	err := h.DB.QueryRowContext(r.Context(),
+		`SELECT id, domain_name, maildir_root, system_user FROM mail_domains WHERE domain_id=? AND status='active'`, id).
+		Scan(&target.mailDomainID, &target.domainName, &target.maildirRoot, &target.systemUser)
+	if errors.Is(err, sql.ErrNoRows) {
+		httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
+		return target, false
+	}
+	if err != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		httpx.LogR(r, "read mail domain=%d: %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read mail domain")
+		return target, false
+	}
+	return target, true
+}
+
+// writeMailboxQuotaRefusal answers a plan check that did not pass: the plan's own
+// message for a full plan, a fixed one for a check that could not run.
+func writeMailboxQuotaRefusal(w http.ResponseWriter, r *http.Request, id int64, err error) {
+	if le, ok := errors.AsType[*quota.LimitError](err); ok {
+		httpx.WriteError(w, http.StatusForbidden, le.Message)
+		return
+	}
+	// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+	httpx.LogR(r, "mailbox quota check for domain %d: %v", id, err)
+	httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
 }
 
 // Delete removes a mailbox row while preserving its Maildir data on disk.
@@ -407,15 +438,10 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// The guard sits in the WHERE clause, not in a separate read, so the policy
 	// server cannot contain the mailbox between a check and the write.
 	operator := isMailOperator(r)
-	liftsContainment := operator && req.Status == "active"
-	guard := ""
-	if req.Status == "active" && !operator {
-		guard = " AND spam_suspended_at IS NULL"
-	}
 	res, err := h.DB.ExecContext(r.Context(),
 		`UPDATE mailboxes SET status=?,
 		   spam_suspended_at=IF(?='active',NULL,spam_suspended_at)
-		 WHERE id=? AND domain_id=?`+guard, req.Status, req.Status, mailboxID, id)
+		 WHERE id=? AND domain_id=?`+statusGuard(req.Status, operator), req.Status, req.Status, mailboxID, id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not update mailbox")
 		return
@@ -428,15 +454,28 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// mailboxes.status is an input to the cached passdb answer, so a suspension
 	// reaches IMAP only once the entry is dropped.
 	h.flushMailboxAuthCache(r.Context(), id, mailboxID)
-	action := "mail.status"
-	if liftsContainment {
+	h.audit(r, statusAuditAction(req.Status, operator), strconv.FormatInt(mailboxID, 10), true)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// statusGuard is the clause that keeps a customer's resume off a mailbox the
+// spam policy suspended.
+func statusGuard(status string, operator bool) string {
+	if status == "active" && !operator {
+		return " AND spam_suspended_at IS NULL"
+	}
+	return ""
+}
+
+// statusAuditAction names the audit line for a status change.
+func statusAuditAction(status string, operator bool) string {
+	if operator && status == "active" {
 		// Naming the lift separately is the point of reserving it: an operator
 		// undoing a spam containment leaves a line an operator can find later,
 		// rather than one indistinguishable from an ordinary resume.
-		action = "mail.status.spam_resume"
+		return "mail.status.spam_resume"
 	}
-	h.audit(r, action, strconv.FormatInt(mailboxID, 10), true)
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return "mail.status"
 }
 
 // statusRefusal explains why a status update matched no row. The update itself

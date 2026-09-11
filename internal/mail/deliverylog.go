@@ -64,6 +64,50 @@ func CollectDeliveryLog(ctx context.Context, db *sql.DB) error {
 	}
 	size := info.Size()
 
+	start := deliveryLogStart(ctx, db, size)
+	if start == size {
+		return pruneDeliveryLog(ctx, db)
+	}
+
+	// #nosec G304 -- path is a fixed system path from the configuration, not tenant input.
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+	if start, err = seekDeliveryLog(file, start); err != nil {
+		return err
+	}
+
+	hosted, err := hostedMailDomains(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	pass := &deliveryPass{
+		db: db, hosted: hosted, size: size, consumed: start,
+		senders: map[string]string{}, reference: time.Now(),
+		pending: make([]storedDelivery, 0, maxPendingDeliveries),
+	}
+	if err := pass.read(ctx, bufio.NewReaderSize(file, 256*1024)); err != nil {
+		return err
+	}
+	if pass.oversize > 0 {
+		// Never silent: a skipped line is delivery history the panel will not
+		// show, and an operator has to be able to see that it happened.
+		log.Printf("mail delivery log: skipped %d line(s) longer than %d bytes", pass.oversize, maxLogLineBytes)
+	}
+
+	// The final flush runs even with nothing pending, because the cursor still
+	// has to advance past the lines that matched no hosted domain.
+	if err := flushDeliveries(ctx, db, pass.pending, pass.consumed, size); err != nil {
+		return err
+	}
+	return pruneDeliveryLog(ctx, db)
+}
+
+// deliveryLogStart reads the cursor and returns where this pass starts reading.
+func deliveryLogStart(ctx context.Context, db *sql.DB, size int64) int64 {
 	// `offset` is backticked because OFFSET is a reserved word from MariaDB 10.6
 	// onward. Unquoted it is a parse error, and the error is discarded here, so
 	// the cursor would silently read as zero and every pass would re-read the
@@ -77,78 +121,73 @@ func CollectDeliveryLog(ctx context.Context, db *sql.DB) error {
 	if size < offset || size < previousSize {
 		start = 0
 	}
-	if start == size {
-		return pruneDeliveryLog(ctx, db)
-	}
+	return start
+}
 
-	// #nosec G304 -- path is a fixed system path from the configuration, not tenant input.
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = file.Close() }()
+// seekDeliveryLog moves the file to start, or back to its beginning when that
+// seek fails, and returns where reading begins.
+func seekDeliveryLog(file *os.File, start int64) (int64, error) {
 	if start > 0 {
 		if _, err := file.Seek(start, 0); err != nil {
 			start = 0
 			if _, err := file.Seek(0, 0); err != nil {
-				return err
+				return start, err
 			}
 		}
 	}
+	return start, nil
+}
 
-	hosted, err := hostedMailDomains(ctx, db)
-	if err != nil {
-		return err
-	}
+// deliveryPass is one read through the log: how far it got, the senders it saw
+// and the deliveries it has not written yet.
+type deliveryPass struct {
+	db        *sql.DB
+	hosted    map[string]int64
+	size      int64
+	consumed  int64
+	oversize  int
+	senders   map[string]string
+	reference time.Time
+	pending   []storedDelivery
+}
 
-	reader := bufio.NewReaderSize(file, 256*1024)
-	senders := map[string]string{}
-	reference := time.Now()
-	consumed := start
-	oversize := 0
-	pending := make([]storedDelivery, 0, maxPendingDeliveries)
-
+// read takes lines until the reader is exhausted, writing a batch as soon as it
+// fills.
+func (p *deliveryPass) read(ctx context.Context, reader *bufio.Reader) error {
 	for {
 		line, read, status, readErr := readLogLine(reader)
-		switch status {
-		case lineComplete:
-			consumed += read
-			if queueID, sender, ok := parseSender(line); ok {
-				if len(senders) < senderCacheMax {
-					senders[queueID] = sender
-				}
-			} else if record, ok := parseDelivery(line, reference); ok {
-				record.Sender = senders[record.QueueID]
-				pending = append(pending, matchDomains(record, hosted)...)
-			}
-		case lineOversize:
-			consumed += read
-			oversize++
-		}
+		p.take(line, read, status)
 		// Written in batches rather than once at the end, so the memory this
 		// holds is bounded by the batch and not by the length of the whole pass.
-		if len(pending) >= maxPendingDeliveries {
-			if err := flushDeliveries(ctx, db, pending, consumed, size); err != nil {
+		if len(p.pending) >= maxPendingDeliveries {
+			if err := flushDeliveries(ctx, p.db, p.pending, p.consumed, p.size); err != nil {
 				return err
 			}
-			pending = pending[:0]
+			p.pending = p.pending[:0]
 		}
 		if readErr != nil {
-			break
+			return nil
 		}
 	}
-	if oversize > 0 {
-		// Never silent: a skipped line is delivery history the panel will not
-		// show, and an operator has to be able to see that it happened.
-		log.Printf("mail delivery log: skipped %d line(s) longer than %d bytes", oversize, maxLogLineBytes)
-	}
+}
 
-	// The final flush runs even with nothing pending, because the cursor still
-	// has to advance past the lines that matched no hosted domain.
-	if err := flushDeliveries(ctx, db, pending, consumed, size); err != nil {
-		return err
+// take accounts for one line and parses it when it is whole.
+func (p *deliveryPass) take(line string, read int64, status lineStatus) {
+	switch status {
+	case lineComplete:
+		p.consumed += read
+		if queueID, sender, ok := parseSender(line); ok {
+			if len(p.senders) < senderCacheMax {
+				p.senders[queueID] = sender
+			}
+		} else if record, ok := parseDelivery(line, p.reference); ok {
+			record.Sender = p.senders[record.QueueID]
+			p.pending = append(p.pending, matchDomains(record, p.hosted)...)
+		}
+	case lineOversize:
+		p.consumed += read
+		p.oversize++
 	}
-	return pruneDeliveryLog(ctx, db)
 }
 
 // lineStatus says what readLogLine found.

@@ -100,10 +100,7 @@ func (h *Handlers) WebmailToken(w http.ResponseWriter, r *http.Request) {
 // protected the same way the phpMyAdmin redeem is: a shared secret readable only
 // by root and the web application, plus a token that is consumed once.
 func (h *Handlers) WebmailRedeem(w http.ResponseWriter, r *http.Request) {
-	expected := webmailInternalToken()
-	provided := r.Header.Get("X-Internal-Auth")
-	if expected == "" || provided == "" ||
-		subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+	if !internalCallerMatches(r) {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -121,34 +118,9 @@ func (h *Handlers) WebmailRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var email string
-	var used, expired int
-	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT email, used, (expires_at < NOW()) FROM webmail_tokens WHERE token=?`, req.Token).
-		Scan(&email, &used, &expired)
-	if errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusNotFound, "token not found")
-		return
-	}
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
-		return
-	}
-	if used == 1 || expired == 1 {
-		httpx.WriteError(w, http.StatusGone, "token is no longer valid")
-		return
-	}
-
-	// Consuming and checking in one statement is what makes the token single-use:
-	// two requests arriving together cannot both find it unused.
-	result, err := h.DB.ExecContext(r.Context(),
-		`UPDATE webmail_tokens SET used=1 WHERE token=? AND used=0 AND expires_at >= NOW()`, req.Token)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
-		return
-	}
-	if consumed, err := result.RowsAffected(); err != nil || consumed != 1 {
-		httpx.WriteError(w, http.StatusGone, "token is no longer valid")
+	email, status, message := h.redeemWebmailToken(r.Context(), req.Token)
+	if status != 0 {
+		httpx.WriteError(w, status, message)
 		return
 	}
 
@@ -156,6 +128,46 @@ func (h *Handlers) WebmailRedeem(w http.ResponseWriter, r *http.Request) {
 		"username": MasterLogin(email),
 		"password": master,
 	})
+}
+
+// internalCallerMatches reports whether the request carries the shared secret
+// Roundcube presents.
+func internalCallerMatches(r *http.Request) bool {
+	expected := webmailInternalToken()
+	provided := r.Header.Get("X-Internal-Auth")
+	return expected != "" && provided != "" &&
+		subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
+
+// redeemWebmailToken checks the token and consumes it. It returns the mailbox the
+// token was minted for, or the status and message that refuse it.
+func (h *Handlers) redeemWebmailToken(ctx context.Context, token string) (string, int, string) {
+	var email string
+	var used, expired int
+	err := h.DB.QueryRowContext(ctx,
+		`SELECT email, used, (expires_at < NOW()) FROM webmail_tokens WHERE token=?`, token).
+		Scan(&email, &used, &expired)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", http.StatusNotFound, "token not found"
+	}
+	if err != nil {
+		return "", http.StatusInternalServerError, "database operation failed"
+	}
+	if used == 1 || expired == 1 {
+		return "", http.StatusGone, "token is no longer valid"
+	}
+
+	// Consuming and checking in one statement is what makes the token single-use:
+	// two requests arriving together cannot both find it unused.
+	result, err := h.DB.ExecContext(ctx,
+		`UPDATE webmail_tokens SET used=1 WHERE token=? AND used=0 AND expires_at >= NOW()`, token)
+	if err != nil {
+		return "", http.StatusInternalServerError, "database operation failed"
+	}
+	if consumed, err := result.RowsAffected(); err != nil || consumed != 1 {
+		return "", http.StatusGone, "token is no longer valid"
+	}
+	return email, 0, ""
 }
 
 // webmailInternalToken reads the shared secret Roundcube presents. The panel and

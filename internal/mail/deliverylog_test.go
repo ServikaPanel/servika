@@ -27,6 +27,12 @@ func TestParsesTheTwoHalvesOfADelivery(t *testing.T) {
 	if !ok {
 		t.Fatal("the smtp line was not recognised")
 	}
+	assertParsedDelivery(t, record, queueID)
+}
+
+// assertParsedDelivery checks the smtp half against the qmgr half it belongs to.
+func assertParsedDelivery(t *testing.T, record deliveryRecord, queueID string) {
+	t.Helper()
 	if record.QueueID != queueID {
 		t.Errorf("queue ID = %q, want %q", record.QueueID, queueID)
 	}

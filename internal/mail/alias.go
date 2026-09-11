@@ -71,40 +71,16 @@ func (h *Handlers) CreateAlias(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var domainName string
-	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name FROM mail_domains WHERE domain_id=? AND status='active'`, id).Scan(&domainName)
-	if errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
-		return
-	}
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read mail domain")
+	domainName, ok := h.activeAliasDomain(w, r, id)
+	if !ok {
 		return
 	}
 
 	localPart := strings.ToLower(strings.TrimSpace(req.LocalPart))
-	var source string
-	if localPart == "" {
-		source = "@" + domainName
-	} else {
-		if !localPartPattern.MatchString(localPart) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid alias name")
-			return
-		}
-		source = localPart + "@" + domainName
-	}
-
-	destination, validationMessage := normalizeDestination(req.Destination)
-	if validationMessage != "" {
-		httpx.WriteError(w, http.StatusBadRequest, validationMessage)
+	source, destination, reason := aliasAddresses(localPart, domainName, req.Destination)
+	if reason != "" {
+		httpx.WriteError(w, http.StatusBadRequest, reason)
 		return
-	}
-	for item := range strings.SplitSeq(destination, ",") {
-		if strings.EqualFold(item, source) {
-			httpx.WriteError(w, http.StatusBadRequest, "destination cannot match the source address")
-			return
-		}
 	}
 
 	res, err := h.DB.ExecContext(r.Context(),
@@ -121,6 +97,48 @@ func (h *Handlers) CreateAlias(w http.ResponseWriter, r *http.Request) {
 		"destination": destination,
 		"catch_all":   localPart == "",
 	})
+}
+
+// activeAliasDomain reads the name of the domain's active mail domain. It writes
+// the refusal and reports false when the request must stop.
+func (h *Handlers) activeAliasDomain(w http.ResponseWriter, r *http.Request, id int64) (string, bool) {
+	var domainName string
+	err := h.DB.QueryRowContext(r.Context(),
+		`SELECT domain_name FROM mail_domains WHERE domain_id=? AND status='active'`, id).Scan(&domainName)
+	if errors.Is(err, sql.ErrNoRows) {
+		httpx.WriteError(w, http.StatusBadRequest, "enable mail for this domain first")
+		return "", false
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read mail domain")
+		return "", false
+	}
+	return domainName, true
+}
+
+// aliasAddresses builds the alias source, the catch-all for an empty local part,
+// and its normalised destinations, or returns the reason they are refused.
+func aliasAddresses(localPart, domainName, rawDestination string) (string, string, string) {
+	var source string
+	if localPart == "" {
+		source = "@" + domainName
+	} else {
+		if !localPartPattern.MatchString(localPart) {
+			return "", "", "invalid alias name"
+		}
+		source = localPart + "@" + domainName
+	}
+
+	destination, validationMessage := normalizeDestination(rawDestination)
+	if validationMessage != "" {
+		return "", "", validationMessage
+	}
+	for item := range strings.SplitSeq(destination, ",") {
+		if strings.EqualFold(item, source) {
+			return "", "", "destination cannot match the source address"
+		}
+	}
+	return source, destination, ""
 }
 
 // DeleteAlias removes a mail alias for a domain.

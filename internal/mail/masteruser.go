@@ -102,22 +102,8 @@ func writeMasterUser(ctx context.Context, hash string) error {
 	if _, err := lookPath("doveconf"); err != nil {
 		return nil // Dovecot is not installed on this host
 	}
-	line := masterUserName + ":" + hash + "\n"
-
-	// The password file is the credential. 0600 and root-owned, written through a
-	// temporary file so Dovecot can never read a half-written one.
-	tmp := masterPasswdTarget + ".new"
-	// #nosec G306 G703 -- fixed system path from a constant; this file holds the master credential, hence 0600.
-	if err := os.WriteFile(tmp, []byte(line), 0o600); err != nil {
-		return fmt.Errorf("write the master password file: %w", err)
-	}
-	if err := chownFile(tmp, 0, 0); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("set the master password file ownership: %w", err)
-	}
-	if err := os.Rename(tmp, masterPasswdTarget); err != nil {
-		_ = os.Remove(tmp)
-		return fmt.Errorf("install the master password file: %w", err)
+	if err := installMasterPasswd(hash); err != nil {
+		return err
 	}
 
 	// #nosec G304 -- fixed system path from a constant, not from any request value.
@@ -132,12 +118,7 @@ func writeMasterUser(ctx context.Context, hash string) error {
 	if out, err := execCommandContext(ctx, "doveconf", "-n").CombinedOutput(); err != nil {
 		// Roll back rather than leave Dovecot with a file it refuses: that would
 		// stop authentication for every mailbox on the server, not just webmail.
-		if previousErr == nil {
-			// #nosec G306 G703 -- restoring the file this function just replaced, at the same fixed system path.
-			_ = os.WriteFile(masterConfTarget, previous, 0o644)
-		} else {
-			_ = os.Remove(masterConfTarget)
-		}
+		restoreMasterConf(previous, previousErr)
 		return fmt.Errorf("doveconf rejected the master passdb, it was rolled back: %s", strings.TrimSpace(string(out)))
 	}
 	if out, err := execCommandContext(ctx, "systemctl", "reload", "dovecot").CombinedOutput(); err != nil {
@@ -145,6 +126,39 @@ func writeMasterUser(ctx context.Context, hash string) error {
 	}
 	log.Printf("mail master user configured for panel-initiated webmail sessions")
 	return nil
+}
+
+// installMasterPasswd writes the master credential file.
+//
+// The password file is the credential. 0600 and root-owned, written through a
+// temporary file so Dovecot can never read a half-written one.
+func installMasterPasswd(hash string) error {
+	line := masterUserName + ":" + hash + "\n"
+	tmp := masterPasswdTarget + ".new"
+	// #nosec G306 G703 -- fixed system path from a constant; this file holds the master credential, hence 0600.
+	if err := os.WriteFile(tmp, []byte(line), 0o600); err != nil {
+		return fmt.Errorf("write the master password file: %w", err)
+	}
+	if err := chownFile(tmp, 0, 0); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("set the master password file ownership: %w", err)
+	}
+	if err := os.Rename(tmp, masterPasswdTarget); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("install the master password file: %w", err)
+	}
+	return nil
+}
+
+// restoreMasterConf puts back the drop-in Dovecot refused to replace, or removes
+// it when there was none.
+func restoreMasterConf(previous []byte, previousErr error) {
+	if previousErr == nil {
+		// #nosec G306 G703 -- restoring the file this function just replaced, at the same fixed system path.
+		_ = os.WriteFile(masterConfTarget, previous, 0o644)
+	} else {
+		_ = os.Remove(masterConfTarget)
+	}
 }
 
 // removeMasterUser withdraws the bypass.

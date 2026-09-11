@@ -55,53 +55,77 @@ func HealMailIPv6(ctx context.Context) {
 
 // healPostfixIPv6 writes the three delivery settings when any is missing.
 func healPostfixIPv6(ctx context.Context) {
-	// #nosec G304 -- fixed system configuration path, never built from request input.
-	content, err := os.ReadFile(postfixMainCf)
-	if err != nil {
-		return // no Postfix here
-	}
-	if !strings.Contains(string(content), "servika-mail") {
-		return // a Postfix this panel did not configure; leave it alone
-	}
-	if _, err := lookPath("postconf"); err != nil {
+	content, ok := managedPostfixConfig()
+	if !ok {
 		return
 	}
-
-	var missing []string
-	for _, setting := range postfixIPv6Settings {
-		if !hasPostfixSetting(string(content), setting.key, setting.value) {
-			missing = append(missing, setting.key+" = "+setting.value)
-		}
-	}
+	missing := missingPostfixIPv6Settings(content)
 	if len(missing) == 0 {
 		return
 	}
 
 	applyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	if !applyPostfixIPv6(applyCtx, missing) {
+		return
+	}
+	log.Printf("mail ipv6 heal: postfix now accepts and delivers over IPv4 and IPv6 (%s)", strings.Join(missing, "; "))
+}
+
+// managedPostfixConfig reads main.cf when it belongs to a Postfix this panel
+// configured and postconf is there to change it.
+func managedPostfixConfig() (string, bool) {
+	// #nosec G304 -- fixed system configuration path, never built from request input.
+	content, err := os.ReadFile(postfixMainCf)
+	if err != nil {
+		return "", false // no Postfix here
+	}
+	if !strings.Contains(string(content), "servika-mail") {
+		return "", false // a Postfix this panel did not configure; leave it alone
+	}
+	if _, err := lookPath("postconf"); err != nil {
+		return "", false
+	}
+	return string(content), true
+}
+
+// missingPostfixIPv6Settings names each delivery setting main.cf does not carry.
+func missingPostfixIPv6Settings(content string) []string {
+	var missing []string
+	for _, setting := range postfixIPv6Settings {
+		if !hasPostfixSetting(content, setting.key, setting.value) {
+			missing = append(missing, setting.key+" = "+setting.value)
+		}
+	}
+	return missing
+}
+
+// applyPostfixIPv6 writes the missing settings, has Postfix check them and
+// restarts it. It logs the step that failed and reports whether every step ran.
+func applyPostfixIPv6(ctx context.Context, missing []string) bool {
 	for _, setting := range missing {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); every argument comes from the package-level table above, never from a request.
-		if out, err := execCommandContext(applyCtx, "postconf", "-e", setting).CombinedOutput(); err != nil {
+		if out, err := execCommandContext(ctx, "postconf", "-e", setting).CombinedOutput(); err != nil {
 			// #nosec G706 -- the operand is postconf output, not client-controlled input.
 			log.Printf("mail ipv6 heal: could not set %q: %v: %s", setting, err, strings.TrimSpace(string(out)))
-			return
+			return false
 		}
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
-	if out, err := execCommandContext(applyCtx, "postfix", "check").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "postfix", "check").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is postfix output, not client-controlled input.
 		log.Printf("mail ipv6 heal: postfix refused the settings: %v: %s", err, strings.TrimSpace(string(out)))
-		return
+		return false
 	}
 	// inet_protocols is one of the few settings a reload does NOT pick up:
 	// Postfix binds its listeners at start, so the master has to come back.
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
-	if out, err := execCommandContext(applyCtx, "systemctl", "restart", "postfix").CombinedOutput(); err != nil {
+	if out, err := execCommandContext(ctx, "systemctl", "restart", "postfix").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is systemctl output, not client-controlled input.
 		log.Printf("mail ipv6 heal: could not restart postfix: %v: %s", err, strings.TrimSpace(string(out)))
-		return
+		return false
 	}
-	log.Printf("mail ipv6 heal: postfix now accepts and delivers over IPv4 and IPv6 (%s)", strings.Join(missing, "; "))
+	return true
 }
 
 // hasPostfixSetting reports whether main.cf already carries key with value.
