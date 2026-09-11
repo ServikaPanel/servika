@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"servika/internal/httpx"
+	"servika/internal/middleware"
 )
 
 // Handlers serves the public policy file and the per-domain controls.
@@ -135,6 +136,12 @@ type modeRequest struct {
 // testing, moves it to enforce.
 func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	// Publishing an enforce policy is the one setting in the panel that can lose
+	// mail silently. CustomerScope enforces ownership and suspension, never
+	// is_demo.
+	if !middleware.EnforceDomainNotDemo(w, r, id, "the MTA-STS policy") {
+		return
+	}
 	var request modeRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -215,6 +222,10 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 // exists to prevent (K3).
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	// Withdrawing a policy is as much a mail-affecting change as publishing one.
+	if !middleware.EnforceDomainNotDemo(w, r, id, "the MTA-STS policy") {
+		return
+	}
 	row, err := loadDomain(r.Context(), h.DB, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "this domain does not host mail here")

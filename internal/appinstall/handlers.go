@@ -13,6 +13,7 @@ import (
 
 	"servika/internal/bgjob"
 	"servika/internal/httpx"
+	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -128,6 +129,12 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	request, ok := h.domainOf(r.Context(), domainID)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
+		return
+	}
+	// An install unpacks a whole CMS into the document root and creates a
+	// MariaDB schema. CustomerScope enforces ownership and suspension, never
+	// is_demo.
+	if !middleware.EnforceDomainNotDemo(w, r, domainID, "applications") {
 		return
 	}
 	var body struct {
