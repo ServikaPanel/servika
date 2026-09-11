@@ -30,6 +30,76 @@ lftp_escape() {
   printf '%s' "$s"
 }
 
+# offsite_known_hosts <prefix-lowercase>
+offsite_known_hosts() { printf '/etc/servika/offsite-%s.known_hosts' "$1"; }
+
+# offsite_host_alias <host> <port>
+#
+# The alias has to be spelled exactly as ssh-keyscan wrote the pin, because ssh
+# uses HostKeyAlias VERBATIM and applies no bracketing of its own. Measured
+# against OpenSSH 10.3p1: on port 22 ssh-keyscan writes the bare name and a bare
+# alias verifies; on any other port it writes `[host]:port` and a bare alias
+# fails with "No ED25519 host key is known ... and you have requested strict
+# checking", which refuses every connection to a destination on a non-default
+# port.
+offsite_host_alias() {
+  if [ "$2" = "22" ]; then printf '%s' "$1"; else printf '[%s]:%s' "$1" "$2"; fi
+}
+
+# offsite_pin_host_key <prefix> <host> <port> -> prints the known_hosts path
+#
+# SFTP destinations are verified trust-on-first-use, the same rule the panel's
+# own destination handling follows (internal/backups/hostkey.go). The first
+# connection scans the key and stores it; every connection after that is
+# verified against exactly that key, and a host that changes key fails loudly
+# instead of silently.
+#
+# What this replaces is lftp's auto-confirm, which accepts whatever key the
+# destination presents, on every connection, without recording or comparing it.
+# The transfer then had no authentication of the remote server at all: anything
+# able to answer for the hostname received the panel's entire database dump,
+# which carries every tenant's rows, the users table and the encrypted
+# credential columns, and the upload reported success.
+#
+# TOFU does not protect the very first connection. An operator who wants a pin
+# that never had that window sets SERVIKA_<PREFIX>_OFFSITE_HOSTKEY to the
+# known_hosts line out of band; it is written verbatim and no scan runs.
+#
+# Returns non-zero with a diagnostic when no key can be established. The caller
+# must then skip the upload rather than fall back to accepting any key.
+offsite_pin_host_key() {
+  local prefix=$1 host=$2 port=$3 lower file scanned
+  lower=$(printf '%s' "$prefix" | tr '[:upper:]' '[:lower:]')
+  file=$(offsite_known_hosts "$lower")
+
+  local prefix_key="SERVIKA_${prefix}_OFFSITE_HOSTKEY"
+  local pinned="${!prefix_key:-}"
+  if [ -n "$pinned" ] && [ ! -s "$file" ]; then
+    ( umask 077; printf '%s\n' "$pinned" > "$file" ) || {
+      echo "offsite: $file could not be written" >&2; return 1; }
+  fi
+
+  if [ -s "$file" ]; then
+    printf '%s' "$file"
+    return 0
+  fi
+
+  if ! command -v ssh-keyscan >/dev/null 2>&1; then
+    echo "offsite: ssh-keyscan not found, so the destination's host key cannot be pinned" >&2
+    return 1
+  fi
+  # -T bounds one scan; the whole call is one round trip.
+  scanned=$(ssh-keyscan -p "$port" -T 10 "$host" 2>/dev/null | grep -v '^#' | grep -v '^[[:space:]]*$') || true
+  if [ -z "$scanned" ]; then
+    echo "offsite: the host key of $host:$port could not be read, skipping upload" >&2
+    return 1
+  fi
+  ( umask 077; printf '%s\n' "$scanned" > "$file" ) || {
+    echo "offsite: $file could not be written" >&2; return 1; }
+  echo "offsite: pinned the host key of $host:$port in $file" >&2
+  printf '%s' "$file"
+}
+
 # servika_upload_offsite <PREFIX> <local-file> <remote-glob> <default-dir> <default-keep>
 #
 # Uploads one file to the FTP/SFTP destination configured for PREFIX, then prunes
@@ -89,6 +159,23 @@ servika_upload_offsite() {
   fi
   local eu ed
   eu=$(lftp_escape "$user"); ed=$(lftp_escape "$dir")
+
+  # The transport settings are built once and used by all three lftp runs
+  # below, so the upload, the listing and the pruning cannot disagree about how
+  # the connection is authenticated.
+  local guard=""
+  if [ "$otype" = "sftp" ]; then
+    local known alias
+    known=$(offsite_pin_host_key "$prefix" "$host" "$port") || return 0
+    alias=$(offsite_host_alias "$host" "$port")
+    guard=$(printf 'set sftp:auto-confirm no; set sftp:connect-program "ssh -a -x -o HostKeyAlias=%s -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s -o GlobalKnownHostsFile=/dev/null"; ' \
+      "$(lftp_escape "$alias")" "$(lftp_escape "$known")")
+  else
+    # ftp: require the TLS upgrade rather than disabling it. Without this the
+    # dump and the destination credentials cross the network in the clear, and
+    # any passive observer on the path reads both.
+    guard='set ftp:ssl-allow yes; set ftp:ssl-force yes; set ftp:ssl-protect-data yes; set ssl:verify-certificate yes; '
+  fi
   # The password travels in LFTP_PASSWORD, which `open --env-password` reads. The
   # whole `-c` script is an element of lftp's argv, and /proc/<pid>/cmdline is
   # mode 444: every c_* tenant on this host has shell and cron, so the older
@@ -99,16 +186,16 @@ servika_upload_offsite() {
   # It is set per COMMAND rather than exported, so no other subprocess of the
   # calling script inherits it.
   local script
-  script=$(printf 'set cmd:fail-exit yes; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; mkdir -p -f "%s"; cd "%s"; put -O . "%s"; bye' \
-    "$eu" "$otype" "$host" "$port" "$ed" "$ed" "$dump")
+  script=$(printf 'set cmd:fail-exit yes; %sset net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; mkdir -p -f "%s"; cd "%s"; put -O . "%s"; bye' \
+    "$guard" "$eu" "$otype" "$host" "$port" "$ed" "$ed" "$dump")
   if ! LFTP_PASSWORD="$pass" lftp -c "$script" >/dev/null 2>&1; then
     echo "offsite: upload of $name to $otype://$host:$port failed" >&2
     return 0
   fi
   # Remote retention: list newest-first, delete entries beyond $keep. Best-effort.
   local prune
-  prune=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s"; cls -1 --sort=date -r %s; bye' \
-    "$eu" "$otype" "$host" "$port" "$ed" "$glob")
+  prune=$(printf 'set cmd:fail-exit no; %sset net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s"; cls -1 --sort=date -r %s; bye' \
+    "$guard" "$eu" "$otype" "$host" "$port" "$ed" "$glob")
   local listing
   if listing=$(LFTP_PASSWORD="$pass" lftp -c "$prune" 2>/dev/null); then
     # The glob is a shell pattern, so the listing is filtered with the same
@@ -127,8 +214,8 @@ servika_upload_offsite() {
     done <<< "$listing"
     if [ -n "$old" ]; then
       local rm_script
-      rm_script=$(printf 'set cmd:fail-exit no; set sftp:auto-confirm yes; set ssl:verify-certificate no; set ftp:ssl-allow no; set net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s";' \
-        "$eu" "$otype" "$host" "$port" "$ed")
+      rm_script=$(printf 'set cmd:fail-exit no; %sset net:max-retries 1; set net:timeout 15; open -u "%s" --env-password %s://%s:%s; cd "%s";' \
+        "$guard" "$eu" "$otype" "$host" "$port" "$ed")
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         rm_script+=$(printf ' rm -f "%s";' "$(lftp_escape "$line")")
