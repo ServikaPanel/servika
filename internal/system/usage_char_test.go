@@ -249,6 +249,15 @@ func TestPrimaryIPPrefersAPublicAddressOnARealInterface(t *testing.T) {
 		{name: "an IPv6 address ahead of the IPv4 one", want: "203.0.113.10",
 			ifaces: []net.Interface{{Name: "eth0", Flags: up}},
 			addrs:  map[string][]net.Addr{"eth0": {addr("2001:db8::1/64"), addr("203.0.113.10/24")}}},
+		{name: "a private address ahead of the public one on the same interface", want: "203.0.113.10",
+			ifaces: []net.Interface{{Name: "eth0", Flags: up}},
+			addrs:  map[string][]net.Addr{"eth0": {addr("10.0.0.5/24"), addr("203.0.113.10/24")}}},
+		{name: "a NAT interface ahead of the public one", want: "203.0.113.10",
+			ifaces: []net.Interface{{Name: "eth0", Flags: up}, {Name: "eth1", Flags: up}},
+			addrs: map[string][]net.Addr{
+				"eth0": {addr("192.168.1.20/24")},
+				"eth1": {addr("203.0.113.10/24")},
+			}},
 		// Nothing public: the fallback takes the first address of any interface
 		// that is not loopback, virtual or not.
 		{name: "only private addresses", want: "10.0.0.5",
