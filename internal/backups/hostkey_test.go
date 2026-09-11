@@ -104,6 +104,45 @@ func TestSSHHostKeyOptionsCloseEveryFallback(t *testing.T) {
 	}
 }
 
+// ssh uses HostKeyAlias verbatim and applies no bracketing of its own, so the
+// alias has to be spelled exactly as ssh-keyscan wrote the pin. Measured
+// against OpenSSH 10.3p1 with a real sshd: on port 22 ssh-keyscan writes the
+// bare name and a bare alias verifies; on any other port it writes
+// `[host]:port`, and a bare alias there answers "No ED25519 host key is known
+// for <host> and you have requested strict checking" and refuses the
+// connection. A bare alias therefore broke every SFTP destination on a
+// non-default port, which is most of them.
+func TestTheHostKeyAliasMatchesWhatTheScanWrote(t *testing.T) {
+	if got := hostKeyAlias("backup.example.com", 22); got != "backup.example.com" {
+		t.Errorf("hostKeyAlias(_, 22) = %q, want the bare name ssh-keyscan writes", got)
+	}
+	if got := hostKeyAlias("backup.example.com", 2222); got != "[backup.example.com]:2222" {
+		t.Errorf("hostKeyAlias(_, 2222) = %q, want the bracketed form ssh-keyscan writes", got)
+	}
+}
+
+// And the two places that build ssh options use it, or the helper is decorative.
+func TestBothSSHPathsAliasThroughThePortAwareForm(t *testing.T) {
+	body := readBackupsSource(t, "destination.go")
+	for _, want := range []string{
+		"HostKeyAlias=` + lftpEscape(hostKeyAlias(d.Host, d.Port))",
+		"sshHostKeyOptions(knownHosts, hostKeyAlias(d.Host, d.Port))",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("destination.go does not build its alias through hostKeyAlias: %q is missing", want)
+		}
+	}
+}
+
+func readBackupsSource(t *testing.T, name string) string {
+	t.Helper()
+	body, err := os.ReadFile(name) // #nosec G304 -- a file of this package.
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(body)
+}
+
 func knownHostsPathFrom(t *testing.T, settings string) string {
 	t.Helper()
 	const marker = "UserKnownHostsFile="

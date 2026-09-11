@@ -582,12 +582,12 @@ func lftpHostKeySettings(ctx context.Context, db *sql.DB, d *Destination) (strin
 	// HostKeyAlias is what makes the pinned address and the pinned key agree. The
 	// URL carries the vetted IP so lftp cannot resolve the name a second time,
 	// and ssh-keyscan wrote the pin under the NAME, so without the alias ssh
-	// would look the address up in known_hosts, find nothing, and refuse. ssh
-	// applies the same [host]:port bracketing ssh-keyscan used, so the bare name
-	// is the right value for both default and non-default ports.
+	// would look the address up in known_hosts, find nothing, and refuse. The
+	// alias carries the port bracketing, because ssh applies none of its own;
+	// see hostKeyAlias.
 	return `set sftp:auto-confirm no; ` +
 		`set sftp:connect-program "ssh -a -x` +
-		` -o HostKeyAlias=` + lftpEscape(d.Host) +
+		` -o HostKeyAlias=` + lftpEscape(hostKeyAlias(d.Host, d.Port)) +
 		` -o StrictHostKeyChecking=yes` +
 		` -o UserKnownHostsFile=` + lftpEscape(path) +
 		` -o GlobalKnownHostsFile=/dev/null"; `, cleanup, nil
@@ -710,7 +710,7 @@ func testConnection(ctx context.Context, db *sql.DB, d *Destination) error {
 			"-o", "PubkeyAuthentication=no",
 			"-o", "BatchMode=no",
 		}
-		args = append(args, sshHostKeyOptions(knownHosts, d.Host)...)
+		args = append(args, sshHostKeyOptions(knownHosts, hostKeyAlias(d.Host, d.Port))...)
 		// The vetted address, not the name: ssh would otherwise resolve the name
 		// a THIRD time, after netguard and after ssh-keyscan, and the connection
 		// test is the path a customer can drive at will.

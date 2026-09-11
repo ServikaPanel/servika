@@ -110,15 +110,29 @@ func knownHostsFile(key string) (string, func(), error) {
 	return file.Name(), cleanup, nil
 }
 
+// hostKeyAlias spells the pinned name exactly as ssh-keyscan wrote it.
+//
+// ssh uses HostKeyAlias VERBATIM and applies no bracketing of its own. Measured
+// against OpenSSH 10.3p1: on port 22 ssh-keyscan writes the bare name and a bare
+// alias verifies; on any other port it writes `[host]:port`, and a bare alias
+// there fails with "No ED25519 host key is known for <host> and you have
+// requested strict checking", which refuses every connection to a destination on
+// a non-default port.
+func hostKeyAlias(host string, port int) string {
+	if port == 22 {
+		return host
+	}
+	return "[" + host + "]:" + strconv.Itoa(port)
+}
+
 // sshHostKeyOptions are the ssh flags that turn the pinned file into the only
 // key the client will accept.
 //
-// hostAlias is the NAME the key was pinned under. The caller connects to the
-// address netguard vetted rather than to the name, so that the name is not
-// resolved a second time; ssh-keyscan wrote the pin under the name, so without
-// the alias ssh would look the address up in known_hosts, find nothing, and
-// refuse. ssh applies the same [host]:port bracketing ssh-keyscan used, so the
-// bare name is right for a default and a non-default port alike.
+// hostAlias is the NAME the key was pinned under, as hostKeyAlias spells it. The
+// caller connects to the address netguard vetted rather than to the name, so
+// that the name is not resolved a second time; ssh-keyscan wrote the pin under
+// the name, so without the alias ssh would look the address up in known_hosts,
+// find nothing, and refuse.
 func sshHostKeyOptions(knownHosts, hostAlias string) []string {
 	return []string{
 		"-o", "HostKeyAlias=" + hostAlias,

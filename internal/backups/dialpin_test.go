@@ -103,7 +103,9 @@ func TestTheConnectionTestDialsThePinnedAddressUnderTheNamesAlias(t *testing.T) 
 		end = len(body) - start
 	}
 	test := body[start : start+end]
-	if !strings.Contains(test, `sshHostKeyOptions(knownHosts, d.Host)`) {
+	// The alias comes from the configured NAME, never from the dialled address,
+	// and carries the port bracketing ssh-keyscan used; see hostKeyAlias.
+	if !strings.Contains(test, `sshHostKeyOptions(knownHosts, hostKeyAlias(d.Host, d.Port))`) {
 		t.Error("the connection test does not pin the key under the configured name")
 	}
 	if !strings.Contains(test, `"--", dialTarget(d), "true"`) {
