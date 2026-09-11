@@ -216,7 +216,7 @@ func clearKernelIOLimits(systemUser string, l Limits) {
 	if err != nil || controlGroup == "" {
 		return
 	}
-	ioMaxPath := filepath.Join("/sys/fs/cgroup", controlGroup, "io.max")
+	ioMaxPath := filepath.Join(cgroupRoot, controlGroup, "io.max")
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	data, err := os.ReadFile(ioMaxPath)
 	if err != nil {
@@ -718,26 +718,26 @@ func ApplyAll(ctx context.Context, db *sql.DB, domainID int64) error {
 		return fmt.Errorf("system_user is empty")
 	}
 	if !planID.Valid {
-		if provisioner.TenantFPMActive(systemUser) {
-			if err := provisioner.RollbackToSharedFPM(db, domainID, systemUser, phpVersion); err != nil {
+		if tenantFPMActive(systemUser) {
+			if err := rollbackToSharedFPM(db, domainID, systemUser, phpVersion); err != nil {
 				return fmt.Errorf("rollback tenant PHP-FPM: %w", err)
 			}
 		}
-		_ = DeleteSystemdSlice(systemUser)
+		_ = deleteSlice(systemUser)
 		// Even without a plan, apply DEFAULT disk/inode quota (CloudLinux parity:
 		// never leave tenants unlimited). When the filesystem is noquota,
 		// DomainQuotaApply skips silently (never an error).
-		if err := DomainQuotaApply(ctx, db, domainID); err != nil {
+		if err := applyDomainQuota(ctx, db, domainID); err != nil {
 			log.Printf("quota (no plan) %s: %v", systemUser, err)
 		}
 		return nil
 	}
 
-	l, err := GetPlanLimits(ctx, db, domainID)
+	l, err := planLimits(ctx, db, domainID)
 	if err != nil {
 		return err
 	}
-	if err := WriteSystemdSlice(systemUser, l); err != nil {
+	if err := writeSlice(systemUser, l); err != nil {
 		log.Printf("write slice %s: %v", systemUser, err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO php_settings(domain_id, subdomain_id, pm_max_children, extra_directives, debug_mode)
@@ -745,13 +745,13 @@ func ApplyAll(ctx context.Context, db *sql.DB, domainID int64) error {
 		domainID, calculatePMMaxChildren(l)); err != nil {
 		return fmt.Errorf("store PHP-FPM worker limit: %w", err)
 	}
-	if _, err := provisioner.EnableTenantFPM(db, domainID, systemUser, phpVersion); err != nil {
+	if _, err := enableTenantFPM(db, domainID, systemUser, phpVersion); err != nil {
 		log.Printf("tenant PHP-FPM %s: %v", systemUser, err)
 	}
-	if err := DomainQuotaApply(ctx, db, domainID); err != nil {
+	if err := applyDomainQuota(ctx, db, domainID); err != nil {
 		log.Printf("xfs user-quota %s: %v", systemUser, err)
 	}
-	if err := ApplyMySQLLimits(ctx, db, domainID, l); err != nil {
+	if err := applyMySQLLimits(ctx, db, domainID, l); err != nil {
 		log.Printf("mysql governor %s: %v", systemUser, err)
 	}
 	return nil
@@ -872,8 +872,8 @@ func HealTenantFPM(ctx context.Context, db *sql.DB) {
 		if item.systemUser == "" || !strings.HasPrefix(item.systemUser, "c_") {
 			continue
 		}
-		if provisioner.TenantFPMActive(item.systemUser) {
-			if err := ReassertLimits(ctx, db, item.id); err != nil {
+		if tenantFPMActive(item.systemUser) {
+			if err := reassertLimits(ctx, db, item.id); err != nil {
 				log.Printf("tenant PHP-FPM healing failed to reassert limits for %s: %v", item.systemUser, err)
 			} else {
 				log.Printf("tenant PHP-FPM healing reasserted limits for active tenant %s without restarting it", item.systemUser)
@@ -882,11 +882,11 @@ func HealTenantFPM(ctx context.Context, db *sql.DB) {
 			continue
 		}
 
-		baseline := planProbeHTTPS(item.domainName)
-		if err := ApplyAll(ctx, db, item.id); err != nil {
+		baseline := probeHTTPS(item.domainName)
+		if err := applyAllLimits(ctx, db, item.id); err != nil {
 			log.Printf("tenant PHP-FPM healing failed to apply limits for %s: %v", item.systemUser, err)
 		}
-		if !provisioner.TenantFPMActive(item.systemUser) {
+		if !tenantFPMActive(item.systemUser) {
 			log.Printf("tenant PHP-FPM healing left %s on the shared service after cutover failure", item.systemUser)
 			continue
 		}
@@ -894,16 +894,16 @@ func HealTenantFPM(ctx context.Context, db *sql.DB) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(700 * time.Millisecond):
+		case <-time.After(cutoverSettle):
 		}
-		active := tenantServiceActive("php-fpm-" + item.systemUser + ".service")
-		post := planProbeHTTPS(item.domainName)
+		active := serviceActive("php-fpm-" + item.systemUser + ".service")
+		post := probeHTTPS(item.domainName)
 		if !active || tenantCutoverRegressed(baseline, post) {
 			log.Printf("tenant PHP-FPM healing is rolling back %s: active=%v baseline=%d post=%d", item.systemUser, active, baseline, post)
-			if err := provisioner.RollbackToSharedFPM(db, item.id, item.systemUser, item.phpVersion); err != nil {
+			if err := rollbackToSharedFPM(db, item.id, item.systemUser, item.phpVersion); err != nil {
 				log.Printf("tenant PHP-FPM healing rollback failed for %s: %v", item.systemUser, err)
 			}
-			_ = DeleteSystemdSlice(item.systemUser)
+			_ = deleteSlice(item.systemUser)
 			rolledBack++
 			continue
 		}
@@ -922,8 +922,8 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 	if db == nil {
 		return
 	}
-	if !QuotaFSCompatible() {
-		quotaSentinelDelete()
+	if !quotaFSCompatible() {
+		sentinelDelete()
 		var total int
 		_ = db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM domains WHERE system_user LIKE 'c\_%'`).Scan(&total)
@@ -932,8 +932,8 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 	}
 	// Quota enforcement is off: write the reboot-required sentinel (UI visibility) +
 	// single log + exit.
-	if acc, enf := mountQuotaActive(); !enf {
-		quotaSentinelWrite()
+	if acc, enf := quotaActive(); !enf {
+		sentinelWrite()
 		var total int
 		_ = db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM domains WHERE system_user LIKE 'c\_%'`).Scan(&total)
@@ -945,7 +945,7 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 		return
 	}
 	// Enforcement is active → remove the stale post-reboot warning (idempotent).
-	quotaSentinelDelete()
+	sentinelDelete()
 	rows, err := db.QueryContext(ctx,
 		`SELECT id FROM domains WHERE system_user LIKE 'c\_%' ORDER BY id`)
 	if err != nil {
@@ -978,7 +978,7 @@ func HealQuotaOnStartup(ctx context.Context, db *sql.DB) {
 			return
 		default:
 		}
-		if e := DomainQuotaApply(ctx, db, id); e != nil {
+		if e := applyDomainQuota(ctx, db, id); e != nil {
 			log.Printf("quota heal: domain %d error: %v", id, e)
 			skipped++
 			continue
