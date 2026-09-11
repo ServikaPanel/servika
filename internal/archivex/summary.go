@@ -45,50 +45,61 @@ type Summary struct {
 // ".." component, a symlink or a special file is rejected here too rather than
 // being described and only refused later at extraction.
 func Summarize(ctx context.Context, archivePath string, archiveType Type, limits Limits, markers []string) (Summary, error) {
-	wanted := make(map[string]bool, len(markers))
-	for _, marker := range markers {
-		wanted[marker] = true
+	builder := summaryBuilder{
+		summary: Summary{Roots: []string{}, Markers: map[string][]string{}},
+		roots:   map[string]bool{},
+		wanted:  make(map[string]bool, len(markers)),
 	}
-	summary := Summary{Roots: []string{}, Markers: map[string][]string{}}
-	roots := map[string]bool{}
-	nested := false
+	for _, marker := range markers {
+		builder.wanted[marker] = true
+	}
 
-	err := scan(ctx, archivePath, archiveType, limits, func(name string, size int64) {
-		clean := strings.Trim(strings.ReplaceAll(name, `\`, "/"), "/")
-		clean = strings.TrimPrefix(clean, "./")
-		if clean == "" || clean == "." {
-			return
-		}
-		summary.Members++
-		summary.TotalBytes += size
-		first, rest, hasSlash := strings.Cut(clean, "/")
-		roots[first] = true
-		if hasSlash && strings.TrimSpace(rest) != "" {
-			nested = true
-		}
-		if base := path.Base(clean); wanted[base] {
-			dir := path.Dir(clean)
-			if dir == "." {
-				dir = ""
-			}
-			summary.Markers[base] = appendUnique(summary.Markers[base], dir)
-		}
-	})
-	if err != nil {
+	if err := scan(ctx, archivePath, archiveType, limits, builder.add); err != nil {
 		return Summary{}, err
 	}
 
-	for root := range roots {
-		summary.Roots = append(summary.Roots, root)
+	for root := range builder.roots {
+		builder.summary.Roots = append(builder.summary.Roots, root)
 	}
-	sort.Strings(summary.Roots)
+	sort.Strings(builder.summary.Roots)
 	// One root is only a CONTAINER when something lives inside it. An archive of
 	// a single loose file has one root too, and stripping that would discard the
 	// file rather than unwrap a directory.
-	if len(summary.Roots) == 1 && nested {
-		summary.ContainerRoot = summary.Roots[0]
+	if len(builder.summary.Roots) == 1 && builder.nested {
+		builder.summary.ContainerRoot = builder.summary.Roots[0]
 	}
-	return summary, nil
+	return builder.summary, nil
+}
+
+// summaryBuilder accumulates the inventory while the scan walks the archive.
+type summaryBuilder struct {
+	summary Summary
+	roots   map[string]bool
+	wanted  map[string]bool
+	nested  bool
+}
+
+// add records one member that already passed validation.
+func (b *summaryBuilder) add(name string, size int64) {
+	clean := strings.Trim(strings.ReplaceAll(name, `\`, "/"), "/")
+	clean = strings.TrimPrefix(clean, "./")
+	if clean == "" || clean == "." {
+		return
+	}
+	b.summary.Members++
+	b.summary.TotalBytes += size
+	first, rest, hasSlash := strings.Cut(clean, "/")
+	b.roots[first] = true
+	if hasSlash && strings.TrimSpace(rest) != "" {
+		b.nested = true
+	}
+	if base := path.Base(clean); b.wanted[base] {
+		dir := path.Dir(clean)
+		if dir == "." {
+			dir = ""
+		}
+		b.summary.Markers[base] = appendUnique(b.summary.Markers[base], dir)
+	}
 }
 
 // AppRoot picks the application inside an archive from its markers, returning

@@ -233,11 +233,8 @@ func validateLSARListing(output []byte, limits Limits, collect func(string, int6
 	}
 	var total int64
 	for _, member := range listing.Contents {
-		if unsafeMemberName(member.Name) {
-			return ErrUnsafePath
-		}
-		if member.LinkDestination != "" || (member.Type != "Regular" && member.Type != "Directory") {
-			return ErrUnsafeMember
+		if problem := unsafeLSARMember(member.Name, member.Type, member.LinkDestination); problem != nil {
+			return problem
 		}
 		total += member.Size
 		if limits.exceedsBytes(total) {
@@ -246,6 +243,18 @@ func validateLSARListing(output []byte, limits Limits, collect func(string, int6
 		if collect != nil {
 			collect(member.Name, member.Size)
 		}
+	}
+	return nil
+}
+
+// unsafeLSARMember reports why a listed member cannot be extracted: its name
+// would escape the destination, or it is not an ordinary file or directory.
+func unsafeLSARMember(name, memberType, linkDestination string) error {
+	if unsafeMemberName(name) {
+		return ErrUnsafePath
+	}
+	if linkDestination != "" || (memberType != "Regular" && memberType != "Directory") {
+		return ErrUnsafeMember
 	}
 	return nil
 }
@@ -265,12 +274,8 @@ func scanZIP(ctx context.Context, archivePath string, limits Limits, collect fun
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		mode := member.Mode()
-		if mode&os.ModeSymlink != 0 || mode&(os.ModeDevice|os.ModeNamedPipe|os.ModeSocket) != 0 {
-			return ErrUnsafeMember
-		}
-		if unsafeMemberName(member.Name) {
-			return ErrUnsafePath
+		if problem := unsafeZIPMember(member); problem != nil {
+			return problem
 		}
 		// The declared uncompressed size is attacker-controlled. Reject values that
 		// would overflow int64 (individually or when summed) so a crafted header
@@ -289,6 +294,19 @@ func scanZIP(ctx context.Context, archivePath string, limits Limits, collect fun
 	return nil
 }
 
+// unsafeZIPMember reports why a member cannot be extracted: it is a link or a
+// special file, or its name would escape the destination.
+func unsafeZIPMember(member *zip.File) error {
+	mode := member.Mode()
+	if mode&os.ModeSymlink != 0 || mode&(os.ModeDevice|os.ModeNamedPipe|os.ModeSocket) != 0 {
+		return ErrUnsafeMember
+	}
+	if unsafeMemberName(member.Name) {
+		return ErrUnsafePath
+	}
+	return nil
+}
+
 func scanTAR(ctx context.Context, archivePath string, archiveType Type, limits Limits, collect func(string, int64)) error {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	file, err := os.Open(archivePath)
@@ -297,42 +315,91 @@ func scanTAR(ctx context.Context, archivePath string, archiveType Type, limits L
 	}
 	defer func() { _ = file.Close() }()
 
-	var reader io.Reader = file
-	var gzipReader *gzip.Reader
-	var xzCommand *exec.Cmd
-	var xzStderr bytes.Buffer
+	source, err := openTarStream(ctx, file, archiveType)
+	if err != nil {
+		return err
+	}
+	defer source.close()
 
+	if err := walkTAR(ctx, source.reader, limits, collect); err != nil {
+		return err
+	}
+	return source.finish()
+}
+
+// tarSource is the decompressed stream of a TAR archive together with what it
+// takes to shut its decompressor down.
+type tarSource struct {
+	reader io.Reader
+	// finish waits for an external decompressor and reports what it said. It is
+	// never nil.
+	finish func() error
+	// close releases a decompressor that is still running after an early
+	// return. It is never nil.
+	close func()
+}
+
+// openTarStream wraps the archive in the decompressor its type calls for. xz
+// has no reader in the standard library, so it runs as a process.
+func openTarStream(ctx context.Context, file *os.File, archiveType Type) (tarSource, error) {
 	switch archiveType {
 	case TypeTARGzip:
-		gzipReader, err = gzip.NewReader(file)
+		gzipReader, err := gzip.NewReader(file)
 		if err != nil {
-			return fmt.Errorf("open gzip stream: %w", err)
+			return tarSource{}, fmt.Errorf("open gzip stream: %w", err)
 		}
-		defer func() { _ = gzipReader.Close() }()
-		reader = gzipReader
+		return tarSource{
+			reader: gzipReader,
+			finish: func() error { return nil },
+			close:  func() { _ = gzipReader.Close() },
+		}, nil
 	case TypeTARBzip2:
-		reader = bzip2.NewReader(file)
+		return tarSource{
+			reader: bzip2.NewReader(file),
+			finish: func() error { return nil },
+			close:  func() {},
+		}, nil
 	case TypeTARXz:
-		xzCommand = exec.CommandContext(ctx, "xz", "-dc")
+		xzCommand := exec.CommandContext(ctx, "xz", "-dc")
 		xzCommand.Env = []string{"PATH=" + safePath}
 		xzCommand.Stdin = file
+		var xzStderr bytes.Buffer
 		xzCommand.Stderr = &xzStderr
 		pipe, pipeErr := xzCommand.StdoutPipe()
 		if pipeErr != nil {
-			return fmt.Errorf("open xz output: %w", pipeErr)
+			return tarSource{}, fmt.Errorf("open xz output: %w", pipeErr)
 		}
 		if err := xzCommand.Start(); err != nil {
-			return fmt.Errorf("start xz: %w", err)
+			return tarSource{}, fmt.Errorf("start xz: %w", err)
 		}
-		defer func() {
-			if xzCommand != nil && xzCommand.Process != nil {
-				_ = xzCommand.Process.Kill()
-				_ = xzCommand.Wait()
-			}
-		}()
-		reader = pipe
+		running := xzCommand
+		return tarSource{
+			reader: pipe,
+			finish: func() error {
+				waitErr := xzCommand.Wait()
+				running = nil
+				if waitErr != nil {
+					return fmt.Errorf("decompress xz archive: %s: %w", strings.TrimSpace(xzStderr.String()), waitErr)
+				}
+				return nil
+			},
+			close: func() {
+				if running != nil && running.Process != nil {
+					_ = running.Process.Kill()
+					_ = running.Wait()
+				}
+			},
+		}, nil
 	}
+	return tarSource{
+		reader: file,
+		finish: func() error { return nil },
+		close:  func() {},
+	}, nil
+}
 
+// walkTAR validates every member of the stream and reports each one that passed.
+func walkTAR(ctx context.Context, reader io.Reader, limits Limits, collect func(string, int64)) error {
 	tarReader := tar.NewReader(reader)
 	var total int64
 	members := 0
@@ -364,14 +431,6 @@ func scanTAR(ctx context.Context, archivePath string, archiveType Type, limits L
 		}
 		if collect != nil {
 			collect(header.Name, header.Size)
-		}
-	}
-
-	if xzCommand != nil {
-		waitErr := xzCommand.Wait()
-		xzCommand = nil
-		if waitErr != nil {
-			return fmt.Errorf("decompress xz archive: %s: %w", strings.TrimSpace(xzStderr.String()), waitErr)
 		}
 	}
 	return nil
@@ -494,13 +553,8 @@ func extractStrip(ctx context.Context, archivePath string, archiveType Type, des
 	if archiveType == TypeUnknown {
 		return "", ErrUnsupported
 	}
-	if !strings.HasPrefix(systemUser, "c_") || len(systemUser) == 2 {
+	if !managedTenant(systemUser) {
 		return "", ErrInvalidTenant
-	}
-	for _, character := range systemUser[2:] {
-		if character != '_' && (character < '0' || character > '9') && (character < 'A' || character > 'Z') && (character < 'a' || character > 'z') {
-			return "", ErrInvalidTenant
-		}
 	}
 	total := 0
 	if err := scanArchive(ctx, archivePath, archiveType, limits, func(string, int64) { total++ }); err != nil {
@@ -513,77 +567,145 @@ func extractStrip(ctx context.Context, archivePath string, archiveType Type, des
 	// In verbose mode each extractor prints one line per member, which the
 	// progress counter turns into a running total.
 	verbose := prog != nil
-	var command *exec.Cmd
-	switch archiveType {
-	case TypeZIP:
-		if strip > 0 {
-			if _, err := lookPath("bsdtar"); err != nil {
-				return "", ErrStripUnsupported
-			}
-			bsdX := "-x"
-			if verbose {
-				bsdX = "-xv"
-			}
-			command = extractCommand(ctx, systemUser, "bsdtar", bsdX, stripFlag(strip),
-				"-f", archivePath, "-C", destination)
-			break
-		}
-		// verbose drops -q so unzip prints one " extracting: ..." line per member.
-		if verbose {
-			command = extractCommand(ctx, systemUser, "unzip", "-o", archivePath, "-d", destination)
-			break
-		}
-		command = extractCommand(ctx, systemUser, "unzip", "-o", "-q", archivePath, "-d", destination)
-	case TypeRAR:
-		tool, ok := rarTool()
-		if !ok {
-			return "", ErrRARUnavailable
-		}
-		if tool == "bsdtar" {
-			bsdX := "-x"
-			if verbose {
-				bsdX = "-xv"
-			}
-			arguments := []string{"bsdtar", bsdX}
-			if strip > 0 {
-				arguments = append(arguments, stripFlag(strip))
-			}
-			command = extractCommand(ctx, systemUser, append(arguments, "-f", archivePath, "-C", destination)...)
-			break
-		}
-		// unar unpacks whole; it cannot drop a leading component.
-		if strip > 0 {
-			return "", ErrStripUnsupported
-		}
-		command = extractCommand(ctx, systemUser, "unar", "-f", "-D", "-o", destination, archivePath)
-	default:
-		// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
-		file, err := os.Open(archivePath)
-		if err != nil {
-			return "", fmt.Errorf("open archive: %w", err)
-		}
-		defer func() { _ = file.Close() }()
-
-		flag := "-x"
-		switch archiveType {
-		case TypeTARGzip:
-			flag = "-xz"
-		case TypeTARBzip2:
-			flag = "-xj"
-		case TypeTARXz:
-			flag = "-xJ"
-		}
-		if verbose {
-			flag += "v" // GNU tar prints one line per member to stderr.
-		}
-		arguments := []string{"tar", flag}
-		if strip > 0 {
-			arguments = append(arguments, stripFlag(strip))
-		}
-		command = extractCommand(ctx, systemUser, append(arguments, "-f", "-", "-C", destination)...)
-		command.Stdin = file
+	command, closeArchive, err := extractorCommand(ctx, extractRequest{
+		archivePath: archivePath,
+		archiveType: archiveType,
+		destination: destination,
+		systemUser:  systemUser,
+		strip:       strip,
+		verbose:     verbose,
+	})
+	defer closeArchive()
+	if err != nil {
+		return "", err
 	}
+	return runExtractor(command, prog)
+}
 
+// managedTenant reports whether systemUser is a tenant this panel created. The
+// name is handed to runuser, so nothing else may reach it.
+func managedTenant(systemUser string) bool {
+	if !strings.HasPrefix(systemUser, "c_") || len(systemUser) == 2 {
+		return false
+	}
+	for _, character := range systemUser[2:] {
+		if !tenantNameRune(character) {
+			return false
+		}
+	}
+	return true
+}
+
+// tenantNameRune reports whether a character may appear in the part of a tenant
+// name that follows the c_ prefix.
+func tenantNameRune(character rune) bool {
+	return character == '_' ||
+		(character >= '0' && character <= '9') ||
+		(character >= 'A' && character <= 'Z') ||
+		(character >= 'a' && character <= 'z')
+}
+
+// extractRequest is one extraction as the command builders read it.
+type extractRequest struct {
+	archivePath string
+	archiveType Type
+	destination string
+	systemUser  string
+	strip       int
+	verbose     bool
+}
+
+// extractorCommand builds the extractor for one archive format. The returned
+// close releases what the command holds open and is never nil.
+func extractorCommand(ctx context.Context, request extractRequest) (*exec.Cmd, func(), error) {
+	switch request.archiveType {
+	case TypeZIP:
+		command, err := zipExtractCommand(ctx, request)
+		return command, func() {}, err
+	case TypeRAR:
+		command, err := rarExtractCommand(ctx, request)
+		return command, func() {}, err
+	default:
+		return tarExtractCommand(ctx, request)
+	}
+}
+
+func zipExtractCommand(ctx context.Context, request extractRequest) (*exec.Cmd, error) {
+	if request.strip > 0 {
+		if _, err := lookPath("bsdtar"); err != nil {
+			return nil, ErrStripUnsupported
+		}
+		bsdX := "-x"
+		if request.verbose {
+			bsdX = "-xv"
+		}
+		return extractCommand(ctx, request.systemUser, "bsdtar", bsdX, stripFlag(request.strip),
+			"-f", request.archivePath, "-C", request.destination), nil
+	}
+	// verbose drops -q so unzip prints one " extracting: ..." line per member.
+	if request.verbose {
+		return extractCommand(ctx, request.systemUser, "unzip", "-o", request.archivePath, "-d", request.destination), nil
+	}
+	return extractCommand(ctx, request.systemUser, "unzip", "-o", "-q", request.archivePath, "-d", request.destination), nil
+}
+
+func rarExtractCommand(ctx context.Context, request extractRequest) (*exec.Cmd, error) {
+	tool, ok := rarTool()
+	if !ok {
+		return nil, ErrRARUnavailable
+	}
+	if tool == "bsdtar" {
+		bsdX := "-x"
+		if request.verbose {
+			bsdX = "-xv"
+		}
+		arguments := []string{"bsdtar", bsdX}
+		if request.strip > 0 {
+			arguments = append(arguments, stripFlag(request.strip))
+		}
+		return extractCommand(ctx, request.systemUser,
+			append(arguments, "-f", request.archivePath, "-C", request.destination)...), nil
+	}
+	// unar unpacks whole; it cannot drop a leading component.
+	if request.strip > 0 {
+		return nil, ErrStripUnsupported
+	}
+	return extractCommand(ctx, request.systemUser, "unar", "-f", "-D", "-o", request.destination, request.archivePath), nil
+}
+
+// tarExtractCommand feeds the archive to tar through standard input, so the
+// file stays open until the caller runs the command and closes it.
+func tarExtractCommand(ctx context.Context, request extractRequest) (*exec.Cmd, func(), error) {
+	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
+	file, err := os.Open(request.archivePath)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("open archive: %w", err)
+	}
+	flag := "-x"
+	switch request.archiveType {
+	case TypeTARGzip:
+		flag = "-xz"
+	case TypeTARBzip2:
+		flag = "-xj"
+	case TypeTARXz:
+		flag = "-xJ"
+	}
+	if request.verbose {
+		flag += "v" // GNU tar prints one line per member to stderr.
+	}
+	arguments := []string{"tar", flag}
+	if request.strip > 0 {
+		arguments = append(arguments, stripFlag(request.strip))
+	}
+	command := extractCommand(ctx, request.systemUser,
+		append(arguments, "-f", "-", "-C", request.destination)...)
+	command.Stdin = file
+	return command, func() { _ = file.Close() }, nil
+}
+
+// runExtractor runs the extractor and returns what it printed, which is the
+// only account of why an extraction failed.
+func runExtractor(command *exec.Cmd, prog *progressCounter) (string, error) {
 	if prog != nil {
 		command.Stdout = prog
 		command.Stderr = prog
