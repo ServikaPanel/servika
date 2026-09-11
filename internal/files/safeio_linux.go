@@ -44,6 +44,11 @@ func userLookup(name string) (usrInfo, error) {
 
 const dirOpenFlags = unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_RDONLY | unix.O_CLOEXEC | unix.O_NONBLOCK
 
+// errSafeIOBadTarget refuses an import that names no destination. It is
+// declared here rather than beside the other errors because this file holds its
+// only caller, and the stub build has none.
+var errSafeIOBadTarget = errors.New("security: empty destination path")
+
 // openHomeFd opens the home directory O_DIRECTORY. home (/home/c_<slug>) is created
 // by root; /home is owned by root → the tenant cannot swap the home DIRECTORY ENTRY
 // with a symlink, so opening home directly is safe. Sub-components are protected by openat2.
