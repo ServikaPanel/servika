@@ -671,6 +671,13 @@ func main() {
 	r.Use(middleware.Timeout(300 * time.Second))
 	r.Use(chimw.Compress(5, "application/json", "text/html", "text/css", "text/javascript", "application/javascript"))
 	r.Use(middleware.CORS)
+	// CSRF. The session cookie's SameSite=Strict was the only control, and
+	// SameSite is scoped to the registrable domain rather than the origin: a
+	// tenant subdomain of the panel's own domain is same-site, so the browser
+	// attaches the session to a request a page under the tenant's control makes.
+	// This refuses a state-changing request the browser says did not come from
+	// the panel's own origin, and leaves non-browser clients alone.
+	r.Use(middleware.EnforceSameOrigin)
 	r.Use(middleware.MaintenanceMode)
 	r.Use(middleware.BodyLimit)
 
