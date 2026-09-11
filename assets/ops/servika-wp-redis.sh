@@ -119,7 +119,14 @@ fi
 [[ "$PASS" =~ ^[a-f0-9]{36}$ ]] || PASS=$(openssl rand -hex 18)
 
 # 1) Isolated ACL user with @dangerous disabled and read-only diagnostics enabled
-vc_in "ACL SETUSER $SYSTEM_USER on >$PASS resetkeys ~$SYSTEM_USER:* resetchannels &$SYSTEM_USER:* \
+#
+# resetpass is not optional. SETUSER merges into the existing rule set and `>`
+# ADDS a password rather than replacing it, so without this every password ever
+# issued to this ACL user stays valid and re-running this script revokes
+# nothing. Measured against Valkey 8: two calls without resetpass leave two
+# hashes and both authenticate; with it exactly one remains and the earlier ones
+# answer WRONGPASS.
+vc_in "ACL SETUSER $SYSTEM_USER on resetpass >$PASS resetkeys ~$SYSTEM_USER:* resetchannels &$SYSTEM_USER:* \
    +@all -@dangerous -@admin -scan -randomkey +info +dbsize +command +ping +echo +client|no-evict"
 vc ACL SAVE >/dev/null
 say "ACL user ready: $SYSTEM_USER (~$SYSTEM_USER:*)"

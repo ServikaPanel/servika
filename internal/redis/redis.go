@@ -116,8 +116,22 @@ func enableUser(systemUser, password string) error {
 	}
 	// On STDIN, never argv: the password would otherwise be readable by every
 	// other account on the host (see cliInput).
+	//
+	// resetpass comes BEFORE the new password, and it is not optional. SETUSER
+	// MERGES into the existing rule set, and the `>` verb ADDS a password to the
+	// user's list rather than replacing it, so without this every password ever
+	// issued to this ACL user stays valid. The panel stores only the newest one,
+	// so re-issuing looked like a rotation and revoked nothing: a credential
+	// disclosed out of the tenant's wp-config.php could not be taken back short
+	// of deleting the user and taking the object cache down with it. The file
+	// also grew a password per call for a caller that looped the endpoint.
+	//
+	// Measured against Valkey 8: two SETUSER calls without resetpass leave two
+	// hashes in ACL GETUSER and both authenticate; with resetpass exactly one
+	// remains, the earlier ones answer WRONGPASS, and the key and channel scopes
+	// are unchanged.
 	if _, err := cliInput(strings.Join([]string{
-		"ACL", "SETUSER", systemUser, "on", ">" + password,
+		"ACL", "SETUSER", systemUser, "on", "resetpass", ">" + password,
 		"resetkeys", "~" + systemUser + ":*", "resetchannels", "&" + systemUser + ":*",
 		"+@all", "-@dangerous", "-@admin", "-scan", "-randomkey",
 		"+info", "+dbsize", "+command", "+ping", "+echo", "+client|no-evict",
