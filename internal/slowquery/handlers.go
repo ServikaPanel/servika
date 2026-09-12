@@ -114,7 +114,9 @@ func (h *Handlers) query(ctx context.Context, domainID int64, hours, limit int) 
 		" MIN(s.bucket_hour), MAX(s.bucket_hour)" +
 		" FROM slow_query_stats s" +
 		" LEFT JOIN domains d ON d.id = s.domain_id" +
-		" WHERE s.bucket_hour >= NOW() - INTERVAL ? HOUR"
+		// UTC_TIMESTAMP() and not NOW(): bucket_hour holds a UTC wall clock, so
+		// NOW() would shorten the window by the session's timezone offset.
+		" WHERE s.bucket_hour >= UTC_TIMESTAMP() - INTERVAL ? HOUR"
 	args := []any{hours}
 	if domainID > 0 {
 		statement += " AND s.domain_id = ?"

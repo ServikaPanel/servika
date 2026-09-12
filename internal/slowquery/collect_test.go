@@ -233,7 +233,7 @@ func TestASymlinkedLogIsRefused(t *testing.T) {
 // maintenance and never grows without bound.
 func TestOldRowsArePrunedInTheSamePass(t *testing.T) {
 	source := readSource(t, "collect.go")
-	if !strings.Contains(source, "DELETE FROM slow_query_stats WHERE bucket_hour < NOW() - INTERVAL ? DAY") {
+	if !strings.Contains(source, "DELETE FROM slow_query_stats WHERE bucket_hour < UTC_TIMESTAMP() - INTERVAL ? DAY") {
 		t.Error("the pass does not prune old rows")
 	}
 	if retentionDays <= 0 || retentionDays > 90 {

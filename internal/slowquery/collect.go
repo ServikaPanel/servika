@@ -294,8 +294,12 @@ func storeBuckets(ctx context.Context, db *sql.DB, buckets map[bucketKey]*bucket
 		consumed, size); err != nil {
 		return err
 	}
+	// UTC_TIMESTAMP() and not NOW(): bucket_hour is written from a Go time.Time,
+	// and the driver is opened with no `loc`, so its default converts the value to
+	// UTC on the wire. NOW() answers in the session timezone, so on a +03:00
+	// server the retention would delete rows three hours early.
 	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM slow_query_stats WHERE bucket_hour < NOW() - INTERVAL ? DAY`,
+		`DELETE FROM slow_query_stats WHERE bucket_hour < UTC_TIMESTAMP() - INTERVAL ? DAY`,
 		retentionDays); err != nil {
 		return err
 	}
