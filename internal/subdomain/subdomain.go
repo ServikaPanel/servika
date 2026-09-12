@@ -128,12 +128,17 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	out := []Sub{}
 	for rows.Next() {
 		var s Sub
-		if err := rows.Scan(&s.ID, &s.Subdomain, &s.FQDN, &s.CreatedAt); err == nil {
-			s.DocRoot = docrootOf(systemUser, s.FQDN)
-			s.PHPLocked = phpLocked
-			s.SSL, s.SSLSource = sslState(systemUser, s.Subdomain, s.FQDN)
-			out = append(out, s)
+		// Every column the query asks for is scanned. A destination short of the
+		// column count fails the scan for EVERY row, and a dropped row is a
+		// subdomain that is being served and that the tenant cannot see or manage.
+		if err := rows.Scan(&s.ID, &s.Subdomain, &s.FQDN, &s.PHPVersion, &s.CreatedAt); err != nil {
+			httpx.LogR(r, "list subdomains of domain %d: %v", id, err)
+			continue
 		}
+		s.DocRoot = docrootOf(systemUser, s.FQDN)
+		s.PHPLocked = phpLocked
+		s.SSL, s.SSLSource = sslState(systemUser, s.Subdomain, s.FQDN)
+		out = append(out, s)
 	}
 	_ = rows.Err()
 	httpx.WriteJSON(w, http.StatusOK, out)
