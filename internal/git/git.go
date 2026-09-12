@@ -449,11 +449,11 @@ func gitPull(systemUser, repoURL, targetDir, branch, token string) (sha string, 
 	if !validRepoURL(repoURL) {
 		return "", "", errors.New("invalid repository URL")
 	}
-	resolveArgs, err := gitResolveArgs(repoURL)
+	resolveArgs, err := resolveArgsFor(repoURL)
 	if err != nil {
 		return "", "", err
 	}
-	home := "/home/" + systemUser
+	home := filepath.Join(tenantHomeRoot, systemUser)
 	dst := filepath.Join(home, targetDir)
 	// Resolve the target through openat2 before touching it. git itself runs as
 	// the tenant, so DAC already bounds the damage, but a symlinked component
@@ -474,9 +474,9 @@ func gitPull(systemUser, repoURL, targetDir, branch, token string) (sha string, 
 	defer cancel()
 	fetchArgs := append([]string{"-C", dst}, resolveArgs...)
 	fetchArgs = append(fetchArgs, "fetch", "origin", branch)
-	out, err := runAsUserArgsCtx(ctx, systemUser, dst, authEnv, "git", fetchArgs...)
+	out, err := runUserCtx(ctx, systemUser, dst, authEnv, "git", fetchArgs...)
 	if err == nil {
-		resetOutput, resetErr := runAsUserArgs(systemUser, dst, nil, "git", "-C", dst, "reset", "--hard", "origin/"+branch)
+		resetOutput, resetErr := runUser(systemUser, dst, nil, "git", "-C", dst, "reset", "--hard", "origin/"+branch)
 		out += resetOutput
 		err = resetErr
 	}
@@ -484,7 +484,7 @@ func gitPull(systemUser, repoURL, targetDir, branch, token string) (sha string, 
 	if err != nil {
 		return "", out, err
 	}
-	shaOut, _ := runAsUserArgs(systemUser, dst, nil, "git", "-C", dst, "rev-parse", "HEAD")
+	shaOut, _ := runUser(systemUser, dst, nil, "git", "-C", dst, "rev-parse", "HEAD")
 	sha = strings.TrimSpace(shaOut)
 	files.RestoreconBeneath(home, targetDir)
 	return sha, log, nil
@@ -542,7 +542,7 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid repo_url")
 		return
 	}
-	if err := netguard.CheckGitURL(req.RepoURL); err != nil {
+	if err := checkGitURL(req.RepoURL); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "repository host is not permitted")
 		return
 	}
@@ -554,7 +554,7 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid target_dir")
 		return
 	}
-	pub, err := generateDeployKey(systemUser)
+	pub, err := deployKeyFor(systemUser)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
@@ -744,7 +744,7 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sha, _, perr := gitPull(systemUser, repoURL, targetDir, branch, githubTokenFor(h.DB, domainID))
+	sha, _, perr := pullRepository(systemUser, repoURL, targetDir, branch, githubTokenFor(h.DB, domainID))
 	status := "successful"
 	if perr != nil {
 		status = "error-webhook"

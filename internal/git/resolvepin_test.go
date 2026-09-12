@@ -105,14 +105,34 @@ func TestBothNetworkPathsCarryThePin(t *testing.T) {
 		if end < 0 {
 			end = len(body) - start
 		}
-		if !strings.Contains(body[start:start+end], "gitResolveArgs(repoURL)") {
+		// gitPull reaches the pin through the resolveArgsFor seam (seams.go),
+		// whose default IS gitResolveArgs, so either spelling is the pin.
+		reached := body[start : start+end]
+		if !strings.Contains(reached, "gitResolveArgs(repoURL)") &&
+			!strings.Contains(reached, "resolveArgsFor(repoURL)") {
 			t.Errorf("%s does not pin its remote", fn)
 		}
 	}
-	// The old upfront-only check must not survive beside the pin, or a path could
-	// vet without pinning and read as guarded.
-	if strings.Count(body, "netguard.CheckGitURL(") != 2 {
-		t.Errorf("netguard.CheckGitURL appears %d times, want the one in gitResolveArgs and the one on the create path",
-			strings.Count(body, "netguard.CheckGitURL("))
+	assertOneVettingCall(t, body)
+}
+
+// assertOneVettingCall checks that the URL is vetted in exactly two places: the
+// pin inside gitResolveArgs, and the create path through its seam. The old
+// upfront-only check must not survive beside the pin, or a path could vet
+// without pinning and read as guarded.
+func assertOneVettingCall(t *testing.T, body string) {
+	t.Helper()
+	seams, err := os.ReadFile("seams.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls := strings.Count(body, "netguard.CheckGitURL("); calls != 1 {
+		t.Errorf("netguard.CheckGitURL is called %d times in git.go, want only the one in gitResolveArgs", calls)
+	}
+	if !strings.Contains(string(seams), "checkGitURL = netguard.CheckGitURL") {
+		t.Error("the create path's seam does not default to netguard.CheckGitURL")
+	}
+	if calls := strings.Count(body, "checkGitURL("); calls != 1 {
+		t.Errorf("the create path vets the URL %d times, want once", calls)
 	}
 }
