@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 
+	"servika/internal/hostapps"
 	"servika/internal/httpx"
 	"servika/internal/system"
 
@@ -562,38 +563,26 @@ type hostAppAccess struct {
 // A read error aborts the whole rebuild rather than producing a ruleset with the
 // range dropped and no accepts, which would take every installed application off
 // the network without saying so.
+// The two facts come from internal/hostapps, which owns the table and the port
+// range. Repeating the queries here is how the two drift: a change to the
+// selection rule would have to be made twice.
 func (h *Handlers) hostAppAccess() (hostAppAccess, error) {
-	var installed int
-	if err := h.DB.QueryRow(`SELECT COUNT(*) FROM host_apps`).Scan(&installed); err != nil {
+	ctx := context.Background()
+	installed, err := hostapps.AnyInstalled(ctx, h.DB)
+	if err != nil {
 		return hostAppAccess{}, fmt.Errorf("server applications: %w", err)
 	}
-	if installed == 0 {
+	if !installed {
 		return hostAppAccess{}, nil
 	}
 
-	rows, err := h.DB.Query(
-		`SELECT port FROM host_app_ports WHERE firewall_open=1 ORDER BY port`)
+	ports, err := hostapps.OpenPorts(ctx, h.DB)
 	if err != nil {
 		return hostAppAccess{}, fmt.Errorf("server application ports: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
 	access := hostAppAccess{enabled: true}
-	for rows.Next() {
-		var port int
-		if err := rows.Scan(&port); err != nil {
-			return hostAppAccess{}, err
-		}
-		// A stored port outside the range is dropped rather than rendered: the
-		// accept would sit above a drop that does not cover it, so it would open a
-		// port belonging to something else entirely.
-		if port < hostAppPortMin || port > hostAppPortMax {
-			log.Printf("firewall: ignoring out-of-range server application port %d", port)
-			continue
-		}
+	for _, port := range ports {
 		access.accepts = append(access.accepts, "\t\ttcp dport "+strconv.Itoa(port)+" accept")
-	}
-	if err := rows.Err(); err != nil {
-		return hostAppAccess{}, err
 	}
 	return access, nil
 }

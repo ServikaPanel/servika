@@ -180,9 +180,14 @@ func OpenPorts(ctx context.Context, db *sql.DB) ([]int, error) {
 		if err := rows.Scan(&port); err != nil {
 			return nil, err
 		}
-		if InRange(port) {
-			out = append(out, port)
+		// A stored port outside the range is dropped rather than returned: the
+		// firewall's accept would sit above a drop that does not cover it, so it
+		// would open a port belonging to something else entirely.
+		if !InRange(port) {
+			log.Printf("hostapps: ignoring out-of-range application port %d", port)
+			continue
 		}
+		out = append(out, port)
 	}
 	return out, rows.Err()
 }
