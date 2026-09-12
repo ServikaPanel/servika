@@ -181,7 +181,7 @@ func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), composerTimeout)
 	defer cancel()
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	cmd := exec.CommandContext(ctx, "runuser", args...)
+	cmd := runCommand(ctx, "runuser", args...)
 	cmd.Env = []string{
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"HOME=/home/" + systemUser,
