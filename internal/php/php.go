@@ -365,19 +365,8 @@ func checkProcessManager(s Settings) error {
 	default:
 		return settingError{Reason: reasonInvalidPMMode, Detail: "pm_strategy must be static, dynamic or ondemand"}
 	}
-	for name, bound := range map[string]struct{ value, ceiling int }{
-		"pm_max_children":      {s.PMMaxChildren, pmMaxChildrenCeiling},
-		"pm_start_servers":     {s.PMStartServers, pmMaxChildrenCeiling},
-		"pm_min_spare_servers": {s.PMMinSpareServers, pmMaxChildrenCeiling},
-		"pm_max_spare_servers": {s.PMMaxSpareServers, pmMaxChildrenCeiling},
-		"pm_max_requests":      {s.PMMaxRequests, pmMaxRequestsCeiling},
-	} {
-		if bound.value < 0 || bound.value > bound.ceiling {
-			return settingError{Reason: reasonPMOutOfRange, Detail: name + " is outside the accepted range"}
-		}
-	}
-	if s.PMMaxChildren < 1 {
-		return settingError{Reason: reasonPMOutOfRange, Detail: "pm_max_children must be at least 1"}
+	if err := checkProcessManagerRange(s); err != nil {
+		return err
 	}
 	if s.PMStrategy != "dynamic" {
 		return nil
@@ -391,6 +380,26 @@ func checkProcessManager(s Settings) error {
 			Reason: reasonPMInconsistent,
 			Detail: "dynamic requires 1 <= min_spare <= start_servers <= max_spare <= max_children",
 		}
+	}
+	return nil
+}
+
+// checkProcessManagerRange bounds each pm.* value on its own, whatever the
+// strategy is.
+func checkProcessManagerRange(s Settings) error {
+	for name, bound := range map[string]struct{ value, ceiling int }{
+		"pm_max_children":      {s.PMMaxChildren, pmMaxChildrenCeiling},
+		"pm_start_servers":     {s.PMStartServers, pmMaxChildrenCeiling},
+		"pm_min_spare_servers": {s.PMMinSpareServers, pmMaxChildrenCeiling},
+		"pm_max_spare_servers": {s.PMMaxSpareServers, pmMaxChildrenCeiling},
+		"pm_max_requests":      {s.PMMaxRequests, pmMaxRequestsCeiling},
+	} {
+		if bound.value < 0 || bound.value > bound.ceiling {
+			return settingError{Reason: reasonPMOutOfRange, Detail: name + " is outside the accepted range"}
+		}
+	}
+	if s.PMMaxChildren < 1 {
+		return settingError{Reason: reasonPMOutOfRange, Detail: "pm_max_children must be at least 1"}
 	}
 	return nil
 }
@@ -474,21 +483,7 @@ func ApplyToFilesystem(systemUser, version string, s Settings) (socket string, e
 	if !ok {
 		return "", fmt.Errorf("unsupported PHP version: %s", version)
 	}
-	// Remove pools from previous versions.
-	for _, other := range InstalledVersions {
-		if other.Version == version {
-			continue
-		}
-		// #nosec G703 -- systemUser is the provisioned tenant account read from the domains row (^c_[A-Za-z0-9_]+$), never raw request input; PoolDir is a fixed system path.
-		old := filepath.Join(other.PoolDir, systemUser+".conf")
-		// #nosec G703 -- old is <fixed per-version PoolDir>/<provisioned tenant account>.conf; neither component comes from the request.
-		if _, err := os.Stat(old); err == nil {
-			// #nosec G703 -- same path as the stat above: fixed PoolDir plus the provisioned tenant account.
-			_ = os.Remove(old)
-			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-			_, _ = runCommand("systemctl", "reload-or-restart", other.Service)
-		}
-	}
+	removeOtherVersionPools(systemUser, version)
 
 	// #nosec G301 G703 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; the path is a fixed per-version constant, not request input.
 	_ = os.MkdirAll(sb.PoolDir, 0755)
@@ -535,6 +530,26 @@ func ApplyToFilesystem(systemUser, version string, s Settings) (socket string, e
 	}
 	socket = filepath.Join(sb.SockDir, systemUser+".sock")
 	return socket, nil
+}
+
+// removeOtherVersionPools drops the tenant's pool from every version except the
+// one being applied, and reloads each master it took a pool away from.
+func removeOtherVersionPools(systemUser, version string) {
+	for _, other := range InstalledVersions {
+		if other.Version == version {
+			continue
+		}
+		// #nosec G703 -- systemUser is the provisioned tenant account read from the domains row (^c_[A-Za-z0-9_]+$), never raw request input; PoolDir is a fixed system path.
+		old := filepath.Join(other.PoolDir, systemUser+".conf")
+		// #nosec G703 -- old is <fixed per-version PoolDir>/<provisioned tenant account>.conf; neither component comes from the request.
+		if _, err := os.Stat(old); err != nil {
+			continue
+		}
+		// #nosec G703 -- same path as the stat above: fixed PoolDir plus the provisioned tenant account.
+		_ = os.Remove(old)
+		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+		_, _ = runCommand("systemctl", "reload-or-restart", other.Service)
+	}
 }
 
 // ----- HTTP handlers -----
@@ -677,12 +692,9 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	if req.PHPVersion != "" && req.PHPVersion != version {
-		if _, ok := versionInfo(req.PHPVersion); !ok {
-			httpx.WriteError(w, http.StatusBadRequest, "unsupported PHP version")
-			return
-		}
-		version = req.PHPVersion
+	version, ok = requestedVersion(w, req.PHPVersion, version)
+	if !ok {
+		return
 	}
 
 	// The isolation controls are admin-only. A customer or reseller (or a
@@ -703,7 +715,7 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		// PHP settings" leaves an operator staring at a form with no idea which
 		// box the server refused or why.
 		reason := "invalid PHP settings"
-		if refused, ok := errors.AsType[settingError](err); ok {
+		if refused, isRefusal := errors.AsType[settingError](err); isRefusal {
 			reason = refused.Reason
 		}
 		httpx.WriteError(w, http.StatusBadRequest, reason)
@@ -718,28 +730,9 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		h.applySubdomain(w, r, id, sid, systemUser, version, req.PHPVersion != "")
 		return
 	}
-	var socket string
-	writeDebugShim(h.DB, systemUser, id)
-	if tenantFPMActive(systemUser) {
-		// The GUARDED variant: this is a person saving one domain's settings, so
-		// a master that starts and then dies is worth watching for and putting
-		// back. The watching is asynchronous and adds nothing to this response.
-		// The startup and drift paths keep calling the plain EnableTenantFPM.
-		socket, err = enableTenantFPMGuarded(h.DB, id, systemUser, version)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply tenant PHP-FPM configuration")
-			return
-		}
-	} else {
-		socket, err = applyPool(systemUser, version, req.Settings)
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply PHP pool configuration")
-			return
-		}
-		if err := applyVhostForDomain(h.DB, id, socket, version); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply nginx virtual host")
-			return
-		}
+	socket, ok := h.publishDomainPool(w, id, systemUser, version, req.Settings)
+	if !ok {
+		return
 	}
 
 	if req.PHPVersion != "" {
@@ -752,6 +745,48 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		"php_version": version,
 		"socket":      socket,
 	})
+}
+
+// requestedVersion resolves the version a save runs against. An empty or
+// unchanged request keeps the current one; anything the panel does not offer is
+// refused here, before a pool is written for a directory that does not exist.
+func requestedVersion(w http.ResponseWriter, requested, current string) (string, bool) {
+	if requested == "" || requested == current {
+		return current, true
+	}
+	if _, ok := versionInfo(requested); !ok {
+		httpx.WriteError(w, http.StatusBadRequest, "unsupported PHP version")
+		return "", false
+	}
+	return requested, true
+}
+
+// publishDomainPool installs the saved settings on the host and returns the
+// socket the domain now answers on. It answers the refusal itself.
+func (h *Handlers) publishDomainPool(w http.ResponseWriter, id int64, systemUser, version string, settings Settings) (string, bool) {
+	writeDebugShim(h.DB, systemUser, id)
+	if tenantFPMActive(systemUser) {
+		// The GUARDED variant: this is a person saving one domain's settings, so
+		// a master that starts and then dies is worth watching for and putting
+		// back. The watching is asynchronous and adds nothing to this response.
+		// The startup and drift paths keep calling the plain EnableTenantFPM.
+		socket, err := enableTenantFPMGuarded(h.DB, id, systemUser, version)
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply tenant PHP-FPM configuration")
+			return "", false
+		}
+		return socket, true
+	}
+	socket, err := applyPool(systemUser, version, settings)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to apply PHP pool configuration")
+		return "", false
+	}
+	if err := applyVhostForDomain(h.DB, id, socket, version); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to apply nginx virtual host")
+		return "", false
+	}
+	return socket, true
 }
 
 // applySubdomain publishes settings that were just saved for a subdomain. The version
@@ -828,29 +863,41 @@ func (h *Handlers) GetDebugLog(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"lines": []string{}})
 		return
 	}
-	// DoS-safe: only read the last ~64KB instead of the entire file.
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"lines": lastLines(readTail(f, st.Size()))})
+}
+
+// readTail returns the end of the log.
+//
+// DoS-safe: only the last ~64KB are read instead of the entire file, and the
+// partial line the window starts in is dropped.
+func readTail(f *os.File, size int64) []byte {
 	const tailBytes = 64 * 1024
-	var data []byte
-	if st.Size() > tailBytes {
-		buf := make([]byte, tailBytes)
-		if _, e := f.ReadAt(buf, st.Size()-tailBytes); e == nil || e == io.EOF {
-			if i := bytes.IndexByte(buf, '\n'); i >= 0 {
-				buf = buf[i+1:] // skip the partial first line
-			}
-			data = buf
-		}
-	} else {
-		data, _ = io.ReadAll(f)
+	if size <= tailBytes {
+		data, _ := io.ReadAll(f)
+		return data
 	}
+	buf := make([]byte, tailBytes)
+	if _, err := f.ReadAt(buf, size-tailBytes); err != nil && err != io.EOF {
+		return nil
+	}
+	if i := bytes.IndexByte(buf, '\n'); i >= 0 {
+		buf = buf[i+1:] // skip the partial first line
+	}
+	return buf
+}
+
+// lastLines splits the log tail and keeps the last 200 lines. An empty log is
+// no lines rather than one empty line.
+func lastLines(data []byte) []string {
 	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
 	if len(lines) == 1 && lines[0] == "" {
-		lines = []string{}
+		return []string{}
 	}
 	const maxLines = 200
 	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
+		return lines[len(lines)-maxLines:]
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"lines": lines})
+	return lines
 }
 
 // ClearDebugLog truncates the per-domain PHP debug log.
