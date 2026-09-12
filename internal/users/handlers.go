@@ -210,7 +210,19 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// Scope the entry to the affected account's owner, not the actor: a reseller
 	// (or admin) creating an account is recorded in that account's own scope so
 	// its managing reseller sees it.
-	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.create", b.Username, true, auth.ScopeOf(h.DB, id))
+	//
+	// The new values name what the account was created AS. The password is not
+	// among them, and the redaction would drop it anyway.
+	middleware.RecordChangeScoped(h.DB, r, "user.create", b.Username, true, auth.ScopeOf(h.DB, id), auth.Change{
+		Type:     auth.ActionInsert,
+		Table:    "users",
+		RecordID: strconv.FormatInt(id, 10),
+		NewValues: map[string]any{
+			"username": b.Username,
+			"role":     b.Role,
+			"email":    b.Email,
+		},
+	})
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
@@ -340,11 +352,65 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	if b.Role != nil && !h.roleChangeAllowed(w, r, c, id, *b.Role) {
 		return
 	}
+	// Read the row BEFORE the write. Afterwards the old value is gone, and "the
+	// role was changed" without saying what it was changed FROM is the question
+	// an operator arrives with, unanswered.
+	before := h.profileSnapshot(r, id)
 	if !h.writeProfileFields(w, r, b, id) {
 		return
 	}
-	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.update", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id))
+	middleware.RecordChangeScoped(h.DB, r, "user.update", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id), auth.Change{
+		Type:      auth.ActionUpdate,
+		Table:     "users",
+		RecordID:  strconv.FormatInt(id, 10),
+		OldValues: keepChanged(before, requestedFields(b)),
+		NewValues: requestedFields(b),
+	})
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// profileSnapshot reads the fields an update may change, before it changes
+// them. A failed read yields an empty map rather than an error: the audit row
+// is worth writing without the old values, and refusing the update because the
+// audit could not be prepared would be the wrong trade.
+func (h *Handlers) profileSnapshot(r *http.Request, id int64) map[string]any {
+	var email, fullName, role sql.NullString
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT email, full_name, role FROM users WHERE id=?`, id).Scan(&email, &fullName, &role); err != nil {
+		httpx.WarnR(r, "audit snapshot for user %d: %v", id, err)
+		return nil
+	}
+	return map[string]any{"email": email.String, "full_name": fullName.String, "role": role.String}
+}
+
+// requestedFields returns the fields this request asked to change, and only
+// those. A field the caller did not name is not a change and must not appear as
+// one.
+func requestedFields(b updateReq) map[string]any {
+	fields := map[string]any{}
+	if b.Email != nil {
+		fields["email"] = strings.TrimSpace(*b.Email)
+	}
+	if b.FullName != nil {
+		fields["full_name"] = strings.TrimSpace(*b.FullName)
+	}
+	if b.Role != nil {
+		fields["role"] = *b.Role
+	}
+	return fields
+}
+
+// keepChanged narrows a snapshot to the keys the request named, so the old
+// values line up with the new ones instead of listing the whole row.
+func keepChanged(before, requested map[string]any) map[string]any {
+	if len(before) == 0 || len(requested) == 0 {
+		return nil
+	}
+	kept := make(map[string]any, len(requested))
+	for key := range requested {
+		kept[key] = before[key]
+	}
+	return kept
 }
 
 // roleChangeAllowed decides whether this caller may move this account into that
@@ -711,6 +777,10 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	deletedScope := h.deletedAuditScope(r, id)
+	// The row is read before the DELETE, because afterwards there is nothing
+	// left to say WHO was removed: the audit row would name an id that no longer
+	// resolves to anything.
+	removed := h.profileSnapshot(r, id)
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM users WHERE id=?`, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not delete")
 		return
@@ -721,7 +791,12 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.ExecContext(r.Context(), `UPDATE audit_log SET reseller_id=0 WHERE reseller_id=?`, id); err != nil {
 		httpx.LogR(r, "audit scope cleanup after deleting user %d failed: %v", id, err)
 	}
-	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.delete", strconv.FormatInt(id, 10), true, deletedScope)
+	middleware.RecordChangeScoped(h.DB, r, "user.delete", strconv.FormatInt(id, 10), true, deletedScope, auth.Change{
+		Type:      auth.ActionDelete,
+		Table:     "users",
+		RecordID:  strconv.FormatInt(id, 10),
+		OldValues: removed,
+	})
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

@@ -57,6 +57,33 @@ func RecordAudit(db *sql.DB, r *http.Request, action, target string, ok bool) {
 	auth.WriteAudit(db, claims.UserID, claims.Username, httpx.AuditIP(r), action, target, ok)
 }
 
+// RecordChange writes one audit_log row that also names the row it changed.
+//
+// It is RecordAudit plus the change columns. The correlation id is read here
+// rather than passed in, so a caller cannot forget it and the audit row joins
+// the request_logs row for the same call.
+func RecordChange(db *sql.DB, r *http.Request, action, target string, ok bool, change auth.Change) {
+	claims := ClaimsFrom(r)
+	if claims == nil {
+		return
+	}
+	change.RequestID = chimw.GetReqID(r.Context())
+	auth.WriteAuditChange(db, claims.UserID, claims.Username, httpx.AuditIP(r),
+		action, target, ok, auth.ScopeOf(db, claims.UserID), change)
+}
+
+// RecordChangeScoped is RecordChange with an explicit reseller scope, for the
+// entries that belong to the AFFECTED account's owner rather than the actor's.
+func RecordChangeScoped(db *sql.DB, r *http.Request, action, target string, ok bool, scope int64, change auth.Change) {
+	claims := ClaimsFrom(r)
+	if claims == nil {
+		return
+	}
+	change.RequestID = chimw.GetReqID(r.Context())
+	auth.WriteAuditChange(db, claims.UserID, claims.Username, httpx.AuditIP(r),
+		action, target, ok, scope, change)
+}
+
 // Init configures the database used to enforce suspended customer scopes.
 func Init(db *sql.DB) {
 	scopeDB = db
