@@ -972,6 +972,22 @@ func SamePHPVersion(a, b string) bool {
 }
 
 // vhostTmpl covers vhosts both with and without SSL.
+//
+// cacheVisibility: the browser-cache location decides Cache-Control per request
+// instead of writing "public".
+//
+// A password-protected document root puts auth_basic at SERVER level, because
+// nginx refuses a second "location /", and the browser-cache location inherits
+// it. "public" is the explicit allowance RFC 7234 requires before a shared
+// cache may store a response to a request that carried credentials, so a CDN or
+// forward proxy could hold the protected images, stylesheets, PDFs and archives
+// for browser_cache_days and hand them to a client with no credentials at all.
+//
+// nginx sets $remote_user to the authenticated name and leaves it empty when no
+// auth_basic applied, so the value follows the request and a site with no
+// protection keeps the public label it had. Verified against nginx 1.29 with a
+// rendered vhost: the authenticated request answered "Cache-Control: private"
+// and the same location on an unprotected server answered "public".
 var vhostTmpl = template.Must(template.New("v").Funcs(vhostFuncs).Parse(`{{- if .SSL -}}
 # {{.DomainName}} — port 80 remains open for the HTTP-01 challenge; all other traffic redirects to 443
 server {
@@ -1067,7 +1083,10 @@ server {
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff2?|svg|webp|avif|mp4|webm|pdf|zip|gz)$ {
         expires {{.BrowserCacheDays}}d;
         access_log off;
-        add_header Cache-Control "public" always;
+        # Visibility follows the REQUEST; see the comment on vhostTmpl.
+        set $servika_cache_visibility "public";
+        if ($remote_user) { set $servika_cache_visibility "private"; }
+        add_header Cache-Control $servika_cache_visibility always;
         # Repeat headers because this location defines add_header.
 {{.SecHeaders}}    }
 {{end}}
@@ -1153,7 +1172,10 @@ server {
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff2?|svg|webp|avif|mp4|webm|pdf|zip|gz)$ {
         expires {{.BrowserCacheDays}}d;
         access_log off;
-        add_header Cache-Control "public" always;
+        # Visibility follows the REQUEST; see the comment on vhostTmpl.
+        set $servika_cache_visibility "public";
+        if ($remote_user) { set $servika_cache_visibility "private"; }
+        add_header Cache-Control $servika_cache_visibility always;
         # Repeat headers because this location defines add_header.
 {{.SecHeaders}}    }
 {{end}}

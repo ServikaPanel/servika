@@ -137,7 +137,10 @@ func renderWebSettings(s nginxset.Settings, fqdn string, https bool) webRender {
 		out.BrowserCache = fmt.Sprintf(`    location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff2?|svg|webp|avif|mp4|webm|pdf|zip|gz)$ {
         expires %dd;
         access_log off;
-        add_header Cache-Control "public" always;
+        # Visibility follows the REQUEST; see the comment on provisioner.vhostTmpl.
+        set $servika_cache_visibility "public";
+        if ($remote_user) { set $servika_cache_visibility "private"; }
+        add_header Cache-Control $servika_cache_visibility always;
         # Repeat headers because this location defines add_header.
 %s    }
 `, days, out.Headers)

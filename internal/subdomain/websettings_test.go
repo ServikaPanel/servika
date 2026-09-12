@@ -40,6 +40,33 @@ func TestSubdomainVhostRendersTheStoredCacheSettings(t *testing.T) {
 	}
 }
 
+// A subdomain carries its own auth_basic blocks, and its browser-cache location
+// used to label every static file publicly cacheable whatever they guarded. The
+// visibility now follows the request through $remote_user, which nginx leaves
+// empty when no auth_basic applied.
+func TestTheSubdomainBrowserCacheDoesNotAdvertiseProtectedContentAsPublic(t *testing.T) {
+	settings := nginxset.Defaults()
+	settings.BrowserCacheDays = 7
+	web := renderWebSettings(settings, "app.example.com", false)
+	protected := "    auth_basic \"Authentication Required\";\n    auth_basic_user_file /home/c_example_com/.htpasswd;\n"
+
+	config := vhost("app.example.com", "/home/c_example_com/subdomains/app.example.com",
+		"/run/php-fpm-c_example_com/sub-3.sock", protected, web)
+
+	if strings.Contains(config, `add_header Cache-Control "public"`) {
+		t.Error("the browser-cache location still advertises every static file as publicly cacheable")
+	}
+	for _, want := range []string{
+		`set $servika_cache_visibility "public";`,
+		`if ($remote_user) { set $servika_cache_visibility "private"; }`,
+		"add_header Cache-Control $servika_cache_visibility always;",
+	} {
+		if !strings.Contains(config, want) {
+			t.Errorf("subdomain vhost is missing %q", want)
+		}
+	}
+}
+
 func TestSubdomainHSTSOnlyOnTheHTTPSVhost(t *testing.T) {
 	settings := nginxset.Defaults()
 	settings.HdrHSTS = true
