@@ -187,100 +187,24 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	b.Username = strings.ToLower(strings.TrimSpace(b.Username))
 	b.Role = strings.TrimSpace(b.Role)
 
-	if !usernamePattern.MatchString(b.Username) {
-		httpx.WriteError(w, http.StatusBadRequest,
-			"username: 3-32 chars, must start with a letter, may contain letters/digits/_/-")
+	if !validNewAccount(w, c, b) {
 		return
 	}
-	// "root" is defined in the system, not the panel DB; a second account with
-	// the same name would make the login flow ambiguous.
-	if auth.IsRootUser(b.Username) {
-		httpx.WriteError(w, http.StatusBadRequest, "this username is reserved")
-		return
-	}
-
-	// Privilege-escalation guard: a reseller may only create customer accounts.
-	switch c.Role {
-	case middleware.RoleAdmin:
-		if b.Role != middleware.RoleAdmin && b.Role != middleware.RoleReseller && b.Role != middleware.RoleUser {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid role")
-			return
-		}
-	case middleware.RoleReseller:
-		if b.Role != middleware.RoleUser {
-			httpx.WriteError(w, http.StatusForbidden, "a reseller may only create customer accounts")
-			return
-		}
-	default:
-		httpx.WriteError(w, http.StatusForbidden, "insufficient permissions")
-		return
-	}
-
 	hash, err := auth.HashPassword(b.Password)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
-	// An account a reseller creates is automatically bound to it; an account an
-	// admin creates is unowned (belongs directly to admin).
-	var resellerID any
-	if c.Role == middleware.RoleReseller {
-		// The reseller's customer quota counts customer accounts (role=user), so
-		// it is enforced on the same path that creates one.
-		if err := quota.CheckResellerCustomerAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			if le, ok := errors.AsType[*quota.LimitError](err); ok {
-				httpx.WriteError(w, http.StatusForbidden, le.Message)
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
-			return
-		}
-		resellerID = c.UserID
-	}
-
-	res, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO users(username, email, password_hash, role, reseller_id, full_name, status)
-		 VALUES(?,?,?,?,?,?, 'active')`,
-		b.Username, strings.TrimSpace(b.Email), hash, b.Role, resellerID, strings.TrimSpace(b.FullName))
-	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
-			httpx.WriteError(w, http.StatusConflict, "this username is already in use")
-			return
-		}
-		httpx.WriteError(w, http.StatusInternalServerError, "could not create account")
+	resellerID, ok := h.resellerBinding(w, r, c)
+	if !ok {
 		return
 	}
-	id, _ := res.LastInsertId()
-
-	// Every customer account gets a customers row, whoever opened it. The row is
-	// the middle link of the ownership chain, so without it the account signs in
-	// and sees nothing (ScopeSQL's RoleUser branch matches on customers.user_id),
-	// and no domain can be attached to it either, because the domain form lists
-	// customers. This used to run only on the reseller path, which left every
-	// administrator-created customer account stranded that way.
-	//
-	// owner_user_id is the reseller's only when a reseller opened the account:
-	// its customer list and quota are counted over that column. An administrator
-	// leaves it NULL, which means the customer sits directly under admin.
-	//
-	// Non-fatal: the login already exists, so a failure here is logged.
+	id, ok := h.insertAccount(w, r, b, hash, resellerID)
+	if !ok {
+		return
+	}
 	if b.Role == middleware.RoleUser {
-		displayName := strings.TrimSpace(b.FullName)
-		if displayName == "" {
-			displayName = b.Username
-		}
-		var owner any
-		if c.Role == middleware.RoleReseller {
-			owner = c.UserID
-		}
-		if _, e := h.DB.ExecContext(r.Context(),
-			`INSERT INTO customers(name, email, status, notes, user_id, owner_user_id)
-			 VALUES(?,?, 'active', '', ?, ?)`,
-			displayName, strings.TrimSpace(b.Email), id, owner); e != nil {
-			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			httpx.LogR(r, "auto customer record for user %d failed: %v", id, e)
-		}
+		h.writeCustomerRecord(r, c, b, id)
 	}
 
 	// Scope the entry to the affected account's owner, not the actor: a reseller
@@ -288,6 +212,110 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// its managing reseller sees it.
 	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.create", b.Username, true, auth.ScopeOf(h.DB, id))
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": id})
+}
+
+// resellerBinding returns the reseller_id a new account carries. An account a
+// reseller creates is automatically bound to it; an account an admin creates is
+// unowned (belongs directly to admin). It answers the caller itself when the
+// reseller's customer quota refuses the account.
+func (h *Handlers) resellerBinding(w http.ResponseWriter, r *http.Request, c *auth.Claims) (any, bool) {
+	if c.Role != middleware.RoleReseller {
+		return nil, true
+	}
+	// The reseller's customer quota counts customer accounts (role=user), so it
+	// is enforced on the same path that creates one.
+	if err := quota.CheckResellerCustomerAllowed(r.Context(), h.DB, c.UserID); err != nil {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
+			httpx.WriteError(w, http.StatusForbidden, le.Message)
+			return nil, false
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
+		return nil, false
+	}
+	return c.UserID, true
+}
+
+// insertAccount writes the login row and returns its id. It answers the caller
+// itself on a failure, telling a taken username apart from a write that did not
+// happen.
+func (h *Handlers) insertAccount(w http.ResponseWriter, r *http.Request, b createReq, hash string, resellerID any) (int64, bool) {
+	res, err := h.DB.ExecContext(r.Context(),
+		`INSERT INTO users(username, email, password_hash, role, reseller_id, full_name, status)
+		 VALUES(?,?,?,?,?,?, 'active')`,
+		b.Username, strings.TrimSpace(b.Email), hash, b.Role, resellerID, strings.TrimSpace(b.FullName))
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+			httpx.WriteError(w, http.StatusConflict, "this username is already in use")
+			return 0, false
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "could not create account")
+		return 0, false
+	}
+	id, _ := res.LastInsertId()
+	return id, true
+}
+
+// validNewAccount refuses a name or a role the caller may not open. It answers
+// the caller itself and reports whether the creation may go on.
+func validNewAccount(w http.ResponseWriter, c *auth.Claims, b createReq) bool {
+	if !usernamePattern.MatchString(b.Username) {
+		httpx.WriteError(w, http.StatusBadRequest,
+			"username: 3-32 chars, must start with a letter, may contain letters/digits/_/-")
+		return false
+	}
+	// "root" is defined in the system, not the panel DB; a second account with
+	// the same name would make the login flow ambiguous.
+	if auth.IsRootUser(b.Username) {
+		httpx.WriteError(w, http.StatusBadRequest, "this username is reserved")
+		return false
+	}
+	// Privilege-escalation guard: a reseller may only create customer accounts.
+	switch c.Role {
+	case middleware.RoleAdmin:
+		if b.Role != middleware.RoleAdmin && b.Role != middleware.RoleReseller && b.Role != middleware.RoleUser {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid role")
+			return false
+		}
+	case middleware.RoleReseller:
+		if b.Role != middleware.RoleUser {
+			httpx.WriteError(w, http.StatusForbidden, "a reseller may only create customer accounts")
+			return false
+		}
+	default:
+		httpx.WriteError(w, http.StatusForbidden, "insufficient permissions")
+		return false
+	}
+	return true
+}
+
+// writeCustomerRecord gives a customer account its customers row, whoever
+// opened it. The row is the middle link of the ownership chain, so without it
+// the account signs in and sees nothing (ScopeSQL's RoleUser branch matches on
+// customers.user_id), and no domain can be attached to it either, because the
+// domain form lists customers. This used to run only on the reseller path,
+// which left every administrator-created customer account stranded that way.
+//
+// owner_user_id is the reseller's only when a reseller opened the account: its
+// customer list and quota are counted over that column. An administrator leaves
+// it NULL, which means the customer sits directly under admin.
+//
+// Non-fatal: the login already exists, so a failure here is logged.
+func (h *Handlers) writeCustomerRecord(r *http.Request, c *auth.Claims, b createReq, id int64) {
+	displayName := strings.TrimSpace(b.FullName)
+	if displayName == "" {
+		displayName = b.Username
+	}
+	var owner any
+	if c.Role == middleware.RoleReseller {
+		owner = c.UserID
+	}
+	if _, e := h.DB.ExecContext(r.Context(),
+		`INSERT INTO customers(name, email, status, notes, user_id, owner_user_id)
+		 VALUES(?,?, 'active', '', ?, ?)`,
+		displayName, strings.TrimSpace(b.Email), id, owner); e != nil {
+		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
+		httpx.LogR(r, "auto customer record for user %d failed: %v", id, e)
+	}
 }
 
 type updateReq struct {
@@ -309,39 +337,55 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if b.Role != nil && !h.roleChangeAllowed(w, r, c, id, *b.Role) {
+		return
+	}
+	if !h.writeProfileFields(w, r, b, id) {
+		return
+	}
+	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.update", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id))
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
 
-	if b.Role != nil {
-		if id == rootID {
-			httpx.WriteError(w, http.StatusForbidden, "the root account's role cannot be changed")
-			return
-		}
-		if c.Role != middleware.RoleAdmin {
-			httpx.WriteError(w, http.StatusForbidden, "only an administrator may change roles")
-			return
-		}
-		if *b.Role != middleware.RoleAdmin && *b.Role != middleware.RoleReseller && *b.Role != middleware.RoleUser {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid role")
-			return
-		}
-		// The last admin cannot be demoted out of the admin role.
-		if *b.Role != middleware.RoleAdmin {
-			if only, err := h.lastAdmin(r, id); err != nil || only {
-				httpx.WriteError(w, http.StatusForbidden, "the last administrator account cannot be changed")
-				return
-			}
+// roleChangeAllowed decides whether this caller may move this account into that
+// role. It answers the caller itself and reports whether the update may go on.
+func (h *Handlers) roleChangeAllowed(w http.ResponseWriter, r *http.Request, c *auth.Claims, id int64, role string) bool {
+	if id == rootID {
+		httpx.WriteError(w, http.StatusForbidden, "the root account's role cannot be changed")
+		return false
+	}
+	if c.Role != middleware.RoleAdmin {
+		httpx.WriteError(w, http.StatusForbidden, "only an administrator may change roles")
+		return false
+	}
+	if role != middleware.RoleAdmin && role != middleware.RoleReseller && role != middleware.RoleUser {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid role")
+		return false
+	}
+	// The last admin cannot be demoted out of the admin role.
+	if role != middleware.RoleAdmin {
+		if only, err := h.lastAdmin(r, id); err != nil || only {
+			httpx.WriteError(w, http.StatusForbidden, "the last administrator account cannot be changed")
+			return false
 		}
 	}
+	return true
+}
 
+// writeProfileFields writes each field the request named, and only those. It
+// answers the caller itself on a failure and reports whether every write
+// succeeded.
+func (h *Handlers) writeProfileFields(w http.ResponseWriter, r *http.Request, b updateReq, id int64) bool {
 	if b.Email != nil {
 		if _, err := h.DB.ExecContext(r.Context(), `UPDATE users SET email=?, updated_at=NOW() WHERE id=?`, strings.TrimSpace(*b.Email), id); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not update")
-			return
+			return false
 		}
 	}
 	if b.FullName != nil {
 		if _, err := h.DB.ExecContext(r.Context(), `UPDATE users SET full_name=?, updated_at=NOW() WHERE id=?`, strings.TrimSpace(*b.FullName), id); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not update")
-			return
+			return false
 		}
 	}
 	if b.Role != nil {
@@ -349,11 +393,10 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		// stale JWT must not keep the prior privileges after a role change.
 		if _, err := h.DB.ExecContext(r.Context(), `UPDATE users SET role=?, token_version=token_version+1, updated_at=NOW() WHERE id=?`, *b.Role, id); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not update")
-			return
+			return false
 		}
 	}
-	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.update", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id))
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return true
 }
 
 // lastAdmin reports whether the given user is the only active admin in the system.
@@ -440,26 +483,9 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
-	if id == rootID {
-		httpx.WriteError(w, http.StatusForbidden, "the root account cannot be suspended")
+	status, ok := h.requestedStatus(w, r, c, id)
+	if !ok {
 		return
-	}
-	if id == c.UserID {
-		httpx.WriteError(w, http.StatusForbidden, "you cannot suspend your own account")
-		return
-	}
-	var b struct {
-		Status string `json:"status"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&b); err != nil || (b.Status != "active" && b.Status != "suspended") {
-		httpx.WriteError(w, http.StatusBadRequest, "status must be 'active' or 'suspended'")
-		return
-	}
-	if b.Status == "suspended" {
-		if only, err := h.lastAdmin(r, id); err != nil || only {
-			httpx.WriteError(w, http.StatusForbidden, "the last administrator cannot be suspended")
-			return
-		}
 	}
 	// Bump token_version so a suspended account's live session is revoked at once
 	// rather than surviving until the JWT expires.
@@ -469,33 +495,65 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// takes ownership of the row's state from the reseller cascade.
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE users SET status=?, token_version=token_version+1, suspended_by_reseller=0, updated_at=NOW()
-		 WHERE id=?`, b.Status, id); err != nil {
+		 WHERE id=?`, status, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not change status")
 		return
 	}
+	h.cascadeStatus(r, id, status)
+	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.status", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id))
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
 
+// requestedStatus reads the status a request asks for and refuses the accounts
+// that must stay reachable. It answers the caller itself and reports whether
+// the change may go on.
+func (h *Handlers) requestedStatus(w http.ResponseWriter, r *http.Request, c *auth.Claims, id int64) (string, bool) {
+	if id == rootID {
+		httpx.WriteError(w, http.StatusForbidden, "the root account cannot be suspended")
+		return "", false
+	}
+	if id == c.UserID {
+		httpx.WriteError(w, http.StatusForbidden, "you cannot suspend your own account")
+		return "", false
+	}
+	var b struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil || (b.Status != "active" && b.Status != "suspended") {
+		httpx.WriteError(w, http.StatusBadRequest, "status must be 'active' or 'suspended'")
+		return "", false
+	}
+	if b.Status == "suspended" {
+		if only, err := h.lastAdmin(r, id); err != nil || only {
+			httpx.WriteError(w, http.StatusForbidden, "the last administrator cannot be suspended")
+			return "", false
+		}
+	}
+	return b.Status, true
+}
+
+// cascadeStatus carries a status change down to what the account owns. Both
+// steps are non-fatal: the primary status change already succeeded, so a
+// cascade failure is logged rather than reported.
+func (h *Handlers) cascadeStatus(r *http.Request, id int64, status string) {
 	// Cascade to the reseller's own sub-accounts: suspending a reseller must not
 	// leave its customer logins active, and reactivating it restores them. The
 	// cascade only touches rows bound to this reseller (reseller_id = id), so an
-	// ordinary customer account (no sub-accounts) matches nothing. Non-fatal: the
-	// primary status change already succeeded, so a cascade failure is logged.
-	if _, err := h.DB.ExecContext(r.Context(), subAccountCascade(b.Status), id); err != nil {
+	// ordinary customer account (no sub-accounts) matches nothing.
+	if _, err := h.DB.ExecContext(r.Context(), subAccountCascade(status), id); err != nil {
 		httpx.LogR(r, "cascade status to sub-accounts of user %d failed: %v", id, err)
 	}
 
 	// Cascade to the reseller's actual hosting: without this, suspending a
 	// reseller only revoked panel logins while its customers' sites, FTP and mail
 	// stayed live. Suspend/resume every domain owned by this reseller's customers.
-	// Non-fatal: the account status change already succeeded. This is a no-op for
-	// a customer account (it owns no customers, so the sweep matches nothing).
-	if affected, failed, err := suspendResellerDomains(r.Context(), h.DB, id, b.Status == "suspended"); err != nil {
+	// This is a no-op for a customer account (it owns no customers, so the sweep
+	// matches nothing).
+	if affected, failed, err := suspendResellerDomains(r.Context(), h.DB, id, status == "suspended"); err != nil {
 		httpx.LogR(r, "hosting suspend cascade for reseller %d failed: %v", id, err)
 	} else if affected > 0 || failed > 0 {
 		httpx.LogR(r, "hosting suspend cascade for reseller %d: %d applied, %d failed", id, affected, failed)
 	}
-
-	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.status", strconv.FormatInt(id, 10), true, auth.ScopeOf(h.DB, id))
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // ---------- Reseller limits (reseller_limits) ----------
@@ -565,32 +623,20 @@ func (h *Handlers) SaveLimits(w http.ResponseWriter, r *http.Request) {
 	c := middleware.ClaimsFrom(r)
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 
-	var role string
-	if err := h.DB.QueryRowContext(r.Context(), `SELECT role FROM users WHERE id=?`, id).Scan(&role); err != nil {
-		httpx.WriteError(w, http.StatusNotFound, "account not found")
+	if !h.resellerAccount(w, r, id) {
 		return
 	}
-	if role != middleware.RoleReseller {
-		httpx.WriteError(w, http.StatusBadRequest, "limits can only be defined for reseller accounts")
-		return
-	}
-
-	var b struct {
-		MaxCustomer    int   `json:"max_customer"`
-		MaxDomain      int   `json:"max_domain"`
-		DiskQuotaMB    int64 `json:"disk_quota_mb"`
-		TrafficQuotaMB int64 `json:"traffic_quota_mb"`
-	}
+	var b resellerLimitInput
 	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if b.MaxCustomer < 0 || b.MaxDomain < 0 || b.DiskQuotaMB < 0 || b.TrafficQuotaMB < 0 {
+	if b.negative() {
 		httpx.WriteError(w, http.StatusBadRequest, "limits cannot be negative (0 = unlimited)")
 		return
 	}
 
-	if b.MaxCustomer == 0 && b.MaxDomain == 0 && b.DiskQuotaMB == 0 && b.TrafficQuotaMB == 0 {
+	if b.unlimited() {
 		if _, err := h.DB.ExecContext(r.Context(),
 			`DELETE FROM reseller_limits WHERE user_id=?`, id); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "could not remove limits")
@@ -610,6 +656,41 @@ func (h *Handlers) SaveLimits(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// resellerLimitInput is the quota a request asks to store.
+type resellerLimitInput struct {
+	MaxCustomer    int   `json:"max_customer"`
+	MaxDomain      int   `json:"max_domain"`
+	DiskQuotaMB    int64 `json:"disk_quota_mb"`
+	TrafficQuotaMB int64 `json:"traffic_quota_mb"`
+}
+
+// negative reports whether any limit is below zero, which is neither a ceiling
+// nor the unlimited value.
+func (l resellerLimitInput) negative() bool {
+	return l.MaxCustomer < 0 || l.MaxDomain < 0 || l.DiskQuotaMB < 0 || l.TrafficQuotaMB < 0
+}
+
+// unlimited reports whether every limit is zero, which is stored as no row.
+func (l resellerLimitInput) unlimited() bool {
+	return l.MaxCustomer == 0 && l.MaxDomain == 0 && l.DiskQuotaMB == 0 && l.TrafficQuotaMB == 0
+}
+
+// resellerAccount reports whether the named account exists and is a reseller,
+// which is the only kind of account a limit row belongs to. It answers the
+// caller itself when it is not.
+func (h *Handlers) resellerAccount(w http.ResponseWriter, r *http.Request, id int64) bool {
+	var role string
+	if err := h.DB.QueryRowContext(r.Context(), `SELECT role FROM users WHERE id=?`, id).Scan(&role); err != nil {
+		httpx.WriteError(w, http.StatusNotFound, "account not found")
+		return false
+	}
+	if role != middleware.RoleReseller {
+		httpx.WriteError(w, http.StatusBadRequest, "limits can only be defined for reseller accounts")
+		return false
+	}
+	return true
+}
+
 // Delete: DELETE /users/{id}
 func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	c := middleware.ClaimsFrom(r)
@@ -618,16 +699,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusForbidden, "insufficient permissions")
 		return
 	}
-	if id == rootID {
-		httpx.WriteError(w, http.StatusForbidden, "the root account cannot be deleted")
-		return
-	}
-	if id == c.UserID {
-		httpx.WriteError(w, http.StatusForbidden, "you cannot delete your own account")
-		return
-	}
-	if only, err := h.lastAdmin(r, id); err != nil || only {
-		httpx.WriteError(w, http.StatusForbidden, "the last administrator cannot be deleted")
+	if !h.deletable(w, r, c, id) {
 		return
 	}
 	// If a reseller is being deleted, the accounts under it are kept (not
@@ -638,17 +710,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not reassign linked accounts")
 		return
 	}
-	// Resolve the audit scope BEFORE the row is deleted (the users row is gone
-	// once the DELETE runs). A deleted RESELLER's own scope dies with it, so the
-	// deletion is scoped to root (0); deleting any other account is scoped to its
-	// owning reseller so that reseller sees the removal.
-	var deletedRole string
-	var deletedReseller sql.NullInt64
-	_ = h.DB.QueryRowContext(r.Context(), `SELECT role, reseller_id FROM users WHERE id=?`, id).Scan(&deletedRole, &deletedReseller)
-	var deletedScope int64
-	if deletedRole != "reseller" && deletedReseller.Valid {
-		deletedScope = deletedReseller.Int64
-	}
+	deletedScope := h.deletedAuditScope(r, id)
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM users WHERE id=?`, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not delete")
 		return
@@ -661,4 +723,36 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	auth.WriteAuditScoped(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "user.delete", strconv.FormatInt(id, 10), true, deletedScope)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// deletable refuses the accounts whose removal locks the panel out. It answers
+// the caller itself and reports whether the deletion may go on.
+func (h *Handlers) deletable(w http.ResponseWriter, r *http.Request, c *auth.Claims, id int64) bool {
+	if id == rootID {
+		httpx.WriteError(w, http.StatusForbidden, "the root account cannot be deleted")
+		return false
+	}
+	if id == c.UserID {
+		httpx.WriteError(w, http.StatusForbidden, "you cannot delete your own account")
+		return false
+	}
+	if only, err := h.lastAdmin(r, id); err != nil || only {
+		httpx.WriteError(w, http.StatusForbidden, "the last administrator cannot be deleted")
+		return false
+	}
+	return true
+}
+
+// deletedAuditScope resolves the audit scope BEFORE the row is deleted (the
+// users row is gone once the DELETE runs). A deleted RESELLER's own scope dies
+// with it, so the deletion is scoped to root (0); deleting any other account is
+// scoped to its owning reseller so that reseller sees the removal.
+func (h *Handlers) deletedAuditScope(r *http.Request, id int64) int64 {
+	var deletedRole string
+	var deletedReseller sql.NullInt64
+	_ = h.DB.QueryRowContext(r.Context(), `SELECT role, reseller_id FROM users WHERE id=?`, id).Scan(&deletedRole, &deletedReseller)
+	if deletedRole != "reseller" && deletedReseller.Valid {
+		return deletedReseller.Int64
+	}
+	return 0
 }
