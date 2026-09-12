@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -63,12 +64,16 @@ func (h *Handlers) lookup(r *http.Request) (string, string, error) {
 	return domainName, systemUser, nil
 }
 
+// logDir is where nginx writes the per-domain files. It is a variable so a test
+// can point the handlers at a directory it owns instead of the host's.
+var logDir = "/var/log/nginx"
+
 func filePath(domainName, key string) string {
 	switch key {
 	case "access":
-		return "/var/log/nginx/" + domainName + ".access.log"
+		return filepath.Join(logDir, domainName+".access.log")
 	case "error":
-		return "/var/log/nginx/" + domainName + ".error.log"
+		return filepath.Join(logDir, domainName+".error.log")
 	}
 	return ""
 }
