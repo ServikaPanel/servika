@@ -158,37 +158,45 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if requested == ModeEnforce {
-		hosts, err := MXHosts(r.Context(), h.DB, id)
-		if err != nil {
-			httpx.LogR(r, "mtasts: read the MX hosts for domain %d: %v", id, err)
-			httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
-			return
-		}
-		// The lock is checked HERE, on the write path, not only on the read path
-		// that renders the button. A screen can be stale or bypassed entirely;
-		// this is the boundary.
-		if blocked, reason := enforceLock(r.Context(), h.DB, id, row, hosts); blocked {
-			httpx.WriteJSON(w, http.StatusForbidden, map[string]string{
-				"error":  "enforce is not available yet",
-				"reason": reason,
-			})
-			return
-		}
-		if _, err := setMode(r.Context(), h.DB, id, ModeEnforce, true); err != nil {
-			httpx.LogR(r, "mtasts: set enforce for domain %d: %v", id, err)
-			httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
-			return
-		}
-		if err := h.republish(r, id); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "the mode was saved but DNS could not be updated")
-			return
-		}
-		h.respondState(w, r, id)
+		h.enforce(w, r, id, row)
 		return
 	}
+	h.startTesting(w, r, id, row)
+}
 
-	// testing: start the sequence. The heal takes it the rest of the way, because
-	// each remaining step waits on the world rather than on the panel.
+// enforce moves a soaked domain to enforce and republishes the policy.
+func (h *Handlers) enforce(w http.ResponseWriter, r *http.Request, id int64, row domainRow) {
+	hosts, err := MXHosts(r.Context(), h.DB, id)
+	if err != nil {
+		httpx.LogR(r, "mtasts: read the MX hosts for domain %d: %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	// The lock is checked HERE, on the write path, not only on the read path
+	// that renders the button. A screen can be stale or bypassed entirely;
+	// this is the boundary.
+	if blocked, reason := enforceLock(r.Context(), h.DB, id, row, hosts); blocked {
+		httpx.WriteJSON(w, http.StatusForbidden, map[string]string{
+			"error":  "enforce is not available yet",
+			"reason": reason,
+		})
+		return
+	}
+	if _, err := setMode(r.Context(), h.DB, id, ModeEnforce, true); err != nil {
+		httpx.LogR(r, "mtasts: set enforce for domain %d: %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	if err := h.republish(r, id); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the mode was saved but DNS could not be updated")
+		return
+	}
+	h.respondState(w, r, id)
+}
+
+// startTesting begins the sequence. The heal takes it the rest of the way,
+// because each remaining step waits on the world rather than on the panel.
+func (h *Handlers) startTesting(w http.ResponseWriter, r *http.Request, id int64, row domainRow) {
 	if Published(row.mode) {
 		httpx.WriteError(w, http.StatusConflict, "a policy is already published for this domain")
 		return
