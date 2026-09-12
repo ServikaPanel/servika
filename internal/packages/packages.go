@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -70,8 +69,7 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	// Parse the Name and Summary Matched sections from dnf search.
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	out, _ := exec.CommandContext(ctx, "dnf", "search", "--quiet", q).CombinedOutput()
+	out, _ := runCommand(ctx, "dnf", "search", "--quiet", q).CombinedOutput()
 	lines := strings.Split(string(out), "\n")
 	packageList := []Package{}
 	installedPackages := installedSet()
@@ -114,7 +112,9 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 
 // installedSet returns the set of all installed package names.
 func installedSet() map[string]bool {
-	out, _ := exec.Command("rpm", "-qa", "--qf", "%{NAME}\n").CombinedOutput()
+	// context.Background() rather than a request context: the same command the
+	// literal exec.Command built, routed through the seam.
+	out, _ := runCommand(context.Background(), "rpm", "-qa", "--qf", "%{NAME}\n").CombinedOutput()
 	set := make(map[string]bool, 600)
 	for ln := range strings.SplitSeq(string(out), "\n") {
 		ln = strings.TrimSpace(ln)
@@ -128,7 +128,7 @@ func installedSet() map[string]bool {
 // Installed lists installed packages with an optional filter.
 func (h *Handlers) Installed(w http.ResponseWriter, r *http.Request) {
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
-	out, _ := exec.Command("rpm", "-qa", "--qf", "%{NAME}|%{VERSION}|%{SUMMARY}\n").CombinedOutput()
+	out, _ := runCommand(r.Context(), "rpm", "-qa", "--qf", "%{NAME}|%{VERSION}|%{SUMMARY}\n").CombinedOutput()
 	packageList := []Package{}
 	for ln := range strings.SplitSeq(string(out), "\n") {
 		parts := strings.SplitN(ln, "|", 3)
@@ -173,8 +173,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	cmd := exec.CommandContext(ctx, "dnf", "install", "-y", req.Package)
+	cmd := runCommand(ctx, "dnf", "install", "-y", req.Package)
 	if _, err := cmd.CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "package installation failed")
 		return
@@ -203,8 +202,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	cmd := exec.CommandContext(ctx, "dnf", "remove", "-y", req.Package)
+	cmd := runCommand(ctx, "dnf", "remove", "-y", req.Package)
 	if _, err := cmd.CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "package removal failed")
 		return
@@ -232,7 +230,7 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Package != "" {
 		args = append(args, req.Package)
 	}
-	cmd := exec.CommandContext(ctx, "dnf", args...)
+	cmd := runCommand(ctx, "dnf", args...)
 	if _, err := cmd.CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "package upgrade failed")
 		return
@@ -252,8 +250,7 @@ func (h *Handlers) Info(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if _, err := exec.CommandContext(ctx, "dnf", "info", name).CombinedOutput(); err != nil {
+	if _, err := runCommand(ctx, "dnf", "info", name).CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "package information lookup failed")
 		return
 	}
