@@ -100,7 +100,6 @@ export default function DomainDNSPage() {
   const [dnssec, setDNSSEC] = useState<DNSSECStatus | null>(null)
   const [dnssecProcessing, setDNSSECProcessing] = useState(false)
   const [dnssecDisableConfirmationOpen, setDNSSECDisableConfirmationOpen] = useState(false)
-  const [dsCopied, setDSCopied] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importReplace, setImportReplace] = useState(false)
@@ -288,197 +287,31 @@ export default function DomainDNSPage() {
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 sm:py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.dnsSettings') },
-      ]} />
+      <DnsHeader domain={domain} id={id} />
 
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-      {domain && (
-        <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
-          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
-          {' '}{t('ipLabel')} <span className="font-mono">{domain.ipv4}</span>
-        </p>
-      )}
+      {nameservers && <NameserverBanner nameservers={nameservers} />}
 
-      {/* The pair comes from the server. It used to be printed as
-          ns1.<this domain>, which is a vanity nameserver: it resolves only with
-          a glue record at this domain's own registrar, so telling a customer to
-          use it left the domain unreachable. */}
-      {nameservers && (
-        <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md px-3 py-2 text-xs text-sky-800 dark:text-sky-200 mb-4">
-          <strong>{t('authoritative.label')}</strong>{t('authoritative.pre')}<span className="font-mono">{nameservers.ns1}</span>{t('authoritative.mid')}<span className="font-mono">{nameservers.ns2}</span>{t('authoritative.post')}
-          {nameservers.source === 'none' && (
-            <span className="block mt-1 text-amber-800 dark:text-amber-300">{t('authoritative.unconfigured')}</span>
-          )}
-        </div>
-      )}
+      <IPv6Card
+        show={isAdmin}
+        server={serverIPv6}
+        stored={domain?.ipv6 || ''}
+        choice={ipv6Choice}
+        onChoice={setIPv6Choice}
+        onSave={saveIPv6}
+        saving={savingIPv6}
+      />
 
-      {/* The address this domain answers on over IPv6. Administrator-only,
-          because it has to be an address this server really carries and the
-          operator is the only party who knows which those are. */}
-      {isAdmin && serverIPv6 && (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 px-4 py-3">
-          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('ipv6.title')}</div>
-          {serverIPv6.addresses.length === 0 ? (
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {serverIPv6.has_ipv6 ? t('ipv6.noRoutable') : t('ipv6.noStack')}
-            </p>
-          ) : (
-            <>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('ipv6.hint')}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select
-                  aria-label={t('ipv6.title')}
-                  value={ipv6Choice}
-                  onChange={event => setIPv6Choice(event.target.value)}
-                  className="text-sm px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-                >
-                  <option value="">{t('ipv6.none')}</option>
-                  {serverIPv6.addresses.map(address => (
-                    <option key={address} value={address}>{address}</option>
-                  ))}
-                  {/* An address stored before it left the interface list is kept
-                      selectable, or the screen would silently show a different
-                      value from the one the zone actually publishes. */}
-                  {domain?.ipv6 && !serverIPv6.addresses.includes(domain.ipv6) && (
-                    <option value={domain.ipv6}>{domain.ipv6}</option>
-                  )}
-                </select>
-                <button
-                  type="button"
-                  onClick={saveIPv6}
-                  disabled={savingIPv6 || ipv6Choice === (domain?.ipv6 || '')}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {savingIPv6 ? t('ipv6.saving') : t('ipv6.save')}
-                </button>
-              </div>
-              {ipv6Choice === '' && domain?.ipv6 && (
-                <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{t('ipv6.clearWarning')}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      <VerifyCard verification={verification} verifying={isVerifying} onVerify={verifyDNS} />
 
-      {/* Verification asks a PUBLIC resolver what the world sees, which is not
-          the same thing as what this panel has written locally. */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
-            {t('verify.title')}
-            <span className="ml-2 text-xs font-normal text-slate-400">{t('verify.hint')}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            {verification && (
-              <span className="text-xs text-slate-500">
-                <span className="text-emerald-600 dark:text-emerald-400">{t('verify.okCount', { count: verification.ok_count })}</span>
-                {verification.warning_count > 0 && <span className="text-amber-600 dark:text-amber-400"> · {t('verify.warningCount', { count: verification.warning_count })}</span>}
-                {verification.error_count > 0 && <span className="text-red-600 dark:text-red-400"> · {t('verify.errorCount', { count: verification.error_count })}</span>}
-              </span>
-            )}
-            <button type="button" onClick={verifyDNS} disabled={isVerifying}
-              className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
-              {isVerifying ? t('verify.running') : t('verify.button')}
-            </button>
-          </div>
-        </div>
-        {verification && (
-          <div className="border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-            {verification.checks.map(check => (
-              <VerifyRow key={check.key} check={check} />
-            ))}
-          </div>
-        )}
-      </div>
+      {soa && <SoaCard soa={soa} onChange={setSOA} onSave={saveSOA} open={soaOpen} onToggle={() => setSOAOpen(value => !value)} />}
 
-      {soa && (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 overflow-hidden">
-          <button onClick={() => setSOAOpen(value => !value)} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-            <span>{t('soa.title')} <span className="text-xs text-slate-400 font-normal">{t('soa.titleHint')}</span></span>
-            <span className="text-slate-400 text-xs">{soaOpen ? t('soa.hide') : t('soa.edit')}</span>
-          </button>
-          {soaOpen && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-t border-slate-100 dark:border-slate-800">
-              <label className="col-span-2">
-                <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t('soa.primaryNs')}</span>
-                <input value={soa.primary_ns} onChange={e => setSOA({ ...soa, primary_ns: e.target.value })}
-                  className="mt-1 w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm font-mono outline-none focus:border-brand-500" />
-              </label>
-              <label className="col-span-2">
-                <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t('soa.hostmasterEmail')}</span>
-                <input value={soa.hostmaster} onChange={e => setSOA({ ...soa, hostmaster: e.target.value })}
-                  className="mt-1 w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm font-mono outline-none focus:border-brand-500" />
-              </label>
-              {(['refresh', 'retry', 'expire', 'minimum', 'ttl'] as const).map(field => (
-                <label key={field}>
-                  <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t(`soa.fields.${field}`)}</span>
-                  <input type="number" min={1} value={soa[field]} onChange={e => setSOA({ ...soa, [field]: parseInt(e.target.value) || 0 })}
-                    className="mt-1 w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm font-mono outline-none focus:border-brand-500" />
-                </label>
-              ))}
-              <div className="flex items-end">
-                <button onClick={saveSOA} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded-md">{t('soa.save')}</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {dnssec && (
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
-            <div>
-              <div className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                {t('dnssec.title')}
-                {dnssec.active ? (
-                  dnssec.signed
-                    ? <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium">{t('dnssec.signed')}</span>
-                    : <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">{t('dnssec.signing')}</span>
-                ) : (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">{t('dnssec.disabled')}</span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t('dnssec.description')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {dnssec.active && (
-                <button onClick={refreshDNSSEC} className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-md transition">{t('dnssec.refreshStatus')}</button>
-              )}
-              {dnssec.active ? (
-                <button disabled={dnssecProcessing} onClick={() => setDNSSECDisableConfirmationOpen(true)} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition disabled:opacity-50">{t('dnssec.disable')}</button>
-              ) : (
-                <button disabled={dnssecProcessing} onClick={() => changeDNSSEC(true)} className="px-3 py-1.5 text-sm bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-md transition disabled:opacity-50">{dnssecProcessing ? t('dnssec.enabling') : t('dnssec.enable')}</button>
-              )}
-            </div>
-          </div>
-          {dnssec.active && (
-            <div className="px-4 pb-4 border-t border-slate-100 dark:border-slate-800 pt-3">
-              {dnssec.ds.length > 0 ? (
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{t('dnssec.dsForRegistrar')}</div>
-                  {dnssec.ds.map((record, index) => (
-                    <div key={index} className="flex items-center gap-2 mb-1">
-                      <code className="flex-1 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 break-all text-slate-800 dark:text-slate-200">{record}</code>
-                      <button onClick={() => { void navigator.clipboard?.writeText(record); setDSCopied(true); setTimeout(() => setDSCopied(false), 1500) }}
-                        className="px-2 py-1 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded transition whitespace-nowrap">{dsCopied ? t('dnssec.copied') : t('dnssec.copy')}</button>
-                    </div>
-                  ))}
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t('dnssec.dsHint')}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-amber-600 dark:text-amber-400">{t('dnssec.signingInProgress')}</p>
-              )}
-              {dnssec.status && (
-                <pre className="mt-2 text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-2 overflow-x-auto max-h-44">{dnssec.status}</pre>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      <DnssecCard
+        dnssec={dnssec}
+        processing={dnssecProcessing}
+        onRefresh={refreshDNSSEC}
+        onEnable={() => changeDNSSEC(true)}
+        onAskDisable={() => setDNSSECDisableConfirmationOpen(true)}
+      />
 
       <div className="grid grid-cols-2 gap-2 mb-4 sm:flex sm:items-center sm:flex-wrap">
         <button
@@ -504,148 +337,75 @@ export default function DomainDNSPage() {
       </div>
 
       {importOpen && (
-        <Modal open={true} title={t('import.title')} onClose={() => setImportOpen(false)} width="md">
-          <div className="space-y-4">
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t('import.description')}</p>
-            <input type="file" accept=".zone,.txt,.db,.bind,text/plain" onChange={e => setImportFile(e.target.files?.[0] || null)}
-              className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded-md file:border-0 file:bg-slate-900 file:text-white dark:file:bg-slate-700 hover:file:bg-slate-800 file:cursor-pointer" />
-            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={importReplace} onChange={e => setImportReplace(e.target.checked)} className="rounded" />
-              {t('import.overwriteLabel')}
-            </label>
-            {importReplace && <p className="text-[11px] text-amber-600 dark:text-amber-400">{t('import.replaceWarning')}</p>}
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setImportOpen(false)} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition">{t('import.cancel')}</button>
-              <button disabled={!importFile || importing} onClick={importZone} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white dark:text-slate-100 text-sm font-medium rounded-md transition disabled:opacity-50">{importing ? t('import.importing') : t('import.import')}</button>
-            </div>
-          </div>
-        </Modal>
+        <ImportModal
+          file={importFile}
+          onFile={setImportFile}
+          replace={importReplace}
+          onReplace={setImportReplace}
+          importing={importing}
+          onClose={() => setImportOpen(false)}
+          onImport={importZone}
+        />
       )}
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      <Banners error={error} success={success} />
 
       {selected.size > 0 && (
-        <div className="mb-3 px-3 py-2 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-md flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-brand-800 dark:text-brand-200">{t('bulk.selected', { count: selected.size })}</span>
-          <div className="ml-auto flex items-center gap-2 flex-wrap">
-            <button onClick={() => bulkStatus(true)} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition">{t('bulk.enable')}</button>
-            <button onClick={() => bulkStatus(false)} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">{t('bulk.disable')}</button>
-            <button onClick={() => setBulkDeleteConfirmationOpen(true)} className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition">{t('bulk.deleteSelected', { count: selected.size })}</button>
-            <button onClick={() => setSelected(new Set())} className="px-2 py-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">{t('bulk.clearSelection')}</button>
-          </div>
-        </div>
+        <BulkBar
+          count={selected.size}
+          onEnable={() => bulkStatus(true)}
+          onDisable={() => bulkStatus(false)}
+          onDelete={() => setBulkDeleteConfirmationOpen(true)}
+          onClear={() => setSelected(new Set())}
+        />
       )}
 
-      <div className={responsiveTableContainerClass}>
-        {loading ? (
-          <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
-        ) : records.length === 0 ? (
-          <div className="py-12 text-center">
-            <p className="text-sm text-slate-500 dark:text-slate-500 mb-3">{t('empty.text')}</p>
-            <button onClick={applyTemplate} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-md">
-              {t('empty.applyTemplate')}
-            </button>
-          </div>
-        ) : (
-          <table className={responsiveTableClass}>
-            <thead className={responsiveTableHeadClass}>
-              <tr>
-                <th className="px-4 py-2.5 w-10">
-                  <input type="checkbox" aria-label={t('table.selectAll')} checked={records.length > 0 && selected.size === records.length}
-                    ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < records.length }}
-                    onChange={selectAll} className="rounded border-slate-300 dark:border-slate-600 cursor-pointer" />
-                </th>
-                <th className="text-left px-4 py-2.5">{t('table.name')}</th>
-                <th className="text-left px-4 py-2.5">{t('table.type')}</th>
-                <th className="text-left px-4 py-2.5">{t('table.value')}</th>
-                <th className="text-left px-4 py-2.5">{t('table.ttl')}</th>
-                <th className="text-left px-4 py-2.5">{t('table.priority')}</th>
-                <th className="text-left px-4 py-2.5">{t('table.status')}</th>
-                <th className="text-right px-4 py-2.5">{t('table.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className={responsiveTableBodyClass}>
-              {records.map(k => (
-                <tr key={k.id} className={`${responsiveTableRowClass} ${selected.has(k.id) ? 'bg-brand-50/60 dark:bg-brand-900/10' : ''}`}>
-                  <td data-label={t('table.selectLabel')} className={responsiveTableCellClass}>
-                    <input type="checkbox" aria-label={t('table.select', { name: k.name, type: k.type })} checked={selected.has(k.id)} onChange={() => toggleSelection(k.id)}
-                      className="rounded border-slate-300 dark:border-slate-600 cursor-pointer" />
-                  </td>
-                  <td data-label={t('table.name')} className={responsiveTableCodeCellClass}>{k.name}</td>
-                  <td data-label={t('table.type')} className={responsiveTableCellClass}>
-                    <span className="text-xs px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded font-mono font-semibold">{k.type}</span>
-                  </td>
-                  <td data-label={t('table.value')} className={`${responsiveTableCodeCellClass} break-all`}>{k.value}</td>
-                  <td data-label={t('table.ttl')} className={responsiveTableCodeCellClass}>{k.ttl}</td>
-                  <td data-label={t('table.priority')} className={responsiveTableCodeCellClass}>{k.type === 'MX' || k.type === 'SRV' ? k.priority : t('table.noPriority')}</td>
-                  <td data-label={t('table.status')} className={responsiveTableCellClass}>
-                    {k.active ? (
-                      <span className="text-xs text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{t('table.active')}</span>
-                    ) : (
-                      <span className="text-xs text-slate-500 dark:text-slate-500">{t('table.disabled')}</span>
-                    )}
-                  </td>
-                  <td className={responsiveTableActionCellClass}>
-                    <button onClick={() => setEdit(k)} className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 dark:text-slate-100 px-2 py-1 rounded hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800">{t('table.edit')}</button>
-                    <button onClick={() => setRecordToDelete(k)} className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:text-red-300 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20">{t('table.delete')}</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <RecordsTable
+        loading={loading}
+        records={records}
+        selected={selected}
+        onToggle={toggleSelection}
+        onSelectAll={selectAll}
+        onEdit={setEdit}
+        onDelete={setRecordToDelete}
+        onApplyTemplate={applyTemplate}
+      />
 
       {editingRecord && (
         <RecordModal
           current={editingRecord}
           domainId={Number(id)}
-          ipv4={domain?.ipv4 || ''}
+          domain={domain}
           onClose={() => setEdit(null)}
           onSaved={() => { setEdit(null); load() }}
         />
       )}
 
-      <ConfirmDialog
-        open={!!recordToDelete}
-        title={t('delete.title')}
-        message={t('delete.message', { name: recordToDelete?.name, type: recordToDelete?.type, value: recordToDelete?.value.slice(0, 40) })}
-        dangerous
-        confirmText={t('delete.confirm')}
-        onConfirm={remove}
-        onCancel={() => setRecordToDelete(null)}
-      />
-
-      <ConfirmDialog
-        open={bulkDeleteConfirmationOpen}
-        title={t('bulkDelete.title')}
-        message={t('bulkDelete.message', { count: selected.size })}
-        dangerous
-        confirmText={t('bulkDelete.confirm', { count: selected.size })}
-        onConfirm={bulkDelete}
-        onCancel={() => setBulkDeleteConfirmationOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={dnssecDisableConfirmationOpen}
-        title={t('dnssecDisable.title')}
-        message={t('dnssecDisable.message')}
-        dangerous
-        confirmText={t('dnssecDisable.confirm')}
-        onConfirm={() => changeDNSSEC(false)}
-        onCancel={() => setDNSSECDisableConfirmationOpen(false)}
+      <DnsDialogs
+        record={recordToDelete}
+        onRecordConfirm={remove}
+        onRecordCancel={() => setRecordToDelete(null)}
+        bulkOpen={bulkDeleteConfirmationOpen}
+        bulkCount={selected.size}
+        onBulkConfirm={bulkDelete}
+        onBulkCancel={() => setBulkDeleteConfirmationOpen(false)}
+        dnssecOpen={dnssecDisableConfirmationOpen}
+        onDnssecConfirm={() => changeDNSSEC(false)}
+        onDnssecCancel={() => setDNSSECDisableConfirmationOpen(false)}
       />
     </div>
   )
 }
 
-function RecordModal({ current, domainId, ipv4, onClose, onSaved }: {
-  current: RecordItem; domainId: number; ipv4: string; onClose: () => void; onSaved: () => void
-}) {
-  const { t } = useTranslation('DomainDNSPage')
-  const isNew = !current.id
-  const [form, setForm] = useState<RecordItem>({
+// needsPriority reports the record types whose priority field is meaningful.
+function needsPriority(type: string): boolean {
+  return type === 'MX' || type === 'SRV'
+}
+
+// initialForm seeds the modal from the record being edited, or from the
+// defaults a new record starts with.
+function initialForm(current: RecordItem, domainId: number, ipv4: string): RecordItem {
+  return {
     id: current.id || 0,
     domain_id: domainId,
     name: current.name || '@',
@@ -655,7 +415,15 @@ function RecordModal({ current, domainId, ipv4, onClose, onSaved }: {
     priority: current.priority || 0,
     active: current.active !== false,
     created_at: '',
-  })
+  }
+}
+
+function RecordModal({ current, domainId, domain, onClose, onSaved }: {
+  current: RecordItem; domainId: number; domain: Domain | null; onClose: () => void; onSaved: () => void
+}) {
+  const { t } = useTranslation('DomainDNSPage')
+  const isNew = !current.id
+  const [form, setForm] = useState<RecordItem>(() => initialForm(current, domainId, domain?.ipv4 || ''))
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -687,7 +455,7 @@ function RecordModal({ current, domainId, ipv4, onClose, onSaved }: {
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('modal.typeLabel')}</label>
             <select value={form.type} onChange={e => {
               const type = e.target.value
-              setForm({ ...form, type, priority: type === 'MX' || type === 'SRV' ? 10 : 0 })
+              setForm({ ...form, type, priority: needsPriority(type) ? 10 : 0 })
             }}
               className="w-full px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-800">
               {RECORD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -708,7 +476,7 @@ function RecordModal({ current, domainId, ipv4, onClose, onSaved }: {
             <input type="number" min={60} value={form.ttl} onChange={e => setForm({ ...form, ttl: parseInt(e.target.value) || 3600 })}
               className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono" />
           </div>
-          {(form.type === 'MX' || form.type === 'SRV') && (
+          {needsPriority(form.type) && (
             <div>
               <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('modal.priorityLabel')}</label>
               <input type="number" min={0} value={form.priority} onChange={e => setForm({ ...form, priority: parseInt(e.target.value) || 0 })}
@@ -736,14 +504,22 @@ function RecordModal({ current, domainId, ipv4, onClose, onSaved }: {
 // the label and the explanation are resolved here: an English sentence from the
 // API could not be shown in the other eleven interface languages. The reason
 // falls back to a shared wording when a check has nothing specific to add.
+function checkTone(status: VerifyCheck['status']): string {
+  if (status === 'ok') return 'text-emerald-600 dark:text-emerald-400'
+  if (status === 'warning') return 'text-amber-600 dark:text-amber-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+function checkMark(status: VerifyCheck['status']): string {
+  if (status === 'ok') return '✓'
+  if (status === 'warning') return '!'
+  return '✗'
+}
+
 function VerifyRow({ check }: { check: VerifyCheck }) {
   const { t } = useTranslation('DomainDNSPage')
-  const tone = check.status === 'ok'
-    ? 'text-emerald-600 dark:text-emerald-400'
-    : check.status === 'warning'
-      ? 'text-amber-600 dark:text-amber-400'
-      : 'text-red-600 dark:text-red-400'
-  const mark = check.status === 'ok' ? '✓' : check.status === 'warning' ? '!' : '✗'
+  const tone = checkTone(check.status)
+  const mark = checkMark(check.status)
   const message = check.reason
     ? t([`verify.reasons.${check.key}.${check.reason}`, `verify.reasons.${check.reason}`], { host: check.host })
     : ''
@@ -764,5 +540,476 @@ function VerifyRow({ check }: { check: VerifyCheck }) {
         )}
       </div>
     </div>
+  )
+}
+
+function DnsHeader({ domain, id }: { domain: Domain | null; id?: string }) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
+        { label: t('breadcrumb.dnsSettings') },
+      ]} />
+
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      {domain && (
+        <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
+          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
+          {' '}{t('ipLabel')} <span className="font-mono">{domain.ipv4}</span>
+        </p>
+      )}
+    </>
+  )
+}
+
+// The pair comes from the server. It used to be printed as ns1.<this domain>,
+// which is a vanity nameserver: it resolves only with a glue record at this
+// domain's own registrar, so telling a customer to use it left the domain
+// unreachable.
+function NameserverBanner({ nameservers }: { nameservers: Nameservers }) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md px-3 py-2 text-xs text-sky-800 dark:text-sky-200 mb-4">
+      <strong>{t('authoritative.label')}</strong>{t('authoritative.pre')}<span className="font-mono">{nameservers.ns1}</span>{t('authoritative.mid')}<span className="font-mono">{nameservers.ns2}</span>{t('authoritative.post')}
+      {nameservers.source === 'none' && (
+        <span className="block mt-1 text-amber-800 dark:text-amber-300">{t('authoritative.unconfigured')}</span>
+      )}
+    </div>
+  )
+}
+
+type IPv6CardProps = {
+  show: boolean
+  server: ServerIPv6 | null
+  stored: string
+  choice: string
+  onChoice: (value: string) => void
+  onSave: () => void
+  saving: boolean
+}
+
+// The address this domain answers on over IPv6. Administrator-only, because it
+// has to be an address this server really carries and the operator is the only
+// party who knows which those are.
+function IPv6Card({ show, server, stored, choice, onChoice, onSave, saving }: IPv6CardProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  if (!show || !server) return null
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 px-4 py-3">
+      <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{t('ipv6.title')}</div>
+      {server.addresses.length === 0 ? (
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          {server.has_ipv6 ? t('ipv6.noRoutable') : t('ipv6.noStack')}
+        </p>
+      ) : (
+        <IPv6Picker addresses={server.addresses} stored={stored} choice={choice} onChoice={onChoice} onSave={onSave} saving={saving} />
+      )}
+    </div>
+  )
+}
+
+type IPv6PickerProps = {
+  addresses: string[]
+  stored: string
+  choice: string
+  onChoice: (value: string) => void
+  onSave: () => void
+  saving: boolean
+}
+
+function IPv6Picker({ addresses, stored, choice, onChoice, onSave, saving }: IPv6PickerProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('ipv6.hint')}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <select
+          aria-label={t('ipv6.title')}
+          value={choice}
+          onChange={event => onChoice(event.target.value)}
+          className="text-sm px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+        >
+          <option value="">{t('ipv6.none')}</option>
+          {addresses.map(address => (
+            <option key={address} value={address}>{address}</option>
+          ))}
+          {/* An address stored before it left the interface list is kept
+              selectable, or the screen would silently show a different
+              value from the one the zone actually publishes. */}
+          {stored && !addresses.includes(stored) && (
+            <option value={stored}>{stored}</option>
+          )}
+        </select>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving || choice === stored}
+          className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+        >
+          {saving ? t('ipv6.saving') : t('ipv6.save')}
+        </button>
+      </div>
+      {choice === '' && stored && (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{t('ipv6.clearWarning')}</p>
+      )}
+    </>
+  )
+}
+
+// Verification asks a PUBLIC resolver what the world sees, which is not the
+// same thing as what this panel has written locally.
+function VerifyCard({ verification, verifying, onVerify }: { verification: VerifyResult | null; verifying: boolean; onVerify: () => void }) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+        <div className="text-sm font-medium text-slate-700 dark:text-slate-200">
+          {t('verify.title')}
+          <span className="ml-2 text-xs font-normal text-slate-400">{t('verify.hint')}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {verification && (
+            <span className="text-xs text-slate-500">
+              <span className="text-emerald-600 dark:text-emerald-400">{t('verify.okCount', { count: verification.ok_count })}</span>
+              {verification.warning_count > 0 && <span className="text-amber-600 dark:text-amber-400"> · {t('verify.warningCount', { count: verification.warning_count })}</span>}
+              {verification.error_count > 0 && <span className="text-red-600 dark:text-red-400"> · {t('verify.errorCount', { count: verification.error_count })}</span>}
+            </span>
+          )}
+          <button type="button" onClick={onVerify} disabled={verifying}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
+            {verifying ? t('verify.running') : t('verify.button')}
+          </button>
+        </div>
+      </div>
+      {verification && (
+        <div className="border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+          {verification.checks.map(check => (
+            <VerifyRow key={check.key} check={check} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type SoaCardProps = {
+  soa: SOA
+  onChange: (value: SOA) => void
+  onSave: () => void
+  open: boolean
+  onToggle: () => void
+}
+
+function SoaCard({ soa, onChange, onSave, open, onToggle }: SoaCardProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+        <span>{t('soa.title')} <span className="text-xs text-slate-400 font-normal">{t('soa.titleHint')}</span></span>
+        <span className="text-slate-400 text-xs">{open ? t('soa.hide') : t('soa.edit')}</span>
+      </button>
+      {open && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 border-t border-slate-100 dark:border-slate-800">
+          <label className="col-span-2">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t('soa.primaryNs')}</span>
+            <input value={soa.primary_ns} onChange={e => onChange({ ...soa, primary_ns: e.target.value })}
+              className="mt-1 w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm font-mono outline-none focus:border-brand-500" />
+          </label>
+          <label className="col-span-2">
+            <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t('soa.hostmasterEmail')}</span>
+            <input value={soa.hostmaster} onChange={e => onChange({ ...soa, hostmaster: e.target.value })}
+              className="mt-1 w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm font-mono outline-none focus:border-brand-500" />
+          </label>
+          {(['refresh', 'retry', 'expire', 'minimum', 'ttl'] as const).map(field => (
+            <label key={field}>
+              <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t(`soa.fields.${field}`)}</span>
+              <input type="number" min={1} value={soa[field]} onChange={e => onChange({ ...soa, [field]: parseInt(e.target.value) || 0 })}
+                className="mt-1 w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm font-mono outline-none focus:border-brand-500" />
+            </label>
+          ))}
+          <div className="flex items-end">
+            <button onClick={onSave} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded-md">{t('soa.save')}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type DnssecCardProps = {
+  dnssec: DNSSECStatus | null
+  processing: boolean
+  onRefresh: () => void
+  onEnable: () => void
+  onAskDisable: () => void
+}
+
+function DnssecCard({ dnssec, processing, onRefresh, onEnable, onAskDisable }: DnssecCardProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  if (!dnssec) return null
+  return (
+    <div className="border border-slate-200 dark:border-slate-800 rounded-xl mb-4 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 gap-3 flex-wrap">
+        <div>
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            {t('dnssec.title')}
+            {dnssec.active ? (
+              dnssec.signed
+                ? <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium">{t('dnssec.signed')}</span>
+                : <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">{t('dnssec.signing')}</span>
+            ) : (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">{t('dnssec.disabled')}</span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{t('dnssec.description')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {dnssec.active && (
+            <button onClick={onRefresh} className="px-2.5 py-1.5 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-md transition">{t('dnssec.refreshStatus')}</button>
+          )}
+          {dnssec.active ? (
+            <button disabled={processing} onClick={onAskDisable} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition disabled:opacity-50">{t('dnssec.disable')}</button>
+          ) : (
+            <button disabled={processing} onClick={onEnable} className="px-3 py-1.5 text-sm bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-md transition disabled:opacity-50">{processing ? t('dnssec.enabling') : t('dnssec.enable')}</button>
+          )}
+        </div>
+      </div>
+      {dnssec.active && <DnssecDetails ds={dnssec.ds} status={dnssec.status} />}
+    </div>
+  )
+}
+
+function DnssecDetails({ ds, status }: { ds: string[]; status: string }) {
+  const { t } = useTranslation('DomainDNSPage')
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="px-4 pb-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+      {ds.length > 0 ? (
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{t('dnssec.dsForRegistrar')}</div>
+          {ds.map((record, index) => (
+            <div key={index} className="flex items-center gap-2 mb-1">
+              <code className="flex-1 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 break-all text-slate-800 dark:text-slate-200">{record}</code>
+              <button onClick={() => { void navigator.clipboard?.writeText(record); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+                className="px-2 py-1 text-xs bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded transition whitespace-nowrap">{copied ? t('dnssec.copied') : t('dnssec.copy')}</button>
+            </div>
+          ))}
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t('dnssec.dsHint')}</p>
+        </div>
+      ) : (
+        <p className="text-xs text-amber-600 dark:text-amber-400">{t('dnssec.signingInProgress')}</p>
+      )}
+      {status && (
+        <pre className="mt-2 text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-2 overflow-x-auto max-h-44">{status}</pre>
+      )}
+    </div>
+  )
+}
+
+type ImportModalProps = {
+  file: File | null
+  onFile: (file: File | null) => void
+  replace: boolean
+  onReplace: (value: boolean) => void
+  importing: boolean
+  onClose: () => void
+  onImport: () => void
+}
+
+function ImportModal({ file, onFile, replace, onReplace, importing, onClose, onImport }: ImportModalProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <Modal open={true} title={t('import.title')} onClose={onClose} width="md">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('import.description')}</p>
+        <input type="file" accept=".zone,.txt,.db,.bind,text/plain" onChange={e => onFile(e.target.files?.[0] || null)}
+          className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded-md file:border-0 file:bg-slate-900 file:text-white dark:file:bg-slate-700 hover:file:bg-slate-800 file:cursor-pointer" />
+        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+          <input type="checkbox" checked={replace} onChange={e => onReplace(e.target.checked)} className="rounded" />
+          {t('import.overwriteLabel')}
+        </label>
+        {replace && <p className="text-[11px] text-amber-600 dark:text-amber-400">{t('import.replaceWarning')}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition">{t('import.cancel')}</button>
+          <button disabled={!file || importing} onClick={onImport} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white dark:text-slate-100 text-sm font-medium rounded-md transition disabled:opacity-50">{importing ? t('import.importing') : t('import.import')}</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+type BulkBarProps = {
+  count: number
+  onEnable: () => void
+  onDisable: () => void
+  onDelete: () => void
+  onClear: () => void
+}
+
+function BulkBar({ count, onEnable, onDisable, onDelete, onClear }: BulkBarProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <div className="mb-3 px-3 py-2 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-md flex items-center gap-2 flex-wrap">
+      <span className="text-sm font-medium text-brand-800 dark:text-brand-200">{t('bulk.selected', { count })}</span>
+      <div className="ml-auto flex items-center gap-2 flex-wrap">
+        <button onClick={onEnable} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition">{t('bulk.enable')}</button>
+        <button onClick={onDisable} className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">{t('bulk.disable')}</button>
+        <button onClick={onDelete} className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-md transition">{t('bulk.deleteSelected', { count })}</button>
+        <button onClick={onClear} className="px-2 py-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">{t('bulk.clearSelection')}</button>
+      </div>
+    </div>
+  )
+}
+
+type RecordsTableProps = {
+  loading: boolean
+  records: RecordItem[]
+  selected: Set<number>
+  onToggle: (id: number) => void
+  onSelectAll: () => void
+  onEdit: (record: RecordItem) => void
+  onDelete: (record: RecordItem) => void
+  onApplyTemplate: () => void
+}
+
+function RecordsTable({ loading, records, selected, onToggle, onSelectAll, onEdit, onDelete, onApplyTemplate }: RecordsTableProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <div className={responsiveTableContainerClass}>
+      {loading ? (
+        <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+      ) : records.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-sm text-slate-500 dark:text-slate-500 mb-3">{t('empty.text')}</p>
+          <button onClick={onApplyTemplate} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-md">
+            {t('empty.applyTemplate')}
+          </button>
+        </div>
+      ) : (
+        <table className={responsiveTableClass}>
+          <thead className={responsiveTableHeadClass}>
+            <tr>
+              <th className="px-4 py-2.5 w-10">
+                <input type="checkbox" aria-label={t('table.selectAll')} checked={records.length > 0 && selected.size === records.length}
+                  ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < records.length }}
+                  onChange={onSelectAll} className="rounded border-slate-300 dark:border-slate-600 cursor-pointer" />
+              </th>
+              <th className="text-left px-4 py-2.5">{t('table.name')}</th>
+              <th className="text-left px-4 py-2.5">{t('table.type')}</th>
+              <th className="text-left px-4 py-2.5">{t('table.value')}</th>
+              <th className="text-left px-4 py-2.5">{t('table.ttl')}</th>
+              <th className="text-left px-4 py-2.5">{t('table.priority')}</th>
+              <th className="text-left px-4 py-2.5">{t('table.status')}</th>
+              <th className="text-right px-4 py-2.5">{t('table.actions')}</th>
+            </tr>
+          </thead>
+          <tbody className={responsiveTableBodyClass}>
+            {records.map(k => (
+              <RecordRow key={k.id} record={k} selected={selected.has(k.id)} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+type RecordRowProps = {
+  record: RecordItem
+  selected: boolean
+  onToggle: (id: number) => void
+  onEdit: (record: RecordItem) => void
+  onDelete: (record: RecordItem) => void
+}
+
+function RecordRow({ record: k, selected, onToggle, onEdit, onDelete }: RecordRowProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <tr className={`${responsiveTableRowClass} ${selected ? 'bg-brand-50/60 dark:bg-brand-900/10' : ''}`}>
+      <td data-label={t('table.selectLabel')} className={responsiveTableCellClass}>
+        <input type="checkbox" aria-label={t('table.select', { name: k.name, type: k.type })} checked={selected} onChange={() => onToggle(k.id)}
+          className="rounded border-slate-300 dark:border-slate-600 cursor-pointer" />
+      </td>
+      <td data-label={t('table.name')} className={responsiveTableCodeCellClass}>{k.name}</td>
+      <td data-label={t('table.type')} className={responsiveTableCellClass}>
+        <span className="text-xs px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded font-mono font-semibold">{k.type}</span>
+      </td>
+      <td data-label={t('table.value')} className={`${responsiveTableCodeCellClass} break-all`}>{k.value}</td>
+      <td data-label={t('table.ttl')} className={responsiveTableCodeCellClass}>{k.ttl}</td>
+      <td data-label={t('table.priority')} className={responsiveTableCodeCellClass}>{needsPriority(k.type) ? k.priority : t('table.noPriority')}</td>
+      <td data-label={t('table.status')} className={responsiveTableCellClass}>
+        {k.active ? (
+          <span className="text-xs text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{t('table.active')}</span>
+        ) : (
+          <span className="text-xs text-slate-500 dark:text-slate-500">{t('table.disabled')}</span>
+        )}
+      </td>
+      <td className={responsiveTableActionCellClass}>
+        <button onClick={() => onEdit(k)} className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 dark:text-slate-100 px-2 py-1 rounded hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800">{t('table.edit')}</button>
+        <button onClick={() => onDelete(k)} className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:text-red-300 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20">{t('table.delete')}</button>
+      </td>
+    </tr>
+  )
+}
+
+type DnsDialogsProps = {
+  record: RecordItem | null
+  onRecordConfirm: () => void
+  onRecordCancel: () => void
+  bulkOpen: boolean
+  bulkCount: number
+  onBulkConfirm: () => void
+  onBulkCancel: () => void
+  dnssecOpen: boolean
+  onDnssecConfirm: () => void
+  onDnssecCancel: () => void
+}
+
+function DnsDialogs(p: DnsDialogsProps) {
+  const { t } = useTranslation('DomainDNSPage')
+  return (
+    <>
+      <ConfirmDialog
+        open={!!p.record}
+        title={t('delete.title')}
+        message={t('delete.message', { name: p.record?.name, type: p.record?.type, value: p.record?.value.slice(0, 40) })}
+        dangerous
+        confirmText={t('delete.confirm')}
+        onConfirm={p.onRecordConfirm}
+        onCancel={p.onRecordCancel}
+      />
+
+      <ConfirmDialog
+        open={p.bulkOpen}
+        title={t('bulkDelete.title')}
+        message={t('bulkDelete.message', { count: p.bulkCount })}
+        dangerous
+        confirmText={t('bulkDelete.confirm', { count: p.bulkCount })}
+        onConfirm={p.onBulkConfirm}
+        onCancel={p.onBulkCancel}
+      />
+
+      <ConfirmDialog
+        open={p.dnssecOpen}
+        title={t('dnssecDisable.title')}
+        message={t('dnssecDisable.message')}
+        dangerous
+        confirmText={t('dnssecDisable.confirm')}
+        onConfirm={p.onDnssecConfirm}
+        onCancel={p.onDnssecCancel}
+      />
+    </>
   )
 }
