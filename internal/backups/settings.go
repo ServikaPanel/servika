@@ -12,7 +12,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/netguard"
 	"servika/internal/notifications"
 	"servika/internal/secret"
@@ -257,10 +257,10 @@ func notifyDiskGate(db *sql.DB, reason string) {
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
 		// #nosec G706 -- logged value is a template-derived reason; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup disk guard: alert could not be written: %v", err)
+		logx.Errorf("backup disk guard: alert could not be written: %v", err)
 	}
 	// #nosec G706 -- logged value is a template-derived reason; no raw tenant string with CR/LF reaches the log.
-	log.Printf("backup disk guard: %s", reason)
+	logx.Warnf("backup disk guard: %s", reason)
 }
 
 // remoteDateDir derives a UTC date folder from the backup file name's stamp, so
@@ -331,7 +331,7 @@ func pushGlobalAsync(db *sql.DB, domainID, backupID int64, localPath, fileName s
 		if err := uploadToRemote(ctx, db, d, localPath, fileName); err != nil {
 			failGlobalUpload(ctx, db, domainID, backupID, err.Error())
 			// #nosec G706 -- logged values are integer IDs and error output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup global upload domain=%d: %v", domainID, err)
+			logx.Errorf("backup global upload domain=%d: %v", domainID, err)
 			return
 		}
 		msg, rs := uploadSizeMismatch(ctx, db, d, localPath, fileName)
@@ -339,7 +339,7 @@ func pushGlobalAsync(db *sql.DB, domainID, backupID int64, localPath, fileName s
 			markGlobalStatus(db, "failed", msg)
 			notifyUploadFailed(ctx, db, domainID, backupID, msg)
 			// #nosec G706 -- logged values are integer IDs and a template-derived size message; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup global upload domain=%d: %s", domainID, msg)
+			logx.Infof("backup global upload domain=%d: %s", domainID, msg)
 			return
 		}
 		markGlobalStatus(db, "successful", "")
@@ -372,7 +372,7 @@ func removeOffSiteLocalCopy(db *sql.DB, backupID int64, localPath, fileName stri
 	if err := os.Remove(localPath); err == nil {
 		_, _ = db.Exec(`UPDATE backups SET notes=CONCAT(notes,' `+movedOffSiteMark+`') WHERE id=?`, backupID)
 		// #nosec G706 -- logged values are template-derived names; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup global: %s moved off-site, local copy removed", fileName)
+		logx.Infof("backup global: %s moved off-site, local copy removed", fileName)
 	}
 }
 

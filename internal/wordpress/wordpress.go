@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -26,6 +25,7 @@ import (
 	"servika/internal/credentials"
 	"servika/internal/files"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 	"servika/internal/quota"
 	"servika/internal/subdomain"
@@ -763,7 +763,7 @@ func removeBeneathHome(systemUser, absolutePath, what string) error {
 	}
 	if err := files.RemoveAllBeneath(home, rel); err != nil && !errors.Is(err, os.ErrNotExist) {
 		// #nosec G706 -- rel is derived from a filepath.Clean'ed path whose source is either the regex-validated sub_dir or resolveDirectory, which rejects CR/LF/NUL; `what` is a literal.
-		log.Printf("%s: could not remove %q: %v", what, rel, err)
+		logx.Errorf("%s: could not remove %q: %v", what, rel, err)
 		return err
 	}
 	return nil

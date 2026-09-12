@@ -9,8 +9,8 @@ package datamigrate
 import (
 	"context"
 	"database/sql"
-	"log"
 
+	"servika/internal/logx"
 	"servika/internal/tenantaccount"
 )
 
@@ -44,7 +44,7 @@ func BackfillCustomerAccounts(ctx context.Context, db *sql.DB) {
 		WHERE customer_id IS NULL AND system_user <> ''
 		GROUP BY system_user`)
 	if err != nil {
-		log.Printf("customer account backfill: could not read tenant list: %v", err)
+		logx.Errorf("customer account backfill: could not read tenant list: %v", err)
 		return
 	}
 	type tenant struct {
@@ -62,7 +62,7 @@ func BackfillCustomerAccounts(ctx context.Context, db *sql.DB) {
 	if err := rows.Err(); err != nil {
 		// A tenant missing from this list keeps no customer account, and the
 		// backfill runs once at startup, so the gap is not retried.
-		log.Printf("customer account backfill: could not read the tenant list: %v", err)
+		logx.Errorf("customer account backfill: could not read the tenant list: %v", err)
 	}
 	_ = rows.Close() // read-only query: closing the result set has nothing to flush
 	if len(list) == 0 {
@@ -72,13 +72,13 @@ func BackfillCustomerAccounts(ctx context.Context, db *sql.DB) {
 	var created, skipped int
 	for _, t := range list {
 		if err := migrateTenant(ctx, db, t.systemUser, t.domainName); err != nil {
-			log.Printf("customer account backfill: %s skipped: %v", t.systemUser, err)
+			logx.Warnf("customer account backfill: %s skipped: %v", t.systemUser, err)
 			skipped++
 			continue
 		}
 		created++
 	}
-	log.Printf("customer account backfill: %d tenants migrated, %d skipped (FTP login stays valid until a password is set)",
+	logx.Infof("customer account backfill: %d tenants migrated, %d skipped (FTP login stays valid until a password is set)",
 		created, skipped)
 }
 

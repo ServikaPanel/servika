@@ -33,11 +33,12 @@ package provisioner
 
 import (
 	"database/sql"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"servika/internal/logx"
 )
 
 const (
@@ -158,11 +159,11 @@ func guardPostStart(db *sql.DB, domainID int64, systemUser, phpVersion string, w
 			// The tenant is on neither a working isolated master nor a working
 			// shared pool, which is the one state an operator has to be told
 			// about by name.
-			log.Printf("tenant PHP-FPM %s crash-looped (%s/%s, %d restarts) and the rollback FAILED: %v",
+			logx.Errorf("tenant PHP-FPM %s crash-looped (%s/%s, %d restarts) and the rollback FAILED: %v",
 				systemUser, state.ActiveState, state.SubState, state.Restarts, err)
 			return err
 		}
-		log.Printf("tenant PHP-FPM %s crash-looped (%s/%s, %d restarts); the domain is back on the shared pool and has lost its isolation",
+		logx.Warnf("tenant PHP-FPM %s crash-looped (%s/%s, %d restarts); the domain is back on the shared pool and has lost its isolation",
 			systemUser, state.ActiveState, state.SubState, state.Restarts)
 		return errFPMCrashLoop
 	}

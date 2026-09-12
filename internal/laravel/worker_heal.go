@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // reWorkerUnitFile matches a template this package owns, so healing never
@@ -36,7 +36,7 @@ func TeardownForDomain(ctx context.Context, db *sql.DB, domainID int64) {
 	if err != nil {
 		// The rows cannot be read, so the ids are unknown. Say so rather than
 		// return quietly: what is left behind is a running process.
-		log.Printf("laravel: read the workers of domain %d for teardown: %v", domainID, err)
+		logx.Errorf("laravel: read the workers of domain %d for teardown: %v", domainID, err)
 	}
 	for _, worker := range workers {
 		TeardownWorker(worker.ID)
@@ -68,7 +68,7 @@ func HealOnStartup(db *sql.DB) {
 	ctx := context.Background()
 	workers, err := AllWorkers(ctx, db)
 	if err != nil {
-		log.Printf("laravel: startup heal could not read the workers: %v", err)
+		logx.Errorf("laravel: startup heal could not read the workers: %v", err)
 		return
 	}
 	known := make(map[int64]bool, len(workers))
@@ -87,12 +87,12 @@ func healWorker(ctx context.Context, db *sql.DB, worker Worker) {
 		   FROM domains d
 		   LEFT JOIN cp_laravel_apps a ON a.domain_id = d.id
 		  WHERE d.id=?`, worker.DomainID).Scan(&systemUser, &phpVersion, &appRoot); err != nil {
-		log.Printf("laravel: heal worker %d: read its domain: %v", worker.ID, err)
+		logx.Errorf("laravel: heal worker %d: read its domain: %v", worker.ID, err)
 		return
 	}
 	appDir, err := safeAppDir(systemUser, appRoot)
 	if err != nil {
-		log.Printf("laravel: heal worker %d: %v", worker.ID, err)
+		logx.Errorf("laravel: heal worker %d: %v", worker.ID, err)
 		return
 	}
 
@@ -112,10 +112,10 @@ func healWorker(ctx context.Context, db *sql.DB, worker Worker) {
 		return
 	}
 	if err := ApplyWorker(worker, worker.DomainID, systemUser, appDir, phpBin(phpVersion)); err != nil {
-		log.Printf("laravel: heal worker %d: %v", worker.ID, err)
+		logx.Errorf("laravel: heal worker %d: %v", worker.ID, err)
 		return
 	}
-	log.Printf("laravel: reapplied worker %d of domain %d", worker.ID, worker.DomainID)
+	logx.Infof("laravel: reapplied worker %d of domain %d", worker.ID, worker.DomainID)
 }
 
 // removeOrphanWorkerUnits tears down units and cron entries whose row is gone.
@@ -131,7 +131,7 @@ func removeOrphanWorkerUnits(ctx context.Context, db *sql.DB, known map[int64]bo
 			if err != nil || known[id] {
 				continue
 			}
-			log.Printf("laravel: removing %s, which has no worker row", name)
+			logx.Infof("laravel: removing %s, which has no worker row", name)
 			TeardownWorker(id)
 			continue
 		}
@@ -139,7 +139,7 @@ func removeOrphanWorkerUnits(ctx context.Context, db *sql.DB, known map[int64]bo
 		// no longer produces that shape, so one surviving an upgrade is running
 		// against a schema that was dropped.
 		if match := reLegacyQueueUnit.FindStringSubmatch(name); match != nil {
-			log.Printf("laravel: removing %s, which predates the worker definitions", name)
+			logx.Infof("laravel: removing %s, which predates the worker definitions", name)
 			stopInstance(name)
 			_ = os.Remove(unitDir + "/" + name)
 			_, _ = workerCommand("systemctl", "daemon-reload").CombinedOutput()
@@ -174,7 +174,7 @@ func removeOrphanScheduleCrons(ctx context.Context, db *sql.DB) {
 		if !errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
-		log.Printf("laravel: removing the schedule of domain %d, which no longer exists", id)
+		logx.Infof("laravel: removing the schedule of domain %d, which no longer exists", id)
 		_ = os.Remove(cronDir + "/" + entry.Name())
 	}
 }

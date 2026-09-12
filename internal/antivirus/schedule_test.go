@@ -54,7 +54,7 @@ func TestEveryConditionThatStopsATickIsStillThere(t *testing.T) {
 	// A failed read is NOT treated as "no sweep yet". That direction starts a
 	// sweep of the whole filesystem every hour for as long as the database is
 	// unwell, which is the worst hour to be adding load.
-	failOpen := strings.Index(source, "log.Printf(\"antivirus: whether a sweep is already due could not be read")
+	failOpen := strings.Index(source, "logx.Errorf(\"antivirus: whether a sweep is already due could not be read")
 	if failOpen < 0 {
 		t.Fatal("the read failure is no longer reported")
 	}

@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -22,6 +21,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/secret"
 
 	"github.com/go-chi/chi/v5"
@@ -170,7 +170,7 @@ func HealScanACL() {
 	}
 	if healed > 0 {
 		_, _ = cli("ACL", "SAVE")
-		log.Printf("redis: denied scan/randomkey on %d tenant ACL user(s)", healed)
+		logx.Infof("redis: denied scan/randomkey on %d tenant ACL user(s)", healed)
 	}
 }
 
@@ -276,7 +276,7 @@ func connectWordPress(systemUser, password string) int {
 		if err := setSecretConstant(systemUser, dir, "WP_REDIS_PASSWORD",
 			"array('"+systemUser+"','"+password+"')"); err != nil {
 			// #nosec G706 -- logged values are a validated identifier, a path this package composed, and error text.
-			log.Printf("redis: could not write WP_REDIS_PASSWORD for %s in %s: %v", systemUser, dir, err)
+			logx.Errorf("redis: could not write WP_REDIS_PASSWORD for %s in %s: %v", systemUser, dir, err)
 			continue
 		}
 		set("WP_REDIS_PREFIX", systemUser+":", false)

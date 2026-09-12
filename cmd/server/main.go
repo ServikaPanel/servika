@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -47,6 +46,7 @@ import (
 	"servika/internal/httpx"
 	"servika/internal/laravel"
 	"servika/internal/logs"
+	"servika/internal/logx"
 	"servika/internal/mail"
 	"servika/internal/mailreport"
 	"servika/internal/metrics"
@@ -114,18 +114,18 @@ func pinTempDir() {
 	}
 	const dir = "/var/lib/servika/tmp"
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		log.Printf("could not create temp dir (%s), falling back to /tmp: %v", dir, err)
+		logx.Warnf("could not create temp dir (%s), falling back to /tmp: %v", dir, err)
 		return
 	}
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 	if err := os.Chmod(dir, 0o700); err != nil {
-		log.Printf("could not set temp dir permissions: %v", err)
+		logx.Errorf("could not set temp dir permissions: %v", err)
 	}
 	if err := os.Setenv("TMPDIR", dir); err != nil {
-		log.Printf("could not set TMPDIR: %v", err)
+		logx.Errorf("could not set TMPDIR: %v", err)
 		return
 	}
-	log.Printf("temporary file directory: %s", dir)
+	logx.Infof("temporary file directory: %s", dir)
 }
 
 // printPortsIfAsked answers "-print-ports" and reports whether it did.
@@ -290,14 +290,14 @@ func bootstrap() (*config.Config, *sql.DB) {
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		logx.Fatalf("config: %v", err)
 	}
 	if err := secret.Init(cfg.SecretKey); err != nil {
-		log.Fatalf("secret: %v", err)
+		logx.Fatalf("secret: %v", err)
 	}
 	d, err := db.Open(cfg.DBDsn)
 	if err != nil {
-		log.Fatalf("db: %v", err)
+		logx.Fatalf("db: %v", err)
 	}
 	return cfg, d
 }
@@ -308,16 +308,16 @@ func backfillCredentials(d *sql.DB) {
 	// Hash any FTP passwords still stored as legacy cleartext, so the switch to
 	// Pure-FTPd MYSQLCrypt=crypt does not lock out existing accounts. Idempotent.
 	if n, err := credentials.BackfillCleartextPasswords(d); err != nil {
-		log.Printf("ftp password backfill warn: %v", err)
+		logx.Warnf("ftp password backfill warn: %v", err)
 	} else if n > 0 {
-		log.Printf("ftp password backfill: hashed %d cleartext account(s)", n)
+		logx.Infof("ftp password backfill: hashed %d cleartext account(s)", n)
 	}
 	// Encrypt any database-account passwords still stored as legacy cleartext, so
 	// a leaked panel dump does not expose them. Idempotent.
 	if n, err := credentials.BackfillDBPasswords(d); err != nil {
-		log.Printf("db password backfill warn: %v", err)
+		logx.Warnf("db password backfill warn: %v", err)
 	} else if n > 0 {
-		log.Printf("db password backfill: encrypted %d cleartext account(s)", n)
+		logx.Infof("db password backfill: encrypted %d cleartext account(s)", n)
 	}
 	// Encrypt the remaining credentials that were stored before their column
 	// gained encryption (GitHub PATs, remote backup passwords). Idempotent.
@@ -358,14 +358,14 @@ func healInterruptedWork(d *sql.DB) {
 	appinstall.HealRunningInstalls(d)
 	middleware.Init(d)
 	if err := dns.SeedTemplateIfEmpty(context.Background(), d); err != nil {
-		log.Printf("DNS template seed warn: %v", err)
+		logx.Warnf("DNS template seed warn: %v", err)
 	}
 	// Right after the seed, because the seed only ever writes into an EMPTY
 	// template: every server that already runs Servika would otherwise never
 	// receive the AAAA rows added to the built-in set.
 	datamigrate.BackfillDNSTemplateIPv6(context.Background(), d)
 	if err := dns.HealZoneIncludes(context.Background(), d); err != nil {
-		log.Printf("DNS zone include heal warn: %v", err)
+		logx.Warnf("DNS zone include heal warn: %v", err)
 	}
 }
 
@@ -373,13 +373,13 @@ func healInterruptedWork(d *sql.DB) {
 // plans in step with the built-in set.
 func seedDefaults(d *sql.DB, ipv4 string) {
 	if err := domains.SeedIfEmpty(context.Background(), d, ipv4); err != nil {
-		log.Printf("seed warn: %v", err)
+		logx.Warnf("seed warn: %v", err)
 	}
 	if err := plans.SeedIfEmpty(context.Background(), d); err != nil {
-		log.Printf("plans seed warn: %v", err)
+		logx.Warnf("plans seed warn: %v", err)
 	}
 	if err := plans.SeedSync(context.Background(), d); err != nil {
-		log.Printf("plans seed sync warn: %v", err)
+		logx.Warnf("plans seed sync warn: %v", err)
 	}
 }
 
@@ -526,9 +526,9 @@ func applyAntivirusLimits(d *sql.DB) {
 	// Both start or restart a unit, and doing that at boot would interrupt the
 	// watcher of an operator who changed nothing, on every panel restart.
 	if s, err := avsettings.Read(context.Background(), d); err != nil {
-		log.Printf("antivirus: the resource limits could not be read at startup: %v", err)
+		logx.Errorf("antivirus: the resource limits could not be read at startup: %v", err)
 	} else if err := avsettings.ApplyLimits(s); err != nil {
-		log.Printf("antivirus: the resource limits could not be applied at startup: %v", err)
+		logx.Errorf("antivirus: the resource limits could not be applied at startup: %v", err)
 	}
 }
 
@@ -540,7 +540,7 @@ func wireFirewallReapply(d *sql.DB) {
 	// other direction would close an import cycle.
 	hostapps.SetReapply(func() {
 		if err := firewall.Reapply(d); err != nil {
-			log.Printf("host application firewall reapply warn: %v", err)
+			logx.Warnf("host application firewall reapply warn: %v", err)
 		}
 	})
 }
@@ -605,24 +605,24 @@ var shutdownGrace = httpx.LargeTransferDeadline + time.Minute
 func serve(srv *http.Server, cfg *config.Config, d *sql.DB) {
 	firewall.TakeOverFirewalld()
 	if err := firewall.Reapply(d); err != nil {
-		log.Printf("firewall reapply warn: %v", err)
+		logx.Warnf("firewall reapply warn: %v", err)
 	}
 
 	go func() {
-		log.Printf("servika %s listening on %s (env=%s)", version, cfg.ListenAddr, cfg.Env)
+		logx.Infof("servika %s listening on %s (env=%s)", version, cfg.ListenAddr, cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %v", err)
+			logx.Fatalf("listen: %v", err)
 		}
 	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
-	log.Printf("shutting down...")
+	logx.Infof("shutting down...")
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("shutdown: %v", err)
+		logx.Errorf("shutdown: %v", err)
 	}
 }
 
@@ -655,7 +655,7 @@ func main() {
 
 	ipv4 := config.PublicIPv4()
 	ipv6 := config.PublicIPv6()
-	log.Printf("server ipv4: %s ipv6: %q kernel ipv6: %t", ipv4, ipv6, config.HasIPv6())
+	logx.Infof("server ipv4: %s ipv6: %q kernel ipv6: %t", ipv4, ipv6, config.HasIPv6())
 
 	seedDefaults(d, ipv4)
 	startHostServices(d, ipv4)
@@ -1647,7 +1647,7 @@ const migrationsDir = "/opt/servika/src/migrations"
 // through instead of re-running it from the first statement.
 func runMigrations(d *sql.DB) {
 	if err := dbmigrate.Run(d, migrationsDir); err != nil {
-		log.Fatalf("migrations: %v", err)
+		logx.Fatalf("migrations: %v", err)
 	}
 }
 
@@ -1665,7 +1665,7 @@ func warnIfNoSwap(ctx context.Context, db *sql.DB) {
 		`SELECT COUNT(*) FROM notifications
 		 WHERE message_key = ? AND domain_id IS NULL AND created_at > (NOW() - INTERVAL 7 DAY)`,
 		key).Scan(&recent); err != nil {
-		log.Printf("no-swap warning: the dedup check failed: %v", err)
+		logx.Warnf("no-swap warning: the dedup check failed: %v", err)
 		return
 	}
 	if recent > 0 {
@@ -1678,6 +1678,6 @@ func warnIfNoSwap(ctx context.Context, db *sql.DB) {
 		Message:  "This server has no swap space. If it runs out of memory the kernel kills the largest process, usually MariaDB, and every site goes down. Add a swap file.",
 		Key:      key,
 	}); err != nil {
-		log.Printf("no-swap warning: the notification could not be written: %v", err)
+		logx.Warnf("no-swap warning: the notification could not be written: %v", err)
 	}
 }

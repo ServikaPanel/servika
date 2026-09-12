@@ -25,12 +25,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -318,7 +318,7 @@ func prune(ctx context.Context, db *sql.DB) {
 	days := int(retention / (24 * time.Hour))
 	if _, err := db.ExecContext(ctx,
 		`DELETE FROM notifications WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, days); err != nil {
-		log.Printf("notifications: the retention pass failed: %v", err)
+		logx.Errorf("notifications: the retention pass failed: %v", err)
 	}
 }
 

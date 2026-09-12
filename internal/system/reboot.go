@@ -1,11 +1,11 @@
 package system
 
 import (
-	"log"
 	"net/http"
 	"os/exec"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 // Reboot requests a host reboot through systemd without exposing command output.
@@ -15,7 +15,7 @@ import (
 // never happens while the operator believes it was issued.
 func Reboot(w http.ResponseWriter, _ *http.Request) {
 	if out, err := exec.Command("systemctl", "reboot").CombinedOutput(); err != nil {
-		log.Printf("systemctl reboot failed: %v: %s", err, out)
+		logx.Errorf("systemctl reboot failed: %v: %s", err, out)
 		httpx.WriteError(w, http.StatusInternalServerError, "reboot could not be initiated")
 		return
 	}

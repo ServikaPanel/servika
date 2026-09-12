@@ -3,7 +3,6 @@ package provisioner
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +11,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/geoip"
+	"servika/internal/logx"
 )
 
 // Country rules and request rate limiting, both of which need one shared
@@ -267,7 +267,7 @@ func domainProtection(domainName string) (geoBlock, rateLimit string) {
 		if err := rows.Scan(&code); err != nil {
 			// A dropped country renders as the opposite of the saved rule: let in on
 			// a deny list, refused on an allow list.
-			log.Printf("geo: skipping an unreadable country code for domain %d: %v", domainID, err)
+			logx.Warnf("geo: skipping an unreadable country code for domain %d: %v", domainID, err)
 			continue
 		}
 		countries = append(countries, code)
@@ -276,7 +276,7 @@ func domainProtection(domainName string) (geoBlock, rateLimit string) {
 		// A short list renders a country rule that is not the one the operator
 		// saved: a missing country is let in on a deny list and refused on an
 		// allow list, and nothing downstream contradicts the rendered file.
-		log.Printf("geo: could not read the country rules for domain %d: %v", domainID, err)
+		logx.Errorf("geo: could not read the country rules for domain %d: %v", domainID, err)
 	}
 	return buildGeoBlock(mode, countries), rateLimit
 }
@@ -322,7 +322,7 @@ func addCountryCodes(seen map[string]bool, rows *sql.Rows, skipped, cutShort str
 			// A country missing from this set is never declared in the shared
 			// nginx file, so every domain asking for it renders a rule nginx
 			// cannot apply.
-			log.Printf("%s: %v", skipped, err)
+			logx.Warnf("%s: %v", skipped, err)
 			continue
 		}
 		if normalized := geoip.NormalizeCountry(code); normalized != "" {
@@ -332,7 +332,7 @@ func addCountryCodes(seen map[string]bool, rows *sql.Rows, skipped, cutShort str
 	if err := rows.Err(); err != nil {
 		// A country missing from this set is never declared in the shared nginx
 		// file, so every domain asking for it renders a rule nginx cannot apply.
-		log.Printf("%s: %v", cutShort, err)
+		logx.Warnf("%s: %v", cutShort, err)
 	}
 	_ = rows.Close()
 }
@@ -347,7 +347,7 @@ func usedRates() (rates []int) {
 			if err := rateRows.Scan(&rps); err != nil {
 				// A rate missing here declares no zone, and a vhost naming an
 				// undeclared zone fails nginx -t for the WHOLE server.
-				log.Printf("geo: skipping an unreadable rate limit: %v", err)
+				logx.Warnf("geo: skipping an unreadable rate limit: %v", err)
 				continue
 			}
 			if ValidRate(rps) && rps > 0 {
@@ -357,7 +357,7 @@ func usedRates() (rates []int) {
 		if err := rateRows.Err(); err != nil {
 			// A rate missing here declares no zone, and a vhost naming an undeclared
 			// zone fails nginx -t for the WHOLE server, not just that domain.
-			log.Printf("geo: could not read the per-domain rate limits: %v", err)
+			logx.Errorf("geo: could not read the per-domain rate limits: %v", err)
 		}
 		_ = rateRows.Close()
 	}

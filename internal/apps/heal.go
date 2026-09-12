@@ -3,7 +3,6 @@ package apps
 import (
 	"context"
 	"database/sql"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +10,7 @@ import (
 	"strings"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // reUnitFile matches a unit this package owns, so healing never touches a unit
@@ -28,7 +28,7 @@ func HealOnStartup(db *sql.DB) {
 	ctx := context.Background()
 	list, err := ListAll(ctx, db)
 	if err != nil {
-		log.Printf("apps: startup heal could not read the applications: %v", err)
+		logx.Errorf("apps: startup heal could not read the applications: %v", err)
 		return
 	}
 
@@ -59,21 +59,21 @@ func wantedUnit(ctx context.Context, db *sql.DB, app App) (string, bool) {
 	var systemUser string
 	if err := db.QueryRowContext(ctx,
 		`SELECT system_user FROM domains WHERE id=?`, app.DomainID).Scan(&systemUser); err != nil {
-		log.Printf("apps: heal application %d: read its domain: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: read its domain: %v", app.ID, err)
 		return "", false
 	}
 	if !ValidSystemUser(systemUser) {
-		log.Printf("apps: heal application %d: %q is not a tenant login", app.ID, systemUser)
+		logx.Errorf("apps: heal application %d: %q is not a tenant login", app.ID, systemUser)
 		return "", false
 	}
 	appDir, err := SafeAppDir(systemUser, app.AppRoot)
 	if err != nil {
-		log.Printf("apps: heal application %d: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: %v", app.ID, err)
 		return "", false
 	}
 	argv, err := ParseStartCommand(app.Start)
 	if err != nil {
-		log.Printf("apps: heal application %d: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: %v", app.ID, err)
 		return "", false
 	}
 	execStart, err := ResolveExec(app.Runtime, app.Version, appDir, argv)
@@ -81,7 +81,7 @@ func wantedUnit(ctx context.Context, db *sql.DB, app App) (string, bool) {
 		// The interpreter this application was created against is gone. Saying
 		// so is the whole repair: rewriting the unit against a different one
 		// would run the application on a runtime nobody chose.
-		log.Printf("apps: application %d cannot start: %v", app.ID, err)
+		logx.Errorf("apps: application %d cannot start: %v", app.ID, err)
 		return "", false
 	}
 	return RenderUnit(app, systemUser, appDir, execStart), true
@@ -99,22 +99,22 @@ func healUnit(ctx context.Context, db *sql.DB, app App, want string) bool {
 	}
 	values, err := ReadEnv(ctx, db, app.ID)
 	if err != nil {
-		log.Printf("apps: heal application %d: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: %v", app.ID, err)
 		return false
 	}
 	if err := WriteEnvFile(app, values); err != nil {
-		log.Printf("apps: heal application %d: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: %v", app.ID, err)
 		return false
 	}
 	if err := EnsureLogFile(app.ID); err != nil {
-		log.Printf("apps: heal application %d: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: %v", app.ID, err)
 		return false
 	}
 	if err := InstallUnit(app.ID, want); err != nil {
-		log.Printf("apps: heal application %d: %v", app.ID, err)
+		logx.Errorf("apps: heal application %d: %v", app.ID, err)
 		return false
 	}
-	log.Printf("apps: rewrote the unit of application %d", app.ID)
+	logx.Infof("apps: rewrote the unit of application %d", app.ID)
 	return true
 }
 
@@ -124,13 +124,13 @@ func healRunState(app App) {
 	switch {
 	case app.Enabled && status.ActiveState != "active" && status.ActiveState != "activating":
 		if err := Enable(app.ID); err != nil {
-			log.Printf("apps: start application %d: %v", app.ID, err)
+			logx.Errorf("apps: start application %d: %v", app.ID, err)
 		}
 	case !app.Enabled && status.ActiveState == "active":
 		// The row says stopped. Restart=always means a process that came back
 		// on its own would otherwise stay up against the panel's own record.
 		if err := Disable(app.ID); err != nil {
-			log.Printf("apps: stop application %d: %v", app.ID, err)
+			logx.Errorf("apps: stop application %d: %v", app.ID, err)
 		}
 	}
 }
@@ -151,7 +151,7 @@ func removeOrphanUnits(known map[int64]bool) {
 		if err != nil || known[id] {
 			continue
 		}
-		log.Printf("apps: removing unit %s, which has no application row", entry.Name())
+		logx.Infof("apps: removing unit %s, which has no application row", entry.Name())
 		Teardown(id)
 	}
 	removeOrphanFiles(known, config.AppEnvDir(), ".env")

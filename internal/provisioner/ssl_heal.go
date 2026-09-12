@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // ---------------------------------------------------------------------------
@@ -324,7 +324,7 @@ func sslFailSafe(domainName, systemUser, phpVersion, backend string, reason sslR
 			if e := writeSSLVhost(domainName, systemUser, phpVersion, backend, cp, kp, source); e != nil {
 				return "", "", IssueOutcome{}, e
 			}
-			log.Printf("ssl fail-safe: %s LE issuance failed (%s: %s); 443 kept alive with existing %s certificate", domainName, reason.Code, reason.Detail, source)
+			logx.Warnf("ssl fail-safe: %s LE issuance failed (%s: %s); 443 kept alive with existing %s certificate", domainName, reason.Code, reason.Detail, source)
 			return cp, kp, IssueOutcome{Real: real, Reason: reason.Code, Skipped: reason.Skipped}, nil
 		}
 	}
@@ -336,7 +336,7 @@ func sslFailSafe(domainName, systemUser, phpVersion, backend string, reason sslR
 	if e := writeSSLVhost(domainName, systemUser, phpVersion, backend, cp, kp, "self-signed"); e != nil {
 		return "", "", IssueOutcome{}, e
 	}
-	log.Printf("ssl fail-safe: %s LE issuance failed (%s: %s); self-signed generated, 443 kept alive", domainName, reason.Code, reason.Detail)
+	logx.Warnf("ssl fail-safe: %s LE issuance failed (%s: %s); self-signed generated, 443 kept alive", domainName, reason.Code, reason.Detail)
 	return cp, kp, IssueOutcome{Reason: reason.Code, Skipped: reason.Skipped}, nil
 }
 
@@ -397,7 +397,7 @@ func HealSSLVhost443OnStartup() {
 	}
 	repaired, failed, healthy := outcomes[sslHealRepaired], outcomes[sslHealFailed], outcomes[sslHealHealthy]
 	if repaired > 0 || failed > 0 {
-		log.Printf("ssl 443 heal: %d repaired / %d failed / %d healthy (%d SSL domains total)", repaired, failed, healthy, len(list))
+		logx.Warnf("ssl 443 heal: %d repaired / %d failed / %d healthy (%d SSL domains total)", repaired, failed, healthy, len(list))
 	}
 }
 
@@ -435,7 +435,7 @@ func readSSLHealDomains() ([]sslHealDomain, error) {
 	if err := rows.Err(); err != nil {
 		// A short list leaves some certificates unhealed and makes the summary
 		// below report fewer domains than the server actually has.
-		log.Printf("ssl heal: could not read the domain list: %v", err)
+		logx.Errorf("ssl heal: could not read the domain list: %v", err)
 	}
 	_ = rows.Close()
 	return list, nil
@@ -467,10 +467,10 @@ func healSSLVhost443(x sslHealDomain) sslHealOutcome {
 	}
 	socket, _ := PHPSocketFor(x.systemUser, x.php)
 	if e := applyVhostForDomain(packageDB, x.id, socket, x.php, nil, nil); e != nil {
-		log.Printf("ssl 443 heal: %s vhost 443 re-render failed (previous state preserved): %v", x.domainName, e)
+		logx.Errorf("ssl 443 heal: %s vhost 443 re-render failed (previous state preserved): %v", x.domainName, e)
 		return sslHealFailed
 	}
-	log.Printf("ssl 443 heal: %s 443 block + certificate repaired", x.domainName)
+	logx.Infof("ssl 443 heal: %s 443 block + certificate repaired", x.domainName)
 	return sslHealRepaired
 }
 
@@ -494,14 +494,14 @@ func installBestCertificate(domainName string) (string, string, bool) {
 	if src == "" {
 		cp, kp, e := generateSelfSigned(domainName)
 		if e != nil {
-			log.Printf("ssl 443 heal: %s cert missing + self-signed generation failed: %v", domainName, e)
+			logx.Errorf("ssl 443 heal: %s cert missing + self-signed generation failed: %v", domainName, e)
 			return "", "", false
 		}
 		src, srcKey = cp, kp
 	}
 	cp, kp, e := installToPKI(domainName, src, srcKey)
 	if e != nil {
-		log.Printf("ssl 443 heal: %s certificate install into /etc/pki failed: %v", domainName, e)
+		logx.Errorf("ssl 443 heal: %s certificate install into /etc/pki failed: %v", domainName, e)
 		return "", "", false
 	}
 	return cp, kp, true
@@ -515,7 +515,7 @@ func repointSSLCertificate(x sslHealDomain, useCert, useKey string) bool {
 		return true
 	}
 	if _, e := packageDB.Exec(`UPDATE domains SET cert_path=?, key_path=? WHERE id=?`, useCert, useKey, x.id); e != nil {
-		log.Printf("ssl 443 heal: %s DB repoint failed: %v", x.domainName, e)
+		logx.Errorf("ssl 443 heal: %s DB repoint failed: %v", x.domainName, e)
 		return false
 	}
 	return true

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -469,7 +469,7 @@ func (h *Handlers) markTLSRequirement(ctx context.Context, hosts []Host) {
 	rows, err := h.DB.QueryContext(ctx,
 		`SELECT user, host FROM mysql.user WHERE ssl_type <> ''`)
 	if err != nil {
-		log.Printf("remote db: could not read which accounts require TLS: %v", err)
+		logx.Errorf("remote db: could not read which accounts require TLS: %v", err)
 		return
 	}
 	defer func() { _ = rows.Close() }() // read-only: nothing to flush
@@ -477,7 +477,7 @@ func (h *Handlers) markTLSRequirement(ctx context.Context, hosts []Host) {
 	for rows.Next() {
 		var account, address string
 		if err := rows.Scan(&account, &address); err != nil {
-			log.Printf("remote db: skipping an unreadable mysql.user row: %v", err)
+			logx.Warnf("remote db: skipping an unreadable mysql.user row: %v", err)
 			continue
 		}
 		secured[account+"@"+address] = true
@@ -485,7 +485,7 @@ func (h *Handlers) markTLSRequirement(ctx context.Context, hosts []Host) {
 	if err := rows.Err(); err != nil {
 		// A short list would mark an account as plaintext when it is not, which
 		// only over-warns; saying so keeps that visible.
-		log.Printf("remote db: could not read the whole TLS list: %v", err)
+		logx.Errorf("remote db: could not read the whole TLS list: %v", err)
 	}
 	for i := range hosts {
 		hosts[i].RequiresTLS = secured[hosts[i].DBUser+"@"+hosts[i].Host]
@@ -551,7 +551,7 @@ func (h *Handlers) recordError(ctx context.Context, message string) {
 	}
 	if _, err := h.DB.ExecContext(ctx,
 		`UPDATE panel_settings SET db_remote_last_error=? WHERE id=1`, message); err != nil {
-		log.Printf("remote db: could not record the failure: %v", err)
+		logx.Errorf("remote db: could not record the failure: %v", err)
 	}
 }
 

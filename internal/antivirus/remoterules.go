@@ -61,6 +61,7 @@ import (
 
 	"servika/internal/avpackage"
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // rulePublicKeyHex is the Ed25519 public half of the rule-signing key, hex
@@ -347,11 +348,11 @@ func compilePackagedSet(body []byte) ([]rule, error) {
 	for _, candidate := range packaged.Rules {
 		compiled, err := compilePackagedRule(candidate)
 		if err != nil {
-			log.Printf("antivirus: dropping packaged rule %q: %v", candidate.Name, err)
+			logx.Errorf("antivirus: dropping packaged rule %q: %v", candidate.Name, err)
 			continue
 		}
 		if seen[compiled.name] {
-			log.Printf("antivirus: dropping packaged rule %q: the name appears twice", candidate.Name)
+			logx.Warnf("antivirus: dropping packaged rule %q: the name appears twice", candidate.Name)
 			continue
 		}
 		seen[compiled.name] = true
@@ -493,7 +494,7 @@ func LoadRulesFromDisk() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("antivirus: malware rule package version %d adopted from %s (%d rules)",
+	logx.Infof("antivirus: malware rule package version %d adopted from %s (%d rules)",
 		version, path, len(RemoteRules()))
 	return nil
 }
@@ -558,10 +559,10 @@ func FetchRules(ctx context.Context) error {
 	if err := writeRulesToDisk(raw); err != nil {
 		// The rules are already in use; a disk that could not be written costs
 		// the next restart, not this scan, so it is reported and not fatal.
-		log.Printf("antivirus: rule package version %d adopted but not cached: %v", version, err)
+		logx.Errorf("antivirus: rule package version %d adopted but not cached: %v", version, err)
 		return nil
 	}
-	log.Printf("antivirus: malware rule package version %d adopted from the network (%d rules)",
+	logx.Infof("antivirus: malware rule package version %d adopted from the network (%d rules)",
 		version, len(RemoteRules()))
 	return nil
 }
@@ -596,7 +597,7 @@ func StartRuleUpdater(ctx context.Context) {
 		return
 	}
 	if err := LoadRulesFromDisk(); err != nil && !os.IsNotExist(err) {
-		log.Printf("antivirus: no cached malware rule package in use: %v", err)
+		logx.Errorf("antivirus: no cached malware rule package in use: %v", err)
 	}
 	go func() {
 		ticker := time.NewTicker(ruleFetchInterval)
@@ -604,7 +605,7 @@ func StartRuleUpdater(ctx context.Context) {
 		for {
 			if err := FetchRules(ctx); err != nil &&
 				!errors.Is(err, ErrRuleSetNotNewer) && !errors.Is(err, context.Canceled) {
-				log.Printf("antivirus: malware rule package not updated: %v", err)
+				logx.Errorf("antivirus: malware rule package not updated: %v", err)
 			}
 			select {
 			case <-ctx.Done():

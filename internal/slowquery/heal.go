@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/credentials"
+	"servika/internal/logx"
 )
 
 // dropInPath makes the setting survive a MariaDB restart. The panel applies the
@@ -83,11 +83,11 @@ func HealConfig(db *sql.DB) {
 
 	enabled, seconds, err := readSetting(ctx, db)
 	if err != nil {
-		log.Printf("slow query log: could not read the setting: %v", err)
+		logx.Errorf("slow query log: could not read the setting: %v", err)
 		return
 	}
 	if err := Apply(ctx, enabled, seconds); err != nil {
-		log.Printf("slow query log: %v", err)
+		logx.Errorf("slow query log: %v", err)
 	}
 }
 
@@ -109,7 +109,7 @@ func Apply(ctx context.Context, enabled bool, seconds float64) error {
 	// every tenant's SQL, so a window in which it exists world-readable is a
 	// window in which one tenant can read a neighbour's queries.
 	if err := hardenLogPerms(ctx, path); err != nil {
-		log.Printf("slow query log: could not harden %s: %v", filepath.Dir(path), err)
+		logx.Errorf("slow query log: could not harden %s: %v", filepath.Dir(path), err)
 	}
 	if err := applyGlobals(enabled, seconds, path); err != nil {
 		return err
@@ -118,7 +118,7 @@ func Apply(ctx context.Context, enabled bool, seconds float64) error {
 	// creates it 0660. Without this second pass a fresh host would leave the
 	// file group-readable until the next panel start.
 	if err := hardenLogPerms(ctx, path); err != nil {
-		log.Printf("slow query log: could not harden %s: %v", path, err)
+		logx.Errorf("slow query log: could not harden %s: %v", path, err)
 	}
 	return nil
 }
@@ -230,12 +230,12 @@ func hardenLogPerms(ctx context.Context, path string) error {
 		if err := os.Chmod(dir, 0o700); err != nil {
 			return err
 		}
-		log.Printf("slow query log: %s set to 0700 (cross-tenant query reading closed)", dir)
+		logx.Infof("slow query log: %s set to 0700 (cross-tenant query reading closed)", dir)
 	}
 	// chown by name rather than a hardcoded uid: the mysql account's id differs
 	// between distributions and between a package install and a container.
 	if out, err := healCommand(ctx, "chown", "mysql:mysql", dir).CombinedOutput(); err != nil {
-		log.Printf("slow query log: could not set the owner of %s: %s", dir, bytes.TrimSpace(out))
+		logx.Errorf("slow query log: could not set the owner of %s: %s", dir, bytes.TrimSpace(out))
 	}
 	// The mask covers GROUP as well as other, which is what catches the 0660
 	// MariaDB creates. It only ever tightens: a file already stricter than 0600
@@ -244,7 +244,7 @@ func hardenLogPerms(ctx context.Context, path string) error {
 		if err := os.Chmod(path, 0o600); err != nil {
 			return err
 		}
-		log.Printf("slow query log: %s set to 0600", path)
+		logx.Infof("slow query log: %s set to 0600", path)
 	}
 	return nil
 }

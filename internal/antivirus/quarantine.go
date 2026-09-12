@@ -301,7 +301,7 @@ func (h *Handlers) QuarantineAll(w http.ResponseWriter, r *http.Request) {
 			// A dropped id is a finding the bulk action silently does not act on,
 			// while the count it reports says it did.
 			// #nosec G706 -- the logged value is a database error; no raw tenant string with CR/LF reaches the log.
-			httpx.LogR(r, "antivirus: skipping an unreadable finding id: %v", err)
+			httpx.WarnR(r, "antivirus: skipping an unreadable finding id: %v", err)
 			continue
 		}
 		ids = append(ids, findingID)
@@ -352,7 +352,7 @@ func (h *Handlers) QuarantineList(w http.ResponseWriter, r *http.Request) {
 			// A dropped row is a held file the operator is never shown, so it can
 			// neither be restored nor deleted from the screen that owns it.
 			// #nosec G706 -- the logged value is a database error; no raw tenant string with CR/LF reaches the log.
-			httpx.LogR(r, "antivirus: skipping an unreadable quarantine entry: %v", err)
+			httpx.WarnR(r, "antivirus: skipping an unreadable quarantine entry: %v", err)
 			continue
 		}
 		if findingID.Valid {

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -195,6 +195,6 @@ func randomToken() (string, error) {
 func pruneWebmailTokens(ctx context.Context, db *sql.DB) {
 	if _, err := db.ExecContext(ctx,
 		`DELETE FROM webmail_tokens WHERE expires_at < NOW() OR used=1`); err != nil {
-		log.Printf("webmail token prune: %v", err)
+		logx.Errorf("webmail token prune: %v", err)
 	}
 }

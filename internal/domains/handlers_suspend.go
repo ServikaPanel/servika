@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -116,11 +116,11 @@ func restoreSuspensionState(ctx context.Context, db *sql.DB, targets []suspensio
 		if _, err := db.ExecContext(ctx,
 			`UPDATE domains SET suspended=?, status=?, suspended_by_reseller=? WHERE id=?`,
 			target.suspended, target.status, target.byReseller, target.id); err != nil {
-			log.Printf("rollback domain suspension state for domain %d: %v", target.id, err)
+			logx.Errorf("rollback domain suspension state for domain %d: %v", target.id, err)
 			continue
 		}
 		if err := rerenderVhost(db, target.id); err != nil {
-			log.Printf("restore domain vhost after suspension rollback for domain %d: %v", target.id, err)
+			logx.Errorf("restore domain vhost after suspension rollback for domain %d: %v", target.id, err)
 		}
 	}
 }
@@ -167,7 +167,7 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 		// Restart=always, so a killed process is back within seconds and the
 		// suspended account keeps serving until systemd is told to stop it.
 		if err := suspendApps(ctx, db, systemUser, suspended); err != nil {
-			log.Printf("apply application suspension state for domain %d: %v", id, err)
+			logx.Errorf("apply application suspension state for domain %d: %v", id, err)
 		}
 	}
 	return domainName, nil
@@ -194,7 +194,7 @@ func cascadeSuspension(ctx context.Context, db *sql.DB, id int64, suspended bool
 		ftpQuery = `UPDATE ftp_accounts SET status=?, token_version=token_version+1 WHERE ` + ownedByDomainOrItsAddons
 	}
 	if _, err := db.ExecContext(ctx, ftpQuery, ftpStatus, id, id); err != nil {
-		log.Printf("update FTP account suspension state for domain %d: %v", id, err)
+		logx.Errorf("update FTP account suspension state for domain %d: %v", id, err)
 	}
 	mailStatus := "active"
 	if suspended {
@@ -202,11 +202,11 @@ func cascadeSuspension(ctx context.Context, db *sql.DB, id int64, suspended bool
 	}
 	if _, err := db.ExecContext(ctx,
 		`UPDATE mail_domains SET status=? WHERE `+ownedByDomainOrItsAddons, mailStatus, id, id); err != nil {
-		log.Printf("update mail domain suspension state for domain %d: %v", id, err)
+		logx.Errorf("update mail domain suspension state for domain %d: %v", id, err)
 	}
 	if _, err := db.ExecContext(ctx,
 		`UPDATE mailboxes SET status=? WHERE `+ownedByDomainOrItsAddons, mailStatus, id, id); err != nil {
-		log.Printf("update mailbox suspension state for domain %d: %v", id, err)
+		logx.Errorf("update mailbox suspension state for domain %d: %v", id, err)
 	}
 }
 
@@ -227,7 +227,7 @@ func SuspendResellerDomains(ctx context.Context, db *sql.DB, resellerID int64, s
 		}
 		if _, e := applySuspend(ctx, db, target.id, suspended); e != nil {
 			failed++
-			log.Printf("reseller %d suspend cascade: domain %d: %v", resellerID, target.id, e)
+			logx.Errorf("reseller %d suspend cascade: domain %d: %v", resellerID, target.id, e)
 			continue
 		}
 		if suspended {
@@ -237,7 +237,7 @@ func SuspendResellerDomains(ctx context.Context, db *sql.DB, resellerID int64, s
 			// direction needs no counterpart, because it clears it the same way.
 			if _, e := db.ExecContext(ctx,
 				`UPDATE domains SET suspended_by_reseller=1 WHERE id=?`, target.id); e != nil {
-				log.Printf("reseller %d suspend cascade: marking domain %d: %v", resellerID, target.id, e)
+				logx.Errorf("reseller %d suspend cascade: marking domain %d: %v", resellerID, target.id, e)
 			}
 		}
 		affected++
@@ -293,7 +293,7 @@ func resellerDomainSnapshot(ctx context.Context, db *sql.DB, resellerID int64) (
 		if err := rows.Scan(&target.id, &target.suspended, &target.byReseller); err != nil {
 			// A dropped row is a domain that is not suspended or not resumed while
 			// the count returned to the caller says it was.
-			log.Printf("suspend: skipping an unreadable domain row: %v", err)
+			logx.Warnf("suspend: skipping an unreadable domain row: %v", err)
 			continue
 		}
 		targets = append(targets, target)

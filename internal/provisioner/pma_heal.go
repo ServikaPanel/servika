@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"strings"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 const pmaPoolPath = "/etc/php-fpm.d/phpmyadmin.conf"
@@ -198,7 +198,7 @@ func ensurePMASELinux() {
 			continue // phpMyAdmin is not installed on this host
 		}
 		if err := ensureSELinuxType(target.path, target.typeName); err != nil {
-			log.Printf("phpMyAdmin repair: %v; phpMyAdmin may be refused on an Enforcing host", err)
+			logx.Warnf("phpMyAdmin repair: %v; phpMyAdmin may be refused on an Enforcing host", err)
 		}
 	}
 }
@@ -266,7 +266,7 @@ func ensurePMAOwnership() {
 	poolUser := pmaPoolUser()
 	uid, gid, err := pmaLookupAccount(poolUser)
 	if err != nil {
-		log.Printf("phpMyAdmin repair: %v, ownership left alone", err)
+		logx.Warnf("phpMyAdmin repair: %v, ownership left alone", err)
 		return
 	}
 
@@ -292,12 +292,12 @@ func ensurePMAOwnership() {
 		// its own configuration, which is an outage rather than a weaker
 		// permission. Leaving the old mode is the lesser of the two.
 		if err := pmaChown(target.path, target.uid, gid); err != nil {
-			log.Printf("phpMyAdmin repair: could not set ownership of %s: %v; permissions left as they were", target.path, err)
+			logx.Warnf("phpMyAdmin repair: could not set ownership of %s: %v; permissions left as they were", target.path, err)
 			continue
 		}
 		// #nosec G302 -- root-owned system file or directory its daemon must read; 0640 on config.inc.php is what keeps the blowfish secret and the control-user password off every other account.
 		if err := os.Chmod(target.path, target.mode); err != nil {
-			log.Printf("phpMyAdmin repair: could not set permissions of %s: %v", target.path, err)
+			logx.Errorf("phpMyAdmin repair: could not set permissions of %s: %v", target.path, err)
 		}
 	}
 }
@@ -323,7 +323,7 @@ func ensurePMASignon() {
 	signonPHP := pmaSignonPHP()
 	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
 	if err := os.MkdirAll(signonDir, 0755); err != nil {
-		log.Printf("phpMyAdmin repair: could not create signon directory: %v", err)
+		logx.Errorf("phpMyAdmin repair: could not create signon directory: %v", err)
 		return
 	}
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
@@ -333,7 +333,7 @@ func ensurePMASignon() {
 	}
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(signonPath, []byte(signonPHP), 0644); err != nil {
-		log.Printf("phpMyAdmin repair: could not write signon endpoint: %v", err)
+		logx.Errorf("phpMyAdmin repair: could not write signon endpoint: %v", err)
 		return
 	}
 	_, _ = tenantCommand("restorecon", signonPath).CombinedOutput()
@@ -347,16 +347,16 @@ func ensurePMAToken() {
 	if err != nil || !pmaTokenPattern.MatchString(token) {
 		// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
 		if err := os.MkdirAll(filepath.Dir(tokenPath), 0755); err != nil {
-			log.Printf("phpMyAdmin repair: could not create token directory: %v", err)
+			logx.Errorf("phpMyAdmin repair: could not create token directory: %v", err)
 			return
 		}
 		raw := make([]byte, 32)
 		if _, err := rand.Read(raw); err != nil {
-			log.Printf("phpMyAdmin repair: could not generate internal token: %v", err)
+			logx.Errorf("phpMyAdmin repair: could not generate internal token: %v", err)
 			return
 		}
 		if err := os.WriteFile(tokenPath, []byte(hex.EncodeToString(raw)+"\n"), 0600); err != nil {
-			log.Printf("phpMyAdmin repair: could not write internal token: %v", err)
+			logx.Errorf("phpMyAdmin repair: could not write internal token: %v", err)
 			return
 		}
 	}
@@ -365,21 +365,21 @@ func ensurePMAToken() {
 	if err != nil {
 		_ = os.Chown(tokenPath, 0, 0)
 		_ = os.Chmod(tokenPath, 0600)
-		log.Printf("phpMyAdmin repair: apache group unavailable, internal token remains root-only")
+		logx.Warnf("phpMyAdmin repair: apache group unavailable, internal token remains root-only")
 		return
 	}
 	gid, err := strconv.Atoi(group.Gid)
 	if err != nil {
-		log.Printf("phpMyAdmin repair: invalid apache group ID")
+		logx.Errorf("phpMyAdmin repair: invalid apache group ID")
 		return
 	}
 	if err := os.Chown(tokenPath, 0, gid); err != nil {
-		log.Printf("phpMyAdmin repair: could not set internal token ownership: %v", err)
+		logx.Errorf("phpMyAdmin repair: could not set internal token ownership: %v", err)
 		return
 	}
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 	if err := os.Chmod(tokenPath, 0640); err != nil {
-		log.Printf("phpMyAdmin repair: could not set internal token permissions: %v", err)
+		logx.Errorf("phpMyAdmin repair: could not set internal token permissions: %v", err)
 	}
 }
 
@@ -407,11 +407,11 @@ func ensurePMAPoolSocket() {
 	}
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(pmaPoolPath, []byte(updated), 0644); err != nil {
-		log.Printf("phpMyAdmin repair: could not update PHP-FPM socket settings: %v", err)
+		logx.Errorf("phpMyAdmin repair: could not update PHP-FPM socket settings: %v", err)
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload-or-restart", "php-fpm").CombinedOutput(); err != nil {
-		log.Printf("phpMyAdmin repair: PHP-FPM reload failed: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("phpMyAdmin repair: PHP-FPM reload failed: %s", strings.TrimSpace(string(output)))
 	}
 }
 
@@ -428,6 +428,6 @@ func ensurePMAConfigHost() {
 	}
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(configPath, []byte(updated), 0644); err != nil {
-		log.Printf("phpMyAdmin repair: could not update database host: %v", err)
+		logx.Errorf("phpMyAdmin repair: could not update database host: %v", err)
 	}
 }

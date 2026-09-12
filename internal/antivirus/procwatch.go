@@ -31,13 +31,13 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"servika/internal/avsettings"
+	"servika/internal/logx"
 )
 
 // procWatchFlag is the argv that runs `servika-server -proc-watch`.
@@ -441,7 +441,7 @@ func (t *procTimers) due(now time.Time) (sweep, recheck bool) {
 func procMonitorStillOn(ctx context.Context, handle *sql.DB) bool {
 	settings, err := avsettings.Read(ctx, handle)
 	if err != nil {
-		log.Printf("process watcher: the settings could not be re-read, keeping the watcher running: %v", err)
+		logx.Warnf("process watcher: the settings could not be re-read, keeping the watcher running: %v", err)
 		return true
 	}
 	return settings.ProcessMonitor

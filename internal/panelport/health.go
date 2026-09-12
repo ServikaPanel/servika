@@ -3,11 +3,12 @@ package panelport
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // The health check URL the ops tools use after a restart lives in the same
@@ -172,7 +173,7 @@ func HealHealthURL() {
 	// #nosec G304 -- fixed path, overridable only by the operator's own environment.
 	text, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("health url heal: %s could not be read: %v", path, err)
+		logx.Errorf("health url heal: %s could not be read: %v", path, err)
 		return
 	}
 	if ReadEnvHealth(string(text)) == "" {
@@ -184,22 +185,22 @@ func HealHealthURL() {
 	}
 	_, port, err := ParseListen(ReadEnvListen(string(text)))
 	if err != nil {
-		log.Printf("health url heal: %s does not set SERVIKA_LISTEN to an address with a port", path)
+		logx.Warnf("health url heal: %s does not set SERVIKA_LISTEN to an address with a port", path)
 		return
 	}
 	next, changed, err := SetEnvHealthPort(string(text), port)
 	if err != nil {
-		log.Printf("health url heal: %s could not be rewritten: %v", path, err)
+		logx.Errorf("health url heal: %s could not be rewritten: %v", path, err)
 		return
 	}
 	if !changed {
 		return
 	}
 	if err := replaceEnvFile(path, next); err != nil {
-		log.Printf("health url heal: %s was left unchanged: %v", path, err)
+		logx.Errorf("health url heal: %s was left unchanged: %v", path, err)
 		return
 	}
-	log.Printf("health url heal: %s now names port %d, which is where the panel listens", envHealthName, port)
+	logx.Infof("health url heal: %s now names port %d, which is where the panel listens", envHealthName, port)
 }
 
 // replaceEnvFile writes the environment file through a sibling temporary file

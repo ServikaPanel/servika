@@ -42,7 +42,6 @@ package antivirus
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,6 +52,7 @@ import (
 	"servika/internal/config"
 	"servika/internal/credentials"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 const (
@@ -168,14 +168,14 @@ func (h *Handlers) tenantSchemas(ctx context.Context) ([]tenantSchema, error) {
 		// further down where the refusal would be one branch among many.
 		if !credentials.ValidDBIdentifier(schema.name) || !credentials.ValidDBIdentifier(schema.user) {
 			// #nosec G706 -- the value is refused precisely because it is not an identifier, so it is not logged.
-			log.Printf("antivirus: a db_accounts row for domain %d carries an identifier that is not valid; skipping it",
+			logx.Warnf("antivirus: a db_accounts row for domain %d carries an identifier that is not valid; skipping it",
 				schema.domainID)
 			continue
 		}
 		password, err := credentials.DecryptDBPass(schema.user, stored)
 		if err != nil {
 			// #nosec G706 -- the user name passed ValidDBIdentifier.
-			log.Printf("antivirus: the stored password for %s could not be read: %v", schema.user, err)
+			logx.Errorf("antivirus: the stored password for %s could not be read: %v", schema.user, err)
 			continue
 		}
 		schema.password = password

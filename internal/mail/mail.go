@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"servika/internal/auth"
 	"servika/internal/credentials"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 	"servika/internal/quota"
 
@@ -514,7 +514,7 @@ func planLimitsOrDefault(ctx context.Context, db *sql.DB, domainID int64) PlanMa
 	if err != nil {
 		// #nosec G706 -- the operands are an integer domain ID and a database
 		// driver error; no client-controlled string reaches the log line.
-		log.Printf("mail plan limit lookup for domain %d: %v", domainID, err)
+		logx.Errorf("mail plan limit lookup for domain %d: %v", domainID, err)
 		return PlanMailLimits{}
 	}
 	return limits

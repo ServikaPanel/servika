@@ -19,7 +19,6 @@ package domains
 
 import (
 	"context"
-	"log"
 	"maps"
 	"net/http"
 	"strconv"
@@ -27,6 +26,7 @@ import (
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 
 	"github.com/go-chi/chi/v5"
@@ -152,7 +152,7 @@ func (j *sslJob) step(name string, run func() (reason string, warned bool, err e
 	j.mu.Unlock()
 
 	if err != nil {
-		log.Printf("ssl install %s: step %s failed: %v", j.domain, name, err)
+		logx.Errorf("ssl install %s: step %s failed: %v", j.domain, name, err)
 	}
 	return err
 }
@@ -362,7 +362,7 @@ func (s *sslInstall) issueMail(mailCert *provisioner.MailCertificate) (string, b
 	}
 	if mailErr != nil {
 		s.job.set("mail_ssl_error", "mail_certificate_failed")
-		log.Printf("mail certificate for %s: %v", s.domainName, mailErr)
+		logx.Errorf("mail certificate for %s: %v", s.domainName, mailErr)
 		return "mail_certificate_failed", true, nil
 	}
 	s.job.set("mail_ssl", map[string]any{
@@ -379,7 +379,7 @@ func (s *sslInstall) serveMail() (string, bool, error) {
 		// The certificate exists but nothing serves it yet, which is
 		// a different situation from not having one.
 		s.job.set("mail_ssl_error", "mail_sni_apply_failed")
-		log.Printf("applying the mail SNI configuration for %s: %v", s.domainName, e)
+		logx.Warnf("applying the mail SNI configuration for %s: %v", s.domainName, e)
 		return "mail_sni_apply_failed", true, nil
 	}
 	return "", false, nil

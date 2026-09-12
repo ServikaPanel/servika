@@ -2,11 +2,12 @@ package mail
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // Bringing an existing mail install onto both address families.
@@ -69,7 +70,7 @@ func healPostfixIPv6(ctx context.Context) {
 	if !applyPostfixIPv6(applyCtx, missing) {
 		return
 	}
-	log.Printf("mail ipv6 heal: postfix now accepts and delivers over IPv4 and IPv6 (%s)", strings.Join(missing, "; "))
+	logx.Infof("mail ipv6 heal: postfix now accepts and delivers over IPv4 and IPv6 (%s)", strings.Join(missing, "; "))
 }
 
 // managedPostfixConfig reads main.cf when it belongs to a Postfix this panel
@@ -107,14 +108,14 @@ func applyPostfixIPv6(ctx context.Context, missing []string) bool {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); every argument comes from the package-level table above, never from a request.
 		if out, err := execCommandContext(ctx, "postconf", "-e", setting).CombinedOutput(); err != nil {
 			// #nosec G706 -- the operand is postconf output, not client-controlled input.
-			log.Printf("mail ipv6 heal: could not set %q: %v: %s", setting, err, strings.TrimSpace(string(out)))
+			logx.Errorf("mail ipv6 heal: could not set %q: %v: %s", setting, err, strings.TrimSpace(string(out)))
 			return false
 		}
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
 	if out, err := execCommandContext(ctx, "postfix", "check").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is postfix output, not client-controlled input.
-		log.Printf("mail ipv6 heal: postfix refused the settings: %v: %s", err, strings.TrimSpace(string(out)))
+		logx.Errorf("mail ipv6 heal: postfix refused the settings: %v: %s", err, strings.TrimSpace(string(out)))
 		return false
 	}
 	// inet_protocols is one of the few settings a reload does NOT pick up:
@@ -122,7 +123,7 @@ func applyPostfixIPv6(ctx context.Context, missing []string) bool {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
 	if out, err := execCommandContext(ctx, "systemctl", "restart", "postfix").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is systemctl output, not client-controlled input.
-		log.Printf("mail ipv6 heal: could not restart postfix: %v: %s", err, strings.TrimSpace(string(out)))
+		logx.Errorf("mail ipv6 heal: could not restart postfix: %v: %s", err, strings.TrimSpace(string(out)))
 		return false
 	}
 	return true
@@ -183,16 +184,16 @@ func healDovecotListen(ctx context.Context) {
 	// #nosec G304 -- fixed system configuration path, never built from request input.
 	file, err := os.OpenFile(dovecotServikaConf, os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
-		log.Printf("mail ipv6 heal: could not open %s: %v", dovecotServikaConf, err)
+		logx.Errorf("mail ipv6 heal: could not open %s: %v", dovecotServikaConf, err)
 		return
 	}
 	if _, err := file.WriteString(appended); err != nil {
 		_ = file.Close()
-		log.Printf("mail ipv6 heal: could not write %s: %v", dovecotServikaConf, err)
+		logx.Errorf("mail ipv6 heal: could not write %s: %v", dovecotServikaConf, err)
 		return
 	}
 	if err := file.Close(); err != nil {
-		log.Printf("mail ipv6 heal: could not close %s: %v", dovecotServikaConf, err)
+		logx.Errorf("mail ipv6 heal: could not close %s: %v", dovecotServikaConf, err)
 		return
 	}
 
@@ -201,10 +202,10 @@ func healDovecotListen(ctx context.Context) {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell).
 	if out, err := exec.CommandContext(reloadCtx, "systemctl", "restart", "dovecot").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is systemctl output, not client-controlled input.
-		log.Printf("mail ipv6 heal: could not restart dovecot: %v: %s", err, strings.TrimSpace(string(out)))
+		logx.Errorf("mail ipv6 heal: could not restart dovecot: %v: %s", err, strings.TrimSpace(string(out)))
 		return
 	}
-	log.Printf("mail ipv6 heal: dovecot now listens on IPv4 and IPv6")
+	logx.Infof("mail ipv6 heal: dovecot now listens on IPv4 and IPv6")
 }
 
 // hasActiveDovecotListen reports whether the file already sets listen.

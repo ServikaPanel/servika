@@ -16,12 +16,12 @@ package backups
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"servika/internal/credentials"
+	"servika/internal/logx"
 )
 
 // dbUsersFileName is the archive member holding the user/GRANT dump.
@@ -221,7 +221,7 @@ func applyDBUsers(ctx context.Context, dbDir string, allow map[string]bool) (int
 		// so any line still holding one after the trailing-semicolon trim is refused.
 		if strings.Contains(s, ";") {
 			// #nosec G706 -- the value is bounded and comes from a root-produced archive file, not a live client request.
-			log.Printf("backup: users.sql chained statement refused: %.80s", s)
+			logx.Errorf("backup: users.sql chained statement refused: %.80s", s)
 			continue
 		}
 		switch {
@@ -229,12 +229,12 @@ func applyDBUsers(ctx context.Context, dbDir string, allow map[string]bool) (int
 		case grantAllowed(s, allow):
 		default:
 			// #nosec G706 -- the value is bounded and comes from a root-produced archive file, not a live client request.
-			log.Printf("backup: users.sql statement refused: %.80s", s)
+			logx.Errorf("backup: users.sql statement refused: %.80s", s)
 			continue
 		}
 		if err := mysqlExec(ctx, s+";"); err != nil {
 			// #nosec G706 -- the value is bounded and comes from a root-produced archive file, not a live client request.
-			log.Printf("backup: users.sql statement could not be applied (%.60s): %v", s, err)
+			logx.Errorf("backup: users.sql statement could not be applied (%.60s): %v", s, err)
 			continue
 		}
 		n++

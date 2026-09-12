@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"unsafe"
 
 	"servika/internal/avsettings"
+	"servika/internal/logx"
 
 	"golang.org/x/sys/unix"
 )
@@ -64,7 +64,7 @@ var settingsRefresh = time.Minute
 func (w *watcher) refresh(ctx context.Context) error {
 	settings, err := avsettings.Read(ctx, w.db)
 	if err != nil {
-		log.Printf("antivirus watcher: settings could not be re-read, keeping the current ones: %v", err)
+		logx.Warnf("antivirus watcher: settings could not be re-read, keeping the current ones: %v", err)
 		return nil
 	}
 	if !settings.Realtime {
@@ -131,9 +131,9 @@ func markFilesystem(fd int, root string) error {
 	// statement about cost.
 	mount := mountPointOf(root)
 	if mount == root {
-		log.Printf("antivirus watcher: watching %s", root)
+		logx.Infof("antivirus watcher: watching %s", root)
 	} else {
-		log.Printf("antivirus watcher: watching %s, which marks the whole %s filesystem "+
+		logx.Infof("antivirus watcher: watching %s, which marks the whole %s filesystem "+
 			"because %s is not a separate one; the exclusion list is what narrows it",
 			root, mount, root)
 	}

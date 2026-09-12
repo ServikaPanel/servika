@@ -15,11 +15,11 @@ package chains
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 )
 
@@ -168,7 +168,7 @@ func (h *Handlers) chainEvents(ctx context.Context, domID int64, at, cond string
 		// behaviour above already promises: a chain drawn with some of its events
 		// missing reads as a weaker chain than it is, and nothing on the screen
 		// says the list was cut short.
-		log.Printf("chains: could not read the event timeline for domain %d: %v", domID, err)
+		logx.Errorf("chains: could not read the event timeline for domain %d: %v", domID, err)
 		return nil
 	}
 	return out

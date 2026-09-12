@@ -1,12 +1,12 @@
 package middleware
 
 import (
-	"log"
 	"strings"
 	"sync"
 	"time"
 
 	"servika/internal/auth"
+	"servika/internal/logx"
 )
 
 // The rate limiter was written as a pure in-memory gate: it returns 429 before
@@ -73,7 +73,7 @@ func recordLockout(action, account, address, target string) {
 		auth.WriteAudit(scopeDB, 0, name, address, action, safeName(target), false)
 	}
 	// #nosec G706 -- the account and target are passed through safeName, which strips every control character; the address comes from httpx.RateLimitKey.
-	log.Printf("login lockout: %s engaged for %q from %s", action, safeName(target), address)
+	logx.Warnf("login lockout: %s engaged for %q from %s", action, safeName(target), address)
 }
 
 // noteBlocked logs a throttled line for an attempt refused by an existing lock.
@@ -89,7 +89,7 @@ func noteBlocked(kind, subject, address string) {
 	lastBlocked[kind] = now
 	blockedMu.Unlock()
 	// #nosec G706 -- subject is passed through safeName and address comes from httpx.RateLimitKey.
-	log.Printf("login lockout: still refusing %s for %q from %s", kind, safeName(subject), address)
+	logx.Warnf("login lockout: still refusing %s for %q from %s", kind, safeName(subject), address)
 }
 
 // resetLockoutLog drops the throttle. Tests call it so one case cannot decide

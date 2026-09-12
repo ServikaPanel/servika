@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // dropInPath is a SEPARATE file from the installer's
@@ -79,16 +80,16 @@ func HealBind(db *sql.DB) {
 
 	enabled, err := readSwitch(ctx, db)
 	if err != nil {
-		log.Printf("remote db: could not read the switch: %v", err)
+		logx.Errorf("remote db: could not read the switch: %v", err)
 		return
 	}
 	changed, err := writeDropIn(enabled)
 	if err != nil {
-		log.Printf("remote db: could not write %s: %v", dropInPath, err)
+		logx.Errorf("remote db: could not write %s: %v", dropInPath, err)
 		return
 	}
 	if changed {
-		log.Printf("remote db: %s realigned with the stored setting; it takes effect on the next MariaDB restart", dropInPath)
+		logx.Infof("remote db: %s realigned with the stored setting; it takes effect on the next MariaDB restart", dropInPath)
 	}
 }
 
@@ -129,7 +130,7 @@ func Apply(ctx context.Context, db *sql.DB, enable bool) error {
 		if restartErr := restart(ctx); restartErr != nil {
 			// Worth its own line: the rollback itself failed, which is the one
 			// case where an operator has to look at the host.
-			log.Printf("remote db: ROLLBACK RESTART FAILED after %v: %v", err, restartErr)
+			logx.Errorf("remote db: ROLLBACK RESTART FAILED after %v: %v", err, restartErr)
 		}
 		return err
 	}

@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
-	"log"
 	"os"
 	"slices"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // The two catch-all vhosts answer every request whose Host or SNI matches no
@@ -108,7 +109,7 @@ func HealDefaultVhostsOnStartup() {
 	// directive validator builds its throwaway server block on the same path.
 	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
 	if err := os.MkdirAll(defaultWebroot, 0o755); err != nil {
-		log.Printf("default vhost heal: could not create %s: %v", defaultWebroot, err)
+		logx.Errorf("default vhost heal: could not create %s: %v", defaultWebroot, err)
 	}
 	// The page goes down BEFORE the vhosts. The other order leaves a window in
 	// which nginx serves a location whose fallback file is not there yet, and the
@@ -123,7 +124,7 @@ func HealDefaultVhostsOnStartup() {
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		log.Printf("default vhost heal: nginx reload failed: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("default vhost heal: nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
 }
 
@@ -140,10 +141,10 @@ func ensureDefaultParkPage() {
 	}
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(defaultParkPage, next, 0o644); err != nil {
-		log.Printf("default vhost heal: could not write %s: %v", defaultParkPage, err)
+		logx.Errorf("default vhost heal: could not write %s: %v", defaultParkPage, err)
 		return
 	}
-	log.Printf("default vhost heal: %s written", defaultParkPage)
+	logx.Infof("default vhost heal: %s written", defaultParkPage)
 }
 
 // healManagedVhost applies one file and reports whether it wrote anything.
@@ -169,13 +170,13 @@ func healManagedVhost(path, canonical string, known []string) bool {
 	case vhostUpToDate:
 		return false
 	case vhostKeepEdited:
-		log.Printf("default vhost heal: %s differs from every shipped version, left untouched", path)
+		logx.Warnf("default vhost heal: %s differs from every shipped version, left untouched", path)
 		return false
 	}
 
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(path, []byte(wanted), 0o644); err != nil {
-		log.Printf("default vhost heal: could not write %s: %v", path, err)
+		logx.Errorf("default vhost heal: could not write %s: %v", path, err)
 		return false
 	}
 
@@ -186,10 +187,10 @@ func healManagedVhost(path, canonical string, known []string) bool {
 		} else {
 			_ = os.Remove(path)
 		}
-		log.Printf("default vhost heal: nginx -t rejected %s, reverted: %s", path, strings.TrimSpace(string(output)))
+		logx.Errorf("default vhost heal: nginx -t rejected %s, reverted: %s", path, strings.TrimSpace(string(output)))
 		return false
 	}
 
-	log.Printf("default vhost heal: %s updated", path)
+	logx.Infof("default vhost heal: %s updated", path)
 	return true
 }

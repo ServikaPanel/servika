@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 
+	"servika/internal/logx"
 	"servika/internal/notifications"
 )
 
@@ -37,7 +37,7 @@ func notifyUploadFailed(ctx context.Context, db *sql.DB, domainID, backupID int6
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
 		// #nosec G706 -- logged values are an integer ID and error output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup: the upload-failure alert for domain %d could not be written: %v", domainID, err)
+		logx.Errorf("backup: the upload-failure alert for domain %d could not be written: %v", domainID, err)
 	}
 }
 
@@ -85,7 +85,7 @@ func notifyDumpsFailed(ctx context.Context, db *sql.DB, domainID, backupID int64
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
 		// #nosec G706 -- logged values are an integer ID and error output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup: the failed-dump alert for domain %d could not be written: %v", domainID, err)
+		logx.Errorf("backup: the failed-dump alert for domain %d could not be written: %v", domainID, err)
 	}
 }
 
@@ -120,7 +120,7 @@ func notifyBackupFailed(ctx context.Context, db *sql.DB, domainID int64, reason 
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
 		// #nosec G706 -- logged values are an integer ID and error output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup: the failed-backup alert for domain %d could not be written: %v", domainID, err)
+		logx.Errorf("backup: the failed-backup alert for domain %d could not be written: %v", domainID, err)
 	}
 }
 

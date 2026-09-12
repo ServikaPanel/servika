@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -22,7 +22,7 @@ func Open(dsn string) (*sql.DB, error) {
 	if override != "" {
 		// Reported rather than obeyed, and reported rather than dropped: an
 		// operator who set this deserves to know their value is not in effect.
-		log.Printf("database pool: %s, using %d instead", override, maxOpen)
+		logx.Warnf("database pool: %s, using %d instead", override, maxOpen)
 	}
 	d.SetMaxOpenConns(maxOpen)
 	d.SetMaxIdleConns(maxOpen / 2)

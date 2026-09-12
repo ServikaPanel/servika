@@ -32,7 +32,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +41,7 @@ import (
 
 	"servika/internal/avsettings"
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // workerFlag is the argument that turns servika-server into a scan worker.
@@ -267,7 +267,7 @@ func executeScan(ctx context.Context, req ScanRequest) ScanResult {
 		// nothing else, so this is reported rather than failing the scan. Saying
 		// nothing would leave a sweep that reads the whole tree every night with
 		// no explanation anywhere.
-		log.Printf("antivirus: the scan cache was not written: %v", err)
+		logx.Errorf("antivirus: the scan cache was not written: %v", err)
 	}
 	return result
 }
@@ -314,7 +314,7 @@ func Scan(ctx context.Context, req ScanRequest, label string) (ScanResult, bool,
 	confined := avsettings.Confined(result.Cgroup)
 	if !confined {
 		// #nosec G706 -- the logged value is this process's child's own /proc/self/cgroup line, supplied by the kernel; no tenant string reaches it.
-		log.Printf("antivirus: the scan ran in %q, which is not %s carrying a "+
+		logx.Warnf("antivirus: the scan ran in %q, which is not %s carrying a "+
 			"resource limit; the limits did not apply", result.Cgroup, avsettings.SliceName)
 	}
 	return result, confined, nil

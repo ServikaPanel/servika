@@ -10,7 +10,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -26,6 +25,7 @@ import (
 	"servika/internal/bgjob"
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -37,7 +37,7 @@ import (
 func failScan(db *sql.DB, sid int64) {
 	if _, err := db.Exec(
 		`UPDATE av_scans SET status='failed', finished_at=NOW() WHERE id=?`, sid); err != nil {
-		log.Printf("antivirus: scan %d could not be closed after a panic: %v", sid, err)
+		logx.Errorf("antivirus: scan %d could not be closed after a panic: %v", sid, err)
 	}
 }
 
@@ -66,11 +66,11 @@ func HealRunningScans(db *sql.DB) {
 	}
 	result, err := db.Exec(`UPDATE av_scans SET status='failed', finished_at=NOW() WHERE status='running'`)
 	if err != nil {
-		log.Printf("antivirus: could not close the scans left running: %v", err)
+		logx.Errorf("antivirus: could not close the scans left running: %v", err)
 		return
 	}
 	if closed, err := result.RowsAffected(); err == nil && closed > 0 {
-		log.Printf("antivirus: closed %d scan(s) left running by a restart", closed)
+		logx.Infof("antivirus: closed %d scan(s) left running by a restart", closed)
 	}
 }
 

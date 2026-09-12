@@ -5,11 +5,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // A mail client connecting to mail.<domain> is shown whatever certificate the
@@ -200,14 +201,14 @@ func RefreshMailChains() (changed bool) {
 		}
 		stale, err := mailChainIsStale(chainPath, certPath, keyPath)
 		if err != nil {
-			log.Printf("mail chain: %s could not be compared with its certificate: %v", domain, err)
+			logx.Errorf("mail chain: %s could not be compared with its certificate: %v", domain, err)
 			continue
 		}
 		if !stale {
 			continue
 		}
 		if err := writeMailChain(chainPath, certPath, keyPath); err != nil {
-			log.Printf("mail chain: %s could not be rewritten from its renewed certificate: %v", domain, err)
+			logx.Errorf("mail chain: %s could not be rewritten from its renewed certificate: %v", domain, err)
 			continue
 		}
 		changed = true
@@ -290,11 +291,11 @@ func InstalledMailCertificates() map[string][]string {
 		}
 		names, notAfter, err := readCertificate(certPath)
 		if err != nil {
-			log.Printf("mail sni: %s has a chain but its certificate could not be read: %v", domain, err)
+			logx.Errorf("mail sni: %s has a chain but its certificate could not be read: %v", domain, err)
 			continue
 		}
 		if time.Now().After(notAfter) {
-			log.Printf("mail sni: the certificate for %s expired on %s and is left out", domain, notAfter.Format("2006-01-02"))
+			logx.Warnf("mail sni: the certificate for %s expired on %s and is left out", domain, notAfter.Format("2006-01-02"))
 			continue
 		}
 		covered[domain] = names

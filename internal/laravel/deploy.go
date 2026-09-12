@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 func deployUnit(id int64) string { return fmt.Sprintf("servika-laravel-deploy-%d", id) }
@@ -168,7 +168,7 @@ func (h *Handlers) restartWorkersAfterDeploy(ctx context.Context, domainID int64
 	workers, err := WorkersForDomain(ctx, h.DB, domainID)
 	if err != nil {
 		// #nosec G706 -- the logged values are an integer id and a driver error from a SELECT whose only parameter is bound; no raw tenant string with CR/LF reaches the log.
-		log.Printf("laravel: deploy of domain %d finished but its workers could not be read: %v", domainID, err)
+		logx.Errorf("laravel: deploy of domain %d finished but its workers could not be read: %v", domainID, err)
 		return
 	}
 	for _, worker := range workers {
@@ -180,7 +180,7 @@ func (h *Handlers) restartWorkersAfterDeploy(ctx context.Context, domainID int64
 			// turned into a failure: saying nothing would leave the old code
 			// running with no trace of why.
 			// #nosec G706 -- the logged values are integer ids and systemctl output about a unit name derived from those ids; no raw tenant string with CR/LF reaches the log.
-			log.Printf("laravel: worker %d of domain %d did not restart after the deploy: %v",
+			logx.Errorf("laravel: worker %d of domain %d did not restart after the deploy: %v",
 				worker.ID, domainID, err)
 		}
 	}

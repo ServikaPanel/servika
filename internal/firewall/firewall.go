@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -29,6 +28,7 @@ import (
 
 	"servika/internal/hostapps"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/system"
 
 	"github.com/go-chi/chi/v5"
@@ -415,7 +415,7 @@ func (h *Handlers) readRules() (storedRules, error) {
 		if err := rows.Scan(&ruleType, &ip, &port, &proto); err != nil {
 			// A dropped rule is a firewall line that is never emitted: a block that
 			// does not block, or an allowlist entry whose absence locks somebody out.
-			log.Printf("firewall: skipping an unreadable rule: %v", err)
+			logx.Warnf("firewall: skipping an unreadable rule: %v", err)
 			continue
 		}
 		switch ruleType {
@@ -541,7 +541,7 @@ func (h *Handlers) remoteAccess() (remoteAccess, error) {
 		// nft would refuse the whole document, which takes every other rule down
 		// with it, including the drop this block depends on.
 		if !validIP(host) {
-			log.Printf("firewall: ignoring unusable remote database host %q", host)
+			logx.Warnf("firewall: ignoring unusable remote database host %q", host)
 			continue
 		}
 		access.accepts = append(access.accepts, "\t\t"+saddr(host)+"tcp dport 3306 accept")
@@ -705,7 +705,7 @@ func TakeOverFirewalld() {
 	}
 	_ = exec.Command("systemctl", "disable", "--now", "firewalld").Run()
 	_ = exec.Command("systemctl", "mask", "firewalld").Run()
-	log.Printf("firewall: firewalld stopped and masked; Servika nftables is the active firewall")
+	logx.Infof("firewall: firewalld stopped and masked; Servika nftables is the active firewall")
 }
 
 // --- Helpers ---

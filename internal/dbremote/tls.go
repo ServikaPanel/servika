@@ -4,7 +4,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // Turning remote access on rebinds MariaDB from loopback to every interface, and
@@ -98,11 +98,11 @@ func applyCertificatePermissions() error {
 	// expects, and the caller's own restart verification is what catches that.
 	gid, err := mysqlGroupID()
 	if err != nil {
-		log.Printf("remote db: no mysql group to own %s: %v", serverKeyPath(), err)
+		logx.Errorf("remote db: no mysql group to own %s: %v", serverKeyPath(), err)
 		return nil
 	}
 	if err := os.Chown(serverKeyPath(), 0, gid); err != nil {
-		log.Printf("remote db: could not give %s to the mysql group: %v", serverKeyPath(), err)
+		logx.Errorf("remote db: could not give %s to the mysql group: %v", serverKeyPath(), err)
 	}
 	return nil
 }

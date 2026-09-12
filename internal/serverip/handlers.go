@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 	"servika/internal/panelport"
 
@@ -55,7 +55,7 @@ func (h *Handlers) fail(w http.ResponseWriter, err error, fallback string) {
 		writeRefusal(w, http.StatusConflict, reason, err.Error())
 		return
 	}
-	log.Printf("server ip: %v", err)
+	logx.Errorf("server ip: %v", err)
 	httpx.WriteError(w, http.StatusInternalServerError, fallback)
 }
 
@@ -290,7 +290,7 @@ func (h *Handlers) activate(w http.ResponseWriter, r *http.Request, id int64, pl
 func (h *Handlers) forget(r *http.Request, id int64) {
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM server_ips WHERE id=?`, id); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("server ip rollback %d: %v", id, err)
+		logx.Errorf("server ip rollback %d: %v", id, err)
 	}
 }
 

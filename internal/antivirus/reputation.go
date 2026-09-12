@@ -43,7 +43,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -52,6 +51,7 @@ import (
 	"servika/internal/config"
 	"servika/internal/dnsbl"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 )
 
@@ -140,7 +140,7 @@ func StartReputationScanner(db *sql.DB) {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), reputationBudget)
 			if err := ScanReputation(ctx, db); err != nil {
-				log.Printf("domain reputation scan: %v", err)
+				logx.Errorf("domain reputation scan: %v", err)
 			}
 			cancel()
 			time.Sleep(reputationInterval)

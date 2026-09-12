@@ -3,10 +3,11 @@ package mail
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // Dovecot master user.
@@ -90,11 +91,11 @@ func HealMasterUser(ctx context.Context) {
 	}
 	hash, err := HashPassword(password)
 	if err != nil {
-		log.Printf("mail master user: could not hash the master password: %v", err)
+		logx.Errorf("mail master user: could not hash the master password: %v", err)
 		return
 	}
 	if err := writeMasterUser(ctx, hash); err != nil {
-		log.Printf("mail master user: %v", err)
+		logx.Errorf("mail master user: %v", err)
 	}
 }
 
@@ -124,7 +125,7 @@ func writeMasterUser(ctx context.Context, hash string) error {
 	if out, err := execCommandContext(ctx, "systemctl", "reload", "dovecot").CombinedOutput(); err != nil {
 		return fmt.Errorf("reload dovecot: %s", strings.TrimSpace(string(out)))
 	}
-	log.Printf("mail master user configured for panel-initiated webmail sessions")
+	logx.Infof("mail master user configured for panel-initiated webmail sessions")
 	return nil
 }
 
@@ -169,12 +170,12 @@ func removeMasterUser() {
 		return // nothing was installed
 	}
 	if err := os.Remove(masterConfPath); err != nil {
-		log.Printf("mail master user: could not remove the master passdb: %v", err)
+		logx.Errorf("mail master user: could not remove the master passdb: %v", err)
 		return
 	}
 	if out, err := exec.Command("systemctl", "reload", "dovecot").CombinedOutput(); err != nil {
-		log.Printf("mail master user: removed but dovecot did not reload: %s", strings.TrimSpace(string(out)))
+		logx.Errorf("mail master user: removed but dovecot did not reload: %s", strings.TrimSpace(string(out)))
 		return
 	}
-	log.Printf("mail master user removed; panel-initiated webmail sessions are disabled")
+	logx.Warnf("mail master user removed; panel-initiated webmail sessions are disabled")
 }

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/user"
@@ -15,6 +14,7 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 	"servika/internal/provisioner"
 	"servika/internal/quota"
@@ -352,7 +352,7 @@ func (h *Handlers) provisionDatabase(domainID int64, dbName, dbUser string) stri
 	}
 	dbPass := credentials.RandomPassword(24)
 	if err := mysqlCreateDB(h.DB, domainID, dbName, dbUser, dbPass); err != nil {
-		log.Printf("MySQL create %q error: %v", dbName, err)
+		logx.Errorf("MySQL create %q error: %v", dbName, err)
 	}
 	return dbPass
 }
@@ -776,7 +776,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) deleteAddonDomain(w http.ResponseWriter, r *http.Request, id int64, sk string) {
 	deleted, err := cleanupAddonDomain(r.Context(), h.DB, id)
 	if err != nil {
-		httpx.LogR(r, "addon domain delete warn (%d): %v", id, err)
+		httpx.WarnR(r, "addon domain delete warn (%d): %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "addon domain deletion failed")
 		return
 	}
@@ -797,7 +797,7 @@ func (h *Handlers) cleanupAddonChildren(r *http.Request, id int64) {
 	for childRows.Next() {
 		var childID int64
 		if err := childRows.Scan(&childID); err != nil {
-			httpx.LogR(r, "addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
+			httpx.WarnR(r, "addon domain cleanup warn (parent=%d): skipping an unreadable child row: %v", id, err)
 			continue
 		}
 		childIDs = append(childIDs, childID)
@@ -805,12 +805,12 @@ func (h *Handlers) cleanupAddonChildren(r *http.Request, id int64) {
 	if err := childRows.Err(); err != nil {
 		// A child missed here keeps its vhost, its certificate paths and its DNS
 		// zone after the parent is gone, with no row left to find it from.
-		httpx.LogR(r, "addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
+		httpx.WarnR(r, "addon domain cleanup warn (parent=%d): could not read the child list: %v", id, err)
 	}
 	_ = childRows.Close()
 	for _, childID := range childIDs {
 		if _, err := cleanupAddonDomain(r.Context(), h.DB, childID); err != nil {
-			httpx.LogR(r, "addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
+			httpx.WarnR(r, "addon domain cleanup warn (parent=%d, child=%d): %v", id, childID, err)
 		}
 	}
 }
@@ -849,13 +849,13 @@ func (h *Handlers) tearDownTenant(r *http.Request, id int64, domainName, sk stri
 
 	// Remove the real DBs in MariaDB (CASCADE FK only deletes the panel DB metadata)
 	if err := mysqlDropAllForDomain(h.DB, id); err != nil {
-		httpx.LogR(r, "mysql drop-all warn (%s): %v", domainName, err)
+		httpx.WarnR(r, "mysql drop-all warn (%s): %v", domainName, err)
 	}
 	// nginx vhost + PHP pool + Linux user. Deprovision asks the same question
 	// again for itself, so a caller that never learned about sharing cannot
 	// reintroduce the data loss.
 	if err := deprovisionTenant(domainName, sk); err != nil {
-		httpx.LogR(r, "deprovision warn (%s): %v", domainName, err)
+		httpx.WarnR(r, "deprovision warn (%s): %v", domainName, err)
 	}
 	h.releaseTenantUser(r, id, sk, systemUserShared)
 	// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
@@ -872,13 +872,13 @@ func (h *Handlers) tearDownTenant(r *http.Request, id int64, domainName, sk stri
 func (h *Handlers) releaseTenantUser(r *http.Request, id int64, sk string, systemUserShared bool) {
 	if !systemUserShared {
 		if err := deleteSystemdSlice(sk); err != nil {
-			httpx.LogR(r, "resource slice cleanup warn (%s): %v", sk, err)
+			httpx.WarnR(r, "resource slice cleanup warn (%s): %v", sk, err)
 		}
 		// The quarantine store lives OUTSIDE the home, so userdel -r never
 		// reaches it: the rows go with the foreign key and the files would stay
 		// for good, holding a tenant's malware after the tenant is gone.
 		if err := removeQuarantineStore(sk); err != nil {
-			httpx.LogR(r, "quarantine store cleanup warn (%s): %v", sk, err)
+			httpx.WarnR(r, "quarantine store cleanup warn (%s): %v", sk, err)
 		}
 	}
 	// Redis tenant cache: Valkey ACL user + WP drop-in + domain_redis row.
@@ -887,10 +887,10 @@ func (h *Handlers) releaseTenantUser(r *http.Request, id int64, sk string, syste
 	// so only this domain's row goes.
 	if systemUserShared {
 		if err := forgetRedisDomain(h.DB, id); err != nil {
-			httpx.LogR(r, "redis row cleanup warn (%d): %v", id, err)
+			httpx.WarnR(r, "redis row cleanup warn (%d): %v", id, err)
 		}
 	} else if err := closeRedisDomain(h.DB, id, sk); err != nil {
-		httpx.LogR(r, "redis close-domain warn (%s): %v", sk, err)
+		httpx.WarnR(r, "redis close-domain warn (%s): %v", sk, err)
 	}
 }
 
@@ -899,10 +899,10 @@ func (h *Handlers) releaseTenantUser(r *http.Request, id int64, sk string, syste
 func (h *Handlers) deleteDomainRows(w http.ResponseWriter, r *http.Request, id int64) bool {
 	// Existing installations may not have foreign keys on the traffic tables.
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_traffic WHERE domain_id=?`, id); err != nil {
-		httpx.LogR(r, "domain traffic cleanup warn (%d): %v", id, err)
+		httpx.WarnR(r, "domain traffic cleanup warn (%d): %v", id, err)
 	}
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_traffic_cursor WHERE domain_id=?`, id); err != nil {
-		httpx.LogR(r, "domain traffic cursor cleanup warn (%d): %v", id, err)
+		httpx.WarnR(r, "domain traffic cursor cleanup warn (%d): %v", id, err)
 	}
 	// These domain-owned tables have a domain_id index but no ON DELETE CASCADE, so
 	// their rows would be orphaned after the domain is deleted. Remove them explicitly.
@@ -910,7 +910,7 @@ func (h *Handlers) deleteDomainRows(w http.ResponseWriter, r *http.Request, id i
 		// #nosec G202 -- table names come from this fixed literal whitelist, never user input; domain_id is bound.
 		if _, err := h.DB.ExecContext(r.Context(),
 			"DELETE FROM "+table+" WHERE domain_id=?", id); err != nil {
-			httpx.LogR(r, "%s cleanup warn (%d): %v", table, id, err)
+			httpx.WarnR(r, "%s cleanup warn (%d): %v", table, id, err)
 		}
 	}
 
@@ -937,7 +937,7 @@ func (h *Handlers) afterDomainRowDeleted(r *http.Request, domainName string, sib
 	// table; if the domain were still in the table (old order) the last deleted
 	// domain zone include would be rewritten (dangling, named reload error).
 	if err := deleteDNSZone(r.Context(), h.DB, domainName); err != nil {
-		httpx.LogR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
+		httpx.WarnR(r, "DNS DeleteZone warn (%s): %v", domainName, err)
 	}
 }
 
@@ -1198,7 +1198,7 @@ func (h *Handlers) SetFTPPassword(w http.ResponseWriter, r *http.Request) {
 		if err := credentials.SyncSSHPassword(h.DB, sk); err != nil {
 			// SSH password stayed at its old value; the returned password only works
 			// for FTP. Report a degraded result rather than implying SSH is in sync.
-			httpx.LogR(r, "ssh password sync warn (%s): %v", sk, err)
+			httpx.WarnR(r, "ssh password sync warn (%s): %v", sk, err)
 			httpx.WriteJSON(w, http.StatusOK, map[string]any{
 				"ok": true, "id": id, "username": sk, "password": req.Password,
 				"ssh_sync_failed": true,
@@ -1261,7 +1261,7 @@ func (h *Handlers) ListDatabases(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&d.ID, &d.DomainID, &d.DBName, &d.DBUser, &d.DBHost, &d.DBPass, &d.CreatedAt); err != nil {
 			// A dropped row is a database the customer owns and cannot see, so it
 			// can be neither opened, nor reset, nor deleted from this screen.
-			httpx.LogR(r, "databases: skipping an unreadable account row for domain %d: %v", d.DomainID, err)
+			httpx.WarnR(r, "databases: skipping an unreadable account row for domain %d: %v", d.DomainID, err)
 			continue
 		}
 		// db_pass_plain is encrypted at rest (bound to db_user); decrypt for the
@@ -1787,7 +1787,7 @@ func (h *Handlers) applyPlanNginxDefaults(ctx context.Context, domainID, planID 
 	if err := h.DB.QueryRowContext(ctx,
 		`SELECT fastcgi_cache, client_max_body_mb, COALESCE(nginx_extra_directives,'')
 		   FROM service_plans WHERE id=?`, planID).Scan(&fastCGICache, &clientMaxBodyMB, &planDirectives); err != nil {
-		log.Printf("read plan nginx defaults (plan=%d): %v", planID, err)
+		logx.Errorf("read plan nginx defaults (plan=%d): %v", planID, err)
 		return
 	}
 	// The ceiling goes into its OWN column, not into extra_directives. That column
@@ -1807,15 +1807,15 @@ func (h *Handlers) applyPlanNginxDefaults(ctx context.Context, domainID, planID 
 		 ON DUPLICATE KEY UPDATE fastcgi_cache=VALUES(fastcgi_cache),
 		    extra_directives=VALUES(extra_directives), client_max_body=VALUES(client_max_body)`,
 		domainID, fastCGICache, extraDirectives, clientMaxBody); err != nil {
-		log.Printf("seed nginx_settings (domain=%d): %v", domainID, err)
+		logx.Errorf("seed nginx_settings (domain=%d): %v", domainID, err)
 		return
 	}
 	socket, err := phpSocketFor(sk, php)
 	if err != nil {
-		log.Printf("php socket (domain=%d): %v", domainID, err)
+		logx.Errorf("php socket (domain=%d): %v", domainID, err)
 		return
 	}
 	if err := applyVhostForDomain(h.DB, domainID, socket, php); err != nil {
-		log.Printf("rerender plan virtual host (domain=%d): %v", domainID, err)
+		logx.Errorf("rerender plan virtual host (domain=%d): %v", domainID, err)
 	}
 }

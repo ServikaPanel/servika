@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"servika/internal/geoip"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -88,7 +88,7 @@ func blockedCountries(ctx context.Context, db *sql.DB) ([]string, error) {
 		if err := rows.Scan(&code); err != nil {
 			// A dropped country never reaches the nftables set, so a country the
 			// operator blocked is quietly let through.
-			log.Printf("firewall: skipping an unreadable country code: %v", err)
+			logx.Warnf("firewall: skipping an unreadable country code: %v", err)
 			continue
 		}
 		if normalized := geoip.NormalizeCountry(code); normalized != "" {

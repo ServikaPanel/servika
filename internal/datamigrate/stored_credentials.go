@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
+	"servika/internal/logx"
 	"servika/internal/secret"
 )
 
@@ -44,11 +44,11 @@ func EncryptStoredCredentials(ctx context.Context, db *sql.DB) {
 	for _, target := range encryptedCredentials {
 		migrated, err := encryptColumn(ctx, db, target)
 		if err != nil {
-			log.Printf("credential encryption backfill: %s.%s: %v", target.table, target.column, err)
+			logx.Errorf("credential encryption backfill: %s.%s: %v", target.table, target.column, err)
 			continue
 		}
 		if migrated > 0 {
-			log.Printf("credential encryption backfill: encrypted %d cleartext value(s) in %s.%s",
+			logx.Infof("credential encryption backfill: encrypted %d cleartext value(s) in %s.%s",
 				migrated, target.table, target.column)
 		}
 	}

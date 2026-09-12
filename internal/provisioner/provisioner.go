@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 	"servika/internal/phpdefaults"
 )
 
@@ -259,21 +259,21 @@ func Init(db *sql.DB) {
 func healCacheZoneOnStartup() {
 	changed, err := ensureCacheZone()
 	if err != nil {
-		log.Printf("servikacache repair: could not write zone configuration: %v", err)
+		logx.Errorf("servikacache repair: could not write zone configuration: %v", err)
 		return
 	}
 	if !changed {
 		return
 	}
 	if out, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
-		log.Printf("servikacache repair: nginx configuration remains invalid, reload skipped: %s", strings.TrimSpace(string(out)))
+		logx.Warnf("servikacache repair: nginx configuration remains invalid, reload skipped: %s", strings.TrimSpace(string(out)))
 		return
 	}
 	if out, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		log.Printf("servikacache repair: nginx reload failed: %s", strings.TrimSpace(string(out)))
+		logx.Errorf("servikacache repair: nginx reload failed: %s", strings.TrimSpace(string(out)))
 		return
 	}
-	log.Printf("servikacache repair: zone configuration restored and nginx reloaded")
+	logx.Infof("servikacache repair: zone configuration restored and nginx reloaded")
 }
 
 func ensureCacheZone() (bool, error) {
@@ -354,7 +354,7 @@ func ensureCacheLogFormat() bool {
 	}
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(logFormatConf, []byte(logFormatBody), 0644); err != nil {
-		log.Printf("servikacache repair: could not write cache log format: %v", err)
+		logx.Errorf("servikacache repair: could not write cache log format: %v", err)
 		return false
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
@@ -378,7 +378,7 @@ func purgeFastCGICache(domainName string) {
 		// No host to attribute entries to. Sweeping the directory instead is what
 		// this function used to do, and it is the defect: it emptied the cache of
 		// every OTHER tenant on the host.
-		log.Printf("fastcgi cache: no host name to purge for; nothing removed")
+		logx.Infof("fastcgi cache: no host name to purge for; nothing removed")
 		return
 	}
 	dir := cacheZoneDir()
@@ -400,14 +400,14 @@ func purgeFastCGICache(domainName string) {
 		unattributed += levelUnattributed
 	}
 	if purged > 0 {
-		log.Printf("fastcgi cache: purged %d entries (%s)", purged, domainName)
+		logx.Infof("fastcgi cache: purged %d entries (%s)", purged, domainName)
 	}
 	if unattributed > 0 {
 		// Left in place deliberately. An entry whose key cannot be read is not
 		// evidence that it belongs to this domain, and nginx expires it on its own
 		// (inactive=60m). Removing it would restore the cross-tenant wipe for every
 		// file this reader does not understand.
-		log.Printf("fastcgi cache: %d entries left in place, their cache key could not be read", unattributed)
+		logx.Warnf("fastcgi cache: %d entries left in place, their cache key could not be read", unattributed)
 	}
 }
 
@@ -750,7 +750,7 @@ func HealSSLCertPathsOnStartup() {
 		FROM domains
 		WHERE ssl_enabled=1 AND (cert_path LIKE '/home/%' OR key_path LIKE '/home/%')`)
 	if err != nil {
-		log.Printf("SSL certificate path healing: query failed: %v", err)
+		logx.Errorf("SSL certificate path healing: query failed: %v", err)
 		return
 	}
 	defer func() { _ = rows.Close() }()
@@ -762,10 +762,10 @@ func HealSSLCertPathsOnStartup() {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("SSL certificate path healing: row iteration failed: %v", err)
+		logx.Errorf("SSL certificate path healing: row iteration failed: %v", err)
 	}
 	if migrated > 0 {
-		log.Printf("SSL certificate path healing: migrated %d certificate sets", migrated)
+		logx.Infof("SSL certificate path healing: migrated %d certificate sets", migrated)
 	}
 }
 
@@ -797,23 +797,23 @@ func migrateHomeCertificate(rows *sql.Rows) bool {
 func readHomeCertificateRow(rows *sql.Rows) (homeCertificateRow, bool) {
 	var row homeCertificateRow
 	if err := rows.Scan(&row.id, &row.domainName, &row.systemUser, &row.phpVersion, &row.certPath, &row.keyPath); err != nil {
-		log.Printf("SSL certificate path healing: row scan failed: %v", err)
+		logx.Errorf("SSL certificate path healing: row scan failed: %v", err)
 		return row, false
 	}
 	if ValidateDomain(row.domainName) != nil || !tenantUserPattern.MatchString(row.systemUser) {
-		log.Printf("SSL certificate path healing: refused invalid domain or tenant for domain ID %d", row.id)
+		logx.Errorf("SSL certificate path healing: refused invalid domain or tenant for domain ID %d", row.id)
 		return row, false
 	}
 	row.domainName = strings.ToLower(strings.TrimSpace(row.domainName))
 	expectedCertPath := filepath.Join(tenantHomeRoot, row.systemUser, "ssl", row.domainName+".crt")
 	expectedKeyPath := filepath.Join(tenantHomeRoot, row.systemUser, "ssl", row.domainName+".key")
 	if filepath.Clean(row.certPath) != expectedCertPath || filepath.Clean(row.keyPath) != expectedKeyPath {
-		log.Printf("SSL certificate path healing: refused unexpected tenant paths for %s", row.domainName)
+		logx.Errorf("SSL certificate path healing: refused unexpected tenant paths for %s", row.domainName)
 		return row, false
 	}
 	uid, _, err := uidGid(row.systemUser)
 	if err != nil {
-		log.Printf("SSL certificate path healing: resolve owner for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: resolve owner for %s: %v", row.domainName, err)
 		return row, false
 	}
 	row.uid = uid
@@ -825,17 +825,17 @@ func readHomeCertificateRow(rows *sql.Rows) (homeCertificateRow, bool) {
 func copyHomeCertificate(row homeCertificateRow) (string, string, bool) {
 	sslDir, err := prepareCertificateDir(row.domainName)
 	if err != nil {
-		log.Printf("SSL certificate path healing: prepare directory for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: prepare directory for %s: %v", row.domainName, err)
 		return "", "", false
 	}
 	newCertPath := filepath.Join(sslDir, row.domainName+".crt")
 	newKeyPath := filepath.Join(sslDir, row.domainName+".key")
 	if err := copyTenantCertificate(row.certPath, newCertPath, row.uid, 0644); err != nil {
-		log.Printf("SSL certificate path healing: migrate certificate for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: migrate certificate for %s: %v", row.domainName, err)
 		return "", "", false
 	}
 	if err := copyTenantCertificate(row.keyPath, newKeyPath, row.uid, 0600); err != nil {
-		log.Printf("SSL certificate path healing: migrate private key for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: migrate private key for %s: %v", row.domainName, err)
 		return "", "", false
 	}
 	_, _ = tenantCommand("restorecon", "-R", sslDir).CombinedOutput()
@@ -847,15 +847,15 @@ func copyHomeCertificate(row homeCertificateRow) (string, string, bool) {
 func repointHomeCertificate(row homeCertificateRow, newCertPath, newKeyPath string) bool {
 	socket, err := PHPSocketFor(row.systemUser, row.phpVersion)
 	if err != nil {
-		log.Printf("SSL certificate path healing: resolve PHP socket for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: resolve PHP socket for %s: %v", row.domainName, err)
 		return false
 	}
 	if err := applyVhostForDomain(packageDB, row.id, socket, row.phpVersion, &newCertPath, &newKeyPath); err != nil {
-		log.Printf("SSL certificate path healing: render vhost for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: render vhost for %s: %v", row.domainName, err)
 		return false
 	}
 	if _, err := packageDB.Exec(`UPDATE domains SET cert_path=?, key_path=? WHERE id=?`, newCertPath, newKeyPath, row.id); err != nil {
-		log.Printf("SSL certificate path healing: update database for %s: %v", row.domainName, err)
+		logx.Errorf("SSL certificate path healing: update database for %s: %v", row.domainName, err)
 		return false
 	}
 	removeHomeCertificate(row.systemUser, row.domainName)
@@ -1574,7 +1574,7 @@ func withCertifiableCanonicalRedirect(opts VhostOpts, covers func(certPath, keyP
 		return opts
 	}
 	// #nosec G706 -- both values are validated hostnames (ValidateDomain) or template-derived, so no raw tenant string with CR/LF reaches the log.
-	log.Printf("canonical redirect for %q dropped from this render: the installed certificate does not cover %q", opts.DomainName, opts.RedirectToHost())
+	logx.Warnf("canonical redirect for %q dropped from this render: the installed certificate does not cover %q", opts.DomainName, opts.RedirectToHost())
 	opts.WWWRedirect = ""
 	return opts
 }
@@ -2357,22 +2357,22 @@ func ReportSystemUserCollisions() {
 		  GROUP BY system_user
 		 HAVING COUNT(*) > 1`)
 	if err != nil {
-		log.Printf("system user collision check failed: %v", err)
+		logx.Errorf("system user collision check failed: %v", err)
 		return
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var systemUser, domainNames string
 		if err := rows.Scan(&systemUser, &domainNames); err != nil {
-			log.Printf("system user collision check failed: %v", err)
+			logx.Errorf("system user collision check failed: %v", err)
 			return
 		}
-		log.Printf("system user %q is shared by more than one domain (%s): they share a home directory, "+
+		logx.Warnf("system user %q is shared by more than one domain (%s): they share a home directory, "+
 			"an FTP account and a database namespace, and deleting one no longer removes the account",
 			systemUser, domainNames)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("system user collision check failed: %v", err)
+		logx.Errorf("system user collision check failed: %v", err)
 	}
 }
 
@@ -2387,7 +2387,7 @@ func Deprovision(domainName, systemUser string) error {
 	// deleted tenant home is not.
 	siblings, err := OtherTopLevelDomainsUsing(systemUser, domainName)
 	if err != nil {
-		log.Printf("deprovision %q: cannot tell whether the system user is shared, keeping it: %v", domainName, err)
+		logx.Warnf("deprovision %q: cannot tell whether the system user is shared, keeping it: %v", domainName, err)
 	}
 	if err != nil || len(siblings) > 0 {
 		keepSharedSystemUser(domainName, systemUser, len(siblings), err)
@@ -2414,7 +2414,7 @@ func keepSharedSystemUser(domainName, systemUser string, siblings int, lookupErr
 	_, _ = systemCommand("systemctl", "reload", "nginx").CombinedOutput()
 	purgeFastCGICache(domainName)
 	if lookupErr == nil {
-		log.Printf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
+		logx.Warnf("deprovision %q: system user %q still answers for %d other domain(s), host teardown skipped",
 			domainName, systemUser, siblings)
 	}
 }
@@ -2659,7 +2659,7 @@ func reuseValidCertificate(domainName, systemUser, phpVersion, backend string) (
 		return "", "", true, e
 	}
 	removeHomeCertificate(systemUser, domainName)
-	log.Printf("ssl reuse: %s valid letsencrypt certificate found; fresh LE issuance skipped (rate-limit protection)", domainName)
+	logx.Infof("ssl reuse: %s valid letsencrypt certificate found; fresh LE issuance skipped (rate-limit protection)", domainName)
 	return cp, kp, true, nil
 }
 
@@ -2690,7 +2690,7 @@ func orderLetsEncryptCertificate(domainName string, sanHosts []string) (sslReaso
 	// deploy what acme.sh already has. The reuse-before-issue check above only skips
 	// issuance above 30 days, so this window is reachable.
 	if e != nil && !IsACMERenewSkip(e) && len(sanHosts) > 1 {
-		log.Printf("acme issue with www failed for %s, retrying apex-only: %s", domainName, strings.TrimSpace(string(out)))
+		logx.Warnf("acme issue with www failed for %s, retrying apex-only: %s", domainName, strings.TrimSpace(string(out)))
 		out, e = RunACMEIssue(letsEncryptIssueArgs([]string{domainName})...)
 	}
 	if e != nil && !IsACMERenewSkip(e) {
@@ -2799,16 +2799,16 @@ func ensureArchiveTools() {
 		}
 		if _, err := exec.LookPath("setfacl"); err != nil {
 			if out, err := exec.Command("dnf", "install", "-y", "acl").CombinedOutput(); err != nil {
-				log.Printf("archive-tool heal: 'acl' install failed (fail-safe group=nginx in effect): %s", strings.TrimSpace(string(out)))
+				logx.Warnf("archive-tool heal: 'acl' install failed (fail-safe group=nginx in effect): %s", strings.TrimSpace(string(out)))
 			} else {
-				log.Printf("archive-tool heal: 'acl' (setfacl) installed; per-user ACL isolation active on first update")
+				logx.Infof("archive-tool heal: 'acl' (setfacl) installed; per-user ACL isolation active on first update")
 			}
 		}
 		if _, err := exec.LookPath("bsdtar"); err != nil {
 			if out, err := exec.Command("dnf", "install", "-y", "bsdtar").CombinedOutput(); err != nil {
-				log.Printf("archive-tool heal: 'bsdtar' install failed (RAR may fall back to unar/unrar): %s", strings.TrimSpace(string(out)))
+				logx.Warnf("archive-tool heal: 'bsdtar' install failed (RAR may fall back to unar/unrar): %s", strings.TrimSpace(string(out)))
 			} else {
-				log.Printf("archive-tool heal: 'bsdtar' (libarchive) installed; RAR extraction ready on first update")
+				logx.Infof("archive-tool heal: 'bsdtar' (libarchive) installed; RAR extraction ready on first update")
 			}
 		}
 	})
@@ -2861,7 +2861,7 @@ func applyLegacyHomePerms(home string, uid, nginxGID int) {
 	// symlink cannot redirect the ownership change outside the tenant tree.
 	if output, err := tenantCommand("chown", "-R", "-h", "-P",
 		fmt.Sprintf("%d:%d", uid, nginxGID), publicHTML).CombinedOutput(); err != nil {
-		log.Printf("tenant home permissions: group fallback chown failed for %s: %s",
+		logx.Warnf("tenant home permissions: group fallback chown failed for %s: %s",
 			publicHTML, strings.TrimSpace(string(output)))
 	}
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
@@ -2871,7 +2871,7 @@ func applyLegacyHomePerms(home string, uid, nginxGID int) {
 func hardenHomePerms(home, systemUser string, uid, gid int) bool {
 	publicHTML := filepath.Join(home, "public_html")
 	if !managedPublicHTML(publicHTML, systemUser) {
-		log.Printf("tenant home permissions: rejected unmanaged path %s", publicHTML)
+		logx.Errorf("tenant home permissions: rejected unmanaged path %s", publicHTML)
 		return false
 	}
 	if aclAvailable() {
@@ -2882,15 +2882,15 @@ func hardenHomePerms(home, systemUser string, uid, gid int) bool {
 		// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 		_ = os.Chmod(publicHTML, 0750)
 		if output, err := tenantCommand("setfacl", "-m", "u:nginx:--x", home).CombinedOutput(); err != nil {
-			log.Printf("tenant home permissions: home ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
+			logx.Errorf("tenant home permissions: home ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
 			return false
 		}
 		if output, err := tenantCommand("setfacl", "-m", "u:nginx:rX", publicHTML).CombinedOutput(); err != nil {
-			log.Printf("tenant home permissions: document root ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
+			logx.Errorf("tenant home permissions: document root ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
 			return false
 		}
 		if output, err := tenantCommand("setfacl", "-d", "-m", "u:nginx:rX", publicHTML).CombinedOutput(); err != nil {
-			log.Printf("tenant home permissions: default ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
+			logx.Errorf("tenant home permissions: default ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
 			return false
 		}
 		// Every setfacl call reported success, which is not proof the filesystem
@@ -2898,14 +2898,14 @@ func hardenHomePerms(home, systemUser string, uid, gid int) bool {
 		if nginxCanRead(publicHTML) {
 			return true
 		}
-		log.Printf("tenant home permissions: ACLs are ineffective on this filesystem for %s, using the nginx group instead (0710/0750 preserved)", systemUser)
+		logx.Warnf("tenant home permissions: ACLs are ineffective on this filesystem for %s, using the nginx group instead (0710/0750 preserved)", systemUser)
 	}
 
 	if _, nginxGID, err := uidGid(nginxAccount); err == nil {
 		applyLegacyHomePerms(home, uid, nginxGID)
 		return false
 	}
-	log.Printf("tenant home permissions: ACL tools and nginx account unavailable for %s", systemUser)
+	logx.Warnf("tenant home permissions: ACL tools and nginx account unavailable for %s", systemUser)
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
 	_ = os.Chmod(home, 0711)
 	// #nosec G302 -- root-owned system file its daemon must read; secrets use 0600/0640 elsewhere.
@@ -2931,7 +2931,7 @@ func hardenHomePermsRecursive(publicHTML, systemUser string) bool {
 	}
 	output, err := tenantCommand("setfacl", "-R", "-P", "-m", "u:nginx:rX", publicHTML).CombinedOutput()
 	if err != nil {
-		log.Printf("tenant home permissions: recursive ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("tenant home permissions: recursive ACL failed for %s: %s", systemUser, strings.TrimSpace(string(output)))
 		return false
 	}
 	return true
@@ -2952,7 +2952,7 @@ func HealHomePerms() {
 	}
 	rows, err := packageDB.Query(`SELECT DISTINCT system_user FROM domains`)
 	if err != nil {
-		log.Printf("heal tenant home permissions: %v", err)
+		logx.Errorf("heal tenant home permissions: %v", err)
 		return
 	}
 	defer func() { _ = rows.Close() }()
@@ -2971,11 +2971,11 @@ func HealHomePerms() {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("heal tenant home permissions rows: %v", err)
+		logx.Errorf("heal tenant home permissions rows: %v", err)
 		migrationSucceeded = false
 	}
 	if updated > 0 {
-		log.Printf("healed permissions for %d tenant homes", updated)
+		logx.Infof("healed permissions for %d tenant homes", updated)
 	}
 	if migrateExisting && migrationSucceeded {
 		writeSentinel(homeACLSentinel, "heal tenant home permissions")
@@ -2990,13 +2990,13 @@ func healTenantHome(rows *sql.Rows, migrateExisting bool) (healed, succeeded boo
 	if err := rows.Scan(&systemUser); err != nil {
 		// A dropped row is a tenant whose home permissions are never repaired,
 		// while the count reported at the end says the pass covered everything.
-		log.Printf("home permission heal: skipping an unreadable tenant row: %v", err)
+		logx.Warnf("home permission heal: skipping an unreadable tenant row: %v", err)
 		return false, true
 	}
 	// A stored name that fails the identifier rule is refused rather than
 	// dropped in silence, because every path below is built from it.
 	if !tenantUserPattern.MatchString(systemUser) {
-		log.Printf("home permission heal: refusing a tenant with an invalid system user")
+		logx.Errorf("home permission heal: refusing a tenant with an invalid system user")
 		return false, true
 	}
 	home := filepath.Join(tenantHomeRoot, systemUser)
@@ -3020,12 +3020,12 @@ func healTenantHome(rows *sql.Rows, migrateExisting bool) (healed, succeeded boo
 func writeSentinel(path, logPrefix string) {
 	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		log.Printf("%s: could not create sentinel directory: %v", logPrefix, err)
+		logx.Errorf("%s: could not create sentinel directory: %v", logPrefix, err)
 		return
 	}
 	// #nosec G306 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(path, []byte("done\n"), 0644); err != nil {
-		log.Printf("%s: could not write sentinel: %v", logPrefix, err)
+		logx.Errorf("%s: could not write sentinel: %v", logPrefix, err)
 	}
 }
 
@@ -3116,9 +3116,9 @@ func SuspendUserRuntime(systemUser string, suspended bool) {
 	if suspended {
 		if _, err := os.Stat(cronSpool); err == nil {
 			if err := os.MkdirAll(suspendedCronDir, 0700); err != nil {
-				log.Printf("suspend tenant runtime: create cron store for %s: %v", systemUser, err)
+				logx.Errorf("suspend tenant runtime: create cron store for %s: %v", systemUser, err)
 			} else if err := os.Rename(cronSpool, storedCron); err != nil {
-				log.Printf("suspend tenant runtime: disable crontab for %s: %v", systemUser, err)
+				logx.Errorf("suspend tenant runtime: disable crontab for %s: %v", systemUser, err)
 			}
 		}
 		_, _ = tenantCommand("pkill", "-KILL", "-u", systemUser).CombinedOutput()
@@ -3127,11 +3127,11 @@ func SuspendUserRuntime(systemUser string, suspended bool) {
 
 	if _, err := os.Stat(storedCron); err == nil {
 		if err := os.MkdirAll(cronSpoolDir, 0700); err != nil {
-			log.Printf("resume tenant runtime: create cron spool for %s: %v", systemUser, err)
+			logx.Errorf("resume tenant runtime: create cron spool for %s: %v", systemUser, err)
 			return
 		}
 		if err := os.Rename(storedCron, cronSpool); err != nil {
-			log.Printf("resume tenant runtime: restore crontab for %s: %v", systemUser, err)
+			logx.Errorf("resume tenant runtime: restore crontab for %s: %v", systemUser, err)
 			return
 		}
 		_ = os.Chmod(cronSpool, 0600)
@@ -3326,7 +3326,7 @@ func buildProtectedBlocks(db *sql.DB, domainID, subdomainID int64, socket string
 		if err := rows.Scan(&path, &file); err != nil {
 			// A dropped row is a protected directory that renders without its
 			// auth_basic, so a path the operator locked is served to everybody.
-			log.Printf("protected directories: skipping an unreadable row: %v", err)
+			logx.Warnf("protected directories: skipping an unreadable row: %v", err)
 			continue
 		}
 		if path == "/" {
@@ -3411,7 +3411,7 @@ func healVhostsOnStartup() {
 		}
 	}
 	if failed != 0 {
-		log.Printf("vhost hardening: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
+		logx.Warnf("vhost hardening: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
 		return
 	}
 	writeSentinel(vhostHardenSentinel, "vhost hardening")
@@ -3422,7 +3422,7 @@ func healVhostsOnStartup() {
 func readHardeningDomains() ([]tenantFPMDomain, bool) {
 	rows, err := packageDB.Query(`SELECT id, system_user, php_version FROM domains`)
 	if err != nil {
-		log.Printf("vhost hardening: could not list domains: %v", err)
+		logx.Errorf("vhost hardening: could not list domains: %v", err)
 		return nil, false
 	}
 	var domains []tenantFPMDomain
@@ -3430,7 +3430,7 @@ func readHardeningDomains() ([]tenantFPMDomain, bool) {
 	for rows.Next() {
 		var item tenantFPMDomain
 		if err := rows.Scan(&item.id, &item.systemUser, &item.phpVersion); err != nil {
-			log.Printf("vhost hardening: could not read domain row: %v", err)
+			logx.Errorf("vhost hardening: could not read domain row: %v", err)
 			rowReadFailed = true
 			continue
 		}
@@ -3439,11 +3439,11 @@ func readHardeningDomains() ([]tenantFPMDomain, bool) {
 	rowsErr := rows.Err()
 	_ = rows.Close()
 	if rowsErr != nil {
-		log.Printf("vhost hardening: domain iteration failed: %v", rowsErr)
+		logx.Errorf("vhost hardening: domain iteration failed: %v", rowsErr)
 		return nil, false
 	}
 	if rowReadFailed {
-		log.Printf("vhost hardening: at least one domain row could not be read, retry scheduled for next startup")
+		logx.Warnf("vhost hardening: at least one domain row could not be read, retry scheduled for next startup")
 		return nil, false
 	}
 	return domains, true
@@ -3460,7 +3460,7 @@ func hardenDomainVhost(item tenantFPMDomain) bool {
 		socket, domainFailed = rewriteSharedPool(item)
 	}
 	if err := ApplyVhostForDomain(packageDB, item.id, socket, item.phpVersion); err != nil {
-		log.Printf("vhost hardening: %s vhost update failed: %v", item.systemUser, err)
+		logx.Errorf("vhost hardening: %s vhost update failed: %v", item.systemUser, err)
 		domainFailed = true
 	}
 	return !domainFailed
@@ -3472,7 +3472,7 @@ func rewriteSharedPool(item tenantFPMDomain) (string, bool) {
 	failed := false
 	resolved, _, err := writePoolValidated(item.systemUser, item.phpVersion)
 	if err != nil {
-		log.Printf("vhost hardening: %s PHP pool update failed: %v", item.systemUser, err)
+		logx.Errorf("vhost hardening: %s PHP pool update failed: %v", item.systemUser, err)
 		failed = true
 		if fallback, resolveErr := sharedSocketPath(item.systemUser, item.phpVersion); resolveErr == nil {
 			resolved = fallback
@@ -3548,22 +3548,22 @@ func repairHardenedPanelVhost(content string, original []byte) {
 func applyPanelVhostRepair(updated string, original []byte, repair panelVhostRepair) {
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
-		log.Printf("panel security repair: %s: %v", repair.writeFailure, err)
+		logx.Errorf("panel security repair: %s: %v", repair.writeFailure, err)
 		return
 	}
 	if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(panelVhostPath, original, 0644)
-		log.Printf("panel security repair: %s nginx -t failed, vhost restored: %s", repair.step, strings.TrimSpace(string(output)))
+		logx.Errorf("panel security repair: %s nginx -t failed, vhost restored: %s", repair.step, strings.TrimSpace(string(output)))
 		return
 	}
 	if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(panelVhostPath, original, 0644)
-		log.Printf("panel security repair: %s nginx reload failed, vhost restored: %s", repair.step, strings.TrimSpace(string(output)))
+		logx.Errorf("panel security repair: %s nginx reload failed, vhost restored: %s", repair.step, strings.TrimSpace(string(output)))
 		return
 	}
-	log.Printf("panel security repair: %s", repair.success)
+	logx.Infof("panel security repair: %s", repair.success)
 }
 
 // addPanelSecurityHeaders inserts the security header block after the panel's
@@ -3576,7 +3576,7 @@ func addPanelSecurityHeaders(content string, original []byte) {
 		anchorIndex = strings.Index(content, anchor)
 	}
 	if anchorIndex < 0 {
-		log.Printf("panel security repair: panel server name anchor not found")
+		logx.Warnf("panel security repair: panel server name anchor not found")
 		return
 	}
 
@@ -3600,17 +3600,17 @@ func addPanelSecurityHeaders(content string, original []byte) {
 
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
-		log.Printf("panel security repair: could not write vhost: %v", err)
+		logx.Errorf("panel security repair: could not write vhost: %v", err)
 		return
 	}
 	if output, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(panelVhostPath, original, 0644)
-		log.Printf("panel security repair: nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel security repair: nginx -t failed, vhost restored: %s", strings.TrimSpace(string(output)))
 		return
 	}
 	if output, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		log.Printf("panel security repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel security repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
 }
 

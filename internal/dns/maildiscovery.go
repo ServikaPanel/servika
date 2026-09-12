@@ -3,10 +3,10 @@ package dns
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 // The template only shapes zones created AFTER it changed, so new record types
@@ -115,7 +115,7 @@ func applyDiscoveryToDomain(ctx context.Context, db *sql.DB, domain discoveryDom
 	if err != nil {
 		// Which domain failed goes to the log; the response carries a count,
 		// because one broken zone must not stop the rest from being fixed.
-		log.Printf("mail discovery records for domain %d: %v", domain.id, err)
+		logx.Errorf("mail discovery records for domain %d: %v", domain.id, err)
 		result.Failed++
 		return
 	}
@@ -124,7 +124,7 @@ func applyDiscoveryToDomain(ctx context.Context, db *sql.DB, domain discoveryDom
 	}
 	result.RecordsAdded += added
 	if err := writeZone(ctx, db, domain.id); err != nil {
-		log.Printf("write zone after adding mail discovery records for domain %d: %v", domain.id, err)
+		logx.Errorf("write zone after adding mail discovery records for domain %d: %v", domain.id, err)
 		result.Failed++
 	}
 }

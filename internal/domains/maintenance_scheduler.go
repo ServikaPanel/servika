@@ -3,9 +3,9 @@ package domains
 import (
 	"context"
 	"database/sql"
-	"log"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -56,20 +56,20 @@ func MaintenanceTickOnce(db *sql.DB) {
 		    AND maintenance_until IS NOT NULL
 		    AND maintenance_until <= NOW()`)
 	if err != nil {
-		log.Printf("maintenance scheduler: could not read due domains: %v", err)
+		logx.Errorf("maintenance scheduler: could not read due domains: %v", err)
 		return
 	}
 	var due []int64
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			log.Printf("maintenance scheduler: could not read a due row: %v", err)
+			logx.Errorf("maintenance scheduler: could not read a due row: %v", err)
 			continue
 		}
 		due = append(due, id)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("maintenance scheduler: could not read due domains: %v", err)
+		logx.Errorf("maintenance scheduler: could not read due domains: %v", err)
 	}
 	_ = rows.Close()
 
@@ -88,7 +88,7 @@ func MaintenanceTickOnce(db *sql.DB) {
 func liftMaintenance(ctx context.Context, db *sql.DB, domainID int64) {
 	if _, err := db.ExecContext(ctx,
 		`UPDATE domains SET maintenance_enabled=0 WHERE id=?`, domainID); err != nil {
-		log.Printf("maintenance scheduler: could not clear domain %d: %v", domainID, err)
+		logx.Errorf("maintenance scheduler: could not clear domain %d: %v", domainID, err)
 		return
 	}
 	if err := provisioner.RerenderVhost(db, domainID); err != nil {
@@ -97,17 +97,17 @@ func liftMaintenance(ctx context.Context, db *sql.DB, domainID int64) {
 		// going to reopen.
 		if _, restore := db.ExecContext(ctx,
 			`UPDATE domains SET maintenance_enabled=1 WHERE id=?`, domainID); restore != nil {
-			log.Printf("maintenance scheduler: could not restore domain %d after a failed render: %v", domainID, restore)
+			logx.Errorf("maintenance scheduler: could not restore domain %d after a failed render: %v", domainID, restore)
 		}
-		log.Printf("maintenance scheduler: could not re-render domain %d, will retry: %v", domainID, err)
+		logx.Warnf("maintenance scheduler: could not re-render domain %d, will retry: %v", domainID, err)
 		return
 	}
 	// Cleared only after the vhost really changed, so a domain whose render
 	// failed still reads as due on the next pass.
 	if _, err := db.ExecContext(ctx,
 		`UPDATE domains SET maintenance_until=NULL WHERE id=?`, domainID); err != nil {
-		log.Printf("maintenance scheduler: could not clear the deadline for domain %d: %v", domainID, err)
+		logx.Errorf("maintenance scheduler: could not clear the deadline for domain %d: %v", domainID, err)
 		return
 	}
-	log.Printf("maintenance scheduler: domain %d is open again", domainID)
+	logx.Infof("maintenance scheduler: domain %d is open again", domainID)
 }

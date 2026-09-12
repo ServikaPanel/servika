@@ -3,10 +3,11 @@ package mail
 import (
 	"context"
 	"database/sql"
-	"log"
 	"os/exec"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // Dovecot caches the SQL passdb answer, the password hash included, and serves a
@@ -64,7 +65,7 @@ func runAuthCacheFlush(ctx context.Context, args []string, cost string) {
 	defer cancel()
 	if out, err := authCommand(flushCtx, "doveadm", args...); err != nil {
 		// #nosec G706 -- the operands are doveadm's own output and a message this package composed.
-		log.Printf("mail: could not flush the Dovecot auth cache (%s): %s", cost, strings.TrimSpace(string(out)))
+		logx.Errorf("mail: could not flush the Dovecot auth cache (%s): %s", cost, strings.TrimSpace(string(out)))
 	}
 }
 
@@ -78,7 +79,7 @@ func (h *Handlers) flushMailboxAuthCache(ctx context.Context, domainID, mailboxI
 			return // The row is gone; its caller flushed by address instead.
 		}
 		// #nosec G706 -- logged values are integer IDs and driver error text.
-		log.Printf("mail: could not read mailbox %d of domain %d to flush its auth cache: %v", mailboxID, domainID, err)
+		logx.Errorf("mail: could not read mailbox %d of domain %d to flush its auth cache: %v", mailboxID, domainID, err)
 		return
 	}
 	FlushAuthCache(ctx, email)

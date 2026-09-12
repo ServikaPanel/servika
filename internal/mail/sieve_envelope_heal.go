@@ -2,11 +2,12 @@ package mail
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // sieveEnvelopeSetting is the Pigeonhole key that decides the envelope-from of a
@@ -42,7 +43,7 @@ func HealSieveEnvelopeFrom(ctx context.Context) {
 	// above, so it exists, and its own mode and ownership are preserved.
 	// #nosec G304 G703 -- fixed system configuration path (package var), never built from request input.
 	if err := os.WriteFile(dovecotServikaConf, []byte(appended), 0); err != nil {
-		log.Printf("mail sieve-envelope heal: could not write %s: %v", dovecotServikaConf, err)
+		logx.Errorf("mail sieve-envelope heal: could not write %s: %v", dovecotServikaConf, err)
 		return
 	}
 
@@ -54,10 +55,10 @@ func HealSieveEnvelopeFrom(ctx context.Context) {
 		// rather than leave Dovecot unable to start.
 		// #nosec G304 G703 -- fixed system configuration path (package var), never built from request input.
 		if rerr := os.WriteFile(dovecotServikaConf, content, 0); rerr != nil {
-			log.Printf("mail sieve-envelope heal: could not restore %s: %v", dovecotServikaConf, rerr)
+			logx.Errorf("mail sieve-envelope heal: could not restore %s: %v", dovecotServikaConf, rerr)
 		}
 		// #nosec G706 -- the operand is doveconf output, not client-controlled input.
-		log.Printf("mail sieve-envelope heal: doveconf rejected the change, rolled back: %v: %s", err, strings.TrimSpace(string(out)))
+		logx.Errorf("mail sieve-envelope heal: doveconf rejected the change, rolled back: %v: %s", err, strings.TrimSpace(string(out)))
 		return
 	}
 
@@ -66,10 +67,10 @@ func HealSieveEnvelopeFrom(ctx context.Context) {
 	// #nosec G204 -- fixed binary with separate args (no shell).
 	if out, err := exec.CommandContext(reloadCtx, "systemctl", "restart", "dovecot").CombinedOutput(); err != nil {
 		// #nosec G706 -- the operand is systemctl output, not client-controlled input.
-		log.Printf("mail sieve-envelope heal: could not restart dovecot: %v: %s", err, strings.TrimSpace(string(out)))
+		logx.Errorf("mail sieve-envelope heal: could not restart dovecot: %v: %s", err, strings.TrimSpace(string(out)))
 		return
 	}
-	log.Printf("mail sieve-envelope heal: forwards now pass SPF (envelope-from = user_email)")
+	logx.Infof("mail sieve-envelope heal: forwards now pass SPF (envelope-from = user_email)")
 }
 
 // appendSieveEnvelope adds the envelope-from setting when it is absent and

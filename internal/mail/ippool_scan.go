@@ -3,11 +3,11 @@ package mail
 import (
 	"context"
 	"database/sql"
-	"log"
 	"strings"
 
 	"servika/internal/bgjob"
 	"servika/internal/dnsbl"
+	"servika/internal/logx"
 	"time"
 )
 
@@ -48,7 +48,7 @@ func StartPoolScanner(db *sql.DB, primary string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 				defer cancel()
 				if err := ScanPool(ctx, db, primary); err != nil {
-					log.Printf("mail address pool scan: %v", err)
+					logx.Errorf("mail address pool scan: %v", err)
 				}
 			})
 			time.Sleep(dnsblScanInterval)
@@ -111,7 +111,7 @@ func ScanPool(ctx context.Context, db *sql.DB, primary string) error {
 			ptrName, boolToInt(ptrOK), boolToInt(len(hits) > 0), strings.Join(hits, " "), row.id); err != nil {
 			// One address failing must not stop the rest: the others still need
 			// their state refreshed, and the failure is visible in the log.
-			log.Printf("mail address pool scan for %d: %v", row.id, err)
+			logx.Errorf("mail address pool scan for %d: %v", row.id, err)
 		}
 	}
 	return scanPrimary(ctx, db, primary, zones)
@@ -156,7 +156,7 @@ func scanPrimary(ctx context.Context, db *sql.DB, primary string, zones []string
 func announceListing(address string, wasListed bool, hits []string) {
 	if len(hits) > 0 && !wasListed {
 		// #nosec G706 -- address came from a validated pool row or the panel's own IP detection, and the zones passed dnsblZonePattern.
-		log.Printf("mail: %s is now listed on %s", address, strings.Join(hits, " "))
+		logx.Infof("mail: %s is now listed on %s", address, strings.Join(hits, " "))
 	}
 }
 

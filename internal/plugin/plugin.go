@@ -6,7 +6,6 @@ package plugin
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -18,6 +17,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -89,7 +89,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&plugin.Name, &plugin.Label, &plugin.Version, &enabled, &ui, &plugin.Health); err != nil {
 			// A dropped row is an installed plugin the operator cannot see, so they
 			// cannot disable or remove it either.
-			httpx.LogR(r, "plugin list: skipping an unreadable row: %v", err)
+			httpx.WarnR(r, "plugin list: skipping an unreadable row: %v", err)
 			continue
 		}
 		plugin.Enabled, plugin.UI = enabled == 1, ui == 1
@@ -202,7 +202,7 @@ func (h *Handlers) CheckHealth(ctx context.Context) {
 	if err := rows.Err(); err != nil {
 		// A plugin missing from this list keeps whatever health it was last given,
 		// so a dead plugin can go on reading as healthy.
-		log.Printf("plugin health: could not read the plugin list: %v", err)
+		logx.Errorf("plugin health: could not read the plugin list: %v", err)
 	}
 	_ = rows.Close()
 

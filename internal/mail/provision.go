@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -15,6 +14,7 @@ import (
 
 	"servika/internal/dns"
 	"servika/internal/files"
+	"servika/internal/logx"
 )
 
 // requiredMailServices must be running before mail can be enabled for a domain.
@@ -85,10 +85,10 @@ func EnableDomain(ctx context.Context, db *sql.DB, domainID int64) error {
 	}
 
 	if _, err := dns.SeedDefaults(ctx, db, domainID, domainName, ipv4); err != nil {
-		log.Printf("mail: dns seed %s: %v", domainName, err)
+		logx.Errorf("mail: dns seed %s: %v", domainName, err)
 	}
 	if err := dns.WriteZone(ctx, db, domainID); err != nil {
-		log.Printf("mail: write DNS zone %s: %v", domainName, err)
+		logx.Errorf("mail: write DNS zone %s: %v", domainName, err)
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ var removeMaildirs = func(systemUser string, maildirs []string) error {
 		rel, inside := strings.CutPrefix(filepath.Clean(maildir), home+"/")
 		if !inside || rel == "" {
 			// #nosec G706 -- logged values are a validated identifier (^c_[A-Za-z0-9_]+$) and a filepath.Clean'ed column value; no raw tenant string with CR/LF reaches the log.
-			log.Printf("purge mail: maildir %q is not under %s, left in place", maildir, home)
+			logx.Warnf("purge mail: maildir %q is not under %s, left in place", maildir, home)
 			continue
 		}
 		if err := files.RemoveAllBeneath(home, rel); err != nil && !errors.Is(err, os.ErrNotExist) && firstErr == nil {
@@ -153,7 +153,7 @@ func mailRootIsShared(ctx context.Context, db *sql.DB, systemUser string) bool {
 	if err := db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM mail_domains WHERE system_user=?`, systemUser).Scan(&others); err != nil {
 		// #nosec G706 -- logged values are a validated identifier (^c_[A-Za-z0-9_]+$) and an error string; no raw tenant string with CR/LF reaches the log.
-		log.Printf("purge mail: could not check whether %s still hosts mail, keeping the shared root: %v", systemUser, err)
+		logx.Warnf("purge mail: could not check whether %s still hosts mail, keeping the shared root: %v", systemUser, err)
 		return true
 	}
 	return others > 0
@@ -267,7 +267,7 @@ func PurgeDomain(ctx context.Context, db *sql.DB, domainID int64, systemUser str
 	}
 	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("purge mail domain=%d: mail files not removed: %v", domainID, removeErr)
+		logx.Errorf("purge mail domain=%d: mail files not removed: %v", domainID, removeErr)
 		return true, nil
 	}
 	return false, nil

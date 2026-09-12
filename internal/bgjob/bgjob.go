@@ -13,8 +13,9 @@ package bgjob
 
 import (
 	"errors"
-	"log"
 	"runtime/debug"
+
+	"servika/internal/logx"
 )
 
 // ErrPanic is the error handed to a Go caller's onPanic. It carries no detail on
@@ -52,7 +53,7 @@ func guarded(name string, fn func()) (panicked bool) {
 		if p := recover(); p != nil {
 			panicked = true
 			// #nosec G706 -- name is a caller-supplied literal and the stack is runtime-generated; no tenant string reaches the log.
-			log.Printf("%s: panicked: %v\n%s", name, p, debug.Stack())
+			logx.Errorf("%s: panicked: %v\n%s", name, p, debug.Stack())
 		}
 	}()
 	fn()

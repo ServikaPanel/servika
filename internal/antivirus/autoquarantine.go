@@ -17,7 +17,8 @@ package antivirus
 import (
 	"context"
 	"database/sql"
-	"log"
+
+	"servika/internal/logx"
 )
 
 // autoQuarantineOutcome is what one automatic pass did. Both halves are
@@ -65,7 +66,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 		scanID, LevelCritical, EngineDatabase)
 	if err != nil {
 		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
-		log.Printf("antivirus: automatic containment could not read the findings of scan %d: %v", scanID, err)
+		logx.Errorf("antivirus: automatic containment could not read the findings of scan %d: %v", scanID, err)
 		return out
 	}
 	for rows.Next() {
@@ -74,7 +75,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 			// A dropped row is an infected file that is never contained while the
 			// pass reports itself as complete.
 			// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
-			log.Printf("antivirus: automatic containment skipped an unreadable finding of scan %d: %v", scanID, err)
+			logx.Warnf("antivirus: automatic containment skipped an unreadable finding of scan %d: %v", scanID, err)
 			continue
 		}
 		targets = append(targets, t)
@@ -86,7 +87,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 		// completed pass, so the ones that were read are still contained and the
 		// rest are counted as failures rather than forgotten.
 		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
-		log.Printf("antivirus: the finding list for scan %d was cut short: %v", scanID, closeErr)
+		logx.Errorf("antivirus: the finding list for scan %d was cut short: %v", scanID, closeErr)
 		out.Failed++
 	}
 
@@ -105,7 +106,7 @@ func (h *Handlers) autoQuarantine(ctx context.Context, scanID int64) autoQuarant
 		}
 		if reason := h.quarantineFinding(t.domainID, t.systemUser, t.findingID); reason != "" {
 			// #nosec G706 -- logged values are integer ids and a fixed reason code from this package; no raw tenant string reaches the log.
-			log.Printf("antivirus: finding %d could not be contained automatically: %s", t.findingID, reason)
+			logx.Errorf("antivirus: finding %d could not be contained automatically: %s", t.findingID, reason)
 			out.Failed++
 			continue
 		}
@@ -120,6 +121,6 @@ func recordAutoQuarantine(db *sql.DB, scanID int64, out autoQuarantineOutcome) {
 		`UPDATE av_scans SET auto_quarantined=?, auto_quarantine_failed=?, auto_quarantine_core_skipped=? WHERE id=?`,
 		out.Taken, out.Failed, out.CoreSkipped, scanID); err != nil {
 		// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
-		log.Printf("antivirus: what automatic containment did to scan %d could not be recorded: %v", scanID, err)
+		logx.Errorf("antivirus: what automatic containment did to scan %d could not be recorded: %v", scanID, err)
 	}
 }

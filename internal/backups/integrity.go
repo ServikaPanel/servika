@@ -15,13 +15,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/notifications"
 )
 
@@ -123,9 +123,9 @@ func verifyBackupIntegrity(db *sql.DB) {
 		}
 	}
 	if corrupt > 0 {
-		log.Printf("backup integrity scan: %d/%d newest backups CORRUPT (%d off-site, not scanned)", corrupt, len(list), remote)
+		logx.Warnf("backup integrity scan: %d/%d newest backups CORRUPT (%d off-site, not scanned)", corrupt, len(list), remote)
 	} else {
-		log.Printf("backup integrity scan: %d clean (%d off-site, not scanned)", len(list)-remote, remote)
+		logx.Warnf("backup integrity scan: %d clean (%d off-site, not scanned)", len(list)-remote, remote)
 	}
 }
 
@@ -146,7 +146,7 @@ func integrityCheckList(db *sql.DB) ([]integrityRecord, bool) {
 		JOIN (SELECT domain_id, MAX(id) AS mid FROM backups WHERE sha256 <> '' GROUP BY domain_id) x
 		  ON x.mid = b.id`)
 	if err != nil {
-		log.Printf("backup integrity scan query: %v", err)
+		logx.Errorf("backup integrity scan query: %v", err)
 		return nil, false
 	}
 	var list []integrityRecord
@@ -155,7 +155,7 @@ func integrityCheckList(db *sql.DB) ([]integrityRecord, bool) {
 		if err := rows.Scan(&k.id, &k.domainID, &k.user, &k.file, &k.storedSHA); err != nil {
 			// A dropped row is an archive that is never integrity-checked, so a
 			// corrupt one keeps reading as verified.
-			log.Printf("backups: skipping an unreadable integrity row: %v", err)
+			logx.Warnf("backups: skipping an unreadable integrity row: %v", err)
 			continue
 		}
 		list = append(list, k)
@@ -163,7 +163,7 @@ func integrityCheckList(db *sql.DB) ([]integrityRecord, bool) {
 	if err := rows.Err(); err != nil {
 		// A backup missing from this list is never checked, so a corrupt archive
 		// keeps whatever verification state it already had and reads as fine.
-		log.Printf("backups: could not read the integrity check list: %v", err)
+		logx.Errorf("backups: could not read the integrity check list: %v", err)
 	}
 	_ = rows.Close()
 	return list, true
@@ -222,6 +222,6 @@ func notifyIntegrity(db *sql.DB, domainID, backupID int64, file, alertKey string
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
 		// #nosec G706 -- logged values are integer IDs and error output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup integrity: alert for domain %d could not be written: %v", domainID, err)
+		logx.Errorf("backup integrity: alert for domain %d could not be written: %v", domainID, err)
 	}
 }

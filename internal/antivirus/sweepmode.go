@@ -24,13 +24,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"servika/internal/avsettings"
 	"servika/internal/db"
+	"servika/internal/logx"
 )
 
 const sweepFlag = "av-sweep"
@@ -91,14 +91,14 @@ func sweepNow(ctx context.Context, handle *sql.DB) error {
 	// operator asked for, so it is checked here as well as where the timer is
 	// written.
 	if !settings.ScheduledScan {
-		log.Print("antivirus: the scheduled sweep is switched off, doing nothing")
+		logx.Info("antivirus: the scheduled sweep is switched off, doing nothing")
 		return errSweepNotDue
 	}
 	if !settings.RuleEngine && !settings.LocationHeuristics {
 		// A sweep with every layer off records a finished scan with no
 		// findings, which reads exactly like a clean server. Both other paths
 		// refuse this too.
-		log.Print("antivirus: every detection layer is switched off, so a sweep would inspect nothing")
+		logx.Info("antivirus: every detection layer is switched off, so a sweep would inspect nothing")
 		return errSweepNotDue
 	}
 	// This is what stops a sweep the panel already ran by hand from being
@@ -110,7 +110,7 @@ func sweepNow(ctx context.Context, handle *sql.DB) error {
 		// unwell, which is the worst time to be adding load.
 		return fmt.Errorf("whether a sweep is already due could not be read: %w", err)
 	} else if recent {
-		log.Print("antivirus: a sweep already ran inside the gap, doing nothing")
+		logx.Info("antivirus: a sweep already ran inside the gap, doing nothing")
 		return errSweepNotDue
 	}
 
@@ -118,7 +118,7 @@ func sweepNow(ctx context.Context, handle *sql.DB) error {
 	if err != nil {
 		// Not a failure either: the panel is running a scan right now. The next
 		// firing will find it recorded and skip for the right reason.
-		log.Print("antivirus: another scan is in progress, doing nothing")
+		logx.Info("antivirus: another scan is in progress, doing nothing")
 		return errSweepNotDue
 	}
 	defer slot.Release()
@@ -132,7 +132,7 @@ func sweepNow(ctx context.Context, handle *sql.DB) error {
 	}
 	sid, _ := res.LastInsertId()
 	// #nosec G706 -- sid is an integer and req.Roots is one of two compiled-in literals ("/" or "/home"), chosen by a scope the write path validates against two constants. No tenant text reaches this line.
-	log.Printf("antivirus: timed sweep %d starting over %v", sid, req.Roots)
+	logx.Infof("antivirus: timed sweep %d starting over %v", sid, req.Roots)
 	runSweep(ctx, handle, sid, req)
 	return nil
 }

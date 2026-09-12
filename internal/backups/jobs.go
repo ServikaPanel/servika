@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 
 	"servika/internal/bgjob"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -298,13 +298,13 @@ func (h *Handlers) scopedDomains(r *http.Request, ids []int64) ([]jobDomain, err
 		if err := rows.Scan(&d.ID, &d.SystemUser, &d.DomainName); err != nil {
 			// A dropped row is a domain the bulk job never touches while its total
 			// says it did.
-			log.Printf("backups: skipping an unreadable job domain row: %v", err)
+			logx.Warnf("backups: skipping an unreadable job domain row: %v", err)
 			continue
 		}
 		// A name that fails the identifier rule is refused rather than dropped in
 		// silence, because every path below builds a filesystem path from it.
 		if !validSystemUser(d.SystemUser) {
-			log.Printf("backups: refusing a job domain with an invalid system user: domain %d", d.ID)
+			logx.Errorf("backups: refusing a job domain with an invalid system user: domain %d", d.ID)
 			continue
 		}
 		out = append(out, d)
@@ -344,7 +344,7 @@ func finishJobStopped(db *sql.DB, jobID int64, succeeded, failed int, stopped bo
 	if _, err := db.Exec(
 		`UPDATE backup_jobs SET status=?, active_domain='', finished_at=NOW() WHERE id=?`,
 		status, jobID); err != nil {
-		log.Printf("backup job %d: could not close: %v", jobID, err)
+		logx.Errorf("backup job %d: could not close: %v", jobID, err)
 	}
 }
 
@@ -356,7 +356,7 @@ func failJob(db *sql.DB, jobID int64) {
 	if _, err := db.Exec(
 		`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW() WHERE id=?`,
 		jobID); err != nil {
-		log.Printf("backup job %d: could not close after a panic: %v", jobID, err)
+		logx.Errorf("backup job %d: could not close after a panic: %v", jobID, err)
 	}
 }
 
@@ -467,11 +467,11 @@ func (h *Handlers) HealJobsOnStartup() {
 		`UPDATE backup_jobs SET status='failed', active_domain='', finished_at=NOW()
 		 WHERE status='running'`)
 	if err != nil {
-		log.Printf("backup jobs: startup heal failed: %v", err)
+		logx.Errorf("backup jobs: startup heal failed: %v", err)
 		return
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("backup jobs: %d unfinished job(s) marked as failed", n)
+		logx.Warnf("backup jobs: %d unfinished job(s) marked as failed", n)
 	}
 }
 
@@ -654,7 +654,7 @@ func (h *Handlers) jobItems(r *http.Request, jobID int64) ([]JobItem, *httpRefus
 	for rows.Next() {
 		var it JobItem
 		if err := rows.Scan(&it.BackupID, &it.DomainID, &it.DomainName, &it.SystemUser, &it.SizeBytes, &it.Type); err != nil {
-			httpx.LogR(r, "backups: skipping an unreadable job item row: %v", err)
+			httpx.WarnR(r, "backups: skipping an unreadable job item row: %v", err)
 			continue
 		}
 		items = append(items, it)

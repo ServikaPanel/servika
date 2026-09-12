@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -36,10 +36,10 @@ type SendLimits struct {
 func StartPolicyServer(db *sql.DB, address string) {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
-		log.Printf("mail policy could not listen (%s): %v", address, err)
+		logx.Errorf("mail policy could not listen (%s): %v", address, err)
 		return
 	}
-	log.Printf("mail send policy service on %s", address)
+	logx.Infof("mail send policy service on %s", address)
 	go func() {
 		defer func() { _ = listener.Close() }()
 		// An unconditional `continue` on an Accept error spins the CPU forever
@@ -52,10 +52,10 @@ func StartPolicyServer(db *sql.DB, address string) {
 			conn, err := listener.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					log.Printf("mail policy listener closed: %v", err)
+					logx.Errorf("mail policy listener closed: %v", err)
 					return
 				}
-				log.Printf("mail policy accept: %v", err)
+				logx.Errorf("mail policy accept: %v", err)
 				time.Sleep(wait)
 				if wait < maxWait {
 					wait *= 2
@@ -85,7 +85,7 @@ func pruneSendLog(db *sql.DB) {
 				`DELETE FROM mail_send_log WHERE ts < NOW()-INTERVAL 2 DAY LIMIT ?`, batch)
 			cancel()
 			if err != nil {
-				log.Printf("mail_send_log prune: %v", err)
+				logx.Errorf("mail_send_log prune: %v", err)
 				break
 			}
 			if n, err := res.RowsAffected(); err != nil || n < batch {
@@ -133,10 +133,10 @@ func handlePolicyConnection(db *sql.DB, conn net.Conn) {
 // closes every connection, healthy ones included.
 func reportUnansweredPolicyRequest(attrs map[string]string, err error) {
 	if len(attrs) > 0 {
-		log.Printf("mail policy: connection ended with %d attributes and no verdict; the send limit did not apply to that mail", len(attrs))
+		logx.Errorf("mail policy: connection ended with %d attributes and no verdict; the send limit did not apply to that mail", len(attrs))
 	}
 	if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
-		log.Printf("mail policy read: %v", err)
+		logx.Errorf("mail policy read: %v", err)
 	}
 }
 
@@ -166,7 +166,7 @@ func evaluateSendPolicy(db *sql.DB, attrs map[string]string) string {
 	if serverErr != nil {
 		// Failing open here would let a compromised account through exactly when
 		// the database is unhealthy, which is not when to relax a ceiling.
-		log.Printf("mail policy could not read the server settings: %v", serverErr)
+		logx.Errorf("mail policy could not read the server settings: %v", serverErr)
 		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
 	}
 	if verdict := serverCeilingVerdict(ctx, tx, server, sender, request); verdict != "" {
@@ -243,13 +243,13 @@ func (sender *policySender) readSentCounts(ctx context.Context, tx *sql.Tx) stri
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
 		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 HOUR`, sender.mailboxID).Scan(&sender.sentHour); err != nil {
 		// #nosec G706 -- the logged values are a validated mailbox id and an error string; no raw tenant string with CR/LF reaches the log.
-		log.Printf("mail policy could not read the hourly send count for mailbox %d: %v", sender.mailboxID, err)
+		logx.Errorf("mail policy could not read the hourly send count for mailbox %d: %v", sender.mailboxID, err)
 		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
 	}
 	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(recipient_count),0) FROM mail_send_log
 		WHERE mailbox_id=? AND ok=1 AND ts >= NOW()-INTERVAL 1 DAY`, sender.mailboxID).Scan(&sender.sentDay); err != nil {
 		// #nosec G706 -- the logged values are a validated mailbox id and an error string; no raw tenant string with CR/LF reaches the log.
-		log.Printf("mail policy could not read the daily send count for mailbox %d: %v", sender.mailboxID, err)
+		logx.Errorf("mail policy could not read the daily send count for mailbox %d: %v", sender.mailboxID, err)
 		return "DEFER_IF_PERMIT 4.7.1 Send policy is temporarily unavailable"
 	}
 	return ""
@@ -300,7 +300,7 @@ func suspendForSendLimit(ctx context.Context, tx *sql.Tx, sender policySender, r
 	// The suspension reaches Postfix immediately (this server re-reads the
 	// row per message) but not IMAP, whose passdb answer is cached.
 	FlushAuthCache(ctx, email)
-	log.Printf("mail spam protection: %s auto-suspended (hour=%d/%d day=%d/%d)",
+	logx.Warnf("mail spam protection: %s auto-suspended (hour=%d/%d day=%d/%d)",
 		email, sender.sentHour, sender.hourLimit, sender.sentDay, sender.dayLimit)
 	return "REJECT 5.7.1 Send limit exceeded; account suspended for security"
 }
@@ -461,7 +461,7 @@ func ceilingCount(ctx context.Context, tx *sql.Tx, query string, ceiling int, ar
 	}
 	var count int
 	if err := tx.QueryRowContext(ctx, query, arg).Scan(&count); err != nil {
-		log.Printf("mail policy ceiling count: %v", err)
+		logx.Errorf("mail policy ceiling count: %v", err)
 		return ceiling
 	}
 	return count

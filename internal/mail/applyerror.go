@@ -2,10 +2,10 @@ package mail
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 // applyErrorLogLimit caps one logged apply failure. sievec echoes the offending
@@ -35,6 +35,6 @@ func writeApplyFailure(w http.ResponseWriter, operation string, id int64, messag
 	// #nosec G706 -- sanitize strips the control characters, which is required
 	// here rather than optional: sievec quotes the generated script back, and
 	// the script carries the mailbox owner's own filter match values.
-	log.Printf("%s=%d: %s", operation, id, sanitize(err.Error(), applyErrorLogLimit))
+	logx.Errorf("%s=%d: %s", operation, id, sanitize(err.Error(), applyErrorLogLimit))
 	httpx.WriteError(w, http.StatusServiceUnavailable, message)
 }

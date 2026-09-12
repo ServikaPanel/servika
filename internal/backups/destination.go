@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/netguard"
 	"servika/internal/secret"
 )
@@ -247,7 +247,7 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 			return nil
 		}
 		// #nosec G706 -- logged values are integer IDs, a validated file name and error text; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup restore domain=%d: the copy of %s from the domain destination was refused: %v", domainID, file, verifyErr)
+		logx.Errorf("backup restore domain=%d: the copy of %s from the domain destination was refused: %v", domainID, file, verifyErr)
 	}
 	// Then the SYSTEM-WIDE destination, which is where a delete-local backup lives.
 	s := readBackupSettings(ctx, db)
@@ -268,10 +268,10 @@ func ensureLocalArchive(ctx context.Context, db *sql.DB, domainID, backupID int6
 				return nil
 			}
 			// #nosec G706 -- logged values are integer IDs, a validated file name and error text; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup restore domain=%d: the off-site copy of %s was refused: %v", domainID, file, verifyErr)
+			logx.Errorf("backup restore domain=%d: the off-site copy of %s was refused: %v", domainID, file, verifyErr)
 		} else {
 			// #nosec G706 -- logged values are integer IDs and error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
+			logx.Errorf("backup restore domain=%d: off-site fetch failed: %v", domainID, err)
 		}
 	}
 	return errors.New("backup file is missing on disk")
@@ -308,7 +308,7 @@ func localArchiveComplete(abs string, expected, domainID int64, file string) boo
 		return true
 	}
 	// #nosec G706 -- logged values are integer IDs, a validated file name and sizes; no raw tenant string with CR/LF reaches the log.
-	log.Printf("backup restore domain=%d: local copy of %s is incomplete (%d/%d bytes), refetching", domainID, file, fi.Size(), expected)
+	logx.Warnf("backup restore domain=%d: local copy of %s is incomplete (%d/%d bytes), refetching", domainID, file, fi.Size(), expected)
 	// #nosec G703 -- abs derives from backupRoot(), a validSystemUser-checked identifier and a base-name-validated file.
 	_ = os.Remove(abs)
 	return false
@@ -827,14 +827,14 @@ func removeRemoteCopy(db *sql.DB, domainID int64, fileName, remoteStatus string)
 	if err != nil || d == nil {
 		if err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup remote delete domain=%d: destination unreadable: %v", domainID, err)
+			logx.Errorf("backup remote delete domain=%d: destination unreadable: %v", domainID, err)
 		}
 		return
 	}
 	// A disabled destination still holds what was uploaded while it was on.
 	if err := deleteFromRemote(ctx, db, d, fileName); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup remote delete domain=%d file=%s: %v", domainID, fileName, err)
+		logx.Errorf("backup remote delete domain=%d file=%s: %v", domainID, fileName, err)
 	}
 }
 
@@ -856,11 +856,11 @@ func (h *Handlers) HealRemoteUploads() {
 		        remote_error='the panel restarted while this upload was running'
 		  WHERE remote_status='uploading'`)
 	if err != nil {
-		log.Printf("backup destinations: startup heal failed: %v", err)
+		logx.Errorf("backup destinations: startup heal failed: %v", err)
 		return
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("backup destinations: %d interrupted upload(s) marked as failed", n)
+		logx.Warnf("backup destinations: %d interrupted upload(s) marked as failed", n)
 	}
 }
 
@@ -877,7 +877,7 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 			short := truncateError(err.Error())
 			failDestinationUpload(db, domainID, backupID, short)
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup destination upload domain=%d: %v", domainID, err)
+			logx.Errorf("backup destination upload domain=%d: %v", domainID, err)
 			notifyUploadFailed(ctx, db, domainID, backupID, short)
 			return
 		}
@@ -887,7 +887,7 @@ func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fil
 		if short, _ := uploadSizeMismatch(ctx, db, d, localPath, fileName); short != "" {
 			failDestinationUpload(db, domainID, backupID, short)
 			// #nosec G706 -- logged values are integer IDs and a template-derived size message; no raw tenant string with CR/LF reaches the log.
-			log.Printf("backup destination upload domain=%d: %s", domainID, short)
+			logx.Infof("backup destination upload domain=%d: %s", domainID, short)
 			notifyUploadFailed(ctx, db, domainID, backupID, short)
 			return
 		}
@@ -938,5 +938,5 @@ func recordDestinationUpload(db *sql.DB, domainID, backupID int64, remoteDir, fi
 			SET remote_status='successful', remote_key=?, remote_error='' WHERE id=?`,
 		remoteKey, backupID)
 	// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-	log.Printf("backup destination upload domain=%d successful: %s", domainID, fileName)
+	logx.Infof("backup destination upload domain=%d successful: %s", domainID, fileName)
 }

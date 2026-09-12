@@ -3,7 +3,6 @@ package provisioner
 import (
 	"fmt"
 	"html"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // Per-domain maintenance mode.
@@ -196,7 +197,7 @@ func buildMaintenanceBlock(domainName string) string {
 			if err := rows.Scan(&value); err != nil {
 				// A dropped exception is an address that was told it may reach the
 				// site during maintenance and then gets the 503 like everybody else.
-				log.Printf("maintenance: skipping an unreadable exception address for domain %d: %v", domainID, err)
+				logx.Warnf("maintenance: skipping an unreadable exception address for domain %d: %v", domainID, err)
 				continue
 			}
 			// Re-validated here rather than trusted from the write path: this
@@ -209,7 +210,7 @@ func buildMaintenanceBlock(domainName string) string {
 		if err := rows.Err(); err != nil {
 			// A missing exception is an address that was told it may reach the site
 			// during maintenance and then gets the 503 like everybody else.
-			log.Printf("maintenance: could not read the exception addresses for domain %d: %v", domainID, err)
+			logx.Errorf("maintenance: could not read the exception addresses for domain %d: %v", domainID, err)
 		}
 		_ = rows.Close()
 	}

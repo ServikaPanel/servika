@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"servika/internal/auth"
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 	"servika/internal/secret"
 )
@@ -408,7 +408,7 @@ func (h *Handlers) closeMigrationJob(jobID int64, source *RemoteSource) {
 		// log line; sanitizeRemoteError collapses it to one line.
 		detail := sanitizeRemoteError(fmt.Sprintf("%v", rec))
 		// #nosec G706 -- sanitizeRemoteError already replaces every CR and LF with a space, so the value cannot forge a log line.
-		log.Printf("migration: panic (job=%d): %s", jobID, detail)
+		logx.Errorf("migration: panic (job=%d): %s", jobID, detail)
 		_, _ = h.DB.Exec(
 			`UPDATE migration_jobs SET status='failed', error_text=?, finished_at=NOW() WHERE id=?`,
 			"unexpected error: "+detail, jobID)
@@ -431,7 +431,7 @@ func openMigrationLog(jobID int64) (func(string, ...any), func()) {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	logFile, err := os.OpenFile(migrationLogPath(jobID), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		log.Printf("migration: the log file could not be opened: %v", err)
+		logx.Errorf("migration: the log file could not be opened: %v", err)
 	}
 	logf := func(format string, args ...any) {
 		line := fmt.Sprintf("[%s] %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
@@ -485,7 +485,7 @@ func (h *Handlers) MigrationList(w http.ResponseWriter, r *http.Request) {
 			&v.Completed, &v.Failed, &v.Error, &v.StartedBy, &v.StartedAt, &v.FinishedAt, &v.CreatedAt); err != nil {
 			// A dropped row hides a migration job from the only screen that lists
 			// them, including one still marked running.
-			httpx.LogR(r, "migrations: skipping an unreadable job row: %v", err)
+			httpx.WarnR(r, "migrations: skipping an unreadable job row: %v", err)
 			continue
 		}
 		out = append(out, v)
@@ -537,7 +537,7 @@ func (h *Handlers) MigrationDetail(w http.ResponseWriter, r *http.Request) {
 			&v.FileBytes, &v.DBCount, &v.DNSCount, &v.MailCount, &v.Error, &v.StartedAt, &v.FinishedAt); err != nil {
 			// A dropped item beside the job's own counts reads as a migration that
 			// moved sites it did not, and a failed item disappears with it.
-			httpx.LogR(r, "migrations: skipping an unreadable item row: %v", err)
+			httpx.WarnR(r, "migrations: skipping an unreadable item row: %v", err)
 			continue
 		}
 		out = append(out, v)
@@ -619,7 +619,7 @@ func (h *Handlers) HealMigrationsOnStartup() {
 		return
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("migration: %d unfinished job(s) marked as interrupted", n)
+		logx.Infof("migration: %d unfinished job(s) marked as interrupted", n)
 		_, _ = h.DB.Exec(
 			`UPDATE migration_items SET status='failed', error_text='the panel was restarted',
 			   finished_at=NOW() WHERE status='running'`)

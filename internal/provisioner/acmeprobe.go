@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/netguard"
 )
 
@@ -141,8 +141,8 @@ func validatedSANHosts(hosts []string) (kept []string, dropped map[string]challe
 // name" without reproducing the probe.
 func logChallengeDrop(host string, reason challengeReason, err error) {
 	if err != nil {
-		log.Printf("acme preflight: %s dropped from the certificate (%s): %v", host, reason, err)
+		logx.Warnf("acme preflight: %s dropped from the certificate (%s): %v", host, reason, err)
 		return
 	}
-	log.Printf("acme preflight: %s dropped from the certificate (%s)", host, reason)
+	logx.Warnf("acme preflight: %s dropped from the certificate (%s)", host, reason)
 }

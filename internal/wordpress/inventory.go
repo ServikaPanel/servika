@@ -3,9 +3,10 @@ package wordpress
 import (
 	"context"
 	"database/sql"
-	"log"
 	"sync"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // The server-wide WordPress inventory costs two wp-cli invocations per
@@ -108,7 +109,7 @@ func StartInventoryRefresher(ctx context.Context, db *sql.DB) {
 	go func() {
 		for {
 			if _, err := Inventory(ctx, db); err != nil && ctx.Err() == nil {
-				log.Printf("wordpress inventory: %v", err)
+				logx.Errorf("wordpress inventory: %v", err)
 			}
 			select {
 			case <-ctx.Done():

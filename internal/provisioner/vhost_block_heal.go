@@ -2,9 +2,10 @@ package provisioner
 
 import (
 	"database/sql"
-	"log"
 	"os"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // webmailMarker identifies a vhost that already serves webmail, and
@@ -63,10 +64,10 @@ func healTLSVhostBlocksOnStartup() {
 		outcomes[repairTLSVhostBlocks(item, required)]++
 	}
 	if updated := outcomes[blockRepairUpdated]; updated > 0 {
-		log.Printf("vhost block repair: %d domain vhosts brought up to date", updated)
+		logx.Infof("vhost block repair: %d domain vhosts brought up to date", updated)
 	}
 	if failed := outcomes[blockRepairFailed]; failed > 0 {
-		log.Printf("vhost block repair: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
+		logx.Warnf("vhost block repair: %d of %d domains failed, retry scheduled for next startup", failed, len(domains))
 	}
 }
 
@@ -97,7 +98,7 @@ func readBlockRepairDomains() ([]blockRepairDomain, bool) {
 		        COALESCE(cert_path,''), COALESCE(key_path,'')
 		   FROM domains ORDER BY id`)
 	if err != nil {
-		log.Printf("vhost block repair: could not list domains: %v", err)
+		logx.Errorf("vhost block repair: could not list domains: %v", err)
 		return nil, false
 	}
 	var domains []blockRepairDomain
@@ -105,7 +106,7 @@ func readBlockRepairDomains() ([]blockRepairDomain, bool) {
 		var item blockRepairDomain
 		if err := rows.Scan(&item.id, &item.systemUser, &item.domainName, &item.parentID,
 			&item.certPath, &item.keyPath); err != nil {
-			log.Printf("vhost block repair: could not read domain row: %v", err)
+			logx.Errorf("vhost block repair: could not read domain row: %v", err)
 			continue
 		}
 		domains = append(domains, item)
@@ -113,7 +114,7 @@ func readBlockRepairDomains() ([]blockRepairDomain, bool) {
 	rowsErr := rows.Err()
 	_ = rows.Close()
 	if rowsErr != nil {
-		log.Printf("vhost block repair: domain iteration failed: %v", rowsErr)
+		logx.Errorf("vhost block repair: domain iteration failed: %v", rowsErr)
 		return nil, false
 	}
 	return domains, true
@@ -149,7 +150,7 @@ func repairTLSVhostBlocks(item blockRepairDomain, required []string) blockRepair
 		return blockRepairUnchanged
 	}
 	if err := rerenderVhost(packageDB, item.id); err != nil {
-		log.Printf("vhost block repair: %s vhost update failed: %v", item.domainName, err)
+		logx.Errorf("vhost block repair: %s vhost update failed: %v", item.domainName, err)
 		return blockRepairFailed
 	}
 	return blockRepairUpdated

@@ -1,10 +1,11 @@
 package provisioner
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // nginxLogDir holds one access, error and cache log per domain, each named after
@@ -40,9 +41,9 @@ func HealNginxLogPerms() {
 	if info.Mode().Perm() != 0o700 {
 		// #nosec G302 -- 0700 is the minimum for a DIRECTORY; root still needs the execute bit to traverse it, and this tightens the mode rather than loosening it.
 		if err := os.Chmod(nginxLogDir, 0o700); err != nil {
-			log.Printf("could not harden the nginx log directory permissions: %v", err)
+			logx.Errorf("could not harden the nginx log directory permissions: %v", err)
 		} else {
-			log.Printf("nginx log directory set to 0700 (cross-tenant log reading closed)")
+			logx.Infof("nginx log directory set to 0700 (cross-tenant log reading closed)")
 		}
 	}
 	entries, err := os.ReadDir(nginxLogDir)

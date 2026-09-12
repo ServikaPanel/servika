@@ -24,8 +24,9 @@ package chains
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net"
+
+	"servika/internal/logx"
 )
 
 // entryThreshold is the failed-login count in the window that, together with a
@@ -48,10 +49,10 @@ func apiScan(db *sql.DB) {
 		}
 		if _, err := db.Exec(`INSERT INTO av_events (domain_id, actor_user_id, source, stage, level, summary, path, pid)
 			VALUES (NULL, ?, 'api', 'entry', 'warning', ?, '', 0)`, b.actorUID, entrySummary(b)); err != nil {
-			log.Printf("attack chain: the entry event for user %d could not be recorded: %v", b.actorUID, err)
+			logx.Errorf("attack chain: the entry event for user %d could not be recorded: %v", b.actorUID, err)
 			continue
 		}
-		log.Printf("ATTACK CHAIN entry [user=%d] %d failed logins then a success (%d distinct IPs, last %s)",
+		logx.Warnf("ATTACK CHAIN entry [user=%d] %d failed logins then a success (%d distinct IPs, last %s)",
 			b.actorUID, b.fails, b.distinct, safeIP(b.ip))
 	}
 }
@@ -81,7 +82,7 @@ func detectBursts(db *sql.DB) []loginBurst {
 		) s ON s.actor_username = f.actor_username AND s.last_ok >= f.first_fail`,
 		windowMin, entryThreshold, windowMin)
 	if err != nil {
-		log.Printf("attack chain: the entry detector query failed (it may be reporting no entries on a real attack): %v", err)
+		logx.Errorf("attack chain: the entry detector query failed (it may be reporting no entries on a real attack): %v", err)
 		return nil
 	}
 	defer func() { _ = rows.Close() }()
@@ -90,14 +91,14 @@ func detectBursts(db *sql.DB) []loginBurst {
 		var b loginBurst
 		var ip sql.NullString
 		if err := rows.Scan(&b.actorUID, &b.fails, &ip, &b.distinct); err != nil {
-			log.Printf("attack chain: an entry detector row could not be read: %v", err)
+			logx.Errorf("attack chain: an entry detector row could not be read: %v", err)
 			continue
 		}
 		b.ip = ip.String
 		out = append(out, b)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("attack chain: the entry detector result set broke: %v", err)
+		logx.Errorf("attack chain: the entry detector result set broke: %v", err)
 	}
 	return out
 }
@@ -128,7 +129,7 @@ func entryRecent(db *sql.DB, actorUID int64) bool {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM av_events
 		WHERE stage='entry' AND actor_user_id = ? AND created_at >= (NOW() - INTERVAL ? MINUTE)`,
 		actorUID, entryRededupMin).Scan(&n); err != nil {
-		log.Printf("attack chain: the entry dedup query failed for user %d (fail-safe: suppressed): %v", actorUID, err)
+		logx.Errorf("attack chain: the entry dedup query failed for user %d (fail-safe: suppressed): %v", actorUID, err)
 		return true
 	}
 	return n > 0

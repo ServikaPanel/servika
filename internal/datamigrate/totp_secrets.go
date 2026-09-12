@@ -3,9 +3,9 @@ package datamigrate
 import (
 	"context"
 	"database/sql"
-	"log"
 
 	"servika/internal/auth"
+	"servika/internal/logx"
 	"servika/internal/secret"
 )
 
@@ -37,7 +37,7 @@ func EncryptTOTPSecrets(ctx context.Context, db *sql.DB) {
 		}
 	}
 	if migrated > 0 {
-		log.Printf("TOTP secret backfill: sealed %d cleartext seed(s) in users", migrated)
+		logx.Infof("TOTP secret backfill: sealed %d cleartext seed(s) in users", migrated)
 	}
 }
 
@@ -52,14 +52,14 @@ type pendingSeed struct {
 func cleartextTOTPSeeds(ctx context.Context, db *sql.DB) ([]pendingSeed, bool) {
 	rows, err := db.QueryContext(ctx, `SELECT id, totp_secret FROM users WHERE totp_secret <> ''`)
 	if err != nil {
-		log.Printf("TOTP secret backfill: could not read the list: %v", err)
+		logx.Errorf("TOTP secret backfill: could not read the list: %v", err)
 		return nil, false
 	}
 	var work []pendingSeed
 	for rows.Next() {
 		var p pendingSeed
 		if err := rows.Scan(&p.id, &p.value); err != nil {
-			log.Printf("TOTP secret backfill: skipping an unreadable row: %v", err)
+			logx.Warnf("TOTP secret backfill: skipping an unreadable row: %v", err)
 			continue
 		}
 		if !secret.IsEncrypted(p.value) {
@@ -69,10 +69,10 @@ func cleartextTOTPSeeds(ctx context.Context, db *sql.DB) ([]pendingSeed, bool) {
 	if err := rows.Err(); err != nil {
 		// A short list leaves some seeds in the clear, and the count logged by the
 		// caller would otherwise read as a complete pass.
-		log.Printf("TOTP secret backfill: could not read the whole list: %v", err)
+		logx.Errorf("TOTP secret backfill: could not read the whole list: %v", err)
 	}
 	if err := rows.Close(); err != nil {
-		log.Printf("TOTP secret backfill: could not close the cursor: %v", err)
+		logx.Errorf("TOTP secret backfill: could not close the cursor: %v", err)
 	}
 	return work, true
 }
@@ -81,7 +81,7 @@ func cleartextTOTPSeeds(ctx context.Context, db *sql.DB) ([]pendingSeed, bool) {
 func sealTOTPSeed(ctx context.Context, db *sql.DB, p pendingSeed) bool {
 	sealed, err := auth.SealTOTPSecret(p.value, p.id)
 	if err != nil {
-		log.Printf("TOTP secret backfill: could not seal user %d: %v", p.id, err)
+		logx.Errorf("TOTP secret backfill: could not seal user %d: %v", p.id, err)
 		return false
 	}
 	// Matching the old value as well as the id means a record saved between
@@ -92,7 +92,7 @@ func sealTOTPSeed(ctx context.Context, db *sql.DB, p pendingSeed) bool {
 	if _, err := db.ExecContext(ctx,
 		`UPDATE users SET totp_secret=? WHERE id=? AND totp_secret=?`,
 		sealed, p.id, p.value); err != nil {
-		log.Printf("TOTP secret backfill: could not write user %d: %v", p.id, err)
+		logx.Errorf("TOTP secret backfill: could not write user %d: %v", p.id, err)
 		return false
 	}
 	return true

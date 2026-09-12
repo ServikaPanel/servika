@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -41,7 +41,7 @@ func AccessLog(next http.Handler) http.Handler {
 		// NOT httpx.LogR: this line already carries the id as a named field, and
 		// the helper's prefix would print it twice. It is the summary line the
 		// helper's prefix exists to be correlated WITH.
-		log.Printf("http reqid=%s ip=%s method=%s route=%q status=%d bytes=%d dur=%s",
+		logx.Infof("http reqid=%s ip=%s method=%s route=%q status=%d bytes=%d dur=%s",
 			chimw.GetReqID(r.Context()), httpx.ClientIP(r), r.Method, route,
 			ww.Status(), ww.BytesWritten(), time.Since(start).Round(time.Millisecond))
 	})

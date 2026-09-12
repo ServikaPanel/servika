@@ -149,7 +149,7 @@ func (h *Handlers) databaseUsers(r *http.Request, id int64) []string {
 	for rows.Next() {
 		var u string
 		if err := rows.Scan(&u); err != nil {
-			httpx.LogR(r, "resource: skipping an unreadable database account for domain %d: %v", id, err)
+			httpx.WarnR(r, "resource: skipping an unreadable database account for domain %d: %v", id, err)
 			continue
 		}
 		dbUsers = append(dbUsers, u)

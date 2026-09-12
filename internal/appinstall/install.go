@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -20,6 +19,7 @@ import (
 
 	"servika/internal/archivex"
 	"servika/internal/credentials"
+	"servika/internal/logx"
 	"servika/internal/netguard"
 	"servika/internal/quota"
 )
@@ -458,6 +458,6 @@ func Finish(db *sql.DB, id int64, runErr error) {
 	if _, err := db.ExecContext(ctx,
 		`UPDATE app_installs SET state=?, last_error=?, finished_at=NOW() WHERE id=?`,
 		state, message, id); err != nil {
-		log.Printf("app install %d: could not record the outcome: %v", id, err)
+		logx.Errorf("app install %d: could not record the outcome: %v", id, err)
 	}
 }

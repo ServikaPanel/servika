@@ -3,17 +3,18 @@ package panelport
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 func complain(format string, args ...any) {
 	// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-	log.Printf("panel port: "+format, args...)
+	logx.Errorf("panel port: "+format, args...)
 }
 
 // verifyDeadline bounds how long a change waits for the panel to answer on its

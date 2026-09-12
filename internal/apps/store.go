@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strconv"
 
+	"servika/internal/logx"
 	"servika/internal/secret"
 )
 
@@ -107,7 +107,7 @@ func ReadEnv(ctx context.Context, db *sql.DB, appID int64) (map[string]string, e
 		}
 		plain, err := secret.DecryptWith(stored, envAAD(appID, name))
 		if err != nil {
-			log.Printf("apps: environment value %q of application %d cannot be decrypted: %v", name, appID, err)
+			logx.Errorf("apps: environment value %q of application %d cannot be decrypted: %v", name, appID, err)
 			return nil, fmt.Errorf("environment value %q cannot be decrypted", name)
 		}
 		values[name] = plain

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 // Installing or removing a PHP version is detached work.
@@ -135,7 +135,7 @@ func readOpDescriptor() opDescriptor {
 	}
 	var descriptor opDescriptor
 	if err := json.Unmarshal(body, &descriptor); err != nil {
-		log.Printf("php op: the recorded operation could not be read: %v", err)
+		logx.Errorf("php op: the recorded operation could not be read: %v", err)
 		return opDescriptor{}
 	}
 	return descriptor

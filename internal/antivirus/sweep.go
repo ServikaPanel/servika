@@ -21,7 +21,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,6 +29,7 @@ import (
 	"servika/internal/bgjob"
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -131,7 +131,7 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 	result, confined, err := scanTree(ctx, req, "sweep-"+strconv.FormatInt(sid, 10))
 	if err != nil {
 		// #nosec G706 -- logged values are an integer scan id and systemd command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("antivirus: sweep %d could not run: %v", sid, err)
+		logx.Errorf("antivirus: sweep %d could not run: %v", sid, err)
 	}
 	owners := newOwnerLookup(db)
 	// Counted while the findings are recorded, so the alert below is written from
@@ -142,7 +142,7 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 		owner := owners.forPath(f.File)
 		if err := insertSweepFinding(db, sid, owner, f); err != nil {
 			// #nosec G706 -- logged values are an integer scan id and a database error; no raw tenant string with CR/LF reaches the log.
-			log.Printf("antivirus: sweep %d could not record a finding: %v", sid, err)
+			logx.Errorf("antivirus: sweep %d could not record a finding: %v", sid, err)
 			continue
 		}
 		if owner.Valid {
@@ -164,7 +164,7 @@ func runSweep(ctx context.Context, db *sql.DB, sid int64, req ScanRequest) {
 		`UPDATE av_scans SET status=?, scanned=?, skipped=?, infected=?, confined=?, finished_at=NOW() WHERE id=?`,
 		status, result.Scanned, result.Skipped, len(result.Findings), confined, sid); err != nil {
 		// #nosec G706 -- sid is an integer and err is a MariaDB driver error for a statement whose arguments are all parameterized; no tenant string reaches it.
-		log.Printf("antivirus: sweep %d could not be closed: %v", sid, err)
+		logx.Errorf("antivirus: sweep %d could not be closed: %v", sid, err)
 	}
 	// Last, so a screen that follows the alert to the scan finds it finished. A
 	// partial sweep still alerts: the files it did find are infected whether or
@@ -331,7 +331,7 @@ func (o *ownerLookup) forPath(path string) sql.NullInt64 {
 		// of the sweep. The alert then names no domain and reaches no customer,
 		// which reads as a site that is clean.
 		// #nosec G706 -- the logged value is a database error for a statement whose one argument is parameterized; no tenant string reaches it.
-		log.Printf("antivirus: the owner of a finding could not be resolved: %v", err)
+		logx.Errorf("antivirus: the owner of a finding could not be resolved: %v", err)
 		return sql.NullInt64{}
 	}
 	o.cache[user] = id

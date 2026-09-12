@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -26,6 +25,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 )
 
@@ -635,7 +635,7 @@ func importPSTFile(path, folder string, sink *maildirSink) error {
 	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		// #nosec G706 -- the path is one this process built under its own temp dir.
-		log.Printf("import: skipped %s, which could not be opened as a plain file: %v", path, err)
+		logx.Warnf("import: skipped %s, which could not be opened as a plain file: %v", path, err)
 		return nil
 	}
 	defer func() { _ = file.Close() }()
@@ -643,7 +643,7 @@ func importPSTFile(path, folder string, sink *maildirSink) error {
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		// #nosec G706 -- the path is one this process built under its own temp dir.
-		log.Printf("import: skipped %s, which is not a regular file", path)
+		logx.Warnf("import: skipped %s, which is not a regular file", path)
 		return nil
 	}
 	return importMbox(folder, file, sink)

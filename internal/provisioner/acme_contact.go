@@ -3,7 +3,6 @@ package provisioner
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // letsEncryptDirectory is the acme.sh per-CA config directory for the Let's Encrypt
@@ -46,7 +46,7 @@ func RunACMEIssue(args ...string) ([]byte, error) {
 	if err == nil || !strings.Contains(string(out), "invalidContact") {
 		return out, err
 	}
-	log.Printf("acme: invalidContact, clearing the stored account contact and re-registering")
+	logx.Warnf("acme: invalidContact, clearing the stored account contact and re-registering")
 	clearACMEContact()
 	_, _ = runACME("--register-account", "--server", "letsencrypt")
 	return runACME(args...)
@@ -95,7 +95,7 @@ func emptyACMEKey(path, key string) {
 	}
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
-		log.Printf("acme: clear %s in %s: %v", key, path, err)
+		logx.Errorf("acme: clear %s in %s: %v", key, path, err)
 	}
 }
 

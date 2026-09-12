@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +19,7 @@ import (
 
 	"servika/internal/avsettings"
 	"servika/internal/db"
+	"servika/internal/logx"
 	"servika/internal/notifications"
 
 	"golang.org/x/sys/unix"
@@ -68,7 +68,7 @@ func runProcWatcher() error {
 		return fmt.Errorf("antivirus settings: %w", err)
 	}
 	if !settings.ProcessMonitor {
-		log.Print("process watcher: process monitoring is off in the antivirus settings")
+		logx.Info("process watcher: process monitoring is off in the antivirus settings")
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func runProcWatcher() error {
 	if err := subscribeProcConnector(fd); err != nil {
 		return fmt.Errorf("PROC_CN_MCAST_LISTEN: %w", err)
 	}
-	log.Print("process watcher: watching the exec stream (netlink proc connector)")
+	logx.Info("process watcher: watching the exec stream (netlink proc connector)")
 
 	w := &procWatcher{
 		db:       handle,
@@ -121,7 +121,7 @@ func (w *procWatcher) loop(fd int) {
 			if transientNetlinkError(err) {
 				continue
 			}
-			log.Printf("process watcher: netlink read stopped: %v", err)
+			logx.Errorf("process watcher: netlink read stopped: %v", err)
 			return
 		}
 		// Only KERNEL-sourced events (a netlink peer pid of 0). This rejects a
@@ -144,7 +144,7 @@ func (w *procWatcher) periodic(timers *procTimers) bool {
 		w.sweepTables()
 	}
 	if recheck && !procMonitorStillOn(context.Background(), w.db) {
-		log.Print("process watcher: process monitoring was turned off in the antivirus settings, stopping")
+		logx.Info("process watcher: process monitoring was turned off in the antivirus settings, stopping")
 		return false
 	}
 	return true
@@ -154,7 +154,7 @@ func (w *procWatcher) periodic(timers *procTimers) bool {
 // ENOBUFS overrun is journalled, because it means events were dropped.
 func transientNetlinkError(err error) bool {
 	if errors.Is(err, unix.ENOBUFS) {
-		log.Print("process watcher: netlink buffer overran (ENOBUFS) — events dropped, continuing")
+		logx.Warn("process watcher: netlink buffer overran (ENOBUFS) — events dropped, continuing")
 		return true
 	}
 	return errors.Is(err, unix.EINTR) || errors.Is(err, unix.EAGAIN)
@@ -252,7 +252,7 @@ func (w *procWatcher) evaluate(pid int) {
 
 	// The command line and the exe path go to the journal only. They are a
 	// tenant's own text and a tenant path, so they never reach the notification.
-	log.Printf("process watcher: %s on domain %d (uid %d) exe=%q cmd=%q",
+	logx.Infof("process watcher: %s on domain %d (uid %d) exe=%q cmd=%q",
 		finding.code, domainID, uid, exe, cmdline)
 	w.notify(domainID, finding)
 
@@ -332,7 +332,7 @@ func (w *procWatcher) notify(domainID int64, f procFinding) {
 		event.Params = map[string]any{"domain": name}
 	}
 	if err := writeNotification(ctx, w.db, event); err != nil {
-		log.Printf("process watcher: the alert for domain %d could not be written: %v", domainID, err)
+		logx.Errorf("process watcher: the alert for domain %d could not be written: %v", domainID, err)
 	}
 }
 

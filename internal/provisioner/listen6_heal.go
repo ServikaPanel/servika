@@ -1,9 +1,10 @@
 package provisioner
 
 import (
-	"log"
 	"os"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // The shipped nginx files are COPIED, not rendered, so the template-side
@@ -129,18 +130,18 @@ func HealPanelIPv6Listen() {
 	// still has to read it.
 	// #nosec G306 G703 -- root-owned nginx configuration at a package-constant path; nothing here comes from a request, and 0640 is required because the file carries the proxy secret and nginx must still read it.
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0o640); err != nil {
-		log.Printf("panel ipv6 listen heal: could not write %s: %v", panelVhostPath, err)
+		logx.Errorf("panel ipv6 listen heal: could not write %s: %v", panelVhostPath, err)
 		return
 	}
 	if output, err := tenantCommand("nginx", "-t").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned nginx configuration restored to its previous bytes after a failed validation; the path is a package constant.
 		_ = os.WriteFile(panelVhostPath, original, 0o640)
-		log.Printf("panel ipv6 listen heal: nginx -t rejected the change, reverted: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel ipv6 listen heal: nginx -t rejected the change, reverted: %s", strings.TrimSpace(string(output)))
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		log.Printf("panel ipv6 listen heal: nginx reload failed: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel ipv6 listen heal: nginx reload failed: %s", strings.TrimSpace(string(output)))
 		return
 	}
-	log.Printf("panel ipv6 listen heal: %s adjusted for kernel IPv6 support", panelVhostPath)
+	logx.Infof("panel ipv6 listen heal: %s adjusted for kernel IPv6 support", panelVhostPath)
 }

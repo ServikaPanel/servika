@@ -1,14 +1,16 @@
 package httpx
 
 import (
-	"log"
 	"net/http"
+
+	"servika/internal/logx"
 
 	chimw "github.com/go-chi/chi/v5/middleware"
 )
 
-// LogR logs a line on a request path, prefixed with the request's correlation
-// ID.
+// LogR logs a FAILURE on a request path at error severity, prefixed with the
+// request's correlation ID. Use WarnR for a request the handler continued
+// through: a skipped row, a cleanup that did not finish, a fallback.
 //
 // The ID used to reach three places only: the access-log summary line, the
 // X-Request-Id response header and, optionally, a response body. Every other
@@ -25,7 +27,15 @@ import (
 // rather than with an empty one.
 func LogR(r *http.Request, format string, args ...any) {
 	// #nosec G706 -- the caller's own values, logged exactly as log.Printf would have; the prefix is a chi-generated id.
-	log.Printf(reqPrefix(r)+format, args...)
+	logx.Errorf(reqPrefix(r)+format, args...)
+}
+
+// WarnR logs a degraded path on a request, prefixed with the same correlation
+// ID. A row the handler skipped and a request the handler could not answer are
+// different facts, and a journal that calls both an error cannot be filtered.
+func WarnR(r *http.Request, format string, args ...any) {
+	// #nosec G706 -- the caller's own values, logged exactly as log.Printf would have; the prefix is a chi-generated id.
+	logx.Warnf(reqPrefix(r)+format, args...)
 }
 
 // reqPrefix renders the correlation prefix, or "" when there is no ID to carry.

@@ -3,8 +3,9 @@ package pma
 import (
 	"context"
 	"database/sql"
-	"log"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // sweepStatement removes every token that can no longer be redeemed.
@@ -43,6 +44,6 @@ func StartTokenSweep(ctx context.Context, db *sql.DB) {
 func sweepTokens(ctx context.Context, db *sql.DB) {
 	if _, err := db.ExecContext(ctx, sweepStatement); err != nil {
 		// #nosec G706 -- a MariaDB driver error for a statement with no arguments; no tenant string reaches it.
-		log.Printf("pma: the signon tokens could not be swept: %v", err)
+		logx.Errorf("pma: the signon tokens could not be swept: %v", err)
 	}
 }

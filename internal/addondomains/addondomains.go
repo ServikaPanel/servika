@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"log"
 	"net/http"
 	"os"
 	"os/user"
@@ -20,6 +19,7 @@ import (
 	"servika/internal/dns"
 	"servika/internal/files"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 	"servika/internal/quota"
 
@@ -343,7 +343,7 @@ func Cleanup(ctx context.Context, db *sql.DB, addonID int64) (string, error) {
 	}
 	_ = credentials.MySQLDropAllForDomain(db, addonID)
 	if err := provisioner.DeprovisionAddonDomain(domainName, systemUser); err != nil {
-		log.Printf("addon domain deprovision warn (%s): %v", domainName, err)
+		logx.Warnf("addon domain deprovision warn (%s): %v", domainName, err)
 	}
 	// The document root is removed HERE, beside prepareDocRoot, so the two
 	// halves of the same path cannot drift apart again: the mkdir has always
@@ -353,16 +353,16 @@ func Cleanup(ctx context.Context, db *sql.DB, addonID int64) (string, error) {
 		removeDocRoot(systemUser, domainName, webRoot)
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM domain_traffic WHERE domain_id=?`, addonID); err != nil {
-		log.Printf("addon domain traffic cleanup warn (%d): %v", addonID, err)
+		logx.Warnf("addon domain traffic cleanup warn (%d): %v", addonID, err)
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM domain_traffic_cursor WHERE domain_id=?`, addonID); err != nil {
-		log.Printf("addon domain traffic cursor cleanup warn (%d): %v", addonID, err)
+		logx.Warnf("addon domain traffic cursor cleanup warn (%d): %v", addonID, err)
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM domains WHERE id=?`, addonID); err != nil {
 		return "", err
 	}
 	if err := dns.DeleteZone(ctx, db, domainName); err != nil {
-		log.Printf("DNS DeleteZone warn (%s): %v", domainName, err)
+		logx.Warnf("DNS DeleteZone warn (%s): %v", domainName, err)
 	}
 	return domainName, nil
 }
@@ -389,7 +389,7 @@ func removeDocRoot(systemUser, domainName, webRoot string) {
 		return
 	}
 	if err := files.RemoveAllBeneath(home, rel); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("addon domain document root %s: %v", domainName, err)
+		logx.Errorf("addon domain document root %s: %v", domainName, err)
 	}
 }
 

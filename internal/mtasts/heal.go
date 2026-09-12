@@ -3,8 +3,9 @@ package mtasts
 import (
 	"context"
 	"database/sql"
-	"log"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // Advancing the publication sequence.
@@ -30,7 +31,7 @@ func StartHeal(db *sql.DB) {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			if err := Heal(ctx, db); err != nil {
-				log.Printf("mtasts heal: %v", err)
+				logx.Errorf("mtasts heal: %v", err)
 			}
 			cancel()
 			time.Sleep(healInterval)
@@ -85,7 +86,7 @@ func Heal(ctx context.Context, db *sql.DB) error {
 		// One domain's blocked resolver must not stop the rest, so a failure is
 		// logged against that domain and the pass continues.
 		if err := advance(ctx, db, row); err != nil {
-			log.Printf("mtasts heal for domain %d in %s: %v", row.id, describe(row.mode), err)
+			logx.Errorf("mtasts heal for domain %d in %s: %v", row.id, describe(row.mode), err)
 		}
 	}
 	return nil

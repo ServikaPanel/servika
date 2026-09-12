@@ -5,12 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // Accumulating the shared Postfix log into per-domain rows.
@@ -42,7 +42,7 @@ func StartDeliveryLogCollector(db *sql.DB) {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			if err := CollectDeliveryLog(ctx, db); err != nil {
-				log.Printf("mail delivery log: %v", err)
+				logx.Errorf("mail delivery log: %v", err)
 			}
 			// An unopened signon token would otherwise sit in the table until the
 			// next signon happened to clean it up.
@@ -95,7 +95,7 @@ func CollectDeliveryLog(ctx context.Context, db *sql.DB) error {
 	if pass.oversize > 0 {
 		// Never silent: a skipped line is delivery history the panel will not
 		// show, and an operator has to be able to see that it happened.
-		log.Printf("mail delivery log: skipped %d line(s) longer than %d bytes", pass.oversize, maxLogLineBytes)
+		logx.Warnf("mail delivery log: skipped %d line(s) longer than %d bytes", pass.oversize, maxLogLineBytes)
 	}
 
 	// The final flush runs even with nothing pending, because the cursor still

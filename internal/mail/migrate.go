@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 
+	"servika/internal/logx"
 	"servika/internal/secret"
 )
 
@@ -157,7 +157,7 @@ func startMigrationJob(db *sql.DB, mailboxID int64, remote RemoteAccount) (int64
 			        remote_password=NULL, credentials_cleared=1
 			  WHERE id=?`, id); err != nil {
 			// #nosec G706 -- integer id and a database driver error.
-			log.Printf("mail migration job=%d: could not be closed after the queue refused it: %v", id, err)
+			logx.Errorf("mail migration job=%d: could not be closed after the queue refused it: %v", id, err)
 		}
 		return 0, ErrTooManyMigrations
 	}
@@ -202,7 +202,7 @@ func runMigrationJob(ctx context.Context, db *sql.DB, job pendingMigration) {
 		// nothing wrong here. CancelMigration clears it now and the startup heal
 		// clears it on the next restart.
 		// #nosec G706 -- integer id and a database driver error.
-		log.Printf("mail migration job=%d: could not be claimed and stays queued: %v", job.id, err)
+		logx.Errorf("mail migration job=%d: could not be claimed and stays queued: %v", job.id, err)
 		return
 	}
 	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
@@ -243,7 +243,7 @@ func finishJob(db *sql.DB, id int64, cause error) {
 	default:
 		status, code = "failed", reasonFor(cause)
 		// #nosec G706 -- the job id is an integer and the reason is one of this package's own constants; the wrapped error is the library's or the kernel's, never a raw remote string.
-		log.Printf("mail migration job=%d failed: %v", id, cause)
+		logx.Errorf("mail migration job=%d failed: %v", id, cause)
 	}
 	// The credential is cleared in the SAME statement that closes the job, so the
 	// ciphertext exists only while a copy is actually pending or running and a
@@ -255,7 +255,7 @@ func finishJob(db *sql.DB, id int64, cause error) {
 		  WHERE id=?`,
 		status, code, id); err != nil {
 		// #nosec G706 -- integer id and a fixed status word.
-		log.Printf("mail migration job=%d: could not record %s: %v", id, status, err)
+		logx.Errorf("mail migration job=%d: could not record %s: %v", id, status, err)
 	}
 }
 
@@ -332,7 +332,7 @@ func copyFolder(ctx context.Context, db *sql.DB, client *imapclient.Client, layo
 		// whole migration: one unreadable folder must not cost the customer
 		// every other one.
 		// #nosec G706 -- the folder name is not logged; only the job id and the library's error.
-		log.Printf("mail migration job=%d: skipping an unreadable folder: %v", jobID, err)
+		logx.Warnf("mail migration job=%d: skipping an unreadable folder: %v", jobID, err)
 		return nil
 	}
 	if selected.NumMessages == 0 {
@@ -521,7 +521,7 @@ func addCounter(ctx context.Context, db *sql.DB, jobID int64, column string, val
 func runProgress(ctx context.Context, db *sql.DB, jobID int64, column, statement string, value int) {
 	if _, err := db.ExecContext(ctx, statement, value, jobID); err != nil {
 		// #nosec G706 -- integer id and a key from the fixed map above.
-		log.Printf("mail migration job=%d: could not record %s: %v", jobID, column, err)
+		logx.Errorf("mail migration job=%d: could not record %s: %v", jobID, column, err)
 	}
 }
 
@@ -547,7 +547,7 @@ func HealMigrationJobs(db *sql.DB) {
 
 	if _, err := db.ExecContext(ctx,
 		`UPDATE mail_migration_jobs SET status='queued', started_at=NULL WHERE status='running'`); err != nil {
-		log.Printf("mail migration resume: unfinished jobs could not be requeued: %v", err)
+		logx.Errorf("mail migration resume: unfinished jobs could not be requeued: %v", err)
 		return
 	}
 
@@ -557,7 +557,7 @@ func HealMigrationJobs(db *sql.DB) {
 		   FROM mail_migration_jobs
 		  WHERE status='queued' ORDER BY id`)
 	if err != nil {
-		log.Printf("mail migration resume: the queue could not be read: %v", err)
+		logx.Errorf("mail migration resume: the queue could not be read: %v", err)
 		return
 	}
 	defer func() { _ = rows.Close() }()
@@ -572,10 +572,10 @@ func HealMigrationJobs(db *sql.DB) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("mail migration resume: reading the queue ended early: %v", err)
+		logx.Errorf("mail migration resume: reading the queue ended early: %v", err)
 	}
 	if resumed > 0 || abandoned > 0 {
-		log.Printf("mail migration resume: %d job(s) requeued, %d closed as interrupted", resumed, abandoned)
+		logx.Infof("mail migration resume: %d job(s) requeued, %d closed as interrupted", resumed, abandoned)
 	}
 }
 
@@ -597,7 +597,7 @@ func resumeMigrationRow(ctx context.Context, db *sql.DB, rows *sql.Rows) resumeO
 	)
 	if err := rows.Scan(&job.id, &job.mailboxID, &job.remote.Host, &job.remote.Port,
 		&job.remote.Security, &job.remote.Username, &sealed); err != nil {
-		log.Printf("mail migration resume: a row could not be read: %v", err)
+		logx.Errorf("mail migration resume: a row could not be read: %v", err)
 		return resumeSkipped
 	}
 	// A credential that will not open is the end of that job: the key was
@@ -632,6 +632,6 @@ func abandonMigration(ctx context.Context, db *sql.DB, id int64) {
 		        remote_password=NULL, credentials_cleared=1
 		  WHERE id=?`, id); err != nil {
 		// #nosec G706 -- integer id and a database driver error.
-		log.Printf("mail migration job=%d: could not be closed: %v", id, err)
+		logx.Errorf("mail migration job=%d: could not be closed: %v", id, err)
 	}
 }

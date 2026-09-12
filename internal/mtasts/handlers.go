@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 // Handlers serves the public policy file and the per-domain controls.
@@ -270,11 +270,11 @@ func (h *Handlers) republish(r *http.Request, id int64) error {
 	var policyID string
 	if err := h.DB.QueryRowContext(r.Context(),
 		`SELECT mtasts_id FROM mail_domains WHERE domain_id=?`, id).Scan(&policyID); err != nil {
-		log.Printf("mtasts: read the policy id for domain %d: %v", id, err)
+		logx.Errorf("mtasts: read the policy id for domain %d: %v", id, err)
 		return err
 	}
 	if err := writePolicyTXT(r.Context(), h.DB, id, policyID); err != nil {
-		log.Printf("mtasts: write the policy TXT for domain %d: %v", id, err)
+		logx.Errorf("mtasts: write the policy TXT for domain %d: %v", id, err)
 		return err
 	}
 	return nil

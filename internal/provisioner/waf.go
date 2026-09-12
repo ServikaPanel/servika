@@ -16,11 +16,12 @@ package provisioner
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // The ModSecurity paths are variables so a test can put a module, an nginx.conf
@@ -163,11 +164,11 @@ func buildModSec(sk string) string {
 		return ""
 	}
 	if !WAFModuleLoaded() {
-		log.Printf("waf: %s is WAF-enabled but ModSecurity module is NOT loaded — WAF SKIPPED (vhost intact). Run 'servika-waf-setup'.", sk)
+		logx.Warnf("waf: %s is WAF-enabled but ModSecurity module is NOT loaded — WAF SKIPPED (vhost intact). Run 'servika-waf-setup'.", sk)
 		return ""
 	}
 	if err := wafDomainConfWrite(sk, engine, paranoia); err != nil {
-		log.Printf("waf: %s per-domain conf write failed: %v — WAF SKIPPED (vhost intact)", sk, err)
+		logx.Warnf("waf: %s per-domain conf write failed: %v — WAF SKIPPED (vhost intact)", sk, err)
 		return ""
 	}
 	return "    # ---- WAF (ModSecurity v3 + OWASP CRS) — panel-managed ----\n" +
@@ -208,13 +209,13 @@ func HealWAFOnStartup() {
 	if err := rows.Err(); err != nil {
 		// A short list leaves some tenants without their WAF configuration and
 		// makes the count reported below understate what is enabled.
-		log.Printf("waf heal: could not read the domain list: %v", err)
+		logx.Errorf("waf heal: could not read the domain list: %v", err)
 	}
 	if activeCount > 0 && !module {
-		log.Printf("waf heal: %d WAF-enabled domains but ModSecurity module is NOT LOADED — "+
+		logx.Warnf("waf heal: %d WAF-enabled domains but ModSecurity module is NOT LOADED — "+
 			"'servika-waf-setup' must be run (WAF is currently PASSIVE, vhosts intact)", activeCount)
 	} else {
-		log.Printf("waf heal: module=%v, WAF-enabled domains=%d", module, activeCount)
+		logx.Infof("waf heal: module=%v, WAF-enabled domains=%d", module, activeCount)
 	}
 }
 
@@ -226,7 +227,7 @@ func refreshTenantWAF(rows *sql.Rows, module bool) bool {
 	if err := rows.Scan(&sk); err != nil {
 		// A dropped row is a tenant whose WAF configuration is never written and
 		// who is missing from the count reported below.
-		log.Printf("waf heal: skipping an unreadable domain row: %v", err)
+		logx.Warnf("waf heal: skipping an unreadable domain row: %v", err)
 		return false
 	}
 	active, engine, paranoia := WAFEffective(packageDB, sk)
@@ -237,7 +238,7 @@ func refreshTenantWAF(rows *sql.Rows, module bool) bool {
 		return true // graceful: vhost render already skips WAF
 	}
 	if err := wafDomainConfWrite(sk, engine, paranoia); err != nil {
-		log.Printf("waf heal: %s conf write: %v", sk, err)
+		logx.Errorf("waf heal: %s conf write: %v", sk, err)
 	}
 	return true
 }

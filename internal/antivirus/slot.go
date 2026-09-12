@@ -20,7 +20,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+
+	"servika/internal/logx"
 )
 
 // scanSlotLock is the GET_LOCK name. It is server-wide rather than per-database
@@ -48,7 +49,7 @@ func (h *slotHold) Release() {
 	// point of this call is to give the slot back rather than to be prompt.
 	if _, err := h.conn.ExecContext(context.Background(),
 		`DO RELEASE_LOCK(?)`, scanSlotLock); err != nil {
-		log.Printf("antivirus: the scan slot could not be released explicitly, "+
+		logx.Errorf("antivirus: the scan slot could not be released explicitly, "+
 			"closing the connection instead: %v", err)
 	}
 	_ = h.conn.Close()

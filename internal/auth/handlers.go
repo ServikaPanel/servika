@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +16,7 @@ import (
 	yescrypt "github.com/openwall/yescrypt-go"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/system"
 )
 
@@ -185,7 +185,7 @@ func legacyCryptVerify(password, hash string) bool {
 		// Distinguishable from a wrong password in the log, because a missing or
 		// failing openssl locks root out and must not look like a typo. The hash and
 		// the password are never logged.
-		log.Printf("root login: openssl passwd failed for a $%s$ hash: %v", id, err)
+		logx.Errorf("root login: openssl passwd failed for a $%s$ hash: %v", id, err)
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(string(out))), []byte(hash)) == 1
@@ -445,7 +445,7 @@ func WriteAuditScoped(db *sql.DB, uid int64, username, ip, action, target string
 		`INSERT INTO audit_log(actor_user_id, actor_username, ip, action, target, ok, reseller_id)
 		 VALUES(?,?,?,?,?,?,?)`,
 		uidVal, username, ip, action, target, okv, resellerScope); err != nil {
-		log.Printf("audit log insert failed: %v", err)
+		logx.Errorf("audit log insert failed: %v", err)
 	}
 }
 
@@ -558,7 +558,7 @@ func (h *Handlers) AuditList(w http.ResponseWriter, r *http.Request) {
 			// A dropped row is an audit entry that disappears from the record
 			// somebody is reading precisely to account for what happened.
 			// #nosec G706 -- the logged value is a database error; no request-controlled string reaches the log.
-			httpx.LogR(r, "audit list: skipping an unreadable entry: %v", err)
+			httpx.WarnR(r, "audit list: skipping an unreadable entry: %v", err)
 			continue
 		}
 		e.OK = okv == 1

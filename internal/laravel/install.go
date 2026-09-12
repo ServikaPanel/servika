@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 func setupUnit(id int64) string { return fmt.Sprintf("servika-laravel-install-%d", id) }
@@ -301,7 +301,7 @@ func (h *Handlers) moveDocrootToPublic(ctx context.Context, id int64, systemUser
 	}
 	if err := h.setDocroot(ctx, id, systemUser, publicSubdirectory(appRoot)); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
+		logx.Errorf("laravel setDocroot domain %d: %v (docroot may still serve project root)", id, err)
 	}
 }
 

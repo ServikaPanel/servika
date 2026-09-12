@@ -2,13 +2,13 @@ package mail
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // roundcubeConfigPath is a function value so tests can point the heal at a
@@ -73,7 +73,7 @@ func HealRoundcubeSMTP(ctx context.Context) {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file-manager paths use safeio (openat2) instead.
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
-		log.Printf("roundcube smtp heal: could not open the config: %v", err)
+		logx.Errorf("roundcube smtp heal: could not open the config: %v", err)
 		return
 	}
 	// Keep the appended block off the end of an unterminated last line.
@@ -83,11 +83,11 @@ func HealRoundcubeSMTP(ctx context.Context) {
 	}
 	if _, err := file.WriteString(prefix + roundcubeSMTPPatch); err != nil {
 		_ = file.Close()
-		log.Printf("roundcube smtp heal: could not write the config: %v", err)
+		logx.Errorf("roundcube smtp heal: could not write the config: %v", err)
 		return
 	}
 	if err := file.Close(); err != nil {
-		log.Printf("roundcube smtp heal: could not close the config: %v", err)
+		logx.Errorf("roundcube smtp heal: could not close the config: %v", err)
 		return
 	}
 
@@ -99,5 +99,5 @@ func HealRoundcubeSMTP(ctx context.Context) {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		_, _ = exec.CommandContext(reloadCtx, "systemctl", "restart", "php-fpm").CombinedOutput()
 	}
-	log.Printf("roundcube smtp heal applied; webmail outgoing mail authentication repaired")
+	logx.Infof("roundcube smtp heal applied; webmail outgoing mail authentication repaired")
 }

@@ -2,12 +2,13 @@ package mail
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // SQL map paths written by servika-mail-setup. Package variables so a test can
@@ -73,7 +74,7 @@ func HealMaildirQuery(ctx context.Context) {
 	for _, path := range maildirQueryTarget {
 		changed, err := healOneMaildirQuery(*path)
 		if err != nil {
-			log.Printf("maildir query heal: %s not updated: %v", *path, err)
+			logx.Errorf("maildir query heal: %s not updated: %v", *path, err)
 			continue
 		}
 		if !changed {
@@ -96,7 +97,7 @@ func HealMaildirQuery(ctx context.Context) {
 	if postfixChanged {
 		reloadMailService(reloadCtx, "postfix")
 	}
-	log.Printf("maildir query heal applied; the mail SQL maps now read mailboxes.maildir")
+	logx.Infof("maildir query heal applied; the mail SQL maps now read mailboxes.maildir")
 }
 
 // healOneMaildirQuery rewrites one map in place, preserving its mode and owner:
@@ -140,6 +141,6 @@ func reloadMailService(ctx context.Context, unit string) {
 	out, err := exec.CommandContext(ctx, "systemctl", "restart", unit).CombinedOutput()
 	if err != nil {
 		// #nosec G706 -- the operand is systemctl output, not client-controlled input.
-		log.Printf("maildir query heal: could not reload %s: %v: %s", unit, err, strings.TrimSpace(string(out)))
+		logx.Errorf("maildir query heal: could not reload %s: %v: %s", unit, err, strings.TrimSpace(string(out)))
 	}
 }

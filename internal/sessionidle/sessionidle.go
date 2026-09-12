@@ -10,9 +10,10 @@ package sessionidle
 import (
 	"context"
 	"database/sql"
-	"log"
 	"sync"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // MaxMinutes is the ceiling the write path enforces. A day is already long
@@ -141,5 +142,5 @@ func Complain(err error) {
 		return
 	}
 	lastComplaint = now()
-	log.Printf("session idle check: %v", err)
+	logx.Errorf("session idle check: %v", err)
 }

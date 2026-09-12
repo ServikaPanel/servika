@@ -26,11 +26,11 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -391,7 +391,7 @@ func addressDomain(address string) string {
 func writeXML(w http.ResponseWriter, payload any) {
 	body, err := xml.MarshalIndent(payload, "", "  ")
 	if err != nil {
-		log.Printf("autoconfig: encode the response: %v", err)
+		logx.Errorf("autoconfig: encode the response: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "mail settings could not be produced")
 		return
 	}
@@ -405,6 +405,6 @@ func writeXML(w http.ResponseWriter, payload any) {
 		return
 	}
 	if _, err := w.Write(body); err != nil {
-		log.Printf("autoconfig: write the response: %v", err)
+		logx.Errorf("autoconfig: write the response: %v", err)
 	}
 }

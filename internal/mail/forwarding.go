@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 )
 
@@ -153,7 +153,7 @@ func (h *Handlers) forwardingDestinations(w http.ResponseWriter, r *http.Request
 func (h *Handlers) applyForwardingSieve(ctx context.Context, w http.ResponseWriter, mailboxID int64, forwarding Forwarding) {
 	if err := ApplyMailboxSieve(ctx, h.DB, mailboxID); err != nil {
 		// #nosec G706 -- integer id and the compiler's own output.
-		log.Printf("apply sieve mailbox=%d: %v", mailboxID, err)
+		logx.Errorf("apply sieve mailbox=%d: %v", mailboxID, err)
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"enabled": forwarding.Enabled, "destinations": forwarding.Destinations,
 			"keep_copy": forwarding.KeepCopy,

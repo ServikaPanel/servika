@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/mail"
 	"servika/internal/provisioner"
 
@@ -325,11 +325,11 @@ func (h *Handlers) mailLimitReapply(planID int64) {
 	defer cancel()
 	changed, err := mail.ApplyPlanLimitsToPlan(ctx, h.DB, planID)
 	if err != nil {
-		log.Printf("mail limit reapply for plan %d: %v", planID, err)
+		logx.Errorf("mail limit reapply for plan %d: %v", planID, err)
 		return
 	}
 	if changed > 0 {
-		log.Printf("mail limit reapply for plan %d: %d mailbox rows updated", planID, changed)
+		logx.Infof("mail limit reapply for plan %d: %d mailbox rows updated", planID, changed)
 	}
 }
 
@@ -346,7 +346,7 @@ func (h *Handlers) wafPlanReapply(planID int64) {
 		if err := rows.Scan(&did); err != nil {
 			// A dropped id leaves that domain on its old WAF settings after the plan
 			// changed, and nothing on the plan screen shows it.
-			log.Printf("waf plan reapply: skipping an unreadable domain id: %v", err)
+			logx.Warnf("waf plan reapply: skipping an unreadable domain id: %v", err)
 			continue
 		}
 		ids = append(ids, did)
@@ -354,12 +354,12 @@ func (h *Handlers) wafPlanReapply(planID int64) {
 	if err := rows.Err(); err != nil {
 		// A short list silently leaves some of the plan's domains on their old WAF
 		// settings, which is invisible until somebody looks at one of them.
-		log.Printf("waf plan reapply: could not read the plan's domains: %v", err)
+		logx.Errorf("waf plan reapply: could not read the plan's domains: %v", err)
 	}
 	_ = rows.Close()
 	for _, did := range ids {
 		if err := provisioner.WAFApply(h.DB, did); err != nil {
-			log.Printf("waf plan reapply domain=%d: %v", did, err)
+			logx.Errorf("waf plan reapply domain=%d: %v", did, err)
 		}
 	}
 }
@@ -495,7 +495,7 @@ func SeedIfEmpty(ctx context.Context, db *sql.DB) error {
 	if n > 0 {
 		return nil
 	}
-	log.Printf("seed: adding 3 default plans")
+	logx.Infof("seed: adding 3 default plans")
 	for _, p := range seedPlans(panelLang(ctx, db)) {
 		_, err := db.ExecContext(ctx,
 			`INSERT INTO service_plans(name, description, disk_quota_mb, traffic_quota_mb,
@@ -506,7 +506,7 @@ func SeedIfEmpty(ctx context.Context, db *sql.DB) error {
 			p.Name, p.Description, p.Disk, p.Traffic, p.MaxDomain, p.MaxDB, p.MaxMail, p.MaxFTP, p.MaxApp,
 			p.CPU, p.RAM, p.Process, p.Inode, p.IO, p.MySQL, p.PMMax, p.Default)
 		if err != nil {
-			log.Printf("seed plan %s: %v", p.Name, err)
+			logx.Errorf("seed plan %s: %v", p.Name, err)
 		}
 	}
 	return nil
@@ -526,7 +526,7 @@ func SeedSync(ctx context.Context, db *sql.DB) error {
 			p.Name, p.Description, p.Disk, p.Traffic, p.MaxDomain, p.MaxDB, p.MaxMail, p.MaxFTP, p.MaxApp,
 			p.CPU, p.RAM, p.Process, p.Inode, p.IO, p.MySQL, p.PMMax, p.Name)
 		if err != nil {
-			log.Printf("seed sync plan %s: %v", p.Name, err)
+			logx.Errorf("seed sync plan %s: %v", p.Name, err)
 		}
 	}
 	return nil

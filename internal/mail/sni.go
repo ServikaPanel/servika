@@ -3,13 +3,13 @@ package mail
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"sort"
 	"strings"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -196,7 +196,7 @@ func HealMailSNI(ctx context.Context) {
 		return
 	}
 	if err := ApplySNI(); err != nil {
-		log.Printf("mail sni heal: %v", err)
+		logx.Errorf("mail sni heal: %v", err)
 	}
 }
 
@@ -228,7 +228,7 @@ func StartMailCertRefresh(ctx context.Context) {
 				continue
 			}
 			if err := ApplySNI(); err != nil {
-				log.Printf("mail sni refresh: %v", err)
+				logx.Errorf("mail sni refresh: %v", err)
 			}
 		}
 	}()

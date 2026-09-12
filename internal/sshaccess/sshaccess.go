@@ -8,7 +8,6 @@ package sshaccess
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,6 +18,7 @@ import (
 	"servika/internal/config"
 	"servika/internal/files"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/system"
 
 	"github.com/go-chi/chi/v5"
@@ -337,7 +337,7 @@ func EnsureInfra() {
 			_ = os.Chmod(servikaJailBin(), 0o755)
 		}
 	} else {
-		log.Printf("SSH ISOLATION: the servika-jail script is missing from %s, so the jail shell cannot be installed: %v", srcDir, err)
+		logx.Errorf("SSH ISOLATION: the servika-jail script is missing from %s, so the jail shell cannot be installed: %v", srcDir, err)
 	}
 	// Create the restricted SSH access group.
 	_ = exec.Command("groupadd", "-f", "servika-ssh").Run()
@@ -348,7 +348,7 @@ func EnsureInfra() {
 		// Without this file the sshd Match chroot block is never written, so a
 		// tenant granted SSH gets a FULL shell outside the jail. The previous
 		// bare return made that failure invisible.
-		log.Printf("SSH ISOLATION NOT APPLIED: %s/50-servika-jail.conf is missing, so a tenant granted SSH cannot be confined to its chroot: %v. Add it to the deployed assets/ops payload.", srcDir, err)
+		logx.Errorf("SSH ISOLATION NOT APPLIED: %s/50-servika-jail.conf is missing, so a tenant granted SSH cannot be confined to its chroot: %v. Add it to the deployed assets/ops payload.", srcDir, err)
 		return
 	}
 	cur, _ := os.ReadFile(dst)
@@ -358,7 +358,7 @@ func EnsureInfra() {
 	}
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if e := os.WriteFile(dst, src, 0o644); e != nil {
-		log.Printf("could not write jail sshd configuration: %v", e)
+		logx.Errorf("could not write jail sshd configuration: %v", e)
 		return
 	}
 	if out, e := exec.Command("sshd", "-t").CombinedOutput(); e != nil {
@@ -370,9 +370,9 @@ func EnsureInfra() {
 		} else {
 			_ = os.Remove(dst)
 		}
-		log.Printf("jail sshd configuration is invalid and was not applied: %s", strings.TrimSpace(string(out)))
+		logx.Errorf("jail sshd configuration is invalid and was not applied: %s", strings.TrimSpace(string(out)))
 		return
 	}
 	_ = exec.Command("systemctl", "reload", "sshd").Run()
-	log.Printf("SSH jail infrastructure is ready (script + servika-ssh + sshd chroot configuration)")
+	logx.Infof("SSH jail infrastructure is ready (script + servika-ssh + sshd chroot configuration)")
 }

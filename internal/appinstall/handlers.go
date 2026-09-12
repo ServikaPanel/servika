@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"servika/internal/bgjob"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -266,6 +266,6 @@ func HealRunningInstalls(db *sql.DB) {
 		    SET state='failed', last_error='the panel restarted while this installation was running',
 		        finished_at=NOW()
 		  WHERE state='installing'`); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Printf("app installs: could not clear a stale installation state: %v", err)
+		logx.Warnf("app installs: could not clear a stale installation state: %v", err)
 	}
 }

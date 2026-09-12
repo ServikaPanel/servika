@@ -5,13 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"log"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"servika/internal/archivex"
+	"servika/internal/logx"
 )
 
 // extractJobTimeout bounds one extraction. It is long because a multi-gigabyte
@@ -110,7 +110,7 @@ func runExtractJob(job *extractJob, archiveFd, targetFd *os.File, archivePinned,
 	// carry an internal path) reaches the client; the detail is logged.
 	defer func() {
 		if p := recover(); p != nil {
-			log.Printf("files: extract job panicked: %v", p)
+			logx.Errorf("files: extract job panicked: %v", p)
 			job.fail("extract_internal_error")
 		}
 	}()

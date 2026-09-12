@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -17,6 +16,7 @@ import (
 
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -237,16 +237,16 @@ func HealIonCube(ctx context.Context) {
 	defer cancel()
 	stageDir, cleanup, err := ionCubeStage(ctx)
 	if err != nil {
-		log.Printf("ioncube heal: %v", err)
+		logx.Errorf("ioncube heal: %v", err)
 		return
 	}
 	defer cleanup()
 	for _, s := range missing {
 		if _, _, _, ierr := installIonCubeForVersion(ctx, s, stageDir); ierr != nil {
-			log.Printf("ioncube heal: PHP %s: %v", s.Version, ierr)
+			logx.Errorf("ioncube heal: PHP %s: %v", s.Version, ierr)
 			continue
 		}
-		log.Printf("ioncube heal: installed the loader for PHP %s", s.Version)
+		logx.Infof("ioncube heal: installed the loader for PHP %s", s.Version)
 	}
 }
 

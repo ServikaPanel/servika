@@ -4,8 +4,9 @@ package mail
 import (
 	"context"
 	"database/sql"
-	"log"
 	"os"
+
+	"servika/internal/logx"
 )
 
 // HealMailOnStartup checks mail service SQL-map prerequisites and repairs active Maildir roots.
@@ -16,7 +17,7 @@ func HealMailOnStartup(ctx context.Context, db *sql.DB) {
 	}
 	for _, path := range required {
 		if _, err := os.Stat(path); err != nil {
-			log.Printf("mail heal: %s is missing; mail service setup may not have run", path)
+			logx.Warnf("mail heal: %s is missing; mail service setup may not have run", path)
 		}
 	}
 
@@ -32,7 +33,7 @@ func HealMailOnStartup(ctx context.Context, db *sql.DB) {
 		if err := rows.Scan(&systemUser, &uid, &gid, &root); err != nil {
 			// A dropped row is a tenant whose Maildir root is never created, so
 			// delivery for that domain fails with nothing here saying why.
-			log.Printf("mail heal: skipping an unreadable Maildir row: %v", err)
+			logx.Warnf("mail heal: skipping an unreadable Maildir row: %v", err)
 			continue
 		}
 		if _, err := os.Stat(root); err != nil {
@@ -43,7 +44,7 @@ func HealMailOnStartup(ctx context.Context, db *sql.DB) {
 	if err := rows.Err(); err != nil {
 		// A tenant missing from this list keeps no Maildir root, and delivery for
 		// that domain fails until the next start happens to read the whole list.
-		log.Printf("mail heal: could not read the Maildir root list: %v", err)
+		logx.Errorf("mail heal: could not read the Maildir root list: %v", err)
 	}
 }
 

@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // Installing the Roundcube side of the panel's one-click webmail sign-in.
@@ -211,12 +211,12 @@ func HealWebmailPlugin(ctx context.Context) {
 
 	pluginChanged, err := writeWebmailPlugin()
 	if err != nil {
-		log.Printf("webmail signon plugin: %v", err)
+		logx.Errorf("webmail signon plugin: %v", err)
 		return
 	}
 	configChanged, err := enableWebmailPlugin(configPath, string(current))
 	if err != nil {
-		log.Printf("webmail signon plugin: %v", err)
+		logx.Errorf("webmail signon plugin: %v", err)
 		return
 	}
 	if !pluginChanged && !configChanged {
@@ -232,7 +232,7 @@ func HealWebmailPlugin(ctx context.Context) {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
 		_, _ = exec.CommandContext(reloadCtx, "systemctl", "restart", "php-fpm").CombinedOutput()
 	}
-	log.Printf("webmail signon plugin installed; panel-initiated webmail sessions are available")
+	logx.Infof("webmail signon plugin installed; panel-initiated webmail sessions are available")
 }
 
 // writeWebmailPlugin puts the plugin in place and reports whether it changed.

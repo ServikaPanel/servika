@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
+
+	"servika/internal/logx"
 )
 
 func complain(format string, args ...any) {
-	log.Printf("hostapps: "+format, args...)
+	logx.Errorf("hostapps: "+format, args...)
 }
 
 // FeatureEnabled reads the server-wide switch.
@@ -184,7 +185,7 @@ func OpenPorts(ctx context.Context, db *sql.DB) ([]int, error) {
 		// firewall's accept would sit above a drop that does not cover it, so it
 		// would open a port belonging to something else entirely.
 		if !InRange(port) {
-			log.Printf("hostapps: ignoring out-of-range application port %d", port)
+			logx.Warnf("hostapps: ignoring out-of-range application port %d", port)
 			continue
 		}
 		out = append(out, port)

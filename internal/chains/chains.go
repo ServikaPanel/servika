@@ -27,13 +27,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/notifications"
 )
 
@@ -249,14 +249,14 @@ func WriteEvent(db *sql.DB, domainID int64, source, stage, level, summary, path 
 		// A failed check is not an answer. Writing anyway is the safe direction,
 		// because a duplicate event is harmless while a dropped one loses a stage
 		// of the chain, but the failure is said rather than read as "not seen".
-		log.Printf("chains: duplicate check failed for domain %d stage %s: %v", domainID, stage, err)
+		logx.Errorf("chains: duplicate check failed for domain %d stage %s: %v", domainID, stage, err)
 	}
 	_, err := db.Exec(
 		`INSERT INTO av_events (domain_id, source, stage, level, summary, path, pid, ref_type, ref_id)
 		 VALUES (?,?,?,?,?,?,?,?,?)`,
 		domainID, source, stage, level, truncate(summary, 250), truncate(path, 500), pid, refType, refID)
 	if err != nil {
-		log.Printf("attack chain: the event could not be recorded: %v", err)
+		logx.Errorf("attack chain: the event could not be recorded: %v", err)
 	}
 }
 
@@ -274,12 +274,12 @@ func Start(db *sql.DB) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("attack chain correlation panicked (recovered): %v", r)
+					logx.Errorf("attack chain correlation panicked (recovered): %v", r)
 				}
 			}()
 			apiScan(db) // detect a panel brute-force success and record the entry stage
 			if err := Run(db); err != nil {
-				log.Printf("attack chain correlation: %v", err)
+				logx.Errorf("attack chain correlation: %v", err)
 			}
 		}()
 		if time.Since(lastCleanup) > cleanupMin*time.Minute {
@@ -331,7 +331,7 @@ func windowedDomains(ctx context.Context, db *sql.DB) ([]int64, error) {
 		if err := rows.Scan(&d); err != nil {
 			// A dropped id is a tenant whose events are never correlated, so a real
 			// attack chain on that domain is never formed.
-			log.Printf("chains: skipping an unreadable domain id: %v", err)
+			logx.Warnf("chains: skipping an unreadable domain id: %v", err)
 			continue
 		}
 		if d > 0 {
@@ -392,7 +392,7 @@ func domainEvents(db *sql.DB, domainID int64) ([]Event, error) {
 		if err := rows.Scan(&e.Stage, &e.Level, &path, &pid, &ts); err != nil {
 			// A dropped event weakens the chain the correlator builds from it, so a
 			// chain can fall below the level its evidence actually supports.
-			log.Printf("chains: skipping an unreadable event: %v", err)
+			logx.Warnf("chains: skipping an unreadable event: %v", err)
 			continue
 		}
 		e.Path = path.String
@@ -410,7 +410,7 @@ func reportedRecently(db *sql.DB, signature string) bool {
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM av_chains
 		WHERE signature=? AND created_at >= (NOW() - INTERVAL ? MINUTE)`, signature, rededupeMin).Scan(&n); err != nil {
-		log.Printf("attack chain: the dedup query failed: %v", err)
+		logx.Errorf("attack chain: the dedup query failed: %v", err)
 		return true
 	}
 	return n > 0
@@ -434,12 +434,12 @@ func writeChain(db *sql.DB, domainID int64, r Result, eventCount int, signature 
 		(domain_id, stages, confidence, level, event_count, signature)
 		VALUES (?,?,?,?,?,?)`, domainID, strings.Join(r.Stages, ">"), r.Confidence, r.Level, eventCount, signature)
 	if err != nil {
-		log.Printf("attack chain: the chain could not be recorded: %v", err)
+		logx.Errorf("attack chain: the chain could not be recorded: %v", err)
 		return
 	}
 	chainID, _ := res.LastInsertId()
 	notify(db, domainID, chainID, r)
-	log.Printf("ATTACK CHAIN [%s confidence %d causal=%v] domain=%d: %s",
+	logx.Warnf("ATTACK CHAIN [%s confidence %d causal=%v] domain=%d: %s",
 		r.Level, r.Confidence, r.Causal, domainID, StageSummary(r.Stages))
 }
 
@@ -463,7 +463,7 @@ func notify(db *sql.DB, domainID, chainID int64, r Result) {
 		RefID:    chainID,
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
-		log.Printf("attack chain: the alert for domain %d could not be written: %v", domainID, err)
+		logx.Errorf("attack chain: the alert for domain %d could not be written: %v", domainID, err)
 	}
 }
 
@@ -478,7 +478,7 @@ func prune(db *sql.DB) {
 			r, err := db.ExecContext(ctx,
 				"DELETE FROM "+table+" WHERE created_at < (NOW() - INTERVAL ? DAY) LIMIT 5000", retentionDays)
 			if err != nil {
-				log.Printf("attack chain: pruning %s failed: %v", table, err)
+				logx.Errorf("attack chain: pruning %s failed: %v", table, err)
 				break
 			}
 			if n, _ := r.RowsAffected(); n < 5000 {

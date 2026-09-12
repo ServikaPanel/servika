@@ -1,9 +1,10 @@
 package middleware
 
 import (
-	"log"
 	"sync"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // The resilience layer beside this was a pure control-flow change: retry, then
@@ -58,7 +59,7 @@ func complainState(kind complaintKind, format string, args ...any) {
 	}
 	lastComplaint[kind] = now
 	// #nosec G706 -- the arguments are a fixed cache key built from integer ids and a database driver error; no tenant string reaches the log.
-	log.Printf("auth state: "+format, args...)
+	logx.Warnf("auth state: "+format, args...)
 }
 
 // noteStateHealthy closes an episode. It logs once, on the first successful read
@@ -72,7 +73,7 @@ func noteStateHealthy() {
 	since := degradedSince
 	degradedSince = time.Time{}
 	clear(lastComplaint)
-	log.Printf("auth state: the database answered again after %s of degraded reads; "+
+	logx.Infof("auth state: the database answered again after %s of degraded reads; "+
 		"a revocation written during that window may have been served from the cache",
 		stateNow().Sub(since).Round(time.Second))
 }

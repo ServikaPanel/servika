@@ -24,7 +24,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -35,6 +34,7 @@ import (
 	"servika/internal/avsettings"
 	"servika/internal/chains"
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 const watchFlag = "av-watch"
@@ -74,7 +74,7 @@ func runWatcher() error {
 	// and the panel is the only process that writes this file. A failure leaves
 	// the built-in set running, so it is reported and not fatal.
 	if err := loadPackagedRules(); err != nil && !errors.Is(err, ErrRuleKeyAbsent) && !os.IsNotExist(err) {
-		log.Printf("antivirus watcher: packaged rules not in use: %v", err)
+		logx.Errorf("antivirus watcher: packaged rules not in use: %v", err)
 	}
 	return watchUntilStopped(ctx, handle)
 }
@@ -86,14 +86,14 @@ func watchUntilStopped(ctx context.Context, handle *sql.DB) error {
 	w, err := startWatcher(ctx, handle)
 	if err != nil {
 		if errors.Is(err, errWatchDisabled) {
-			log.Print("antivirus watcher: real-time watching is off in the antivirus settings")
+			logx.Info("antivirus watcher: real-time watching is off in the antivirus settings")
 			return nil
 		}
 		return err
 	}
 	if err := watchFiles(w, ctx); err != nil && !errors.Is(err, context.Canceled) {
 		if errors.Is(err, errWatchDisabled) {
-			log.Print("antivirus watcher: real-time watching is off in the antivirus settings")
+			logx.Info("antivirus watcher: real-time watching is off in the antivirus settings")
 			return nil
 		}
 		return err
@@ -145,13 +145,13 @@ func reportQuarantineWritable() {
 	dir := config.QuarantineDir()
 	// #nosec G301 -- the quarantine store holds files taken out of a tenant tree; 0700 root keeps every tenant out of it.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		log.Printf("antivirus watcher: the quarantine store %s cannot be created, "+
+		logx.Errorf("antivirus watcher: the quarantine store %s cannot be created, "+
 			"so containment will fail: %v", dir, err)
 		return
 	}
 	probe, err := os.CreateTemp(dir, ".writable-")
 	if err != nil {
-		log.Printf("antivirus watcher: the quarantine store %s is not writable, "+
+		logx.Errorf("antivirus watcher: the quarantine store %s is not writable, "+
 			"so containment will fail. Under ProtectSystem=strict the unit must "+
 			"name this path in ReadWritePaths: %v", dir, err)
 		return
@@ -249,19 +249,19 @@ func (w *watcher) record(ctx context.Context, settings avsettings.Settings, find
 		 VALUES (?,?,?,?,?,?,?,?,NOW())`,
 		domainID, "realtime", "finished", 1, 1, "heuristic", confined, SourceRealtime)
 	if err != nil {
-		log.Printf("antivirus watcher: the detection could not be recorded: %v", err)
+		logx.Errorf("antivirus watcher: the detection could not be recorded: %v", err)
 		return
 	}
 	sid, err := result.LastInsertId()
 	if err != nil {
-		log.Printf("antivirus watcher: the detection row could not be identified: %v", err)
+		logx.Errorf("antivirus watcher: the detection row could not be identified: %v", err)
 		return
 	}
 	if err := insertSweepFinding(w.db, sid, domainID, finding); err != nil {
-		log.Printf("antivirus watcher: the finding could not be recorded: %v", err)
+		logx.Errorf("antivirus watcher: the finding could not be recorded: %v", err)
 		return
 	}
-	log.Printf("antivirus watcher: %s %s (score %d) %s",
+	logx.Warnf("antivirus watcher: %s %s (score %d) %s",
 		finding.Level, finding.Signature, finding.Score, finding.File)
 
 	contained := false

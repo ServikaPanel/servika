@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"database/sql"
 	"errors"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"servika/internal/bgjob"
+	"servika/internal/logx"
 )
 
 const trafficJobName = "stats: traffic aggregator"
@@ -42,7 +42,7 @@ func StartTrafficAggregator(db *sql.DB, every time.Duration) {
 func AggregateAll(db *sql.DB) int {
 	rows, err := db.Query(`SELECT id, domain_name FROM domains`)
 	if err != nil {
-		log.Printf("traffic domain list: %v", err)
+		logx.Errorf("traffic domain list: %v", err)
 		return 0
 	}
 	type domain struct {
@@ -59,7 +59,7 @@ func AggregateAll(db *sql.DB) int {
 	if err := rows.Err(); err != nil {
 		// A domain missing from this pass has its traffic counted on the next one
 		// only if the log has not rotated first, so the figure is lost, not late.
-		log.Printf("traffic aggregator: could not read the domain list: %v", err)
+		logx.Errorf("traffic aggregator: could not read the domain list: %v", err)
 	}
 	_ = rows.Close()
 
@@ -74,7 +74,7 @@ func AggregateAll(db *sql.DB) int {
 
 func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 	if !trafficDomainPattern.MatchString(domainName) {
-		log.Printf("traffic rejected unsafe domain name for domain=%d", domainID)
+		logx.Errorf("traffic rejected unsafe domain name for domain=%d", domainID)
 		return false
 	}
 	logPath := trafficLogRoot + domainName + ".access.log"
@@ -129,7 +129,7 @@ func readCursor(db *sql.DB, domainID, size int64) (start int64, ok bool) {
 		// No cursor yet: this domain has never been counted, so zero is right.
 	case err != nil:
 		// #nosec G706 -- an integer domain id and a MariaDB driver error for a parameterized statement; no tenant string reaches the log.
-		log.Printf("traffic cursor read domain=%d: %v; this domain is not accounted this pass", domainID, err)
+		logx.Errorf("traffic cursor read domain=%d: %v; this domain is not accounted this pass", domainID, err)
 		return 0, false
 	}
 	if size < offset || size < previousSize {
@@ -147,7 +147,7 @@ func readLog(logPath string, domainID, start int64) (monthly map[string]int64, c
 	file, err := os.Open(logPath)
 	if err != nil {
 		// #nosec G706 -- an integer domain id and an os error naming a path built from a validated domain name; no raw tenant string reaches the log.
-		log.Printf("traffic log open domain=%d: %v; this domain is not accounted this pass", domainID, err)
+		logx.Errorf("traffic log open domain=%d: %v; this domain is not accounted this pass", domainID, err)
 		return nil, 0, false
 	}
 	defer func() { _ = file.Close() }()
@@ -157,7 +157,7 @@ func readLog(logPath string, domainID, start int64) (monthly map[string]int64, c
 			// the same reason the cursor read above must not fail silently. Stop
 			// instead: a pass skipped is recoverable, a doubled figure is not.
 			// #nosec G706 -- an integer domain id, an integer offset and an os error; no tenant string reaches the log.
-			log.Printf("traffic log seek domain=%d offset=%d: %v; this domain is not accounted this pass",
+			logx.Errorf("traffic log seek domain=%d offset=%d: %v; this domain is not accounted this pass",
 				domainID, start, err)
 			return nil, 0, false
 		}
@@ -187,7 +187,7 @@ func readLog(logPath string, domainID, start int64) (monthly map[string]int64, c
 func storeTraffic(db *sql.DB, domainID int64, monthly map[string]int64, consumed, size int64) bool {
 	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("begin traffic update domain=%d: %v", domainID, err)
+		logx.Errorf("begin traffic update domain=%d: %v", domainID, err)
 		return false
 	}
 	defer func() { _ = tx.Rollback() }()
@@ -198,11 +198,11 @@ func storeTraffic(db *sql.DB, domainID int64, monthly map[string]int64, consumed
 		"INSERT INTO domain_traffic_cursor(domain_id, `offset`, `size`) VALUES(?,?,?)\n"+
 			" ON DUPLICATE KEY UPDATE `offset`=VALUES(`offset`), `size`=VALUES(`size`)",
 		domainID, consumed, size); err != nil {
-		log.Printf("traffic cursor update domain=%d: %v", domainID, err)
+		logx.Errorf("traffic cursor update domain=%d: %v", domainID, err)
 		return false
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("commit traffic update domain=%d: %v", domainID, err)
+		logx.Errorf("commit traffic update domain=%d: %v", domainID, err)
 		return false
 	}
 	return true
@@ -222,7 +222,7 @@ func mergeMonths(tx *sql.Tx, domainID int64, monthly map[string]int64) bool {
 			"INSERT INTO domain_traffic(domain_id, `year_month`, bytes) VALUES(?,?,?)\n"+
 				" ON DUPLICATE KEY UPDATE bytes=bytes+VALUES(bytes)",
 			domainID, month, bytes); err != nil {
-			log.Printf("traffic upsert domain=%d month=%s: %v", domainID, month, err)
+			logx.Errorf("traffic upsert domain=%d month=%s: %v", domainID, month, err)
 			return false
 		}
 	}

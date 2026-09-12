@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	"time"
 
 	"servika/internal/bgjob"
+	"servika/internal/logx"
 	"servika/internal/wordpress"
 )
 
@@ -117,7 +117,7 @@ func HealRunningScans(db *sql.DB) {
 		`UPDATE security_scan_status SET state='failed',
 		        last_error='the panel restarted while this scan was running'
 		  WHERE state='running'`); err != nil {
-		log.Printf("site security: could not clear a stale scan state: %v", err)
+		logx.Warnf("site security: could not clear a stale scan state: %v", err)
 	}
 }
 
@@ -136,7 +136,7 @@ func StartCollector(db *sql.DB) {
 				ctx, cancel := context.WithTimeout(context.Background(), scanBudget)
 				defer cancel()
 				if err := collector.ScanAll(ctx); err != nil && !errors.Is(err, ErrScanRunning) {
-					log.Printf("site security scan: %v", err)
+					logx.Errorf("site security scan: %v", err)
 				}
 			})
 			time.Sleep(scanInterval)
@@ -277,7 +277,7 @@ func (c *Collector) finish(counts tally, scanErr error) {
 		  WHERE id=1`,
 		state, scanErr == nil, message,
 		counts.domains, counts.packages, counts.unparsed, counts.findings); err != nil {
-		log.Printf("site security: could not record the scan outcome: %v", err)
+		logx.Errorf("site security: could not record the scan outcome: %v", err)
 	}
 }
 

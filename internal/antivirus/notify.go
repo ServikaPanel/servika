@@ -22,8 +22,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
+	"servika/internal/logx"
 	"servika/internal/notifications"
 )
 
@@ -63,7 +63,7 @@ func notifySweep(ctx context.Context, db *sql.DB, scanID int64, perDomain map[in
 			RefID:    scanID,
 		}
 		if err := notifications.Write(ctx, db, event); err != nil {
-			log.Printf("antivirus: the sweep alert for domain %d could not be written: %v", id, err)
+			logx.Errorf("antivirus: the sweep alert for domain %d could not be written: %v", id, err)
 		}
 	}
 
@@ -81,7 +81,7 @@ func notifySweep(ctx context.Context, db *sql.DB, scanID int64, perDomain map[in
 		RefID:   scanID,
 	}
 	if err := notifications.Write(ctx, db, summary); err != nil {
-		log.Printf("antivirus: the sweep summary alert could not be written: %v", err)
+		logx.Errorf("antivirus: the sweep summary alert could not be written: %v", err)
 	}
 }
 
@@ -113,7 +113,7 @@ func notifyRealtime(ctx context.Context, db *sql.DB, scanID int64, domainID sql.
 		event.Message = fmt.Sprintf("A file written on %s was found infected. It is still in place.", name)
 	}
 	if err := notifications.Write(ctx, db, event); err != nil {
-		log.Printf("antivirus: the real-time alert for scan %d could not be written: %v", scanID, err)
+		logx.Errorf("antivirus: the real-time alert for scan %d could not be written: %v", scanID, err)
 	}
 }
 

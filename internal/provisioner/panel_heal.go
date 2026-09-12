@@ -1,9 +1,10 @@
 package provisioner
 
 import (
-	"log"
 	"os"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // The SPA location deliberately has no sentinel; see
@@ -162,7 +163,7 @@ func healPanelLoginRateLimitOnStartup() {
 	content := string(original)
 	updated, ok := applyLoginRateLimit(content)
 	if !ok {
-		log.Printf("panel login rate limit repair: canonical API location was not found")
+		logx.Warnf("panel login rate limit repair: canonical API location was not found")
 		return
 	}
 	if updated == content {
@@ -170,17 +171,17 @@ func healPanelLoginRateLimitOnStartup() {
 	}
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
-		log.Printf("panel login rate limit repair: could not write vhost: %v", err)
+		logx.Errorf("panel login rate limit repair: could not write vhost: %v", err)
 		return
 	}
 	if output, err := tenantCommand("nginx", "-t").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(panelVhostPath, original, 0644)
-		log.Printf("panel login rate limit repair: nginx configuration failed, vhost restored: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel login rate limit repair: nginx configuration failed, vhost restored: %s", strings.TrimSpace(string(output)))
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		log.Printf("panel login rate limit repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel login rate limit repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
 }
 
@@ -227,7 +228,7 @@ func healPanelIndexNoCacheOnStartup() {
 	content := string(original)
 	updated, replaced := replaceIndentedBlock(content, "location / {", panelIndexNoCacheBlock())
 	if replaced == 0 {
-		log.Printf("panel cache repair: the panel vhost declares no SPA location")
+		logx.Warnf("panel cache repair: the panel vhost declares no SPA location")
 		return
 	}
 	if updated == content {
@@ -235,16 +236,16 @@ func healPanelIndexNoCacheOnStartup() {
 	}
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
-		log.Printf("panel cache repair: could not write vhost: %v", err)
+		logx.Errorf("panel cache repair: could not write vhost: %v", err)
 		return
 	}
 	if output, err := tenantCommand("nginx", "-t").CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(panelVhostPath, original, 0644)
-		log.Printf("panel cache repair: nginx configuration failed, vhost restored: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel cache repair: nginx configuration failed, vhost restored: %s", strings.TrimSpace(string(output)))
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
-		log.Printf("panel cache repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
+		logx.Errorf("panel cache repair: nginx reload failed: %s", strings.TrimSpace(string(output)))
 	}
 }

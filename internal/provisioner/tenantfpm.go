@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/phpdefaults"
 
 	"golang.org/x/sys/unix"
@@ -179,11 +179,11 @@ func ensureHTTPDHomeBooleans() {
 	}
 	output, err := tenantCommand("setsebool", args...).CombinedOutput()
 	if err != nil {
-		log.Printf("SELinux HTTP home boolean update failed: %s: %v", strings.TrimSpace(string(output)), err)
+		logx.Errorf("SELinux HTTP home boolean update failed: %s: %v", strings.TrimSpace(string(output)), err)
 		return
 	}
 	httpdBooleanDone = true
-	log.Printf("SELinux: enabled HTTP home access booleans: %v", disabled)
+	logx.Infof("SELinux: enabled HTTP home access booleans: %v", disabled)
 }
 
 // TenantFPMActive reports whether a tenant PHP-FPM unit is installed.
@@ -841,7 +841,7 @@ func RemoveSubdomainFPM(systemUser string, subdomainID int64) {
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload-or-restart", tenantUnitName(systemUser)).CombinedOutput(); err != nil {
-		log.Printf("remove subdomain pool %d for %s: reload failed: %s", subdomainID, systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("remove subdomain pool %d for %s: reload failed: %s", subdomainID, systemUser, strings.TrimSpace(string(output)))
 	}
 	_ = os.Remove(tenantSubSocket(systemUser, subdomainID))
 }
@@ -907,7 +907,7 @@ func EnsureTenantFPMOnStartup() {
 	}
 	rows, err := packageDB.Query(`SELECT id, system_user, php_version FROM domains`)
 	if err != nil {
-		log.Printf("tenant PHP-FPM startup check: %v", err)
+		logx.Errorf("tenant PHP-FPM startup check: %v", err)
 		return
 	}
 	for _, item := range readTenantFPMDomains(rows) {
@@ -938,10 +938,10 @@ func readTenantFPMDomains(rows *sql.Rows) []tenantFPMDomain {
 	if err := rows.Err(); err != nil {
 		// A short list silently skips a tenant's PHP-FPM heal, so that tenant keeps
 		// running on whatever unit file it already had.
-		log.Printf("tenant PHP-FPM startup: could not read the domain list: %v", err)
+		logx.Errorf("tenant PHP-FPM startup: could not read the domain list: %v", err)
 	}
 	if err := rows.Close(); err != nil {
-		log.Printf("tenant PHP-FPM startup rows: %v", err)
+		logx.Errorf("tenant PHP-FPM startup rows: %v", err)
 	}
 	return domains
 }
@@ -957,9 +957,9 @@ func ensureTenantMasterRunning(item tenantFPMDomain) {
 		return
 	}
 	if output, err := tenantCommand("systemctl", "start", tenantUnitName(item.systemUser)).CombinedOutput(); err != nil {
-		log.Printf("tenant PHP-FPM startup failed for %s: %s", item.systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("tenant PHP-FPM startup failed for %s: %s", item.systemUser, strings.TrimSpace(string(output)))
 		if rollbackErr := RollbackToSharedFPM(packageDB, item.id, item.systemUser, item.phpVersion); rollbackErr != nil {
-			log.Printf("tenant PHP-FPM rollback failed for %s: %v", item.systemUser, rollbackErr)
+			logx.Errorf("tenant PHP-FPM rollback failed for %s: %v", item.systemUser, rollbackErr)
 		}
 	}
 }
@@ -1002,7 +1002,7 @@ func moveLegacyTenantPool(systemUser string) (moved, ok bool) {
 		return false, true
 	}
 	if err := migrateTenantPoolLayout(systemUser); err != nil {
-		log.Printf("repairTenantPoolDrift: %s pool layout migration failed: %v", systemUser, err)
+		logx.Errorf("repairTenantPoolDrift: %s pool layout migration failed: %v", systemUser, err)
 		return false, false
 	}
 	return true, true
@@ -1027,14 +1027,14 @@ func rewriteTenantPool(systemUser, poolPath string, current []byte, expected str
 	if output, err := tenantCommand(config.FPMBin, "-t", "-y", globalPath).CombinedOutput(); err != nil {
 		// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 		_ = os.WriteFile(poolPath, current, 0644) // rollback
-		log.Printf("repairTenantPoolDrift: %s php-fpm -t failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("repairTenantPoolDrift: %s php-fpm -t failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return
 	}
 	// Graceful reload (USR2) -- does not drop active requests.
 	if output, err := tenantCommand("systemctl", "reload", tenantUnitName(systemUser)).CombinedOutput(); err != nil {
-		log.Printf("repairTenantPoolDrift: %s reload warning: %s", systemUser, strings.TrimSpace(string(output)))
+		logx.Warnf("repairTenantPoolDrift: %s reload warning: %s", systemUser, strings.TrimSpace(string(output)))
 	}
-	log.Printf("repairTenantPoolDrift: %s pool.conf updated (logging hardening + config drift repair)", systemUser)
+	logx.Infof("repairTenantPoolDrift: %s pool.conf updated (logging hardening + config drift repair)", systemUser)
 }
 
 // ---- PHP Debug Mode (robust fatal error visibility) ----

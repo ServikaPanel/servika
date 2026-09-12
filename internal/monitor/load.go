@@ -4,7 +4,6 @@ package monitor
 
 import (
 	"database/sql"
-	"log"
 	"math"
 	"net/http"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 )
 
 // StartLoadSampler samples /proc/loadavg and /proc/meminfo every interval and stores the result.
@@ -21,7 +21,7 @@ func StartLoadSampler(db *sql.DB, every time.Duration) {
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("load sampler panic: %v", rec)
+				logx.Errorf("load sampler panic: %v", rec)
 			}
 		}()
 		sampleLoad(db) // Record one sample immediately at startup.
@@ -32,7 +32,7 @@ func StartLoadSampler(db *sql.DB, every time.Duration) {
 			sampleLoad(db)
 			if n++; n%60 == 0 {
 				if _, err := db.Exec(`DELETE FROM system_load WHERE ts < NOW() - INTERVAL 7 DAY`); err != nil {
-					log.Printf("load sampler prune: %v", err)
+					logx.Errorf("load sampler prune: %v", err)
 				}
 			}
 		}
@@ -43,14 +43,14 @@ func sampleLoad(db *sql.DB) {
 	load1, load5, load15 := readLoad()
 	memory := readMemoryPercent()
 	if _, err := db.Exec(`INSERT INTO system_load (load1, load5, load15, mem_percent) VALUES (?,?,?,?)`, load1, load5, load15, memory); err != nil {
-		log.Printf("load sampler insert: %v", err)
+		logx.Errorf("load sampler insert: %v", err)
 	}
 }
 
 func readLoad() (float64, float64, float64) {
 	b, err := os.ReadFile("/proc/loadavg")
 	if err != nil {
-		log.Printf("load sampler: read /proc/loadavg: %v", err)
+		logx.Errorf("load sampler: read /proc/loadavg: %v", err)
 		return 0, 0, 0
 	}
 	f := strings.Fields(string(b))
@@ -66,7 +66,7 @@ func readLoad() (float64, float64, float64) {
 func readMemoryPercent() float64 {
 	b, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
-		log.Printf("load sampler: read /proc/meminfo: %v", err)
+		logx.Errorf("load sampler: read /proc/meminfo: %v", err)
 		return 0
 	}
 	var total, avail float64

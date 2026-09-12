@@ -2,9 +2,10 @@ package phpext
 
 import (
 	"bytes"
-	"log"
 	"os"
 	"path/filepath"
+
+	"servika/internal/logx"
 )
 
 // hardeningDropinName is the managed php.d file this package owns. The 99
@@ -33,7 +34,7 @@ func HealExposePHP() {
 	for _, version := range installedVersions() {
 		wrote, err := writeHardeningDropin(version.IniDir)
 		if err != nil {
-			log.Printf("PHP %s: expose_php drop-in: %v", version.Version, err)
+			logx.Errorf("PHP %s: expose_php drop-in: %v", version.Version, err)
 			continue
 		}
 		if !wrote {
@@ -43,7 +44,7 @@ func HealExposePHP() {
 		if _, err := runCommand("systemctl", "reload-or-restart", version.Service); err != nil {
 			// The file is on disk, so the next start of the pool picks it up. The
 			// banner stays until then, and saying so beats a silent partial repair.
-			log.Printf("PHP %s: %s did not reload, the drop-in applies at its next start: %v",
+			logx.Errorf("PHP %s: %s did not reload, the drop-in applies at its next start: %v",
 				version.Version, version.Service, err)
 		}
 	}

@@ -17,7 +17,6 @@ package backups
 import (
 	"context"
 	"database/sql"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,6 +24,7 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/files"
+	"servika/internal/logx"
 )
 
 const (
@@ -47,7 +47,7 @@ func completeIdentity(ctx context.Context, db *sql.DB, domainID int64, systemUse
 	// interpolates it into SQL through credentials, which validates again, but an
 	// invalid name means there is nothing to recover rather than something to try.
 	if !credentials.ValidDBIdentifier(dbName) {
-		log.Printf("backups: identity recovery refused an invalid database name: %.60q", dbName)
+		logx.Errorf("backups: identity recovery refused an invalid database name: %.60q", dbName)
 		return ""
 	}
 
@@ -67,11 +67,11 @@ func completeIdentity(ctx context.Context, db *sql.DB, domainID int64, systemUse
 	// MySQLAddUser validates the triple again and is the only place this package
 	// creates an account, so no CREATE USER statement is built here.
 	if err := credentials.MySQLAddUser(dbName, user, password); err != nil {
-		log.Printf("backups: identity recovery for %q failed: %v", dbName, err)
+		logx.Errorf("backups: identity recovery for %q failed: %v", dbName, err)
 		return ""
 	}
 	updatePanelRecord(db, domainID, dbName, user, password)
-	log.Printf("backups: recovered the account for %q from the site's own configuration", dbName)
+	logx.Infof("backups: recovered the account for %q from the site's own configuration", dbName)
 	return "user " + user + " recovered from the site configuration (" + source + ")"
 }
 
@@ -83,19 +83,19 @@ func updatePanelRecord(db *sql.DB, domainID int64, dbName, user, password string
 		if _, err := db.Exec(
 			`UPDATE db_accounts SET db_user=? WHERE domain_id=? AND db_name=? AND (db_user='' OR db_user IS NULL)`,
 			user, domainID, dbName); err != nil {
-			log.Printf("backups: could not record the recovered user for %q: %v", dbName, err)
+			logx.Errorf("backups: could not record the recovered user for %q: %v", dbName, err)
 		}
 		return
 	}
 	sealed, err := credentials.EncryptDBPass(user, password)
 	if err != nil {
-		log.Printf("backups: could not seal the recovered password for %q: %v", dbName, err)
+		logx.Errorf("backups: could not seal the recovered password for %q: %v", dbName, err)
 		return
 	}
 	if _, err := db.Exec(
 		`UPDATE db_accounts SET db_user=?, db_pass_plain=? WHERE domain_id=? AND db_name=?`,
 		user, sealed, domainID, dbName); err != nil {
-		log.Printf("backups: could not record the recovered account for %q: %v", dbName, err)
+		logx.Errorf("backups: could not record the recovered account for %q: %v", dbName, err)
 	}
 }
 

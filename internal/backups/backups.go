@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"servika/internal/bgjob"
 	"servika/internal/config"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -124,7 +124,7 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&id, &domainName, &systemUser, &frequency, &hour, &retention); err != nil {
 			// A dropped row leaves a domain out of the server-wide summary and out
 			// of the schedule figures computed from it.
-			httpx.LogR(r, "backups: skipping an unreadable summary row: %v", err)
+			httpx.WarnR(r, "backups: skipping an unreadable summary row: %v", err)
 			continue
 		}
 		schedule.add(frequency, hour, retention)
@@ -302,7 +302,7 @@ func (h *Handlers) backupTask(id int64, release func(), domainName, systemUser, 
 	sizeBytes, failedDBs, aerr := buildArchive(ctx, h.DB, id, systemUser, dir, file, time.Now().UTC().Format("2006-01-02 15:04:05"))
 	if aerr != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers, or error output; no raw tenant string with CR/LF reaches the log.
-		log.Printf("backup build failed for %s: %v", systemUser, aerr)
+		logx.Errorf("backup build failed for %s: %v", systemUser, aerr)
 		progressFinish(id, "", aerr)
 		return
 	}
@@ -448,7 +448,7 @@ func pruneManualBackups(db *sql.DB, domainID int64, systemUser string) {
 		var it item
 		if err := rows.Scan(&it.id, &it.file, &it.remoteStatus); err != nil {
 			// A dropped row is an old backup the retention pass never removes.
-			log.Printf("backups: skipping an unreadable retention row: %v", err)
+			logx.Warnf("backups: skipping an unreadable retention row: %v", err)
 			continue
 		}
 		old = append(old, it)
@@ -457,7 +457,7 @@ func pruneManualBackups(db *sql.DB, domainID int64, systemUser string) {
 		// A short list under-prunes rather than over-prunes, so nothing is lost,
 		// but the retention the operator set is quietly not the one being applied.
 		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
-		log.Printf("backups: could not read the retention list for domain %d: %v", domainID, err)
+		logx.Errorf("backups: could not read the retention list for domain %d: %v", domainID, err)
 	}
 	_ = rows.Close()
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.

@@ -3,10 +3,10 @@ package laravel
 import (
 	"context"
 	"database/sql"
-	"log"
 	"time"
 
 	"servika/internal/bgjob"
+	"servika/internal/logx"
 )
 
 const reconcileJobName = "laravel: job reconciler"
@@ -47,7 +47,7 @@ func reconcileOnce(db *sql.DB) {
 		   AND a.updated_at < (NOW() - INTERVAL ? SECOND)`,
 		int(jobReconcileGrace.Seconds()))
 	if err != nil {
-		log.Printf("laravel job reconciler query: %v", err)
+		logx.Errorf("laravel job reconciler query: %v", err)
 		return
 	}
 	type stuck struct {
@@ -58,7 +58,7 @@ func reconcileOnce(db *sql.DB) {
 	for rows.Next() {
 		var s stuck
 		if err := rows.Scan(&s.id, &s.systemUser); err != nil {
-			log.Printf("laravel job reconciler scan: %v", err)
+			logx.Errorf("laravel job reconciler scan: %v", err)
 			continue
 		}
 		jobs = append(jobs, s)
@@ -66,7 +66,7 @@ func reconcileOnce(db *sql.DB) {
 	if err := rows.Err(); err != nil {
 		// A job missing from this list stays marked running for good, because the
 		// reconciler is what closes a row a restart left behind.
-		log.Printf("laravel job reconciler: could not read the stuck job list: %v", err)
+		logx.Errorf("laravel job reconciler: could not read the stuck job list: %v", err)
 	}
 	_ = rows.Close()
 

@@ -80,7 +80,7 @@ func TestAFailedAlertDoesNotFailTheScan(t *testing.T) {
 	if strings.Contains(source, "return err") || strings.Contains(source, ") error {") {
 		t.Error("the alert writer returns an error upward, so a scan can fail because its alert did")
 	}
-	if strings.Count(source, "log.Printf") < 3 {
+	if strings.Count(source, "logx.Errorf") < 3 {
 		t.Error("a failed alert is no longer reported at all")
 	}
 }

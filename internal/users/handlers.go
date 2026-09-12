@@ -148,7 +148,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			&s.ResellerID, &twoFA, &s.LastLogin, &s.LastLoginIP, &s.CreatedAt, &passwordless); err != nil {
 			// A dropped row is an account that exists and can sign in while the
 			// screen that manages accounts does not show it.
-			httpx.LogR(r, "user list: skipping an unreadable row: %v", err)
+			httpx.WarnR(r, "user list: skipping an unreadable row: %v", err)
 			continue
 		}
 		s.TwoFA = twoFA == 1

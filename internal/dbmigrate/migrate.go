@@ -12,10 +12,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // ErrResumeRefused reports that a file which stopped part way through has since
@@ -26,7 +27,7 @@ var ErrResumeRefused = errors.New("migration changed since it stopped part way t
 func Run(d *sql.DB, dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("migration directory could not be read: %v", err)
+		logx.Errorf("migration directory could not be read: %v", err)
 		return nil
 	}
 	if err := ensureTables(d); err != nil {
@@ -74,7 +75,7 @@ func applyNamed(d *sql.DB, dir, name string, applied map[string]string) error {
 	if done {
 		return nil
 	}
-	log.Printf("migration: %s", name)
+	logx.Infof("migration: %s", name)
 	return applyFile(d, name, string(body), checksum)
 }
 
@@ -252,12 +253,12 @@ func applyFile(d *sql.DB, name, body, checksum string) error {
 		return err
 	}
 	if start > 0 {
-		log.Printf("migration: %s resumes at statement %d of %d", name, start+1, len(statements))
+		logx.Infof("migration: %s resumes at statement %d of %d", name, start+1, len(statements))
 	}
 	for i := start; i < len(statements); i++ {
 		if _, err := d.Exec(statements[i]); err != nil {
 			if perr := recordProgress(d, name, prefixChecksum(statements[:i]), i); perr != nil {
-				log.Printf("migration: %s could not record progress: %v", name, perr)
+				logx.Errorf("migration: %s could not record progress: %v", name, perr)
 			}
 			return fmt.Errorf("%s failed at statement %d of %d (the next start resumes there): %w",
 				name, i+1, len(statements), err)

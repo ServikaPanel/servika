@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/middleware"
 
 	"github.com/go-chi/chi/v5"
@@ -222,7 +222,7 @@ func MigrateNameserverRecords(ctx context.Context, db *sql.DB) (MigrationResult,
 		if err != nil {
 			// The detail goes to the log, not the API response; the operator
 			// needs to know WHICH domain failed, and the server log carries why.
-			log.Printf("dns nameserver migration domain=%d: %v", row.id, err)
+			logx.Errorf("dns nameserver migration domain=%d: %v", row.id, err)
 			result.Failed = append(result.Failed, row.name)
 			continue
 		}
@@ -231,7 +231,7 @@ func MigrateNameserverRecords(ctx context.Context, db *sql.DB) (MigrationResult,
 		}
 		result.Updated++
 		if err := WriteZone(ctx, db, row.id); err != nil {
-			log.Printf("dns nameserver migration WriteZone domain=%d: %v", row.id, err)
+			logx.Errorf("dns nameserver migration WriteZone domain=%d: %v", row.id, err)
 			result.Failed = append(result.Failed, row.name)
 		}
 	}

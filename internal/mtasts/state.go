@@ -6,9 +6,9 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -165,7 +165,7 @@ func enforceLock(ctx context.Context, db *sql.DB, domainID int64, row domainRow,
 		   FROM mail_domains WHERE domain_id = ?`, TestingSoakDays, domainID).Scan(&soaked); err != nil {
 		// FAIL-CLOSED: an unreadable timestamp must not unlock the one control
 		// in the panel that can stop mail being delivered.
-		log.Printf("mtasts: read the testing soak for domain %d: %v", domainID, err)
+		logx.Errorf("mtasts: read the testing soak for domain %d: %v", domainID, err)
 		return true, ReasonSoak
 	}
 	if soaked != 1 {

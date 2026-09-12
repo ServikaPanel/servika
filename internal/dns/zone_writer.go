@@ -5,13 +5,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	"servika/internal/logx"
 )
 
 const (
@@ -257,7 +258,7 @@ func reloadNamed() {
 		return
 	}
 	if err := zoneCommand("named-checkconf").Run(); err != nil {
-		log.Printf("dns reload: named-checkconf failed; named restart skipped: %v", err)
+		logx.Warnf("dns reload: named-checkconf failed; named restart skipped: %v", err)
 		return
 	}
 	_ = zoneCommand("systemctl", "restart", "named").Run()

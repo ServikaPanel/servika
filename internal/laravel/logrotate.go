@@ -3,10 +3,10 @@ package laravel
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // logrotatePathVar is the drop-in that rotates every log a long-running tenant
@@ -66,7 +66,7 @@ func HealLogRotation() {
 		// /etc/logrotate.d comes from the logrotate package, so a missing
 		// directory means the tool is not installed. Saying so is the repair:
 		// writing the file somewhere nothing reads would look like success.
-		log.Printf("laravel: could not install the log rotation rule: %v", err)
+		logx.Errorf("laravel: could not install the log rotation rule: %v", err)
 	}
 }
 

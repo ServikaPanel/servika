@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // Keeping the country database current.
@@ -48,6 +49,6 @@ func refresh(db *sql.DB) {
 		if errors.Is(err, ErrNoCredentials) {
 			return
 		}
-		log.Printf("geoip: refresh the country database: %v", err)
+		logx.Errorf("geoip: refresh the country database: %v", err)
 	}
 }

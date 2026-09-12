@@ -3,12 +3,12 @@ package provisioner
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // legacyTenantLogDir is where a tenant's PHP-FPM error log lived before it
@@ -48,7 +48,7 @@ func removeTenantLogs(systemUser string) {
 	}
 	matches, err := filepath.Glob(tenantLogPath(systemUser) + "*")
 	if err != nil {
-		log.Printf("tenant PHP-FPM log cleanup for %s: %v", systemUser, err)
+		logx.Errorf("tenant PHP-FPM log cleanup for %s: %v", systemUser, err)
 	}
 	for _, path := range matches {
 		_ = os.Remove(path)
@@ -160,14 +160,14 @@ func HealTenantFPMLogs() {
 		// Nothing is migrated. The old arrangement rotates a tenant's PHP errors
 		// away, which is the bug this repairs; moving them somewhere php-fpm
 		// cannot write would stop the tenant serving PHP at all.
-		log.Printf("tenant PHP-FPM logs left where they are: %v", err)
+		logx.Errorf("tenant PHP-FPM logs left where they are: %v", err)
 		return
 	}
 	if err := writeIfChanged(fpmLogrotatePathVar, []byte(renderFPMLogrotate()), 0o644); err != nil {
 		// /etc/logrotate.d comes from the logrotate package, so a missing
 		// directory means the tool is not installed. Saying so is the repair:
 		// writing the file somewhere nothing reads would look like success.
-		log.Printf("tenant PHP-FPM log rotation rule: %v", err)
+		logx.Errorf("tenant PHP-FPM log rotation rule: %v", err)
 	}
 	migrateTenantFPMLogPaths()
 }
@@ -215,7 +215,7 @@ func execStartBinary(unit string) string {
 func migrateTenantFPMLogPaths() {
 	units, err := filepath.Glob(filepath.Join(tenantUnitDir, "php-fpm-c_*.service"))
 	if err != nil {
-		log.Printf("tenant PHP-FPM log migration: %v", err)
+		logx.Errorf("tenant PHP-FPM log migration: %v", err)
 		return
 	}
 	for _, unitPath := range units {
@@ -268,7 +268,7 @@ func readTenantLogMigration(systemUser, unitPath string) (tenantLogMigration, bo
 	}
 	fpmBinary := execStartBinary(string(currentUnit))
 	if fpmBinary == "" {
-		log.Printf("tenant PHP-FPM log migration: %s has no usable ExecStart", systemUser)
+		logx.Warnf("tenant PHP-FPM log migration: %s has no usable ExecStart", systemUser)
 		return tenantLogMigration{}, false
 	}
 	globalPath := filepath.Join(tenantCfgDir(systemUser), "php-fpm.conf")
@@ -299,23 +299,23 @@ func (m tenantLogMigration) apply(wantedUnit, wantedGlobal string) {
 	systemUser := m.systemUser
 	// #nosec G306 -- root-owned system integration file that php-fpm must read; it carries no secret.
 	if err := os.WriteFile(m.globalPath, []byte(wantedGlobal), 0644); err != nil {
-		log.Printf("tenant PHP-FPM log migration: %s global config: %v", systemUser, err)
+		logx.Errorf("tenant PHP-FPM log migration: %s global config: %v", systemUser, err)
 		return
 	}
 	if output, err := tenantCommand(m.fpmBinary, "-t", "-y", m.globalPath).CombinedOutput(); err != nil {
 		m.restore()
-		log.Printf("tenant PHP-FPM log migration: %s php-fpm -t failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("tenant PHP-FPM log migration: %s php-fpm -t failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return
 	}
 	// #nosec G306 -- root-owned system integration file that systemd must read; it carries no secret.
 	if err := os.WriteFile(m.unitPath, []byte(wantedUnit), 0644); err != nil {
 		m.restore()
-		log.Printf("tenant PHP-FPM log migration: %s unit: %v", systemUser, err)
+		logx.Errorf("tenant PHP-FPM log migration: %s unit: %v", systemUser, err)
 		return
 	}
 	if output, err := tenantCommand("systemctl", "daemon-reload").CombinedOutput(); err != nil {
 		m.restore()
-		log.Printf("tenant PHP-FPM log migration: %s daemon-reload failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("tenant PHP-FPM log migration: %s daemon-reload failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return
 	}
 	// A restart, not a reload: USR2 re-reads the configuration but keeps the mount
@@ -324,8 +324,8 @@ func (m tenantLogMigration) apply(wantedUnit, wantedGlobal string) {
 	if output, err := tenantCommand("systemctl", "restart", tenantUnitName(systemUser)).CombinedOutput(); err != nil {
 		m.restore()
 		_, _ = tenantCommand("systemctl", "restart", tenantUnitName(systemUser)).CombinedOutput()
-		log.Printf("tenant PHP-FPM log migration: %s restart failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
+		logx.Errorf("tenant PHP-FPM log migration: %s restart failed, rolled back: %s", systemUser, strings.TrimSpace(string(output)))
 		return
 	}
-	log.Printf("tenant PHP-FPM log migration: %s now logs to %s", systemUser, tenantLogPath(systemUser))
+	logx.Infof("tenant PHP-FPM log migration: %s now logs to %s", systemUser, tenantLogPath(systemUser))
 }

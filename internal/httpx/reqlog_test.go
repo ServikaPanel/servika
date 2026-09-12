@@ -49,9 +49,11 @@ func TestTheRequestIDReachesTheLine(t *testing.T) {
 
 	LogR(requestWithID("abc123"), "backup destination %d: %v", 7, fmt.Errorf("connection refused"))
 
+	// The severity token comes first, because journald reads the priority off
+	// the start of the line; the correlation id follows it.
 	line := logged.String()
-	if !strings.HasPrefix(line, "reqid=abc123 ") {
-		t.Errorf("the line does not carry the correlation id: %q", line)
+	if !strings.HasPrefix(line, "<3>reqid=abc123 ") {
+		t.Errorf("the line does not carry the severity and the correlation id: %q", line)
 	}
 	if !strings.Contains(line, "backup destination 7: connection refused") {
 		t.Errorf("the caller's own message was changed: %q", line)
@@ -161,20 +163,32 @@ func (f *logSiteFinder) visit(inner ast.Node, hasRequest *bool) bool {
 			return false
 		}
 	case *ast.CallExpr:
-		if *hasRequest && isLogPrintf(d) {
+		if *hasRequest && logsWithoutTheRequest(d) {
 			f.found = append(f.found, d.Lparen)
 		}
 	}
 	return true
 }
 
-func isLogPrintf(call *ast.CallExpr) bool {
+// logsWithoutTheRequest reports whether a call writes a log line that carries no
+// correlation id: the standard logger, or logx, which adds the severity but
+// knows nothing about the request.
+func logsWithoutTheRequest(call *ast.CallExpr) bool {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || sel.Sel.Name != "Printf" {
+	if !ok {
 		return false
 	}
 	pkg, ok := sel.X.(*ast.Ident)
-	return ok && pkg.Name == "log"
+	if !ok {
+		return false
+	}
+	switch pkg.Name {
+	case "log":
+		return sel.Sel.Name == "Printf" || sel.Sel.Name == "Print" || sel.Sel.Name == "Println"
+	case "logx":
+		return true
+	}
+	return false
 }
 
 // requestParam returns the name of the *http.Request parameter when the

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -169,7 +169,7 @@ func runPECLInstall(job *peclJob, s Version, pkg string) {
 	defer func() {
 		if p := recover(); p != nil {
 			job.fail("internal")
-			log.Printf("phpext: PECL install job panicked: %v", p)
+			logx.Errorf("phpext: PECL install job panicked: %v", p)
 		}
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), extensionInstallTimeout)
@@ -300,7 +300,7 @@ func reloadFPM(ctx context.Context, job *peclJob, s Version) {
 	out, err := exec.CommandContext(ctx, "systemctl", "reload-or-restart", s.Service).CombinedOutput()
 	job.appendLog(out)
 	if err != nil {
-		log.Printf("phpext: php-fpm reload after PECL install failed: %v: %s", err, strings.TrimSpace(string(out)))
+		logx.Errorf("phpext: php-fpm reload after PECL install failed: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	// The extension lives in the global php.d, but each tenant runs its own
 	// isolated master, so reload those too or the new extension stays invisible

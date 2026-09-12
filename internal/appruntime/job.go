@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // Installing a runtime is detached work, for the same reasons a PHP version is:
@@ -132,7 +132,7 @@ func readOpDescriptor() opDescriptor {
 	}
 	var descriptor opDescriptor
 	if err := json.Unmarshal(body, &descriptor); err != nil {
-		log.Printf("runtime op: the recorded operation could not be read: %v", err)
+		logx.Errorf("runtime op: the recorded operation could not be read: %v", err)
 		return opDescriptor{}
 	}
 	return descriptor

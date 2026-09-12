@@ -3,7 +3,8 @@ package datamigrate
 import (
 	"context"
 	"database/sql"
-	"log"
+
+	"servika/internal/logx"
 )
 
 // BackfillDNSTemplateIPv6 adds the AAAA rows and the ip6 SPF term to an
@@ -23,7 +24,7 @@ import (
 func BackfillDNSTemplateIPv6(ctx context.Context, db *sql.DB) {
 	var count int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dns_template`).Scan(&count); err != nil {
-		log.Printf("dns template ipv6 backfill: could not read the template: %v", err)
+		logx.Errorf("dns template ipv6 backfill: could not read the template: %v", err)
 		return
 	}
 	if count == 0 {
@@ -35,7 +36,7 @@ func BackfillDNSTemplateIPv6(ctx context.Context, db *sql.DB) {
 		var exists int
 		if err := db.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM dns_template WHERE name=? AND type='AAAA'`, row.name).Scan(&exists); err != nil {
-			log.Printf("dns template ipv6 backfill: could not check %s: %v", row.name, err)
+			logx.Errorf("dns template ipv6 backfill: could not check %s: %v", row.name, err)
 			return
 		}
 		if exists > 0 {
@@ -44,7 +45,7 @@ func BackfillDNSTemplateIPv6(ctx context.Context, db *sql.DB) {
 		if _, err := db.ExecContext(ctx,
 			`INSERT INTO dns_template(name,type,value,ttl,priority,sort_order,enabled) VALUES(?,'AAAA','{IP6}',3600,0,?,1)`,
 			row.name, row.sortOrder); err != nil {
-			log.Printf("dns template ipv6 backfill: could not add %s: %v", row.name, err)
+			logx.Errorf("dns template ipv6 backfill: could not add %s: %v", row.name, err)
 			return
 		}
 		added++
@@ -54,13 +55,13 @@ func BackfillDNSTemplateIPv6(ctx context.Context, db *sql.DB) {
 		`UPDATE dns_template SET value=? WHERE type='TXT' AND value=?`,
 		spfWithIPv6, spfWithoutIPv6)
 	if err != nil {
-		log.Printf("dns template ipv6 backfill: could not update the SPF record: %v", err)
+		logx.Errorf("dns template ipv6 backfill: could not update the SPF record: %v", err)
 		return
 	}
 	updated, _ := result.RowsAffected()
 
 	if added > 0 || updated > 0 {
-		log.Printf("dns template ipv6 backfill: %d AAAA rows added, %d SPF rows updated", added, updated)
+		logx.Infof("dns template ipv6 backfill: %d AAAA rows added, %d SPF rows updated", added, updated)
 	}
 }
 

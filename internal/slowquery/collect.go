@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"io"
-	"log"
 	"os"
 	"syscall"
 	"time"
 
 	"servika/internal/bgjob"
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // collectJobName identifies the collector in a panic log line.
@@ -67,7 +67,7 @@ func CollectOnce(db *sql.DB) {
 
 	enabled, err := collectionEnabled(ctx, db)
 	if err != nil {
-		log.Printf("slow query collector: could not read the setting: %v", err)
+		logx.Errorf("slow query collector: could not read the setting: %v", err)
 		return
 	}
 	if !enabled {
@@ -76,7 +76,7 @@ func CollectOnce(db *sql.DB) {
 		return
 	}
 	if err := collectPass(ctx, db, config.MariaDBSlowLog()); err != nil {
-		log.Printf("slow query collector: %v", err)
+		logx.Errorf("slow query collector: %v", err)
 		recordCollectorError(ctx, db, err.Error())
 		return
 	}
@@ -105,7 +105,7 @@ func recordCollectorError(ctx context.Context, db *sql.DB, message string) {
 	if _, err := db.ExecContext(ctx,
 		`UPDATE panel_settings SET slow_query_last_error=?, slow_query_collected_at=NOW() WHERE id=1`,
 		message); err != nil {
-		log.Printf("slow query collector: could not record its own state: %v", err)
+		logx.Errorf("slow query collector: could not record its own state: %v", err)
 	}
 }
 
@@ -171,7 +171,7 @@ func collectPass(ctx context.Context, db *sql.DB, path string) error {
 		if int64(len(data)) < passByteCap {
 			return nil
 		}
-		log.Printf("slow query collector: no record boundary in %d bytes at offset %d, skipping the window",
+		logx.Warnf("slow query collector: no record boundary in %d bytes at offset %d, skipping the window",
 			len(data), start)
 		return storeBuckets(ctx, db, nil, start+int64(len(data)), size)
 	}

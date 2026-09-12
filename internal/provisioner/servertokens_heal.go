@@ -1,10 +1,11 @@
 package provisioner
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 // serverTokensFile is the drop-in this heal owns. The 00 prefix keeps it beside
@@ -39,22 +40,22 @@ func HealServerTokens() {
 	}
 	// #nosec G306 -- root-owned nginx configuration nginx must read; it carries no secret.
 	if err := os.WriteFile(target, []byte(serverTokensBody), 0o644); err != nil {
-		log.Printf("server_tokens heal: could not write %s: %v", target, err)
+		logx.Errorf("server_tokens heal: could not write %s: %v", target, err)
 		return
 	}
 	if output, err := tenantCommand("nginx", "-t").CombinedOutput(); err != nil {
 		_ = os.Remove(target)
-		log.Printf("server_tokens heal: nginx -t rejected the drop-in, removed it: %s",
+		logx.Errorf("server_tokens heal: nginx -t rejected the drop-in, removed it: %s",
 			strings.TrimSpace(string(output)))
 		return
 	}
 	if output, err := tenantCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
 		// The file is valid and on disk, so the next start applies it.
-		log.Printf("server_tokens heal: nginx reload failed, the drop-in applies at the next start: %s",
+		logx.Warnf("server_tokens heal: nginx reload failed, the drop-in applies at the next start: %s",
 			strings.TrimSpace(string(output)))
 		return
 	}
-	log.Printf("server_tokens heal: nginx no longer advertises its version")
+	logx.Infof("server_tokens heal: nginx no longer advertises its version")
 }
 
 // serverTokensDeclared reports whether nginx.conf or any conf.d file already

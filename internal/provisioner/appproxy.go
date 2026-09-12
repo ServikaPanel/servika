@@ -3,12 +3,12 @@ package provisioner
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strings"
 
 	"servika/internal/config"
+	"servika/internal/logx"
 )
 
 // A tenant application listens on a loopback port and is published here. The
@@ -90,7 +90,7 @@ func readAppProxies(db *sql.DB, domainID, subdomainID int64) []appProxy {
 		 WHERE domain_id=? AND COALESCE(subdomain_id,0)=? AND enabled=1
 		 ORDER BY LENGTH(mount_path) DESC, id`, domainID, subdomainID)
 	if err != nil {
-		log.Printf("app proxy: read applications of domain %d: %v", domainID, err)
+		logx.Errorf("app proxy: read applications of domain %d: %v", domainID, err)
 		return nil
 	}
 	defer func() { _ = rows.Close() }()
@@ -99,21 +99,21 @@ func readAppProxies(db *sql.DB, domainID, subdomainID int64) []appProxy {
 	for rows.Next() {
 		var proxy appProxy
 		if err := rows.Scan(&proxy.Name, &proxy.Mount, &proxy.Port); err != nil {
-			log.Printf("app proxy: read an application row of domain %d: %v", domainID, err)
+			logx.Errorf("app proxy: read an application row of domain %d: %v", domainID, err)
 			return nil
 		}
 		if !reProxyMount.MatchString(proxy.Mount) {
-			log.Printf("app proxy: skipping application %q of domain %d: invalid mount %q", proxy.Name, domainID, proxy.Mount)
+			logx.Warnf("app proxy: skipping application %q of domain %d: invalid mount %q", proxy.Name, domainID, proxy.Mount)
 			continue
 		}
 		if proxy.Port < appProxyPortMin || proxy.Port > appProxyPortMax {
-			log.Printf("app proxy: skipping application %q of domain %d: port %d is outside the managed range", proxy.Name, domainID, proxy.Port)
+			logx.Warnf("app proxy: skipping application %q of domain %d: port %d is outside the managed range", proxy.Name, domainID, proxy.Port)
 			continue
 		}
 		out = append(out, proxy)
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("app proxy: read applications of domain %d: %v", domainID, err)
+		logx.Errorf("app proxy: read applications of domain %d: %v", domainID, err)
 		return nil
 	}
 	return out

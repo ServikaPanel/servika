@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"database/sql"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 	"servika/internal/subdomain"
 
@@ -102,13 +102,13 @@ func (h *Handlers) logSources(r *http.Request, id int64, domainName string) (str
 		var fqdn string
 		if err := rows.Scan(&fqdn); err != nil {
 			// A dropped subdomain has its traffic left out of the parent's figure.
-			log.Printf("stats: skipping an unreadable subdomain row for domain %d: %v", id, err)
+			logx.Warnf("stats: skipping an unreadable subdomain row for domain %d: %v", id, err)
 			continue
 		}
 		// Re-validate before the value becomes a filesystem path. A stored name
 		// that fails is refused rather than dropped in silence.
 		if provisioner.ValidateDomain(fqdn) != nil {
-			log.Printf("stats: refusing an invalid stored subdomain name for domain %d", id)
+			logx.Errorf("stats: refusing an invalid stored subdomain name for domain %d", id)
 			continue
 		}
 		names = append(names, accessLogPath(fqdn))
@@ -117,7 +117,7 @@ func (h *Handlers) logSources(r *http.Request, id int64, domainName string) (str
 		// Same reasoning as the query failure above: a subdomain missing from this
 		// list only understates the parent's traffic, so the parent's own log is
 		// still reported rather than the whole figure being withheld.
-		log.Printf("stats: could not read the subdomain list for domain %d: %v", id, err)
+		logx.Errorf("stats: could not read the subdomain list for domain %d: %v", id, err)
 	}
 	return domainName, names, true
 }

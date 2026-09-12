@@ -11,11 +11,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"time"
 
 	"servika/internal/avsettings"
 	"servika/internal/bgjob"
+	"servika/internal/logx"
 )
 
 const scheduleJobName = "antivirus: nightly sweep scheduler"
@@ -82,7 +82,7 @@ func tickOnce(db *sql.DB, now func() time.Time) {
 func scheduledSweepDue(ctx context.Context, db *sql.DB, now func() time.Time) (avsettings.Settings, bool) {
 	settings, err := avsettings.Read(ctx, db)
 	if err != nil {
-		log.Printf("antivirus: the scheduled sweep could not read its settings: %v", err)
+		logx.Errorf("antivirus: the scheduled sweep could not read its settings: %v", err)
 		return settings, false
 	}
 	if !settings.ScheduledScan {
@@ -101,7 +101,7 @@ func scheduledSweepDue(ctx context.Context, db *sql.DB, now func() time.Time) (a
 		// A read that failed is NOT treated as "no sweep yet". That direction
 		// starts a sweep of the whole filesystem every hour for as long as the
 		// database is unwell, which is the worst hour to be adding load.
-		log.Printf("antivirus: whether a sweep is already due could not be read: %v", err)
+		logx.Errorf("antivirus: whether a sweep is already due could not be read: %v", err)
 		return settings, false
 	} else if recent {
 		return settings, false
@@ -116,7 +116,7 @@ func startScheduledSweep(ctx context.Context, db *sql.DB, settings avsettings.Se
 	// the same trees under one resource limit.
 	slot, err := takeScanSlot(ctx, db)
 	if err != nil {
-		log.Printf("antivirus: the scheduled sweep was skipped, another scan is running")
+		logx.Warnf("antivirus: the scheduled sweep was skipped, another scan is running")
 		return
 	}
 	defer slot.Release()
@@ -126,11 +126,11 @@ func startScheduledSweep(ctx context.Context, db *sql.DB, settings avsettings.Se
 		`INSERT INTO av_scans (domain_id, scope, status, engine, source) VALUES (NULL,?,?,?,?)`,
 		settings.Scope, "running", engineName(), SourceScheduled)
 	if err != nil {
-		log.Printf("antivirus: the scheduled sweep could not be recorded: %v", err)
+		logx.Errorf("antivirus: the scheduled sweep could not be recorded: %v", err)
 		return
 	}
 	sid, _ := res.LastInsertId()
-	log.Printf("antivirus: scheduled sweep %d starting over %v", sid, req.Roots)
+	logx.Infof("antivirus: scheduled sweep %d starting over %v", sid, req.Roots)
 	runSweep(ctx, db, sid, req)
 }
 

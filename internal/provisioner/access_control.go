@@ -2,10 +2,11 @@ package provisioner
 
 import (
 	"database/sql"
-	"log"
 	"net"
 	"regexp"
 	"strings"
+
+	"servika/internal/logx"
 )
 
 var hotlinkAllowedDomainPattern = regexp.MustCompile(`^\*?\.?[a-zA-Z0-9.-]+$`)
@@ -52,13 +53,13 @@ func ipRuleLines(rows *sql.Rows, domainID int64, directive string) (string, int)
 		if err := rows.Scan(&ipCIDR); err != nil {
 			// A dropped rule renders as the opposite of what the operator saved: a
 			// missing deny lets that address in, a missing allow shuts it out.
-			log.Printf("access control: skipping an unreadable IP rule for domain %d: %v", domainID, err)
+			logx.Warnf("access control: skipping an unreadable IP rule for domain %d: %v", domainID, err)
 			continue
 		}
 		// A stored value that is not a valid nginx address is refused rather than
 		// dropped in silence, because it would otherwise fail the whole reload.
 		if !validNginxIPRule(ipCIDR) {
-			log.Printf("access control: refusing an invalid stored IP rule for domain %d", domainID)
+			logx.Errorf("access control: refusing an invalid stored IP rule for domain %d", domainID)
 			continue
 		}
 		builder.WriteString("    ")
@@ -72,7 +73,7 @@ func ipRuleLines(rows *sql.Rows, domainID int64, directive string) (string, int)
 		// A short list renders an access rule that is not the one the operator
 		// saved: a missing entry is let in on a deny list and refused on an allow
 		// list, and the rendered file gives no sign of it.
-		log.Printf("access control: could not read the IP rules for domain %d: %v", domainID, err)
+		logx.Errorf("access control: could not read the IP rules for domain %d: %v", domainID, err)
 	}
 	return builder.String(), count
 }
@@ -121,6 +122,6 @@ func validNginxIPRule(value string) bool {
 	if _, _, err := net.ParseCIDR(value); err == nil {
 		return true
 	}
-	log.Printf("access control: skipped invalid IP rule %q", value)
+	logx.Warnf("access control: skipped invalid IP rule %q", value)
 	return false
 }

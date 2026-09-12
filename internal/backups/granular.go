@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -23,6 +22,7 @@ import (
 	"servika/internal/credentials"
 	"servika/internal/files"
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/sqlimport"
 
 	"github.com/go-chi/chi/v5"
@@ -213,7 +213,7 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 		// missing databases and report it as successful. The driver's own text
 		// goes to the log, not into the job record the customer reads.
 		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
-		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
+		logx.Errorf("backups: could not list the databases of domain %d: %v", domainID, err)
 		return 0, nil, errors.New("could not list the domain's databases")
 	}
 	written, failedDBs := dumpDatabases(ctx, dbDir, ownedDBs)
@@ -232,7 +232,7 @@ func buildArchive(ctx context.Context, db *sql.DB, domainID int64, systemUser, d
 	// site connects as, and the site kept returning 500.
 	if n := writeDBUsers(ctx, dbDir, written); n > 0 {
 		// #nosec G706 -- logged values are an integer count and a validated systemUser identifier.
-		log.Printf("backup %s: %d database user(s) added to the archive", systemUser, n)
+		logx.Infof("backup %s: %d database user(s) added to the archive", systemUser, n)
 	}
 
 	writeManifest(dbDir, archiveManifest{CreatedAt: createdTS, Home: systemUser, MainDB: systemUser + "_main", Databases: written, FailedDatabases: failedDBs})
@@ -326,7 +326,7 @@ func packageArchive(ctx context.Context, abs, dir, systemUser string) error {
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && tarArchiveUsable(exitErr.ExitCode()) {
 		// #nosec G706 -- the operand is tar's own output, not client-controlled input.
-		log.Printf("backup: tar reported a file changed during read for %s (exit 1); archive kept: %s",
+		logx.Warnf("backup: tar reported a file changed during read for %s (exit 1); archive kept: %s",
 			systemUser, strings.TrimSpace(string(out)))
 		return nil
 	}
@@ -462,7 +462,7 @@ func restoreAllDBs(ctx context.Context, db *sql.DB, domainID int64, tmp, systemU
 		// the domain really owns and report it as "not owned", so the failure is
 		// reported as itself instead.
 		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
-		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
+		logx.Errorf("backups: could not list the databases of domain %d: %v", domainID, err)
 		return append(res, map[string]string{
 			"db": "", "status": "failed",
 			"message": "could not list the domain's databases",
@@ -558,7 +558,7 @@ func applyRestoredAccounts(ctx context.Context, tmp, systemUser string, restored
 	}
 	if n, err := applyDBUsers(ctx, filepath.Join(tmp, "__db__"), nameSet(restored)); err == nil && n > 0 {
 		// #nosec G706 -- logged values are an integer count and a validated systemUser identifier.
-		log.Printf("restore %s: %d user/grant statement(s) applied", systemUser, n)
+		logx.Infof("restore %s: %d user/grant statement(s) applied", systemUser, n)
 	}
 }
 
@@ -607,7 +607,7 @@ func restoreOneDB(ctx context.Context, db *sql.DB, domainID int64, tmp, systemUs
 		// A short list would report a database the domain owns as one it does not.
 		// This error becomes a 400 body, so the driver's text stays in the log.
 		// #nosec G706 -- domainID is an int64; %d cannot carry a line break into the log.
-		log.Printf("backups: could not list the databases of domain %d: %v", domainID, err)
+		logx.Errorf("backups: could not list the databases of domain %d: %v", domainID, err)
 		return "", errors.New("could not list the domain's databases")
 	}
 	owned := nameSet(ownedNames)

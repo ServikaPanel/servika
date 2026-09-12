@@ -3,9 +3,9 @@ package subdomain
 import (
 	"context"
 	"database/sql"
-	"log"
 	"strings"
 
+	"servika/internal/logx"
 	"servika/internal/provisioner"
 )
 
@@ -56,7 +56,7 @@ func HealSubdomainPHPVersions(db *sql.DB) {
 		SELECT s.id, s.fqdn, s.php_version, d.system_user, COALESCE(d.php_version,'')
 		  FROM subdomains s JOIN domains d ON d.id = s.domain_id`)
 	if err != nil {
-		log.Printf("heal subdomain PHP versions: %v", err)
+		logx.Errorf("heal subdomain PHP versions: %v", err)
 		return
 	}
 	type drift struct {
@@ -71,7 +71,7 @@ func HealSubdomainPHPVersions(db *sql.DB) {
 		if err := rows.Scan(&id, &fqdn, &recorded, &systemUser, &parentVersion); err != nil {
 			// A dropped row is a subdomain whose recorded PHP version is never
 			// corrected, so the panel keeps showing a version it does not serve.
-			log.Printf("php lock heal: skipping an unreadable subdomain row: %v", err)
+			logx.Warnf("php lock heal: skipping an unreadable subdomain row: %v", err)
 			continue
 		}
 		if parentVersion == "" {
@@ -87,10 +87,10 @@ func HealSubdomainPHPVersions(db *sql.DB) {
 	for _, correction := range corrections {
 		if _, err := db.Exec(`UPDATE subdomains SET php_version=? WHERE id=?`,
 			correction.served, correction.id); err != nil {
-			log.Printf("heal subdomain PHP version %s: %v", correction.fqdn, err)
+			logx.Errorf("heal subdomain PHP version %s: %v", correction.fqdn, err)
 			continue
 		}
-		log.Printf("subdomain %s was recorded on a PHP version its tenant does not serve; corrected to %s",
+		logx.Warnf("subdomain %s was recorded on a PHP version its tenant does not serve; corrected to %s",
 			correction.fqdn, correction.served)
 	}
 }

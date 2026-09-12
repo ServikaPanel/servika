@@ -14,7 +14,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"servika/internal/httpx"
+	"servika/internal/logx"
 	"servika/internal/secret"
 )
 
@@ -38,12 +38,12 @@ func (h *Handlers) saveSession(source *RemoteSource, discoveryJSON []byte, start
 
 	encPass, err := sealForHost(source.Password, source.Host)
 	if err != nil {
-		log.Printf("migration session: could not seal the password: %v", err)
+		logx.Errorf("migration session: could not seal the password: %v", err)
 		return 0
 	}
 	encKey, err := sealForHost(source.Key, source.Host)
 	if err != nil {
-		log.Printf("migration session: could not seal the key: %v", err)
+		logx.Errorf("migration session: could not seal the key: %v", err)
 		return 0
 	}
 	res, err := h.DB.Exec(
@@ -54,7 +54,7 @@ func (h *Handlers) saveSession(source *RemoteSource, discoveryJSON []byte, start
 		source.Type, source.Host, source.Port, source.User, encPass, encKey,
 		string(discoveryJSON), nullIfEmpty(startedBy), int(sessionTTL.Seconds()))
 	if err != nil {
-		log.Printf("migration session: could not save: %v", err)
+		logx.Errorf("migration session: could not save: %v", err)
 		return 0
 	}
 	id, _ := res.LastInsertId()

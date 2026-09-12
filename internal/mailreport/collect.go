@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"servika/internal/bgjob"
+	"servika/internal/logx"
 )
 
 // collectJobName identifies the collector in a panic log line.
@@ -54,7 +54,7 @@ func StartCollector(db *sql.DB) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 				defer cancel()
 				if err := CollectAll(ctx, db); err != nil {
-					log.Printf("mail report collector: %v", err)
+					logx.Errorf("mail report collector: %v", err)
 				}
 			})
 			time.Sleep(collectInterval)
@@ -134,7 +134,7 @@ func collectDomain(ctx context.Context, db *sql.DB, target domainTarget) {
 	names, newest, err := newMessages(target.maildir, target.cursorEpoch)
 	if err != nil {
 		saveCursor(ctx, db, target, target.cursorEpoch, "mailbox could not be read")
-		log.Printf("mail report: read %s for domain %d: %v", target.maildir, target.domainID, err)
+		logx.Errorf("mail report: read %s for domain %d: %v", target.maildir, target.domainID, err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func collectDomain(ctx context.Context, db *sql.DB, target domainTarget) {
 		raw, err := readMessage(name)
 		if err != nil {
 			failures++
-			log.Printf("mail report: read a message for domain %d: %v", target.domainID, err)
+			logx.Errorf("mail report: read a message for domain %d: %v", target.domainID, err)
 			continue
 		}
 		for _, document := range Attachments(raw) {
@@ -164,21 +164,21 @@ func collectDomain(ctx context.Context, db *sql.DB, target domainTarget) {
 func storeDocument(ctx context.Context, db *sql.DB, domainID int64, document []byte) {
 	if report, err := ParseAggregate(document); err == nil {
 		if err := StoreAggregate(ctx, db, domainID, report); err != nil {
-			log.Printf("mail report: store a DMARC report for domain %d: %v", domainID, err)
+			logx.Errorf("mail report: store a DMARC report for domain %d: %v", domainID, err)
 		}
 		return
 	} else if !errors.Is(err, ErrNotAReport) {
 		// A document that IS a report and was refused is worth saying out loud:
 		// silently skipping it would look identical to no report arriving.
-		log.Printf("mail report: refused a DMARC report for domain %d: %v", domainID, err)
+		logx.Errorf("mail report: refused a DMARC report for domain %d: %v", domainID, err)
 		return
 	}
 	if report, err := ParseTLSRPT(document); err == nil {
 		if err := StoreTLSRPT(ctx, db, domainID, report); err != nil {
-			log.Printf("mail report: store a TLS-RPT report for domain %d: %v", domainID, err)
+			logx.Errorf("mail report: store a TLS-RPT report for domain %d: %v", domainID, err)
 		}
 	} else if !errors.Is(err, ErrNotAReport) {
-		log.Printf("mail report: refused a TLS-RPT report for domain %d: %v", domainID, err)
+		logx.Errorf("mail report: refused a TLS-RPT report for domain %d: %v", domainID, err)
 	}
 }
 
@@ -247,6 +247,6 @@ func saveCursor(ctx context.Context, db *sql.DB, target domainTarget, epoch int6
 		 ON DUPLICATE KEY UPDATE last_scan_at=NOW(), last_message_epoch=VALUES(last_message_epoch),
 		   last_error=VALUES(last_error)`,
 		target.domainID, target.mailboxLocal, epoch, reason); err != nil {
-		log.Printf("mail report: save the cursor for domain %d: %v", target.domainID, err)
+		logx.Errorf("mail report: save the cursor for domain %d: %v", target.domainID, err)
 	}
 }

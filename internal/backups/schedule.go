@@ -5,13 +5,13 @@ package backups
 import (
 	"context"
 	"database/sql"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
 	"servika/internal/bgjob"
+	"servika/internal/logx"
 )
 
 const scheduleJobName = "backups: nightly scheduler"
@@ -83,7 +83,7 @@ func tickOnce(db *sql.DB) {
 	if len(due) == 0 {
 		return
 	}
-	log.Printf("backup scheduler: %d due domain found", len(due))
+	logx.Infof("backup scheduler: %d due domain found", len(due))
 
 	// Group the whole nightly run into one 'scheduled' job so the panel shows a single
 	// row with progress instead of one unrelated record per domain.
@@ -120,7 +120,7 @@ func tickOnce(db *sql.DB) {
 				break
 			}
 			failed++
-			log.Printf("backup scheduler %s: %v", d.DomainName, err)
+			logx.Errorf("backup scheduler %s: %v", d.DomainName, err)
 			// The one event that means this domain has no recovery point from
 			// tonight. Without this it reached nothing but the log and a partial
 			// job row nobody reads.
@@ -136,12 +136,12 @@ func tickOnce(db *sql.DB) {
 		// Nothing new was written on the failure path, so this only trims the
 		// existing ones down to the count the domain asked for.
 		if err := pruneOld(db, d.ID, d.SystemUser, d.Retention); err != nil {
-			log.Printf("backup retention %s: %v", d.DomainName, err)
+			logx.Errorf("backup retention %s: %v", d.DomainName, err)
 		}
 		if _, err := db.Exec(
 			`UPDATE backup_jobs SET completed=?, succeeded=?, failed=?, size_b=? WHERE id=?`,
 			succeeded+failed, succeeded, failed, totalBytes, jobID); err != nil {
-			log.Printf("backup scheduler: progress update failed: %v", err)
+			logx.Errorf("backup scheduler: progress update failed: %v", err)
 		}
 	}
 	finishJobStopped(db, jobID, succeeded, failed, stopped)
@@ -186,7 +186,7 @@ func dueDomains(ctx context.Context, db *sql.DB, now time.Time) []dueDomain {
 		FROM domains
 		WHERE COALESCE(backup_freq,'none') != 'none'`)
 	if err != nil {
-		log.Printf("backup scheduler tick query: %v", err)
+		logx.Errorf("backup scheduler tick query: %v", err)
 		return nil
 	}
 	defer func() { _ = rows.Close() }()
@@ -196,7 +196,7 @@ func dueDomains(ctx context.Context, db *sql.DB, now time.Time) []dueDomain {
 		var d dueDomain
 		var lastTs sql.NullInt64
 		if err := rows.Scan(&d.ID, &d.DomainName, &d.SystemUser, &d.Frequency, &d.Hour, &d.Retention, &lastTs); err != nil {
-			log.Printf("backup scheduler scan: %v", err)
+			logx.Errorf("backup scheduler scan: %v", err)
 			continue
 		}
 		if backupDue(now, d.Hour, d.Frequency, lastTs) {
@@ -206,7 +206,7 @@ func dueDomains(ctx context.Context, db *sql.DB, now time.Time) []dueDomain {
 	if err := rows.Err(); err != nil {
 		// A domain missing from this list is simply not backed up tonight, and the
 		// only sign is a gap in its archive list weeks later.
-		log.Printf("backup scheduler: could not read the due domain list: %v", err)
+		logx.Errorf("backup scheduler: could not read the due domain list: %v", err)
 	}
 	return due
 }
@@ -220,7 +220,7 @@ func openScheduledJob(db *sql.DB, total int) int64 {
 		 VALUES('scheduled','backup','running',?,'system')`, total); err == nil {
 		jobID, _ = res.LastInsertId()
 	} else {
-		log.Printf("backup scheduler: could not open job row: %v", err)
+		logx.Errorf("backup scheduler: could not open job row: %v", err)
 	}
 	return jobID
 }
@@ -229,7 +229,7 @@ func openScheduledJob(db *sql.DB, total int) int64 {
 // write is logged, because the run itself goes on.
 func markScheduledActive(db *sql.DB, jobID int64, domainName string) {
 	if err := setActiveDomain(db, jobID, domainName); err != nil {
-		log.Printf("backup scheduler: progress update failed: %v", err)
+		logx.Errorf("backup scheduler: progress update failed: %v", err)
 	}
 }
 
@@ -251,9 +251,9 @@ func runOneBackup(parent context.Context, db *sql.DB, d dueDomain, jobID int64) 
 		return 0, err
 	}
 	if _, err := db.Exec(`UPDATE domains SET last_backup_at=NOW() WHERE id=?`, d.ID); err != nil {
-		log.Printf("last_backup_at could not be updated: %v", err)
+		logx.Errorf("last_backup_at could not be updated: %v", err)
 	}
-	log.Printf("scheduled backup %s: file=%s size_bytes=%d", d.DomainName, file, sizeBytes)
+	logx.Infof("scheduled backup %s: file=%s size_bytes=%d", d.DomainName, file, sizeBytes)
 	return sizeBytes, nil
 }
 
@@ -281,7 +281,7 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 		var it item
 		if err := rows.Scan(&it.ID, &it.File, &it.RemoteStatus); err != nil {
 			// A dropped row is an old backup the retention pass never removes.
-			log.Printf("backups: skipping an unreadable retention row: %v", err)
+			logx.Warnf("backups: skipping an unreadable retention row: %v", err)
 			continue
 		}
 		all = append(all, it)
@@ -289,7 +289,7 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 	if err := rows.Err(); err != nil {
 		// A short list under-prunes rather than over-prunes, so nothing is lost,
 		// but the retention the operator set is quietly not the one being applied.
-		log.Printf("backups: could not read the retention list for %s: %v", systemUser, err)
+		logx.Errorf("backups: could not read the retention list for %s: %v", systemUser, err)
 	}
 	_ = rows.Close()
 	if len(all) <= retention {
@@ -304,6 +304,6 @@ func pruneOld(db *sql.DB, domainID int64, systemUser string, retention int) erro
 		removeRemoteCopy(db, domainID, it.File, it.RemoteStatus)
 		_, _ = db.Exec(`DELETE FROM backups WHERE id=?`, it.ID)
 	}
-	log.Printf("backup retention domain=%d: %d old backups deleted (keep %d)", domainID, len(old), retention)
+	logx.Infof("backup retention domain=%d: %d old backups deleted (keep %d)", domainID, len(old), retention)
 	return nil
 }

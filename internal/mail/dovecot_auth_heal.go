@@ -2,12 +2,13 @@ package mail
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // Dovecot configuration paths. They are package variables so tests can point the
@@ -85,11 +86,11 @@ func HealDovecotAuth(ctx context.Context) {
 		out, restartErr := exec.CommandContext(reloadCtx, "systemctl", "restart", "dovecot").CombinedOutput()
 		if restartErr != nil {
 			// #nosec G706 -- the operand is systemctl output, not client-controlled input.
-			log.Printf("dovecot auth heal: could not reload dovecot: %v: %s", restartErr, strings.TrimSpace(string(out)))
+			logx.Errorf("dovecot auth heal: could not reload dovecot: %v: %s", restartErr, strings.TrimSpace(string(out)))
 			return
 		}
 	}
-	log.Printf("dovecot auth heal applied; the PAM delay on virtual mailbox logins is gone")
+	logx.Infof("dovecot auth heal applied; the PAM delay on virtual mailbox logins is gone")
 }
 
 // disableStockPAM comments the stock PAM include out. It reports whether it
@@ -110,16 +111,16 @@ func disableStockPAM() bool {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file-manager paths use safeio (openat2) instead.
 	file, err := os.OpenFile(dovecotAuthConf, os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
-		log.Printf("dovecot auth heal: could not open %s: %v", dovecotAuthConf, err)
+		logx.Errorf("dovecot auth heal: could not open %s: %v", dovecotAuthConf, err)
 		return false
 	}
 	if _, err := file.Write(patched); err != nil {
 		_ = file.Close()
-		log.Printf("dovecot auth heal: could not write %s: %v", dovecotAuthConf, err)
+		logx.Errorf("dovecot auth heal: could not write %s: %v", dovecotAuthConf, err)
 		return false
 	}
 	if err := file.Close(); err != nil {
-		log.Printf("dovecot auth heal: could not close %s: %v", dovecotAuthConf, err)
+		logx.Errorf("dovecot auth heal: could not close %s: %v", dovecotAuthConf, err)
 		return false
 	}
 	return true
@@ -143,7 +144,7 @@ func appendAuthCache() bool {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file-manager paths use safeio (openat2) instead.
 	file, err := os.OpenFile(dovecotServikaConf, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
-		log.Printf("dovecot auth heal: could not open %s: %v", dovecotServikaConf, err)
+		logx.Errorf("dovecot auth heal: could not open %s: %v", dovecotServikaConf, err)
 		return false
 	}
 	// Keep the appended block off the end of an unterminated last line, which
@@ -154,11 +155,11 @@ func appendAuthCache() bool {
 	}
 	if _, err := file.WriteString(prefix + authCacheBlock); err != nil {
 		_ = file.Close()
-		log.Printf("dovecot auth heal: could not append the auth cache: %v", err)
+		logx.Errorf("dovecot auth heal: could not append the auth cache: %v", err)
 		return false
 	}
 	if err := file.Close(); err != nil {
-		log.Printf("dovecot auth heal: could not close %s: %v", dovecotServikaConf, err)
+		logx.Errorf("dovecot auth heal: could not close %s: %v", dovecotServikaConf, err)
 		return false
 	}
 	return true

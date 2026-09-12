@@ -4,7 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+
+	"servika/internal/logx"
 )
 
 // enableUnit and disableUnit name the two systemd calls the suspension path
@@ -37,7 +38,7 @@ func SuspendForUser(ctx context.Context, db *sql.DB, systemUser string, suspende
 	for _, app := range list {
 		if suspended {
 			if err := disableUnit(app.ID); err != nil {
-				log.Printf("apps: suspend application %d of %s: %v", app.ID, systemUser, err)
+				logx.Errorf("apps: suspend application %d of %s: %v", app.ID, systemUser, err)
 				failures++
 			}
 			continue
@@ -46,7 +47,7 @@ func SuspendForUser(ctx context.Context, db *sql.DB, systemUser string, suspende
 			continue // stopped by the customer before the suspension
 		}
 		if err := enableUnit(app.ID); err != nil {
-			log.Printf("apps: resume application %d of %s: %v", app.ID, systemUser, err)
+			logx.Errorf("apps: resume application %d of %s: %v", app.ID, systemUser, err)
 			failures++
 		}
 	}
@@ -64,7 +65,7 @@ func SuspendForUser(ctx context.Context, db *sql.DB, systemUser string, suspende
 func TeardownForDomain(ctx context.Context, db *sql.DB, domainID int64) {
 	list, err := ListForDomain(ctx, db, domainID)
 	if err != nil {
-		log.Printf("apps: read the applications of domain %d for teardown: %v", domainID, err)
+		logx.Errorf("apps: read the applications of domain %d for teardown: %v", domainID, err)
 		return
 	}
 	for _, app := range list {
