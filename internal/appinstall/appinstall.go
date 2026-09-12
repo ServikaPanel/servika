@@ -122,12 +122,15 @@ func ValidSubdirectory(subdirectory string) bool {
 }
 
 // ValidEntry reports whether a catalog row may be stored, and why not.
-//
-// The URL must be https. An administrator entering a plain http address would
-// be asking the panel to fetch executable code over a channel anybody on the
-// path can rewrite, and the checksum would then be verifying whatever the
-// attacker sent alongside it.
 func ValidEntry(entry Entry) (string, bool) {
+	if field, ok := validEntryName(entry); !ok {
+		return field, ok
+	}
+	return validEntryDownload(entry)
+}
+
+// validEntryName checks the fields that name the application in the catalog.
+func validEntryName(entry Entry) (string, bool) {
 	switch {
 	case !codePattern.MatchString(entry.Code):
 		return "code", false
@@ -135,6 +138,19 @@ func ValidEntry(entry Entry) (string, bool) {
 		return "name", false
 	case strings.TrimSpace(entry.Version) == "" || len(entry.Version) > 32:
 		return "version", false
+	}
+	return "", true
+}
+
+// validEntryDownload checks the fields that decide what is fetched and how it is
+// unpacked.
+//
+// The URL must be https. An administrator entering a plain http address would
+// be asking the panel to fetch executable code over a channel anybody on the
+// path can rewrite, and the checksum would then be verifying whatever the
+// attacker sent alongside it.
+func validEntryDownload(entry Entry) (string, bool) {
+	switch {
 	case !strings.HasPrefix(entry.DownloadURL, "https://") || len(entry.DownloadURL) > 512:
 		return "download_url", false
 	case entry.SHA256 != "" && !sha256Pattern.MatchString(entry.SHA256):
