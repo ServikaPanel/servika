@@ -73,6 +73,51 @@ func mapWAFParanoia(paranoia int) any {
 	return nil
 }
 
+// detects reports whether a stored waf_mode column names detection-only.
+func detects(mode sql.NullString) bool {
+	return mode.Valid && strings.ToLower(strings.TrimSpace(mode.String)) == "detect"
+}
+
+// overrideOf maps the domain's own columns to the API settings. An unset
+// override is "inherit", which is not the same answer as "off".
+func overrideOf(enabled sql.NullInt64, mode sql.NullString, paranoia sql.NullInt64) Settings {
+	s := Settings{Mode: "inherit", Paranoia: 0}
+	if enabled.Valid {
+		switch {
+		case int(enabled.Int64) != 1:
+			s.Mode = "off"
+		case detects(mode):
+			s.Mode = "detect"
+		default:
+			s.Mode = "block"
+		}
+	}
+	if paranoia.Valid && paranoia.Int64 > 0 {
+		s.Paranoia = int(paranoia.Int64)
+	}
+	return s
+}
+
+// planDefault maps the plan columns to the informational plan block. A domain
+// on no plan reports the resolver's own default rather than an empty plan.
+func planDefault(enabled sql.NullInt64, mode sql.NullString, paranoia sql.NullInt64, name sql.NullString) planInfo {
+	plan := planInfo{Active: false, Mode: "off", Paranoia: 1}
+	if name.Valid {
+		plan.Name = name.String
+	}
+	if paranoia.Valid && paranoia.Int64 > 0 {
+		plan.Paranoia = int(paranoia.Int64)
+	}
+	if enabled.Valid && enabled.Int64 == 1 {
+		plan.Active = true
+		plan.Mode = "block"
+		if detects(mode) {
+			plan.Mode = "detect"
+		}
+	}
+	return plan
+}
+
 // GET /domains/{id}/waf
 func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -98,37 +143,8 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Domain override → Settings
-	s := Settings{Mode: "inherit", Paranoia: 0}
-	if dEn.Valid {
-		if int(dEn.Int64) != 1 {
-			s.Mode = "off"
-		} else if dMode.Valid && strings.ToLower(strings.TrimSpace(dMode.String)) == "detect" {
-			s.Mode = "detect"
-		} else {
-			s.Mode = "block"
-		}
-	}
-	if dPL.Valid && dPL.Int64 > 0 {
-		s.Paranoia = int(dPL.Int64)
-	}
-
-	// Plan default (informational)
-	plan := planInfo{Active: false, Mode: "off", Paranoia: 1}
-	if pName.Valid {
-		plan.Name = pName.String
-	}
-	if pPL.Valid && pPL.Int64 > 0 {
-		plan.Paranoia = int(pPL.Int64)
-	}
-	if pEn.Valid && pEn.Int64 == 1 {
-		plan.Active = true
-		m := "block"
-		if pMode.Valid && strings.ToLower(strings.TrimSpace(pMode.String)) == "detect" {
-			m = "detect"
-		}
-		plan.Mode = m
-	}
+	s := overrideOf(dEn, dMode, dPL)
+	plan := planDefault(pEn, pMode, pPL, pName)
 
 	// Effective (same resolver as provisioner — no drift)
 	efActive, efEngine, efPL := wafEffective(h.DB, sk)
