@@ -137,124 +137,187 @@ export default function BackupManagementPage() {
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
-      {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <Kpi label={t('kpi.totalSize')} value={o ? formatBytes(o.total_size_bytes) : '-'} color="sky" icon={<Icon d={ICON.save} className="h-4 w-4" />} />
-        <Kpi label={t('kpi.totalBackups')} value={o ? String(o.total_backups) : '-'} color="violet" icon={<Icon d={ICON.box} className="h-4 w-4" />} />
-        <Kpi label={t('kpi.domainCount')} value={o ? String(o.domains.length) : '-'} color="teal" icon={<Icon d={ICON.globe} className="h-4 w-4" />} />
-        <Kpi label={t('kpi.remoteDestinations')} value={o ? String(o.destination_count) : '-'} color="emerald" icon={<Icon d={ICON.cloud} className="h-4 w-4" />} subtitle={t('kpi.remoteSubtitle')} />
-      </div>
+      <KpiRow summary={o} />
 
       {/* System-wide backup settings (renders only for admins) */}
       <BackupSettings />
 
-      {/* Schedule and action */}
-      <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/60 sm:flex-row sm:items-center">
-        <span className="text-sm text-slate-600 dark:text-slate-300">{scheduleLine(t, o)}</span>
-        <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:items-center">
-          <button onClick={startBackupJob} disabled={backingUp}
-            className="px-3.5 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg disabled:opacity-50">
-            {backingUp
-              ? t('schedule.triggering')
-              : selected.length > 0
-                ? t('schedule.backupSelected', { n: selected.length })
-                : t('schedule.backupAll')}
-          </button>
-          <button onClick={reload} disabled={loading} className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">{t('schedule.refresh')}</button>
-        </div>
-      </div>
+      <ScheduleBar
+        summary={o} selectedCount={selected.length} backingUp={backingUp} loading={loading}
+        onBackup={startBackupJob} onReload={reload}
+      />
 
-      {/* Table */}
-      <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700/60 dark:bg-slate-800/60">
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('table.title')}</h3>
-        </div>
-        <div className={responsiveTableContainerClass}>
-          <table className={responsiveTableClass}>
-            <thead className={responsiveTableHeadClass}>
-              <tr>
-                <th className="w-8 px-4 py-2.5"></th>
-                <th className="text-left font-medium px-4 py-2.5">{t('table.colDomain')}</th>
-                <th className="text-right font-medium px-4 py-2.5">{t('table.colCount')}</th>
-                <th className="text-right font-medium px-4 py-2.5">{t('table.colSize')}</th>
-                <th className="text-left font-medium px-4 py-2.5">{t('table.colLatest')}</th>
-                <th className="text-right font-medium px-4 py-2.5">{t('table.colAction')}</th>
-              </tr>
-            </thead>
-            <tbody className={responsiveTableBodyClass}>
-              {loading ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{t('table.loading')}</td></tr>
-              ) : !o || o.domains.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">{t('table.noDomains')}</td></tr>
-              ) : (
-                o.domains.map(d => (
-                  <tr key={d.domain_id} className={responsiveTableRowClass}>
-                    <td className="px-4 py-2.5">
-                      <input type="checkbox" checked={selected.includes(d.domain_id)} onChange={() => toggle(d.domain_id)} />
-                    </td>
-                    <td data-label={t('table.colDomain')} className={`${responsiveTableCellClass} font-medium text-slate-800 dark:text-slate-100`}>{d.domain_name}</td>
-                    <td data-label={t('table.colCount')} className={`${responsiveTableCodeCellClass} lg:text-right`}>{d.count}</td>
-                    <td data-label={t('table.colSize')} className={`${responsiveTableCodeCellClass} lg:text-right`}>{d.count ? formatBytes(d.total_bytes) : '-'}</td>
-                    <td data-label={t('table.colLatest')} className={responsiveTableCodeCellClass}>{d.last_backup || <span className="text-slate-400">{t('table.never')}</span>}</td>
-                    <td className={responsiveTableActionCellClass}>
-                      <Link to={`/subscriptions/${d.domain_id}/backups`} className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-brand-600 dark:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-700">{t('table.manage')}</Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      {/* Jobs */}
-      <div className="mt-5 rounded-2xl border border-slate-200 bg-white dark:border-slate-700/60 dark:bg-slate-800/60">
-        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('jobs.title')}</h3>
-        </div>
-        {jobs.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">{t('jobs.empty')}</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
-            {jobs.map(j => (
-              <li key={j.id} className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link to={`/backup-management/job/${j.id}`}
-                    className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline">
-                    {t(j.operation === 'restore' ? 'jobs.opRestore' : 'jobs.opBackup')} #{j.id}
-                  </Link>
-                  <JobStatusBadge status={j.status} label={t(`jobs.status.${j.status}`)} />
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {t('jobs.startedBy', { user: j.started_by || '-' })} · {j.started_at}
-                  </span>
-                  <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
-                    {j.completed}/{j.total}
-                    {j.failed > 0 && <span className="text-red-600 dark:text-red-400"> · {t('jobs.failedCount', { n: j.failed })}</span>}
-                    {j.size_b > 0 && <span> · {formatBytes(j.size_b)}</span>}
-                  </span>
-                  {j.status === 'running' && (
-                    <button type="button" onClick={() => stopJob(j.id)}
-                      className="px-2 py-0.5 text-[11px] rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20">
-                      {t('jobs.stop')}
-                    </button>
-                  )}
-                </div>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700">
-                  <div className={`h-1.5 rounded-full ${j.failed > 0 ? 'bg-amber-500' : 'bg-brand-600'}`}
-                    style={{ width: `${j.total > 0 ? Math.round((j.completed / j.total) * 100) : 0}%` }} />
-                </div>
-                {j.status === 'running' && j.active_domain && (
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('jobs.active', { domain: j.active_domain })}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <DomainTable summary={o} loading={loading} selected={selected} onToggle={toggle} />
+
+      <JobsCard jobs={jobs} onStop={stopJob} />
 
       <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">
         {t('footnote.pre')} <span className="font-mono">/var/backups/servika/&lt;domain&gt;/</span> {t('footnote.post')}
       </p>
     </div>
+  )
+}
+
+// KpiRow reports the four totals of the whole installation.
+function KpiRow({ summary }: { summary: Summary | null }) {
+  const { t } = useTranslation('BackupManagementPage')
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <Kpi label={t('kpi.totalSize')} value={summary ? formatBytes(summary.total_size_bytes) : '-'} color="sky" icon={<Icon d={ICON.save} className="h-4 w-4" />} />
+      <Kpi label={t('kpi.totalBackups')} value={summary ? String(summary.total_backups) : '-'} color="violet" icon={<Icon d={ICON.box} className="h-4 w-4" />} />
+      <Kpi label={t('kpi.domainCount')} value={summary ? String(summary.domains.length) : '-'} color="teal" icon={<Icon d={ICON.globe} className="h-4 w-4" />} />
+      <Kpi label={t('kpi.remoteDestinations')} value={summary ? String(summary.destination_count) : '-'} color="emerald" icon={<Icon d={ICON.cloud} className="h-4 w-4" />} subtitle={t('kpi.remoteSubtitle')} />
+    </div>
+  )
+}
+
+// ScheduleBar states the schedule and starts a job over the current selection.
+function ScheduleBar({ summary, selectedCount, backingUp, loading, onBackup, onReload }: {
+  summary: Summary | null
+  selectedCount: number
+  backingUp: boolean
+  loading: boolean
+  onBackup: () => void
+  onReload: () => void
+}) {
+  const { t } = useTranslation('BackupManagementPage')
+  return (
+    <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/60 sm:flex-row sm:items-center">
+      <span className="text-sm text-slate-600 dark:text-slate-300">{scheduleLine(t, summary)}</span>
+      <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:items-center">
+        <button onClick={onBackup} disabled={backingUp}
+          className="px-3.5 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg disabled:opacity-50">
+          {backingUp
+            ? t('schedule.triggering')
+            : selectedCount > 0
+              ? t('schedule.backupSelected', { n: selectedCount })
+              : t('schedule.backupAll')}
+        </button>
+        <button onClick={onReload} disabled={loading} className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">{t('schedule.refresh')}</button>
+      </div>
+    </div>
+  )
+}
+
+// DomainTable lists every domain in scope with its archive count and size.
+function DomainTable({ summary, loading, selected, onToggle }: {
+  summary: Summary | null
+  loading: boolean
+  selected: number[]
+  onToggle: (domainID: number) => void
+}) {
+  const { t } = useTranslation('BackupManagementPage')
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700/60 dark:bg-slate-800/60">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('table.title')}</h3>
+      </div>
+      <div className={responsiveTableContainerClass}>
+        <table className={responsiveTableClass}>
+          <thead className={responsiveTableHeadClass}>
+            <tr>
+              <th className="w-8 px-4 py-2.5"></th>
+              <th className="text-left font-medium px-4 py-2.5">{t('table.colDomain')}</th>
+              <th className="text-right font-medium px-4 py-2.5">{t('table.colCount')}</th>
+              <th className="text-right font-medium px-4 py-2.5">{t('table.colSize')}</th>
+              <th className="text-left font-medium px-4 py-2.5">{t('table.colLatest')}</th>
+              <th className="text-right font-medium px-4 py-2.5">{t('table.colAction')}</th>
+            </tr>
+          </thead>
+          <tbody className={responsiveTableBodyClass}>
+            {loading ? (
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{t('table.loading')}</td></tr>
+            ) : !summary || summary.domains.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">{t('table.noDomains')}</td></tr>
+            ) : (
+              summary.domains.map(d => (
+                <DomainRow key={d.domain_id} row={d} checked={selected.includes(d.domain_id)} onToggle={onToggle} />
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// DomainRow is one domain of that table.
+function DomainRow({ row, checked, onToggle }: {
+  row: SummaryRow
+  checked: boolean
+  onToggle: (domainID: number) => void
+}) {
+  const { t } = useTranslation('BackupManagementPage')
+  return (
+    <tr className={responsiveTableRowClass}>
+      <td className="px-4 py-2.5">
+        <input type="checkbox" checked={checked} onChange={() => onToggle(row.domain_id)} />
+      </td>
+      <td data-label={t('table.colDomain')} className={`${responsiveTableCellClass} font-medium text-slate-800 dark:text-slate-100`}>{row.domain_name}</td>
+      <td data-label={t('table.colCount')} className={`${responsiveTableCodeCellClass} lg:text-right`}>{row.count}</td>
+      <td data-label={t('table.colSize')} className={`${responsiveTableCodeCellClass} lg:text-right`}>{row.count ? formatBytes(row.total_bytes) : '-'}</td>
+      <td data-label={t('table.colLatest')} className={responsiveTableCodeCellClass}>{row.last_backup || <span className="text-slate-400">{t('table.never')}</span>}</td>
+      <td className={responsiveTableActionCellClass}>
+        <Link to={`/subscriptions/${row.domain_id}/backups`} className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-brand-600 dark:text-brand-400 hover:bg-slate-50 dark:hover:bg-slate-700">{t('table.manage')}</Link>
+      </td>
+    </tr>
+  )
+}
+
+// JobsCard lists the backup and restore jobs of this installation.
+function JobsCard({ jobs, onStop }: { jobs: Job[]; onStop: (jobID: number) => void }) {
+  const { t } = useTranslation('BackupManagementPage')
+  return (
+    <div className="mt-5 rounded-2xl border border-slate-200 bg-white dark:border-slate-700/60 dark:bg-slate-800/60">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('jobs.title')}</h3>
+      </div>
+      {jobs.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">{t('jobs.empty')}</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
+          {jobs.map(j => <JobRow key={j.id} job={j} onStop={onStop} />)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// JobRow is one job of that list, with its progress bar.
+function JobRow({ job, onStop }: { job: Job; onStop: (jobID: number) => void }) {
+  const { t } = useTranslation('BackupManagementPage')
+  const running = job.status === 'running'
+  return (
+    <li className="px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to={`/backup-management/job/${job.id}`}
+          className="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline">
+          {t(job.operation === 'restore' ? 'jobs.opRestore' : 'jobs.opBackup')} #{job.id}
+        </Link>
+        <JobStatusBadge status={job.status} label={t(`jobs.status.${job.status}`)} />
+        <span className="text-xs text-slate-500 dark:text-slate-400">
+          {t('jobs.startedBy', { user: job.started_by || '-' })} · {job.started_at}
+        </span>
+        <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+          {job.completed}/{job.total}
+          {job.failed > 0 && <span className="text-red-600 dark:text-red-400"> · {t('jobs.failedCount', { n: job.failed })}</span>}
+          {job.size_b > 0 && <span> · {formatBytes(job.size_b)}</span>}
+        </span>
+        {running && (
+          <button type="button" onClick={() => onStop(job.id)}
+            className="px-2 py-0.5 text-[11px] rounded-lg border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20">
+            {t('jobs.stop')}
+          </button>
+        )}
+      </div>
+      <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-700">
+        <div className={`h-1.5 rounded-full ${job.failed > 0 ? 'bg-amber-500' : 'bg-brand-600'}`}
+          style={{ width: `${job.total > 0 ? Math.round((job.completed / job.total) * 100) : 0}%` }} />
+      </div>
+      {running && job.active_domain && (
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('jobs.active', { domain: job.active_domain })}</p>
+      )}
+    </li>
   )
 }
 

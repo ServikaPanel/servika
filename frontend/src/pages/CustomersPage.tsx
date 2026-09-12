@@ -31,6 +31,164 @@ type Plan = { id: number; name: string }
 
 const EMPTY: Customer = { id: 0, name: '', email: '', plan_id: null, status: 'active', notes: '', created_at: '' }
 
+const FIELD_CLASS = 'w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500'
+
+// CustomerListBody answers with the spinner, the empty state, the no-match
+// line or the table, in that order.
+function CustomerListBody({ loading, total, rows, planName, onNew, onEdit, onDelete }: {
+  loading: boolean
+  total: number
+  rows: Customer[]
+  planName: (id: number | null) => string
+  onNew: () => void
+  onEdit: (customer: Customer) => void
+  onDelete: (customer: Customer) => void
+}) {
+  const { t } = useTranslation('CustomersPage')
+  if (loading) return <div className="py-16 text-center text-sm text-slate-400">{t('loading')}</div>
+  if (total === 0) {
+    return (
+      <EmptyState
+        title={t('empty.title')}
+        description={t('empty.description')}
+        button={{ label: t('newCustomer'), onClick: onNew }}
+      />
+    )
+  }
+  if (rows.length === 0) return <div className="py-12 text-center text-sm text-slate-400">{t('noMatch')}</div>
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 dark:bg-slate-900/60">
+          <tr>
+            {['name', 'email', 'plan', 'status', 'created', ''].map((b, i) => (
+              <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                {b ? t(`columns.${b}`) : ''}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
+          {rows.map((m) => (
+            <CustomerRow key={m.id} row={m} planName={planName} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// CustomerRow is one customer record of that table.
+function CustomerRow({ row, planName, onEdit, onDelete }: {
+  row: Customer
+  planName: (id: number | null) => string
+  onEdit: (customer: Customer) => void
+  onDelete: (customer: Customer) => void
+}) {
+  const { t } = useTranslation('CustomersPage')
+  return (
+    <tr className="hover:bg-slate-50 dark:hover:bg-slate-900/60 transition">
+      <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">{row.name}</td>
+      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{row.email}</td>
+      <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{planName(row.plan_id)}</td>
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        {row.status === 'active'
+          ? <span className="px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{t('status.active')}</span>
+          : <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{t('status.passive')}</span>}
+      </td>
+      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.created_at}</td>
+      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+        <button onClick={() => onEdit(row)} className="text-xs text-brand-600 dark:text-brand-400 hover:underline mr-3">
+          {t('actions.edit')}
+        </button>
+        <button onClick={() => onDelete(row)} className="text-xs text-red-600 dark:text-red-400 hover:underline">
+          {t('actions.delete')}
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+// CustomerForm edits one record, new or existing.
+function CustomerForm({ value, plans, saving, onChange, onCancel, onSave }: {
+  value: Customer
+  plans: Plan[]
+  saving: boolean
+  onChange: (customer: Customer) => void
+  onCancel: () => void
+  onSave: () => void
+}) {
+  const { t } = useTranslation('CustomersPage')
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.name')}</label>
+        <input
+          value={value.name}
+          onChange={(e) => onChange({ ...value, name: e.target.value })}
+          className={FIELD_CLASS}
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.email')}</label>
+        <input
+          type="email"
+          value={value.email}
+          onChange={(e) => onChange({ ...value, email: e.target.value })}
+          className={FIELD_CLASS}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.plan')}</label>
+          <select
+            value={value.plan_id ?? ''}
+            onChange={(e) => onChange({ ...value, plan_id: e.target.value === '' ? null : Number(e.target.value) })}
+            className={FIELD_CLASS}
+          >
+            <option value="">{t('modal.noPlan')}</option>
+            {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.status')}</label>
+          <select
+            value={value.status}
+            onChange={(e) => onChange({ ...value, status: e.target.value })}
+            className={FIELD_CLASS}
+          >
+            <option value="active">{t('status.active')}</option>
+            <option value="passive">{t('status.passive')}</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.notes')}</label>
+        <input
+          value={value.notes}
+          onChange={(e) => onChange({ ...value, notes: e.target.value })}
+          className={FIELD_CLASS}
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          onClick={onCancel}
+          className="px-3.5 py-2 text-sm rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+        >
+          {t('modal.cancel')}
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="px-3.5 py-2 text-sm font-medium rounded-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 transition"
+        >
+          {saving ? t('modal.saving') : t('modal.save')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function CustomersPage() {
   const { t } = useTranslation('CustomersPage')
   const report = useReportError()
@@ -150,54 +308,15 @@ export default function CustomersPage() {
         <div className="mb-4 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm">{success}</div>
       )}
 
-      {loading ? (
-        <div className="py-16 text-center text-sm text-slate-400">{t('loading')}</div>
-      ) : list.length === 0 ? (
-        <EmptyState
-          title={t('empty.title')}
-          description={t('empty.description')}
-          button={{ label: t('newCustomer'), onClick: () => setEditing({ ...EMPTY }) }}
-        />
-      ) : filtered.length === 0 ? (
-        <div className="py-12 text-center text-sm text-slate-400">{t('noMatch')}</div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/60">
-              <tr>
-                {['name', 'email', 'plan', 'status', 'created', ''].map((b, i) => (
-                  <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                    {b ? t(`columns.${b}`) : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
-              {filtered.map((m) => (
-                <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/60 transition">
-                  <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">{m.name}</td>
-                  <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{m.email}</td>
-                  <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{planName(m.plan_id)}</td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">
-                    {m.status === 'active'
-                      ? <span className="px-2 py-0.5 rounded text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{t('status.active')}</span>
-                      : <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{t('status.passive')}</span>}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{m.created_at}</td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    <button onClick={() => setEditing({ ...m })} className="text-xs text-brand-600 dark:text-brand-400 hover:underline mr-3">
-                      {t('actions.edit')}
-                    </button>
-                    <button onClick={() => setToDelete(m)} className="text-xs text-red-600 dark:text-red-400 hover:underline">
-                      {t('actions.delete')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <CustomerListBody
+        loading={loading}
+        total={list.length}
+        rows={filtered}
+        planName={planName}
+        onNew={() => setEditing({ ...EMPTY })}
+        onEdit={(customer) => setEditing({ ...customer })}
+        onDelete={setToDelete}
+      />
 
       <Modal
         open={editing !== null}
@@ -205,72 +324,14 @@ export default function CustomersPage() {
         onClose={() => setEditing(null)}
       >
         {editing && (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.name')}</label>
-              <input
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.email')}</label>
-              <input
-                type="email"
-                value={editing.email}
-                onChange={(e) => setEditing({ ...editing, email: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.plan')}</label>
-                <select
-                  value={editing.plan_id ?? ''}
-                  onChange={(e) => setEditing({ ...editing, plan_id: e.target.value === '' ? null : Number(e.target.value) })}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                >
-                  <option value="">{t('modal.noPlan')}</option>
-                  {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.status')}</label>
-                <select
-                  value={editing.status}
-                  onChange={(e) => setEditing({ ...editing, status: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                >
-                  <option value="active">{t('status.active')}</option>
-                  <option value="passive">{t('status.passive')}</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">{t('modal.notes')}</label>
-              <input
-                value={editing.notes}
-                onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditing(null)}
-                className="px-3.5 py-2 text-sm rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              >
-                {t('modal.cancel')}
-              </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="px-3.5 py-2 text-sm font-medium rounded-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 transition"
-              >
-                {saving ? t('modal.saving') : t('modal.save')}
-              </button>
-            </div>
-          </div>
+          <CustomerForm
+            value={editing}
+            plans={plans}
+            saving={saving}
+            onChange={setEditing}
+            onCancel={() => setEditing(null)}
+            onSave={save}
+          />
         )}
       </Modal>
 

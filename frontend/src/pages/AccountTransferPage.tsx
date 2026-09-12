@@ -127,109 +127,176 @@ export default function AccountTransferPage() {
 
       {error && <div className="mb-4 px-4 py-3 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-5 mb-5">
-        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
-          <label className="flex-1">
-            <span className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">{t('fileLabel')}</span>
-            <input type="file" accept=".tar.gz,.tgz,application/gzip"
-              onChange={e => { setFile(e.target.files?.[0] || null); setInventory(null) }}
-              className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 dark:file:bg-brand-950/40 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-brand-700 dark:file:text-brand-300 hover:file:bg-brand-100" />
-          </label>
-          <button onClick={analyze} disabled={!file || analyzing}
-            className="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50">
-            {analyzing ? t('uploading', { progress }) : t('analyzeButton')}
-          </button>
-        </div>
-        {file && <div className="mt-3 text-xs text-slate-400">{file.name} · {fmtByte(file.size)}</div>}
-        {analyzing && <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"><div className="h-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} /></div>}
-      </div>
+      <UploadCard
+        file={file} analyzing={analyzing} progress={progress}
+        onFile={next => { setFile(next); setInventory(null) }}
+        onAnalyze={analyze}
+      />
 
       {inventory && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-            <Kpi label={t('kpi.primaryDomain')} value={inventory.primary_domain || t('kpi.undetermined')} />
-            <Kpi label={t('kpi.webFiles')} value={inventory.web_files.toLocaleString('en-US')} alt={fmtByte(inventory.web_bytes)} />
-            <Kpi label={t('kpi.databases')} value={String(inventory.databases.length)} />
-            <Kpi label={t('kpi.emailData')} value={inventory.mail_files ? t('kpi.emailFiles', { count: inventory.mail_files }) : t('kpi.none')} />
-          </div>
+          <InventorySummary inventory={inventory} />
 
-          {inventory.warnings.length > 0 && (
-            <div className="mb-5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
-              {inventory.warnings.map(wn => <div key={wn} className="text-sm text-amber-800 dark:text-amber-300">⚠ {wn}</div>)}
-            </div>
-          )}
+          <TargetAndPlan
+            customers={customers} plans={plans}
+            customerID={customerID} onCustomerID={setCustomerID}
+            planID={planID} onPlanID={setPlanID}
+            domain={domain} onDomain={setDomain}
+            phpVersion={phpVersion} onPHPVersion={setPHPVersion}
+            importing={importing} progress={progress} onImport={runImport}
+          />
 
-          <div className="grid lg:grid-cols-2 gap-4">
-            <Detail title={t('detail.title')} rows={[
-              [t('detail.sourcePanel'), 'cPanel'],
-              [t('detail.user'), inventory.username || '—'],
-              [t('detail.archiveRoot'), inventory.archive_root || '—'],
-              [t('detail.totalMembers'), inventory.entry_count.toLocaleString('en-US')],
-              [t('detail.expandedSize'), fmtByte(inventory.expanded_bytes)],
-              [t('detail.cron'), inventory.cron_present ? t('detail.cronPresent') : t('detail.cronNone')],
-              [t('detail.sslFiles'), String(inventory.ssl_certs)],
-              [t('detail.mailboxes'), String(inventory.mailboxes.length)],
-              [t('detail.forwarders'), String(inventory.alias_count)],
-              [t('detail.cronJobs'), String(inventory.cron_jobs.length)],
-            ]} />
-            <div className="space-y-4">
-              <List title={t('lists.databases')} values={inventory.databases} noneFound={t('lists.noneFound')} />
-              <List title={t('lists.dnsZones')} values={inventory.dns_zones} noneFound={t('lists.noneFound')} />
-              <List title={t('lists.cronJobs')} values={inventory.cron_jobs.map(c => `${c.minute} ${c.hour} ${c.day} ${c.month} ${c.weekday}  ${c.command}`)} noneFound={t('lists.noneFound')} />
-            </div>
-          </div>
-
-          <div className="mt-5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/20 px-4 py-3 text-sm text-sky-800 dark:text-sky-300">
-            {t('analysisComplete')}
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-5">
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">{t('targetAndPlan')}</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <Field label={t('fields.targetCustomer')}>
-                <select value={customerID} onChange={e => setCustomerID(e.target.value)} className={inputClass}>
-                  <option value="">{t('fields.selectCustomer')}</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name} — {c.email}</option>)}
-                </select>
-              </Field>
-              <Field label={t('fields.servicePlan')}>
-                <select value={planID} onChange={e => setPlanID(e.target.value)} className={inputClass}>
-                  <option value="">{t('fields.defaultPlan')}</option>
-                  {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </Field>
-              <Field label={t('fields.primaryDomain')}>
-                <input value={domain} onChange={e => setDomain(e.target.value.toLowerCase())} className={inputClass} />
-              </Field>
-              <Field label={t('fields.phpVersion')}>
-                <select value={phpVersion} onChange={e => setPHPVersion(e.target.value)} className={inputClass}>
-                  {['7.4', '8.2', '8.3', '8.4', '8.5'].map(v => <option key={v}>{v}</option>)}
-                </select>
-              </Field>
-            </div>
-            <button onClick={runImport}
-              disabled={importing || !customerID || !domain}
-              className="mt-5 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50">
-              {importing ? t('importing', { progress }) : t('importButton')}
-            </button>
-          </div>
-
-          {result && <div className="mt-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-5">
-            <h2 className="font-semibold text-emerald-800 dark:text-emerald-200">{t('importResult.title')}</h2>
-            <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">{t('importResult.summary', { domain: result.domain, webFiles: result.web_files, count: result.databases.length })}</p>
-            {result.databases.map(d => <p key={d.target} className="mt-1 text-xs font-mono text-emerald-700 dark:text-emerald-300">{d.source} → {d.target}</p>)}
-            {result.mailboxes.length > 0 && <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-white/60 dark:bg-slate-900/40 p-3">
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-2">{t('importResult.newPasswords')}</p>
-              {result.mailboxes.map(m => <p key={m.email} className="text-xs font-mono text-amber-800 dark:text-amber-200">{m.email}: {m.password}</p>)}
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t('importResult.forwardersTransferred', { count: result.aliases })}</p>
-            </div>}
-            {result.cron_jobs > 0 && <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">{t('importResult.cronTransferred', { count: result.cron_jobs })}</p>}
-            {result.ssl_imported && <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">{t('importResult.sslTransferred', { expires: result.ssl_expires })}</p>}
-            {result.skipped?.map(s => <p key={s} className="mt-1 text-xs text-amber-700 dark:text-amber-300">⚠ {s}</p>)}
-            <Link to={`/subscriptions/${result.domain_id}`} className="inline-block mt-3 text-sm font-medium text-brand-700 dark:text-brand-300">{t('importResult.manageDomain')}</Link>
-          </div>}
+          <ImportResultCard result={result} />
         </>
       )}
+    </div>
+  )
+}
+
+// UploadCard takes the cPanel archive and starts the analysis.
+function UploadCard({ file, analyzing, progress, onFile, onAnalyze }: {
+  file: File | null
+  analyzing: boolean
+  progress: number
+  onFile: (file: File | null) => void
+  onAnalyze: () => void
+}) {
+  const { t } = useTranslation('AccountTransferPage')
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-5 mb-5">
+      <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+        <label className="flex-1">
+          <span className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">{t('fileLabel')}</span>
+          <input type="file" accept=".tar.gz,.tgz,application/gzip"
+            onChange={e => onFile(e.target.files?.[0] || null)}
+            className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 dark:file:bg-brand-950/40 file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-brand-700 dark:file:text-brand-300 hover:file:bg-brand-100" />
+        </label>
+        <button onClick={onAnalyze} disabled={!file || analyzing}
+          className="px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium disabled:opacity-50">
+          {analyzing ? t('uploading', { progress }) : t('analyzeButton')}
+        </button>
+      </div>
+      {file && <div className="mt-3 text-xs text-slate-400">{file.name} · {fmtByte(file.size)}</div>}
+      {analyzing && <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden"><div className="h-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} /></div>}
+    </div>
+  )
+}
+
+// InventorySummary reports what the archive holds, before anything is written.
+function InventorySummary({ inventory }: { inventory: Inventory }) {
+  const { t } = useTranslation('AccountTransferPage')
+  return (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <Kpi label={t('kpi.primaryDomain')} value={inventory.primary_domain || t('kpi.undetermined')} />
+        <Kpi label={t('kpi.webFiles')} value={inventory.web_files.toLocaleString('en-US')} alt={fmtByte(inventory.web_bytes)} />
+        <Kpi label={t('kpi.databases')} value={String(inventory.databases.length)} />
+        <Kpi label={t('kpi.emailData')} value={inventory.mail_files ? t('kpi.emailFiles', { count: inventory.mail_files }) : t('kpi.none')} />
+      </div>
+
+      {inventory.warnings.length > 0 && (
+        <div className="mb-5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+          {inventory.warnings.map(wn => <div key={wn} className="text-sm text-amber-800 dark:text-amber-300">⚠ {wn}</div>)}
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Detail title={t('detail.title')} rows={[
+          [t('detail.sourcePanel'), 'cPanel'],
+          [t('detail.user'), inventory.username || '—'],
+          [t('detail.archiveRoot'), inventory.archive_root || '—'],
+          [t('detail.totalMembers'), inventory.entry_count.toLocaleString('en-US')],
+          [t('detail.expandedSize'), fmtByte(inventory.expanded_bytes)],
+          [t('detail.cron'), inventory.cron_present ? t('detail.cronPresent') : t('detail.cronNone')],
+          [t('detail.sslFiles'), String(inventory.ssl_certs)],
+          [t('detail.mailboxes'), String(inventory.mailboxes.length)],
+          [t('detail.forwarders'), String(inventory.alias_count)],
+          [t('detail.cronJobs'), String(inventory.cron_jobs.length)],
+        ]} />
+        <div className="space-y-4">
+          <List title={t('lists.databases')} values={inventory.databases} noneFound={t('lists.noneFound')} />
+          <List title={t('lists.dnsZones')} values={inventory.dns_zones} noneFound={t('lists.noneFound')} />
+          <List title={t('lists.cronJobs')} values={inventory.cron_jobs.map(c => `${c.minute} ${c.hour} ${c.day} ${c.month} ${c.weekday}  ${c.command}`)} noneFound={t('lists.noneFound')} />
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/20 px-4 py-3 text-sm text-sky-800 dark:text-sky-300">
+        {t('analysisComplete')}
+      </div>
+    </>
+  )
+}
+
+// TargetAndPlan names where the archive lands, and starts the import.
+function TargetAndPlan({ customers, plans, customerID, onCustomerID, planID, onPlanID, domain, onDomain, phpVersion, onPHPVersion, importing, progress, onImport }: {
+  customers: Customer[]
+  plans: Plan[]
+  customerID: string
+  onCustomerID: (value: string) => void
+  planID: string
+  onPlanID: (value: string) => void
+  domain: string
+  onDomain: (value: string) => void
+  phpVersion: string
+  onPHPVersion: (value: string) => void
+  importing: boolean
+  progress: number
+  onImport: () => void
+}) {
+  const { t } = useTranslation('AccountTransferPage')
+  return (
+    <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 p-5">
+      <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">{t('targetAndPlan')}</h2>
+      <div className="grid md:grid-cols-2 gap-4">
+        <Field label={t('fields.targetCustomer')}>
+          <select value={customerID} onChange={e => onCustomerID(e.target.value)} className={inputClass}>
+            <option value="">{t('fields.selectCustomer')}</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.name} — {c.email}</option>)}
+          </select>
+        </Field>
+        <Field label={t('fields.servicePlan')}>
+          <select value={planID} onChange={e => onPlanID(e.target.value)} className={inputClass}>
+            <option value="">{t('fields.defaultPlan')}</option>
+            {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Field>
+        <Field label={t('fields.primaryDomain')}>
+          <input value={domain} onChange={e => onDomain(e.target.value.toLowerCase())} className={inputClass} />
+        </Field>
+        <Field label={t('fields.phpVersion')}>
+          <select value={phpVersion} onChange={e => onPHPVersion(e.target.value)} className={inputClass}>
+            {['7.4', '8.2', '8.3', '8.4', '8.5'].map(v => <option key={v}>{v}</option>)}
+          </select>
+        </Field>
+      </div>
+      <button onClick={onImport}
+        disabled={importing || !customerID || !domain}
+        className="mt-5 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50">
+        {importing ? t('importing', { progress }) : t('importButton')}
+      </button>
+    </div>
+  )
+}
+
+// ImportResultCard reports what the import wrote, including the new mailbox
+// passwords, which the operator cannot read anywhere else afterwards.
+function ImportResultCard({ result }: { result: ImportResult | null }) {
+  const { t } = useTranslation('AccountTransferPage')
+  if (!result) return null
+  return (
+    <div className="mt-5 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-5">
+      <h2 className="font-semibold text-emerald-800 dark:text-emerald-200">{t('importResult.title')}</h2>
+      <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">{t('importResult.summary', { domain: result.domain, webFiles: result.web_files, count: result.databases.length })}</p>
+      {result.databases.map(d => <p key={d.target} className="mt-1 text-xs font-mono text-emerald-700 dark:text-emerald-300">{d.source} → {d.target}</p>)}
+      {result.mailboxes.length > 0 && <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-white/60 dark:bg-slate-900/40 p-3">
+        <p className="text-xs font-semibold text-amber-800 dark:text-amber-200 mb-2">{t('importResult.newPasswords')}</p>
+        {result.mailboxes.map(m => <p key={m.email} className="text-xs font-mono text-amber-800 dark:text-amber-200">{m.email}: {m.password}</p>)}
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{t('importResult.forwardersTransferred', { count: result.aliases })}</p>
+      </div>}
+      {result.cron_jobs > 0 && <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">{t('importResult.cronTransferred', { count: result.cron_jobs })}</p>}
+      {result.ssl_imported && <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">{t('importResult.sslTransferred', { expires: result.ssl_expires })}</p>}
+      {result.skipped?.map(s => <p key={s} className="mt-1 text-xs text-amber-700 dark:text-amber-300">⚠ {s}</p>)}
+      <Link to={`/subscriptions/${result.domain_id}`} className="inline-block mt-3 text-sm font-medium text-brand-700 dark:text-brand-300">{t('importResult.manageDomain')}</Link>
     </div>
   )
 }
