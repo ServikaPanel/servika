@@ -6,6 +6,7 @@ import MobileNavBar from './MobileNavBar'
 import ErrorSurface from './ErrorSurface'
 import TopBar from './TopBar'
 import DomainPicker from './DomainPicker'
+import ReplayConsentBanner from './ReplayConsentBanner'
 import { api } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 
@@ -368,6 +369,7 @@ export default function DashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
         <TopBar onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 min-w-0 flex flex-col">
+          <ReplayConsentBanner />
           <div className="flex-1 min-w-0">
             <Suspense fallback={
               <div className="px-6 py-10 text-sm text-slate-400 dark:text-slate-500" role="status">

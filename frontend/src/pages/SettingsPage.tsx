@@ -7,6 +7,7 @@ import NameserverSetting from '@/components/NameserverSetting'
 import ServerRebootButton from '@/components/ServerRebootButton'
 import SessionIdleSetting from '@/components/SessionIdleSetting'
 import LogRetentionSetting from '@/components/LogRetentionSetting'
+import SessionReplaySetting from '@/components/SessionReplaySetting'
 import Breadcrumb from '@/components/Breadcrumb'
 import { useAuth } from '@/store/auth'
 import { setTheme as applyThemePreference, type Theme } from '@/lib/theme'
@@ -153,6 +154,9 @@ export default function SettingsPage() {
         <NameserverSetting audience="reseller" />
         <SessionIdleSetting />
         <LogRetentionSetting />
+        {/* Every role sees this one: the admin half is the switch, and the
+            account half is the consent of whoever is reading. */}
+        <SessionReplaySetting />
         <ServerRebootButton />
 
         {/* 1. Account information */}

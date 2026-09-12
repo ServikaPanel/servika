@@ -1,0 +1,32 @@
+{
+  "title": "Session Replay",
+  "description": "Zeichnet auf, was auf den Panel-Bildschirmen geschieht, damit eine Meldung später abgespielt werden kann.",
+  "masking": "Jeder Text auf dem Bildschirm wird vor dem Senden maskiert, ebenso jeder Input-Wert. Eine Aufzeichnung zeigt, was getan wurde, nie, was geschrieben wurde.",
+  "offHint": "Session Replay ist aus, es wird nichts aufgezeichnet.",
+  "switch": {
+    "label": "Panel-Sitzungen aufzeichnen",
+    "hint": "Standardmäßig aus. Es gilt für jedes Konto, und jedes Konto muss trotzdem zustimmen."
+  },
+  "consent": {
+    "given": "Sie haben der Aufzeichnung am {{at}} zugestimmt.",
+    "missing": "Sie haben der Aufzeichnung nicht zugestimmt.",
+    "accept": "Ich stimme zu",
+    "withdraw": "Zustimmung zurückziehen"
+  },
+  "forget": {
+    "action": "Meine Aufzeichnungen löschen",
+    "confirmTitle": "Aufzeichnungen löschen",
+    "confirm": "Jede Aufzeichnung Ihrer eigenen Sitzungen wird gelöscht. Das lässt sich nicht rückgängig machen."
+  },
+  "messages": {
+    "switchOn": "Session Replay ist an.",
+    "switchOff": "Session Replay ist aus.",
+    "consentGiven": "Ihre Zustimmung wurde gespeichert.",
+    "consentWithdrawn": "Ihre Zustimmung wurde zurückgezogen.",
+    "forgotten": "Ihre Aufzeichnungen wurden gelöscht."
+  },
+  "errors": {
+    "load": "Die Einstellung konnte nicht gelesen werden",
+    "save": "Die Einstellung konnte nicht gespeichert werden"
+  }
+}

@@ -1014,6 +1014,17 @@ func main() {
 			// cover every operator's requests, so the window is a server policy.
 			r.With(middleware.AdminOnly).Get("/system/log-retention", panelSettingsH.LogRetentionGet)
 			r.With(middleware.AdminOnly).Put("/system/log-retention", panelSettingsH.LogRetentionSave)
+			// Whether the browser may record a session at all. Admin only, and
+			// off by default: it decides what is captured from every other
+			// account's screen, which is a server policy and not a preference.
+			r.With(middleware.AdminOnly).Get("/system/session-replay", panelSettingsH.SessionReplayGet)
+			r.With(middleware.AdminOnly).Put("/system/session-replay", panelSettingsH.SessionReplaySave)
+			// The account's own answer to being recorded. Open to EVERY role,
+			// including role=user customers, because the screens being recorded
+			// are theirs. The target is always the token's own user.
+			r.Get("/me/replay-consent", uiEventsH.ConsentGet)
+			r.Put("/me/replay-consent", uiEventsH.ConsentSave)
+			r.Delete("/me/replay-data", uiEventsH.ConsentForget)
 			// The log tables themselves. Admin only: the rows carry every
 			// operator's requests, their redacted bodies and the panel's own
 			// failures, which is server-wide data rather than a tenant's.

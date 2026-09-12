@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Înregistrează ce se întâmplă pe ecranele panoului, astfel încât o sesizare să poată fi redată ulterior.",
+  "masking": "Fiecare text de pe ecran este mascat înainte de trimitere, la fel și fiecare valoare de input. O înregistrare arată ce s-a făcut, niciodată ce s-a scris.",
+  "offHint": "Session replay este oprit, nu se înregistrează nimic.",
+  "switch": {
+    "label": "Înregistrează sesiunile panoului",
+    "hint": "Oprit implicit. Se aplică fiecărui cont, iar fiecare cont trebuie totuși să fie de acord."
+  },
+  "consent": {
+    "given": "Ați acceptat înregistrarea pe {{at}}.",
+    "missing": "Nu ați acceptat înregistrarea.",
+    "accept": "Sunt de acord",
+    "withdraw": "Retrage acordul"
+  },
+  "forget": {
+    "action": "Șterge înregistrările mele",
+    "confirmTitle": "Șterge înregistrările",
+    "confirm": "Fiecare înregistrare a propriilor sesiuni este ștearsă. Acțiunea nu poate fi anulată."
+  },
+  "messages": {
+    "switchOn": "Session replay este pornit.",
+    "switchOff": "Session replay este oprit.",
+    "consentGiven": "Acordul dumneavoastră a fost salvat.",
+    "consentWithdrawn": "Acordul dumneavoastră a fost retras.",
+    "forgotten": "Înregistrările dumneavoastră au fost șterse."
+  },
+  "errors": {
+    "load": "Setarea nu a putut fi citită",
+    "save": "Setarea nu a putut fi salvată"
+  }
+}

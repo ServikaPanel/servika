@@ -1,0 +1,6 @@
+{
+  "title": "Smí být tato relace zaznamenána?",
+  "body": "Panel může zaznamenat, co na těchto obrazovkách děláte, aby bylo možné hlášení později přehrát. Každý text i každá hodnota inputu se maskuje, záznam tedy ukazuje, co se udělalo, a nikdy to, co se psalo. Souhlas můžete kdykoli odvolat v Nastavení.",
+  "accept": "Souhlasím",
+  "decline": "Ne, děkuji"
+}

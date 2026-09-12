@@ -1,0 +1,6 @@
+{
+  "title": "Darf diese Sitzung aufgezeichnet werden?",
+  "body": "Das Panel kann aufzeichnen, was Sie auf diesen Bildschirmen tun, damit eine Meldung später abgespielt werden kann. Jeder Text und jeder Input-Wert wird maskiert, die Aufzeichnung zeigt also, was getan wurde, und nie, was geschrieben wurde. Sie können die Zustimmung jederzeit unter Einstellungen zurückziehen.",
+  "accept": "Ich stimme zu",
+  "decline": "Nein danke"
+}

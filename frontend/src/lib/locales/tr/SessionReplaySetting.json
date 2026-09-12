@@ -1,0 +1,32 @@
+{
+  "title": "Oturum replay",
+  "description": "Panel ekranlarında olanları kaydeder, böylece bir şikâyet sonradan oynatılabilir.",
+  "masking": "Ekrandaki her metin gönderilmeden önce maskelenir, her input değeri de öyle. Kayıt ne yapıldığını gösterir, ne yazıldığını göstermez.",
+  "offHint": "Oturum replay kapalı, hiçbir şey kaydedilmiyor.",
+  "switch": {
+    "label": "Panel oturumlarını kaydet",
+    "hint": "Varsayılan olarak kapalı. Her hesabı kapsar ve her hesap yine de onay vermek zorundadır."
+  },
+  "consent": {
+    "given": "Kaydedilmeyi {{at}} tarihinde kabul ettiniz.",
+    "missing": "Kaydedilmeyi henüz kabul etmediniz.",
+    "accept": "Kabul ediyorum",
+    "withdraw": "Onayı geri çek"
+  },
+  "forget": {
+    "action": "Kayıtlarımı sil",
+    "confirmTitle": "Kayıtları sil",
+    "confirm": "Kendi oturumlarınıza ait her kayıt silinir. Bu işlem geri alınamaz."
+  },
+  "messages": {
+    "switchOn": "Oturum replay açık.",
+    "switchOff": "Oturum replay kapalı.",
+    "consentGiven": "Onayınız kaydedildi.",
+    "consentWithdrawn": "Onayınız geri çekildi.",
+    "forgotten": "Kayıtlarınız silindi."
+  },
+  "errors": {
+    "load": "Ayar okunamadı",
+    "save": "Ayar kaydedilemedi"
+  }
+}

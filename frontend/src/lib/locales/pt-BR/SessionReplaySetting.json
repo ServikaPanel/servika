@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Grava o que acontece nas telas do painel para que um relato possa ser reproduzido depois.",
+  "masking": "Todo o texto na tela é mascarado antes do envio, e cada valor de input também. Uma gravação mostra o que foi feito, nunca o que foi escrito.",
+  "offHint": "O session replay está desligado, nada é gravado.",
+  "switch": {
+    "label": "Gravar as sessões do painel",
+    "hint": "Desligado por padrão. Vale para todas as contas, e cada conta ainda precisa consentir."
+  },
+  "consent": {
+    "given": "Você consentiu com a gravação em {{at}}.",
+    "missing": "Você ainda não consentiu com a gravação.",
+    "accept": "Eu concordo",
+    "withdraw": "Retirar consentimento"
+  },
+  "forget": {
+    "action": "Excluir minhas gravações",
+    "confirmTitle": "Excluir as gravações",
+    "confirm": "Todas as gravações das suas sessões são excluídas. Esta ação não pode ser desfeita."
+  },
+  "messages": {
+    "switchOn": "O session replay está ligado.",
+    "switchOff": "O session replay está desligado.",
+    "consentGiven": "Seu consentimento foi salvo.",
+    "consentWithdrawn": "Seu consentimento foi retirado.",
+    "forgotten": "Suas gravações foram excluídas."
+  },
+  "errors": {
+    "load": "Não foi possível ler a configuração",
+    "save": "Não foi possível salvar a configuração"
+  }
+}

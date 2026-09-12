@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Registra ciò che accade sulle schermate del panel, così una segnalazione può essere riprodotta.",
+  "masking": "Ogni testo sullo schermo viene mascherato prima dell'invio, e così ogni valore di input. Una registrazione mostra cosa è stato fatto, mai cosa è stato scritto.",
+  "offHint": "Il session replay è disattivato, non viene registrato nulla.",
+  "switch": {
+    "label": "Registra le sessioni del panel",
+    "hint": "Disattivato per impostazione predefinita. Riguarda ogni account, e ogni account deve comunque acconsentire."
+  },
+  "consent": {
+    "given": "Hai acconsentito alla registrazione il {{at}}.",
+    "missing": "Non hai acconsentito alla registrazione.",
+    "accept": "Acconsento",
+    "withdraw": "Revoca il consenso"
+  },
+  "forget": {
+    "action": "Elimina le mie registrazioni",
+    "confirmTitle": "Elimina le registrazioni",
+    "confirm": "Ogni registrazione delle tue sessioni viene eliminata. L'operazione non può essere annullata."
+  },
+  "messages": {
+    "switchOn": "Il session replay è attivo.",
+    "switchOff": "Il session replay è disattivato.",
+    "consentGiven": "Il tuo consenso è stato salvato.",
+    "consentWithdrawn": "Il tuo consenso è stato revocato.",
+    "forgotten": "Le tue registrazioni sono state eliminate."
+  },
+  "errors": {
+    "load": "Impossibile leggere l'impostazione",
+    "save": "Impossibile salvare l'impostazione"
+  }
+}

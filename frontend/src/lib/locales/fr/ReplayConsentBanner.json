@@ -1,0 +1,6 @@
+{
+  "title": "Cette session peut-elle être enregistrée ?",
+  "body": "Le panel peut enregistrer ce que vous faites sur ces écrans afin qu'un signalement puisse être rejoué. Chaque texte et chaque valeur d'input est masqué, l'enregistrement montre donc ce qui a été fait et jamais ce qui a été écrit. Vous pouvez retirer votre accord à tout moment dans les Paramètres.",
+  "accept": "J'accepte",
+  "decline": "Non merci"
+}

@@ -1,0 +1,6 @@
+{
+  "title": "Poate fi înregistrată această sesiune?",
+  "body": "Panoul poate înregistra ce faceți pe aceste ecrane, astfel încât o sesizare să poată fi redată ulterior. Fiecare text și fiecare valoare de input este mascată, deci înregistrarea arată ce s-a făcut și niciodată ce s-a scris. Puteți retrage acordul oricând din Setări.",
+  "accept": "Sunt de acord",
+  "decline": "Nu, mulțumesc"
+}

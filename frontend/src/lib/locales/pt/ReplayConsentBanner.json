@@ -1,0 +1,6 @@
+{
+  "title": "Esta sessão pode ser gravada?",
+  "body": "O painel pode gravar o que faz nestes ecrãs para que uma comunicação possa ser reproduzida depois. Todo o texto e cada valor de input é mascarado, por isso a gravação mostra o que foi feito e nunca o que foi escrito. Pode retirar o consentimento a qualquer momento nas Definições.",
+  "accept": "Concordo",
+  "decline": "Não, obrigado"
+}

@@ -1,0 +1,6 @@
+{
+  "title": "Bu oturum kaydedilsin mi?",
+  "body": "Panel, bu ekranlarda yaptıklarınızı kaydedebilir, böylece bir şikâyet sonradan oynatılabilir. Her metin ve her input değeri maskelenir, yani kayıt ne yapıldığını gösterir, ne yazıldığını göstermez. Onayı istediğiniz zaman Ayarlar üzerinden geri çekebilirsiniz.",
+  "accept": "Kabul ediyorum",
+  "decline": "Hayır, teşekkürler"
+}

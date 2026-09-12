@@ -59,9 +59,43 @@ func testActor(t *testing.T, handle *sql.DB, consented bool) int64 {
 	return id
 }
 
+// replaySwitchLock names the advisory lock that serialises the switch.
+//
+// session_replay_enabled is ONE row of panel_settings, and go test runs the
+// packages that write it at the same time against the same database. Without
+// this, internal/panelsettings turning the switch off makes a batch this
+// package just sent be refused.
+const replaySwitchLock = "servika_test_replay_switch"
+
+// holdReplaySwitch takes that lock for the length of the test.
+//
+// The lock is held on ONE connection: MariaDB releases it when that connection
+// closes, and database/sql would otherwise hand the release to a different one.
+func holdReplaySwitch(t *testing.T, handle *sql.DB) {
+	t.Helper()
+	conn, err := handle.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("open a connection for the lock: %v", err)
+	}
+	var got sql.NullInt64
+	if err := conn.QueryRowContext(context.Background(),
+		`SELECT GET_LOCK(?, 30)`, replaySwitchLock).Scan(&got); err != nil {
+		t.Fatalf("take the lock: %v", err)
+	}
+	if !got.Valid || got.Int64 != 1 {
+		t.Fatalf("the switch lock was not free within 30 seconds")
+	}
+	t.Cleanup(func() {
+		_ = conn.QueryRowContext(context.Background(),
+			`SELECT RELEASE_LOCK(?)`, replaySwitchLock).Scan(&got)
+		_ = conn.Close()
+	})
+}
+
 // setReplay turns the feature on or off and restores it when the test ends.
 func setReplay(t *testing.T, handle *sql.DB, on bool) {
 	t.Helper()
+	holdReplaySwitch(t, handle)
 	var previous int
 	if err := handle.QueryRow(
 		`SELECT session_replay_enabled FROM panel_settings WHERE id=1`).Scan(&previous); err != nil {

@@ -1,0 +1,32 @@
+{
+  "title": "会话回放",
+  "description": "记录面板页面上发生的操作，以便之后回放一次反馈。",
+  "masking": "屏幕上的每一段文本在发送前都会被遮蔽，每个 input 的值同样如此。回放显示做了什么，绝不显示写了什么。",
+  "offHint": "会话回放已关闭，不会记录任何内容。",
+  "switch": {
+    "label": "记录面板会话",
+    "hint": "默认关闭。它覆盖所有账户，并且每个账户仍需自行同意。"
+  },
+  "consent": {
+    "given": "您已于 {{at}} 同意被记录。",
+    "missing": "您尚未同意被记录。",
+    "accept": "我同意",
+    "withdraw": "撤回同意"
+  },
+  "forget": {
+    "action": "删除我的记录",
+    "confirmTitle": "删除记录",
+    "confirm": "您自己会话的所有记录都会被删除。此操作无法撤销。"
+  },
+  "messages": {
+    "switchOn": "会话回放已开启。",
+    "switchOff": "会话回放已关闭。",
+    "consentGiven": "您的同意已保存。",
+    "consentWithdrawn": "您的同意已撤回。",
+    "forgotten": "您的记录已删除。"
+  },
+  "errors": {
+    "load": "无法读取该设置",
+    "save": "无法保存该设置"
+  }
+}

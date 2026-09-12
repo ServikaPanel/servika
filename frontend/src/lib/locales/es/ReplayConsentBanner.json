@@ -1,0 +1,6 @@
+{
+  "title": "¿Se puede grabar esta sesión?",
+  "body": "El panel puede grabar lo que haces en estas pantallas para que un aviso pueda reproducirse después. Todo el texto y cada valor de input se enmascara, así que la grabación muestra qué se hizo y nunca qué se escribió. Puedes retirar el consentimiento cuando quieras en Ajustes.",
+  "accept": "Acepto",
+  "decline": "No, gracias"
+}

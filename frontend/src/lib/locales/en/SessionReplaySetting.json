@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Records what happens on the panel screens so a report can be played back.",
+  "masking": "Every text on the screen is masked before it is sent, and so is every input value. A recording shows what was done, never what was written.",
+  "offHint": "Session replay is off, so nothing is recorded.",
+  "switch": {
+    "label": "Record panel sessions",
+    "hint": "Off by default. It covers every account, and each account still has to agree."
+  },
+  "consent": {
+    "given": "You agreed to be recorded on {{at}}.",
+    "missing": "You have not agreed to be recorded.",
+    "accept": "I agree",
+    "withdraw": "Withdraw"
+  },
+  "forget": {
+    "action": "Delete my recordings",
+    "confirmTitle": "Delete the recordings",
+    "confirm": "Every recording of your own sessions is deleted. This cannot be undone."
+  },
+  "messages": {
+    "switchOn": "Session replay is on.",
+    "switchOff": "Session replay is off.",
+    "consentGiven": "Your consent was saved.",
+    "consentWithdrawn": "Your consent was withdrawn.",
+    "forgotten": "Your recordings were deleted."
+  },
+  "errors": {
+    "load": "The setting could not be read",
+    "save": "The setting could not be saved"
+  }
+}

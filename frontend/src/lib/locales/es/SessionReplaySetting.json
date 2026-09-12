@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Graba lo que ocurre en las pantallas del panel para que un aviso pueda reproducirse después.",
+  "masking": "Todo el texto de la pantalla se enmascara antes de enviarse, y también cada valor de input. Una grabación muestra qué se hizo, nunca qué se escribió.",
+  "offHint": "El session replay está desactivado, no se graba nada.",
+  "switch": {
+    "label": "Grabar las sesiones del panel",
+    "hint": "Desactivado por defecto. Afecta a todas las cuentas, y cada cuenta debe aceptar igualmente."
+  },
+  "consent": {
+    "given": "Aceptaste la grabación el {{at}}.",
+    "missing": "No has aceptado la grabación.",
+    "accept": "Acepto",
+    "withdraw": "Retirar el consentimiento"
+  },
+  "forget": {
+    "action": "Eliminar mis grabaciones",
+    "confirmTitle": "Eliminar las grabaciones",
+    "confirm": "Se elimina toda grabación de tus propias sesiones. Esta acción no se puede deshacer."
+  },
+  "messages": {
+    "switchOn": "El session replay está activado.",
+    "switchOff": "El session replay está desactivado.",
+    "consentGiven": "Tu consentimiento se ha guardado.",
+    "consentWithdrawn": "Tu consentimiento se ha retirado.",
+    "forgotten": "Tus grabaciones se han eliminado."
+  },
+  "errors": {
+    "load": "No se pudo leer el ajuste",
+    "save": "No se pudo guardar el ajuste"
+  }
+}

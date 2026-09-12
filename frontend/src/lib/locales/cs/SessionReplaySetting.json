@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Zaznamenává, co se děje na obrazovkách panelu, aby bylo možné hlášení později přehrát.",
+  "masking": "Každý text na obrazovce se před odesláním maskuje, stejně jako každá hodnota inputu. Záznam ukazuje, co se udělalo, nikdy to, co se psalo.",
+  "offHint": "Session replay je vypnutý, nic se nezaznamenává.",
+  "switch": {
+    "label": "Zaznamenávat relace panelu",
+    "hint": "Ve výchozím stavu vypnuto. Týká se každého účtu a každý účet musí přesto souhlasit."
+  },
+  "consent": {
+    "given": "Se záznamem jste souhlasili {{at}}.",
+    "missing": "Se záznamem jste nesouhlasili.",
+    "accept": "Souhlasím",
+    "withdraw": "Odvolat souhlas"
+  },
+  "forget": {
+    "action": "Smazat moje záznamy",
+    "confirmTitle": "Smazat záznamy",
+    "confirm": "Každý záznam vašich vlastních relací bude smazán. Tuto akci nelze vrátit zpět."
+  },
+  "messages": {
+    "switchOn": "Session replay je zapnutý.",
+    "switchOff": "Session replay je vypnutý.",
+    "consentGiven": "Váš souhlas byl uložen.",
+    "consentWithdrawn": "Váš souhlas byl odvolán.",
+    "forgotten": "Vaše záznamy byly smazány."
+  },
+  "errors": {
+    "load": "Nastavení se nepodařilo načíst",
+    "save": "Nastavení se nepodařilo uložit"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "title": "May this session be recorded?",
+  "body": "The panel can record what you do on these screens so a report can be played back. Every text and every input value is masked, so the recording shows what was done and never what was written. You can withdraw this at any time under Settings.",
+  "accept": "I agree",
+  "decline": "No thanks"
+}

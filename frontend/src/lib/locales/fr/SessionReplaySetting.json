@@ -1,0 +1,32 @@
+{
+  "title": "Session replay",
+  "description": "Enregistre ce qui se passe sur les écrans du panel afin qu'un signalement puisse être rejoué.",
+  "masking": "Chaque texte affiché est masqué avant l'envoi, ainsi que chaque valeur d'input. Un enregistrement montre ce qui a été fait, jamais ce qui a été écrit.",
+  "offHint": "Le session replay est désactivé, rien n'est enregistré.",
+  "switch": {
+    "label": "Enregistrer les sessions du panel",
+    "hint": "Désactivé par défaut. Cela concerne chaque compte, et chaque compte doit malgré tout donner son accord."
+  },
+  "consent": {
+    "given": "Vous avez accepté l'enregistrement le {{at}}.",
+    "missing": "Vous n'avez pas accepté l'enregistrement.",
+    "accept": "J'accepte",
+    "withdraw": "Retirer mon accord"
+  },
+  "forget": {
+    "action": "Supprimer mes enregistrements",
+    "confirmTitle": "Supprimer les enregistrements",
+    "confirm": "Chaque enregistrement de vos propres sessions est supprimé. Cette action est irréversible."
+  },
+  "messages": {
+    "switchOn": "Le session replay est activé.",
+    "switchOff": "Le session replay est désactivé.",
+    "consentGiven": "Votre accord a été enregistré.",
+    "consentWithdrawn": "Votre accord a été retiré.",
+    "forgotten": "Vos enregistrements ont été supprimés."
+  },
+  "errors": {
+    "load": "Le paramètre n'a pas pu être lu",
+    "save": "Le paramètre n'a pas pu être enregistré"
+  }
+}
