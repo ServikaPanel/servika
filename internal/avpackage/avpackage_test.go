@@ -161,6 +161,77 @@ func TestAnUnparseableProductionTimeIsAnError(t *testing.T) {
 	}
 }
 
+// handBuilt assembles a package field by field, so a test can produce the
+// shapes Build never makes: a truncated signature field, a signed header that
+// is not JSON, and a header carrying a digest that is not a digest.
+func handBuilt(headerBytes []byte, key ed25519.PrivateKey, body string) []byte {
+	pkg := append([]byte(Magic), 0, 0, 0, 0)
+	binary.LittleEndian.PutUint32(pkg[len(Magic):], uint32(len(headerBytes)))
+	pkg = append(pkg, headerBytes...)
+
+	signature := ed25519.Sign(key, headerBytes)
+	length := make([]byte, 4)
+	binary.LittleEndian.PutUint32(length, uint32(len(signature)))
+	pkg = append(pkg, length...)
+	pkg = append(pkg, signature...)
+	return append(pkg, body...)
+}
+
+// A package whose SIGNATURE field is cut short is a broken download, not an
+// attacker: the reader never reaches the point where a signature could fail.
+func TestATruncatedSignatureFieldIsNotAPackage(t *testing.T) {
+	public, _ := keyPair(t)
+	header := []byte(`{"version":1}`)
+	pkg := append([]byte(Magic), 0, 0, 0, 0)
+	binary.LittleEndian.PutUint32(pkg[len(Magic):], uint32(len(header)))
+	pkg = append(pkg, header...)
+	// A signature field that claims more bytes than the package carries.
+	length := make([]byte, 4)
+	binary.LittleEndian.PutUint32(length, 512)
+	pkg = append(pkg, length...)
+	pkg = append(pkg, []byte("short")...)
+
+	if _, _, err := Open(pkg, public); !errors.Is(err, ErrNotAPackage) {
+		t.Fatalf("a truncated signature field answered %v, want ErrNotAPackage", err)
+	}
+}
+
+// The header is verified before it is parsed, so a correctly signed header that
+// is not JSON reaches the unmarshal. It is reported as a malformed header rather
+// than as a signature failure: the two send an operator to different places.
+func TestASignedHeaderThatIsNotJSONIsReportedAsMalformed(t *testing.T) {
+	public, private := keyPair(t)
+
+	_, _, err := Open(handBuilt([]byte("this is not JSON"), private, "{}"), public)
+
+	if err == nil || errors.Is(err, ErrUnverified) || errors.Is(err, ErrNotAPackage) {
+		t.Fatalf("a signed but unparseable header answered %v", err)
+	}
+	if !strings.Contains(err.Error(), "not valid JSON") {
+		t.Errorf("the answer does not name the malformed header: %v", err)
+	}
+}
+
+// The body is bound to the signature only through the digest, so a header whose
+// digest cannot be read binds nothing. That is refused rather than accepted with
+// the check skipped.
+func TestAHeaderWithNoUsableDigestIsRefused(t *testing.T) {
+	public, private := keyPair(t)
+	for name, digest := range map[string]string{
+		"not hex":     "zzzz",
+		"too short":   "aabb",
+		"not present": "",
+	} {
+		header := []byte(`{"version":1,"produced":"2026-08-21T09:00:00Z","body_sha256":"` + digest + `"}`)
+
+		_, _, err := Open(handBuilt(header, private, "{}"), public)
+
+		if !errors.Is(err, ErrUnverified) {
+			t.Errorf("%s answered %v, want ErrUnverified", name, err)
+		}
+	}
+}
+
 func clone(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)

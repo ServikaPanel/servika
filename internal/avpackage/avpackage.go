@@ -146,19 +146,7 @@ func Open(pkg []byte, key ed25519.PublicKey) (Header, []byte, error) {
 	if len(key) != ed25519.PublicKeySize {
 		return header, nil, errors.New("the verification key is not an Ed25519 public key")
 	}
-	if len(pkg) > MaxBytes {
-		return header, nil, fmt.Errorf("the package is %d bytes, over the %d ceiling", len(pkg), MaxBytes)
-	}
-	if len(pkg) < len(Magic) || string(pkg[:len(Magic)]) != Magic {
-		return header, nil, ErrNotAPackage
-	}
-	rest := pkg[len(Magic):]
-
-	headerBytes, rest, err := takeField(rest)
-	if err != nil {
-		return header, nil, err
-	}
-	signature, body, err := takeField(rest)
+	headerBytes, signature, body, err := splitPackage(pkg)
 	if err != nil {
 		return header, nil, err
 	}
@@ -172,19 +160,47 @@ func Open(pkg []byte, key ed25519.PublicKey) (Header, []byte, error) {
 	if err := json.Unmarshal(headerBytes, &header); err != nil {
 		return header, nil, fmt.Errorf("the signed header is not valid JSON: %w", err)
 	}
+	if err := matchesDigest(header, body); err != nil {
+		return header, nil, err
+	}
+	return header, body, nil
+}
 
-	// The body is bound to the signature only through this digest, so a
-	// mismatch is a tampered body rather than a corrupt one, and it is compared
-	// in constant time for the same reason the signature is.
+// splitPackage cuts the container into its three parts without trusting any of
+// them: nothing inside the header may decide how the bytes around it are read.
+func splitPackage(pkg []byte) (headerBytes, signature, body []byte, err error) {
+	if len(pkg) > MaxBytes {
+		return nil, nil, nil, fmt.Errorf("the package is %d bytes, over the %d ceiling", len(pkg), MaxBytes)
+	}
+	if len(pkg) < len(Magic) || string(pkg[:len(Magic)]) != Magic {
+		return nil, nil, nil, ErrNotAPackage
+	}
+	headerBytes, rest, err := takeField(pkg[len(Magic):])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	signature, body, err = takeField(rest)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return headerBytes, signature, body, nil
+}
+
+// matchesDigest checks the body against the digest the signature covers.
+//
+// The body is bound to the signature only through this digest, so a mismatch is
+// a tampered body rather than a corrupt one, and it is compared in constant time
+// for the same reason the signature is.
+func matchesDigest(header Header, body []byte) error {
 	sum := sha256.Sum256(body)
 	want, err := hex.DecodeString(header.BodySHA256)
 	if err != nil || len(want) != len(sum) {
-		return header, nil, fmt.Errorf("%w: the header carries no usable body digest", ErrUnverified)
+		return fmt.Errorf("%w: the header carries no usable body digest", ErrUnverified)
 	}
 	if subtle.ConstantTimeCompare(sum[:], want) != 1 {
-		return header, nil, fmt.Errorf("%w: the body does not match the signed digest", ErrUnverified)
+		return fmt.Errorf("%w: the body does not match the signed digest", ErrUnverified)
 	}
-	return header, body, nil
+	return nil
 }
 
 func appendLength(out []byte, n int) []byte {
