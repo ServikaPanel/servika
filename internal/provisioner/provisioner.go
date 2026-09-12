@@ -231,6 +231,7 @@ func Init(db *sql.DB) {
 	EnsureBrandAssets() // Lottie animations + player (shared, served at /_srv/)
 	healCacheZoneOnStartup()
 	HealDefaultVhostsOnStartup() // port 80/443 catch-all vhosts, install-only until now
+	HealServerTokens()           // nginx version banner, opt-in through servika-optimize until now
 	// Before every other panel-vhost heal: a file nginx cannot bind makes each
 	// of those heals fail its own nginx -t and revert work that was correct.
 	HealPanelIPv6Listen()
