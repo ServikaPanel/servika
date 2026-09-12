@@ -184,58 +184,90 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"rules": out, "protected_ports": protectedPortList()})
 }
 
-// POST /firewall  {type, ip, port, protocol, description}
-func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Type        string `json:"type"`
-		IP          string `json:"ip"`
-		Port        int    `json:"port"`
-		Protocol    string `json:"protocol"`
-		Description string `json:"description"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
+// addRequest is one rule as the screen submits it.
+type addRequest struct {
+	Type        string `json:"type"`
+	IP          string `json:"ip"`
+	Port        int    `json:"port"`
+	Protocol    string `json:"protocol"`
+	Description string `json:"description"`
+}
+
+// normalize folds the submitted rule into the shape the renderer expects. A rule
+// with no protocol is tcp, because every template and every stored rule is.
+func (req *addRequest) normalize() {
 	req.Type = strings.ToLower(strings.TrimSpace(req.Type))
 	req.IP = strings.TrimSpace(req.IP)
 	req.Protocol = strings.ToLower(strings.TrimSpace(req.Protocol))
 	if req.Protocol == "" {
 		req.Protocol = "tcp"
 	}
+}
+
+// renderable reports whether nft has a line for this protocol and port at all.
+func renderable(w http.ResponseWriter, req addRequest) bool {
 	if req.Protocol != "tcp" && req.Protocol != "udp" {
 		httpx.WriteError(w, http.StatusBadRequest, "protocol must be tcp or udp")
-		return
+		return false
 	}
 	if req.Port < 0 || req.Port > 65535 {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid port (0-65535)")
-		return
+		return false
 	}
+	return true
+}
 
+// allowedTarget reports whether the rule may be stored, and clears the address
+// of a close, because closing a port blocks everyone.
+//
+// A banned may block one IP from a critical port to stop an attacker. Active
+// sessions remain protected by established-accept. Combining all ports with a
+// critical management IP is risky, so the UI warns. A port-zero banned does not
+// override an earlier whitelist rule.
+func allowedTarget(w http.ResponseWriter, req *addRequest) bool {
 	switch req.Type {
 	case "banned", "whitelist":
 		if !validIP(req.IP) {
 			httpx.WriteError(w, http.StatusBadRequest, "enter a valid IP address or CIDR (for example, 1.2.3.4 or 1.2.3.0/24)")
-			return
+			return false
 		}
 	case "close":
-		if req.Port == 0 {
-			httpx.WriteError(w, http.StatusBadRequest, "specify a port to close")
-			return
-		}
-		if isProtectedPort(req.Port) {
-			httpx.WriteError(w, http.StatusBadRequest,
-				fmt.Sprintf("port %d is critical for SSH, web, panel, or DNS access and cannot be closed", req.Port))
-			return
-		}
-		req.IP = "" // Closing a port blocks everyone.
+		return closeable(w, req)
 	default:
 		httpx.WriteError(w, http.StatusBadRequest, "type must be banned, whitelist, or closed")
+		return false
+	}
+	return true
+}
+
+// closeable reports whether the port may be closed. The guarded ports are the
+// ones that carry SSH, the panel, hosted sites and DNS, so closing one locks
+// somebody out of the server this screen is served from.
+func closeable(w http.ResponseWriter, req *addRequest) bool {
+	if req.Port == 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "specify a port to close")
+		return false
+	}
+	if isProtectedPort(req.Port) {
+		httpx.WriteError(w, http.StatusBadRequest,
+			fmt.Sprintf("port %d is critical for SSH, web, panel, or DNS access and cannot be closed", req.Port))
+		return false
+	}
+	req.IP = "" // Closing a port blocks everyone.
+	return true
+}
+
+// POST /firewall  {type, ip, port, protocol, description}
+func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
+	var req addRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	// A banned may block one IP from a critical port to stop an attacker. Active sessions
-	// remain protected by established-accept. Combining all ports with a critical management IP
-	// is risky, so the UI warns. A port-zero banned does not override an earlier whitelist rule.
+	req.normalize()
+	if !renderable(w, req) || !allowedTarget(w, &req) {
+		return
+	}
 
 	res, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO firewall_rules (type, ip, port, protocol, description, enabled) VALUES (?,?,?,?,?,1)`,
@@ -333,18 +365,22 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// rebuild generates an nft ruleset from active rules, validates it, applies it, and persists it.
-func (h *Handlers) rebuild() error {
+// storedRules is the firewall_rules table rendered into nft lines.
+type storedRules struct {
+	allowlisted, restricted, closed, banned []string
+}
+
+// readRules renders every active rule.
+func (h *Handlers) readRules() (storedRules, error) {
 	rows, err := h.DB.Query(`SELECT type, ip, port, protocol FROM firewall_rules WHERE enabled=1 ORDER BY
 		FIELD(type,'whitelist','close','banned'), id`)
 	if err != nil {
-		return err
+		return storedRules{}, err
 	}
-	var allowlisted, closed, banned []string
+	var rendered storedRules
 	// A port-specific whitelist rule puts that port into allowlist mode.
 	// A "proto dport P drop" rule follows the corresponding "ip saddr X dport P accept" rules,
 	// allowing only listed IP addresses to access that port.
-	// Sort "proto/port" keys for deterministic output.
 	restrictedPorts := map[string]bool{}
 	for rows.Next() {
 		var ruleType, ip, proto string
@@ -357,31 +393,66 @@ func (h *Handlers) rebuild() error {
 		}
 		switch ruleType {
 		case "whitelist":
-			allowlisted = append(allowlisted, "\t\t"+saddr(ip)+dport(proto, port)+"accept")
+			rendered.allowlisted = append(rendered.allowlisted, "\t\t"+saddr(ip)+dport(proto, port)+"accept")
 			if port > 0 { // A port-specific permission enables allowlist mode for that port.
 				restrictedPorts[proto+"/"+strconv.Itoa(port)] = true
 			}
 		case "close":
-			closed = append(closed, "\t\t"+proto+" dport "+strconv.Itoa(port)+" drop")
+			rendered.closed = append(rendered.closed, "\t\t"+proto+" dport "+strconv.Itoa(port)+" drop")
 		case "banned":
-			banned = append(banned, "\t\t"+saddr(ip)+dport(proto, port)+"drop")
+			rendered.banned = append(rendered.banned, "\t\t"+saddr(ip)+dport(proto, port)+"drop")
 		}
 	}
 	_ = rows.Err()
 	_ = rows.Close()
+	rendered.restricted = restrictedDrops(restrictedPorts)
+	return rendered, nil
+}
 
-	// Allowlist drops come after permitted IP accepts and before close or banned rules.
-	// Since established,related and lo come first, active sessions and SSH are not interrupted.
-	restrictedKeys := make([]string, 0, len(restrictedPorts))
-	for key := range restrictedPorts {
-		restrictedKeys = append(restrictedKeys, key)
+// restrictedDrops renders the drop that closes an allowlisted port to everybody
+// else.
+//
+// Allowlist drops come after permitted IP accepts and before close or banned
+// rules. Since established,related and lo come first, active sessions and SSH
+// are not interrupted. The "proto/port" keys are sorted for deterministic
+// output.
+func restrictedDrops(ports map[string]bool) []string {
+	keys := make([]string, 0, len(ports))
+	for key := range ports {
+		keys = append(keys, key)
 	}
-	sort.Strings(restrictedKeys)
+	sort.Strings(keys)
 	var restricted []string
-	for _, key := range restrictedKeys {
+	for _, key := range keys {
 		if i := strings.IndexByte(key, '/'); i > 0 {
 			restricted = append(restricted, "\t\t"+key[:i]+" dport "+key[i+1:]+" drop")
 		}
+	}
+	return restricted
+}
+
+// applyRuleset validates, applies and persists one ruleset.
+func applyRuleset(ruleset []byte) error {
+	// 1. Validate so an invalid ruleset is never applied.
+	if out, err := nftCheck(ruleset); err != nil {
+		return fmt.Errorf("nft validation failed: %s", strings.TrimSpace(out))
+	}
+	// 2. Apply the ruleset.
+	if out, err := nftApply(ruleset); err != nil {
+		return fmt.Errorf("nft apply failed: %s", strings.TrimSpace(out))
+	}
+	// 3. Persist the ruleset so panel startup can reload it after reboot.
+	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
+	_ = os.MkdirAll(filepath.Dir(rulesFile), 0o755)
+	_ = os.WriteFile(rulesFile, ruleset, 0o600)
+	return nil
+}
+
+// rebuild generates an nft ruleset from active rules, validates it, applies it, and persists it.
+func (h *Handlers) rebuild() error {
+	rendered, err := h.readRules()
+	if err != nil {
+		return err
 	}
 
 	// The element file is regenerated first: nft validates the include as part
@@ -400,21 +471,8 @@ func (h *Handlers) rebuild() error {
 		return err
 	}
 
-	ruleset := buildRuleset(allowlisted, restricted, closed, banned, remote, hostApps)
-
-	// 1. Validate so an invalid ruleset is never applied.
-	if out, err := nftCheck(ruleset); err != nil {
-		return fmt.Errorf("nft validation failed: %s", strings.TrimSpace(out))
-	}
-	// 2. Apply the ruleset.
-	if out, err := nftApply(ruleset); err != nil {
-		return fmt.Errorf("nft apply failed: %s", strings.TrimSpace(out))
-	}
-	// 3. Persist the ruleset so panel startup can reload it after reboot.
-	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-	_ = os.MkdirAll(filepath.Dir(rulesFile), 0o755)
-	_ = os.WriteFile(rulesFile, ruleset, 0o600)
-	return nil
+	return applyRuleset(buildRuleset(
+		rendered.allowlisted, rendered.restricted, rendered.closed, rendered.banned, remote, hostApps))
 }
 
 // buildRuleset renders the nft ruleset text.

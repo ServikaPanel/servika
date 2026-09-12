@@ -368,7 +368,7 @@ func TestEachKindOfRuleReachesTheRulesetInOrder(t *testing.T) {
 		t.Fatalf("a line is missing (accept=%d restrict=%d close=%d ban=%d):\n%s",
 			accept, restrict, closed, banned, ruleset)
 	}
-	if !(accept < restrict && restrict < closed && closed < banned) {
+	if accept >= restrict || restrict >= closed || closed >= banned {
 		t.Errorf("the order is accept=%d restrict=%d close=%d ban=%d:\n%s",
 			accept, restrict, closed, banned, ruleset)
 	}
