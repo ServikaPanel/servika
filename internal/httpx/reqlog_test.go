@@ -86,25 +86,11 @@ func TestARequestWithoutAnIDLogsWithoutAPrefix(t *testing.T) {
 // a log line.
 func TestNoHandlerLogsWithoutTheRequestID(t *testing.T) {
 	var bare []string
-	fileSet := token.NewFileSet()
-	root := repositoryRoot(t)
-	err := filepath.WalkDir(filepath.Join(root, "internal"), func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return err
-		}
-		parsed, perr := parser.ParseFile(fileSet, path, nil, 0)
-		if perr != nil {
-			return perr
-		}
-		rel, _ := filepath.Rel(root, path)
+	forEachInternalFile(t, func(parsed *ast.File, rel string, at func(token.Pos) int) {
 		for _, call := range bareLogCallsInHandlers(parsed) {
-			bare = append(bare, fmt.Sprintf("%s:%d", rel, fileSet.Position(call).Line))
+			bare = append(bare, fmt.Sprintf("%s:%d", rel, at(call)))
 		}
-		return nil
 	})
-	if err != nil {
-		t.Fatalf("walk internal: %v", err)
-	}
 	// The access-log summary line is the one exemption: it already carries the
 	// id as a named field, and the helper's prefix would print it twice.
 	bare = without(bare, "internal/middleware/accesslog.go")
@@ -220,6 +206,29 @@ func requestName(field *ast.Field) string {
 		return ""
 	}
 	return field.Names[0].Name
+}
+
+// forEachInternalFile parses every non-test Go file under internal/ and hands it
+// to visit with its repository-relative path and a line resolver.
+func forEachInternalFile(t *testing.T, visit func(parsed *ast.File, rel string, at func(token.Pos) int)) {
+	t.Helper()
+	fileSet := token.NewFileSet()
+	root := repositoryRoot(t)
+	err := filepath.WalkDir(filepath.Join(root, "internal"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		parsed, perr := parser.ParseFile(fileSet, path, nil, 0)
+		if perr != nil {
+			return perr
+		}
+		rel, _ := filepath.Rel(root, path)
+		visit(parsed, rel, func(pos token.Pos) int { return fileSet.Position(pos).Line })
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk internal: %v", err)
+	}
 }
 
 func repositoryRoot(t *testing.T) string {

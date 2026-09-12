@@ -980,7 +980,7 @@ func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
 	}
 	socket, err := provisioner.SetPHPVersion(domainName, sk, req.PHPVersion, certPath, keyPath, sslSource, backend, webRoot)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "pHP version change failed")
+		httpx.WriteError(w, http.StatusInternalServerError, "PHP version change failed")
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(),
@@ -1188,7 +1188,7 @@ func (h *Handlers) SetFTPPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := credentials.FTPUpdatePassword(h.DB, sk, req.Password); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "fTP password update failed")
+		httpx.WriteError(w, http.StatusInternalServerError, "FTP password update failed")
 		return
 	}
 	// If SSH is enabled, sync the system (SSH) password with FTP too

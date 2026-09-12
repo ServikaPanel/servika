@@ -85,12 +85,12 @@ func (h *Handlers) PostDNSSEC(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
-	if err := WriteZone(r.Context(), h.DB, id); err != nil {
+	if err := writeZone(r.Context(), h.DB, id); err != nil {
 		if _, rollbackErr := h.DB.ExecContext(r.Context(), `UPDATE domains SET dnssec_active=? WHERE id=?`, previous, id); rollbackErr != nil {
 			httpx.LogR(r, "rollback DNSSEC state for domain %d: %v", id, rollbackErr)
 		}
 		httpx.LogR(r, "write DNS zone after DNSSEC change for domain %d: %v", id, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "dNS zone could not be updated")
+		httpx.WriteError(w, http.StatusInternalServerError, "DNS zone could not be updated")
 		return
 	}
 
