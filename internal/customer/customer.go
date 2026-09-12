@@ -37,38 +37,33 @@ type loginReq struct {
 	Password string `json:"password"`
 }
 
-// Login authenticates a customer with their panel account (users table,
-// role=user) and, on success, sets the HttpOnly session cookie.
-func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
+// credentials reads the submitted username and password.
+func credentials(w http.ResponseWriter, r *http.Request) (loginReq, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10) // login body over 64KB is abuse (DoS)
 	var req loginReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
+		return req, false
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	if req.Username == "" || req.Password == "" {
 		httpx.WriteError(w, http.StatusBadRequest, "username and password are required")
-		return
+		return req, false
 	}
-	ip := httpx.ClientIP(r)
-	// last_login_ip keeps the real address; the audit log labels a genuinely
-	// local (internal/automated) origin as "system" instead of 127.0.0.1.
-	auditIP := httpx.AuditIP(r)
+	return req, true
+}
 
-	var (
-		uid          int64
-		hash         string
-		role         string
-		status       string
-		tokenVersion int64
-	)
+// authenticate resolves the account behind the credentials, and answers the
+// caller when it refuses one.
+func (h *Handlers) authenticate(w http.ResponseWriter, r *http.Request,
+	req loginReq, auditIP string) (uid, tokenVersion int64, role string, ok bool) {
+	var hash, status string
 	err := h.DB.QueryRowContext(r.Context(),
 		`SELECT id, password_hash, role, status, token_version FROM users WHERE username=?`,
 		req.Username).Scan(&uid, &hash, &role, &status, &tokenVersion)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusInternalServerError, "authentication failed")
-		return
+		return 0, 0, "", false
 	}
 	// One and the same rejection so which usernames exist does not leak. Run
 	// PasswordMatches unconditionally (even on a DB miss, where hash is empty, it
@@ -79,11 +74,30 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil || role != mw.RoleUser || !matches {
 		auth.WriteAudit(h.DB, 0, req.Username, auditIP, "customer.login", req.Username, false)
 		httpx.WriteError(w, http.StatusUnauthorized, "invalid username or password")
-		return
+		return 0, 0, "", false
 	}
 	if status != "active" {
 		auth.WriteAudit(h.DB, uid, req.Username, auditIP, "customer.login", req.Username, false)
 		httpx.WriteError(w, http.StatusForbidden, "account is suspended")
+		return 0, 0, "", false
+	}
+	return uid, tokenVersion, role, true
+}
+
+// Login authenticates a customer with their panel account (users table,
+// role=user) and, on success, sets the HttpOnly session cookie.
+func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
+	req, ok := credentials(w, r)
+	if !ok {
+		return
+	}
+	ip := httpx.ClientIP(r)
+	// last_login_ip keeps the real address; the audit log labels a genuinely
+	// local (internal/automated) origin as "system" instead of 127.0.0.1.
+	auditIP := httpx.AuditIP(r)
+
+	uid, tokenVersion, role, ok := h.authenticate(w, r, req, auditIP)
+	if !ok {
 		return
 	}
 

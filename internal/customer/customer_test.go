@@ -101,9 +101,14 @@ func account(t *testing.T, role, status string) []driver.Value {
 
 func login(t *testing.T, script *loginScript, username, password string) *httptest.ResponseRecorder {
 	t.Helper()
+	return postLogin(t, script, `{"username":"`+username+`","password":"`+password+`"}`)
+}
+
+// postLogin sends one raw body, so a test can send what a client cannot.
+func postLogin(t *testing.T, script *loginScript, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	db := sql.OpenDB(loginConn{script: script})
 	t.Cleanup(func() { _ = db.Close() })
-	body := `{"username":"` + username + `","password":"` + password + `"}`
 	recorder := httptest.NewRecorder()
 	(&Handlers{DB: db, Secret: []byte(strings.Repeat("k", 32))}).
 		Login(recorder, httptest.NewRequest(http.MethodPost, "/customer/login", strings.NewReader(body)))
@@ -138,6 +143,47 @@ func TestOnlyACustomerAccountCanSignInHere(t *testing.T) {
 			}
 			if sessionCookie(recorder) != nil {
 				t.Fatalf("a %s account was given a customer session cookie", role)
+			}
+		})
+	}
+}
+
+// A request carrying no credential is refused before the account lookup: there
+// is nothing to check, and the empty script would answer a lookup with a fault.
+func TestARequestWithNoCredentialIsRefusedBeforeTheLookup(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		body    string
+		message string
+	}{
+		{name: "not JSON", body: "{", message: "invalid request body"},
+		{
+			name:    "no username",
+			body:    `{"password":"correct-horse"}`,
+			message: "username and password are required",
+		},
+		{
+			name:    "a username of spaces",
+			body:    `{"username":"   ","password":"correct-horse"}`,
+			message: "username and password are required",
+		},
+		{
+			name:    "no password",
+			body:    `{"username":"customer"}`,
+			message: "username and password are required",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := postLogin(t, &loginScript{}, tc.body)
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+			}
+			if !strings.Contains(recorder.Body.String(), tc.message) {
+				t.Errorf("answer = %s, want %q", recorder.Body.String(), tc.message)
+			}
+			if sessionCookie(recorder) != nil {
+				t.Error("a request with no credential was given a session cookie")
 			}
 		})
 	}
