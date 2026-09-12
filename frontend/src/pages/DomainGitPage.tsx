@@ -211,6 +211,73 @@ export default function DomainGitPage() {
 
   return (
     <div className="w-full px-6 py-5">
+      <GitHeader domain={domain} id={id} />
+
+      <Banners error={error} success={success} />
+
+      {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
+        <>
+          <GithubCard
+            conn={ghConn}
+            token={ghToken}
+            onToken={setGhToken}
+            onConnect={ghConnect}
+            onDisconnect={ghDisconnect}
+            loading={ghLoading}
+            repos={ghRepos}
+            branches={ghBranches}
+            selectedRepo={ghSelectedRepo}
+            onSelectRepo={ghLoadBranches}
+            selectedBranch={ghSelectedBranch}
+            onSelectBranch={setGhSelectedBranch}
+            autoDeploy={ghAutoDeploy}
+            onAutoDeploy={setGhAutoDeploy}
+            onUse={ghUse}
+          />
+
+          <RepoCard
+            repo={repo}
+            repoUrl={repoUrl}
+            onRepoUrl={setRepoUrl}
+            branch={branch}
+            onBranch={setBranch}
+            targetDir={targetDir}
+            onTargetDir={setTargetDir}
+            processing={processing}
+            onConnect={connectRepo}
+            onClone={() => setCloneConfirmOpen(true)}
+            onPull={pull}
+            onRemove={() => setDeleteConfirmOpen(true)}
+          />
+
+          {repo && (
+            <>
+              <DeployKeyCard publicKey={repo.deploy_key_pub} onCopy={copy} />
+              <WebhookCard repo={repo} ipv4={domain?.ipv4 || ''} onCopy={copy} />
+              <StatusCard repo={repo} latestLog={latestLog} />
+            </>
+          )}
+        </>
+      )}
+
+      <GitDialogs
+        cloneOpen={cloneConfirmOpen}
+        targetDir={targetDir}
+        branch={branch}
+        onCloneConfirm={cloneRepo}
+        onCloneCancel={() => setCloneConfirmOpen(false)}
+        deleteOpen={deleteConfirmOpen}
+        onDeleteConfirm={remove}
+        onDeleteCancel={() => setDeleteConfirmOpen(false)}
+      />
+    </div>
+  )
+}
+
+function GitHeader({ domain, id }: { domain: Domain | null; id?: string }) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <>
       <Breadcrumb items={[
         { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
         { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
@@ -222,223 +289,363 @@ export default function DomainGitPage() {
         <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
         {t('intro.pre')}{t('intro.text')}
       </p>}
+    </>
+  )
+}
 
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
 
-      {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
-        <>
-          {/* GitHub connector */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-slate-900 dark:text-slate-100">
-                  <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
-                </svg>
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('github.title')}</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-500">{t('github.subtitle')}</p>
-                </div>
-              </div>
-              {ghConn.login && (
-                <button onClick={ghDisconnect} className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 rounded">{t('github.removeConnection')}</button>
-              )}
-            </div>
+type GithubCardProps = {
+  conn: GHConn
+  token: string
+  onToken: (value: string) => void
+  onConnect: () => void
+  onDisconnect: () => void
+  loading: boolean
+  repos: GHRepo[]
+  branches: string[]
+  selectedRepo: string
+  onSelectRepo: (repo: string) => void
+  selectedBranch: string
+  onSelectBranch: (branch: string) => void
+  autoDeploy: boolean
+  onAutoDeploy: (value: boolean) => void
+  onUse: () => void
+}
 
-            {ghConn.missing || !ghConn.login ? (
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('github.patLabel')}</label>
-                <div className="flex gap-2">
-                  <input type="password" value={ghToken}
-                    onChange={e => setGhToken(e.target.value)}
-                    placeholder="ghp_..." autoComplete="off"
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-                  <button onClick={ghConnect} disabled={ghLoading || !ghToken.trim()}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-sm font-medium rounded">
-                    {ghLoading ? t('github.connecting') : t('github.connect')}
-                  </button>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-500 mt-2">
-                  <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer"
-                    className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300">{t('github.patHintLink')}</a>{t('github.patHintPre')}<code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{t('github.patHintScope1')}</code>{t('github.patHintMid')}
-                  <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded ml-1">{t('github.patHintScope2')}</code>{t('github.patHintPost')}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-md">
-                  {ghConn.avatar_url && <img src={ghConn.avatar_url} alt="" className="w-10 h-10 rounded-full"/>}
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{ghConn.full_name || ghConn.login}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-500 font-mono">@{ghConn.login}</div>
-                  </div>
-                  {ghConn.webhook_url && (
-                    <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">{t('github.autoDeployBadge')}</span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('github.repo')}</label>
-                    <select value={ghSelectedRepo} onChange={e => ghLoadBranches(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-800">
-                      <option value="">{t('github.selectPlaceholder')}</option>
-                      {ghRepos.map(r => (
-                        <option key={r.full_name} value={r.full_name}>
-                          {r.private && <Icon d={ICON.lock} className="inline h-3.5 w-3.5 mr-1" />}{r.full_name}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-500 mt-0.5 block">{t('github.reposFound', { count: ghRepos.length })}</span>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('github.branch')}</label>
-                    <select value={ghSelectedBranch} onChange={e => setGhSelectedBranch(e.target.value)}
-                      disabled={!ghSelectedRepo}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-800 disabled:bg-slate-50 dark:bg-slate-900">
-                      {!ghSelectedBranch && <option value="">{t('github.selectPlaceholder')}</option>}
-                      {ghBranches.map(b => <option key={b} value={b}>{b}</option>)}
-                      {ghSelectedBranch && !ghBranches.includes(ghSelectedBranch) && <option value={ghSelectedBranch}>{ghSelectedBranch}</option>}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                    <input type="checkbox" checked={ghAutoDeploy} onChange={e => setGhAutoDeploy(e.target.checked)} className="cursor-pointer"/>
-                    {t('github.autoDeployLabel')}
-                  </label>
-                  <button onClick={ghUse} disabled={ghLoading || !ghSelectedRepo || !ghSelectedBranch}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium rounded">
-                    {ghLoading ? t('github.connecting') : t('github.useRepo')}
-                  </button>
-                </div>
-
-                {ghConn.webhook_url && (
-                  <div className="text-[11px] text-slate-500 dark:text-slate-500 font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 truncate" title={ghConn.webhook_url}>
-                    {t('github.webhookLabel', { url: ghConn.webhook_url })}
-                  </div>
-                )}
-              </div>
-            )}
+function GithubCard(p: GithubCardProps) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-slate-900 dark:text-slate-100">
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.4 3-.405 1.02.005 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+          </svg>
+          <div>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('github.title')}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-500">{t('github.subtitle')}</p>
           </div>
+        </div>
+        {p.conn.login && (
+          <button onClick={p.onDisconnect} className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 rounded">{t('github.removeConnection')}</button>
+        )}
+      </div>
 
-          {/* Repository connection and updates */}
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">{repo ? t('repoCard.settingsTitle') : t('repoCard.connectTitle')}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('repoCard.gitUrl')}</label>
-                <input type="text" value={repoUrl} onChange={e => setRepoUrl(e.target.value)}
-                  placeholder={t('repoCard.gitUrlPlaceholder')}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">{t('repoCard.gitUrlHint')}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('repoCard.branch')}</label>
-                  <input type="text" value={branch} onChange={e => setBranch(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('repoCard.targetDir')}</label>
-                  <input type="text" value={targetDir} onChange={e => setTargetDir(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={connectRepo} disabled={processing || !repoUrl} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
-                  {repo ? t('repoCard.update') : t('repoCard.connect')}
-                </button>
-                {repo && (
-                  <button onClick={() => setCloneConfirmOpen(true)} disabled={processing} className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 text-amber-800 dark:text-amber-200 text-sm font-medium rounded-md">
-                    {processing ? '...' : t('repoCard.clone')}
-                  </button>
-                )}
-                {repo && (
-                  <button onClick={pull} disabled={processing} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium rounded-md">
-                    {processing ? '...' : t('repoCard.pull')}
-                  </button>
-                )}
-                {repo && (
-                  <button onClick={() => setDeleteConfirmOpen(true)} className="ml-auto px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 text-sm rounded-md">
-                    {t('repoCard.removeConnection')}
-                  </button>
-                )}
-              </div>
+      {p.conn.missing || !p.conn.login ? (
+        <GithubConnect token={p.token} onToken={p.onToken} onConnect={p.onConnect} loading={p.loading} />
+      ) : (
+        <div className="space-y-3">
+          <GithubAccount conn={p.conn} />
+
+          <GithubSelects
+            repos={p.repos}
+            branches={p.branches}
+            selectedRepo={p.selectedRepo}
+            onSelectRepo={p.onSelectRepo}
+            selectedBranch={p.selectedBranch}
+            onSelectBranch={p.onSelectBranch}
+          />
+
+          <GithubActions
+            autoDeploy={p.autoDeploy}
+            onAutoDeploy={p.onAutoDeploy}
+            onUse={p.onUse}
+            loading={p.loading}
+            selectedRepo={p.selectedRepo}
+            selectedBranch={p.selectedBranch}
+          />
+
+          {p.conn.webhook_url && (
+            <div className="text-[11px] text-slate-500 dark:text-slate-500 font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded p-2 truncate" title={p.conn.webhook_url}>
+              {t('github.webhookLabel', { url: p.conn.webhook_url })}
             </div>
-          </div>
-
-          {repo && (
-            <>
-              {/* Deploy key */}
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('deployKey.title')}</h3>
-                  <button onClick={() => copy(repo.deploy_key_pub)} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-brand-100 dark:bg-brand-900/30 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 rounded">{t('deployKey.copy')}</button>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">{t('deployKey.hint')}</p>
-                <textarea readOnly value={repo.deploy_key_pub} rows={3}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-mono break-all" />
-              </div>
-
-              {/* Webhook */}
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('webhook.title')}</h3>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">{t('webhook.hintPre')}<code className="font-mono">application/json</code>{t('webhook.hintPost')}</p>
-                <div className="space-y-2">
-                  <Row e={t('webhook.payloadUrl')} d={`http://${domain?.ipv4 || ''}:8443/api/v1/git-webhook/${repo.webhook_secret}`} onCopy={copy} />
-                  <Row e={t('webhook.secret')} d={repo.webhook_signing_key} onCopy={copy} />
-                  <Row e={t('webhook.contentType')} d={t('webhook.contentTypeValue')} />
-                  <Row e={t('webhook.events')} d={t('webhook.eventsValue')} />
-                </div>
-              </div>
-
-              {/* Status */}
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('status.title')}</h3>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <Stat e={t('status.latestSync')} d={repo.last_sync || t('status.noneYet')} />
-                  <Stat e={t('status.latestCommit')} d={repo.last_commit ? repo.last_commit.slice(0, 8) : '—'} mono />
-                  <Stat e={t('status.statusLabel')}
-                    d={repo.last_status === 'successful' ? t('status.successful') : (repo.last_status === 'error' || repo.last_status.startsWith('error') ? t('status.error') : repo.last_status)}
-                    color={repo.last_status === 'successful' ? 'emerald' : (repo.last_status.startsWith('error') ? 'red' : 'slate')}
-                  />
-                </div>
-                {latestLog && (
-                  <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                    <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-1">{t('status.latestLog')}</div>
-                    <pre className="text-xs bg-slate-900 text-slate-100 p-3 rounded-md overflow-auto max-h-60 font-mono whitespace-pre-wrap">{latestLog}</pre>
-                  </div>
-                )}
-              </div>
-            </>
           )}
-        </>
+        </div>
       )}
+    </div>
+  )
+}
 
+function GithubConnect({ token, onToken, onConnect, loading }: { token: string; onToken: (v: string) => void; onConnect: () => void; loading: boolean }) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('github.patLabel')}</label>
+      <div className="flex gap-2">
+        <input type="password" value={token}
+          onChange={e => onToken(e.target.value)}
+          placeholder="ghp_..." autoComplete="off"
+          className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        <button onClick={onConnect} disabled={loading || !token.trim()}
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white text-sm font-medium rounded">
+          {loading ? t('github.connecting') : t('github.connect')}
+        </button>
+      </div>
+      <p className="text-[11px] text-slate-500 dark:text-slate-500 mt-2">
+        <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noreferrer"
+          className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300">{t('github.patHintLink')}</a>{t('github.patHintPre')}<code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">{t('github.patHintScope1')}</code>{t('github.patHintMid')}
+        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded ml-1">{t('github.patHintScope2')}</code>{t('github.patHintPost')}
+      </p>
+    </div>
+  )
+}
+
+function GithubAccount({ conn }: { conn: GHConn }) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-md">
+      {conn.avatar_url && <img src={conn.avatar_url} alt="" className="w-10 h-10 rounded-full"/>}
+      <div className="flex-1">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{conn.full_name || conn.login}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-500 font-mono">@{conn.login}</div>
+      </div>
+      {conn.webhook_url && (
+        <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">{t('github.autoDeployBadge')}</span>
+      )}
+    </div>
+  )
+}
+
+type GithubSelectsProps = {
+  repos: GHRepo[]
+  branches: string[]
+  selectedRepo: string
+  onSelectRepo: (repo: string) => void
+  selectedBranch: string
+  onSelectBranch: (branch: string) => void
+}
+
+function GithubSelects(p: GithubSelectsProps) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('github.repo')}</label>
+        <select value={p.selectedRepo} onChange={e => p.onSelectRepo(e.target.value)}
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-800">
+          <option value="">{t('github.selectPlaceholder')}</option>
+          {p.repos.map(r => (
+            <option key={r.full_name} value={r.full_name}>
+              {r.private && <Icon d={ICON.lock} className="inline h-3.5 w-3.5 mr-1" />}{r.full_name}
+            </option>
+          ))}
+        </select>
+        <span className="text-[10px] text-slate-500 dark:text-slate-500 mt-0.5 block">{t('github.reposFound', { count: p.repos.length })}</span>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('github.branch')}</label>
+        <select value={p.selectedBranch} onChange={e => p.onSelectBranch(e.target.value)}
+          disabled={!p.selectedRepo}
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-800 disabled:bg-slate-50 dark:bg-slate-900">
+          {!p.selectedBranch && <option value="">{t('github.selectPlaceholder')}</option>}
+          {p.branches.map(b => <option key={b} value={b}>{b}</option>)}
+          {p.selectedBranch && !p.branches.includes(p.selectedBranch) && <option value={p.selectedBranch}>{p.selectedBranch}</option>}
+        </select>
+      </div>
+    </div>
+  )
+}
+
+type GithubActionsProps = {
+  autoDeploy: boolean
+  onAutoDeploy: (value: boolean) => void
+  onUse: () => void
+  loading: boolean
+  selectedRepo: string
+  selectedBranch: string
+}
+
+function GithubActions(p: GithubActionsProps) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="flex items-center justify-between flex-wrap gap-2">
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+        <input type="checkbox" checked={p.autoDeploy} onChange={e => p.onAutoDeploy(e.target.checked)} className="cursor-pointer"/>
+        {t('github.autoDeployLabel')}
+      </label>
+      <button onClick={p.onUse} disabled={p.loading || !p.selectedRepo || !p.selectedBranch}
+        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium rounded">
+        {p.loading ? t('github.connecting') : t('github.useRepo')}
+      </button>
+    </div>
+  )
+}
+
+type RepoCardProps = {
+  repo: Repo | null
+  repoUrl: string
+  onRepoUrl: (value: string) => void
+  branch: string
+  onBranch: (value: string) => void
+  targetDir: string
+  onTargetDir: (value: string) => void
+  processing: boolean
+  onConnect: () => void
+  onClone: () => void
+  onPull: () => void
+  onRemove: () => void
+}
+
+function RepoCard(p: RepoCardProps) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
+      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">{p.repo ? t('repoCard.settingsTitle') : t('repoCard.connectTitle')}</h3>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('repoCard.gitUrl')}</label>
+          <input type="text" value={p.repoUrl} onChange={e => p.onRepoUrl(e.target.value)}
+            placeholder={t('repoCard.gitUrlPlaceholder')}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">{t('repoCard.gitUrlHint')}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('repoCard.branch')}</label>
+            <input type="text" value={p.branch} onChange={e => p.onBranch(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('repoCard.targetDir')}</label>
+            <input type="text" value={p.targetDir} onChange={e => p.onTargetDir(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm font-mono" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={p.onConnect} disabled={p.processing || !p.repoUrl} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
+            {p.repo ? t('repoCard.update') : t('repoCard.connect')}
+          </button>
+          {p.repo && (
+            <button onClick={p.onClone} disabled={p.processing} className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 text-amber-800 dark:text-amber-200 text-sm font-medium rounded-md">
+              {p.processing ? '...' : t('repoCard.clone')}
+            </button>
+          )}
+          {p.repo && (
+            <button onClick={p.onPull} disabled={p.processing} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium rounded-md">
+              {p.processing ? '...' : t('repoCard.pull')}
+            </button>
+          )}
+          {p.repo && (
+            <button onClick={p.onRemove} className="ml-auto px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 text-sm rounded-md">
+              {t('repoCard.removeConnection')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeployKeyCard({ publicKey, onCopy }: { publicKey: string; onCopy: (s: string) => void }) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('deployKey.title')}</h3>
+        <button onClick={() => onCopy(publicKey)} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-brand-100 dark:bg-brand-900/30 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 rounded">{t('deployKey.copy')}</button>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">{t('deployKey.hint')}</p>
+      <textarea readOnly value={publicKey} rows={3}
+        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-mono break-all" />
+    </div>
+  )
+}
+
+function WebhookCard({ repo, ipv4, onCopy }: { repo: Repo; ipv4: string; onCopy: (s: string) => void }) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('webhook.title')}</h3>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">{t('webhook.hintPre')}<code className="font-mono">application/json</code>{t('webhook.hintPost')}</p>
+      <div className="space-y-2">
+        <Row e={t('webhook.payloadUrl')} d={`http://${ipv4}:8443/api/v1/git-webhook/${repo.webhook_secret}`} onCopy={onCopy} />
+        <Row e={t('webhook.secret')} d={repo.webhook_signing_key} onCopy={onCopy} />
+        <Row e={t('webhook.contentType')} d={t('webhook.contentTypeValue')} />
+        <Row e={t('webhook.events')} d={t('webhook.eventsValue')} />
+      </div>
+    </div>
+  )
+}
+
+// statusLabel and statusColor keep the last-status branches out of the card.
+// The backend writes either a known word or an "error..." prefix.
+function statusLabel(t: (key: string) => string, status: string): string {
+  if (status === 'successful') return t('status.successful')
+  if (status === 'error' || status.startsWith('error')) return t('status.error')
+  return status
+}
+
+function statusColor(status: string): string {
+  if (status === 'successful') return 'emerald'
+  if (status.startsWith('error')) return 'red'
+  return 'slate'
+}
+
+function StatusCard({ repo, latestLog }: { repo: Repo; latestLog: string | null }) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('status.title')}</h3>
+      <div className="grid grid-cols-3 gap-3 text-sm">
+        <Stat e={t('status.latestSync')} d={repo.last_sync || t('status.noneYet')} />
+        <Stat e={t('status.latestCommit')} d={repo.last_commit ? repo.last_commit.slice(0, 8) : '—'} mono />
+        <Stat e={t('status.statusLabel')} d={statusLabel(t, repo.last_status)} color={statusColor(repo.last_status)} />
+      </div>
+      {latestLog && (
+        <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+          <div className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-1">{t('status.latestLog')}</div>
+          <pre className="text-xs bg-slate-900 text-slate-100 p-3 rounded-md overflow-auto max-h-60 font-mono whitespace-pre-wrap">{latestLog}</pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type GitDialogsProps = {
+  cloneOpen: boolean
+  targetDir: string
+  branch: string
+  onCloneConfirm: () => void
+  onCloneCancel: () => void
+  deleteOpen: boolean
+  onDeleteConfirm: () => void
+  onDeleteCancel: () => void
+}
+
+function GitDialogs(p: GitDialogsProps) {
+  const { t } = useTranslation('DomainGitPage')
+  return (
+    <>
       <ConfirmDialog
-        open={cloneConfirmOpen}
+        open={p.cloneOpen}
         title={t('cloneDialog.title')}
-        message={t('cloneDialog.message', { dir: targetDir, branch })}
+        message={t('cloneDialog.message', { dir: p.targetDir, branch: p.branch })}
         dangerous
         confirmText={t('cloneDialog.confirm')}
-        onConfirm={cloneRepo}
-        onCancel={() => setCloneConfirmOpen(false)}
+        onConfirm={p.onCloneConfirm}
+        onCancel={p.onCloneCancel}
       />
 
       <ConfirmDialog
-        open={deleteConfirmOpen}
+        open={p.deleteOpen}
         title={t('deleteDialog.title')}
         message={t('deleteDialog.message')}
         dangerous
         confirmText={t('deleteDialog.confirm')}
-        onConfirm={remove}
-        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={p.onDeleteConfirm}
+        onCancel={p.onDeleteCancel}
       />
-    </div>
+    </>
   )
 }
 
