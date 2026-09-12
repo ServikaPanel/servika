@@ -103,30 +103,54 @@ func verifyRootPassword(password string) bool {
 // the "rounds=N" prefix must be within the crypt(3) alphabet (./0-9A-Za-z), which
 // also rules out a salt that could look like a command-line option.
 func legacyCryptSalt(hash string) (id, salt string, ok bool) {
-	parts := strings.Split(hash, "$")
+	id, salt, ok = cryptIDAndSalt(strings.Split(hash, "$"))
+	if !ok || id == "" || salt == "" {
+		return "", "", false
+	}
+	if !cryptAlphabet(strings.TrimPrefix(salt, "rounds=")) {
+		return "", "", false
+	}
+	return id, salt, true
+}
+
+// cryptIDAndSalt reads the format id and the salt out of the "$"-split hash,
+// with or without a "rounds=N" segment.
+func cryptIDAndSalt(parts []string) (id, salt string, ok bool) {
 	switch {
 	case len(parts) == 4: // ["", id, salt, digest]
-		id, salt = parts[1], parts[2]
+		return parts[1], parts[2], true
 	case len(parts) == 5 && strings.HasPrefix(parts[2], "rounds="): // ["", id, rounds=N, salt, digest]
 		rounds := strings.TrimPrefix(parts[2], "rounds=")
-		if rounds == "" || strings.IndexFunc(rounds, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+		if rounds == "" || !allDigits(rounds) {
 			return "", "", false
 		}
-		id, salt = parts[1], parts[2]+"$"+parts[3]
-	default:
-		return "", "", false
+		return parts[1], parts[2] + "$" + parts[3], true
 	}
-	if id == "" || salt == "" {
-		return "", "", false
+	return "", "", false
+}
+
+// allDigits reports whether every rune of s is 0-9.
+func allDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
 	}
-	for _, r := range strings.TrimPrefix(salt, "rounds=") {
+	return true
+}
+
+// cryptAlphabet reports whether s stays inside the crypt(3) alphabet
+// (./0-9A-Za-z plus the "$" that separates a rounds segment), which also rules
+// out a salt that could look like a command-line option.
+func cryptAlphabet(s string) bool {
+	for _, r := range s {
 		switch {
 		case r >= '0' && r <= '9', r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '.', r == '/', r == '$':
 		default:
-			return "", "", false
+			return false
 		}
 	}
-	return id, salt, true
+	return true
 }
 
 // legacyCryptVerify recomputes a non-yescrypt crypt(3) hash with openssl and
@@ -184,118 +208,14 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	// local (internal/automated) origin as "system" instead of 127.0.0.1.
 	auditIP := httpx.AuditIP(r)
 
-	// Identity resolution: two separate password worlds (see password.go).
-	//
-	//   root  -> /etc/shadow (yescrypt). This path was DELIBERATELY left
-	//            unchanged when adding multi-user support; it is the only way to
-	//            keep the risk of locking yourself out of the panel at zero.
-	//   other -> users.password_hash (bcrypt), status='active' accounts only.
-	//
-	// Both branches return the same failure response ("invalid username or
-	// password") so which usernames exist is never leaked.
-	var (
-		uid      int64
-		username string
-		role     string
-		fullName string
-	)
-
-	if IsRootUser(req.Username) {
-		if !rootPasswordOK(req.Password) {
-			WriteAudit(h.DB, 0, req.Username, auditIP, "auth.login", req.Username, false)
-			httpx.WriteError(w, http.StatusUnauthorized, "invalid username or password")
-			return
-		}
-		uid, username, role = 1, "root", "admin"
-		_ = h.DB.QueryRow(`SELECT full_name FROM users WHERE id=1`).Scan(&fullName)
-	} else {
-		var hash, status string
-		err := h.DB.QueryRow(
-			`SELECT id, username, password_hash, role, status, full_name FROM users WHERE username=?`,
-			req.Username).Scan(&uid, &username, &hash, &role, &status, &fullName)
-		// A driver failure is a FAULT, not a wrong credential, and merging the two
-		// cost twice during a database incident. It told an operator typing the
-		// right password that their credentials were wrong, sending them to reset a
-		// password instead of to the database; and every 401 records a failure
-		// against the per-account and per-IP lockout counters, so retrying during
-		// the outage locked a healthy account out for the quarter hour AFTER the
-		// database came back.
-		//
-		// Answering 500 here leaks nothing, because it is not conditioned on
-		// whether the account exists: only sql.ErrNoRows folds into the shared 401
-		// below, which is what keeps username existence secret. This is what
-		// internal/customer already does for the same credential check.
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			httpx.WriteError(w, http.StatusInternalServerError, "authentication failed")
-			return
-		}
-		// Always run PasswordMatches (even on a DB miss, where hash is empty) so a
-		// present and an absent username cannot be told apart by timing; do not let
-		// the err check short-circuit it away.
-		matches := PasswordMatches(hash, req.Password)
-		if err != nil || !matches {
-			WriteAudit(h.DB, 0, req.Username, auditIP, "auth.login", req.Username, false)
-			httpx.WriteError(w, http.StatusUnauthorized, "invalid username or password")
-			return
-		}
-		if status != "active" {
-			WriteAudit(h.DB, uid, username, auditIP, "auth.login", username, false)
-			httpx.WriteError(w, http.StatusForbidden, "account is suspended")
-			return
-		}
-		// The customer role cannot open a management-panel session; customers
-		// sign in at /customer/login to their own domain panels instead.
-		if role != "admin" && role != "reseller" {
-			WriteAudit(h.DB, uid, username, auditIP, "auth.login", username, false)
-			httpx.WriteError(w, http.StatusForbidden, "this account cannot sign in to the management panel")
-			return
-		}
+	who, ok := h.identify(w, req, auditIP)
+	if !ok {
+		return
 	}
+	uid, username, role, fullName := who.uid, who.username, who.role, who.fullName
 
-	// The password is correct; a TOTP code is also required when 2FA is enabled.
-	// This is now read from the signing-in user's own record (it used to be
-	// hardcoded to id=1). FAIL-CLOSED: when 2FA state cannot be read (DB error)
-	// login is DENIED (previously the error was swallowed and 2FA was silently
-	// skipped = fail-open).
-	{
-		var en int
-		var sec string
-		var lastStep int64
-		if err := h.DB.QueryRow(`SELECT totp_enabled, totp_secret, totp_last_step FROM users WHERE id=?`, uid).Scan(&en, &sec, &lastStep); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not verify 2FA state")
-			return
-		}
-		if en == 1 {
-			if strings.TrimSpace(sec) == "" {
-				httpx.WriteError(w, http.StatusInternalServerError, "2FA configuration is invalid")
-				return
-			}
-			if strings.TrimSpace(req.Code) == "" {
-				httpx.WriteJSON(w, http.StatusOK, map[string]any{"two_factor_required": true})
-				return
-			}
-			// FAIL-CLOSED, like every other branch here: a seed that cannot be
-			// opened denies the login rather than verifying the code against a
-			// value this could not read.
-			seed, err := OpenTOTPSecret(sec, uid)
-			if err != nil {
-				httpx.WriteError(w, http.StatusInternalServerError, "2FA configuration is invalid")
-				return
-			}
-			step, ok := TOTPVerifyStep(seed, req.Code, lastStep)
-			if !ok {
-				WriteAudit(h.DB, uid, username, auditIP, "auth.2fa", username, false)
-				httpx.WriteError(w, http.StatusUnauthorized, "invalid or reused 2FA code")
-				return
-			}
-			// Persist the accepted step for replay protection. FAIL-CLOSED: if this
-			// write fails the code would remain replayable within its validity window,
-			// so deny the login rather than issuing a token on unguaranteed protection.
-			if _, err := h.DB.Exec(`UPDATE users SET totp_last_step=? WHERE id=?`, step, uid); err != nil {
-				httpx.WriteError(w, http.StatusInternalServerError, "could not update 2FA state")
-				return
-			}
-		}
+	if !h.secondFactorPassed(w, who, req.Code, auditIP) {
+		return
 	}
 
 	var tokenVersion int64
@@ -329,6 +249,141 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	resp.User.Role = role
 	resp.User.FullName = fullName
 	httpx.WriteJSON(w, http.StatusOK, resp)
+}
+
+// signedIn is the identity a login resolved.
+type signedIn struct {
+	uid      int64
+	username string
+	role     string
+	fullName string
+}
+
+// identify resolves the caller against one of the two separate password worlds
+// (see password.go).
+//
+//	root  -> /etc/shadow (yescrypt). This path was DELIBERATELY left
+//	         unchanged when adding multi-user support; it is the only way to
+//	         keep the risk of locking yourself out of the panel at zero.
+//	other -> users.password_hash (bcrypt), status='active' accounts only.
+//
+// Both branches return the same failure response ("invalid username or
+// password") so which usernames exist is never leaked. It answers the request
+// itself on a refusal and reports false.
+func (h *Handlers) identify(w http.ResponseWriter, req loginReq, auditIP string) (signedIn, bool) {
+	if IsRootUser(req.Username) {
+		return h.rootIdentity(w, req, auditIP)
+	}
+	return h.accountIdentity(w, req, auditIP)
+}
+
+// rootIdentity verifies root against /etc/shadow. Only the display name comes
+// from the database.
+func (h *Handlers) rootIdentity(w http.ResponseWriter, req loginReq, auditIP string) (signedIn, bool) {
+	if !rootPasswordOK(req.Password) {
+		WriteAudit(h.DB, 0, req.Username, auditIP, "auth.login", req.Username, false)
+		httpx.WriteError(w, http.StatusUnauthorized, "invalid username or password")
+		return signedIn{}, false
+	}
+	who := signedIn{uid: 1, username: "root", role: "admin"}
+	_ = h.DB.QueryRow(`SELECT full_name FROM users WHERE id=1`).Scan(&who.fullName)
+	return who, true
+}
+
+// accountIdentity verifies a panel account against users.password_hash.
+func (h *Handlers) accountIdentity(w http.ResponseWriter, req loginReq, auditIP string) (signedIn, bool) {
+	var who signedIn
+	var hash, status string
+	err := h.DB.QueryRow(
+		`SELECT id, username, password_hash, role, status, full_name FROM users WHERE username=?`,
+		req.Username).Scan(&who.uid, &who.username, &hash, &who.role, &status, &who.fullName)
+	// A driver failure is a FAULT, not a wrong credential, and merging the two
+	// cost twice during a database incident. It told an operator typing the
+	// right password that their credentials were wrong, sending them to reset a
+	// password instead of to the database; and every 401 records a failure
+	// against the per-account and per-IP lockout counters, so retrying during
+	// the outage locked a healthy account out for the quarter hour AFTER the
+	// database came back.
+	//
+	// Answering 500 here leaks nothing, because it is not conditioned on
+	// whether the account exists: only sql.ErrNoRows folds into the shared 401
+	// below, which is what keeps username existence secret. This is what
+	// internal/customer already does for the same credential check.
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		httpx.WriteError(w, http.StatusInternalServerError, "authentication failed")
+		return signedIn{}, false
+	}
+	// Always run PasswordMatches (even on a DB miss, where hash is empty) so a
+	// present and an absent username cannot be told apart by timing; do not let
+	// the err check short-circuit it away.
+	matches := PasswordMatches(hash, req.Password)
+	if err != nil || !matches {
+		WriteAudit(h.DB, 0, req.Username, auditIP, "auth.login", req.Username, false)
+		httpx.WriteError(w, http.StatusUnauthorized, "invalid username or password")
+		return signedIn{}, false
+	}
+	if status != "active" {
+		WriteAudit(h.DB, who.uid, who.username, auditIP, "auth.login", who.username, false)
+		httpx.WriteError(w, http.StatusForbidden, "account is suspended")
+		return signedIn{}, false
+	}
+	// The customer role cannot open a management-panel session; customers
+	// sign in at /customer/login to their own domain panels instead.
+	if who.role != "admin" && who.role != "reseller" {
+		WriteAudit(h.DB, who.uid, who.username, auditIP, "auth.login", who.username, false)
+		httpx.WriteError(w, http.StatusForbidden, "this account cannot sign in to the management panel")
+		return signedIn{}, false
+	}
+	return who, true
+}
+
+// secondFactorPassed requires a TOTP code when 2FA is enabled for this account.
+// The state is read from the signing-in user's own record (it used to be
+// hardcoded to id=1). FAIL-CLOSED: when 2FA state cannot be read (DB error)
+// login is DENIED (previously the error was swallowed and 2FA was silently
+// skipped = fail-open). It answers the request itself on a refusal and on the
+// two_factor_required prompt, and reports false.
+func (h *Handlers) secondFactorPassed(w http.ResponseWriter, who signedIn, code, auditIP string) bool {
+	var en int
+	var sec string
+	var lastStep int64
+	if err := h.DB.QueryRow(`SELECT totp_enabled, totp_secret, totp_last_step FROM users WHERE id=?`, who.uid).Scan(&en, &sec, &lastStep); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify 2FA state")
+		return false
+	}
+	if en != 1 {
+		return true
+	}
+	if strings.TrimSpace(sec) == "" {
+		httpx.WriteError(w, http.StatusInternalServerError, "2FA configuration is invalid")
+		return false
+	}
+	if strings.TrimSpace(code) == "" {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"two_factor_required": true})
+		return false
+	}
+	// FAIL-CLOSED, like every other branch here: a seed that cannot be
+	// opened denies the login rather than verifying the code against a
+	// value this could not read.
+	seed, err := OpenTOTPSecret(sec, who.uid)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "2FA configuration is invalid")
+		return false
+	}
+	step, ok := TOTPVerifyStep(seed, code, lastStep)
+	if !ok {
+		WriteAudit(h.DB, who.uid, who.username, auditIP, "auth.2fa", who.username, false)
+		httpx.WriteError(w, http.StatusUnauthorized, "invalid or reused 2FA code")
+		return false
+	}
+	// Persist the accepted step for replay protection. FAIL-CLOSED: if this
+	// write fails the code would remain replayable within its validity window,
+	// so deny the login rather than issuing a token on unguaranteed protection.
+	if _, err := h.DB.Exec(`UPDATE users SET totp_last_step=? WHERE id=?`, step, who.uid); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not update 2FA state")
+		return false
+	}
+	return true
 }
 
 // Logout clears the session cookie. It is a public endpoint: expiring a cookie

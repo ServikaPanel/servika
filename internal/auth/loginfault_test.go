@@ -92,8 +92,9 @@ func TestAWrongPasswordIsIndistinguishableFromAnUnknownUsername(t *testing.T) {
 // The distinction has to be drawn on sql.ErrNoRows specifically, or it is the
 // same merge under another name.
 func TestTheFaultBranchTestsForNoRows(t *testing.T) {
+	// The database identity branch is accountIdentity; Login dispatches to it.
 	body := readAuthSource(t, "handlers.go")
-	login := authFunction(t, body, "func (h *Handlers) Login(")
+	login := authFunction(t, body, "func (h *Handlers) accountIdentity(")
 
 	if !strings.Contains(login, "errors.Is(err, sql.ErrNoRows)") {
 		t.Fatal("the login path does not separate a missing row from a driver failure")

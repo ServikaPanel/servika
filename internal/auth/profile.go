@@ -113,41 +113,51 @@ func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	// verify from shadow, change with chpasswd. Reseller accounts have no system
 	// counterpart; they use users.password_hash.
 	if IsRootUser(c.Username) {
-		if !rootPasswordOK(b.Current) {
-			WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.password", "root", false)
-			httpx.WriteError(w, http.StatusUnauthorized, "current password is incorrect")
-			return
-		}
-		if strings.ContainsAny(b.New, "\n\r\x00") {
-			httpx.WriteError(w, http.StatusBadRequest, "password contains invalid characters")
-			return
-		}
-		if err := setRootPassword(b.New); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "password change failed")
-			return
-		}
-		// Bump token_version so every existing session is revoked after the
-		// credential changes; the caller must re-authenticate.
-		if _, err := h.DB.Exec(`UPDATE users SET token_version=token_version+1, updated_at=NOW() WHERE id=?`, c.UserID); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not revoke existing sessions")
-			return
-		}
-		WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.password", "root", true)
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+		h.changeRootPassword(w, r, c, b.Current, b.New)
 		return
 	}
+	h.changeAccountPassword(w, r, c, b.Current, b.New)
+}
 
+// changeRootPassword verifies the current password against /etc/shadow and
+// writes the new one with chpasswd.
+func (h *Handlers) changeRootPassword(w http.ResponseWriter, r *http.Request, c *Claims, current, next string) {
+	if !rootPasswordOK(current) {
+		WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.password", "root", false)
+		httpx.WriteError(w, http.StatusUnauthorized, "current password is incorrect")
+		return
+	}
+	if strings.ContainsAny(next, "\n\r\x00") {
+		httpx.WriteError(w, http.StatusBadRequest, "password contains invalid characters")
+		return
+	}
+	if err := setRootPassword(next); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "password change failed")
+		return
+	}
+	// Bump token_version so every existing session is revoked after the
+	// credential changes; the caller must re-authenticate.
+	if _, err := h.DB.Exec(`UPDATE users SET token_version=token_version+1, updated_at=NOW() WHERE id=?`, c.UserID); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not revoke existing sessions")
+		return
+	}
+	WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.password", "root", true)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// changeAccountPassword verifies and replaces a panel account's bcrypt hash.
+func (h *Handlers) changeAccountPassword(w http.ResponseWriter, r *http.Request, c *Claims, current, next string) {
 	var currentHash string
 	if err := h.DB.QueryRow(`SELECT password_hash FROM users WHERE id=?`, c.UserID).Scan(&currentHash); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "account could not be read")
 		return
 	}
-	if !PasswordMatches(currentHash, b.Current) {
+	if !PasswordMatches(currentHash, current) {
 		WriteAudit(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "auth.password", c.Username, false)
 		httpx.WriteError(w, http.StatusUnauthorized, "current password is incorrect")
 		return
 	}
-	newHash, err := HashPassword(b.New)
+	newHash, err := HashPassword(next)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
 		return

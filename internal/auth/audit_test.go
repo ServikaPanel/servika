@@ -29,95 +29,114 @@ func TestAuditLimit(t *testing.T) {
 	}
 }
 
-func TestBuildAuditQuery(t *testing.T) {
-	// scope = -1 means "all scopes" (admin): no reseller_id predicate is added,
-	// so these cases exercise the filter logic exactly as before scoping existed.
-	t.Run("no filters: bare select, only limit bound", func(t *testing.T) {
-		q, arg := buildAuditQuery("", false, 200, -1)
-		if strings.Contains(q, "WHERE") {
-			t.Errorf("no filters should produce no WHERE clause: %q", q)
-		}
-		if !strings.HasSuffix(q, "ORDER BY id DESC LIMIT ?") {
-			t.Errorf("query must end with ordered limit: %q", q)
-		}
-		if len(arg) != 1 || arg[0] != 200 {
-			t.Errorf("args = %v, want [200]", arg)
-		}
-	})
+// auditQueryCase is one buildAuditQuery call and what it must produce.
+type auditQueryCase struct {
+	name       string
+	action     string
+	onlyFailed bool
+	limit      int
+	scope      int64
+	// contains and absent are checked against the query TEXT.
+	contains []string
+	absent   []string
+	wantArgs []any
+}
 
-	t.Run("action filter is bound as placeholder, never interpolated", func(t *testing.T) {
-		// A SQL-injection-shaped action must appear ONLY as a bound arg; the
-		// query text must carry a single `?` placeholder for it, not the value.
-		inj := "auth.login'; DROP TABLE audit_log;--"
-		q, arg := buildAuditQuery(inj, false, 200, -1)
-		if strings.Contains(q, "DROP TABLE") || strings.Contains(q, inj) {
-			t.Fatalf("action value leaked into SQL text: %q", q)
-		}
-		if !strings.Contains(q, "action = ?") {
-			t.Errorf("expected bound action predicate: %q", q)
-		}
-		if len(arg) != 2 || arg[0] != inj || arg[1] != 200 {
-			t.Errorf("args = %v, want [%q 200]", arg, inj)
-		}
-	})
+// runAuditQueryCases checks the query text and the bound arguments of each case.
+func runAuditQueryCases(t *testing.T, cases []auditQueryCase) {
+	t.Helper()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			q, arg := buildAuditQuery(c.action, c.onlyFailed, c.limit, c.scope)
+			for _, want := range c.contains {
+				if !strings.Contains(q, want) {
+					t.Errorf("query does not carry %q: %q", want, q)
+				}
+			}
+			for _, unwanted := range c.absent {
+				if strings.Contains(q, unwanted) {
+					t.Errorf("query carries %q: %q", unwanted, q)
+				}
+			}
+			assertAuditArgs(t, arg, c.wantArgs)
+		})
+	}
+}
 
-	t.Run("only_failed adds constant predicate with no arg", func(t *testing.T) {
-		q, arg := buildAuditQuery("", true, 500, -1)
-		if !strings.Contains(q, "ok = 0") {
-			t.Errorf("expected ok = 0 predicate: %q", q)
+// assertAuditArgs compares the bound arguments, in order.
+func assertAuditArgs(t *testing.T, got []any, want []any) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("args = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("args = %v, want %v", got, want)
 		}
-		if len(arg) != 1 || arg[0] != 500 {
-			t.Errorf("args = %v, want [500]", arg)
-		}
-	})
+	}
+}
 
-	t.Run("both filters joined with AND, args ordered action then limit", func(t *testing.T) {
-		q, arg := buildAuditQuery("auth.2fa", true, 42, -1)
-		if !strings.Contains(q, "WHERE action = ? AND ok = 0") {
-			t.Errorf("expected both predicates AND-joined: %q", q)
-		}
-		if len(arg) != 2 || arg[0] != "auth.2fa" || arg[1] != 42 {
-			t.Errorf("args = %v, want [auth.2fa 42]", arg)
-		}
+// scope = -1 means "all scopes" (admin): no reseller_id predicate is added, so
+// these cases exercise the filter logic exactly as before scoping existed.
+func TestBuildAuditQueryFilters(t *testing.T) {
+	// A SQL-injection-shaped action must appear ONLY as a bound arg; the query
+	// text must carry a single `?` placeholder for it, not the value.
+	const injected = "auth.login'; DROP TABLE audit_log;--"
+	runAuditQueryCases(t, []auditQueryCase{
+		{
+			name:  "no filters: bare select, only limit bound",
+			limit: 200, scope: -1,
+			contains: []string{"ORDER BY id DESC LIMIT ?"},
+			absent:   []string{"WHERE"},
+			wantArgs: []any{200},
+		},
+		{
+			name:   "action filter is bound as placeholder, never interpolated",
+			action: injected, limit: 200, scope: -1,
+			contains: []string{"action = ?"},
+			absent:   []string{"DROP TABLE", injected},
+			wantArgs: []any{injected, 200},
+		},
+		{
+			name:       "only_failed adds constant predicate with no arg",
+			onlyFailed: true, limit: 500, scope: -1,
+			contains: []string{"ok = 0"},
+			wantArgs: []any{500},
+		},
+		{
+			name:   "both filters joined with AND, args ordered action then limit",
+			action: "auth.2fa", onlyFailed: true, limit: 42, scope: -1,
+			contains: []string{"WHERE action = ? AND ok = 0"},
+			wantArgs: []any{"auth.2fa", 42},
+		},
+		{
+			name:   "whitespace-only action is treated as absent",
+			action: "   ", limit: 200, scope: -1,
+			absent:   []string{"WHERE"},
+			wantArgs: []any{200},
+		},
 	})
+}
 
-	t.Run("whitespace-only action is treated as absent", func(t *testing.T) {
-		q, arg := buildAuditQuery("   ", false, 200, -1)
-		if strings.Contains(q, "WHERE") {
-			t.Errorf("blank action should not add WHERE: %q", q)
-		}
-		if len(arg) != 1 {
-			t.Errorf("args = %v, want just [limit]", arg)
-		}
-	})
-
-	t.Run("reseller scope binds reseller_id first, before limit", func(t *testing.T) {
-		q, arg := buildAuditQuery("", false, 200, 7)
-		if !strings.Contains(q, "WHERE reseller_id = ?") {
-			t.Errorf("expected bound reseller_id predicate: %q", q)
-		}
-		if len(arg) != 2 || arg[0] != int64(7) || arg[1] != 200 {
-			t.Errorf("args = %v, want [7 200]", arg)
-		}
-	})
-
-	t.Run("scope zero (root-only view) still filters to reseller_id = 0", func(t *testing.T) {
-		q, arg := buildAuditQuery("", false, 200, 0)
-		if !strings.Contains(q, "reseller_id = ?") {
-			t.Errorf("scope 0 must still bind the predicate: %q", q)
-		}
-		if len(arg) != 2 || arg[0] != int64(0) {
-			t.Errorf("args = %v, want [0 200]", arg)
-		}
-	})
-
-	t.Run("scope combined with action: reseller_id bound before action", func(t *testing.T) {
-		q, arg := buildAuditQuery("auth.login", false, 50, 3)
-		if !strings.Contains(q, "WHERE reseller_id = ? AND action = ?") {
-			t.Errorf("expected scope AND action predicates in order: %q", q)
-		}
-		if len(arg) != 3 || arg[0] != int64(3) || arg[1] != "auth.login" || arg[2] != 50 {
-			t.Errorf("args = %v, want [3 auth.login 50]", arg)
-		}
+func TestBuildAuditQueryScope(t *testing.T) {
+	runAuditQueryCases(t, []auditQueryCase{
+		{
+			name:  "reseller scope binds reseller_id first, before limit",
+			limit: 200, scope: 7,
+			contains: []string{"WHERE reseller_id = ?"},
+			wantArgs: []any{int64(7), 200},
+		},
+		{
+			name:  "scope zero (root-only view) still filters to reseller_id = 0",
+			limit: 200, scope: 0,
+			contains: []string{"reseller_id = ?"},
+			wantArgs: []any{int64(0), 200},
+		},
+		{
+			name:   "scope combined with action: reseller_id bound before action",
+			action: "auth.login", limit: 50, scope: 3,
+			contains: []string{"WHERE reseller_id = ? AND action = ?"},
+			wantArgs: []any{int64(3), "auth.login", 50},
+		},
 	})
 }
