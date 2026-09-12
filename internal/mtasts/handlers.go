@@ -193,7 +193,7 @@ func (h *Handlers) Post(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "a policy is already published for this domain")
 		return
 	}
-	if err := WriteEnableRecords(r.Context(), h.DB, id, row.domainName, h.IPv4); err != nil {
+	if err := writeEnableRecords(r.Context(), h.DB, id, row.domainName, h.IPv4); err != nil {
 		httpx.LogR(r, "mtasts: write the enable records for domain %d: %v", id, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the DNS records could not be written")
 		return
@@ -232,7 +232,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if !Published(row.mode) {
 		// The sequence never got as far as publishing anything senders could
 		// cache, so there is nothing to age out and the records can go now.
-		if err := RemoveRecords(r.Context(), h.DB, id); err != nil {
+		if err := removeRecords(r.Context(), h.DB, id); err != nil {
 			httpx.LogR(r, "mtasts: remove the records for domain %d: %v", id, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the DNS records could not be updated")
 			return
@@ -265,7 +265,7 @@ func (h *Handlers) republish(r *http.Request, id int64) error {
 		log.Printf("mtasts: read the policy id for domain %d: %v", id, err)
 		return err
 	}
-	if err := WritePolicyTXT(r.Context(), h.DB, id, policyID); err != nil {
+	if err := writePolicyTXT(r.Context(), h.DB, id, policyID); err != nil {
 		log.Printf("mtasts: write the policy TXT for domain %d: %v", id, err)
 		return err
 	}
