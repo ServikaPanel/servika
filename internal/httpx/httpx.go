@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"mime"
 	"net"
 	"net/http"
 	"strings"
@@ -68,6 +69,27 @@ func WriteJSON(w http.ResponseWriter, status int, body any) {
 	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// Attachment declares a download that only this session may have.
+//
+// The handlers that stream a file write the response themselves, so they never
+// reach WriteJSON's Cache-Control and used to go out with no freshness
+// directive at all. The bodies are a whole-site backup archive with its
+// database dump, a tenant file, a full mailbox export and a complete DNS zone,
+// and a browser applying heuristic freshness may store a response that says
+// nothing.
+//
+// The filename is encoded rather than interpolated, so a quote or a semicolon
+// in it cannot add a second Content-Disposition parameter.
+func Attachment(w http.ResponseWriter, contentType, filename string) {
+	w.Header().Set("Content-Type", contentType)
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+	if disposition == "" {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", disposition)
+	w.Header().Set("Cache-Control", "no-store")
 }
 
 // WriteError writes a standard JSON error response.

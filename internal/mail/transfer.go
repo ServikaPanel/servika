@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -103,13 +102,7 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	disposition := mime.FormatMediaType("attachment",
-		map[string]string{"filename": localPart + "-maildir.tar.gz"})
-	if disposition == "" {
-		disposition = "attachment"
-	}
-	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", disposition)
+	httpx.Attachment(w, "application/gzip", localPart+"-maildir.tar.gz")
 	w.WriteHeader(http.StatusOK)
 
 	// The status line is already sent, so a failure from here on cannot become an

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -298,14 +297,9 @@ func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "directories cannot be downloaded")
 		return
 	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	// Encode the tenant-controlled filename safely so quotes or semicolons cannot
-	// inject additional Content-Disposition parameters.
-	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": info.Name()})
-	if disposition == "" {
-		disposition = "attachment"
-	}
-	w.Header().Set("Content-Disposition", disposition)
+	// The filename is tenant-controlled, and Attachment encodes it so quotes or
+	// semicolons cannot inject additional Content-Disposition parameters.
+	httpx.Attachment(w, "application/octet-stream", info.Name())
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	_, _ = io.Copy(w, f)
 }

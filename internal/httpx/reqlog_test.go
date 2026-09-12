@@ -85,29 +85,38 @@ func TestARequestWithoutAnIDLogsWithoutAPrefix(t *testing.T) {
 // demanding one there would mean threading a parameter through for the sake of
 // a log line.
 func TestNoHandlerLogsWithoutTheRequestID(t *testing.T) {
-	var bare []string
+	reportSites(t, "logs from a handler without the request id; use httpx.LogR(r, ...)",
+		func(parsed *ast.File, rel string, at func(token.Pos) int) []string {
+			// The access-log summary line is the one exemption: it already carries
+			// the id as a named field, and the helper's prefix would print it twice.
+			if rel == "internal/middleware/accesslog.go" {
+				return nil
+			}
+			return sitesAt(rel, at, bareLogCallsInHandlers(parsed))
+		})
+}
+
+// reportSites walks internal/, gathers the sites a check objects to, and
+// reports each one against the same message.
+func reportSites(t *testing.T, message string, collect func(parsed *ast.File, rel string, at func(token.Pos) int) []string) {
+	t.Helper()
+	var sites []string
 	forEachInternalFile(t, func(parsed *ast.File, rel string, at func(token.Pos) int) {
-		for _, call := range bareLogCallsInHandlers(parsed) {
-			bare = append(bare, fmt.Sprintf("%s:%d", rel, at(call)))
-		}
+		sites = append(sites, collect(parsed, rel, at)...)
 	})
-	// The access-log summary line is the one exemption: it already carries the
-	// id as a named field, and the helper's prefix would print it twice.
-	bare = without(bare, "internal/middleware/accesslog.go")
-	sort.Strings(bare)
-	for _, site := range bare {
-		t.Errorf("%s logs from a handler without the request id; use httpx.LogR(r, ...)", site)
+	sort.Strings(sites)
+	for _, site := range sites {
+		t.Errorf("%s %s", site, message)
 	}
 }
 
-func without(sites []string, prefix string) []string {
-	kept := sites[:0]
-	for _, site := range sites {
-		if !strings.HasPrefix(site, prefix) {
-			kept = append(kept, site)
-		}
+// sitesAt renders each position as a file:line the terminal can open.
+func sitesAt(rel string, at func(token.Pos) int, positions []token.Pos) []string {
+	sites := make([]string, 0, len(positions))
+	for _, pos := range positions {
+		sites = append(sites, fmt.Sprintf("%s:%d", rel, at(pos)))
 	}
-	return kept
+	return sites
 }
 
 // bareLogCallsInHandlers returns the position of every log.Printf call sitting

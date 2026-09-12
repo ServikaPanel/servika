@@ -415,8 +415,7 @@ func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = f.Close() }()
 	st, _ := f.Stat()
-	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+file+`"`)
+	httpx.Attachment(w, "application/gzip", file)
 	if st != nil {
 		w.Header().Set("Content-Length", strconv.FormatInt(st.Size(), 10))
 	}

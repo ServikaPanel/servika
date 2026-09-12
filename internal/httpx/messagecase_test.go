@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"sort"
 	"strconv"
 	"testing"
 	"unicode"
@@ -24,16 +23,14 @@ type errorMessage struct {
 // screen shows at the moment the panel refuses an action, and no locale file
 // stands between the constant and the customer.
 func TestNoErrorMessageStartsWithABrokenAcronym(t *testing.T) {
-	var broken []string
-	forEachInternalFile(t, func(parsed *ast.File, rel string, at func(token.Pos) int) {
-		for _, message := range brokenErrorMessages(parsed) {
-			broken = append(broken, fmt.Sprintf("%s:%d %q", rel, at(message.pos), message.text))
-		}
-	})
-	sort.Strings(broken)
-	for _, site := range broken {
-		t.Errorf("%s starts with a lowercased acronym; write the acronym in capitals", site)
-	}
+	reportSites(t, "starts with a lowercased acronym; write the acronym in capitals",
+		func(parsed *ast.File, rel string, at func(token.Pos) int) []string {
+			var broken []string
+			for _, message := range brokenErrorMessages(parsed) {
+				broken = append(broken, fmt.Sprintf("%s:%d %q", rel, at(message.pos), message.text))
+			}
+			return broken
+		})
 }
 
 // brokenErrorMessages returns every WriteError message literal that opens with a

@@ -57,8 +57,7 @@ func (h *Handlers) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	zone := renderBindZone(domainName, soa, records)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+domainName+`.zone"`)
+	httpx.Attachment(w, "text/plain; charset=utf-8", domainName+".zone")
 	_, _ = w.Write([]byte(zone))
 }
 
