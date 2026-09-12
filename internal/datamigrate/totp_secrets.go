@@ -26,18 +26,38 @@ import (
 // Idempotent: an already-sealed or empty value is skipped, so this runs on every
 // boot and does nothing once converged.
 func EncryptTOTPSecrets(ctx context.Context, db *sql.DB) {
-	type pending struct {
-		id    int64
-		value string
+	work, ok := cleartextTOTPSeeds(ctx, db)
+	if !ok {
+		return
 	}
+	migrated := 0
+	for _, p := range work {
+		if sealTOTPSeed(ctx, db, p) {
+			migrated++
+		}
+	}
+	if migrated > 0 {
+		log.Printf("TOTP secret backfill: sealed %d cleartext seed(s) in users", migrated)
+	}
+}
+
+// pendingSeed is one user row still holding a cleartext seed.
+type pendingSeed struct {
+	id    int64
+	value string
+}
+
+// cleartextTOTPSeeds lists the rows this pass has work to do on, and reports
+// whether the table could be read at all.
+func cleartextTOTPSeeds(ctx context.Context, db *sql.DB) ([]pendingSeed, bool) {
 	rows, err := db.QueryContext(ctx, `SELECT id, totp_secret FROM users WHERE totp_secret <> ''`)
 	if err != nil {
 		log.Printf("TOTP secret backfill: could not read the list: %v", err)
-		return
+		return nil, false
 	}
-	var work []pending
+	var work []pendingSeed
 	for rows.Next() {
-		var p pending
+		var p pendingSeed
 		if err := rows.Scan(&p.id, &p.value); err != nil {
 			log.Printf("TOTP secret backfill: skipping an unreadable row: %v", err)
 			continue
@@ -47,35 +67,33 @@ func EncryptTOTPSecrets(ctx context.Context, db *sql.DB) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		// A short list leaves some seeds in the clear, and the count logged below
-		// would otherwise read as a complete pass.
+		// A short list leaves some seeds in the clear, and the count logged by the
+		// caller would otherwise read as a complete pass.
 		log.Printf("TOTP secret backfill: could not read the whole list: %v", err)
 	}
 	if err := rows.Close(); err != nil {
 		log.Printf("TOTP secret backfill: could not close the cursor: %v", err)
 	}
+	return work, true
+}
 
-	migrated := 0
-	for _, p := range work {
-		sealed, err := auth.SealTOTPSecret(p.value, p.id)
-		if err != nil {
-			log.Printf("TOTP secret backfill: could not seal user %d: %v", p.id, err)
-			continue
-		}
-		// Matching the old value as well as the id means a record saved between
-		// the read and this write keeps its newer value instead of being
-		// overwritten with a re-sealed stale one. That matters here more than
-		// elsewhere: overwriting a seed the user has just re-enrolled would lock
-		// them out of their own second factor.
-		if _, err := db.ExecContext(ctx,
-			`UPDATE users SET totp_secret=? WHERE id=? AND totp_secret=?`,
-			sealed, p.id, p.value); err != nil {
-			log.Printf("TOTP secret backfill: could not write user %d: %v", p.id, err)
-			continue
-		}
-		migrated++
+// sealTOTPSeed seals one row and reports whether it was written.
+func sealTOTPSeed(ctx context.Context, db *sql.DB, p pendingSeed) bool {
+	sealed, err := auth.SealTOTPSecret(p.value, p.id)
+	if err != nil {
+		log.Printf("TOTP secret backfill: could not seal user %d: %v", p.id, err)
+		return false
 	}
-	if migrated > 0 {
-		log.Printf("TOTP secret backfill: sealed %d cleartext seed(s) in users", migrated)
+	// Matching the old value as well as the id means a record saved between
+	// the read and this write keeps its newer value instead of being
+	// overwritten with a re-sealed stale one. That matters here more than
+	// elsewhere: overwriting a seed the user has just re-enrolled would lock
+	// them out of their own second factor.
+	if _, err := db.ExecContext(ctx,
+		`UPDATE users SET totp_secret=? WHERE id=? AND totp_secret=?`,
+		sealed, p.id, p.value); err != nil {
+		log.Printf("TOTP secret backfill: could not write user %d: %v", p.id, err)
+		return false
 	}
+	return true
 }

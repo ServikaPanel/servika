@@ -24,21 +24,41 @@ import (
 // still in the clear: the tenant's cache would stop authenticating with nothing
 // able to recover the password.
 func EncryptRedisPasswords(ctx context.Context, db *sql.DB) {
+	work, ok := cleartextRedisPasswords(ctx, db)
+	if !ok {
+		return
+	}
+	migrated := 0
+	for _, p := range work {
+		if sealRedisPassword(ctx, db, p) {
+			migrated++
+		}
+	}
+	if migrated > 0 {
+		log.Printf("redis password backfill: encrypted %d cleartext password(s) in domain_redis", migrated)
+	}
+}
+
+// pendingRedis is one row still holding a cleartext password.
+type pendingRedis struct {
+	domainID   int64
+	systemUser string
+	password   string
+}
+
+// cleartextRedisPasswords lists the rows this pass has work to do on, and
+// reports whether the table could be read at all.
+func cleartextRedisPasswords(ctx context.Context, db *sql.DB) ([]pendingRedis, bool) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT domain_id, system_user, redis_pass FROM domain_redis WHERE redis_pass <> ''`)
 	if err != nil {
 		// An install that predates the table answers here and needs no migration.
 		log.Printf("redis password backfill: could not read domain_redis: %v", err)
-		return
+		return nil, false
 	}
-	type pending struct {
-		domainID   int64
-		systemUser string
-		password   string
-	}
-	var work []pending
+	var work []pendingRedis
 	for rows.Next() {
-		var p pending
+		var p pendingRedis
 		if err := rows.Scan(&p.domainID, &p.systemUser, &p.password); err != nil {
 			log.Printf("redis password backfill: skipping an unreadable row: %v", err)
 			continue
@@ -49,32 +69,30 @@ func EncryptRedisPasswords(ctx context.Context, db *sql.DB) {
 	}
 	if err := rows.Err(); err != nil {
 		// A short list leaves some passwords in the clear, and the count logged
-		// below would otherwise read as a complete pass.
+		// by the caller would otherwise read as a complete pass.
 		log.Printf("redis password backfill: could not read the whole list: %v", err)
 	}
 	if err := rows.Close(); err != nil {
 		log.Printf("redis password backfill: could not close the cursor: %v", err)
 	}
+	return work, true
+}
 
-	migrated := 0
-	for _, p := range work {
-		sealed, err := secret.EncryptWith(p.password, p.systemUser)
-		if err != nil {
-			log.Printf("redis password backfill: could not seal domain %d: %v", p.domainID, err)
-			continue
-		}
-		// Matching the old value as well as the id means a record saved between
-		// the read and this write keeps its newer value instead of being
-		// overwritten with a re-encrypted stale one.
-		if _, err := db.ExecContext(ctx,
-			`UPDATE domain_redis SET redis_pass=? WHERE domain_id=? AND redis_pass=?`,
-			sealed, p.domainID, p.password); err != nil {
-			log.Printf("redis password backfill: could not write domain %d: %v", p.domainID, err)
-			continue
-		}
-		migrated++
+// sealRedisPassword seals one row and reports whether it was written.
+func sealRedisPassword(ctx context.Context, db *sql.DB, p pendingRedis) bool {
+	sealed, err := secret.EncryptWith(p.password, p.systemUser)
+	if err != nil {
+		log.Printf("redis password backfill: could not seal domain %d: %v", p.domainID, err)
+		return false
 	}
-	if migrated > 0 {
-		log.Printf("redis password backfill: encrypted %d cleartext password(s) in domain_redis", migrated)
+	// Matching the old value as well as the id means a record saved between
+	// the read and this write keeps its newer value instead of being
+	// overwritten with a re-encrypted stale one.
+	if _, err := db.ExecContext(ctx,
+		`UPDATE domain_redis SET redis_pass=? WHERE domain_id=? AND redis_pass=?`,
+		sealed, p.domainID, p.password); err != nil {
+		log.Printf("redis password backfill: could not write domain %d: %v", p.domainID, err)
+		return false
 	}
+	return true
 }
