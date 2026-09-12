@@ -480,6 +480,69 @@ func TestARenderStopsAtTheStepThatFails(t *testing.T) {
 	}
 }
 
+// Every failure AFTER the vhost is written has to put the previous vhost back,
+// not just the validation failure. The vhost on disk names the very thing the
+// failed step could not write: $connection_upgrade for an application, a
+// servika_rl_N zone for a rate limit. nginx keeps serving its loaded
+// configuration, so the file sits there unvalidated and fails `nginx -t` for the
+// WHOLE server, which makes every later unrelated render roll back its own valid
+// change until an operator finds the file.
+func TestAPreparationFailureAfterTheWritePutsTheVhostBack(t *testing.T) {
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T, f *renderFixture)
+		reason  string
+	}{
+		{"the cache directory cannot be created", func(t *testing.T, _ *renderFixture) {
+			blocker := filepath.Join(t.TempDir(), "a-file")
+			writeFixture(t, blocker, "not a directory")
+			t.Setenv("SERVIKA_NGINX_CACHE_DIR", filepath.Join(blocker, "cache"))
+		}, "create cache directory"},
+		{"the upgrade map cannot be written", func(t *testing.T, f *renderFixture) {
+			withScript(t, renderScript(map[string][][]driver.Value{appDomainQuery: {{int64(9)}}, appsQuery: {{"api", "/api/", int64(30001)}}}))
+			t.Setenv("SERVIKA_NGINX_UPGRADE_MAP_CONF", filepath.Join(f.confDir, "missing", "map.conf"))
+		}, "write the upgrade map"},
+		{"the shared protection file cannot be written", func(_ *testing.T, f *renderFixture) {
+			protectionConfPath = filepath.Join(f.confDir, "missing", "00-servika-geo.conf")
+		}, "write 00-servika-geo.conf"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := withRenderSequence(t)
+			writeFixture(t, f.vhostPath(), "# the previous vhost\n")
+			tc.prepare(t, f)
+
+			body, err := f.render(t, exampleVhost())
+
+			if err == nil || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("renderAndReload() error = %v, want one naming %q", err, tc.reason)
+			}
+			if body != "# the previous vhost\n" {
+				t.Errorf("the vhost holds %q, want the previous one back", body)
+			}
+			if f.commands.ran("nginx", "-t") {
+				t.Error("the tree was validated after the preparation failed")
+			}
+		})
+	}
+}
+
+// A render that created the vhost leaves nothing behind either: the file it
+// wrote was never validated.
+func TestAPreparationFailureRemovesAVhostItCreated(t *testing.T) {
+	f := withRenderSequence(t)
+	protectionConfPath = filepath.Join(f.confDir, "missing", "00-servika-geo.conf")
+
+	_, err := f.render(t, exampleVhost())
+
+	if err == nil || !strings.Contains(err.Error(), "write 00-servika-geo.conf") {
+		t.Fatalf("renderAndReload() error = %v, want the shared file failure", err)
+	}
+	if _, statErr := os.Stat(f.vhostPath()); statErr == nil {
+		t.Error("the unvalidated vhost was left in conf.d")
+	}
+}
+
 func TestTheApacheVhostFollowsTheBackend(t *testing.T) {
 	cases := []struct {
 		name      string

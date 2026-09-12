@@ -1927,6 +1927,13 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 	}
 	sharedRestorers, err := prepareHTTPContext(opts)
 	if err != nil {
+		// The vhost is already on disk and has NOT been validated. It names the
+		// very thing this step failed to write ($connection_upgrade for an
+		// application, a servika_rl_N zone for a rate limit), and nginx keeps
+		// serving its loaded configuration, so leaving it there fails `nginx -t`
+		// for the whole server: every later unrelated render then rolls back its
+		// own valid change until an operator finds the file.
+		restoreFile(cfgPath, previousConfig, hadPreviousConfig)
 		return err
 	}
 	if out, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
