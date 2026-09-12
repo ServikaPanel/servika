@@ -406,17 +406,28 @@ func installAlreadyExists(target string) (string, bool) {
 		if name == "wp-config.php" {
 			return "WordPress is already installed in this directory", true
 		}
-		if name == "index.html" || name == "index.htm" || name == "index.php" ||
-			name == "favicon.ico" || name == "favicon.png" ||
-			name == ".htaccess" || name == ".htpasswd" ||
-			name == "robots.txt" || name == "sitemap.xml" ||
-			name == "cgi-bin" || name == ".well-known" ||
-			strings.HasPrefix(name, ".") {
+		if placeholderName(name) {
 			continue
 		}
 		return "Target directory already contains content", true
 	}
 	return "", false
+}
+
+// placeholderFiles are the names a directory may hold and still count as empty:
+// what a control panel or a browser leaves in a fresh document root.
+var placeholderFiles = map[string]bool{
+	"index.html": true, "index.htm": true, "index.php": true,
+	"favicon.ico": true, "favicon.png": true,
+	"robots.txt": true, "sitemap.xml": true,
+	"cgi-bin": true,
+}
+
+// placeholderName reports whether one directory entry may be overwritten by an
+// install. Every dotfile passes, which covers .htaccess, .htpasswd and
+// .well-known.
+func placeholderName(name string) bool {
+	return placeholderFiles[name] || strings.HasPrefix(name, ".")
 }
 
 // POST /domains/{id}/wordpress installs WordPress.
@@ -430,53 +441,27 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid user")
 		return
 	}
-	var req struct {
-		SubDir     string `json:"sub_dir"`
-		SiteTitle  string `json:"site_title"`
-		AdminUser  string `json:"admin_user"`
-		AdminEmail string `json:"admin_email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	req, ok := decodeInstallRequest(w, r)
+	if !ok {
 		return
 	}
-	req.SubDir = strings.Trim(strings.TrimSpace(req.SubDir), "/")
-	req.SiteTitle = strings.TrimSpace(req.SiteTitle)
-	req.AdminUser = strings.TrimSpace(req.AdminUser)
-	req.AdminEmail = strings.TrimSpace(req.AdminEmail)
-	if req.SiteTitle == "" || len(req.SiteTitle) > 120 {
-		httpx.WriteError(w, http.StatusBadRequest, "site title is required (maximum 120 characters)")
+	target, release, ok := prepareTarget(w, systemUser, root, req.SubDir)
+	if release != nil {
+		defer release()
+	}
+	if !ok {
 		return
 	}
-	if !reAdmin.MatchString(req.AdminUser) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid administrator username")
+	site, ok := h.createSiteDatabase(w, r, id)
+	if !ok {
 		return
 	}
-	if !reEmail.MatchString(req.AdminEmail) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid email address")
-		return
-	}
-	if req.SubDir != "" && !subdirectoryPattern.MatchString(req.SubDir) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid subdirectory (lowercase letters, digits, and hyphens only)")
-		return
-	}
-	target := root
+	url := scheme(ssl) + domainName
 	if req.SubDir != "" {
-		target = filepath.Join(root, req.SubDir)
+		url += "/" + req.SubDir
 	}
-	// Lock to serialize concurrent installs to the same target.
-	if _, loaded := wpInstallLock.LoadOrStore(target, true); loaded {
-		httpx.WriteError(w, http.StatusConflict, "wordPress installation is already in progress for this directory")
-		return
-	}
-	defer wpInstallLock.Delete(target)
-	if msg, ok := installAlreadyExists(target); ok {
-		httpx.WriteError(w, http.StatusConflict, msg)
-		return
-	}
-	// #nosec G301 G703 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-	if err := os.MkdirAll(target, 0o755); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not create target directory")
+	adminPassword, ok := h.installSite(w, systemUser, target, url, req, site)
+	if !ok {
 		return
 	}
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
@@ -484,33 +469,129 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
 	_ = wpCommand("restorecon", "-R", target).Run()
 
-	// Enforce the plan database quota at this point of use, matching the normal
-	// database endpoint. Without this, repeated WordPress installs in different
-	// subdirectories bypass the customer's max_db limit. A per-customer lock held
-	// across the check and the database creation makes the pair atomic against
-	// concurrent installs and concurrent normal database creation.
+	version := ""
+	if b, err := runWP(systemUser, "core", "version", "--path="+target); err == nil {
+		version = strings.TrimSpace(string(b))
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "site_url": url, "admin_url": url + "/wp-admin",
+		"admin_user": req.AdminUser, "admin_password": adminPassword,
+		"version": version, "db_name": site.name,
+	})
+}
+
+// installRequest is what the caller asks for.
+type installRequest struct {
+	SubDir     string `json:"sub_dir"`
+	SiteTitle  string `json:"site_title"`
+	AdminUser  string `json:"admin_user"`
+	AdminEmail string `json:"admin_email"`
+}
+
+// decodeInstallRequest reads the request and refuses every value the install
+// cannot use. It answers the caller itself and reports whether the install may
+// go on.
+func decodeInstallRequest(w http.ResponseWriter, r *http.Request) (installRequest, bool) {
+	var req installRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return req, false
+	}
+	req.SubDir = strings.Trim(strings.TrimSpace(req.SubDir), "/")
+	req.SiteTitle = strings.TrimSpace(req.SiteTitle)
+	req.AdminUser = strings.TrimSpace(req.AdminUser)
+	req.AdminEmail = strings.TrimSpace(req.AdminEmail)
+	if req.SiteTitle == "" || len(req.SiteTitle) > 120 {
+		httpx.WriteError(w, http.StatusBadRequest, "site title is required (maximum 120 characters)")
+		return req, false
+	}
+	if !reAdmin.MatchString(req.AdminUser) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid administrator username")
+		return req, false
+	}
+	if !reEmail.MatchString(req.AdminEmail) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid email address")
+		return req, false
+	}
+	if req.SubDir != "" && !subdirectoryPattern.MatchString(req.SubDir) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid subdirectory (lowercase letters, digits, and hyphens only)")
+		return req, false
+	}
+	return req, true
+}
+
+// prepareTarget takes the per-directory lock and makes the directory the
+// install writes into. The release function is returned whenever the lock was
+// taken, including on a later failure, so the caller can defer it once.
+func prepareTarget(w http.ResponseWriter, systemUser, root, subDir string) (target string, release func(), ok bool) {
+	target = root
+	if subDir != "" {
+		target = filepath.Join(root, subDir)
+	}
+	// Lock to serialize concurrent installs to the same target.
+	if _, loaded := wpInstallLock.LoadOrStore(target, true); loaded {
+		httpx.WriteError(w, http.StatusConflict, "wordPress installation is already in progress for this directory")
+		return "", nil, false
+	}
+	release = func() { wpInstallLock.Delete(target) }
+	if msg, exists := installAlreadyExists(target); exists {
+		httpx.WriteError(w, http.StatusConflict, msg)
+		return target, release, false
+	}
+	// #nosec G301 G703 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not create target directory")
+		return target, release, false
+	}
+	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
+	_ = wpCommand("chown", "-R", systemUser+":"+systemUser, target).Run()
+	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
+	_ = wpCommand("restorecon", "-R", target).Run()
+	return target, release, true
+}
+
+// siteDatabase is the database an install creates for its site.
+type siteDatabase struct {
+	name string
+	user string
+	pass string
+}
+
+// createSiteDatabase enforces the plan database quota at this point of use,
+// matching the normal database endpoint. Without this, repeated WordPress
+// installs in different subdirectories bypass the customer's max_db limit. A
+// per-customer lock held across the check and the database creation makes the
+// pair atomic against concurrent installs and concurrent normal database
+// creation.
+func (h *Handlers) createSiteDatabase(w http.ResponseWriter, r *http.Request, domainID int64) (siteDatabase, bool) {
 	slug := randSlug()
-	dbName := "wp_" + slug
-	dbUser := "wpu_" + slug
-	dbPass := credentials.RandomPassword(24)
+	site := siteDatabase{name: "wp_" + slug, user: "wpu_" + slug, pass: credentials.RandomPassword(24)}
 	dbErr := func() error {
-		unlock := quota.LockCustomerForDomain(r.Context(), h.DB, id)
+		unlock := quota.LockCustomerForDomain(r.Context(), h.DB, domainID)
 		defer unlock()
-		if err := quota.CheckDatabaseAllowed(r.Context(), h.DB, id); err != nil {
+		if err := quota.CheckDatabaseAllowed(r.Context(), h.DB, domainID); err != nil {
 			return err
 		}
-		return createMySQLDB(h.DB, id, dbName, dbUser, dbPass)
+		return createMySQLDB(h.DB, domainID, site.name, site.user, site.pass)
 	}()
 	if dbErr != nil {
 		if limitErr, ok := errors.AsType[*quota.LimitError](dbErr); ok {
 			httpx.WriteError(w, http.StatusForbidden, limitErr.Message)
-			return
+			return site, false
 		}
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
+		return site, false
 	}
+	return site, true
+}
+
+// installSite runs the wp-cli stages that turn an empty directory into a
+// working site, and undoes the database and the directory when one of them
+// fails. It returns the administrator password on success.
+func (h *Handlers) installSite(w http.ResponseWriter, systemUser, target, url string,
+	req installRequest, site siteDatabase) (string, bool) {
 	fail := func(stage string, out []byte) {
-		_ = dropMySQLDB(h.DB, dbName, dbUser)
+		_ = dropMySQLDB(h.DB, site.name, site.user)
 		if req.SubDir != "" { // Remove only the subdirectory created by this operation.
 			// Best effort, and already logged inside: the install's own failure
 			// is what the caller is told, and a rollback that could not finish
@@ -526,23 +607,19 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 
 	if out, err := runWPTimeout(wpNetworkTimeout, systemUser, "core", "download", "--path="+target, "--locale=en_US"); err != nil {
 		fail("WordPress download", out)
-		return
+		return "", false
 	}
-	if out, err := runWPSecret(systemUser, "dbpass", dbPass, "config", "create",
-		"--dbname="+dbName, "--dbuser="+dbUser, "--dbhost=localhost",
+	if out, err := runWPSecret(systemUser, "dbpass", site.pass, "config", "create",
+		"--dbname="+site.name, "--dbuser="+site.user, "--dbhost=localhost",
 		"--locale=en_US", "--path="+target, "--skip-check"); err != nil {
 		fail("wp-config creation", out)
-		return
+		return "", false
 	}
 	// A wp-config.php whose DB_PASSWORD went in empty is a site that cannot
 	// reach its own database, reported as a successful install.
-	if !configPasswordMatches(systemUser, target, dbPass) {
+	if !configPasswordMatches(systemUser, target, site.pass) {
 		fail("wp-config creation", []byte("the database password was not stored in wp-config.php"))
-		return
-	}
-	url := scheme(ssl) + domainName
-	if req.SubDir != "" {
-		url += "/" + req.SubDir
+		return "", false
 	}
 	adminPassword := randomPassword()
 	if out, err := runWPSecret(systemUser, "admin_password", adminPassword,
@@ -550,7 +627,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		"--admin_user="+req.AdminUser, "--admin_email="+req.AdminEmail,
 		"--skip-email", "--path="+target); err != nil {
 		fail("WordPress installation", out)
-		return
+		return "", false
 	}
 	// Measured with an unrecognised --prompt name: wp-cli exits 0 with an empty
 	// stderr and the account is never created at all. Handing the caller a
@@ -558,22 +635,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	// is worse than the exposure this replaced.
 	if !passwordWorks(systemUser, target, req.AdminUser, adminPassword) {
 		fail("WordPress installation", []byte("the administrator account was not created with the generated password"))
-		return
+		return "", false
 	}
-	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = wpCommand("chown", "-R", systemUser+":"+systemUser, target).Run()
-	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = wpCommand("restorecon", "-R", target).Run()
-
-	version := ""
-	if b, err := runWP(systemUser, "core", "version", "--path="+target); err == nil {
-		version = strings.TrimSpace(string(b))
-	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "site_url": url, "admin_url": url + "/wp-admin",
-		"admin_user": req.AdminUser, "admin_password": adminPassword,
-		"version": version, "db_name": dbName,
-	})
+	return adminPassword, true
 }
 
 // POST /domains/{id}/wordpress/update updates an installation from {dir}.
@@ -640,22 +704,8 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "wordPress in the root directory cannot be removed from the panel because it would delete the entire site; use File Manager")
 		return
 	}
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	if deleteRequest.DBDelete {
-		// #nosec G304 G703 -- dir derives from a validated systemUser/domain path, not raw tenant input; tenant file reads otherwise use safeio (openat2).
-		if b, err := os.ReadFile(filepath.Join(dir, "wp-config.php")); err == nil {
-			if m := reDBName.FindSubmatch(b); len(m) == 2 {
-				dbName := string(m[1])
-				// Cross-tenant guard: only drop databases that belong to this domain
-				// AND carry the wp_ prefix (prevents arbitrary DB drop via payload).
-				if h.dropAllowed(r, id, dbName) {
-					if dbUser, ok := managedDBAccount(dbName); ok {
-						_ = dropMySQLDB(h.DB, dbName, dbUser)
-					}
-				}
-			}
-		}
-		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+		h.dropSiteDatabase(r, id, dir)
 	}
 	// The root path was rejected above, so this is a subdirectory.
 	if err := removeInstall(systemUser, dir, "wordpress delete"); err != nil {
@@ -663,6 +713,31 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// dropSiteDatabase removes the database the installation's wp-config.php names.
+//
+// Cross-tenant guard: only databases that belong to this domain AND carry the
+// wp_ prefix are dropped, which is what prevents an arbitrary DB drop through
+// the payload. A name that fails either test is left alone, silently, because
+// the directory deletion the caller asked for still applies.
+func (h *Handlers) dropSiteDatabase(r *http.Request, domainID int64, dir string) {
+	// #nosec G304 G703 -- dir derives from a validated systemUser/domain path, not raw tenant input; tenant file reads otherwise use safeio (openat2).
+	b, err := os.ReadFile(filepath.Join(dir, "wp-config.php"))
+	if err != nil {
+		return
+	}
+	m := reDBName.FindSubmatch(b)
+	if len(m) != 2 {
+		return
+	}
+	dbName := string(m[1])
+	if !h.dropAllowed(r, domainID, dbName) {
+		return
+	}
+	if dbUser, ok := managedDBAccount(dbName); ok {
+		_ = dropMySQLDB(h.DB, dbName, dbUser)
+	}
 }
 
 // resolveDirectory converts a directory value into a safe absolute path under root

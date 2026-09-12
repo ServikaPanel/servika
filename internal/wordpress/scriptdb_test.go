@@ -180,8 +180,6 @@ func newScript() *sqlScript {
 	}
 }
 
-var errScripted = errors.New("scripted failure")
-
 // setForTest replaces a package variable for one test.
 func setForTest[T any](t *testing.T, target *T, value T) {
 	t.Helper()

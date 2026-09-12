@@ -81,18 +81,7 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	}()
 	go func() {
 		defer wg.Done()
-		if b, e := wpStdout(ctx, systemUser, "core", "check-update", "--path="+dir, "--format=json"); e == nil {
-			bt := strings.TrimSpace(string(b))
-			if bt != "" && bt != "[]" {
-				var ups []struct {
-					Version string `json:"version"`
-				}
-				if json.Unmarshal([]byte(bt), &ups) == nil && len(ups) > 0 {
-					updateAvailable = true
-					targetVersion = ups[0].Version
-				}
-			}
-		}
+		targetVersion, updateAvailable = pendingCoreUpdate(ctx, systemUser, dir)
 	}()
 	go func() {
 		defer wg.Done()
@@ -115,6 +104,28 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 		"version": version, "update_available": updateAvailable, "target_version": targetVersion,
 		"php": php, "db_mb": dbMB, "maintenance": maintenance,
 	})
+}
+
+// pendingCoreUpdate asks wordpress.org which core version the site could move
+// to. A call that fails, an empty list and a list this cannot read all report
+// no update, because the status page must not show an upgrade the site cannot
+// take.
+func pendingCoreUpdate(ctx context.Context, systemUser, dir string) (version string, available bool) {
+	b, err := wpStdout(ctx, systemUser, "core", "check-update", "--path="+dir, "--format=json")
+	if err != nil {
+		return "", false
+	}
+	bt := strings.TrimSpace(string(b))
+	if bt == "" || bt == "[]" {
+		return "", false
+	}
+	var ups []struct {
+		Version string `json:"version"`
+	}
+	if json.Unmarshal([]byte(bt), &ups) != nil || len(ups) == 0 {
+		return "", false
+	}
+	return ups[0].Version, true
 }
 
 // GET /domains/{id}/wordpress/plugins?dir= lists plugins.
@@ -270,15 +281,8 @@ func (h *Handlers) UserPassword(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if req.UserID <= 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid user")
-		return
-	}
-	password := strings.TrimSpace(req.Password)
-	if password == "" {
-		password = randomPassword()
-	} else if len(password) < 8 || len(password) > 100 {
-		httpx.WriteError(w, http.StatusBadRequest, "password must contain 8 to 100 characters")
+	password, ok := requestedPassword(w, req.UserID, req.Password)
+	if !ok {
 		return
 	}
 	// The login is read BEFORE the update because the verification below needs
@@ -313,6 +317,25 @@ func (h *Handlers) UserPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "password": password, "username": login})
+}
+
+// requestedPassword validates the account and the password a reset names, and
+// generates a password when the caller supplied none. It answers the caller
+// itself and reports whether the reset may go on.
+func requestedPassword(w http.ResponseWriter, userID int, raw string) (string, bool) {
+	if userID <= 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid user")
+		return "", false
+	}
+	password := strings.TrimSpace(raw)
+	if password == "" {
+		return randomPassword(), true
+	}
+	if len(password) < 8 || len(password) > 100 {
+		httpx.WriteError(w, http.StatusBadRequest, "password must contain 8 to 100 characters")
+		return "", false
+	}
+	return password, true
 }
 
 // POST /domains/{id}/wordpress/repair repairs an installation from {dir}.

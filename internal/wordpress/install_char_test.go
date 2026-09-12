@@ -12,6 +12,17 @@ import (
 	"testing"
 )
 
+// installResponse is the body a completed install returns.
+type installResponse struct {
+	OK            bool   `json:"ok"`
+	SiteURL       string `json:"site_url"`
+	AdminURL      string `json:"admin_url"`
+	AdminUser     string `json:"admin_user"`
+	AdminPassword string `json:"admin_password"`
+	Version       string `json:"version"`
+	DBName        string `json:"db_name"`
+}
+
 // installBody is the request body the install endpoint takes.
 const installBody = `{"sub_dir":"blog","site_title":"Site","admin_user":"admin","admin_email":"a@b.co"}`
 
@@ -225,18 +236,34 @@ func TestInstallRunsTheWholeSequenceAndReportsTheCredentials(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %s", recorder.Code, recorder.Body.String())
 	}
-	var got struct {
-		OK            bool   `json:"ok"`
-		SiteURL       string `json:"site_url"`
-		AdminURL      string `json:"admin_url"`
-		AdminUser     string `json:"admin_user"`
-		AdminPassword string `json:"admin_password"`
-		Version       string `json:"version"`
-		DBName        string `json:"db_name"`
-	}
+	var got installResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode the response: %v", err)
 	}
+	assertInstallResponse(t, got, rec)
+	if len(host.created) != 1 || host.created[0] != got.DBName {
+		t.Errorf("created = %v, want the reported database", host.created)
+	}
+	if len(host.dropped) != 0 || len(host.removed) != 0 {
+		t.Errorf("a successful install rolled something back: dropped=%v removed=%v", host.dropped, host.removed)
+	}
+
+	target := filepath.Join(root, "blog")
+	if _, err := os.Stat(target); err != nil {
+		t.Errorf("the target directory was not created: %v", err)
+	}
+	assertInstallSequence(t, rec, target, got.DBName)
+	if argv := host.argvOf("chown"); !equalStrings(argv, []string{"chown", "-R", "c_test:c_test", target}) {
+		t.Errorf("chown argv = %v", argv)
+	}
+	if argv := host.argvOf("restorecon"); !equalStrings(argv, []string{"restorecon", "-R", target}) {
+		t.Errorf("restorecon argv = %v", argv)
+	}
+}
+
+// assertInstallResponse checks the body a completed install returns.
+func assertInstallResponse(t *testing.T, got installResponse, rec *wpRecorder) {
+	t.Helper()
 	if !got.OK || got.SiteURL != "http://example.com/blog" || got.AdminURL != "http://example.com/blog/wp-admin" {
 		t.Errorf("response = %+v, want the site under the subdirectory", got)
 	}
@@ -249,33 +276,21 @@ func TestInstallRunsTheWholeSequenceAndReportsTheCredentials(t *testing.T) {
 	if !strings.HasPrefix(got.DBName, "wp_") || len(got.DBName) != 11 {
 		t.Errorf("db_name = %q, want wp_ and eight hexadecimal characters", got.DBName)
 	}
-	if len(host.created) != 1 || host.created[0] != got.DBName {
-		t.Errorf("created = %v, want the reported database", host.created)
-	}
-	if len(host.dropped) != 0 || len(host.removed) != 0 {
-		t.Errorf("a successful install rolled something back: dropped=%v removed=%v", host.dropped, host.removed)
-	}
+}
 
-	target := filepath.Join(root, "blog")
-	if _, err := os.Stat(target); err != nil {
-		t.Errorf("the target directory was not created: %v", err)
-	}
+// assertInstallSequence checks the wp-cli calls an install makes, in order.
+func assertInstallSequence(t *testing.T, rec *wpRecorder, target, dbName string) {
+	t.Helper()
 	wantOrder := []string{"core download", "config create", "config get", "core install",
 		"eval check-password", "core version"}
 	if got := rec.keys(); !equalStrings(got, wantOrder) {
 		t.Errorf("wp-cli calls = %v, want %v", got, wantOrder)
 	}
 	assertArgvHolds(t, rec.argvFor("core download"), "core", "download", "--path="+target, "--locale=en_US")
-	assertArgvHolds(t, rec.argvFor("config create"), "--dbname="+got.DBName, "--dbuser=wpu_"+got.DBName[3:],
+	assertArgvHolds(t, rec.argvFor("config create"), "--dbname="+dbName, "--dbuser=wpu_"+dbName[3:],
 		"--dbhost=localhost", "--skip-check", "--quiet", "--prompt=dbpass")
 	assertArgvHolds(t, rec.argvFor("core install"), "--url=http://example.com/blog", "--title=Site",
 		"--admin_user=admin", "--admin_email=a@b.co", "--skip-email", "--quiet", "--prompt=admin_password")
-	if argv := host.argvOf("chown"); !equalStrings(argv, []string{"chown", "-R", "c_test:c_test", target}) {
-		t.Errorf("chown argv = %v", argv)
-	}
-	if argv := host.argvOf("restorecon"); !equalStrings(argv, []string{"restorecon", "-R", target}) {
-		t.Errorf("restorecon argv = %v", argv)
-	}
 }
 
 // The generated secrets must not reach argv, where every other account on the
