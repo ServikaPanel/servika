@@ -583,6 +583,23 @@ func startCollectors(d *sql.DB) {
 	panelport.HealHealthURL()
 }
 
+// shutdownGrace is how long SIGTERM drains in-flight requests for.
+//
+// It follows httpx.LargeTransferDeadline instead of being a round ten seconds.
+// The SQL dump import, the archive import, the cPanel account transfer and the
+// backup download are each granted that deadline on purpose, and a ten-second
+// drain ended them the moment servika-update or `systemctl restart servika`
+// ran: the unit's cgroup takes the mysql client applying the dump with it, so
+// the operator was left with a half-imported database and no record of the
+// statement it stopped at. Shutdown closes idle connections at once, so this
+// window is only ever spent on a request that is still running.
+//
+// The extra minute is the margin the unit's TimeoutStopSec is set above, so
+// systemd does not SIGKILL the process while Shutdown is still draining. That
+// key has to be in assets/systemd/servika.service for this value to mean
+// anything, and TestTheUnitLetsTheDrainFinish holds the two together.
+var shutdownGrace = httpx.LargeTransferDeadline + time.Minute
+
 // serve reapplies the firewall, listens, and shuts the server down on a signal.
 // The firewall is reapplied BEFORE the listener accepts anything.
 func serve(srv *http.Server, cfg *config.Config, d *sql.DB) {
@@ -602,7 +619,7 @@ func serve(srv *http.Server, cfg *config.Config, d *sql.DB) {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	log.Printf("shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown: %v", err)

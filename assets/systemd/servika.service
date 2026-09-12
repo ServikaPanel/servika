@@ -28,6 +28,12 @@ EnvironmentFile=/etc/servika/env
 ExecStart=/opt/servika/bin/servika-server
 Restart=on-failure
 RestartSec=3
+# The backend drains in-flight requests for the large-transfer deadline plus a
+# minute before it returns from main. systemd's default stop timeout is 90
+# seconds, and its default KillMode reaps the whole cgroup, so without this key
+# a `systemctl restart` during a SQL dump import kills the mysql client applying
+# the dump. Keep this above the drain window in cmd/server (shutdownGrace).
+TimeoutStopSec=1900
 User=root
 StandardOutput=journal
 StandardError=journal
