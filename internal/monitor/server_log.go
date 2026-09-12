@@ -1,13 +1,29 @@
 package monitor
 
 import (
+	"context"
 	"net/http"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"servika/internal/httpx"
 )
+
+// logCommand runs the log readers. It is a variable so a test can stand in for
+// the host's journalctl and tail; nothing outside tests changes it.
+var logCommand = exec.CommandContext
+
+// logBudget bounds one log read.
+//
+// journalctl walks the journal files, and tail reads a log an active nginx is
+// still writing; on a host with a damaged journal or a stalled disk either can
+// sit there. The handler timeout cancels r.Context() and nothing else, so an
+// uncontexted command held the handler and its connection until the socket
+// write deadline dropped the client with no response. The budget hangs off the
+// request context, so a client that goes away also ends the command.
+var logBudget = 20 * time.Second
 
 // logSources maps allowed source keys to systemd units.
 // User input never reaches the command directly and must pass through this allowlist.
@@ -39,11 +55,13 @@ func (h *Handlers) ServerLog(w http.ResponseWriter, r *http.Request) {
 	if last > 1000 {
 		last = 1000
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), logBudget)
+	defer cancel()
 	var output []byte
 	if file, ok := fileSources[source]; ok {
 		// Tail a file-based source such as nginx error.log.
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		output, _ = exec.Command("tail", "-n", strconv.Itoa(last), file).CombinedOutput()
+		output, _ = logCommand(ctx, "tail", "-n", strconv.Itoa(last), file).CombinedOutput()
 	} else {
 		args := []string{"--no-pager", "-o", "short-iso", "-n", strconv.Itoa(last)}
 		if source != "system" {
@@ -55,7 +73,7 @@ func (h *Handlers) ServerLog(w http.ResponseWriter, r *http.Request) {
 			args = append(args, "-u", unit)
 		}
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		output, _ = exec.Command("journalctl", args...).CombinedOutput()
+		output, _ = logCommand(ctx, "journalctl", args...).CombinedOutput()
 	}
 	text := strings.TrimRight(string(output), "\n")
 	lines := []string{}

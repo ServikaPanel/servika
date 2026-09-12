@@ -2,6 +2,7 @@
 package monitor
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
@@ -34,7 +35,16 @@ type Handlers struct {
 
 // psCommand runs the process listing. It is a variable so a test can stand in
 // for the host's own ps, which prints a different table on every platform.
-var psCommand = exec.Command
+var psCommand = exec.CommandContext
+
+// psBudget bounds the process listing.
+//
+// ps reads /proc for every process, and one task stuck in uninterruptible sleep
+// on a hung mount holds it there. The handler timeout cancels r.Context() and
+// nothing else, so an uncontexted command kept the handler, its goroutine and
+// the child process alive until the socket write deadline dropped the client
+// with no response at all.
+var psBudget = 10 * time.Second
 
 // rowLimit reads how many processes the caller asked for. An unreadable or
 // out-of-range value takes the default rather than an unbounded listing.
@@ -81,7 +91,9 @@ func parseProcess(line string) (Process, bool) {
 func Processes(w http.ResponseWriter, r *http.Request) {
 	n := rowLimit(r)
 
-	cmd := psCommand("ps", "-eo", "pid,user:32,pcpu,pmem,args", "--no-headers", "--sort="+sortFlagOf(r))
+	ctx, cancel := context.WithTimeout(r.Context(), psBudget)
+	defer cancel()
+	cmd := psCommand(ctx, "ps", "-eo", "pid,user:32,pcpu,pmem,args", "--no-headers", "--sort="+sortFlagOf(r))
 	out, err := cmd.Output()
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to read process list")

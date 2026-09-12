@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -20,12 +21,12 @@ func fakePS(t *testing.T, output string, fail bool) *[]string {
 	var asked []string
 	previous := psCommand
 	t.Cleanup(func() { psCommand = previous })
-	psCommand = func(name string, args ...string) *exec.Cmd {
+	psCommand = func(ctx context.Context, name string, args ...string) *exec.Cmd {
 		asked = append([]string{name}, args...)
 		if fail {
-			return exec.Command("/bin/sh", "-c", "exit 1")
+			return exec.CommandContext(ctx, "/bin/sh", "-c", "exit 1")
 		}
-		return exec.Command("/bin/echo", output)
+		return exec.CommandContext(ctx, "/bin/echo", output)
 	}
 	return &asked
 }

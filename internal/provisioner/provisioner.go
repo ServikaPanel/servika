@@ -17,8 +17,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"text/template"
+	"time"
 
 	"servika/internal/config"
 	"servika/internal/phpdefaults"
@@ -1936,12 +1938,12 @@ func renderAndReload(opts VhostOpts, systemUser string) error {
 		restoreFile(cfgPath, previousConfig, hadPreviousConfig)
 		return err
 	}
-	if out, err := systemCommand("nginx", "-t").CombinedOutput(); err != nil {
+	if out, err := runBounded(systemCommand("nginx", "-t"), nginxBudget); err != nil {
 		restoreFile(cfgPath, previousConfig, hadPreviousConfig)
 		restoreShared(sharedRestorers)
 		return fmt.Errorf("nginx -t failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	if out, err := systemCommand("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+	if out, err := runBounded(systemCommand("systemctl", "reload", "nginx"), nginxBudget); err != nil {
 		return fmt.Errorf("nginx reload: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	// Purge stale FastCGI cache entries for this domain so that cache TTL and
@@ -3006,6 +3008,44 @@ func writeSentinel(path, logPrefix string) {
 
 func tenantCommand(name string, args ...string) *exec.Cmd {
 	return tenantCommandContext(context.Background(), name, args...)
+}
+
+// nginxBudget bounds the two commands every render ends in.
+//
+// About 26 request handlers reach renderAndReload, and neither `nginx -t` nor
+// `systemctl reload nginx` is instantaneous: the first reads the whole
+// configuration tree, the second waits its turn behind any other systemd job.
+// The handler timeout cancels r.Context() and nothing else, so a command that
+// never returned held the handler, its goroutine and the connection past the
+// 300-second mark, and the client was dropped at the socket write deadline with
+// no HTTP response at all. A budget turns that into an ordinary error the
+// screen can show.
+var nginxBudget = 60 * time.Second
+
+// runBounded runs cmd and kills it when budget expires, returning whatever it
+// printed on either stream.
+//
+// It takes the command rather than a context because the callers reach this
+// through the systemCommand seam, which a test replaces with a recorder, so a
+// context threaded through the seam would change every fake in the package for
+// no gain here.
+func runBounded(cmd *exec.Cmd, budget time.Duration) ([]byte, error) {
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	var timedOut atomic.Bool
+	timer := time.AfterFunc(budget, func() {
+		timedOut.Store(true)
+		_ = cmd.Process.Kill()
+	})
+	defer timer.Stop()
+	err := cmd.Wait()
+	if timedOut.Load() {
+		return output.Bytes(), fmt.Errorf("%s did not finish within %s", cmd.Path, budget)
+	}
+	return output.Bytes(), err
 }
 
 // commandContext builds every command tenantCommandContext runs. It is a
