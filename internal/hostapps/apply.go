@@ -121,15 +121,15 @@ func Install(db *sql.DB, entry Entry, app App, jobID int64) {
 }
 
 func install(ctx context.Context, entry Entry, app App) error {
-	url, digest, err := Download(entry)
+	url, digest, err := downloadFor(entry)
 	if err != nil {
 		return err
 	}
-	systemUser, err := EnsureUser(entry.Code)
+	systemUser, err := ensureUser(entry.Code)
 	if err != nil {
 		return err
 	}
-	if err := PrepareDirectories(entry.Code, systemUser); err != nil {
+	if err := prepareDirectories(entry.Code, systemUser); err != nil {
 		return err
 	}
 
@@ -143,37 +143,37 @@ func install(ctx context.Context, entry Entry, app App) error {
 	defer func() { _ = os.RemoveAll(staging) }()
 
 	archive := filepath.Join(staging, "download")
-	if err := Fetch(ctx, url, digest, archive); err != nil {
+	if err := fetchArchive(ctx, url, digest, archive); err != nil {
 		return err
 	}
-	if err := Unpack(ctx, entry, archive, app.InstallDir); err != nil {
+	if err := unpackArchive(ctx, entry, archive, app.InstallDir); err != nil {
 		return err
 	}
-	binary, err := VerifyBinary(entry.Code, entry.BinaryPath)
+	binary, err := verifyBinary(entry.Code, entry.BinaryPath)
 	if err != nil {
 		return err
 	}
 	// Ownership is set again AFTER the unpack: the files that just landed are
 	// root's, and the service account cannot read its own program otherwise.
-	if err := PrepareDirectories(entry.Code, systemUser); err != nil {
+	if err := prepareDirectories(entry.Code, systemUser); err != nil {
 		return err
 	}
 
-	arguments, err := BuildArgv(entry, app.DataDir, app.Port)
+	arguments, err := buildArgv(entry, app.DataDir, app.Port)
 	if err != nil {
 		return err
 	}
-	if err := WriteEnvFile(entry, app.Port, nil); err != nil {
+	if err := writeEnvFile(entry, app.Port, nil); err != nil {
 		return err
 	}
-	if err := EnsureLogFile(entry.Code); err != nil {
+	if err := ensureLogFile(entry.Code); err != nil {
 		return err
 	}
 	body := RenderUnit(entry, systemUser, append([]string{binary}, arguments...))
-	if err := InstallUnit(entry.Code, body); err != nil {
+	if err := installUnit(entry.Code, body); err != nil {
 		return err
 	}
-	return Enable(entry.Code)
+	return enableUnit(entry.Code)
 }
 
 // Remove takes the application off the host.

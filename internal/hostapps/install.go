@@ -119,7 +119,7 @@ func Unpack(ctx context.Context, entry Entry, archive, installDir string) error 
 			return err
 		}
 	case "zip":
-		if err := runTool(ctx, "unzip", "-q", "-o", archive, "-d", staging); err != nil {
+		if err := unpackWith(ctx, "unzip", "-q", "-o", archive, "-d", staging); err != nil {
 			return err
 		}
 	default:
@@ -127,7 +127,7 @@ func Unpack(ctx context.Context, entry Entry, archive, installDir string) error 
 		if flag == "" {
 			return refuse(ReasonUnpack, "%q is not an archive kind this understands", entry.ArchiveKind)
 		}
-		if err := runTool(ctx, "tar", flag, archive, "-C", staging, "--no-same-owner"); err != nil {
+		if err := unpackWith(ctx, "tar", flag, archive, "-C", staging, "--no-same-owner"); err != nil {
 			return err
 		}
 	}

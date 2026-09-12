@@ -227,6 +227,9 @@ func TestTheBinaryPathCannotLeaveTheArchive(t *testing.T) {
 func TestAnInvalidCatalogRowNamesTheFieldThatIsWrong(t *testing.T) {
 	cases := map[string]func(*Entry){
 		"code":             func(e *Entry) { e.Code = "Grafana!" },
+		"name":             func(e *Entry) { e.Name = "   " },
+		"version":          func(e *Entry) { e.Version = "" },
+		"default_port":     func(e *Entry) { e.DefaultPort = 70000 },
 		"archive_kind":     func(e *Entry) { e.ArchiveKind = "rar" },
 		"strip_components": func(e *Entry) { e.StripComponents = 9 },
 		"binary_path":      func(e *Entry) { e.BinaryPath = "/usr/bin/id" },
@@ -249,6 +252,14 @@ func TestAnInvalidCatalogRowNamesTheFieldThatIsWrong(t *testing.T) {
 	}
 	if field, err := ValidEntry(sampleEntry()); err != nil {
 		t.Errorf("a good row was refused (%s): %v", field, err)
+	}
+	// A row with no URL at all cannot be installed on any architecture, and the
+	// refusal names the amd64 column because that is the one an operator fills in
+	// first.
+	noURL := sampleEntry()
+	noURL.URLAMD64, noURL.URLARM64 = "", ""
+	if field, err := ValidEntry(noURL); err == nil || field != "url_amd64" {
+		t.Errorf("a row with no download URL was accepted as %q: %v", field, err)
 	}
 }
 
