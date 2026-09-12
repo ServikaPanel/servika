@@ -160,6 +160,16 @@ func (h *sshHost) ran(fragment string) bool {
 	return false
 }
 
+// assertRan fails the test for any command that was not run.
+func (h *sshHost) assertRan(t *testing.T, fragments ...string) {
+	t.Helper()
+	for _, fragment := range fragments {
+		if !h.ran(fragment) {
+			t.Errorf("%q was not run: %v", fragment, h.calls)
+		}
+	}
+}
+
 // sshRequest sends one request for domain 7 to a handler.
 func sshRequest(t *testing.T, handler http.HandlerFunc, body string) (int, map[string]any) {
 	t.Helper()
@@ -198,16 +208,11 @@ func TestEnablingSSHConfinesTheAccountBeforeItIsRecorded(t *testing.T) {
 	if body["active"] != true || body["shell"] != enabledShell || body["username"] != "c_acme" {
 		t.Errorf("body = %v", body)
 	}
-	for _, want := range []string{
-		"usermod -s " + enabledShell + " c_acme",
+	host.assertRan(t,
+		"usermod -s "+enabledShell+" c_acme",
 		"groupadd -f servika-ssh",
 		"setup c_acme",
-		"gpasswd -a c_acme servika-ssh",
-	} {
-		if !host.ran(want) {
-			t.Errorf("%q was not run: %v", want, host.calls)
-		}
-	}
+		"gpasswd -a c_acme servika-ssh")
 	if host.prepared != 1 || host.synced != 1 {
 		t.Errorf("prepared %d times, synced %d times", host.prepared, host.synced)
 	}
@@ -231,15 +236,10 @@ func TestDisablingSSHRemovesTheJailAndLocksThePassword(t *testing.T) {
 	if body["active"] != false || body["shell"] != disabledShell {
 		t.Errorf("body = %v", body)
 	}
-	for _, want := range []string{
-		"usermod -s " + disabledShell + " c_acme",
+	host.assertRan(t,
+		"usermod -s "+disabledShell+" c_acme",
 		"gpasswd -d c_acme servika-ssh",
-		"teardown c_acme",
-	} {
-		if !host.ran(want) {
-			t.Errorf("%q was not run: %v", want, host.calls)
-		}
-	}
+		"teardown c_acme")
 	if host.locked != 1 || host.synced != 0 || host.prepared != 0 {
 		t.Errorf("locked %d, synced %d, prepared %d", host.locked, host.synced, host.prepared)
 	}
