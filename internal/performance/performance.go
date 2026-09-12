@@ -75,7 +75,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	summary := Summary{DomainName: domainName, PHPVersion: phpVersion}
 
 	// Use default php_settings when no record exists.
-	var opcache, fileUploads int
+	var opcache int
 	var memLimit, pmStrategy string
 	var pmMaxChildren, maxExec int
 	opcache, memLimit, pmStrategy, pmMaxChildren, maxExec = 1, phpdefaults.MemoryLimit, "ondemand", 8, phpdefaults.MaxExecutionTime
@@ -83,7 +83,6 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 		`SELECT opcache_enable, memory_limit, pm_strategy, pm_max_children, max_execution_time
 		   FROM php_settings WHERE domain_id=? AND subdomain_id=0`, id).
 		Scan(&opcache, &memLimit, &pmStrategy, &pmMaxChildren, &maxExec)
-	_ = fileUploads
 
 	// Use default nginx_settings when no record exists.
 	var fastcgi, browserCache, browserCacheDays int

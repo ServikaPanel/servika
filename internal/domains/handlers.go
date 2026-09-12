@@ -1119,10 +1119,10 @@ func (h *Handlers) SetWebBackend(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid backend (php-fpm|apache|static)")
 		return
 	}
-	var domainName, sk, phpVersion string
+	var sk, phpVersion string
 	err := h.DB.QueryRowContext(r.Context(),
-		`SELECT domain_name, system_user, php_version FROM domains WHERE id=?`, id).
-		Scan(&domainName, &sk, &phpVersion)
+		`SELECT system_user, php_version FROM domains WHERE id=?`, id).
+		Scan(&sk, &phpVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
@@ -1131,7 +1131,6 @@ func (h *Handlers) SetWebBackend(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
 		return
 	}
-	_ = domainName
 	// 1) update DB
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE domains SET web_backend=? WHERE id=?`, req.Backend, id); err != nil {
@@ -1139,8 +1138,8 @@ func (h *Handlers) SetWebBackend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 2) Reapply the vhost (nginx + apache manager read web_backend from the DB)
-	socket, _ := provisioner.PHPSocketFor(sk, phpVersion)
-	if err := provisioner.ApplyVhostForDomain(h.DB, id, socket, phpVersion); err != nil {
+	socket, _ := phpSocketFor(sk, phpVersion)
+	if err := applyVhostForDomain(h.DB, id, socket, phpVersion); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
 		return
 	}

@@ -207,7 +207,6 @@ func uploadToRemote(ctx context.Context, db *sql.DB, d *Destination, localPath, 
 			return fmt.Errorf("lftp: %s", strings.TrimSpace(string(out)))
 		}
 	}
-	_ = fileName
 	return nil
 }
 
