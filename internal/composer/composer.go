@@ -124,6 +124,39 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// runArgs reads the requested command and returns the runuser argument list for
+// it, answering the request itself when the command or the package name is not
+// one this endpoint runs.
+func runArgs(w http.ResponseWriter, r *http.Request, systemUser, directory string) (string, []string, bool) {
+	var req struct {
+		Command string `json:"command"`
+		Package string `json:"package"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return "", nil, false
+	}
+	allowed := map[string]bool{"install": true, "update": true, "dump-autoload": true, "validate": true, "require": true, "remove": true, "show": true}
+	if !allowed[req.Command] {
+		httpx.WriteError(w, http.StatusBadRequest, "command is not allowed")
+		return "", nil, false
+	}
+	// Pass arguments explicitly without a shell to prevent command injection.
+	args := []string{"-u", systemUser, "--", composerBin(), req.Command, "--no-interaction", "--no-ansi", "-d", directory}
+	if req.Command == "install" || req.Command == "update" {
+		args = append(args, "--no-scripts", "--no-plugins")
+	}
+	if req.Command == "require" || req.Command == "remove" {
+		pkg := strings.TrimSpace(req.Package)
+		if !rePkg.MatchString(pkg) {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid package name (expected vendor/package[:version])")
+			return "", nil, false
+		}
+		args = append(args, pkg)
+	}
+	return req.Command, args, true
+}
+
 // POST /domains/{id}/composer  body {"command":"install|update|dump-autoload|validate|require|remove","package":"vendor/pkg"}
 func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 	_, systemUser, directory, ok := h.load(r)
@@ -139,31 +172,9 @@ func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "composer is not installed on the server")
 		return
 	}
-	var req struct {
-		Command string `json:"command"`
-		Package string `json:"package"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	command, args, ok := runArgs(w, r, systemUser, directory)
+	if !ok {
 		return
-	}
-	allowed := map[string]bool{"install": true, "update": true, "dump-autoload": true, "validate": true, "require": true, "remove": true, "show": true}
-	if !allowed[req.Command] {
-		httpx.WriteError(w, http.StatusBadRequest, "command is not allowed")
-		return
-	}
-	// Pass arguments explicitly without a shell to prevent command injection.
-	args := []string{"-u", systemUser, "--", composerBin(), req.Command, "--no-interaction", "--no-ansi", "-d", directory}
-	if req.Command == "install" || req.Command == "update" {
-		args = append(args, "--no-scripts", "--no-plugins")
-	}
-	if req.Command == "require" || req.Command == "remove" {
-		pkg := strings.TrimSpace(req.Package)
-		if !rePkg.MatchString(pkg) {
-			httpx.WriteError(w, http.StatusBadRequest, "invalid package name (expected vendor/package[:version])")
-			return
-		}
-		args = append(args, pkg)
 	}
 	// Taken AFTER validation so a malformed request cannot burn a slot, and
 	// before the process is started so nothing runs ungated.
@@ -195,7 +206,7 @@ func (h *Handlers) Run(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":      err == nil,
-		"command": req.Command,
+		"command": command,
 		"output":  output,
 	})
 }
