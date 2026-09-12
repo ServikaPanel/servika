@@ -226,12 +226,18 @@ func (h *Handlers) TwoFAEnable(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if wait := stepUpLocked(c.UserID); wait > 0 {
+		stepUpRefuse(w, wait)
+		return
+	}
 	b.Secret = strings.TrimSpace(b.Secret)
 	step, ok := TOTPVerifyStep(b.Secret, b.Code, -1)
 	if !ok {
+		stepUpFailed(c.UserID)
 		httpx.WriteError(w, http.StatusBadRequest, "code verification failed; enter the six-digit code from your authenticator app")
 		return
 	}
+	stepUpPassed(c.UserID)
 	sealed, err := SealTOTPSecret(b.Secret, c.UserID)
 	if err != nil {
 		// Storing the seed in the clear instead is not an acceptable fallback:
@@ -261,8 +267,14 @@ func (h *Handlers) TwoFADisable(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if wait := stepUpLocked(c.UserID); wait > 0 {
+		stepUpRefuse(w, wait)
+		return
+	}
 	var stored string
-	_ = h.DB.QueryRow(`SELECT totp_secret FROM users WHERE id=?`, c.UserID).Scan(&stored)
+	var lastStep int64
+	_ = h.DB.QueryRow(`SELECT totp_secret, totp_last_step FROM users WHERE id=?`, c.UserID).
+		Scan(&stored, &lastStep)
 	seed, err := OpenTOTPSecret(stored, c.UserID)
 	if err != nil {
 		// A seed that cannot be opened cannot verify a code. Refusing here leaves
@@ -271,10 +283,15 @@ func (h *Handlers) TwoFADisable(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "code verification failed")
 		return
 	}
-	if !TOTPVerify(seed, b.Code) {
+	// The replay-protected form, as the login flow uses: a code observed earlier
+	// in the same validity window must not turn the second factor off.
+	if _, ok := TOTPVerifyStep(seed, b.Code, lastStep); !ok {
+		stepUpFailed(c.UserID)
+		WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.2fa.disable", "root", false)
 		httpx.WriteError(w, http.StatusBadRequest, "code verification failed")
 		return
 	}
+	stepUpPassed(c.UserID)
 	if _, err := h.DB.Exec(`UPDATE users SET totp_secret='', totp_enabled=0, token_version=token_version+1 WHERE id=?`, c.UserID); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "2FA could not be disabled")
 		return

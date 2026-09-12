@@ -210,8 +210,10 @@ func TestDisablingTwoFactorOpensTheSealedSeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SealTOTPSecret: %v", err)
 	}
+	// The disable path reads the last accepted step beside the seed, because it
+	// verifies with the replay-protected form.
 	script := &totpScript{rows: map[string][]driver.Value{
-		"SELECT totp_secret FROM users": {sealed},
+		"SELECT totp_secret, totp_last_step FROM users": {sealed, int64(-1)},
 	}}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/me/2fa/disable", strings.NewReader(`{"code":"`+code+`"}`))
