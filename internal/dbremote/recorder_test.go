@@ -124,6 +124,54 @@ func (s *statusStmt) Exec(args []driver.Value) (driver.Result, error) {
 	return driver.RowsAffected(1), nil
 }
 
+// storedHost answers the lookup a withdrawal makes.
+func (s *statusStmt) storedHost() *statusRows {
+	columns := []string{"db_user", "mysql_host"}
+	if s.recorder.hostRow == nil {
+		return &statusRows{columns: columns}
+	}
+	return &statusRows{columns: columns, values: [][]driver.Value{s.recorder.hostRow}}
+}
+
+// account answers the db_accounts lookup as a real table would, so the QUERY
+// decides the outcome. The arguments are read by kind rather than by position,
+// and the domain is only applied when the query actually narrows by it: a query
+// that dropped that condition returns the neighbour's row here exactly as
+// MariaDB would.
+func (s *statusStmt) account(args []driver.Value) *statusRows {
+	columns := []string{"db_name", "db_pass_plain"}
+	wantUser, wantDomain := firstOfEachKind(args)
+	owner, known := s.recorder.accounts[wantUser]
+	scoped := strings.Contains(s.query, "domain_id=?")
+	if known && (!scoped || owner == wantDomain) {
+		return &statusRows{
+			columns: columns,
+			values:  [][]driver.Value{{wantUser + "_db", "ZxcvbnmAsdfgh234"}},
+		}
+	}
+	return &statusRows{columns: columns}
+}
+
+// firstOfEachKind returns the first string and the first number among the
+// arguments.
+func firstOfEachKind(args []driver.Value) (string, int64) {
+	var text string
+	var number int64
+	for _, arg := range args {
+		switch value := arg.(type) {
+		case string:
+			if text == "" {
+				text = value
+			}
+		case int64:
+			if number == 0 {
+				number = value
+			}
+		}
+	}
+	return text, number
+}
+
 func (s *statusStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if err := failureFor(s.recorder.queryErr, s.query); err != nil {
 		return nil, err
@@ -139,40 +187,9 @@ func (s *statusStmt) Query(args []driver.Value) (driver.Rows, error) {
 	case strings.Contains(s.query, "db_remote_enabled"):
 		return &statusRows{columns: []string{"enabled"}, values: [][]driver.Value{{int64(boolToInt(s.recorder.enabled))}}}, nil
 	case strings.Contains(s.query, "SELECT db_user, mysql_host"):
-		columns := []string{"db_user", "mysql_host"}
-		if s.recorder.hostRow == nil {
-			return &statusRows{columns: columns}, nil
-		}
-		return &statusRows{columns: columns, values: [][]driver.Value{s.recorder.hostRow}}, nil
+		return s.storedHost(), nil
 	case strings.Contains(s.query, "FROM db_accounts"):
-		// Modelled as a real table would answer, so the QUERY decides the
-		// outcome. The arguments are read by kind rather than by position, and
-		// the domain is only applied when the query actually narrows by it: a
-		// query that dropped that condition returns the neighbour's row here
-		// exactly as MariaDB would.
-		var wantUser string
-		var wantDomain int64
-		for _, arg := range args {
-			switch value := arg.(type) {
-			case string:
-				if wantUser == "" {
-					wantUser = value
-				}
-			case int64:
-				if wantDomain == 0 {
-					wantDomain = value
-				}
-			}
-		}
-		owner, known := s.recorder.accounts[wantUser]
-		scoped := strings.Contains(s.query, "domain_id=?")
-		if known && (!scoped || owner == wantDomain) {
-			return &statusRows{
-				columns: []string{"db_name", "db_pass_plain"},
-				values:  [][]driver.Value{{wantUser + "_db", "ZxcvbnmAsdfgh234"}},
-			}, nil
-		}
-		return &statusRows{columns: []string{"db_name", "db_pass_plain"}}, nil
+		return s.account(args), nil
 	case strings.Contains(s.query, "FROM db_remote_hosts"):
 		return &statusRows{columns: []string{
 			"id", "domain_id", "domain_name", "db_user", "host_cidr", "label", "created_at",

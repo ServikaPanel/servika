@@ -103,32 +103,12 @@ type switchRequest struct {
 // Admin only, and deliberately so: this restart drops every site's open database
 // connections, which is not something a single customer's checkbox may cause.
 func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
-	var request switchRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&request); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	enable, ok := switchRequested(w, r)
+	if !ok {
 		return
 	}
-	if request.Enabled == nil {
-		httpx.WriteError(w, http.StatusBadRequest, "enabled is required")
+	if h.conflictingRule(w, r, enable) {
 		return
-	}
-
-	// A manual rule on the database port is refused on the WRITE path, not only
-	// where the screen draws the switch. Such a rule is rendered ABOVE this
-	// feature's block, so it would win silently and leave the screen saying
-	// remote access is on while every connection was dropped.
-	if *request.Enabled {
-		conflict, err := h.portRuleConflict(r.Context())
-		if err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "could not check the firewall rules")
-			return
-		}
-		if conflict {
-			writeReason(w, http.StatusConflict,
-				"a firewall rule already targets port 3306; remove it before opening remote access",
-				reasonPortRuleConflict)
-			return
-		}
 	}
 
 	// Detached from the request: the restart outlasts a client that hangs up,
@@ -140,31 +120,20 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 	// The audit entry names the direction, so a reader does not have to pair the
 	// row with a separate state read to learn which way the port went.
 	action := "db_remote.disable"
-	if *request.Enabled {
+	if enable {
 		action = "db_remote.enable"
 	}
 
-	if err := applySwitch(ctx, h.DB, *request.Enabled); err != nil {
+	if err := applySwitch(ctx, h.DB, enable); err != nil {
 		middleware.RecordAudit(h.DB, r, action, "mariadb", false)
 		h.recordError(r.Context(), err.Error())
-		// A missing key pair is its own refusal. Opening the port without one
-		// would publish the plain MySQL protocol to the internet, and the operator
-		// has to be told that rather than reading it as a restart failure.
-		if errors.Is(err, ErrTLSUnavailable) {
-			writeReason(w, http.StatusInternalServerError,
-				"the MariaDB server certificate could not be prepared, so nothing was changed",
-				reasonTLSUnavailable)
-			return
-		}
-		writeReason(w, http.StatusInternalServerError,
-			"MariaDB could not be restarted with the new setting, so nothing was changed",
-			reasonApplyFailed)
+		writeApplyFailure(w, err)
 		return
 	}
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE panel_settings
 		    SET db_remote_enabled=?, db_remote_last_error='', db_remote_applied_at=NOW()
-		  WHERE id=1`, boolToInt(*request.Enabled)); err != nil {
+		  WHERE id=1`, boolToInt(enable)); err != nil {
 		middleware.RecordAudit(h.DB, r, action, "mariadb", false)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not save the remote access setting")
 		return
@@ -177,6 +146,60 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 		httpx.LogR(r, "remote db: firewall rebuild after the switch: %v", err)
 	}
 	h.ServerGet(w, r)
+}
+
+// switchRequested reads the requested switch position out of the body.
+func switchRequested(w http.ResponseWriter, r *http.Request) (bool, bool) {
+	var request switchRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&request); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return false, false
+	}
+	if request.Enabled == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "enabled is required")
+		return false, false
+	}
+	return *request.Enabled, true
+}
+
+// conflictingRule reports whether the switch was refused, and answers when it
+// was.
+//
+// A manual rule on the database port is refused on the WRITE path, not only
+// where the screen draws the switch. Such a rule is rendered ABOVE this
+// feature's block, so it would win silently and leave the screen saying remote
+// access is on while every connection was dropped.
+func (h *Handlers) conflictingRule(w http.ResponseWriter, r *http.Request, enable bool) bool {
+	if !enable {
+		return false
+	}
+	conflict, err := h.portRuleConflict(r.Context())
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not check the firewall rules")
+		return true
+	}
+	if conflict {
+		writeReason(w, http.StatusConflict,
+			"a firewall rule already targets port 3306; remove it before opening remote access",
+			reasonPortRuleConflict)
+		return true
+	}
+	return false
+}
+
+// writeApplyFailure names a missing key pair as its own refusal. Opening the
+// port without one would publish the plain MySQL protocol to the internet, and
+// the operator has to be told that rather than reading it as a restart failure.
+func writeApplyFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, ErrTLSUnavailable) {
+		writeReason(w, http.StatusInternalServerError,
+			"the MariaDB server certificate could not be prepared, so nothing was changed",
+			reasonTLSUnavailable)
+		return
+	}
+	writeReason(w, http.StatusInternalServerError,
+		"MariaDB could not be restarted with the new setting, so nothing was changed",
+		reasonApplyFailed)
 }
 
 // DomainList answers one domain's view.
@@ -220,14 +243,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enabled, err := readSwitch(r.Context(), h.DB)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read the remote access settings")
-		return
-	}
-	if !enabled {
-		writeReason(w, http.StatusConflict,
-			"remote database access is switched off for this server", reasonServerDisabled)
+	if !h.remoteAllowed(w, r) {
 		return
 	}
 
@@ -237,17 +253,8 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The account must belong to THIS domain. The route is CustomerScope, so the
-	// caller owns the domain in the URL; without this check they could still name
-	// a neighbour's database user and open it to an address of their choosing.
-	password, databases, err := h.accountFor(r.Context(), domainID, request.DBUser)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeReason(w, http.StatusBadRequest,
-			"that database user does not belong to this domain", reasonUnknownUser)
-		return
-	}
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read the database account")
+	password, databases, ok := h.ownedAccount(w, r, domainID, request.DBUser)
+	if !ok {
 		return
 	}
 
@@ -258,21 +265,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.DB.ExecContext(r.Context(),
-		`INSERT INTO db_remote_hosts (domain_id, db_user, host_cidr, mysql_host, label)
-		 VALUES (?,?,?,?,?)`,
-		domainID, request.DBUser, cidr, mysqlHost, trimLabel(request.Label))
-	if err != nil {
-		// The grant is undone rather than left behind: an account reachable from
-		// an address the panel has no record of is a credential nobody can find.
-		if revokeErr := revokeRemote(request.DBUser, mysqlHost); revokeErr != nil {
-			httpx.LogR(r, "remote db: could not undo the grant for %s@%s: %v", request.DBUser, mysqlHost, revokeErr)
-		}
-		if isDuplicate(err) {
-			writeReason(w, http.StatusConflict, "that address is already allowed", reasonDuplicate)
-			return
-		}
-		httpx.WriteError(w, http.StatusInternalServerError, "could not save the remote access entry")
+	if !h.recordHost(w, r, domainID, request, cidr, mysqlHost) {
 		return
 	}
 
@@ -283,6 +276,67 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.DomainList(w, r)
+}
+
+// remoteAllowed reports whether the server switch is on, and answers when it is
+// not: an address added while the port is closed is an account nothing can
+// reach.
+func (h *Handlers) remoteAllowed(w http.ResponseWriter, r *http.Request) bool {
+	enabled, err := readSwitch(r.Context(), h.DB)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read the remote access settings")
+		return false
+	}
+	if !enabled {
+		writeReason(w, http.StatusConflict,
+			"remote database access is switched off for this server", reasonServerDisabled)
+		return false
+	}
+	return true
+}
+
+// ownedAccount returns the account's password and databases, but only when it
+// belongs to the domain in the URL.
+//
+// The route is CustomerScope, so the caller owns the domain in the URL; without
+// this check they could still name a neighbour's database user and open it to an
+// address of their choosing.
+func (h *Handlers) ownedAccount(w http.ResponseWriter, r *http.Request,
+	domainID int64, dbUser string) (string, []string, bool) {
+	password, databases, err := h.accountFor(r.Context(), domainID, dbUser)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeReason(w, http.StatusBadRequest,
+			"that database user does not belong to this domain", reasonUnknownUser)
+		return "", nil, false
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read the database account")
+		return "", nil, false
+	}
+	return password, databases, true
+}
+
+// recordHost writes the allowed address, and undoes the grant when it cannot:
+// an account reachable from an address the panel has no record of is a
+// credential nobody can find.
+func (h *Handlers) recordHost(w http.ResponseWriter, r *http.Request,
+	domainID int64, request addRequest, cidr, mysqlHost string) bool {
+	_, err := h.DB.ExecContext(r.Context(),
+		`INSERT INTO db_remote_hosts (domain_id, db_user, host_cidr, mysql_host, label)
+		 VALUES (?,?,?,?,?)`,
+		domainID, request.DBUser, cidr, mysqlHost, trimLabel(request.Label))
+	if err == nil {
+		return true
+	}
+	if revokeErr := revokeRemote(request.DBUser, mysqlHost); revokeErr != nil {
+		httpx.LogR(r, "remote db: could not undo the grant for %s@%s: %v", request.DBUser, mysqlHost, revokeErr)
+	}
+	if isDuplicate(err) {
+		writeReason(w, http.StatusConflict, "that address is already allowed", reasonDuplicate)
+		return false
+	}
+	httpx.WriteError(w, http.StatusInternalServerError, "could not save the remote access entry")
+	return false
 }
 
 // DomainDelete withdraws one address.
