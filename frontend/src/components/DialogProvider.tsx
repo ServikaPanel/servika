@@ -15,6 +15,7 @@
 // still one visual language.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import Modal from './Modal'
 import { DialogContext } from '@/lib/dialog'
@@ -30,7 +31,6 @@ interface Request {
 }
 
 export default function DialogProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation('common')
   const [queue, setQueue] = useState<Request[]>([])
   const nextID = useRef(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -78,65 +78,112 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
     settle(current.kind === 'ask' ? (inputRef.current?.value ?? '') : true)
   }
 
-  const options = current?.options
-  const dangerous = !!options?.dangerous
-  const isError = current?.kind === 'notify' && options?.tone === 'error'
-  const accented = dangerous || isError
-
-  function defaultTitle() {
-    if (!current) return ''
-    if (current.kind === 'confirm') return t('areYouSure')
-    if (current.kind === 'ask') return t('enterValue')
-    return isError ? t('error') : t('notice')
-  }
-
   return (
     <DialogContext.Provider value={api}>
       {children}
-      {current && options && (
-        // Escape closes through Modal's own handler, which cancels.
-        <Modal open title={options.title ?? defaultTitle()} onClose={cancel} width="sm">
-          {options.message !== undefined && options.message !== '' && (
-            <div className="text-sm leading-relaxed text-slate-600 dark:text-slate-400 break-words">
-              {options.message}
-            </div>
-          )}
-
-          {current.kind === 'ask' && (
-            <input
-              key={current.id}
-              ref={inputRef}
-              type={options.type === 'password' ? 'password' : 'text'}
-              defaultValue={options.defaultValue ?? ''}
-              placeholder={options.placeholder}
-              onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); accept() } }}
-              className="mt-4 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-400"
-            />
-          )}
-
-          <div className="flex justify-end gap-2 mt-5">
-            {current.kind !== 'notify' && (
-              <button
-                type="button"
-                onClick={cancel}
-                className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 rounded-md text-sm"
-              >
-                {options.cancelLabel ?? t('cancel')}
-              </button>
-            )}
-            <button
-              type="button"
-              ref={confirmRef}
-              onClick={accept}
-              className={`px-4 py-2 text-white rounded-md text-sm font-medium ${
-                accented ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
-              }`}
-            >
-              {options.confirmLabel ?? (current.kind === 'notify' ? t('ok') : t('confirm'))}
-            </button>
-          </div>
-        </Modal>
+      {current && (
+        <DialogBody current={current} inputRef={inputRef} confirmRef={confirmRef}
+          onCancel={cancel} onAccept={accept} />
       )}
     </DialogContext.Provider>
+  )
+}
+
+// isErrorNotice reports whether the request is a failure notice. It decides the
+// default title and the accent colour, so both read it rather than each
+// deciding for itself.
+function isErrorNotice(request: Request): boolean {
+  return request.kind === 'notify' && request.options.tone === 'error'
+}
+
+function defaultTitle(request: Request, t: TFunction): string {
+  if (request.kind === 'confirm') return t('areYouSure')
+  if (request.kind === 'ask') return t('enterValue')
+  return isErrorNotice(request) ? t('error') : t('notice')
+}
+
+// DialogBody draws the request at the head of the queue.
+//
+// Escape closes through Modal's own handler, which cancels.
+function DialogBody({ current, inputRef, confirmRef, onCancel, onAccept }: {
+  current: Request
+  inputRef: React.RefObject<HTMLInputElement | null>
+  confirmRef: React.RefObject<HTMLButtonElement | null>
+  onCancel: () => void
+  onAccept: () => void
+}) {
+  const { t } = useTranslation('common')
+  const options = current.options
+  return (
+    <Modal open title={options.title ?? defaultTitle(current, t)} onClose={onCancel} width="sm">
+      {options.message !== undefined && options.message !== '' && (
+        <div className="text-sm leading-relaxed text-slate-600 dark:text-slate-400 break-words">
+          {options.message}
+        </div>
+      )}
+
+      <AskInput current={current} inputRef={inputRef} onAccept={onAccept} />
+
+      <div className="flex justify-end gap-2 mt-5">
+        <DialogButtons current={current} confirmRef={confirmRef} onCancel={onCancel} onAccept={onAccept} />
+      </div>
+    </Modal>
+  )
+}
+
+// AskInput is the text field of an ask(); the other two kinds have none.
+function AskInput({ current, inputRef, onAccept }: {
+  current: Request
+  inputRef: React.RefObject<HTMLInputElement | null>
+  onAccept: () => void
+}) {
+  if (current.kind !== 'ask') return null
+  const options = current.options
+  return (
+    <input
+      key={current.id}
+      ref={inputRef}
+      type={options.type === 'password' ? 'password' : 'text'}
+      defaultValue={options.defaultValue ?? ''}
+      placeholder={options.placeholder}
+      onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); onAccept() } }}
+      className="mt-4 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-400"
+    />
+  )
+}
+
+// DialogButtons draws Cancel and the accept button. A notify() has nothing to
+// cancel, so it gets the accept button alone.
+function DialogButtons({ current, confirmRef, onCancel, onAccept }: {
+  current: Request
+  confirmRef: React.RefObject<HTMLButtonElement | null>
+  onCancel: () => void
+  onAccept: () => void
+}) {
+  const { t } = useTranslation('common')
+  const options = current.options
+  const accented = !!options.dangerous || isErrorNotice(current)
+  return (
+    <>
+      {current.kind !== 'notify' && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 rounded-md text-sm"
+        >
+          {options.cancelLabel ?? t('cancel')}
+        </button>
+      )}
+      <button
+        type="button"
+        ref={confirmRef}
+        onClick={onAccept}
+        className={`px-4 py-2 text-white rounded-md text-sm font-medium ${
+          accented ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
+        }`}
+      >
+        {options.confirmLabel ?? (current.kind === 'notify' ? t('ok') : t('confirm'))}
+      </button>
+    </>
   )
 }

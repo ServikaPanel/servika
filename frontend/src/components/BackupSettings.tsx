@@ -56,6 +56,108 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
   )
 }
 
+// The setter the card hands to its sections. It writes one field of the loaded
+// settings, so a section never holds a copy of the whole object.
+type SetField = <K extends keyof Settings>(k: K, v: Settings[K]) => void
+
+// MasterSwitch turns scheduled backups on for the whole panel.
+function MasterSwitch({ s, set }: { s: Settings; set: SetField }) {
+  const { t } = useTranslation('BackupSettings')
+  return (
+    <div className="flex items-start gap-3">
+      <Toggle on={s.enabled} onChange={(v) => set('enabled', v)} label={t('autoBackup')} />
+      <div>
+        <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
+          {t('autoBackup')} — <span className={s.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}>{s.enabled ? t('on') : t('off')}</span>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t('autoBackupHint')}</p>
+      </div>
+    </div>
+  )
+}
+
+// LastUpload reports how the last off-site copy ended.
+function LastUpload({ s }: { s: Settings }) {
+  const { t } = useTranslation('BackupSettings')
+  if (!s.last_upload) return null
+  return (
+    <p className="text-xs text-slate-500 dark:text-slate-400">
+      {t('lastUpload')}: {s.last_upload} — {s.last_status === 'successful'
+        ? <span className="text-emerald-600 dark:text-emerald-400">{t('statusOk')}</span>
+        : <span className="text-red-600 dark:text-red-400">{t('statusError')}{s.last_error ? ': ' + s.last_error : ''}</span>}
+    </p>
+  )
+}
+
+// RemoteTarget is the single off-site destination every domain's backup is
+// copied to. It is drawn only while the destination is switched on.
+function RemoteTarget({ s, set, testing, onTest }: {
+  s: Settings
+  set: SetField
+  testing: boolean
+  onTest: () => void
+}) {
+  const { t } = useTranslation('BackupSettings')
+  if (!s.remote_enabled) return null
+  return (
+    <div className="pl-0 sm:pl-14 space-y-3">
+      <div className="grid sm:grid-cols-4 gap-3">
+        <div>
+          <label className={labelClass} htmlFor="remote-type">{t('type')}</label>
+          <select id="remote-type" className={inputClass} value={s.remote_type}
+            onChange={(e) => { set('remote_type', e.target.value); set('remote_port', e.target.value === 'ftp' ? 21 : 22) }}>
+            <option value="sftp">SFTP</option>
+            <option value="ftp">FTP</option>
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className={labelClass} htmlFor="remote-host">{t('host')}</label>
+          <input id="remote-host" className={inputClass} value={s.remote_host} placeholder="backup.example.com"
+            onChange={(e) => set('remote_host', e.target.value)} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="remote-port">{t('port')}</label>
+          <input id="remote-port" type="number" min={1} max={65535} className={inputClass} value={s.remote_port}
+            onChange={(e) => set('remote_port', Number(e.target.value))} />
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div>
+          <label className={labelClass} htmlFor="remote-user">{t('user')}</label>
+          <input id="remote-user" className={inputClass} value={s.remote_username} autoComplete="off"
+            onChange={(e) => set('remote_username', e.target.value)} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="remote-pass">{t('password')}</label>
+          <input id="remote-pass" type="password" className={inputClass} value={s.remote_password || ''} autoComplete="new-password"
+            placeholder={t('passwordHint')}
+            onChange={(e) => set('remote_password', e.target.value)} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="remote-dir">{t('remoteDir')}</label>
+          <input id="remote-dir" className={inputClass} value={s.remote_dir}
+            onChange={(e) => set('remote_dir', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3">
+        <Toggle on={s.delete_local} onChange={(v) => set('delete_local', v)} label={t('deleteLocal')} />
+        <div>
+          <div className="text-sm text-slate-800 dark:text-slate-100">{t('deleteLocal')}</div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">{t('deleteLocalHint')}</p>
+        </div>
+      </div>
+
+      <LastUpload s={s} />
+
+      <button type="button" onClick={onTest} disabled={testing}
+        className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/40 disabled:opacity-50">
+        {testing ? t('testing') : t('testConnection')}
+      </button>
+    </div>
+  )
+}
+
 export default function BackupSettings() {
   const { t } = useTranslation('BackupSettings')
   const isAdmin = useAuth((s) => s.username?.role) === 'admin'
@@ -129,16 +231,7 @@ export default function BackupSettings() {
         {error && <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
         {success && <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
-        {/* Master switch */}
-        <div className="flex items-start gap-3">
-          <Toggle on={s.enabled} onChange={(v) => set('enabled', v)} label={t('autoBackup')} />
-          <div>
-            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              {t('autoBackup')} — <span className={s.enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}>{s.enabled ? t('on') : t('off')}</span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{t('autoBackupHint')}</p>
-          </div>
-        </div>
+        <MasterSwitch s={s} set={set} />
 
         {/* Disk guard */}
         <div>
@@ -169,69 +262,7 @@ export default function BackupSettings() {
             </div>
           </div>
 
-          {s.remote_enabled && (
-            <div className="pl-0 sm:pl-14 space-y-3">
-              <div className="grid sm:grid-cols-4 gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="remote-type">{t('type')}</label>
-                  <select id="remote-type" className={inputClass} value={s.remote_type}
-                    onChange={(e) => { set('remote_type', e.target.value); set('remote_port', e.target.value === 'ftp' ? 21 : 22) }}>
-                    <option value="sftp">SFTP</option>
-                    <option value="ftp">FTP</option>
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={labelClass} htmlFor="remote-host">{t('host')}</label>
-                  <input id="remote-host" className={inputClass} value={s.remote_host} placeholder="backup.example.com"
-                    onChange={(e) => set('remote_host', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="remote-port">{t('port')}</label>
-                  <input id="remote-port" type="number" min={1} max={65535} className={inputClass} value={s.remote_port}
-                    onChange={(e) => set('remote_port', Number(e.target.value))} />
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-3 gap-3">
-                <div>
-                  <label className={labelClass} htmlFor="remote-user">{t('user')}</label>
-                  <input id="remote-user" className={inputClass} value={s.remote_username} autoComplete="off"
-                    onChange={(e) => set('remote_username', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="remote-pass">{t('password')}</label>
-                  <input id="remote-pass" type="password" className={inputClass} value={s.remote_password || ''} autoComplete="new-password"
-                    placeholder={t('passwordHint')}
-                    onChange={(e) => set('remote_password', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="remote-dir">{t('remoteDir')}</label>
-                  <input id="remote-dir" className={inputClass} value={s.remote_dir}
-                    onChange={(e) => set('remote_dir', e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Toggle on={s.delete_local} onChange={(v) => set('delete_local', v)} label={t('deleteLocal')} />
-                <div>
-                  <div className="text-sm text-slate-800 dark:text-slate-100">{t('deleteLocal')}</div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{t('deleteLocalHint')}</p>
-                </div>
-              </div>
-
-              {s.last_upload && (
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {t('lastUpload')}: {s.last_upload} — {s.last_status === 'successful'
-                    ? <span className="text-emerald-600 dark:text-emerald-400">{t('statusOk')}</span>
-                    : <span className="text-red-600 dark:text-red-400">{t('statusError')}{s.last_error ? ': ' + s.last_error : ''}</span>}
-                </p>
-              )}
-
-              <button type="button" onClick={test} disabled={testing}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/40 disabled:opacity-50">
-                {testing ? t('testing') : t('testConnection')}
-              </button>
-            </div>
-          )}
+          <RemoteTarget s={s} set={set} testing={testing} onTest={test} />
         </div>
 
         <div className="pt-1">

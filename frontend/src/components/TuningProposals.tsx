@@ -162,163 +162,227 @@ export default function TuningProposals() {
     }
   }
 
-  const proposals = data?.proposals ?? []
-
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('proposals.title')}</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('proposals.description')}</p>
-
-        {data && (
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            {t('proposals.measured')}: {data.memory_mb} MB / {data.cpus}
-          </p>
-        )}
-
-        {loadError && (
-          <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-            {loadError}
-          </p>
-        )}
-
-        {/* A reading that failed is named. A screen that showed an empty list
-            without saying so would report a tuned server, which is the one
-            answer this must never give by accident. */}
-        {(data?.unreadable ?? []).length > 0 && (
-          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            <p className="font-medium">{t('proposals.unreadable')}</p>
-            <ul className="mt-1 list-disc pl-5">
-              {(data?.unreadable ?? []).map((note) => <li key={note}>{note}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {data && proposals.length === 0 && !loadError && (
-          <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">{t('proposals.none')}</p>
-        )}
-
-        {proposals.length > 0 && (
-          <>
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  <tr>
-                    <th className="w-10 py-2" />
-                    <th className="py-2 pr-4">{t('table.parameter')}</th>
-                    <th className="py-2 pr-4">{t('table.current')}</th>
-                    <th className="py-2 pr-4">{t('table.proposed')}</th>
-                    <th className="py-2 pr-4">{t('table.effect')}</th>
-                    <th className="py-2">{t('table.why')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {proposals.map((proposal) => (
-                    <tr key={proposal.id}>
-                      <td className="py-2 align-top">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={chosen.has(proposal.id)}
-                          onChange={() => toggle(proposal)}
-                          aria-label={proposal.id}
-                        />
-                      </td>
-                      <td className="py-2 pr-4 align-top">
-                        <div className="font-medium text-slate-900 dark:text-slate-100">{proposal.param}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">{proposal.service}</div>
-                        <div className="text-xs text-slate-400 dark:text-slate-500">{proposal.file}</div>
-                        {proposal.group && (
-                          <div className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                            {t('table.appliedTogether')}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 align-top font-mono text-xs text-slate-600 dark:text-slate-300">
-                        {proposal.current || t('table.notSet')}
-                      </td>
-                      <td className="py-2 pr-4 align-top font-mono text-xs text-slate-900 dark:text-slate-100">
-                        {proposal.proposed}
-                      </td>
-                      <td className="py-2 pr-4 align-top text-xs text-slate-600 dark:text-slate-300">
-                        {t(`effect.${proposal.effect}`)}
-                      </td>
-                      <td className="py-2 align-top text-xs text-slate-600 dark:text-slate-300">{proposal.rationale}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void apply()}
-              disabled={busy || chosen.size === 0}
-              className="mt-4 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {t('apply.button')}: {chosen.size}
-            </button>
-          </>
-        )}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('history.title')}</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('history.description')}</p>
-
-        {changes.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">{t('history.none')}</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="py-2 pr-4">{t('table.parameter')}</th>
-                  <th className="py-2 pr-4">{t('history.from')}</th>
-                  <th className="py-2 pr-4">{t('history.to')}</th>
-                  <th className="py-2 pr-4">{t('history.when')}</th>
-                  <th className="py-2">{t('history.action')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {changes.map((change) => (
-                  <tr key={change.id}>
-                    <td className="py-2 pr-4 align-top">
-                      <div className="font-medium text-slate-900 dark:text-slate-100">{change.param}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">{change.service}</div>
-                    </td>
-                    <td className="py-2 pr-4 align-top font-mono text-xs text-slate-600 dark:text-slate-300">
-                      {change.old_value || t('table.notSet')}
-                    </td>
-                    <td className="py-2 pr-4 align-top font-mono text-xs text-slate-600 dark:text-slate-300">
-                      {change.new_value}
-                    </td>
-                    <td className="py-2 pr-4 align-top text-xs text-slate-500 dark:text-slate-400">
-                      {new Date(change.created_at).toLocaleString()}
-                    </td>
-                    <td className="py-2 align-top">
-                      {change.reverted ? (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{t('history.reverted')}</span>
-                      ) : change.backup_present ? (
-                        <button
-                          type="button"
-                          onClick={() => void revert(change)}
-                          disabled={busy}
-                          className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
-                        >
-                          {t('history.revert')}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-amber-700 dark:text-amber-300">{t('history.backupGone')}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <ProposalsSection data={data} loadError={loadError} chosen={chosen} busy={busy}
+        onToggle={toggle} onApply={apply} />
+      <HistorySection changes={changes} busy={busy} onRevert={revert} />
     </div>
+  )
+}
+
+// ProposalsHeader carries the measured hardware and the load failure.
+function ProposalsHeader({ data, loadError }: { data: ProposalsResponse | null; loadError: string }) {
+  const { t } = useTranslation('Tuning')
+  return (
+    <>
+      {data && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          {t('proposals.measured')}: {data.memory_mb} MB / {data.cpus}
+        </p>
+      )}
+
+      {loadError && (
+        <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+          {loadError}
+        </p>
+      )}
+    </>
+  )
+}
+
+// UnreadableNotice names a reading that failed. A screen that showed an empty
+// list without saying so would report a tuned server, which is the one answer
+// this must never give by accident.
+function UnreadableNotice({ notes }: { notes: string[] }) {
+  const { t } = useTranslation('Tuning')
+  if (notes.length === 0) return null
+  return (
+    <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <p className="font-medium">{t('proposals.unreadable')}</p>
+      <ul className="mt-1 list-disc pl-5">
+        {notes.map((note) => <li key={note}>{note}</li>)}
+      </ul>
+    </div>
+  )
+}
+
+function ProposalsSection({ data, loadError, chosen, busy, onToggle, onApply }: {
+  data: ProposalsResponse | null
+  loadError: string
+  chosen: Set<string>
+  busy: boolean
+  onToggle: (proposal: Proposal) => void
+  onApply: () => Promise<void>
+}) {
+  const { t } = useTranslation('Tuning')
+  const proposals = data?.proposals ?? []
+  const nothingToDo = data && proposals.length === 0 && !loadError
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('proposals.title')}</h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('proposals.description')}</p>
+
+      <ProposalsHeader data={data} loadError={loadError} />
+      <UnreadableNotice notes={data?.unreadable ?? []} />
+
+      {nothingToDo && (
+        <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">{t('proposals.none')}</p>
+      )}
+
+      {proposals.length > 0 && (
+        <>
+          <ProposalTable proposals={proposals} chosen={chosen} onToggle={onToggle} />
+
+          <button
+            type="button"
+            onClick={() => void onApply()}
+            disabled={busy || chosen.size === 0}
+            className="mt-4 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {t('apply.button')}: {chosen.size}
+          </button>
+        </>
+      )}
+    </section>
+  )
+}
+
+function ProposalTable({ proposals, chosen, onToggle }: {
+  proposals: Proposal[]
+  chosen: Set<string>
+  onToggle: (proposal: Proposal) => void
+}) {
+  const { t } = useTranslation('Tuning')
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <tr>
+            <th className="w-10 py-2" />
+            <th className="py-2 pr-4">{t('table.parameter')}</th>
+            <th className="py-2 pr-4">{t('table.current')}</th>
+            <th className="py-2 pr-4">{t('table.proposed')}</th>
+            <th className="py-2 pr-4">{t('table.effect')}</th>
+            <th className="py-2">{t('table.why')}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+          {proposals.map((proposal) => (
+            <tr key={proposal.id}>
+              <td className="py-2 align-top">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={chosen.has(proposal.id)}
+                  onChange={() => onToggle(proposal)}
+                  aria-label={proposal.id}
+                />
+              </td>
+              <td className="py-2 pr-4 align-top">
+                <div className="font-medium text-slate-900 dark:text-slate-100">{proposal.param}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">{proposal.service}</div>
+                <div className="text-xs text-slate-400 dark:text-slate-500">{proposal.file}</div>
+                {proposal.group && (
+                  <div className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                    {t('table.appliedTogether')}
+                  </div>
+                )}
+              </td>
+              <td className="py-2 pr-4 align-top font-mono text-xs text-slate-600 dark:text-slate-300">
+                {proposal.current || t('table.notSet')}
+              </td>
+              <td className="py-2 pr-4 align-top font-mono text-xs text-slate-900 dark:text-slate-100">
+                {proposal.proposed}
+              </td>
+              <td className="py-2 pr-4 align-top text-xs text-slate-600 dark:text-slate-300">
+                {t(`effect.${proposal.effect}`)}
+              </td>
+              <td className="py-2 align-top text-xs text-slate-600 dark:text-slate-300">{proposal.rationale}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function HistorySection({ changes, busy, onRevert }: {
+  changes: Change[]
+  busy: boolean
+  onRevert: (change: Change) => Promise<void>
+}) {
+  const { t } = useTranslation('Tuning')
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('history.title')}</h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('history.description')}</p>
+
+      {changes.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">{t('history.none')}</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <tr>
+                <th className="py-2 pr-4">{t('table.parameter')}</th>
+                <th className="py-2 pr-4">{t('history.from')}</th>
+                <th className="py-2 pr-4">{t('history.to')}</th>
+                <th className="py-2 pr-4">{t('history.when')}</th>
+                <th className="py-2">{t('history.action')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {changes.map((change) => (
+                <tr key={change.id}>
+                  <td className="py-2 pr-4 align-top">
+                    <div className="font-medium text-slate-900 dark:text-slate-100">{change.param}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">{change.service}</div>
+                  </td>
+                  <td className="py-2 pr-4 align-top font-mono text-xs text-slate-600 dark:text-slate-300">
+                    {change.old_value || t('table.notSet')}
+                  </td>
+                  <td className="py-2 pr-4 align-top font-mono text-xs text-slate-600 dark:text-slate-300">
+                    {change.new_value}
+                  </td>
+                  <td className="py-2 pr-4 align-top text-xs text-slate-500 dark:text-slate-400">
+                    {new Date(change.created_at).toLocaleString()}
+                  </td>
+                  <td className="py-2 align-top">
+                    <HistoryAction change={change} busy={busy} onRevert={onRevert} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// HistoryAction offers the revert only while the backup the revert reads is
+// still on disk.
+function HistoryAction({ change, busy, onRevert }: {
+  change: Change
+  busy: boolean
+  onRevert: (change: Change) => Promise<void>
+}) {
+  const { t } = useTranslation('Tuning')
+  if (change.reverted) {
+    return <span className="text-xs text-slate-500 dark:text-slate-400">{t('history.reverted')}</span>
+  }
+  if (!change.backup_present) {
+    return <span className="text-xs text-amber-700 dark:text-amber-300">{t('history.backupGone')}</span>
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => void onRevert(change)}
+      disabled={busy}
+      className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
+    >
+      {t('history.revert')}
+    </button>
   )
 }
