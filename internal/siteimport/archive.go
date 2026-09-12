@@ -7,7 +7,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 
 	"servika/internal/archivex"
@@ -216,7 +215,7 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	absoluteTarget := path.Join(home, target)
-	if _, err := archivex.ExtractStrip(r.Context(), archive.Pinned, archive.Type, absoluteTarget, systemUser, strip, archiveLimits); err != nil {
+	if _, err := extractArchive(r.Context(), archive.Pinned, archive.Type, absoluteTarget, systemUser, strip, archiveLimits); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, archivex.ErrStripUnsupported) {
 			status = http.StatusNotImplemented
@@ -243,18 +242,16 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 // having its target's ownership changed.
 func adoptExtracted(home, target, systemUser string) {
 	absolute := path.Join(home, target)
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); systemUser matched managedSystemUser and the path is home-relative and openat2-resolved.
-	_ = exec.Command("chown", "-Rh", systemUser+":"+systemUser, absolute).Run()
+	_ = runCommand("chown", "-Rh", systemUser+":"+systemUser, absolute)
 	files.RestoreconBeneath(home, target)
-	if _, err := exec.LookPath("setfacl"); err != nil {
+	if _, err := lookPath("setfacl"); err != nil {
 		return
 	}
 	for _, arguments := range [][]string{
 		{"-R", "-m", "u:nginx:rX", absolute},
 		{"-R", "-d", "-m", "u:nginx:rX", absolute},
 	} {
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); the path is home-relative and openat2-resolved.
-		_ = exec.Command("setfacl", arguments...).Run()
+		_ = runCommand("setfacl", arguments...)
 	}
 }
 

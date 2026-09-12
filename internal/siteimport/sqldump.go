@@ -14,7 +14,6 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/httpx"
-	"servika/internal/sqlimport"
 )
 
 // importSlot serializes dump imports across the whole panel. Each one holds an
@@ -147,12 +146,12 @@ func (h *Handlers) UploadSQL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if truncate {
-		if err := sqlimport.Truncate(r.Context(), chosen.DBName); err != nil {
+		if err := truncateDatabase(r.Context(), chosen.DBName); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "the database could not be emptied")
 			return
 		}
 	}
-	if err := sqlimport.Import(r.Context(), chosen.DBName, source); err != nil {
+	if err := importDump(r.Context(), chosen.DBName, source); err != nil {
 		// The client failure text is the useful part of a failed import (a syntax
 		// error, a missing table) and it describes the caller's own dump going
 		// into the caller's own database, so it is returned rather than hidden.

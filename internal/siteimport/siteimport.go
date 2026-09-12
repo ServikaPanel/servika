@@ -107,7 +107,7 @@ func (h *Handlers) domain(r *http.Request) (id int64, home, systemUser string, e
 	if !managedSystemUser.MatchString(systemUser) {
 		return 0, "", "", errBadUser
 	}
-	return id, "/home/" + systemUser, systemUser, nil
+	return id, path.Join(tenantHomeRoot, systemUser), systemUser, nil
 }
 
 // statusFor maps an internal failure to a response code without leaking the
