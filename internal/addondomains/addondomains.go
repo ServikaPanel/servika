@@ -119,6 +119,121 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// requestedAddon reads the requested addon domain, and answers the request
+// itself when the name is unusable, banned, or the parent's own name.
+func requestedAddon(w http.ResponseWriter, r *http.Request, db *sql.DB, parent parentDomain) (createReq, bool) {
+	var req createReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return req, false
+	}
+	req.DomainName = strings.ToLower(strings.TrimSpace(req.DomainName))
+	if err := provisioner.ValidateDomain(req.DomainName); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
+		return req, false
+	}
+	if refuseIfBlocked(w, r, db, req.DomainName) {
+		return req, false
+	}
+	if req.DomainName == parent.DomainName {
+		httpx.WriteError(w, http.StatusConflict, "addon domain cannot match the parent domain")
+		return req, false
+	}
+	return req, true
+}
+
+// withinCeilings applies both quota gates to the parent's customer, and answers
+// the request itself when one of them refuses or cannot be read.
+//
+// The reseller-wide domain, disk and traffic ceilings are the ones the top-level
+// create path applies and this one did not. An addon domain is a real domains
+// row and every reseller count query includes it, so it consumed the reseller's
+// contracted totals while being gated by none of them. The route is
+// CustomerScope, so a plain customer could push its own reseller past a ceiling
+// only that reseller's administrator can set.
+func (h *Handlers) withinCeilings(w http.ResponseWriter, r *http.Request, parent parentDomain) bool {
+	if err := quota.CheckDomainAllowed(r.Context(), h.DB, parent.CustomerID); err != nil {
+		return refuseCeiling(w, r, err, "addon domain quota check failed: %v", "could not verify plan limit")
+	}
+	if err := quota.CheckResellerAllowedForCustomer(r.Context(), h.DB, parent.CustomerID); err != nil {
+		return refuseCeiling(w, r, err, "addon domain reseller quota check failed: %v", "could not verify reseller limit")
+	}
+	return true
+}
+
+// refuseCeiling answers a ceiling that refused or could not be read. It always
+// reports false, so a caller can return its result directly.
+func refuseCeiling(w http.ResponseWriter, r *http.Request, err error, logged, failed string) bool {
+	if le, ok := errors.AsType[*quota.LimitError](err); ok {
+		httpx.WriteError(w, http.StatusForbidden, le.Message)
+		return false
+	}
+	httpx.LogR(r, logged, err)
+	httpx.WriteError(w, http.StatusInternalServerError, failed)
+	return false
+}
+
+// nameAvailable reports whether the name is free as a domain and as a
+// subdomain, and answers the request itself when it is not. A lookup that fails
+// is not proof the name is free.
+func (h *Handlers) nameAvailable(w http.ResponseWriter, r *http.Request, name string) bool {
+	for _, lookup := range []struct {
+		query string
+		taken string
+	}{
+		{`SELECT id FROM domains WHERE domain_name=?`, "this domain name is already registered"},
+		{`SELECT id FROM subdomains WHERE fqdn=?`, "this domain name is already registered as a subdomain"},
+	} {
+		var existing int64
+		err := h.DB.QueryRowContext(r.Context(), lookup.query, name).Scan(&existing)
+		if err == nil {
+			httpx.WriteError(w, http.StatusConflict, lookup.taken)
+			return false
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+			return false
+		}
+	}
+	return true
+}
+
+// docRootFor returns the document root the addon domain will serve, building it
+// when the domain is not parked. A parked addon domain serves the parent's own
+// document root, so there is nothing to build.
+func docRootFor(w http.ResponseWriter, r *http.Request, parent parentDomain, req createReq) (string, bool) {
+	if req.Parked {
+		return provisioner.SafeWebRoot(parent.SystemUser, parent.WebRoot), true
+	}
+	docroot := provisioner.AddonWebRoot(parent.SystemUser, req.DomainName)
+	if err := prepareRoot(docroot, parent.SystemUser, req.DomainName); err != nil {
+		httpx.LogR(r, "addon domain docroot prepare %q: %v", req.DomainName, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "document root creation failed")
+		return "", false
+	}
+	return docroot, true
+}
+
+// publish renders the vhost and writes the zone for a stored addon domain. A
+// vhost that fails takes the row back out, because the panel would otherwise
+// keep an addon domain nginx never learned about. A DNS failure is logged only:
+// the addon domain is already serving.
+func (h *Handlers) publish(w http.ResponseWriter, r *http.Request, addonID int64, name string) bool {
+	if err := renderVhost(h.DB, addonID); err != nil {
+		httpx.LogR(r, "addon domain vhost render %q: %v", name, err)
+		_, _ = cleanupAddon(r.Context(), h.DB, addonID)
+		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+		return false
+	}
+	if _, err := seedDNS(r.Context(), h.DB, addonID, name, h.IPv4); err != nil {
+		httpx.LogR(r, "DNS SeedDefaults %q error: %v", name, err)
+	}
+	if err := writeZone(r.Context(), h.DB, addonID); err != nil {
+		httpx.LogR(r, "DNS WriteZone %q error: %v", name, err)
+	}
+	return true
+}
+
 func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	parentID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	parent, err := h.parent(r.Context(), parentID)
@@ -131,21 +246,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req createReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	req.DomainName = strings.ToLower(strings.TrimSpace(req.DomainName))
-	if err := provisioner.ValidateDomain(req.DomainName); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
-		return
-	}
-	if refuseIfBlocked(w, r, h.DB, req.DomainName) {
-		return
-	}
-	if req.DomainName == parent.DomainName {
-		httpx.WriteError(w, http.StatusConflict, "addon domain cannot match the parent domain")
+	req, ok := requestedAddon(w, r, h.DB, parent)
+	if !ok {
 		return
 	}
 	// Both gates below are a COUNT followed by a separate INSERT, and the unique
@@ -159,54 +261,16 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// concurrent request counting it from then on sees the true total.
 	unlock := sync.OnceFunc(quota.LockCustomerForDomain(r.Context(), h.DB, parent.ID))
 	defer unlock()
-	if err := quota.CheckDomainAllowed(r.Context(), h.DB, parent.CustomerID); err != nil {
-		if le, ok := errors.AsType[*quota.LimitError](err); ok {
-			httpx.WriteError(w, http.StatusForbidden, le.Message)
-			return
-		}
-		httpx.LogR(r, "addon domain quota check failed: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify plan limit")
+	if !h.withinCeilings(w, r, parent) {
 		return
 	}
-	// The reseller-wide domain, disk and traffic ceilings, which the top-level
-	// create path applies and this one did not. An addon domain is a real domains
-	// row and every reseller count query above includes it, so it consumed the
-	// reseller's contracted totals while being gated by none of them. The route is
-	// CustomerScope, so a plain customer could push its own reseller past a
-	// ceiling only that reseller's administrator can set.
-	if err := quota.CheckResellerAllowedForCustomer(r.Context(), h.DB, parent.CustomerID); err != nil {
-		if le, ok := errors.AsType[*quota.LimitError](err); ok {
-			httpx.WriteError(w, http.StatusForbidden, le.Message)
-			return
-		}
-		httpx.LogR(r, "addon domain reseller quota check failed: %v", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
-		return
-	}
-	var existing int64
-	if err := h.DB.QueryRowContext(r.Context(), `SELECT id FROM domains WHERE domain_name=?`, req.DomainName).Scan(&existing); err == nil {
-		httpx.WriteError(w, http.StatusConflict, "this domain name is already registered")
-		return
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
-		return
-	}
-	if err := h.DB.QueryRowContext(r.Context(), `SELECT id FROM subdomains WHERE fqdn=?`, req.DomainName).Scan(&existing); err == nil {
-		httpx.WriteError(w, http.StatusConflict, "this domain name is already registered as a subdomain")
-		return
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		httpx.WriteError(w, http.StatusInternalServerError, "database read failed")
+	if !h.nameAvailable(w, r, req.DomainName) {
 		return
 	}
 
-	docroot := provisioner.SafeWebRoot(parent.SystemUser, parent.WebRoot)
-	if !req.Parked {
-		docroot = provisioner.AddonWebRoot(parent.SystemUser, req.DomainName)
-		if err := prepareRoot(docroot, parent.SystemUser, req.DomainName); err != nil {
-			httpx.LogR(r, "addon domain docroot prepare %q: %v", req.DomainName, err)
-			httpx.WriteError(w, http.StatusInternalServerError, "document root creation failed")
-			return
-		}
+	docroot, ok := docRootFor(w, r, parent, req)
+	if !ok {
+		return
 	}
 
 	res, err := h.DB.ExecContext(r.Context(),
@@ -223,17 +287,8 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	unlock()
 	addonID, _ := res.LastInsertId()
 
-	if err := renderVhost(h.DB, addonID); err != nil {
-		httpx.LogR(r, "addon domain vhost render %q: %v", req.DomainName, err)
-		_, _ = cleanupAddon(r.Context(), h.DB, addonID)
-		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+	if !h.publish(w, r, addonID, req.DomainName) {
 		return
-	}
-	if _, err := seedDNS(r.Context(), h.DB, addonID, req.DomainName, h.IPv4); err != nil {
-		httpx.LogR(r, "DNS SeedDefaults %q error: %v", req.DomainName, err)
-	}
-	if err := writeZone(r.Context(), h.DB, addonID); err != nil {
-		httpx.LogR(r, "DNS WriteZone %q error: %v", req.DomainName, err)
 	}
 
 	row := h.DB.QueryRowContext(r.Context(),

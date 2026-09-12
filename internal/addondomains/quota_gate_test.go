@@ -13,14 +13,25 @@ import (
 // The checks themselves are proven against a scripted database in internal/quota.
 func createBody(t *testing.T) string {
 	t.Helper()
+	return functionBody(t, "func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {")
+}
+
+// ceilingsBody is the helper Create applies both ceilings through.
+func ceilingsBody(t *testing.T) string {
+	t.Helper()
+	return functionBody(t, "func (h *Handlers) withinCeilings(")
+}
+
+func functionBody(t *testing.T, signature string) string {
+	t.Helper()
 	source, err := os.ReadFile("addondomains.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	body := string(source)
-	start := strings.Index(body, "func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {")
+	start := strings.Index(body, signature)
 	if start < 0 {
-		t.Fatal("Create was renamed; these assertions have to follow it")
+		t.Fatalf("%s was renamed; these assertions have to follow it", signature)
 	}
 	end := strings.Index(body[start:], "\nfunc ")
 	if end < 0 {
@@ -36,7 +47,10 @@ func createBody(t *testing.T) string {
 // without this a plain customer could push its own reseller past a ceiling only
 // that reseller's administrator can set.
 func TestTheAddonPathAppliesBothTheCustomerAndTheResellerCeilings(t *testing.T) {
-	body := createBody(t)
+	if !strings.Contains(createBody(t), "h.withinCeilings(w, r, parent)") {
+		t.Fatal("Create no longer applies the ceilings to the parent")
+	}
+	body := ceilingsBody(t)
 	if !strings.Contains(body, "quota.CheckDomainAllowed(r.Context(), h.DB, parent.CustomerID)") {
 		t.Error("the customer plan ceiling is not applied to the parent's customer")
 	}
@@ -49,9 +63,10 @@ func TestTheAddonPathAppliesBothTheCustomerAndTheResellerCeilings(t *testing.T) 
 // a directory behind that nothing owns.
 func TestTheAddonCeilingsRunBeforeTheDocumentRootIsPrepared(t *testing.T) {
 	body := createBody(t)
-	reseller := strings.Index(body, "quota.CheckResellerAllowedForCustomer(")
-	// prepareRoot is the seam that stands in for prepareDocRoot in a test.
-	prepare := strings.Index(body, "prepareRoot(")
+	// Both calls now go through a helper each: withinCeilings holds the two
+	// quota gates, docRootFor holds the prepareDocRoot call.
+	reseller := strings.Index(body, "h.withinCeilings(")
+	prepare := strings.Index(body, "docRootFor(")
 	if reseller < 0 || prepare < 0 {
 		t.Fatal("one of the two steps is missing from Create")
 	}
@@ -68,7 +83,7 @@ func TestTheAddonCeilingsRunBeforeTheDocumentRootIsPrepared(t *testing.T) {
 func TestTheAddonCreateHoldsThePerCustomerLockAcrossTheInsert(t *testing.T) {
 	body := createBody(t)
 	lock := strings.Index(body, "quota.LockCustomerForDomain(")
-	check := strings.Index(body, "quota.CheckDomainAllowed(")
+	check := strings.Index(body, "h.withinCeilings(")
 	insert := strings.Index(body, "INSERT INTO domains(")
 	release := strings.Index(body, "\n\tunlock()")
 	if lock < 0 || check < 0 || insert < 0 || release < 0 {
