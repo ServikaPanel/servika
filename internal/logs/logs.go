@@ -3,6 +3,7 @@ package logs
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -109,20 +110,30 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-// Read returns the last N lines, defaulting to 200 with a maximum of 2000.
-func (h *Handlers) Read(w http.ResponseWriter, r *http.Request) {
+// requestedFile resolves the log file the request asks for, and answers the
+// request itself when the domain or the key is not one this endpoint serves.
+func (h *Handlers) requestedFile(w http.ResponseWriter, r *http.Request) (key, path string, ok bool) {
 	domainName, _, err := h.lookup(r)
 	if err != nil {
 		writeLookupError(w, err)
-		return
+		return "", "", false
 	}
-	key := r.URL.Query().Get("file")
+	key = r.URL.Query().Get("file")
 	if key == "" {
 		key = "access"
 	}
-	path := filePath(domainName, key)
+	path = filePath(domainName, key)
 	if path == "" {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid file key")
+		return "", "", false
+	}
+	return key, path, true
+}
+
+// Read returns the last N lines, defaulting to 200 with a maximum of 2000.
+func (h *Handlers) Read(w http.ResponseWriter, r *http.Request) {
+	key, path, ok := h.requestedFile(w, r)
+	if !ok {
 		return
 	}
 	last, _ := strconv.Atoi(r.URL.Query().Get("last"))
@@ -149,27 +160,13 @@ func (h *Handlers) Read(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Tail seeks to the end of a log file and streams new lines as SSE data events.
-func (h *Handlers) Tail(w http.ResponseWriter, r *http.Request) {
-	domainName, _, err := h.lookup(r)
-	if err != nil {
-		writeLookupError(w, err)
-		return
-	}
-	key := r.URL.Query().Get("file")
-	if key == "" {
-		key = "access"
-	}
-	path := filePath(domainName, key)
-	if path == "" {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid file key")
-		return
-	}
-
+// openStream writes the event-stream headers and announces the tail. It
+// answers the request itself when the writer cannot stream.
+func openStream(w http.ResponseWriter, key string) (http.Flusher, bool) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		httpx.WriteError(w, http.StatusInternalServerError, "streaming is not supported")
-		return
+		return nil, false
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -179,6 +176,91 @@ func (h *Handlers) Tail(w http.ResponseWriter, r *http.Request) {
 	// #nosec G705 -- response is text/event-stream (not HTML); the browser EventSource treats payloads as opaque data, and key is validated above.
 	_, _ = fmt.Fprintf(w, ": tail %s started\n\n", key)
 	flusher.Flush()
+	return flusher, true
+}
+
+// sendLine writes one log line as an SSE data event.
+func sendLine(w http.ResponseWriter, line string) {
+	// #nosec G705 -- response is text/event-stream (not HTML); newlines are stripped so SSE framing stays intact.
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(line, "\n", " "))
+}
+
+// reopenIfRotated answers the same file, or a freshly opened one when rotation
+// truncated it below the current position. It reports false when the rotated
+// file cannot be opened, which ends the stream.
+func reopenIfRotated(f *os.File, path string) (*os.File, bool) {
+	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+	st, err := os.Stat(path)
+	if err != nil {
+		return f, true
+	}
+	if cur, _ := f.Seek(0, io.SeekCurrent); cur <= st.Size() {
+		return f, true
+	}
+	_ = f.Close()
+	// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+	rotated, err := os.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	return rotated, true
+}
+
+// streamLines sends every new line until the caller goes away.
+func streamLines(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, f *os.File, path string) {
+	reader := bufio.NewReader(f)
+	tick := time.NewTicker(15 * time.Second) // keepalive
+	defer tick.Stop()
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return
+		}
+		if line != "" {
+			sendLine(w, strings.TrimRight(line, "\n\r"))
+			flusher.Flush()
+		}
+		if err != io.EOF {
+			continue
+		}
+		rotated, ok := waitForMore(ctx, w, flusher, tick, f, path)
+		if !ok {
+			return
+		}
+		if rotated != f {
+			f = rotated
+			reader = bufio.NewReader(f)
+		}
+	}
+}
+
+// waitForMore waits at the end of the file for the next line, sending a
+// keepalive on the ticker. It reports false when the stream must end.
+func waitForMore(ctx context.Context, w http.ResponseWriter, flusher http.Flusher,
+	tick *time.Ticker, f *os.File, path string) (*os.File, bool) {
+	select {
+	case <-ctx.Done():
+		return f, false
+	case <-tick.C:
+		_, _ = fmt.Fprintln(w, ": keepalive")
+		flusher.Flush()
+		return f, true
+	case <-time.After(500 * time.Millisecond):
+		return reopenIfRotated(f, path)
+	}
+}
+
+// Tail seeks to the end of a log file and streams new lines as SSE data events.
+func (h *Handlers) Tail(w http.ResponseWriter, r *http.Request) {
+	key, path, ok := h.requestedFile(w, r)
+	if !ok {
+		return
+	}
+	flusher, ok := openStream(w, key)
+	if !ok {
+		return
+	}
 
 	// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	f, err := os.Open(path)
@@ -191,54 +273,14 @@ func (h *Handlers) Tail(w http.ResponseWriter, r *http.Request) {
 	// Send approximately the last 200 lines first.
 	if existing, err := lastNLines(path, 200); err == nil {
 		for _, ln := range existing {
-			// #nosec G705 -- response is text/event-stream (not HTML); newlines are stripped so SSE framing stays intact.
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(ln, "\n", " "))
+			sendLine(w, ln)
 		}
 		flusher.Flush()
 	}
 	// Seek to the end.
 	_, _ = f.Seek(0, io.SeekEnd)
 
-	reader := bufio.NewReader(f)
-	ctx := r.Context()
-	tick := time.NewTicker(15 * time.Second) // keepalive
-	defer tick.Stop()
-
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
-			return
-		}
-		if line != "" {
-			ln := strings.TrimRight(line, "\n\r")
-			// #nosec G705 -- response is text/event-stream (not HTML); newlines are stripped so SSE framing stays intact.
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.ReplaceAll(ln, "\n", " "))
-			flusher.Flush()
-		}
-		if err == io.EOF {
-			select {
-			case <-ctx.Done():
-				return
-			case <-tick.C:
-				_, _ = fmt.Fprintln(w, ": keepalive")
-				flusher.Flush()
-			case <-time.After(500 * time.Millisecond):
-				// Reopen the file when rotation truncates its size.
-				// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-				if st, err := os.Stat(path); err == nil {
-					if cur, _ := f.Seek(0, io.SeekCurrent); cur > st.Size() {
-						_ = f.Close()
-						// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-						f, err = os.Open(path)
-						if err != nil {
-							return
-						}
-						reader = bufio.NewReader(f)
-					}
-				}
-			}
-		}
-	}
+	streamLines(r.Context(), w, flusher, f, path)
 }
 
 // lastNLines reads N lines from the end of a file.
