@@ -242,47 +242,15 @@ func Apply(ctx context.Context, db *sql.DB, chosen []string, actorUID int64) (Re
 
 // applyFile writes every parameter that lives in one file.
 func applyFile(ctx context.Context, db *sql.DB, path string, proposals []Proposal, actorUID int64) ([]Applied, []string, error) {
-	// An nginx apply writes a file, runs `nginx -t` over the WHOLE conf.d tree
-	// and reloads, with a restore between the steps. Held for the sequence, not
-	// per step: a domain render landing between the validation and the reload
-	// would be validated by this apply and reloaded by it, or rolled back by a
-	// restore that captured the file before it. See
-	// internal/provisioner/nginxlock.go.
-	if proposals[0].Service == ServiceNginx {
-		provisioner.LockNginx()
-		defer provisioner.UnlockNginx()
-	}
-	existing, err := os.ReadFile(path) // #nosec G304 -- path comes from the compile-time specs table.
-	if err != nil && !os.IsNotExist(err) {
-		return nil, nil, fmt.Errorf("read %s: %w", path, err)
-	}
+	defer holdNginx(proposals[0].Service)()
 
-	values := map[string]string{}
-	for _, proposal := range proposals {
-		values[proposal.Param] = proposal.Proposed
+	existing, err := readTuned(path)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	var edited string
-	switch proposals[0].Service {
-	case ServiceNginx:
-		edited = string(existing)
-		for _, proposal := range proposals {
-			edited, err = SetNginxDirective(edited, proposal.Param, proposal.Proposed)
-			if err != nil {
-				return nil, nil, refuse(ReasonNotDefined, "%s: %v", path, err)
-			}
-		}
-	case ServicePHPFPM:
-		edited, err = SetPoolValues(string(existing), values)
-		if err != nil {
-			return nil, nil, refuse(ReasonNotDefined, "%s: %v", path, err)
-		}
-	case ServiceMariaDB:
-		edited = MergeDropIn(string(existing), "[mysqld]", values)
-	case ServiceSysctl:
-		edited = MergeDropIn(string(existing), "", values)
-	default:
-		return nil, nil, fmt.Errorf("unknown service %q", proposals[0].Service)
+	edited, err := editedContent(existing, path, proposals)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	backup, err := backupFile(path)
@@ -293,34 +261,14 @@ func applyFile(ctx context.Context, db *sql.DB, path string, proposals []Proposa
 		return nil, nil, fmt.Errorf("write %s: %w", path, err)
 	}
 
-	if err := validate(ctx, proposals[0].Service); err != nil {
-		if restoreErr := restore(path, backup); restoreErr != nil {
-			return nil, nil, fmt.Errorf("%w (and the backup could not be put back: %v)", err, restoreErr)
-		}
-		return nil, nil, err
-	}
-
-	notes, err := activate(ctx, db, proposals)
+	notes, err := makeLive(ctx, db, path, backup, proposals)
 	if err != nil {
-		if restoreErr := restore(path, backup); restoreErr != nil {
-			return nil, nil, fmt.Errorf("%w (and the backup could not be put back: %v)", err, restoreErr)
-		}
-		// The file is back; put the service back with it.
-		_ = validate(ctx, proposals[0].Service)
-		_, _ = activate(ctx, db, nil)
 		return nil, nil, err
 	}
 
-	var applied []Applied
-	for _, proposal := range proposals {
-		id, err := recordBackup(ctx, db, proposal, path, backup, actorUID)
-		if err != nil {
-			return applied, notes, fmt.Errorf("record %s: %w", proposal.ID, err)
-		}
-		applied = append(applied, Applied{
-			ID: proposal.ID, Service: proposal.Service, Param: proposal.Param,
-			Old: proposal.Current, New: proposal.Proposed, BackupID: id,
-		})
+	applied, err := recordApplied(ctx, db, proposals, path, backup, actorUID)
+	if err != nil {
+		return applied, notes, err
 	}
 
 	// The sysctl drop-in was renamed to sort last. Remove the pre-rename file so
@@ -332,6 +280,111 @@ func applyFile(ctx context.Context, db *sql.DB, path string, proposals []Proposa
 		_ = os.Remove(sysctlOldPath)
 	}
 	return applied, notes, nil
+}
+
+// holdNginx takes the nginx lock for a whole nginx apply and returns the
+// release, so the caller holds it for the sequence.
+//
+// An nginx apply writes a file, runs `nginx -t` over the WHOLE conf.d tree and
+// reloads, with a restore between the steps. Held for the sequence, not per
+// step: a domain render landing between the validation and the reload would be
+// validated by this apply and reloaded by it, or rolled back by a restore that
+// captured the file before it. See internal/provisioner/nginxlock.go.
+func holdNginx(service string) func() {
+	if service != ServiceNginx {
+		return func() {}
+	}
+	provisioner.LockNginx()
+	return provisioner.UnlockNginx
+}
+
+// readTuned reads the file an apply is about to edit. A file that is not there
+// is an empty one: the two drop-ins are this package's own and a host that
+// never tuned anything does not carry them.
+func readTuned(path string) (string, error) {
+	existing, err := os.ReadFile(path) // #nosec G304 -- path comes from the compile-time specs table.
+	if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	return string(existing), nil
+}
+
+// editedContent returns what the file must contain after the apply.
+func editedContent(existing, path string, proposals []Proposal) (string, error) {
+	values := proposedValues(proposals)
+	switch proposals[0].Service {
+	case ServiceNginx:
+		edited := existing
+		for _, proposal := range proposals {
+			next, err := SetNginxDirective(edited, proposal.Param, proposal.Proposed)
+			if err != nil {
+				return "", refuse(ReasonNotDefined, "%s: %v", path, err)
+			}
+			edited = next
+		}
+		return edited, nil
+	case ServicePHPFPM:
+		edited, err := SetPoolValues(existing, values)
+		if err != nil {
+			return "", refuse(ReasonNotDefined, "%s: %v", path, err)
+		}
+		return edited, nil
+	case ServiceMariaDB:
+		return MergeDropIn(existing, "[mysqld]", values), nil
+	case ServiceSysctl:
+		return MergeDropIn(existing, "", values), nil
+	}
+	return "", fmt.Errorf("unknown service %q", proposals[0].Service)
+}
+
+// proposedValues keys every proposed value by its parameter name.
+func proposedValues(proposals []Proposal) map[string]string {
+	values := map[string]string{}
+	for _, proposal := range proposals {
+		values[proposal.Param] = proposal.Proposed
+	}
+	return values
+}
+
+// makeLive validates the written file and activates it, putting both the file
+// and the service back when either step refuses.
+func makeLive(ctx context.Context, db *sql.DB, path, backup string, proposals []Proposal) ([]string, error) {
+	if err := validate(ctx, proposals[0].Service); err != nil {
+		if restoreErr := restore(path, backup); restoreErr != nil {
+			return nil, fmt.Errorf("%w (and the backup could not be put back: %v)", err, restoreErr)
+		}
+		return nil, err
+	}
+
+	notes, err := activate(ctx, db, proposals)
+	if err != nil {
+		if restoreErr := restore(path, backup); restoreErr != nil {
+			return nil, fmt.Errorf("%w (and the backup could not be put back: %v)", err, restoreErr)
+		}
+		// The file is back; put the service back with it.
+		_ = validate(ctx, proposals[0].Service)
+		_, _ = activate(ctx, db, nil)
+		return nil, err
+	}
+	return notes, nil
+}
+
+// recordApplied writes the row that can undo each parameter and returns what
+// the apply reports back. A row that cannot be written stops the loop, and the
+// rows already written are returned with the failure.
+func recordApplied(ctx context.Context, db *sql.DB, proposals []Proposal, path, backup string, actorUID int64) ([]Applied, error) {
+	var applied []Applied
+	for _, proposal := range proposals {
+		id, err := recordBackup(ctx, db, proposal, path, backup, actorUID)
+		if err != nil {
+			return applied, fmt.Errorf("record %s: %w", proposal.ID, err)
+		}
+		applied = append(applied, Applied{
+			ID: proposal.ID, Service: proposal.Service, Param: proposal.Param,
+			Old: proposal.Current, New: proposal.Proposed, BackupID: id,
+		})
+	}
+	return applied, nil
 }
 
 // validate asks the service's own checker whether the file it now has is one it
@@ -376,10 +429,8 @@ func activate(ctx context.Context, db *sql.DB, proposals []Proposal) ([]string, 
 		}
 		notes = append(notes, "php-fpm restarted")
 	case ServiceSysctl:
-		for _, proposal := range proposals {
-			if out, err := runCommand(ctx, "sysctl", "-w", proposal.Param+"="+proposal.Proposed); err != nil {
-				return nil, refuse(ReasonNotApplied, "the kernel refused %s: %s", proposal.Param, tail(out))
-			}
+		if err := applySysctls(ctx, proposals); err != nil {
+			return nil, err
 		}
 	case ServiceMariaDB:
 		if err := applyMariaDB(ctx, db, proposals); err != nil {
@@ -387,6 +438,18 @@ func activate(ctx context.Context, db *sql.DB, proposals []Proposal) ([]string, 
 		}
 	}
 	return notes, nil
+}
+
+// applySysctls writes each value into the running kernel. "sysctl -w" reports
+// the value the kernel took, so a refusal is visible here rather than at the
+// next boot.
+func applySysctls(ctx context.Context, proposals []Proposal) error {
+	for _, proposal := range proposals {
+		if out, err := runCommand(ctx, "sysctl", "-w", proposal.Param+"="+proposal.Proposed); err != nil {
+			return refuse(ReasonNotApplied, "the kernel refused %s: %s", proposal.Param, tail(out))
+		}
+	}
+	return nil
 }
 
 // applyMariaDB sets each value on the running server and READS IT BACK.

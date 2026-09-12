@@ -105,6 +105,31 @@ func SetPoolValues(text string, values map[string]string) (string, error) {
 // header is the section line the file opens with ("[mysqld]"), or empty for a
 // sysctl drop-in, which has no sections.
 func MergeDropIn(existing, header string, values map[string]string) string {
+	merged, order := existingSettings(existing)
+	for _, name := range sortedKeys(values) {
+		if _, seen := merged[name]; !seen {
+			order = append(order, name)
+		}
+		merged[name] = values[name]
+	}
+
+	var out strings.Builder
+	out.WriteString("# Written by Servika. Every line here was approved one at a time\n")
+	out.WriteString("# on the server tuning screen, which can also put each one back.\n")
+	if header != "" {
+		out.WriteString(header)
+		out.WriteString("\n")
+	}
+	for _, name := range order {
+		fmt.Fprintf(&out, "%s = %s\n", name, merged[name])
+	}
+	return out.String()
+}
+
+// existingSettings reads the settings a drop-in already carries, and the order
+// they appear in, so a rewrite keeps the file in the shape an operator last
+// read it. A line that is not "name = value" is not a setting and is dropped.
+func existingSettings(existing string) (map[string]string, []string) {
 	merged := map[string]string{}
 	var order []string
 
@@ -125,24 +150,7 @@ func MergeDropIn(existing, header string, values map[string]string) string {
 		}
 		merged[name] = strings.TrimSpace(value)
 	}
-	for _, name := range sortedKeys(values) {
-		if _, seen := merged[name]; !seen {
-			order = append(order, name)
-		}
-		merged[name] = values[name]
-	}
-
-	var out strings.Builder
-	out.WriteString("# Written by Servika. Every line here was approved one at a time\n")
-	out.WriteString("# on the server tuning screen, which can also put each one back.\n")
-	if header != "" {
-		out.WriteString(header)
-		out.WriteString("\n")
-	}
-	for _, name := range order {
-		fmt.Fprintf(&out, "%s = %s\n", name, merged[name])
-	}
-	return out.String()
+	return merged, order
 }
 
 func sortedKeys(values map[string]string) []string {

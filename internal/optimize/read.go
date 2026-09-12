@@ -83,6 +83,20 @@ func Current(ctx context.Context, db *sql.DB) (map[string]string, []error) {
 		}
 	}
 
+	sysctls, sysctlProblems := sysctlValues()
+	for name, value := range sysctls {
+		values[ServiceSysctl+":"+name] = value
+	}
+	problems = append(problems, sysctlProblems...)
+
+	return values, problems
+}
+
+// sysctlValues reads what the kernel is running on for every sysctl in specs,
+// keyed by the bare parameter name.
+func sysctlValues() (map[string]string, []error) {
+	values := map[string]string{}
+	var problems []error
 	for _, item := range specs {
 		if item.service != ServiceSysctl {
 			continue
@@ -97,9 +111,8 @@ func Current(ctx context.Context, db *sql.DB) (map[string]string, []error) {
 			problems = append(problems, fmt.Errorf("read %s: %w", path, err))
 			continue
 		}
-		values[ServiceSysctl+":"+item.param] = strings.TrimSpace(string(raw))
+		values[item.param] = strings.TrimSpace(string(raw))
 	}
-
 	return values, problems
 }
 
@@ -266,18 +279,6 @@ func backupExists(path string) bool {
 // sysctl form (which has none), because the only difference is a line this
 // skips either way.
 func parseDropIn(text string) map[string]string {
-	values := map[string]string{}
-	for line := range strings.SplitSeq(text, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") ||
-			strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "[") {
-			continue
-		}
-		name, value, found := strings.Cut(trimmed, "=")
-		if !found {
-			continue
-		}
-		values[strings.TrimSpace(name)] = strings.TrimSpace(value)
-	}
+	values, _ := existingSettings(text)
 	return values
 }
