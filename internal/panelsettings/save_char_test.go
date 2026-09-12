@@ -294,8 +294,7 @@ func TestSaveStoresNoExpiryWhenTheCertificateCannotBeRead(t *testing.T) {
 func TestSaveRestoresTheSelfSignedCertificateWhenIssuanceFails(t *testing.T) {
 	stub := pointedHere()
 	stub.issueErr = errors.New("acme issue failed")
-	script := &panelScript{}
-	w, decoded := save(t, stub, script, `{"domain":"`+theDomain+`"}`)
+	w, decoded := save(t, stub, &panelScript{}, `{"domain":"`+theDomain+`"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
@@ -311,8 +310,20 @@ func TestSaveRestoresTheSelfSignedCertificateWhenIssuanceFails(t *testing.T) {
 	if decoded["warning"] != "The domain was saved, but Let's Encrypt certificate issuance failed. The panel remains available with the existing certificate." {
 		t.Fatalf("warning = %v", decoded["warning"])
 	}
+}
+
+// The domain is still stored after a failed issuance, and the row carries the
+// reason so the screen can show it.
+func TestSaveStoresTheFailedIssuance(t *testing.T) {
+	stub := pointedHere()
+	stub.issueErr = errors.New("acme issue failed")
+	script := &panelScript{}
+	save(t, stub, script, `{"domain":"`+theDomain+`"}`)
 	args := script.argsOf(updSettings)
-	if len(args) != 4 || args[1] != "failed" || args[2] != "certificate issuance failed" || args[3] != nil {
+	if len(args) != 4 {
+		t.Fatalf("stored %v, want four arguments", args)
+	}
+	if args[0] != theDomain || args[1] != "failed" || args[2] != "certificate issuance failed" || args[3] != nil {
 		t.Fatalf("stored %v, want a failed row carrying the issuance error", args)
 	}
 }

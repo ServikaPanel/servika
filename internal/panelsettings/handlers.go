@@ -63,36 +63,56 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, settings)
 }
 
-func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
+// requestedDomain reads the domain the request asks for and answers the request
+// itself when it cannot be used. The A record is checked HERE, before issuance:
+// acme.sh answers the challenge from a webroot on this server, so a domain
+// resolving elsewhere fails the challenge and takes the panel certificate with
+// it.
+func (h *Handlers) requestedDomain(w http.ResponseWriter, r *http.Request) (string, bool) {
 	var req saveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
+		return "", false
 	}
 	domain := strings.ToLower(strings.TrimSpace(req.Domain))
 	if err := provisioner.ValidateDomain(domain); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
-		return
+		return "", false
 	}
 	serverIP := h.serverIPv4()
 	if serverIP == "" {
 		httpx.WriteError(w, http.StatusInternalServerError, "server IPv4 address could not be detected")
-		return
+		return "", false
 	}
 	ips, err := lookupHost(domain)
 	if err != nil || !containsIP(ips, serverIP) {
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "domain A record must point to this server before certificate issuance")
+		return "", false
+	}
+	return domain, true
+}
+
+// issuePanelDomain installs a certificate for the domain and reports the row to
+// store. A failure puts the previous certificate back, so the panel keeps
+// serving the one it had.
+func issuePanelDomain(domain string) (sslStatus, sslError, sslExpires string) {
+	if err := issueCert(domain); err != nil {
+		restoreSelf()
+		return "failed", "certificate issuance failed", ""
+	}
+	if expires, ok := certExpiry(panelCertPath, panelKeyPath); ok {
+		sslExpires = expires.Format("2006-01-02")
+	}
+	return "active", "", sslExpires
+}
+
+func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
+	domain, ok := h.requestedDomain(w, r)
+	if !ok {
 		return
 	}
 
-	sslStatus, sslError, sslExpires := "active", "", ""
-	if err := issueCert(domain); err != nil {
-		sslStatus = "failed"
-		sslError = "certificate issuance failed"
-		restoreSelf()
-	} else if expires, ok := certExpiry(panelCertPath, panelKeyPath); ok {
-		sslExpires = expires.Format("2006-01-02")
-	}
+	sslStatus, sslError, sslExpires := issuePanelDomain(domain)
 
 	if _, err := h.DB.ExecContext(r.Context(), `UPDATE panel_settings SET custom_domain=?, ssl_status=?, ssl_error=?, ssl_expires=? WHERE id=1`, nullable(domain), sslStatus, nullable(sslError), nullable(sslExpires)); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "panel settings could not be saved")
