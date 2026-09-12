@@ -191,6 +191,22 @@ func TestANotificationCanBeWrittenWithNothingButItsEnglish(t *testing.T) {
 	}
 }
 
+// assertVisible checks one caller's list: every notification they are entitled
+// to, and none they are not.
+func assertVisible(t *testing.T, who string, answer listBody, wanted, hidden []int64) {
+	t.Helper()
+	for _, id := range wanted {
+		if !has(answer, id) {
+			t.Errorf("%s does not see notification %d", who, id)
+		}
+	}
+	for _, id := range hidden {
+		if has(answer, id) {
+			t.Errorf("%s sees notification %d, which is not theirs", who, id)
+		}
+	}
+}
+
 // A reseller must not read a neighbour's alert off a screen built to tell them
 // about their own, and a panel-wide notification is the panel's own business:
 // there is no ownership chain to narrow it by, so nobody below admin sees it.
@@ -200,28 +216,16 @@ func TestEachRoleSeesOnlyItsOwnNotifications(t *testing.T) {
 	h := &Handlers{DB: db}
 
 	admin := list(t, h, request(middleware.RoleAdmin, f.adminID))
-	if !has(admin, f.noteA) || !has(admin, f.noteB) || !has(admin, f.notePanel) {
-		t.Error("the admin does not see every notification")
-	}
+	assertVisible(t, "the admin", admin,
+		[]int64{f.noteA, f.noteB, f.notePanel}, nil)
 
 	reseller := list(t, h, request(middleware.RoleReseller, f.resellerA))
-	if !has(reseller, f.noteA) {
-		t.Error("the reseller does not see their own customer's notification")
-	}
-	if has(reseller, f.noteB) {
-		t.Error("the reseller sees another reseller's notification")
-	}
-	if has(reseller, f.notePanel) {
-		t.Error("the reseller sees a panel-wide notification")
-	}
+	assertVisible(t, "the reseller", reseller,
+		[]int64{f.noteA}, []int64{f.noteB, f.notePanel})
 
 	customer := list(t, h, request(middleware.RoleUser, f.customerA))
-	if !has(customer, f.noteA) {
-		t.Error("the customer does not see their own domain's notification")
-	}
-	if has(customer, f.noteB) || has(customer, f.notePanel) {
-		t.Error("the customer sees a notification that is not theirs")
-	}
+	assertVisible(t, "the customer", customer,
+		[]int64{f.noteA}, []int64{f.noteB, f.notePanel})
 
 	anonymous := httptest.NewRecorder()
 	h.List(anonymous, httptest.NewRequest(http.MethodGet, "/", nil))

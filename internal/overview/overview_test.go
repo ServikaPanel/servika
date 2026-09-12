@@ -58,38 +58,31 @@ func TestRevealDBPass(t *testing.T) {
 	})
 }
 
+// assertSizes checks the parsed rows against what the output states.
+func assertSizes(t *testing.T, got map[string]int64, want map[string]int64) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("size mismatch: got %d rows, want %d (%v)", len(got), len(want), got)
+	}
+	for name, size := range want {
+		if got[name] != size {
+			t.Errorf("%q = %d, want %d", name, got[name], size)
+		}
+	}
+}
+
 func TestParseDBSizes(t *testing.T) {
 	t.Run("well-formed multi-line output", func(t *testing.T) {
 		raw := []byte("panel\t512\ntenant_shop\t10240\ntenant_blog\t0\n")
-		got := parseDBSizes(raw)
-		want := map[string]int64{"panel": 512, "tenant_shop": 10240, "tenant_blog": 0}
-		if len(got) != len(want) {
-			t.Fatalf("size mismatch: got %d rows, want %d (%v)", len(got), len(want), got)
-		}
-		for k, v := range want {
-			if got[k] != v {
-				t.Errorf("%q = %d, want %d", k, got[k], v)
-			}
-		}
+		assertSizes(t, parseDBSizes(raw),
+			map[string]int64{"panel": 512, "tenant_shop": 10240, "tenant_blog": 0})
 	})
 
 	t.Run("skips malformed lines without dropping valid ones", func(t *testing.T) {
 		// A blank line, a line with no tab, a 3-field line, and a non-numeric
 		// size must all be skipped while the two valid rows survive.
 		raw := []byte("panel\t512\n\nnotabhere\ntoo\tmany\tfields\ntenant\tNaN\ngood\t42")
-		got := parseDBSizes(raw)
-		if len(got) != 2 {
-			t.Fatalf("expected 2 valid rows, got %d: %v", len(got), got)
-		}
-		if got["panel"] != 512 {
-			t.Errorf("panel = %d, want 512", got["panel"])
-		}
-		if got["good"] != 42 {
-			t.Errorf("good = %d, want 42", got["good"])
-		}
-		if _, ok := got["tenant"]; ok {
-			t.Error("non-numeric size row should have been skipped")
-		}
+		assertSizes(t, parseDBSizes(raw), map[string]int64{"panel": 512, "good": 42})
 	})
 
 	t.Run("empty output yields empty non-nil map", func(t *testing.T) {

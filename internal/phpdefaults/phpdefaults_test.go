@@ -46,33 +46,46 @@ func migrationDefaults(t *testing.T, table string, columns []string) map[string]
 		if err != nil {
 			t.Fatalf("read %s: %v", file, err)
 		}
-		current := ""
-		for raw := range strings.SplitSeq(string(body), "\n") {
-			// Strip the line comment FIRST. 0104's header lists the same column
-			// names and the old values beside them, so a parser that reads the
-			// raw text records the wrong default and still reports success.
-			line := raw
-			if at := strings.Index(line, "--"); at >= 0 {
-				line = line[:at]
-			}
-			if match := tableStart.FindStringSubmatch(line); match != nil {
-				current = strings.ToLower(match[1])
-			}
-			if current == table {
-				if match := columnDefarg.FindStringSubmatch(line); match != nil {
-					if column := strings.ToLower(match[1]); wanted[column] {
-						found[column] = strings.Trim(match[2], "'")
-					}
-				}
-			}
-			// A statement ends at the semicolon, and the next statement may name
-			// a different table.
-			if strings.HasSuffix(strings.TrimSpace(line), ";") {
-				current = ""
-			}
-		}
+		collectDefaults(string(body), table, wanted, found)
 	}
 	return found
+}
+
+// collectDefaults records the DEFAULT of each wanted column one migration
+// declares, overwriting an earlier file's answer, because the last one wins.
+func collectDefaults(body, table string, wanted map[string]bool, found map[string]string) {
+	current := ""
+	for raw := range strings.SplitSeq(body, "\n") {
+		// Strip the line comment FIRST. 0104's header lists the same column
+		// names and the old values beside them, so a parser that reads the
+		// raw text records the wrong default and still reports success.
+		line := raw
+		if at := strings.Index(line, "--"); at >= 0 {
+			line = line[:at]
+		}
+		if match := tableStart.FindStringSubmatch(line); match != nil {
+			current = strings.ToLower(match[1])
+		}
+		if current == table {
+			recordDefault(line, wanted, found)
+		}
+		// A statement ends at the semicolon, and the next statement may name
+		// a different table.
+		if strings.HasSuffix(strings.TrimSpace(line), ";") {
+			current = ""
+		}
+	}
+}
+
+// recordDefault stores the DEFAULT one line declares, when the column is wanted.
+func recordDefault(line string, wanted map[string]bool, found map[string]string) {
+	match := columnDefarg.FindStringSubmatch(line)
+	if match == nil {
+		return
+	}
+	if column := strings.ToLower(match[1]); wanted[column] {
+		found[column] = strings.Trim(match[2], "'")
+	}
 }
 
 func TestTheMigrationsAgreeWithTheseConstants(t *testing.T) {

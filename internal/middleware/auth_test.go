@@ -164,6 +164,19 @@ func TestResellerOrAbove(t *testing.T) {
 	}
 }
 
+// assertNarrowedBy checks that a role's clause narrows over one column and
+// binds exactly that caller's own id.
+func assertNarrowedBy(t *testing.T, cond string, arg []any, column string, want int64) {
+	t.Helper()
+	if cond == "" || len(arg) != 1 || arg[0] != want {
+		t.Errorf("scope wrong for %s: cond=%q arg=%v", column, cond, arg)
+		return
+	}
+	if !strings.Contains(cond, column) {
+		t.Errorf("the scope does not match %s: cond=%q", column, cond)
+	}
+}
+
 func TestScopeSQL(t *testing.T) {
 	// Admin: no narrowing.
 	if cond, arg := ScopeSQL(reqRole(RoleAdmin, 1), "d"); cond != "" || arg != nil {
@@ -172,22 +185,15 @@ func TestScopeSQL(t *testing.T) {
 
 	// Reseller: EXISTS over the ownership chain + its own user id.
 	cond, arg := ScopeSQL(reqRole(RoleReseller, 7), "d")
-	if cond == "" || len(arg) != 1 || arg[0] != int64(7) {
-		t.Errorf("reseller scope wrong: cond=%q arg=%v", cond, arg)
-	}
-	if !strings.Contains(cond, "owner_user_id") {
-		t.Errorf("reseller scope must match owner_user_id, cond=%q", cond)
-	}
+	assertNarrowedBy(t, cond, arg, "owner_user_id", 7)
 
 	// Customer (role=user): the regression this fixes — the old switch had no
 	// RoleUser branch and fell through to WHERE 1 = 0, so every scoped list
 	// returned empty for a customer. It must now narrow over customers.user_id.
 	cond, arg = ScopeSQL(reqRole(RoleUser, 42), "d")
-	if cond == "" || len(arg) != 1 || arg[0] != int64(42) {
-		t.Errorf("customer scope wrong: cond=%q arg=%v", cond, arg)
-	}
-	if !strings.Contains(cond, "sc.user_id") || strings.Contains(cond, "1 = 0") {
-		t.Errorf("customer scope must match user_id, not fail-closed, cond=%q", cond)
+	assertNarrowedBy(t, cond, arg, "sc.user_id", 42)
+	if strings.Contains(cond, "1 = 0") {
+		t.Errorf("the customer scope is fail-closed rather than narrowed, cond=%q", cond)
 	}
 
 	// Anonymous: fail-closed — no row must match.

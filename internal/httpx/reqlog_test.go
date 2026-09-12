@@ -128,39 +128,49 @@ func without(sites []string, prefix string) []string {
 // inside a function or closure that carries an (http.ResponseWriter,
 // *http.Request) pair.
 func bareLogCallsInHandlers(file *ast.File) []token.Pos {
-	var found []token.Pos
-	var walk func(n ast.Node, hasRequest bool)
-	walk = func(n ast.Node, hasRequest bool) {
-		ast.Inspect(n, func(inner ast.Node) bool {
-			if inner == nil || inner == n {
-				return true
-			}
-			switch d := inner.(type) {
-			case *ast.FuncDecl:
-				if requestParam(d.Type) != "" {
-					hasRequest = true
-				}
-			case *ast.FuncLit:
-				if requestParam(d.Type) != "" && d.Body != nil {
-					walk(d.Body, true)
-					return false
-				}
-			case *ast.CallExpr:
-				if hasRequest && isLogPrintf(d) {
-					found = append(found, d.Lparen)
-				}
-			}
-			return true
-		})
-	}
+	var finder logSiteFinder
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Body == nil {
 			continue
 		}
-		walk(fn.Body, requestParam(fn.Type) != "")
+		finder.walk(fn.Body, requestParam(fn.Type) != "")
 	}
-	return found
+	return finder.found
+}
+
+// logSiteFinder collects the positions as it walks. A closure carrying its own
+// request parameter is walked separately, so a handler nested inside a function
+// that has none is still found.
+type logSiteFinder struct{ found []token.Pos }
+
+func (f *logSiteFinder) walk(n ast.Node, hasRequest bool) {
+	ast.Inspect(n, func(inner ast.Node) bool {
+		if inner == nil || inner == n {
+			return true
+		}
+		return f.visit(inner, &hasRequest)
+	})
+}
+
+// visit reports whether the walk continues into this node.
+func (f *logSiteFinder) visit(inner ast.Node, hasRequest *bool) bool {
+	switch d := inner.(type) {
+	case *ast.FuncDecl:
+		if requestParam(d.Type) != "" {
+			*hasRequest = true
+		}
+	case *ast.FuncLit:
+		if requestParam(d.Type) != "" && d.Body != nil {
+			f.walk(d.Body, true)
+			return false
+		}
+	case *ast.CallExpr:
+		if *hasRequest && isLogPrintf(d) {
+			f.found = append(f.found, d.Lparen)
+		}
+	}
+	return true
 }
 
 func isLogPrintf(call *ast.CallExpr) bool {
@@ -180,22 +190,36 @@ func requestParam(t *ast.FuncType) string {
 	}
 	hasWriter, req := false, ""
 	for _, field := range t.Params.List {
-		switch expr := field.Type.(type) {
-		case *ast.SelectorExpr:
-			if expr.Sel.Name == "ResponseWriter" {
-				hasWriter = true
-			}
-		case *ast.StarExpr:
-			sel, ok := expr.X.(*ast.SelectorExpr)
-			if ok && sel.Sel.Name == "Request" && len(field.Names) > 0 {
-				req = field.Names[0].Name
-			}
+		if isResponseWriter(field.Type) {
+			hasWriter = true
+		}
+		if name := requestName(field); name != "" {
+			req = name
 		}
 	}
 	if hasWriter && req != "" && req != "_" {
 		return req
 	}
 	return ""
+}
+
+// isResponseWriter reports whether a parameter type is an http.ResponseWriter.
+func isResponseWriter(expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	return ok && sel.Sel.Name == "ResponseWriter"
+}
+
+// requestName returns the name a *http.Request parameter carries, or "".
+func requestName(field *ast.Field) string {
+	star, ok := field.Type.(*ast.StarExpr)
+	if !ok {
+		return ""
+	}
+	sel, ok := star.X.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Request" || len(field.Names) == 0 {
+		return ""
+	}
+	return field.Names[0].Name
 }
 
 func repositoryRoot(t *testing.T) string {
