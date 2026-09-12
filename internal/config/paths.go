@@ -212,6 +212,27 @@ func ShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
+// ScriptWithLogHeader makes a detached job clear its own log and write its
+// header, as the first thing it does.
+//
+// A transient unit takes one fixed unit name, so a second request that arrives
+// while one is running is refused by systemd-run. Clearing the log from the
+// panel BEFORE that refusal destroys the running job's only record, so the
+// clearing belongs inside the unit, where only a job that really started runs
+// it. The unit's own output is appended to the same file, and an appending
+// descriptor always writes at the end, so truncating the file underneath it is
+// safe.
+//
+// The lines are spliced after the shebang, which has to stay first.
+func ScriptWithLogHeader(script, logPath, header string) string {
+	prologue := ": > " + ShellQuote(logPath) + "\necho " + ShellQuote(header) + "\n"
+	shebang, body, found := strings.Cut(script, "\n")
+	if !found {
+		return script + "\n" + prologue
+	}
+	return shebang + "\n" + prologue + body
+}
+
 func mustAbsPath(key, fallback string) string {
 	value, err := EnvAbsPath(key, fallback)
 	if err != nil {

@@ -2,6 +2,7 @@ package phpversion
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -149,25 +150,71 @@ func TestStatusReportsNothingWhenNoOperationEverRan(t *testing.T) {
 	}
 }
 
-// The log is truncated at the start of an operation: the screen shows it as the
-// output of the run it just began, and the previous run's output above it would
-// read as part of this one.
-func TestStartingAnOperationClearsThePreviousLog(t *testing.T) {
+// The log is cleared at the start of an operation, because the screen shows it
+// as the output of the run it just began. The UNIT does the clearing, not the
+// panel: the slot is one fixed unit name, so a second request while one
+// operation runs reaches here and is refused by systemd-run, and a panel-side
+// truncate would already have destroyed the running job's log.
+func TestTheOperationClearsItsOwnLogRatherThanThePanel(t *testing.T) {
 	opPaths(t)
-	stubUnit(t, "activating", nil)
-	if err := os.WriteFile(os.Getenv("SERVIKA_PHPOP_LOG"), []byte("output of an older run\n"), 0o640); err != nil {
+	logPath := os.Getenv("SERVIKA_PHPOP_LOG")
+	if err := os.WriteFile(logPath, []byte("output of an older run\n"), 0o640); err != nil {
 		t.Fatalf("seed the log: %v", err)
 	}
+	var script string
+	stubUnit(t, "activating", &script)
 
 	m := remiVersion(t)
 	if err := startPHPOp(opDescriptor{Version: m.Version, Resource: m.Resource, Action: "remove"},
 		removeScript(m)); err != nil {
 		t.Fatalf("startPHPOp: %v", err)
 	}
-	if strings.Contains(readOpLog(), "older run") {
-		t.Error("the previous run's output survived into the new operation's log")
+
+	if !strings.Contains(readOpLog(), "older run") {
+		t.Error("the panel cleared the log itself, so a refused launch destroys a running job's record")
+	}
+	if !strings.HasPrefix(script, "#!/usr/bin/env bash\n: > "+shellQuote(logPath)+"\n") {
+		t.Errorf("the operation does not clear its own log first:\n%s", script)
+	}
+	if !strings.Contains(script, "echo '════════ PHP "+m.Version) {
+		t.Errorf("the operation does not write its own header:\n%s", script)
 	}
 }
+
+// A launch systemd refuses must leave every file the screen reads exactly as it
+// was, or the running operation is reported as the one that never started.
+func TestARefusedLaunchLeavesTheRunningOperationAlone(t *testing.T) {
+	dir := opPaths(t)
+	logPath := os.Getenv("SERVIKA_PHPOP_LOG")
+	statePath := os.Getenv("SERVIKA_PHPOP_STATE")
+	if err := os.WriteFile(logPath, []byte("the running job's output\n"), 0o640); err != nil {
+		t.Fatalf("seed the log: %v", err)
+	}
+	running := []byte(`{"version":"8.3","resource":"remi","action":"install"}`)
+	if err := os.WriteFile(statePath, running, 0o640); err != nil {
+		t.Fatalf("seed the descriptor: %v", err)
+	}
+	stubUnit(t, "active", nil)
+	launchPHPOp = func(string) error { return errRefused }
+
+	m := remiVersion(t)
+	if err := startPHPOp(opDescriptor{Version: m.Version, Resource: m.Resource, Action: "remove"},
+		removeScript(m)); err == nil {
+		t.Fatal("startPHPOp reported success for a refused launch")
+	}
+
+	if got := readOpLog(); got != "the running job's output\n" {
+		t.Errorf("the log now reads %q", got)
+	}
+	if got := readOpDescriptor(); got.Version != "8.3" || got.Action != "install" {
+		t.Errorf("the descriptor now reads %+v, want the running install of 8.3", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "php-op.json.tmp")); err == nil {
+		t.Error("the staged descriptor was left behind")
+	}
+}
+
+var errRefused = errors.New("systemd-run: refused")
 
 // The handler no longer waits for dnf, so everything that used to run after it
 // returned has to be in the script instead. A step left behind would produce a

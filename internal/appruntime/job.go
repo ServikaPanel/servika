@@ -97,30 +97,38 @@ var launchOp = func(script string) error {
 }
 
 // startOp prepares the log and descriptor and starts the unit.
+//
+// Nothing the screen reads is REPLACED until systemd-run has accepted the unit.
+// The slot is one fixed unit name, and the guard in front of this is a
+// `systemctl is-active` probe, so a second request that arrives while one
+// operation runs reaches here and is refused by systemd. Truncating the log and
+// overwriting the descriptor first destroyed the running job's only record and
+// left the screen reporting a runtime that never started.
 func startOp(descriptor opDescriptor, script string) error {
 	logPath := config.RuntimeOpLog()
 	// #nosec G301 -- root-owned system directory the panel's own logs live in; no secret material.
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o750); err != nil {
 		return fmt.Errorf("prepare the log directory: %w", err)
 	}
-	// The log is TRUNCATED rather than appended to: the screen shows it as the
-	// output of the operation it just started, and leaving the previous run's
-	// output above would read as part of this one.
-	header := fmt.Sprintf("======== %s %s %s ========\n",
-		descriptor.Kind, descriptor.Version, descriptor.Action)
-	// #nosec G306 -- an operator-facing log the panel serves back; it holds no secret.
-	if err := os.WriteFile(logPath, []byte(header), 0o640); err != nil {
-		return fmt.Errorf("open the log: %w", err)
-	}
 	body, err := json.Marshal(descriptor)
 	if err != nil {
 		return fmt.Errorf("encode the descriptor: %w", err)
 	}
+	staged := config.RuntimeOpState() + ".tmp"
 	// #nosec G306 -- a descriptor of which runtime is being worked on; it holds no secret.
-	if err := os.WriteFile(config.RuntimeOpState(), body, 0o640); err != nil {
+	if err := os.WriteFile(staged, body, 0o640); err != nil {
 		return fmt.Errorf("record the operation: %w", err)
 	}
-	return launchOp(script)
+	header := fmt.Sprintf("======== %s %s %s ========",
+		descriptor.Kind, descriptor.Version, descriptor.Action)
+	if err := launchOp(config.ScriptWithLogHeader(script, logPath, header)); err != nil {
+		_ = os.Remove(staged)
+		return err
+	}
+	if err := os.Rename(staged, config.RuntimeOpState()); err != nil {
+		return fmt.Errorf("record the operation: %w", err)
+	}
+	return nil
 }
 
 // readOpDescriptor returns what the last started operation was, or the zero

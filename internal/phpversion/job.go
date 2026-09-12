@@ -92,36 +92,43 @@ var launchPHPOp = func(script string) error {
 }
 
 // startPHPOp prepares the log and descriptor and starts the unit.
+//
+// Nothing the screen reads is REPLACED until systemd-run has accepted the unit.
+// The slot is one fixed unit name, and the guard in front of this is a
+// `systemctl is-active` probe, so a second request that arrives while one
+// operation runs reaches here and is refused by systemd. Truncating the log and
+// overwriting the descriptor first destroyed the running job's only record and
+// left the screen reporting a version that never started.
 func startPHPOp(descriptor opDescriptor, script string) error {
 	logPath := config.PHPOpLog()
 	// #nosec G301 -- root-owned system directory the panel's own logs live in; no secret material.
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o750); err != nil {
 		return fmt.Errorf("prepare the log directory: %w", err)
 	}
-	// The log is TRUNCATED rather than appended to: the screen shows it as the
-	// output of the operation it just started, and leaving the previous run's
-	// output above would read as part of this one.
-	header := fmt.Sprintf("════════ PHP %s (%s) %s — %s ════════\n",
-		descriptor.Version, descriptor.Resource, descriptor.Action,
-		time.Now().Format("2006-01-02 15:04:05"))
-	// #nosec G306 -- an operator-facing log the panel serves back; it holds no secret.
-	if err := os.WriteFile(logPath, []byte(header), 0o640); err != nil {
-		return fmt.Errorf("open the log: %w", err)
-	}
 	body, err := json.Marshal(descriptor)
 	if err != nil {
 		return fmt.Errorf("encode the descriptor: %w", err)
 	}
+	staged := config.PHPOpState() + ".tmp"
 	// #nosec G306 -- a descriptor of which version is being worked on; it holds no secret.
-	if err := os.WriteFile(config.PHPOpState(), body, 0o640); err != nil {
+	if err := os.WriteFile(staged, body, 0o640); err != nil {
+		return fmt.Errorf("record the operation: %w", err)
+	}
+	header := fmt.Sprintf("════════ PHP %s (%s) %s — %s ════════",
+		descriptor.Version, descriptor.Resource, descriptor.Action,
+		time.Now().Format("2006-01-02 15:04:05"))
+	if err := launchPHPOp(config.ScriptWithLogHeader(script, logPath, header)); err != nil {
+		_ = os.Remove(staged)
+		return err
+	}
+	if err := os.Rename(staged, config.PHPOpState()); err != nil {
 		return fmt.Errorf("record the operation: %w", err)
 	}
 	// A dnf install or remove is about to change which versions exist, so the
 	// scan cache stops being an answer about this server the moment the unit
-	// starts. Dropped BEFORE launching rather than after, since the launch
-	// returns as soon as systemd-run has accepted the unit.
+	// starts.
 	InvalidateAllVersions()
-	return launchPHPOp(script)
+	return nil
 }
 
 // readOpDescriptor returns what the last started operation was, or the zero
