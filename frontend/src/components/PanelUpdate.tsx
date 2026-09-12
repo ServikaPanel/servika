@@ -55,6 +55,125 @@ function finishedOutcome(log: string): 'done' | 'failed' | null {
   return null
 }
 
+// VersionBadges marks a critical release, or an ordinary one when the release is
+// not critical, beside the title.
+function VersionBadges({ version }: { version: VersionStatus | null }) {
+  const { t } = useTranslation('PanelUpdate')
+  return (
+    <>
+      {version?.critical && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">{t('badges.critical')}</span>}
+      {version?.update_available && !version.critical && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('badges.updateAvailable')}</span>}
+    </>
+  )
+}
+
+// VersionGrid holds the four version facts of the info box.
+function VersionGrid({ version }: { version: VersionStatus }) {
+  const { t } = useTranslation('PanelUpdate')
+  return (
+    <div className="grid gap-2 sm:grid-cols-4">
+      <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.current')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{version.current || t('unknown')}</span></div>
+      <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.latest')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{version.latest || t('unknown')}</span></div>
+      <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.buildDate')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{version.build_date || t('unknown')}</span></div>
+      <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.lastCheck')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{formatCheckTime(version.last_check, t('notCheckedYet'))}</span></div>
+    </div>
+  )
+}
+
+// VersionPanel is the info box below the description: the version facts, the
+// announcement, and why a check produced nothing.
+function VersionPanel({ version }: { version: VersionStatus | null }) {
+  const { t } = useTranslation('PanelUpdate')
+  if (!version) return null
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-950/20 p-3 text-xs text-slate-600 dark:text-slate-300">
+      <VersionGrid version={version} />
+      {version.announcement && (
+        <div className={`mt-3 rounded-lg px-3 py-2 ${version.critical ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'}`}>
+          {version.announcement}
+          {version.release_date && <span className="ml-1 opacity-80">({version.release_date})</span>}
+        </div>
+      )}
+      {version.error && <div className="mt-2 text-slate-500 dark:text-slate-400">{t('lastCheckFailed', { error: version.error })}</div>}
+      {!version.enabled && <div className="mt-2 text-slate-500 dark:text-slate-400">{t('checksDisabled')}</div>}
+    </div>
+  )
+}
+
+// RunState reports the update while it runs and its outcome once it settles.
+function RunState({ running, outcome }: { running: boolean; outcome: 'done' | 'failed' | null }) {
+  const { t } = useTranslation('PanelUpdate')
+  if (running) {
+    return (
+      <div className="mt-2 inline-flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
+        <span className="w-3 h-3 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+        {t('running')}
+      </div>
+    )
+  }
+  if (outcome === 'done') {
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-xs">
+        <span className="font-semibold">{t('outcome.successTitle')}</span>
+        <span className="opacity-80">{t('outcome.successHint')}</span>
+        <button onClick={() => window.location.reload()}
+          className="ml-auto text-xs px-2.5 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium">
+          {t('outcome.reload')}
+        </button>
+      </div>
+    )
+  }
+  if (outcome === 'failed') {
+    return (
+      <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
+        <span className="font-semibold">{t('outcome.failedTitle')}</span> {t('outcome.failedHint')}
+      </div>
+    )
+  }
+  return null
+}
+
+// ActionRow is the button row, which asks for a confirmation before it starts.
+function ActionRow({ confirmation, running, starting, refreshing, onAsk, onCancel, onStart, onRefresh }: {
+  confirmation: boolean
+  running: boolean
+  starting: boolean
+  refreshing: boolean
+  onAsk: () => void
+  onCancel: () => void
+  onStart: () => void
+  onRefresh: () => void
+}) {
+  const { t } = useTranslation('PanelUpdate')
+  return (
+    <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+      {!confirmation ? (
+        <>
+          <button onClick={onAsk} disabled={running || starting}
+            className="text-xs px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+            {t('checkAndInstall')}
+          </button>
+          <button onClick={onRefresh} disabled={refreshing || running}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
+            {refreshing ? t('checking') : t('refreshStatus')}
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="text-xs text-slate-600 dark:text-slate-300">{t('confirmPrompt')}</span>
+          <button onClick={onStart} disabled={starting}
+            className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium disabled:opacity-40">
+            {starting ? t('starting') : t('confirmYes')}
+          </button>
+          <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            {t('cancel')}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 /** Displays update status, starts an update, and follows its persistent log. */
 export default function PanelUpdate() {
   const { t, i18n } = useTranslation('PanelUpdate')
@@ -189,87 +308,28 @@ export default function PanelUpdate() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('title')}</span>
             <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">{t('badges.server')}</span>
-            {version?.critical && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">{t('badges.critical')}</span>}
-            {version?.update_available && !version.critical && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{t('badges.updateAvailable')}</span>}
+            <VersionBadges version={version} />
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
             {t('description')}
             {status && !status.tool_available && t('toolMissing')}
           </div>
 
-          {version && (
-            <div className="mt-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-950/20 p-3 text-xs text-slate-600 dark:text-slate-300">
-              <div className="grid gap-2 sm:grid-cols-4">
-                <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.current')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{version.current || t('unknown')}</span></div>
-                <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.latest')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{version.latest || t('unknown')}</span></div>
-                <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.buildDate')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{version.build_date || t('unknown')}</span></div>
-                <div><span className="block text-slate-400 dark:text-slate-500">{t('labels.lastCheck')}</span><span className="font-medium text-slate-900 dark:text-slate-100">{formatCheckTime(version.last_check, t('notCheckedYet'))}</span></div>
-              </div>
-              {version.announcement && (
-                <div className={`mt-3 rounded-lg px-3 py-2 ${version.critical ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'}`}>
-                  {version.announcement}
-                  {version.release_date && <span className="ml-1 opacity-80">({version.release_date})</span>}
-                </div>
-              )}
-              {version.error && <div className="mt-2 text-slate-500 dark:text-slate-400">{t('lastCheckFailed', { error: version.error })}</div>}
-              {!version.enabled && <div className="mt-2 text-slate-500 dark:text-slate-400">{t('checksDisabled')}</div>}
-            </div>
-          )}
+          <VersionPanel version={version} />
 
           {error && <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">{error}</div>}
 
-          {running && (
-            <div className="mt-2 inline-flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
-              <span className="w-3 h-3 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-              {t('running')}
-            </div>
-          )}
-
-          {!running && outcome === 'done' && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-xs">
-              <span className="font-semibold">{t('outcome.successTitle')}</span>
-              <span className="opacity-80">{t('outcome.successHint')}</span>
-              <button onClick={() => window.location.reload()}
-                className="ml-auto text-xs px-2.5 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium">
-                {t('outcome.reload')}
-              </button>
-            </div>
-          )}
-          {!running && outcome === 'failed' && (
-            <div className="mt-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
-              <span className="font-semibold">{t('outcome.failedTitle')}</span> {t('outcome.failedHint')}
-            </div>
-          )}
+          <RunState running={running} outcome={outcome} />
 
           {log && (
             <pre ref={logRef} className="mt-2 text-[11px] font-mono bg-slate-900 text-slate-300 rounded-lg p-2.5 max-h-56 overflow-auto whitespace-pre-wrap leading-relaxed">{log}</pre>
           )}
 
-          <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
-            {!confirmation ? (
-              <>
-                <button onClick={() => setConfirmation(true)} disabled={running || starting}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 transition font-medium disabled:opacity-40 disabled:cursor-not-allowed">
-                  {t('checkAndInstall')}
-                </button>
-                <button onClick={refreshVersion} disabled={refreshing || running}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
-                  {refreshing ? t('checking') : t('refreshStatus')}
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="text-xs text-slate-600 dark:text-slate-300">{t('confirmPrompt')}</span>
-                <button onClick={start} disabled={starting}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium disabled:opacity-40">
-                  {starting ? t('starting') : t('confirmYes')}
-                </button>
-                <button onClick={() => setConfirmation(false)} className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                  {t('cancel')}
-                </button>
-              </>
-            )}
-          </div>
+          <ActionRow
+            confirmation={confirmation} running={running} starting={starting} refreshing={refreshing}
+            onAsk={() => setConfirmation(true)} onCancel={() => setConfirmation(false)}
+            onStart={start} onRefresh={refreshVersion}
+          />
         </div>
       </div>
     </div>
