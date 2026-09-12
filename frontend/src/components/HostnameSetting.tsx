@@ -1,11 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
+import { FormAlerts } from './FormAlerts'
 
 type HostnameStatus = {
   hostname: string
   protected: boolean
   note: string
+}
+
+// ProtectionBadge says whether the panel certificate already covers the
+// hostname. It draws nothing until the status has been read.
+function ProtectionBadge({ status }: { status: HostnameStatus | null }) {
+  const { t } = useTranslation('HostnameSetting')
+  if (!status) return null
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+      status.protected
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+    }`}>
+      {status.protected ? t('protected') : t('awaitingProtection')}
+    </span>
+  )
 }
 
 export default function HostnameSetting() {
@@ -57,15 +74,7 @@ export default function HostnameSetting() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h2>
-            {status && (
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                status.protected
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-              }`}>
-                {status.protected ? t('protected') : t('awaitingProtection')}
-              </span>
-            )}
+            <ProtectionBadge status={status} />
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
             {t('descriptionPre')}<code className="text-[11px]">server1.example.com</code>
@@ -73,8 +82,7 @@ export default function HostnameSetting() {
         </div>
       </div>
 
-      {error && <div className="text-sm px-3 py-2 rounded-lg border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 mb-3">{error}</div>}
-      {message && <div className="text-sm px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 mb-3">{message}</div>}
+      <FormAlerts error={error} message={message} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input

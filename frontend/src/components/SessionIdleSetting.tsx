@@ -2,10 +2,42 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useAuth } from '@/store/auth'
+import { FormAlerts } from './FormAlerts'
 
 type SessionIdle = {
   minutes: number
   max: number
+}
+
+// What the server accepts when it has not answered yet. The server owns the
+// real ceiling and sends it in `max`.
+const DEFAULT_MAX = 1440
+
+// fieldState reports what the Apply button needs to know about the field:
+// whether it still holds the saved value, and whether it holds something the
+// server would refuse.
+function fieldState(minutes: string, status: SessionIdle | null) {
+  const parsed = Number(minutes)
+  return {
+    unchanged: Number.isInteger(parsed) && parsed === status?.minutes,
+    malformed: minutes.trim() === '' || !Number.isInteger(parsed) || parsed < 0,
+  }
+}
+
+// IdleBadge says whether the timeout is on. It draws nothing until the status
+// has been read.
+function IdleBadge({ status }: { status: SessionIdle | null }) {
+  const { t } = useTranslation('SessionIdleSetting')
+  if (!status) return null
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+      status.minutes > 0
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+    }`}>
+      {status.minutes > 0 ? t('on') : t('off')}
+    </span>
+  )
 }
 
 /**
@@ -51,7 +83,7 @@ export default function SessionIdleSetting() {
       setMessage(response.data.minutes === 0 ? t('messages.disabled') : t('messages.saved', { minutes: response.data.minutes }))
     } catch (cause) {
       setError(apiError(cause, '') === 'session_idle_out_of_range'
-        ? t('errors.outOfRange', { max: status?.max ?? 1440 })
+        ? t('errors.outOfRange', { max: status?.max ?? DEFAULT_MAX })
         : apiError(cause, t('errors.save')))
     } finally {
       setSaving(false)
@@ -62,9 +94,8 @@ export default function SessionIdleSetting() {
   // and be shown an error for a control they are not offered.
   if (!isAdmin) return null
 
-  const parsed = Number(minutes)
-  const unchanged = Number.isInteger(parsed) && parsed === status?.minutes
-  const malformed = minutes.trim() === '' || !Number.isInteger(parsed) || parsed < 0
+  const maxMinutes = status?.max ?? DEFAULT_MAX
+  const { unchanged, malformed } = fieldState(minutes, status)
 
   return (
     <section className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
@@ -75,22 +106,13 @@ export default function SessionIdleSetting() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h2>
-            {status && (
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                status.minutes > 0
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                  : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
-              }`}>
-                {status.minutes > 0 ? t('on') : t('off')}
-              </span>
-            )}
+            <IdleBadge status={status} />
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{t('description')}</p>
         </div>
       </div>
 
-      {error && <div className="text-sm px-3 py-2 rounded-lg border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 mb-3">{error}</div>}
-      {message && <div className="text-sm px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 mb-3">{message}</div>}
+      <FormAlerts error={error} message={message} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="text-sm text-slate-700 dark:text-slate-300" htmlFor="session-idle-minutes">
@@ -100,7 +122,7 @@ export default function SessionIdleSetting() {
           id="session-idle-minutes"
           type="number"
           min={0}
-          max={status?.max ?? 1440}
+          max={maxMinutes}
           step={1}
           value={minutes}
           onChange={event => setMinutes(event.target.value)}
@@ -115,7 +137,7 @@ export default function SessionIdleSetting() {
           {saving ? t('applying') : t('apply')}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">{t('hint', { max: status?.max ?? 1440 })}</p>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">{t('hint', { max: maxMinutes })}</p>
     </section>
   )
 }

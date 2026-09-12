@@ -2,11 +2,32 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useAuth } from '@/store/auth'
+import { FormAlerts } from './FormAlerts'
 
 type LogRetention = {
   days: number
   min: number
   max: number
+}
+
+// What the field accepts until the server answers. The server owns the real
+// bounds and sends them in `min` and `max`.
+const DEFAULT_MIN = 1
+const DEFAULT_MAX = 365
+
+function bounds(status: LogRetention | null) {
+  return { min: status?.min ?? DEFAULT_MIN, max: status?.max ?? DEFAULT_MAX }
+}
+
+// fieldState reports what the Apply button needs to know about the field:
+// whether it still holds the saved value, and whether it holds something the
+// server would refuse.
+function fieldState(days: string, status: LogRetention | null) {
+  const parsed = Number(days)
+  return {
+    unchanged: Number.isInteger(parsed) && parsed === status?.days,
+    malformed: days.trim() === '' || !Number.isInteger(parsed) || parsed < 1,
+  }
 }
 
 /**
@@ -50,7 +71,7 @@ export default function LogRetentionSetting() {
       setMessage(t('messages.saved', { days: response.data.days }))
     } catch (cause) {
       setError(apiError(cause, '') === 'log_retention_out_of_range'
-        ? t('errors.outOfRange', { min: status?.min ?? 1, max: status?.max ?? 365 })
+        ? t('errors.outOfRange', bounds(status))
         : apiError(cause, t('errors.save')))
     } finally {
       setSaving(false)
@@ -61,9 +82,8 @@ export default function LogRetentionSetting() {
   // and be shown an error for a control they are not offered.
   if (!isAdmin) return null
 
-  const parsed = Number(days)
-  const unchanged = Number.isInteger(parsed) && parsed === status?.days
-  const malformed = days.trim() === '' || !Number.isInteger(parsed) || parsed < 1
+  const limits = bounds(status)
+  const { unchanged, malformed } = fieldState(days, status)
 
   return (
     <section className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm">
@@ -77,8 +97,7 @@ export default function LogRetentionSetting() {
         </div>
       </div>
 
-      {error && <div className="text-sm px-3 py-2 rounded-lg border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 mb-3">{error}</div>}
-      {message && <div className="text-sm px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 mb-3">{message}</div>}
+      <FormAlerts error={error} message={message} />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="text-sm text-slate-700 dark:text-slate-300" htmlFor="log-retention-days">
@@ -87,8 +106,8 @@ export default function LogRetentionSetting() {
         <input
           id="log-retention-days"
           type="number"
-          min={status?.min ?? 1}
-          max={status?.max ?? 365}
+          min={limits.min}
+          max={limits.max}
           step={1}
           value={days}
           onChange={event => setDays(event.target.value)}
@@ -103,7 +122,7 @@ export default function LogRetentionSetting() {
           {saving ? t('applying') : t('apply')}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">{t('hint', { min: status?.min ?? 1, max: status?.max ?? 365 })}</p>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">{t('hint', { min: limits.min, max: limits.max })}</p>
     </section>
   )
 }

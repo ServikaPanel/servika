@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useAuth } from '@/store/auth'
 import ConfirmDialog from './ConfirmDialog'
+import { FormAlerts } from './FormAlerts'
 
 type NameserverSettings = {
   ns1: string
@@ -13,6 +14,63 @@ type NameserverSettings = {
 }
 
 type MigrationResult = { total: number; updated: number; failed?: string[] }
+
+// audienceScope resolves which pair this mount edits. The card is mounted twice
+// with an explicit audience, so the signed-in role alone does not decide it.
+function audienceScope(audience: 'admin' | 'reseller', role: string | undefined) {
+  const isAdmin = audience === 'admin' && role === 'admin'
+  const isReseller = audience === 'reseller' && role === 'reseller'
+  return { isAdmin, isReseller, endpoint: isAdmin ? '/nameservers' : '/reseller/nameservers' }
+}
+
+// SourceNotice says where the pair in the fields came from: nothing configured
+// yet, or the panel pair a reseller has not overridden.
+function SourceNotice({ settings, isAdmin, isReseller }: {
+  settings: NameserverSettings | null
+  isAdmin: boolean
+  isReseller: boolean
+}) {
+  const { t } = useTranslation('NameserverSetting')
+  if (settings?.source === 'none') {
+    return (
+      <div className="text-sm px-3 py-2 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 mb-3">
+        {isAdmin ? t('warnings.unconfiguredAdmin') : t('warnings.unconfiguredReseller')}
+        {settings.suggested_ns1 && <span className="block mt-1">{t('warnings.suggestion')}</span>}
+      </div>
+    )
+  }
+  if (settings?.source === 'panel' && isReseller) {
+    return (
+      <div className="text-sm px-3 py-2 rounded-lg border bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-300 mb-3">
+        {t('warnings.usingPanelPair')}
+      </div>
+    )
+  }
+  return null
+}
+
+// MigrateButton rewrites every existing zone to the saved pair. It is admin
+// only, and disabled while nothing is configured: the migration writes the
+// RESOLVED pair, which with no setting is the vanity fallback, so running it
+// then would stamp ns1.<domain> into every zone.
+function MigrateButton({ isAdmin, migrating, settings, onOpen }: {
+  isAdmin: boolean
+  migrating: boolean
+  settings: NameserverSettings | null
+  onOpen: () => void
+}) {
+  const { t } = useTranslation('NameserverSetting')
+  if (!isAdmin) return null
+  const unconfigured = settings?.source === 'none'
+  return (
+    <button type="button" onClick={onOpen}
+      disabled={migrating || unconfigured}
+      title={unconfigured ? t('migrateDisabledHint') : undefined}
+      className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
+      {migrating ? t('migrating') : t('migrate')}
+    </button>
+  )
+}
 
 // The shared nameserver pair every customer zone publishes. An admin sets the
 // panel-wide pair; a reseller sets its own white-label pair for the domains of
@@ -26,9 +84,7 @@ type MigrationResult = { total: number; updated: number; failed?: string[] }
 export default function NameserverSetting({ audience }: { audience: 'admin' | 'reseller' }) {
   const { t } = useTranslation('NameserverSetting')
   const role = useAuth(state => state.username?.role)
-  const isAdmin = audience === 'admin' && role === 'admin'
-  const isReseller = audience === 'reseller' && role === 'reseller'
-  const endpoint = isAdmin ? '/nameservers' : '/reseller/nameservers'
+  const { isAdmin, isReseller, endpoint } = audienceScope(audience, role)
 
   const [settings, setSettings] = useState<NameserverSettings | null>(null)
   const [ns1, setNS1] = useState('')
@@ -99,19 +155,8 @@ export default function NameserverSetting({ audience }: { audience: 'admin' | 'r
         </div>
       </div>
 
-      {settings?.source === 'none' && (
-        <div className="text-sm px-3 py-2 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 mb-3">
-          {isAdmin ? t('warnings.unconfiguredAdmin') : t('warnings.unconfiguredReseller')}
-          {settings.suggested_ns1 && <span className="block mt-1">{t('warnings.suggestion')}</span>}
-        </div>
-      )}
-      {settings?.source === 'panel' && isReseller && (
-        <div className="text-sm px-3 py-2 rounded-lg border bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-300 mb-3">
-          {t('warnings.usingPanelPair')}
-        </div>
-      )}
-      {error && <div className="text-sm px-3 py-2 rounded-lg border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 mb-3">{error}</div>}
-      {message && <div className="text-sm px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 mb-3">{message}</div>}
+      <SourceNotice settings={settings} isAdmin={isAdmin} isReseller={isReseller} />
+      <FormAlerts error={error} message={message} />
 
       <div className="grid gap-4 sm:grid-cols-2 mb-4">
         <label className="block">
@@ -133,17 +178,8 @@ export default function NameserverSetting({ audience }: { audience: 'admin' | 'r
           className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50">
           {saving ? t('saving') : t('save')}
         </button>
-        {isAdmin && (
-          // Disabled while nothing is configured: the migration writes the
-          // RESOLVED pair, which with no setting is the vanity fallback, so
-          // running it then would stamp ns1.<domain> into every zone.
-          <button type="button" onClick={() => setMigrateOpen(true)}
-            disabled={migrating || settings?.source === 'none'}
-            title={settings?.source === 'none' ? t('migrateDisabledHint') : undefined}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
-            {migrating ? t('migrating') : t('migrate')}
-          </button>
-        )}
+        <MigrateButton isAdmin={isAdmin} migrating={migrating} settings={settings}
+          onOpen={() => setMigrateOpen(true)} />
       </div>
 
       <ConfirmDialog
