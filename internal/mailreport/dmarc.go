@@ -30,20 +30,23 @@ type feedback struct {
 		ADKIM string `xml:"adkim"`
 		ASPF  string `xml:"aspf"`
 	} `xml:"policy_published"`
-	Records []struct {
-		Row struct {
-			SourceIP string `xml:"source_ip"`
-			Count    string `xml:"count"`
-			Policy   struct {
-				Disposition string `xml:"disposition"`
-				DKIM        string `xml:"dkim"`
-				SPF         string `xml:"spf"`
-			} `xml:"policy_evaluated"`
-		} `xml:"row"`
-		Identifiers struct {
-			HeaderFrom string `xml:"header_from"`
-		} `xml:"identifiers"`
-	} `xml:"record"`
+	Records []feedbackRecord `xml:"record"`
+}
+
+// feedbackRecord is one <record> of an aggregate report.
+type feedbackRecord struct {
+	Row struct {
+		SourceIP string `xml:"source_ip"`
+		Count    string `xml:"count"`
+		Policy   struct {
+			Disposition string `xml:"disposition"`
+			DKIM        string `xml:"dkim"`
+			SPF         string `xml:"spf"`
+		} `xml:"policy_evaluated"`
+	} `xml:"row"`
+	Identifiers struct {
+		HeaderFrom string `xml:"header_from"`
+	} `xml:"identifiers"`
 }
 
 // ParseAggregate reads a DMARC aggregate report.
@@ -74,6 +77,26 @@ func ParseAggregate(body []byte) (Report, error) {
 		return Report{}, ErrNotAReport
 	}
 
+	report, err := aggregateHeader(document)
+	if err != nil {
+		return Report{}, err
+	}
+	if len(document.Records) > MaxRecords {
+		return Report{}, fmt.Errorf("the report holds more than %d records", MaxRecords)
+	}
+	report.Rows = make([]Row, 0, len(document.Records))
+	for index, record := range document.Records {
+		row, err := aggregateRow(record)
+		if err != nil {
+			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
+		}
+		report.Rows = append(report.Rows, row)
+	}
+	return report, nil
+}
+
+// aggregateHeader reads the metadata and the published policy.
+func aggregateHeader(document feedback) (Report, error) {
 	report := Report{}
 	var err error
 	if report.OrgName, err = checkedField("org_name", document.Metadata.OrgName, maxOrgName); err != nil {
@@ -85,13 +108,8 @@ func ParseAggregate(body []byte) (Report, error) {
 	if report.OrgName == "" || report.ReportID == "" {
 		return Report{}, errors.New("the report has no org_name or report_id")
 	}
-	if report.DateBegin, err = parseEpoch(document.Metadata.DateRange.Begin); err != nil {
-		return Report{}, fmt.Errorf("date_range begin: %w", err)
-	}
-	if report.DateEnd, err = parseEpoch(document.Metadata.DateRange.End); err != nil {
-		return Report{}, fmt.Errorf("date_range end: %w", err)
-	}
-	if err := checkedRange(report.DateBegin, report.DateEnd); err != nil {
+	if report.DateBegin, report.DateEnd, err = epochRange(document.Metadata.DateRange.Begin,
+		document.Metadata.DateRange.End); err != nil {
 		return Report{}, err
 	}
 	if report.PolicyP, err = checkedField("p", document.Policy.P, maxShortResult); err != nil {
@@ -103,34 +121,49 @@ func ParseAggregate(body []byte) (Report, error) {
 	if report.PolicyASPF, err = alignmentFlag(document.Policy.ASPF); err != nil {
 		return Report{}, err
 	}
-
-	if len(document.Records) > MaxRecords {
-		return Report{}, fmt.Errorf("the report holds more than %d records", MaxRecords)
-	}
-	report.Rows = make([]Row, 0, len(document.Records))
-	for index, record := range document.Records {
-		row := Row{}
-		if row.SourceIP, err = checkedIP("source_ip", record.Row.SourceIP); err != nil {
-			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
-		}
-		if row.MessageCount, err = parseCount(record.Row.Count); err != nil {
-			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
-		}
-		if row.Disposition, err = checkedField("disposition", record.Row.Policy.Disposition, maxShortResult); err != nil {
-			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
-		}
-		if row.DKIMResult, err = checkedField("dkim", record.Row.Policy.DKIM, maxShortResult); err != nil {
-			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
-		}
-		if row.SPFResult, err = checkedField("spf", record.Row.Policy.SPF, maxShortResult); err != nil {
-			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
-		}
-		if row.HeaderFrom, err = checkedField("header_from", record.Identifiers.HeaderFrom, maxHeaderFrom); err != nil {
-			return Report{}, fmt.Errorf("record %d: %w", index+1, err)
-		}
-		report.Rows = append(report.Rows, row)
-	}
 	return report, nil
+}
+
+// aggregateRow reads one source address. The caller adds the record number, so
+// the message names which row of the document failed.
+func aggregateRow(record feedbackRecord) (Row, error) {
+	row := Row{}
+	var err error
+	if row.SourceIP, err = checkedIP("source_ip", record.Row.SourceIP); err != nil {
+		return Row{}, err
+	}
+	if row.MessageCount, err = parseCount(record.Row.Count); err != nil {
+		return Row{}, err
+	}
+	if row.Disposition, err = checkedField("disposition", record.Row.Policy.Disposition, maxShortResult); err != nil {
+		return Row{}, err
+	}
+	if row.DKIMResult, err = checkedField("dkim", record.Row.Policy.DKIM, maxShortResult); err != nil {
+		return Row{}, err
+	}
+	if row.SPFResult, err = checkedField("spf", record.Row.Policy.SPF, maxShortResult); err != nil {
+		return Row{}, err
+	}
+	if row.HeaderFrom, err = checkedField("header_from", record.Identifiers.HeaderFrom, maxHeaderFrom); err != nil {
+		return Row{}, err
+	}
+	return row, nil
+}
+
+// epochRange reads both ends of a DMARC date range and checks the window.
+func epochRange(begin, end string) (time.Time, time.Time, error) {
+	from, err := parseEpoch(begin)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("date_range begin: %w", err)
+	}
+	to, err := parseEpoch(end)
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("date_range end: %w", err)
+	}
+	if err := checkedRange(from, to); err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return from, to, nil
 }
 
 // parseEpoch reads the seconds-since-epoch form a DMARC date range uses.
