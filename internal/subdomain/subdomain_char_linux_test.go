@@ -327,6 +327,24 @@ func TestCreateRefusesAVersionTheServerDoesNotCarry(t *testing.T) {
 	}
 }
 
+// The parent domain's own name reaches the host name, so a parent that is not
+// a domain name is refused rather than turned into a vhost nginx cannot serve.
+func TestCreateRefusesAHostNameThatIsNotOne(t *testing.T) {
+	hostTree(t)
+	script := newScript()
+	tenantAccount(t, script, "c_acme", "not_a_domain")
+	host := hostForCreate(t, "/run/php-fpm/c_acme-8.3.sock")
+	handlers := &Handlers{DB: scriptDB(t, script)}
+
+	recorder := httptest.NewRecorder()
+	handlers.Create(recorder, createRequest(t, 4, `{"subdomain":"shop"}`))
+
+	assertRefusal(t, recorder, http.StatusBadRequest, "invalid domain name")
+	if len(host.ran) != 0 {
+		t.Errorf("commands = %v, want none", host.ran)
+	}
+}
+
 // A tenant on its own FPM unit serves every subdomain from one socket, so a
 // version other than the parent's is refused rather than recorded.
 func TestCreateRefusesAVersionTheTenantPoolCannotServe(t *testing.T) {
@@ -549,6 +567,32 @@ func TestDeleteFinishesThroughEveryFailureAfterTheRecord(t *testing.T) {
 	if _, err := os.Stat(confFile); !os.IsNotExist(err) {
 		t.Errorf("the server block outlived the subdomain: %v", err)
 	}
+}
+
+// A removal that fails for a reason other than "it is not there" is logged and
+// the delete continues: the record is already gone, so refusing here would
+// leave the panel with no way to try again.
+func TestDeleteReportsWhatItCouldNotRemove(t *testing.T) {
+	home, conf := hostTree(t)
+	noHostCalls(t)
+	host := &commandHost{}
+	host.install(t)
+	setForTest(t, &removeSubdomainFPM, func(string, int64) {})
+	script := newScript()
+	oneSubdomain(script, "c_acme", "acme.test", "8.3", "shop")
+	// The tenant home is a FILE, so openat2 refuses to resolve beneath it with
+	// something other than "not found".
+	writeFileAt(t, filepath.Join(home, "c_acme"), "not a home")
+	writeFileAt(t, filepath.Join(conf, "sub_c_acme_shop.conf"), "server {}")
+
+	recorder := httptest.NewRecorder()
+	handlers := &Handlers{DB: scriptDB(t, script)}
+	handlers.Delete(recorder, subdomainRequest(t, http.MethodDelete, 4, 9, ""))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	execArgs(t, script, "DELETE FROM subdomains")
 }
 
 func TestDeleteRefusesWhatItCannotResolve(t *testing.T) {

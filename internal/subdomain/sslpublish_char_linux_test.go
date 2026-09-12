@@ -160,6 +160,38 @@ func TestACertificateDirectoryThatCannotBePreparedIsReported(t *testing.T) {
 	}
 }
 
+// Either half of the pair failing to install is reported: a certificate
+// without its key, or a key without its certificate, is not a certificate the
+// site can be served with.
+func TestAHalfInstalledPairIsReported(t *testing.T) {
+	cases := []struct {
+		name    string
+		blocked string
+		message string
+	}{
+		{name: "the certificate", blocked: "shop.acme.test.crt", message: "install the certificate"},
+		{name: "the key", blocked: "shop.acme.test.key", message: "install the key"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			home, _ := hostTree(t)
+			// A DIRECTORY where the file must go, so the write refuses.
+			if err := os.MkdirAll(filepath.Join(home, "c_acme", "ssl", testCase.blocked), 0o750); err != nil {
+				t.Fatalf("block the target: %v", err)
+			}
+			setForTest(t, &issueSelfSignedCertificate, issuerWriting(t, "the certificate", "the key"))
+
+			err := issueAndPublish("c_acme", "shop.acme.test", "self-signed")
+			if err == nil {
+				t.Fatal("a half-installed pair was reported as issued")
+			}
+			if !strings.Contains(err.Error(), testCase.message) {
+				t.Errorf("error is %q, want it to carry %q", err, testCase.message)
+			}
+		})
+	}
+}
+
 func assertMode(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
 	info, err := os.Stat(path)
