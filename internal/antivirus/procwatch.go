@@ -27,11 +27,17 @@ package antivirus
 // the netlink proc connector is a Linux facility.
 
 import (
+	"context"
+	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"servika/internal/avsettings"
 )
 
 // procWatchFlag is the argv that runs `servika-server -proc-watch`.
@@ -394,6 +400,51 @@ func atoiSafe(s string) int {
 		n = n*10 + int(c-'0')
 	}
 	return n
+}
+
+// procSweepInterval is how often the stale throttle and pid records are dropped,
+// which is what keeps both maps from being a memory-DoS vector. It is a variable
+// so a test can make every read sweep.
+var procSweepInterval = 30 * time.Second
+
+// procSettingsRefresh is how often the watcher re-reads process_monitor.
+//
+// The switch has to reach a process that may have been running for weeks. The
+// unit is also stopped by avsettings.ApplyProcessMonitor, but that call is
+// skipped when an earlier step of avsettings.Write fails, and the watcher then
+// outlives the setting that turned it off: a detection layer the screen reports
+// as disabled goes on writing notifications. The file watcher re-reads realtime
+// on the same reasoning (settingsRefresh in watch_linux.go).
+var procSettingsRefresh = time.Minute
+
+// procTimers carries the two deadlines of the event loop.
+type procTimers struct{ sweep, settings time.Time }
+
+// due reports which periodic work has come due, and re-arms what it reports.
+func (t *procTimers) due(now time.Time) (sweep, recheck bool) {
+	if now.Sub(t.sweep) >= procSweepInterval {
+		t.sweep = now
+		sweep = true
+	}
+	if now.Sub(t.settings) >= procSettingsRefresh {
+		t.settings = now
+		recheck = true
+	}
+	return sweep, recheck
+}
+
+// procMonitorStillOn reports whether the process monitor is still switched on.
+//
+// A read that FAILS keeps the watcher running: a database hiccup must not
+// silently turn a detection layer off, which is the choice watcher.refresh
+// makes for the file watcher.
+func procMonitorStillOn(ctx context.Context, handle *sql.DB) bool {
+	settings, err := avsettings.Read(ctx, handle)
+	if err != nil {
+		log.Printf("process watcher: the settings could not be re-read, keeping the watcher running: %v", err)
+		return true
+	}
+	return settings.ProcessMonitor
 }
 
 // RunProcWatcherIfAsked runs the process watcher when argv asks for it, exactly

@@ -42,15 +42,16 @@ const (
 	procRateBurst = 5
 )
 
-// procSweepInterval is how often the stale throttle and pid records are dropped,
-// which is what keeps both maps from being a memory-DoS vector. It is a variable
-// so a test can make every read sweep.
-var procSweepInterval = 30 * time.Second
+// procReadTimeout bounds how long one netlink read waits, in seconds, so the
+// loop reaches its periodic work even on a server where nothing execs. A read
+// that times out reports EAGAIN, which the loop already treats as transient.
+const procReadTimeout = 1
 
 // runProcWatcher opens the database, checks the gate, subscribes to the exec
 // stream and reports suspicious execs until stopped. It ENDS with a nil error
-// when the feature is off, so systemd's Restart=on-failure does not bring it
-// straight back, exactly like the file watcher.
+// when the feature is off, at startup and again when the switch goes off while
+// it runs, so systemd's Restart=on-failure does not bring it straight back,
+// exactly like the file watcher.
 func runProcWatcher() error {
 	dsn := strings.TrimSpace(os.Getenv("SERVIKA_DB_DSN"))
 	if dsn == "" {
@@ -78,6 +79,9 @@ func runProcWatcher() error {
 	defer func() { _ = unix.Close(fd) }()
 	// A larger receive buffer reduces ENOBUFS under a heavy fork/exec load.
 	_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, 8<<20)
+	// A read deadline is what lets the loop re-read the switch on an idle
+	// server; without it the watcher sits in recvfrom until the next exec.
+	_ = unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &unix.Timeval{Sec: procReadTimeout})
 	if err := unix.Bind(fd, &unix.SockaddrNetlink{Family: unix.AF_NETLINK, Groups: cnIdxProc}); err != nil {
 		return fmt.Errorf("netlink bind: %w", err)
 	}
@@ -97,14 +101,21 @@ func runProcWatcher() error {
 	return nil
 }
 
-// loop reads events until an unrecoverable error. EINTR, ENOBUFS and EAGAIN are
-// TRANSIENT: the watcher must never die on a single error, because a dead
-// watcher is a detection layer that silently went off. Stale records are swept
-// on a timer so neither map grows without bound.
+// loop reads events until an unrecoverable error or until the feature is
+// switched off. EINTR, ENOBUFS and EAGAIN are TRANSIENT: the watcher must never
+// die on a single error, because a dead watcher is a detection layer that
+// silently went off.
+//
+// The periodic work runs BEFORE the read rather than after it. A read that
+// times out reports EAGAIN and continues, so work placed after the read would
+// be skipped on exactly the idle server where the switch has to be re-read.
 func (w *procWatcher) loop(fd int) {
 	buf := make([]byte, 16384)
-	lastSweep := time.Now()
+	timers := &procTimers{sweep: time.Now(), settings: time.Now()}
 	for {
+		if !w.periodic(timers) {
+			return
+		}
 		n, from, err := recvNetlink(fd, buf, 0)
 		if err != nil {
 			if transientNetlinkError(err) {
@@ -121,11 +132,22 @@ func (w *procWatcher) loop(fd int) {
 		for _, ev := range parseProcEvents(buf[:n]) {
 			w.handleEvent(ev)
 		}
-		if time.Since(lastSweep) > procSweepInterval {
-			w.sweepTables()
-			lastSweep = time.Now()
-		}
 	}
+}
+
+// periodic does the work that must happen even while no exec arrives: it sweeps
+// the stale records so neither map grows without bound, re-reads the switch, and
+// reports whether the watcher goes on.
+func (w *procWatcher) periodic(timers *procTimers) bool {
+	sweep, recheck := timers.due(time.Now())
+	if sweep {
+		w.sweepTables()
+	}
+	if recheck && !procMonitorStillOn(context.Background(), w.db) {
+		log.Print("process watcher: process monitoring was turned off in the antivirus settings, stopping")
+		return false
+	}
+	return true
 }
 
 // transientNetlinkError reports whether the watcher survives a read error. An
