@@ -307,18 +307,25 @@ func fetch(ctx context.Context, d Details) (map[string]string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("wordpress.org answered %d", resp.StatusCode)
 	}
-	// The field is taken raw because wordpress.org answers a version it never
-	// published with HTTP 200 and the body {"checksums":false} (measured, not a
-	// 404 and not an empty object). Decoding straight into a map turns that into
-	// "cannot unmarshal bool into map[string]string", which is a decode error
-	// and therefore indistinguishable from a truncated response or a proxy
-	// serving something else. It has to be readable as an ANSWER, because it is
-	// the only thing that separates a version this installation invented from a
-	// wordpress.org nobody can reach.
+	return publishedTable(resp.Body)
+}
+
+// publishedTable reads the answer body. A nil table with a nil error means the
+// endpoint published nothing for this version and locale.
+//
+// The field is taken raw because wordpress.org answers a version it never
+// published with HTTP 200 and the body {"checksums":false} (measured, not a
+// 404 and not an empty object). Decoding straight into a map turns that into
+// "cannot unmarshal bool into map[string]string", which is a decode error
+// and therefore indistinguishable from a truncated response or a proxy
+// serving something else. It has to be readable as an ANSWER, because it is
+// the only thing that separates a version this installation invented from a
+// wordpress.org nobody can reach.
+func publishedTable(body io.Reader) (map[string]string, error) {
 	var wrapper struct {
 		Checksums json.RawMessage `json:"checksums"`
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, tableCeiling)).Decode(&wrapper); err != nil {
+	if err := json.NewDecoder(io.LimitReader(body, tableCeiling)).Decode(&wrapper); err != nil {
 		return nil, err
 	}
 	trimmed := strings.TrimSpace(string(wrapper.Checksums))
@@ -493,21 +500,9 @@ func hashBeneath(home, rel string) (string, error) {
 // extraFiles is the disk pass: every file the filter keeps that the table does
 // not name.
 func extraFiles(home, relDir string, table map[string]string) ([]Verdict, error) {
-	var out []Verdict
-	// The filter keeps only these three places, so the walk visits only them
-	// rather than the whole document root. That is the same set filter_file
-	// admits, and it keeps the walk off wp-content, which on a real site is
-	// almost all of the files.
-	for _, dir := range []string{"wp-admin", "wp-includes"} {
-		found, err := walkBeneath(home, relDir, dir)
-		if err != nil {
-			return nil, err
-		}
-		for _, rel := range found {
-			if _, known := table[rel]; !known {
-				out = append(out, Verdict{Message: MessageExtra, Rel: rel})
-			}
-		}
+	out, err := extraInCoreDirs(home, relDir, table)
+	if err != nil {
+		return nil, err
 	}
 	names, err := files.ListNamesBeneath(home, relDir)
 	if err != nil {
@@ -529,6 +524,29 @@ func extraFiles(home, relDir string, table map[string]string) ([]Verdict, error)
 	return out, nil
 }
 
+// extraInCoreDirs collects the files under the core directories that the table
+// does not name.
+//
+// The filter keeps only these three places, so the walk visits only them
+// rather than the whole document root. That is the same set filter_file
+// admits, and it keeps the walk off wp-content, which on a real site is
+// almost all of the files.
+func extraInCoreDirs(home, relDir string, table map[string]string) ([]Verdict, error) {
+	var out []Verdict
+	for _, dir := range []string{"wp-admin", "wp-includes"} {
+		found, err := walkBeneath(home, relDir, dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, rel := range found {
+			if _, known := table[rel]; !known {
+				out = append(out, Verdict{Message: MessageExtra, Rel: rel})
+			}
+		}
+	}
+	return out, nil
+}
+
 // walkDepth bounds the descent. WordPress core is four levels deep at its
 // deepest; the bound is here because the walk is driven by directory entries a
 // tenant can create.
@@ -542,33 +560,6 @@ const walkDepth = 16
 // and refuse one. That is the deliberate difference from wp-cli described at the
 // top of the file.
 func walkBeneath(home, relDir, sub string) ([]string, error) {
-	var out []string
-	var descend func(rel string, depth int) error
-	descend = func(rel string, depth int) error {
-		if depth > walkDepth {
-			return nil
-		}
-		names, err := files.ListNamesBeneath(home, path.Join(relDir, rel))
-		if err != nil {
-			return err
-		}
-		for _, name := range names {
-			child := path.Join(rel, name)
-			info, err := files.StatBeneath(home, path.Join(relDir, child))
-			if err != nil {
-				continue
-			}
-			switch {
-			case info.IsDir():
-				if err := descend(child, depth+1); err != nil {
-					return err
-				}
-			case info.Mode().IsRegular():
-				out = append(out, child)
-			}
-		}
-		return nil
-	}
 	exists, err := files.IsDirBeneath(home, path.Join(relDir, sub))
 	if err != nil || !exists {
 		// A core directory that is not there is reported by the table pass as a
@@ -576,10 +567,38 @@ func walkBeneath(home, relDir, sub string) ([]string, error) {
 		// added here.
 		return nil, nil //nolint:nilerr // absence is the table pass's finding, not this one's.
 	}
-	if err := descend(sub, 0); err != nil {
+	var out []string
+	if err := descendBeneath(home, relDir, sub, 0, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// descendBeneath appends every regular file under one directory to out.
+func descendBeneath(home, relDir, rel string, depth int, out *[]string) error {
+	if depth > walkDepth {
+		return nil
+	}
+	names, err := files.ListNamesBeneath(home, path.Join(relDir, rel))
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		child := path.Join(rel, name)
+		info, err := files.StatBeneath(home, path.Join(relDir, child))
+		if err != nil {
+			continue
+		}
+		switch {
+		case info.IsDir():
+			if err := descendBeneath(home, relDir, child, depth+1, out); err != nil {
+				return err
+			}
+		case info.Mode().IsRegular():
+			*out = append(*out, child)
+		}
+	}
+	return nil
 }
 
 // sortVerdicts puts a list in a stable order. Map iteration is randomised in Go,

@@ -74,7 +74,7 @@ func TestTheWalkStopsAtItsDepthBound(t *testing.T) {
 	if !found["wp-includes/d/d/d/shallow.php"] {
 		t.Errorf("the file inside the bound was not reported: %v", extras)
 	}
-	if found[path.Join(strings.TrimPrefix(deep, "wp-includes/"), "shell.php")] {
+	if found[path.Join(deep, "shell.php")] {
 		t.Errorf("a file past the bound was reported: %v", extras)
 	}
 }
