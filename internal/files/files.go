@@ -297,6 +297,17 @@ func (h *Handlers) Download(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "directories cannot be downloaded")
 		return
 	}
+	// Asserted on the DESCRIPTOR, which is what OpenBeneath's contract requires
+	// and what the antivirus and checksum callers already do. Refusing a
+	// directory is not enough: a tenant holds a shell as their own c_* account
+	// and can mkfifo inside their home. That opens successfully, stats as size
+	// 0, and the io.Copy below then waits on the pipe for as long as the tenant
+	// keeps a writer open, holding a goroutine and a connection for the whole
+	// LargeTransferDeadline this handler just granted itself.
+	if !info.Mode().IsRegular() {
+		httpx.WriteError(w, http.StatusBadRequest, "only a regular file can be downloaded")
+		return
+	}
 	// The filename is tenant-controlled, and Attachment encodes it so quotes or
 	// semicolons cannot inject additional Content-Disposition parameters.
 	httpx.Attachment(w, "application/octet-stream", info.Name())
