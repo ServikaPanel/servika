@@ -1,8 +1,10 @@
 package antivirus
 
 import (
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // semScore runs the semantic layer over a PHP snippet and returns the total
@@ -144,13 +146,14 @@ func TestSemanticPHPOnly(t *testing.T) {
 	}
 }
 
-// An exponential variable-doubling concatenation must be bounded, not blow
-// memory or hang. The fold ceiling makes it finite.
-func TestSemanticBillionLaughs(t *testing.T) {
+// doublingChain builds `$a='xxxxxxxx'; $b=$a.$a; $c=$b.$b; ...`, whose folded
+// value doubles with every statement. With n doublings the last value is
+// 8 * 2^n bytes if nothing bounds the fold.
+func doublingChain(n int) (source string, unboundedBytes int) {
 	var b strings.Builder
 	b.WriteString("<?php $a='xxxxxxxx';")
-	vars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP"
-	for k := 1; k < len(vars); k++ {
+	vars := "abcdefghijklmnopqrstuvwxyz"
+	for k := 1; k <= n; k++ {
 		b.WriteByte('$')
 		b.WriteByte(vars[k])
 		b.WriteString("=$")
@@ -159,16 +162,77 @@ func TestSemanticBillionLaughs(t *testing.T) {
 		b.WriteByte(vars[k-1])
 		b.WriteByte(';')
 	}
-	semScore(b.String()) // must return in reasonable time without OOM or panic
+	return b.String(), 8 << n
 }
 
-// A very long concatenation must stay within the token budget.
+// allocatedBy reports how many bytes the call allocated in total.
+func allocatedBy(call func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	call()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// An exponential variable-doubling concatenation must be bounded. semMaxFoldBytes
+// is what makes it finite: the scan runs on attacker-authored PHP from a tenant's
+// document root, so a file that folds to gigabytes takes the scan's whole memory
+// budget with it.
+//
+// The chain is measured rather than merely run. Twenty-two doublings allocate
+// about 0.5 MB with the ceiling in place and about 115 MB with it removed from
+// both enforcement points (foldExpr and applyAssign), so the budget below
+// separates the two by two orders of magnitude.
+func TestSemanticBillionLaughs(t *testing.T) {
+	source, unbounded := doublingChain(22)
+	if unbounded <= semMaxFoldBytes {
+		t.Fatalf("the chain folds to %d bytes, which the %d byte ceiling would not bound anyway",
+			unbounded, semMaxFoldBytes)
+	}
+
+	var score int
+	allocated := allocatedBy(func() { score, _ = semScore(source) })
+
+	const budget = 16 << 20
+	if allocated > budget {
+		t.Errorf("the doubling chain allocated %d bytes, want at most %d: the fold ceiling did not bound it",
+			allocated, budget)
+	}
+	if score != 0 {
+		t.Errorf("a chain of harmless letters scored %d, want 0", score)
+	}
+}
+
+// A very long concatenation must stay within the token budget. semMaxToken is
+// what bounds the work: the tokenizer stops there, so a file made of nothing but
+// concatenation terms cannot make the scan grow with the file.
 func TestSemanticDoSBudget(t *testing.T) {
+	const terms = 150000
 	var b strings.Builder
 	b.WriteString("<?php $x = ")
-	for range 50000 {
+	for range terms {
 		b.WriteString("'a'.")
 	}
 	b.WriteString("'b';")
-	semScore(b.String())
+	source := b.String()
+
+	// Each term is a string token plus a dot, so the file carries far more
+	// tokens than the cap. Without the cap this assertion is vacuous.
+	if terms*2 <= semMaxToken {
+		t.Fatalf("%d terms produce fewer tokens than the %d cap; the input no longer tests it",
+			terms, semMaxToken)
+	}
+	if got := len(phpTokenize([]byte(source))); got > semMaxToken {
+		t.Errorf("the tokenizer produced %d tokens, want at most %d", got, semMaxToken)
+	}
+
+	started := time.Now()
+	score, names := semScore(source)
+	if elapsed := time.Since(started); elapsed > 10*time.Second {
+		t.Errorf("scanning %d terms took %s, which is not a bounded amount of work", terms, elapsed)
+	}
+	if score != 0 {
+		t.Errorf("a concatenation of harmless letters scored %d (%v), want 0", score, names)
+	}
 }
