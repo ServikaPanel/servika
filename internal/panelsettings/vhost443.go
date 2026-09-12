@@ -31,6 +31,8 @@ server {
 
     client_max_body_size 10240m;
 
+%s
+
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -61,6 +63,16 @@ server {
 }
 `
 
+// panelDomainVhost renders the custom-domain vhost.
+//
+// The login locations come from the panel-vhost renderer rather than being
+// written again here: a longer prefix wins in nginx, so the /api/ location
+// below would otherwise take the login endpoints and serve them with none of
+// the rate limiting the port-8443 entrance applies to the same handler.
+func panelDomainVhost(domain string) string {
+	return fmt.Sprintf(panelDomainVhostTemplate, domain, domain, provisioner.PanelLoginLocations())
+}
+
 func writePortlessPanelVhost(domain string) error {
 	// Serialised with every other nginx writer: `nginx -t` validates the whole
 	// conf.d tree, so this sequence and a domain render at once each observe the
@@ -68,7 +80,7 @@ func writePortlessPanelVhost(domain string) error {
 	provisioner.LockNginx()
 	defer provisioner.UnlockNginx()
 
-	content := fmt.Sprintf(panelDomainVhostTemplate, domain, domain)
+	content := panelDomainVhost(domain)
 	backup, backupErr := os.ReadFile(panelDomainVhostPath)
 	hadBackup := backupErr == nil
 

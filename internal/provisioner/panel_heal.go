@@ -97,6 +97,27 @@ func panelLoginLocation(path string) string {
     }`
 }
 
+// PanelLoginLocations renders the rate-limited login locations for a SECOND
+// entrance to the panel.
+//
+// The custom panel domain is a separate vhost written by internal/panelsettings,
+// and it proxied /api/ as one location. A longer prefix wins in nginx, so a
+// login through that domain never reached the port-8443 vhost where the zone is
+// applied: the same handler had one entrance under the limit and one without.
+// The renderer is shared rather than copied, so a change to the burst or to the
+// endpoint list reaches both.
+//
+// The zone itself lives in the http context of the panel vhost, which nginx
+// loads for the whole server, and provisioner.Init writes it before any handler
+// can save a custom domain.
+func PanelLoginLocations() string {
+	blocks := make([]string, 0, len(panelLoginPaths))
+	for _, path := range panelLoginPaths {
+		blocks = append(blocks, panelLoginLocation(path))
+	}
+	return strings.Join(blocks, "\n\n")
+}
+
 // ensureLoginRateLimitZone brings the http-context zone up to date, adding the
 // whole block when the panel predates it and replacing just the zone line when
 // it does not. Replacing the line is what lets a changed rate reach an
