@@ -104,6 +104,14 @@
       "title": "Bezpečnostní protokol",
       "subtitle": "Bezpečnostní události"
     },
+    "requestLog": {
+      "title": "Protokol požadavků",
+      "subtitle": "Každý požadavek API"
+    },
+    "appLog": {
+      "title": "Protokol aplikace",
+      "subtitle": "Vlastní řádky logu panelu"
+    },
     "services": {
       "title": "Služby",
       "subtitle": "Systémové služby"

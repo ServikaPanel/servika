@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "首页",
+  "title": "应用日志",
+  "subtitle": "面板自身的日志记录。journald 保留同样的记录，因此数据库停机时写下的记录只存在于 journal 中。",
+  "loading": "加载中…",
+  "noMatch": "没有符合搜索条件的记录。",
+  "searchPlaceholder": "搜索消息、logger 或 request id",
+  "stats": {
+    "entries": "条记录",
+    "errors": "个错误"
+  },
+  "filters": {
+    "allLevels": "全部级别",
+    "last": "最近 {{n}} 条"
+  },
+  "columns": {
+    "time": "时间",
+    "level": "级别",
+    "logger": "Logger",
+    "message": "消息",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "尚未记录任何日志",
+    "description": "面板记录自身进度和故障后，记录会显示在这里。"
+  },
+  "errors": {
+    "loadFailed": "无法读取应用日志"
+  }
+}

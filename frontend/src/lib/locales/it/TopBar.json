@@ -104,6 +104,14 @@
       "title": "Log di Sicurezza",
       "subtitle": "Eventi di sicurezza"
     },
+    "requestLog": {
+      "title": "Log delle richieste",
+      "subtitle": "Ogni richiesta API"
+    },
+    "appLog": {
+      "title": "Log applicativo",
+      "subtitle": "Le righe di log del pannello"
+    },
     "services": {
       "title": "Servizi",
       "subtitle": "Servizi di sistema"

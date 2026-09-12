@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Anasayfa",
+  "title": "Uygulama Logu",
+  "subtitle": "Panelin kendi log satırları. Aynı satırları journald da tutar; veritabanı kapalıyken yazılan bir satır yalnızca journalda bulunur.",
+  "loading": "Yükleniyor…",
+  "noMatch": "Aramayla eşleşen satır yok.",
+  "searchPlaceholder": "Mesaj, logger veya request id ara",
+  "stats": {
+    "entries": "satır",
+    "errors": "hata"
+  },
+  "filters": {
+    "allLevels": "Tüm seviyeler",
+    "last": "Son {{n}}"
+  },
+  "columns": {
+    "time": "Zaman",
+    "level": "Seviye",
+    "logger": "Logger",
+    "message": "Mesaj",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Henüz kayıtlı satır yok",
+    "description": "Panel kendi ilerlemesini ve hatalarını logladıkça satırlar burada görünür."
+  },
+  "errors": {
+    "loadFailed": "Uygulama logu okunamadı"
+  }
+}

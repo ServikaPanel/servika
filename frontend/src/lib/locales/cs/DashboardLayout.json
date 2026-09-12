@@ -34,6 +34,8 @@
     "monitoring": "Monitorování",
     "users": "Uživatelé",
     "auditLog": "Bezpečnostní protokol",
+    "requestLog": "Protokol požadavků",
+    "appLog": "Protokol aplikace",
     "profile": "Profil a předvolby",
     "customerAccounts": "Zákaznické účty",
     "customerRecords": "Záznamy zákazníků",

@@ -104,6 +104,14 @@
       "title": "安全日志",
       "subtitle": "安全事件"
     },
+    "requestLog": {
+      "title": "请求日志",
+      "subtitle": "每一次 API 请求"
+    },
+    "appLog": {
+      "title": "应用日志",
+      "subtitle": "面板自身的日志记录"
+    },
     "services": {
       "title": "服务",
       "subtitle": "系统服务"

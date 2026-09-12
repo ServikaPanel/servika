@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Accueil",
+  "title": "Journal des requêtes",
+  "subtitle": "Chaque requête API, avec son statut, sa durée et son body expurgé.",
+  "loading": "Chargement…",
+  "noMatch": "Aucune ligne ne correspond à la recherche.",
+  "searchPlaceholder": "Rechercher un endpoint, un utilisateur, une IP ou un request id",
+  "stats": {
+    "entries": "requêtes",
+    "failed": "en échec"
+  },
+  "filters": {
+    "allMethods": "Toutes les méthodes",
+    "allStatuses": "Tous les statuts",
+    "last": "{{n}} dernières"
+  },
+  "columns": {
+    "time": "Heure",
+    "status": "Statut",
+    "method": "Méthode",
+    "endpoint": "Endpoint",
+    "user": "Utilisateur",
+    "ip": "IP",
+    "duration": "Durée"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Module / action",
+    "error": "Erreur",
+    "queryParams": "Paramètres de requête",
+    "body": "Body de la requête",
+    "redacted": "Les mots de passe, tokens et autres secrets sont remplacés par [REDACTED] avant l'enregistrement."
+  },
+  "empty": {
+    "title": "Aucune requête n'a encore été enregistrée",
+    "description": "Les lignes apparaissent ici dès que le panneau traite une requête API."
+  },
+  "errors": {
+    "loadFailed": "Le journal des requêtes n'a pas pu être lu"
+  }
+}

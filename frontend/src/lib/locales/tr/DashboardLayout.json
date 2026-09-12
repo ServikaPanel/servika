@@ -34,6 +34,8 @@
     "monitoring": "İzleme",
     "users": "Kullanıcılar",
     "auditLog": "Güvenlik Günlüğü",
+    "requestLog": "Request Logu",
+    "appLog": "Uygulama Logu",
     "profile": "Profil ve Tercihler",
     "customerAccounts": "Müşteri Hesapları",
     "customerRecords": "Müşteri Kayıtları",

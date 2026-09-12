@@ -104,6 +104,14 @@
       "title": "Güvenlik Günlüğü",
       "subtitle": "Güvenlik olayları"
     },
+    "requestLog": {
+      "title": "Request Logu",
+      "subtitle": "Her API isteği"
+    },
+    "appLog": {
+      "title": "Uygulama Logu",
+      "subtitle": "Panelin kendi log satırları"
+    },
     "services": {
       "title": "Servisler",
       "subtitle": "Sistem servisleri"

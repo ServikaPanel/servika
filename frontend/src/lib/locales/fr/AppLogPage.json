@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Accueil",
+  "title": "Journal applicatif",
+  "subtitle": "Les lignes de log du panneau. journald conserve les mêmes lignes, donc une ligne écrite pendant une panne de base de données n'existe que dans le journal.",
+  "loading": "Chargement…",
+  "noMatch": "Aucune ligne ne correspond à la recherche.",
+  "searchPlaceholder": "Rechercher un message, un logger ou un request id",
+  "stats": {
+    "entries": "lignes",
+    "errors": "erreurs"
+  },
+  "filters": {
+    "allLevels": "Tous les niveaux",
+    "last": "{{n}} dernières"
+  },
+  "columns": {
+    "time": "Heure",
+    "level": "Niveau",
+    "logger": "Logger",
+    "message": "Message",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Aucune ligne n'a encore été enregistrée",
+    "description": "Les lignes apparaissent ici à mesure que le panneau journalise son activité et ses échecs."
+  },
+  "errors": {
+    "loadFailed": "Le journal applicatif n'a pas pu être lu"
+  }
+}

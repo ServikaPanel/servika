@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Anasayfa",
+  "title": "Request Logu",
+  "subtitle": "Her API isteği; status, süre ve redacted body ile birlikte.",
+  "loading": "Yükleniyor…",
+  "noMatch": "Aramayla eşleşen satır yok.",
+  "searchPlaceholder": "Endpoint, kullanıcı, IP veya request id ara",
+  "stats": {
+    "entries": "istek",
+    "failed": "başarısız"
+  },
+  "filters": {
+    "allMethods": "Tüm methodlar",
+    "allStatuses": "Tüm statuslar",
+    "last": "Son {{n}}"
+  },
+  "columns": {
+    "time": "Zaman",
+    "status": "Status",
+    "method": "Method",
+    "endpoint": "Endpoint",
+    "user": "Kullanıcı",
+    "ip": "IP",
+    "duration": "Süre"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Modül / işlem",
+    "error": "Hata",
+    "queryParams": "Query parametreleri",
+    "body": "Request body",
+    "redacted": "Parolalar, tokenlar ve diğer secretlar satır saklanmadan önce [REDACTED] ile değiştirilir."
+  },
+  "empty": {
+    "title": "Henüz kayıtlı istek yok",
+    "description": "Panel bir API isteğini karşıladığı anda satırlar burada görünür."
+  },
+  "errors": {
+    "loadFailed": "Request logu okunamadı"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Início",
+  "title": "Registro de requisições",
+  "subtitle": "Cada requisição da API, com seu status, sua duração e seu body ocultado.",
+  "loading": "Carregando…",
+  "noMatch": "Nenhuma linha corresponde à busca.",
+  "searchPlaceholder": "Buscar endpoint, usuário, IP ou request id",
+  "stats": {
+    "entries": "requisições",
+    "failed": "com falha"
+  },
+  "filters": {
+    "allMethods": "Todos os métodos",
+    "allStatuses": "Todos os status",
+    "last": "Últimas {{n}}"
+  },
+  "columns": {
+    "time": "Hora",
+    "status": "Status",
+    "method": "Método",
+    "endpoint": "Endpoint",
+    "user": "Usuário",
+    "ip": "IP",
+    "duration": "Duração"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Módulo / ação",
+    "error": "Erro",
+    "queryParams": "Parâmetros da query",
+    "body": "Body da requisição",
+    "redacted": "Senhas, tokens e outros secrets são substituídos por [REDACTED] antes de a linha ser gravada."
+  },
+  "empty": {
+    "title": "Nenhuma requisição foi registrada ainda",
+    "description": "As linhas aparecem aqui assim que o painel atende uma requisição da API."
+  },
+  "errors": {
+    "loadFailed": "Não foi possível ler o registro de requisições"
+  }
+}

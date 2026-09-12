@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Acasă",
+  "title": "Jurnal aplicație",
+  "subtitle": "Liniile de log ale panoului. journald păstrează aceleași linii, așa că o linie scrisă cu baza de date oprită se află doar în journal.",
+  "loading": "Se încarcă…",
+  "noMatch": "Niciun rând nu corespunde căutării.",
+  "searchPlaceholder": "Caută mesaj, logger sau request id",
+  "stats": {
+    "entries": "linii",
+    "errors": "erori"
+  },
+  "filters": {
+    "allLevels": "Toate nivelurile",
+    "last": "Ultimele {{n}}"
+  },
+  "columns": {
+    "time": "Oră",
+    "level": "Nivel",
+    "logger": "Logger",
+    "message": "Mesaj",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Nicio linie nu a fost înregistrată încă",
+    "description": "Rândurile apar aici pe măsură ce panoul își notează activitatea și erorile."
+  },
+  "errors": {
+    "loadFailed": "Jurnalul aplicației nu a putut fi citit"
+  }
+}

@@ -79,6 +79,10 @@ const NAV: NavGroup[] = [
     { to: '/monitoring',              labelKey: 'monitoring',             icon: ICONS.monitoring },
     { to: '/users',                   labelKey: 'users',                  icon: ICONS.reseller },
     { to: '/audit-log',               labelKey: 'auditLog',           icon: ICONS.audit },
+    // Admin only for the same reason as the entries above: both endpoints are
+    // AdminOnly, so a reseller following the link would meet a 403 on load.
+    { to: '/request-log',             labelKey: 'requestLog',         icon: ICONS.audit },
+    { to: '/app-log',                 labelKey: 'appLog',             icon: ICONS.audit },
   ]},
   { titleKey: 'myProfile', items: [
     { to: '/profile',              labelKey: 'profile', icon: ICONS.profile },

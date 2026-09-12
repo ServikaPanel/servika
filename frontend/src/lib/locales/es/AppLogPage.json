@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Inicio",
+  "title": "Registro de aplicación",
+  "subtitle": "Las líneas de log del propio panel. journald guarda las mismas líneas, así que una línea escrita con la base de datos caída solo está en el journal.",
+  "loading": "Cargando…",
+  "noMatch": "Ninguna fila coincide con la búsqueda.",
+  "searchPlaceholder": "Buscar mensaje, logger o request id",
+  "stats": {
+    "entries": "líneas",
+    "errors": "errores"
+  },
+  "filters": {
+    "allLevels": "Todos los niveles",
+    "last": "Últimas {{n}}"
+  },
+  "columns": {
+    "time": "Hora",
+    "level": "Nivel",
+    "logger": "Logger",
+    "message": "Mensaje",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Todavía no se ha registrado ninguna línea",
+    "description": "Las filas aparecen aquí a medida que el panel registra su actividad y sus fallos."
+  },
+  "errors": {
+    "loadFailed": "No se pudo leer el registro de aplicación"
+  }
+}

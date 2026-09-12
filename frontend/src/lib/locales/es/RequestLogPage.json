@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Inicio",
+  "title": "Registro de peticiones",
+  "subtitle": "Cada petición de la API, con su estado, su duración y su body redactado.",
+  "loading": "Cargando…",
+  "noMatch": "Ninguna fila coincide con la búsqueda.",
+  "searchPlaceholder": "Buscar endpoint, usuario, IP o request id",
+  "stats": {
+    "entries": "peticiones",
+    "failed": "con error"
+  },
+  "filters": {
+    "allMethods": "Todos los métodos",
+    "allStatuses": "Todos los estados",
+    "last": "Últimas {{n}}"
+  },
+  "columns": {
+    "time": "Hora",
+    "status": "Estado",
+    "method": "Método",
+    "endpoint": "Endpoint",
+    "user": "Usuario",
+    "ip": "IP",
+    "duration": "Duración"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Módulo / acción",
+    "error": "Error",
+    "queryParams": "Parámetros de consulta",
+    "body": "Body de la petición",
+    "redacted": "Las contraseñas, los tokens y otros secrets se sustituyen por [REDACTED] antes de guardar la fila."
+  },
+  "empty": {
+    "title": "Todavía no se ha registrado ninguna petición",
+    "description": "Las filas aparecen aquí en cuanto el panel atiende una petición de la API."
+  },
+  "errors": {
+    "loadFailed": "No se pudo leer el registro de peticiones"
+  }
+}

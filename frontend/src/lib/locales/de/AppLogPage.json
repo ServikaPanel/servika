@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Startseite",
+  "title": "Anwendungs-Log",
+  "subtitle": "Die eigenen Log-Zeilen des Panels. journald hält dieselben Zeilen, deshalb steht eine Zeile aus einer Zeit ohne Datenbank nur im Journal.",
+  "loading": "Wird geladen…",
+  "noMatch": "Keine Zeile passt zur Suche.",
+  "searchPlaceholder": "Meldung, Logger oder Request-ID suchen",
+  "stats": {
+    "entries": "Zeilen",
+    "errors": "Fehler"
+  },
+  "filters": {
+    "allLevels": "Alle Stufen",
+    "last": "Letzte {{n}}"
+  },
+  "columns": {
+    "time": "Zeit",
+    "level": "Stufe",
+    "logger": "Logger",
+    "message": "Meldung",
+    "requestId": "Request-ID"
+  },
+  "empty": {
+    "title": "Es wurde noch keine Zeile aufgezeichnet",
+    "description": "Zeilen erscheinen hier, sobald das Panel seinen Ablauf und seine Fehler protokolliert."
+  },
+  "errors": {
+    "loadFailed": "Das Anwendungs-Log konnte nicht gelesen werden"
+  }
+}

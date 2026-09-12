@@ -34,6 +34,8 @@
     "monitoring": "Monitoramento",
     "users": "Usuários",
     "auditLog": "Registro de segurança",
+    "requestLog": "Registro de requisições",
+    "appLog": "Registro da aplicação",
     "profile": "Perfil e preferências",
     "customerAccounts": "Contas de clientes",
     "customerRecords": "Registros de clientes",

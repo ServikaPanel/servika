@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Startseite",
+  "title": "Request-Log",
+  "subtitle": "Jede API-Anfrage mit Status, Dauer und redigiertem Body.",
+  "loading": "Wird geladen…",
+  "noMatch": "Keine Zeile passt zur Suche.",
+  "searchPlaceholder": "Endpoint, Benutzer, IP oder Request-ID suchen",
+  "stats": {
+    "entries": "Anfragen",
+    "failed": "fehlgeschlagen"
+  },
+  "filters": {
+    "allMethods": "Alle Methoden",
+    "allStatuses": "Alle Status",
+    "last": "Letzte {{n}}"
+  },
+  "columns": {
+    "time": "Zeit",
+    "status": "Status",
+    "method": "Methode",
+    "endpoint": "Endpoint",
+    "user": "Benutzer",
+    "ip": "IP",
+    "duration": "Dauer"
+  },
+  "detail": {
+    "requestId": "Request-ID",
+    "userAgent": "User Agent",
+    "module": "Modul / Aktion",
+    "error": "Fehler",
+    "queryParams": "Query-Parameter",
+    "body": "Request-Body",
+    "redacted": "Passwörter, Token und andere Secrets werden vor dem Speichern durch [REDACTED] ersetzt."
+  },
+  "empty": {
+    "title": "Es wurde noch keine Anfrage aufgezeichnet",
+    "description": "Zeilen erscheinen hier, sobald das Panel eine API-Anfrage beantwortet."
+  },
+  "errors": {
+    "loadFailed": "Das Request-Log konnte nicht gelesen werden"
+  }
+}

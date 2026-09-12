@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Domů",
+  "title": "Protokol požadavků",
+  "subtitle": "Každý požadavek API se stavem, dobou trvání a začerněným body.",
+  "loading": "Načítání…",
+  "noMatch": "Hledání neodpovídá žádný řádek.",
+  "searchPlaceholder": "Hledat endpoint, uživatele, IP nebo request id",
+  "stats": {
+    "entries": "požadavků",
+    "failed": "neúspěšných"
+  },
+  "filters": {
+    "allMethods": "Všechny metody",
+    "allStatuses": "Všechny stavy",
+    "last": "Posledních {{n}}"
+  },
+  "columns": {
+    "time": "Čas",
+    "status": "Stav",
+    "method": "Metoda",
+    "endpoint": "Endpoint",
+    "user": "Uživatel",
+    "ip": "IP",
+    "duration": "Doba"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Modul / akce",
+    "error": "Chyba",
+    "queryParams": "Parametry dotazu",
+    "body": "Body požadavku",
+    "redacted": "Hesla, tokeny a další secrety jsou před uložením řádku nahrazeny hodnotou [REDACTED]."
+  },
+  "empty": {
+    "title": "Zatím nebyl zaznamenán žádný požadavek",
+    "description": "Řádky se zde objeví, jakmile panel obslouží požadavek API."
+  },
+  "errors": {
+    "loadFailed": "Protokol požadavků se nepodařilo načíst"
+  }
+}

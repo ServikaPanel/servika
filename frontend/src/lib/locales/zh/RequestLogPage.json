@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "首页",
+  "title": "请求日志",
+  "subtitle": "每一次 API 请求，包含状态、耗时和脱敏后的 body。",
+  "loading": "加载中…",
+  "noMatch": "没有符合搜索条件的记录。",
+  "searchPlaceholder": "搜索 endpoint、用户、IP 或 request id",
+  "stats": {
+    "entries": "次请求",
+    "failed": "次失败"
+  },
+  "filters": {
+    "allMethods": "全部 method",
+    "allStatuses": "全部状态",
+    "last": "最近 {{n}} 条"
+  },
+  "columns": {
+    "time": "时间",
+    "status": "状态",
+    "method": "Method",
+    "endpoint": "Endpoint",
+    "user": "用户",
+    "ip": "IP",
+    "duration": "耗时"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "模块 / 操作",
+    "error": "错误",
+    "queryParams": "查询参数",
+    "body": "Request body",
+    "redacted": "密码、token 和其他 secret 在写入记录前会替换为 [REDACTED]。"
+  },
+  "empty": {
+    "title": "尚未记录任何请求",
+    "description": "面板处理 API 请求后，记录会显示在这里。"
+  },
+  "errors": {
+    "loadFailed": "无法读取请求日志"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Home",
+  "title": "Log applicativo",
+  "subtitle": "Le righe di log del pannello. journald conserva le stesse righe, quindi una riga scritta mentre il database era fermo si trova solo nel journal.",
+  "loading": "Caricamento…",
+  "noMatch": "Nessuna riga corrisponde alla ricerca.",
+  "searchPlaceholder": "Cerca messaggio, logger o request id",
+  "stats": {
+    "entries": "righe",
+    "errors": "errori"
+  },
+  "filters": {
+    "allLevels": "Tutti i livelli",
+    "last": "Ultime {{n}}"
+  },
+  "columns": {
+    "time": "Ora",
+    "level": "Livello",
+    "logger": "Logger",
+    "message": "Messaggio",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Nessuna riga è stata ancora registrata",
+    "description": "Le righe compaiono qui man mano che il pannello registra il proprio lavoro e i propri errori."
+  },
+  "errors": {
+    "loadFailed": "Impossibile leggere il log applicativo"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Home",
+  "title": "Application Log",
+  "subtitle": "The panel's own log lines. journald keeps the same lines, so a line written while the database was down is only in the journal.",
+  "loading": "Loading…",
+  "noMatch": "No row matches the search.",
+  "searchPlaceholder": "Search message, logger or request id",
+  "stats": {
+    "entries": "lines",
+    "errors": "errors"
+  },
+  "filters": {
+    "allLevels": "All levels",
+    "last": "Last {{n}}"
+  },
+  "columns": {
+    "time": "Time",
+    "level": "Level",
+    "logger": "Logger",
+    "message": "Message",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "No line has been recorded yet",
+    "description": "Rows appear here as the panel logs its own progress and failures."
+  },
+  "errors": {
+    "loadFailed": "The application log could not be read"
+  }
+}

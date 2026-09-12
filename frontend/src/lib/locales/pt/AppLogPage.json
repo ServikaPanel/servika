@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Início",
+  "title": "Registo da aplicação",
+  "subtitle": "As linhas de log do próprio painel. O journald guarda as mesmas linhas, por isso uma linha escrita com a base de dados em baixo existe apenas no journal.",
+  "loading": "A carregar…",
+  "noMatch": "Nenhuma linha corresponde à pesquisa.",
+  "searchPlaceholder": "Procurar mensagem, logger ou request id",
+  "stats": {
+    "entries": "linhas",
+    "errors": "erros"
+  },
+  "filters": {
+    "allLevels": "Todos os níveis",
+    "last": "Últimas {{n}}"
+  },
+  "columns": {
+    "time": "Hora",
+    "level": "Nível",
+    "logger": "Logger",
+    "message": "Mensagem",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Ainda não foi registada nenhuma linha",
+    "description": "As linhas aparecem aqui à medida que o painel regista o seu trabalho e as suas falhas."
+  },
+  "errors": {
+    "loadFailed": "Não foi possível ler o registo da aplicação"
+  }
+}

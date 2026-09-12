@@ -104,6 +104,14 @@
       "title": "Sicherheitsprotokoll",
       "subtitle": "Sicherheitsereignisse"
     },
+    "requestLog": {
+      "title": "Request-Log",
+      "subtitle": "Jede API-Anfrage"
+    },
+    "appLog": {
+      "title": "Anwendungs-Log",
+      "subtitle": "Die eigenen Log-Zeilen des Panels"
+    },
     "services": {
       "title": "Dienste",
       "subtitle": "Systemdienste"

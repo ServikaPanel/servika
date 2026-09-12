@@ -48,6 +48,7 @@ import (
 	"servika/internal/logretention"
 	"servika/internal/logs"
 	"servika/internal/logsink"
+	"servika/internal/logview"
 	"servika/internal/logx"
 	"servika/internal/mail"
 	"servika/internal/mailreport"
@@ -785,6 +786,7 @@ func main() {
 	phpExtH := &phpext.Handlers{DB: d}
 	packagesH := &packages.Handlers{DB: d}
 	panelSettingsH := &panelsettings.Handlers{DB: d, ServerIPv4: ipv4}
+	logViewH := &logview.Handlers{DB: d}
 	phpVersionH := &phpversion.Handlers{DB: d}
 	appRuntimeH := &appruntime.Handlers{DB: d}
 	appsH := &apps.Handlers{DB: d}
@@ -1006,6 +1008,11 @@ func main() {
 			// cover every operator's requests, so the window is a server policy.
 			r.With(middleware.AdminOnly).Get("/system/log-retention", panelSettingsH.LogRetentionGet)
 			r.With(middleware.AdminOnly).Put("/system/log-retention", panelSettingsH.LogRetentionSave)
+			// The log tables themselves. Admin only: the rows carry every
+			// operator's requests, their redacted bodies and the panel's own
+			// failures, which is server-wide data rather than a tenant's.
+			r.With(middleware.AdminOnly).Get("/system/request-logs", logViewH.List)
+			r.With(middleware.AdminOnly).Get("/system/app-logs", logViewH.AppList)
 			// The country database is a server-wide integration, so its credentials
 			// and download live with the other system settings rather than on a
 			// domain. The license key is never returned by any of these.

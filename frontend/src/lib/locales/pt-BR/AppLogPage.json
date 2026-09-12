@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Início",
+  "title": "Registro da aplicação",
+  "subtitle": "As linhas de log do próprio painel. O journald guarda as mesmas linhas, então uma linha escrita com o banco fora do ar existe apenas no journal.",
+  "loading": "Carregando…",
+  "noMatch": "Nenhuma linha corresponde à busca.",
+  "searchPlaceholder": "Buscar mensagem, logger ou request id",
+  "stats": {
+    "entries": "linhas",
+    "errors": "erros"
+  },
+  "filters": {
+    "allLevels": "Todos os níveis",
+    "last": "Últimas {{n}}"
+  },
+  "columns": {
+    "time": "Hora",
+    "level": "Nível",
+    "logger": "Logger",
+    "message": "Mensagem",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Nenhuma linha foi registrada ainda",
+    "description": "As linhas aparecem aqui conforme o painel registra seu trabalho e suas falhas."
+  },
+  "errors": {
+    "loadFailed": "Não foi possível ler o registro da aplicação"
+  }
+}

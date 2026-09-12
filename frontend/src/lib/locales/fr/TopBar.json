@@ -104,6 +104,14 @@
       "title": "Journal de sécurité",
       "subtitle": "Événements de sécurité"
     },
+    "requestLog": {
+      "title": "Journal des requêtes",
+      "subtitle": "Chaque requête API"
+    },
+    "appLog": {
+      "title": "Journal applicatif",
+      "subtitle": "Les lignes de log du panneau"
+    },
     "services": {
       "title": "Services",
       "subtitle": "Services système"

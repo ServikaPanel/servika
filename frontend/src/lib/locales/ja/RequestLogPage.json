@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "ホーム",
+  "title": "リクエストログ",
+  "subtitle": "すべての API リクエストを、status、所要時間、伏せ字化した body とともに記録します。",
+  "loading": "読み込み中…",
+  "noMatch": "検索に一致する行はありません。",
+  "searchPlaceholder": "endpoint、ユーザー、IP、request id で検索",
+  "stats": {
+    "entries": "リクエスト",
+    "failed": "失敗"
+  },
+  "filters": {
+    "allMethods": "すべての method",
+    "allStatuses": "すべての status",
+    "last": "直近 {{n}} 件"
+  },
+  "columns": {
+    "time": "時刻",
+    "status": "Status",
+    "method": "Method",
+    "endpoint": "Endpoint",
+    "user": "ユーザー",
+    "ip": "IP",
+    "duration": "所要時間"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "モジュール / 操作",
+    "error": "エラー",
+    "queryParams": "クエリパラメータ",
+    "body": "Request body",
+    "redacted": "パスワード、token、その他の secret は行を保存する前に [REDACTED] に置き換えられます。"
+  },
+  "empty": {
+    "title": "まだリクエストは記録されていません",
+    "description": "パネルが API リクエストを処理すると、ここに行が表示されます。"
+  },
+  "errors": {
+    "loadFailed": "リクエストログを読み取れませんでした"
+  }
+}

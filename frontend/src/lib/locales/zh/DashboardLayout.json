@@ -34,6 +34,8 @@
     "monitoring": "监控",
     "users": "用户",
     "auditLog": "安全日志",
+    "requestLog": "请求日志",
+    "appLog": "应用日志",
     "profile": "资料与偏好",
     "customerAccounts": "客户账户",
     "customerRecords": "客户记录",

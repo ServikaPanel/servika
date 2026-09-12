@@ -34,6 +34,8 @@
     "monitoring": "Surveillance",
     "users": "Utilisateurs",
     "auditLog": "Journal de sécurité",
+    "requestLog": "Journal des requêtes",
+    "appLog": "Journal applicatif",
     "profile": "Profil et préférences",
     "customerAccounts": "Comptes clients",
     "customerRecords": "Fiches clients",

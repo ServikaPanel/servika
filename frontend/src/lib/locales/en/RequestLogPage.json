@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Home",
+  "title": "Request Log",
+  "subtitle": "Every API request, with its status, duration and redacted body.",
+  "loading": "Loading…",
+  "noMatch": "No row matches the search.",
+  "searchPlaceholder": "Search endpoint, user, IP or request id",
+  "stats": {
+    "entries": "requests",
+    "failed": "failed"
+  },
+  "filters": {
+    "allMethods": "All methods",
+    "allStatuses": "All statuses",
+    "last": "Last {{n}}"
+  },
+  "columns": {
+    "time": "Time",
+    "status": "Status",
+    "method": "Method",
+    "endpoint": "Endpoint",
+    "user": "User",
+    "ip": "IP",
+    "duration": "Duration"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Module / action",
+    "error": "Error",
+    "queryParams": "Query parameters",
+    "body": "Request body",
+    "redacted": "Passwords, tokens and other secrets are replaced with [REDACTED] before the row is stored."
+  },
+  "empty": {
+    "title": "No request has been recorded yet",
+    "description": "Rows appear here as soon as the panel serves an API request."
+  },
+  "errors": {
+    "loadFailed": "The request log could not be read"
+  }
+}

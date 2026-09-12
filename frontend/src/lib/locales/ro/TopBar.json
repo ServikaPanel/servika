@@ -104,6 +104,14 @@
       "title": "Jurnal de securitate",
       "subtitle": "Evenimente de securitate"
     },
+    "requestLog": {
+      "title": "Jurnal de cereri",
+      "subtitle": "Fiecare cerere API"
+    },
+    "appLog": {
+      "title": "Jurnal aplicație",
+      "subtitle": "Liniile de log ale panoului"
+    },
     "services": {
       "title": "Servicii",
       "subtitle": "Servicii de sistem"

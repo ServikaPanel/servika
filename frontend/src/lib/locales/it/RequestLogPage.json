@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Home",
+  "title": "Log delle richieste",
+  "subtitle": "Ogni richiesta API, con il suo stato, la durata e il body oscurato.",
+  "loading": "Caricamento…",
+  "noMatch": "Nessuna riga corrisponde alla ricerca.",
+  "searchPlaceholder": "Cerca endpoint, utente, IP o request id",
+  "stats": {
+    "entries": "richieste",
+    "failed": "fallite"
+  },
+  "filters": {
+    "allMethods": "Tutti i metodi",
+    "allStatuses": "Tutti gli stati",
+    "last": "Ultime {{n}}"
+  },
+  "columns": {
+    "time": "Ora",
+    "status": "Stato",
+    "method": "Metodo",
+    "endpoint": "Endpoint",
+    "user": "Utente",
+    "ip": "IP",
+    "duration": "Durata"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Modulo / azione",
+    "error": "Errore",
+    "queryParams": "Parametri della query",
+    "body": "Body della richiesta",
+    "redacted": "Password, token e altri secret vengono sostituiti con [REDACTED] prima che la riga sia salvata."
+  },
+  "empty": {
+    "title": "Nessuna richiesta è stata ancora registrata",
+    "description": "Le righe compaiono qui appena il pannello serve una richiesta API."
+  },
+  "errors": {
+    "loadFailed": "Impossibile leggere il log delle richieste"
+  }
+}

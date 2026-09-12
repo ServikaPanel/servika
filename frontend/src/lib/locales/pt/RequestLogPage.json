@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Início",
+  "title": "Registo de pedidos",
+  "subtitle": "Cada pedido da API, com o seu estado, duração e body ocultado.",
+  "loading": "A carregar…",
+  "noMatch": "Nenhuma linha corresponde à pesquisa.",
+  "searchPlaceholder": "Procurar endpoint, utilizador, IP ou request id",
+  "stats": {
+    "entries": "pedidos",
+    "failed": "falhados"
+  },
+  "filters": {
+    "allMethods": "Todos os métodos",
+    "allStatuses": "Todos os estados",
+    "last": "Últimos {{n}}"
+  },
+  "columns": {
+    "time": "Hora",
+    "status": "Estado",
+    "method": "Método",
+    "endpoint": "Endpoint",
+    "user": "Utilizador",
+    "ip": "IP",
+    "duration": "Duração"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Módulo / ação",
+    "error": "Erro",
+    "queryParams": "Parâmetros da query",
+    "body": "Body do pedido",
+    "redacted": "As palavras-passe, tokens e outros secrets são substituídos por [REDACTED] antes de a linha ser guardada."
+  },
+  "empty": {
+    "title": "Ainda não foi registado nenhum pedido",
+    "description": "As linhas aparecem aqui assim que o painel responde a um pedido da API."
+  },
+  "errors": {
+    "loadFailed": "Não foi possível ler o registo de pedidos"
+  }
+}

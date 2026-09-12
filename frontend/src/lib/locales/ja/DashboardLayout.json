@@ -34,6 +34,8 @@
     "monitoring": "モニタリング",
     "users": "ユーザー",
     "auditLog": "セキュリティログ",
+    "requestLog": "リクエストログ",
+    "appLog": "アプリケーションログ",
     "profile": "プロフィールと設定",
     "customerAccounts": "顧客アカウント",
     "customerRecords": "顧客記録",

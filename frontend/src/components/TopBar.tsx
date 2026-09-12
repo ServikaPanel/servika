@@ -52,6 +52,8 @@ const PAGES: ReadonlyArray<{ tkey: string; path: string; keywords: string; roles
   { tkey: 'firewall', path: '/firewall', keywords: 'port ip block', roles: ['admin'] },
   { tkey: 'monitoring', path: '/monitoring', keywords: 'monitor log cpu ram', roles: ['admin'] },
   { tkey: 'auditLog', path: '/audit-log', keywords: 'audit event', roles: ['admin'] },
+  { tkey: 'requestLog', path: '/request-log', keywords: 'request api endpoint status body log', roles: ['admin'] },
+  { tkey: 'appLog', path: '/app-log', keywords: 'application error warning journald log', roles: ['admin'] },
   { tkey: 'services', path: '/tools/services', keywords: 'systemd nginx mysql php', roles: ['admin'] },
   { tkey: 'phpWizard', path: '/php-server-wizard', keywords: 'fpm version extension pecl ioncube loader easyapache web server nginx', roles: ['admin'] },
   { tkey: 'packages', path: '/tools/packages', keywords: 'dnf rpm', roles: ['admin'] },

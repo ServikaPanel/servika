@@ -104,6 +104,14 @@
       "title": "Registro de seguridad",
       "subtitle": "Eventos de seguridad"
     },
+    "requestLog": {
+      "title": "Registro de peticiones",
+      "subtitle": "Cada petición de la API"
+    },
+    "appLog": {
+      "title": "Registro de aplicación",
+      "subtitle": "Las líneas de log del propio panel"
+    },
     "services": {
       "title": "Servicios",
       "subtitle": "Servicios del sistema"

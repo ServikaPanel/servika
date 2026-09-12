@@ -1,0 +1,42 @@
+{
+  "breadcrumbHome": "Acasă",
+  "title": "Jurnal de cereri",
+  "subtitle": "Fiecare cerere API, cu statusul, durata și body-ul cenzurat.",
+  "loading": "Se încarcă…",
+  "noMatch": "Niciun rând nu corespunde căutării.",
+  "searchPlaceholder": "Caută endpoint, utilizator, IP sau request id",
+  "stats": {
+    "entries": "cereri",
+    "failed": "eșuate"
+  },
+  "filters": {
+    "allMethods": "Toate metodele",
+    "allStatuses": "Toate statusurile",
+    "last": "Ultimele {{n}}"
+  },
+  "columns": {
+    "time": "Oră",
+    "status": "Status",
+    "method": "Metodă",
+    "endpoint": "Endpoint",
+    "user": "Utilizator",
+    "ip": "IP",
+    "duration": "Durată"
+  },
+  "detail": {
+    "requestId": "Request id",
+    "userAgent": "User agent",
+    "module": "Modul / acțiune",
+    "error": "Eroare",
+    "queryParams": "Parametrii cererii",
+    "body": "Body-ul cererii",
+    "redacted": "Parolele, tokenurile și celelalte secrete sunt înlocuite cu [REDACTED] înainte de salvarea rândului."
+  },
+  "empty": {
+    "title": "Nicio cerere nu a fost înregistrată încă",
+    "description": "Rândurile apar aici imediat ce panoul răspunde unei cereri API."
+  },
+  "errors": {
+    "loadFailed": "Jurnalul de cereri nu a putut fi citit"
+  }
+}

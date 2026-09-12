@@ -1,0 +1,30 @@
+{
+  "breadcrumbHome": "Domů",
+  "title": "Protokol aplikace",
+  "subtitle": "Vlastní řádky logu panelu. journald drží tytéž řádky, takže řádek zapsaný při nedostupné databázi je jen v journalu.",
+  "loading": "Načítání…",
+  "noMatch": "Hledání neodpovídá žádný řádek.",
+  "searchPlaceholder": "Hledat zprávu, logger nebo request id",
+  "stats": {
+    "entries": "řádků",
+    "errors": "chyb"
+  },
+  "filters": {
+    "allLevels": "Všechny úrovně",
+    "last": "Posledních {{n}}"
+  },
+  "columns": {
+    "time": "Čas",
+    "level": "Úroveň",
+    "logger": "Logger",
+    "message": "Zpráva",
+    "requestId": "Request id"
+  },
+  "empty": {
+    "title": "Zatím nebyl zaznamenán žádný řádek",
+    "description": "Řádky se zde objeví, jak panel zaznamenává svůj průběh a chyby."
+  },
+  "errors": {
+    "loadFailed": "Protokol aplikace se nepodařilo načíst"
+  }
+}
