@@ -83,37 +83,51 @@ type Address struct {
 func ParseIPOutput(text string) []Address {
 	var out []Address
 	for line := range strings.SplitSeq(text, "\n") {
-		// "ip -o" joins a record's continuation with a literal backslash.
-		if index := strings.Index(line, "\\"); index >= 0 {
-			line = line[:index]
+		if address, ok := parseIPLine(line); ok {
+			out = append(out, address)
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 4 {
-			continue
-		}
-		// "1: lo    inet 127.0.0.1/8 scope host lo"
-		device := strings.TrimSuffix(fields[1], ":")
-		family := fields[2]
-		if family != "inet" && family != "inet6" {
-			continue
-		}
-		ip, prefix, ok := splitCIDR(fields[3])
-		if !ok {
-			continue
-		}
-
-		address := Address{Interface: device, IP: ip, Prefix: prefix}
-		for index := 4; index < len(fields); index++ {
-			if fields[index] == "scope" && index+1 < len(fields) {
-				address.Scope = fields[index+1]
-				address.Label = labelFromTail(fields[index+2:])
-				break
-			}
-		}
-		address.PanelAdded = family == "inet" && strings.HasPrefix(address.Label, labelPrefix)
-		out = append(out, address)
 	}
 	return out
+}
+
+// parseIPLine reads one record of "ip -o addr show". A line that names no
+// address at all answers false.
+func parseIPLine(line string) (Address, bool) {
+	// "ip -o" joins a record's continuation with a literal backslash.
+	if index := strings.Index(line, "\\"); index >= 0 {
+		line = line[:index]
+	}
+	fields := strings.Fields(line)
+	if len(fields) < 4 {
+		return Address{}, false
+	}
+	// "1: lo    inet 127.0.0.1/8 scope host lo"
+	device := strings.TrimSuffix(fields[1], ":")
+	family := fields[2]
+	if family != "inet" && family != "inet6" {
+		return Address{}, false
+	}
+	ip, prefix, ok := splitCIDR(fields[3])
+	if !ok {
+		return Address{}, false
+	}
+
+	address := Address{Interface: device, IP: ip, Prefix: prefix}
+	address.Scope, address.Label = scopeAndLabel(fields)
+	address.PanelAdded = family == "inet" && strings.HasPrefix(address.Label, labelPrefix)
+	return address, true
+}
+
+// scopeAndLabel reads the scope value and the label out of a record's tail.
+// Both are absent from a record that names no scope, which is what the empty
+// strings say.
+func scopeAndLabel(fields []string) (string, string) {
+	for index := 4; index < len(fields); index++ {
+		if fields[index] == "scope" && index+1 < len(fields) {
+			return fields[index+1], labelFromTail(fields[index+2:])
+		}
+	}
+	return "", ""
 }
 
 // addressFlags are the BARE words iproute2 prints between the scope value and
@@ -245,19 +259,29 @@ func ValidInterface(name string) bool {
 	// to "ip", which would let a device name pass an arbitrary option to it.
 	// This is the same defect internal/laravel closes on a queue name reaching
 	// artisan's argument parser.
-	first := name[0]
-	if (first < 'a' || first > 'z') && (first < 'A' || first > 'Z') && (first < '0' || first > '9') {
+	if !alphanumeric(rune(name[0])) {
 		return false
 	}
 	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z',
-			r >= '0' && r <= '9', r == '.', r == '_', r == '-', r == ':':
-		default:
+		if !interfaceRune(r) {
 			return false
 		}
 	}
 	return true
+}
+
+// alphanumeric reports whether a rune is an ASCII letter or digit.
+func alphanumeric(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+}
+
+// interfaceRune reports whether a rune may appear in a device name.
+func interfaceRune(r rune) bool {
+	switch r {
+	case '.', '_', '-', ':':
+		return true
+	}
+	return alphanumeric(r)
 }
 
 // Removable answers the question the delete path exists to ask.

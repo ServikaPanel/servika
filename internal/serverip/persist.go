@@ -64,36 +64,8 @@ set -uo pipefail
 // have now, so the screen, the running host and the next reboot would each say
 // something different.
 func WritePersistence(ctx context.Context, db *sql.DB) error {
-	rows, err := db.QueryContext(ctx,
-		`SELECT ip, interface, prefix_length, label FROM server_ips ORDER BY id`)
+	lines, err := persistenceLines(ctx, db)
 	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-
-	var lines []string
-	for rows.Next() {
-		var ip, device, label string
-		var prefix int
-		if err := rows.Scan(&ip, &device, &prefix, &label); err != nil {
-			return err
-		}
-		// Every value here was validated on the way in, and it is checked again
-		// on the way out: this text becomes a root shell script, and a row is
-		// exactly the kind of thing that outlives the code that wrote it.
-		if _, err := ValidateNew(ip, prefix); err != nil {
-			return fmt.Errorf("row for %q: %w", ip, err)
-		}
-		if !ValidInterface(device) {
-			return fmt.Errorf("row for %q names the interface %q", ip, device)
-		}
-		if !strings.HasPrefix(label, labelPrefix) || len(label) > maxLabelLength || !validLabel(label) {
-			return fmt.Errorf("row for %q carries the label %q", ip, label)
-		}
-		lines = append(lines, fmt.Sprintf(
-			"ip addr add %s/%d dev %s label %s 2>/dev/null || true", ip, prefix, device, label))
-	}
-	if err := rows.Err(); err != nil {
 		return err
 	}
 	sort.Strings(lines)
@@ -115,6 +87,50 @@ func WritePersistence(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("enable %s: %s", unitName, strings.TrimSpace(out))
 	}
 	return nil
+}
+
+// persistenceLines turns the table into the script's body, one line per row.
+func persistenceLines(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx,
+		`SELECT ip, interface, prefix_length, label FROM server_ips ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var lines []string
+	for rows.Next() {
+		var ip, device, label string
+		var prefix int
+		if err := rows.Scan(&ip, &device, &prefix, &label); err != nil {
+			return nil, err
+		}
+		line, err := persistenceLine(ip, device, prefix, label)
+		if err != nil {
+			return nil, err
+		}
+		lines = append(lines, line)
+	}
+	return lines, rows.Err()
+}
+
+// persistenceLine writes one row's line.
+//
+// Every value here was validated on the way in, and it is checked again on the
+// way out: this text becomes a root shell script, and a row is exactly the kind
+// of thing that outlives the code that wrote it.
+func persistenceLine(ip, device string, prefix int, label string) (string, error) {
+	if _, err := ValidateNew(ip, prefix); err != nil {
+		return "", fmt.Errorf("row for %q: %w", ip, err)
+	}
+	if !ValidInterface(device) {
+		return "", fmt.Errorf("row for %q names the interface %q", ip, device)
+	}
+	if !strings.HasPrefix(label, labelPrefix) || len(label) > maxLabelLength || !validLabel(label) {
+		return "", fmt.Errorf("row for %q carries the label %q", ip, label)
+	}
+	return fmt.Sprintf(
+		"ip addr add %s/%d dev %s label %s 2>/dev/null || true", ip, prefix, device, label), nil
 }
 
 // validLabel accepts only what this package generates, so nothing a row carries

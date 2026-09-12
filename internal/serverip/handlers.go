@@ -142,28 +142,34 @@ func (h *Handlers) records(r *http.Request) (map[string]record, error) {
 	return out, rows.Err()
 }
 
+// newAddress is the body POST /system/ips carries.
+type newAddress struct {
+	IP        string `json:"ip"`
+	Prefix    int    `json:"prefix"`
+	Interface string `json:"interface"`
+	Note      string `json:"note"`
+}
+
+// plannedAddress is what the add path decided on: the address, where it goes
+// and the panel label that will mark it as this panel's own.
+type plannedAddress struct {
+	ip     net.IP
+	prefix int
+	device string
+	label  string
+	note   string
+}
+
 // Add — POST /system/ips (AdminOnly).
 func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		IP        string `json:"ip"`
-		Prefix    int    `json:"prefix"`
-		Interface string `json:"interface"`
-		Note      string `json:"note"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	body, ok := decodeNewAddress(w, r)
+	if !ok {
 		return
-	}
-	if body.Prefix == 0 {
-		body.Prefix = 32
 	}
 	ip, err := ValidateNew(body.IP, body.Prefix)
 	if err != nil {
 		h.fail(w, err, "the address was refused")
 		return
-	}
-	if len(body.Note) > 255 {
-		body.Note = body.Note[:255]
 	}
 
 	panelport.Lock()
@@ -178,6 +184,39 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err, "the host's addresses could not be read")
 		return
 	}
+	plan, ok := h.planAddress(w, existing, ip, body)
+	if !ok {
+		return
+	}
+	id, ok := h.recordAddress(w, r, plan)
+	if !ok {
+		return
+	}
+	h.activate(w, r, id, plan)
+}
+
+// decodeNewAddress reads the request body and fills in the defaults. A missing
+// prefix is a single address, not a whole network, and a note longer than its
+// column is cut rather than refused.
+func decodeNewAddress(w http.ResponseWriter, r *http.Request) (newAddress, bool) {
+	var body newAddress
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return newAddress{}, false
+	}
+	if body.Prefix == 0 {
+		body.Prefix = 32
+	}
+	if len(body.Note) > 255 {
+		body.Note = body.Note[:255]
+	}
+	return body, true
+}
+
+// planAddress decides where the address goes and under which label. It writes
+// the refusal itself and answers false when the host cannot take the address.
+func (h *Handlers) planAddress(w http.ResponseWriter, existing []Address,
+	ip net.IP, body newAddress) (plannedAddress, bool) {
 	device := strings.TrimSpace(body.Interface)
 	if device == "" {
 		device = defaultInterface(existing)
@@ -185,22 +224,27 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 	if !knownInterface(existing, device) {
 		writeRefusal(w, http.StatusConflict, ReasonUnknownIface,
 			"this server has no interface named "+device)
-		return
+		return plannedAddress{}, false
 	}
 	for _, address := range existing {
 		if address.IP == ip.String() {
 			writeRefusal(w, http.StatusConflict, ReasonAlreadyOnHost,
 				ip.String()+" is already configured on this server")
-			return
+			return plannedAddress{}, false
 		}
 	}
-
 	label, err := NextLabel(existing)
 	if err != nil {
 		h.fail(w, err, "no address label is available")
-		return
+		return plannedAddress{}, false
 	}
+	return plannedAddress{
+		ip: ip, prefix: body.Prefix, device: device, label: label, note: body.Note,
+	}, true
+}
 
+// recordAddress writes the row that claims the label.
+func (h *Handlers) recordAddress(w http.ResponseWriter, r *http.Request, plan plannedAddress) (int64, bool) {
 	var actor any
 	if uid := actorOf(r); uid > 0 {
 		actor = uid
@@ -208,37 +252,39 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 	result, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO server_ips (ip, interface, prefix_length, label, note, created_by)
 		 VALUES (?,?,?,?,?,?)`,
-		ip.String(), device, body.Prefix, label, body.Note, actor)
+		plan.ip.String(), plan.device, plan.prefix, plan.label, plan.note, actor)
 	if err != nil {
 		httpx.LogR(r, "server ip insert: %v", err)
 		httpx.WriteError(w, http.StatusConflict, "this address is already recorded")
-		return
+		return 0, false
 	}
 	id, _ := result.LastInsertId()
+	return id, true
+}
 
-	// The row is written first so the label is claimed, then the host change,
-	// then the boot script. A failure after this point takes the row back out,
-	// because a row for an address the server does not have would put that
-	// address on at the next reboot.
-	if err := addToHost(r.Context(), ip, body.Prefix, device, label); err != nil {
+// activate puts the recorded address on the host and writes the boot script.
+//
+// The row was written first so the label is claimed, then the host change, then
+// the boot script. A failure at the host change takes the row back out, because
+// a row for an address the server does not have would put that address on at
+// the next reboot.
+func (h *Handlers) activate(w http.ResponseWriter, r *http.Request, id int64, plan plannedAddress) {
+	if err := addToHost(r.Context(), plan.ip, plan.prefix, plan.device, plan.label); err != nil {
 		h.forget(r, id)
 		h.fail(w, err, "the address could not be added")
 		return
 	}
+	answer := map[string]any{
+		"id": id, "ip": plan.ip.String(), "interface": plan.device, "label": plan.label,
+	}
 	if err := writePersistence(r.Context(), h.DB); err != nil {
 		httpx.LogR(r, "server ip persistence: %v", err)
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{
-			"id": id, "ip": ip.String(), "interface": device, "label": label,
-			// The address IS live; it is the reboot that is not covered. Saying
-			// so is the whole point, because the alternative is an operator who
-			// finds out at the next restart.
-			"warning": "the address is active but could not be recorded for the next reboot",
-		})
-		return
+		// The address IS live; it is the reboot that is not covered. Saying so
+		// is the whole point, because the alternative is an operator who finds
+		// out at the next restart.
+		answer["warning"] = "the address is active but could not be recorded for the next reboot"
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"id": id, "ip": ip.String(), "interface": device, "label": label,
-	})
+	httpx.WriteJSON(w, http.StatusOK, answer)
 }
 
 func (h *Handlers) forget(r *http.Request, id int64) {
@@ -259,18 +305,8 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	panelport.Lock()
 	defer panelport.Unlock()
 
-	var ip, device string
-	var prefix int
-	err = h.DB.QueryRowContext(r.Context(),
-		`SELECT ip, interface, prefix_length FROM server_ips WHERE id=?`, id).
-		Scan(&ip, &device, &prefix)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeRefusal(w, http.StatusNotFound, ReasonNotFound, "no such address")
-		return
-	}
-	if err != nil {
-		httpx.LogR(r, "server ip lookup %d: %v", id, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+	row, ok := h.addressRow(w, r, id)
+	if !ok {
 		return
 	}
 
@@ -285,17 +321,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The address is checked as the HOST reports it, never as the row
-	// describes it. The row says what the panel believes; the label on the host
-	// is what proves the panel put it there, and only the second can be trusted
-	// when the two disagree.
-	found := Address{}
-	for _, address := range addresses {
-		if address.IP == ip && address.Interface == device {
-			found = address
-			break
-		}
-	}
+	found := hostAddressOf(addresses, row)
 	if found.IP == "" {
 		// The host no longer has it. Removing the row and rewriting the boot
 		// script is the whole remaining job, and it is the right one: the
@@ -317,15 +343,59 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.forget(r, id)
+	h.reportRemoval(w, r, id)
+}
+
+// recorded is what the table says about one address.
+type recorded struct {
+	ip     string
+	device string
+	prefix int
+}
+
+// addressRow reads the row a removal names. A lookup that FAILED is reported as
+// a failure rather than as a missing address: telling an operator their row is
+// gone when it is not sends them looking in the wrong place.
+func (h *Handlers) addressRow(w http.ResponseWriter, r *http.Request, id int64) (recorded, bool) {
+	var row recorded
+	err := h.DB.QueryRowContext(r.Context(),
+		`SELECT ip, interface, prefix_length FROM server_ips WHERE id=?`, id).
+		Scan(&row.ip, &row.device, &row.prefix)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeRefusal(w, http.StatusNotFound, ReasonNotFound, "no such address")
+		return recorded{}, false
+	}
+	if err != nil {
+		httpx.LogR(r, "server ip lookup %d: %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return recorded{}, false
+	}
+	return row, true
+}
+
+// hostAddressOf finds the row's address as the HOST reports it, never as the
+// row describes it. The row says what the panel believes; the label on the host
+// is what proves the panel put it there, and only the second can be trusted
+// when the two disagree. An empty IP means the host no longer carries it.
+func hostAddressOf(addresses []Address, row recorded) Address {
+	for _, address := range addresses {
+		if address.IP == row.ip && address.Interface == row.device {
+			return address
+		}
+	}
+	return Address{}
+}
+
+// reportRemoval writes the boot script and answers. The address is already
+// gone, so a script that could not be rewritten is a warning beside a success
+// rather than a failure.
+func (h *Handlers) reportRemoval(w http.ResponseWriter, r *http.Request, id int64) {
+	answer := map[string]any{"removed": id}
 	if err := writePersistence(r.Context(), h.DB); err != nil {
 		httpx.LogR(r, "server ip persistence: %v", err)
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{
-			"removed": id,
-			"warning": "the address is gone but the reboot script could not be rewritten",
-		})
-		return
+		answer["warning"] = "the address is gone but the reboot script could not be rewritten"
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"removed": id})
+	httpx.WriteJSON(w, http.StatusOK, answer)
 }
 
 // defaultInterface picks the device carrying the first routable address, which
