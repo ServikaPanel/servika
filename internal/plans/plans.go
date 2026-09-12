@@ -153,35 +153,44 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
+// fillDefaults resolves every "left alone" field. A zero here is not a limit of
+// zero, so it becomes the documented default rather than reaching a cgroup, an
+// FPM pool or an nginx directive as one.
 func fillDefaults(p *Plan) {
-	if p.CPUPercent == 0 {
-		p.CPUPercent = 100
-	}
-	if p.RAMMB == 0 {
-		p.RAMMB = 512
-	}
-	if p.MaxProcess == 0 {
-		p.MaxProcess = 50
-	}
-	if p.InodeQuota == 0 {
-		p.InodeQuota = 50000
-	}
-	if p.IOWeight == 0 {
-		p.IOWeight = 100
-	}
-	if p.MySQLMaxConnections == 0 {
-		p.MySQLMaxConnections = 25
-	}
+	fillLimits(p)
 	if strings.TrimSpace(p.PHPVersion) == "" {
 		p.PHPVersion = "8.3"
 	}
-	if p.ClientMaxBodyMB == 0 {
-		p.ClientMaxBodyMB = 64
+	fillWAF(p)
+}
+
+// fillLimits resolves the numeric resource limits.
+func fillLimits(p *Plan) {
+	for _, limit := range []struct {
+		field    *int
+		fallback int
+	}{
+		{&p.CPUPercent, 100},
+		{&p.RAMMB, 512},
+		{&p.MaxProcess, 50},
+		{&p.InodeQuota, 50000},
+		{&p.IOWeight, 100},
+		{&p.MySQLMaxConnections, 25},
+		{&p.ClientMaxBodyMB, 64},
+	} {
+		if *limit.field == 0 {
+			*limit.field = limit.fallback
+		}
 	}
-	// WAF defaults
-	switch strings.ToLower(strings.TrimSpace(p.WAFMode)) {
+}
+
+// fillWAF folds the mode to one the renderer knows and bounds the paranoia
+// level to the four the rule set defines. Anything else would render a
+// configuration nginx refuses, which takes every site down rather than one.
+func fillWAF(p *Plan) {
+	switch mode := strings.ToLower(strings.TrimSpace(p.WAFMode)); mode {
 	case "on", "detect", "off":
-		p.WAFMode = strings.ToLower(strings.TrimSpace(p.WAFMode))
+		p.WAFMode = mode
 	default:
 		p.WAFMode = "on"
 	}
