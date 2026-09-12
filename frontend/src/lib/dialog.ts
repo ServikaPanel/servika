@@ -4,7 +4,7 @@
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 
-export interface ConfirmOptions {
+interface ConfirmOptions {
   /** Defaults to a generic "Are you sure?" so a bare confirm(message) converts unchanged. */
   title?: string
   message?: ReactNode

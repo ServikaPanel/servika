@@ -9,7 +9,7 @@
 // The value mirrors `antivirus.EngineDatabase` in Go. It is written once here
 // rather than inline on each page, because the same question is asked on the
 // admin screen and on the per-domain one.
-export const ENGINE_DATABASE = 'database'
+const ENGINE_DATABASE = 'database'
 
 export function containable(engine: string): boolean {
   return engine !== ENGINE_DATABASE

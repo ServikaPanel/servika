@@ -57,7 +57,7 @@ export function report(type: UIEventType, path: string, data?: Record<string, un
 }
 
 /** Sends what is queued. A failure drops the batch instead of retrying it. */
-export async function flush() {
+async function flush() {
   if (queue.length === 0) return
   const events = queue
   queue = []

@@ -11,5 +11,3 @@ export function Icon({ d, className = 'h-4 w-4' }: { d: string; className?: stri
     </svg>
   )
 }
-
-export default Icon
