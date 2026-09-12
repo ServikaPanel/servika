@@ -147,6 +147,44 @@ func TestACorrectCodeClearsTheCounter(t *testing.T) {
 	}
 }
 
+// The current-password check is the same step-up surface, so it shares the
+// counter: an attacker holding the session must not be able to guess the
+// credential that would let them set a new one.
+func TestTheCurrentPasswordCheckLocksAfterRepeatedFailures(t *testing.T) {
+	resetStepUp(t)
+	script := accountWithPassword(t, "correct-horse")
+
+	for attempt := 1; attempt <= stepUpMaxFailures; attempt++ {
+		recorder := changePassword(t, script, "operator", 7, `{"current":"wrong","new":"long-enough-1"}`)
+		if recorder.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d answered %d, want %d (%s)",
+				attempt, recorder.Code, http.StatusUnauthorized, recorder.Body)
+		}
+	}
+
+	recorder := changePassword(t, script, "operator", 7, `{"current":"wrong","new":"long-enough-1"}`)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("the account was not locked: status = %d (%s)", recorder.Code, recorder.Body)
+	}
+}
+
+// A wrong 2FA code and a wrong password are attempts on the same account, and a
+// lock earned on one surface holds on the other.
+func TestTheLockIsSharedAcrossTheStepUpSurfaces(t *testing.T) {
+	initSecret(t)
+	resetStepUp(t)
+	twoFA := &Handlers{DB: totpDB(t, sealedSeedScript(t, 7, "JBSWY3DPEHPK3PXP"))}
+	for range stepUpMaxFailures {
+		twoFA.TwoFADisable(httptest.NewRecorder(), disableRequest(7, "000000"))
+	}
+
+	recorder := changePassword(t, accountWithPassword(t, "correct-horse"), "operator", 7,
+		`{"current":"correct-horse","new":"long-enough-1"}`)
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Fatalf("the password change was not locked: status = %d (%s)", recorder.Code, recorder.Body)
+	}
+}
+
 // A code already accepted once must not turn the second factor off a second
 // time inside its validity window. The login flow has used the replay-protected
 // form since the replay migration; this path used the other one.

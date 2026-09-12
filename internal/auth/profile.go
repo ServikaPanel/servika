@@ -108,6 +108,13 @@ func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "new password must be at least 8 characters")
 		return
 	}
+	// The same counter the 2FA step-up uses: this endpoint checks the current
+	// credential behind session auth alone, and a session somebody else is
+	// holding is exactly what the check exists to stop.
+	if wait := stepUpLocked(c.UserID); wait > 0 {
+		stepUpRefuse(w, wait)
+		return
+	}
 
 	// root's password lives in the system (/etc/shadow), not the panel DB:
 	// verify from shadow, change with chpasswd. Reseller accounts have no system
@@ -123,10 +130,12 @@ func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 // writes the new one with chpasswd.
 func (h *Handlers) changeRootPassword(w http.ResponseWriter, r *http.Request, c *Claims, current, next string) {
 	if !rootPasswordOK(current) {
+		stepUpFailed(c.UserID)
 		WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.password", "root", false)
 		httpx.WriteError(w, http.StatusUnauthorized, "current password is incorrect")
 		return
 	}
+	stepUpPassed(c.UserID)
 	if strings.ContainsAny(next, "\n\r\x00") {
 		httpx.WriteError(w, http.StatusBadRequest, "password contains invalid characters")
 		return
@@ -153,10 +162,12 @@ func (h *Handlers) changeAccountPassword(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if !PasswordMatches(currentHash, current) {
+		stepUpFailed(c.UserID)
 		WriteAudit(h.DB, c.UserID, c.Username, httpx.AuditIP(r), "auth.password", c.Username, false)
 		httpx.WriteError(w, http.StatusUnauthorized, "current password is incorrect")
 		return
 	}
+	stepUpPassed(c.UserID)
 	newHash, err := HashPassword(next)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
