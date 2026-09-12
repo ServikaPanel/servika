@@ -23,14 +23,26 @@ import (
 // written with a plan_id that names no plan. The repository carries no sqlmock
 // dependency.
 type accountScript struct {
-	mu    sync.Mutex
-	rows  map[string][]driver.Value
-	execs []string
+	mu sync.Mutex
+	// rows answers a query whose text contains the fragment with one row.
+	rows map[string][]driver.Value
+	// noRows answers a query whose text contains the fragment with no row, which
+	// database/sql reports as sql.ErrNoRows.
+	noRows map[string]bool
+	// execErr fails a statement whose text contains the fragment.
+	execErr  map[string]error
+	execs    []string
+	execArgs map[string][]driver.Value
 }
 
 func (s *accountScript) answerQuery(query string) (driver.Rows, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for fragment := range s.noRows {
+		if strings.Contains(query, fragment) {
+			return &accountRows{done: true}, nil
+		}
+	}
 	for fragment, values := range s.rows {
 		if strings.Contains(query, fragment) {
 			return &accountRows{values: values}, nil
@@ -39,10 +51,36 @@ func (s *accountScript) answerQuery(query string) (driver.Rows, error) {
 	return nil, fmt.Errorf("the test script has no answer for: %s", query)
 }
 
-func (s *accountScript) recordExec(query string) {
+func (s *accountScript) recordExec(query string, args []driver.NamedValue) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.execs = append(s.execs, query)
+	if s.execArgs == nil {
+		s.execArgs = map[string][]driver.Value{}
+	}
+	values := make([]driver.Value, 0, len(args))
+	for _, a := range args {
+		values = append(values, a.Value)
+	}
+	s.execArgs[query] = values
+	for fragment, err := range s.execErr {
+		if strings.Contains(query, fragment) {
+			return err
+		}
+	}
+	return nil
+}
+
+// argsOf returns the arguments of the first statement containing the fragment.
+func (s *accountScript) argsOf(fragment string) []driver.Value {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for query, values := range s.execArgs {
+		if strings.Contains(query, fragment) {
+			return values
+		}
+	}
+	return nil
 }
 
 // wrote reports whether any statement contained the fragment.
@@ -85,8 +123,10 @@ func (c accountConn) QueryContext(_ context.Context, query string, _ []driver.Na
 	return c.script.answerQuery(query)
 }
 
-func (c accountConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	c.script.recordExec(query)
+func (c accountConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if err := c.script.recordExec(query, args); err != nil {
+		return nil, err
+	}
 	return accountResult{}, nil
 }
 
