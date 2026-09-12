@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -212,23 +213,8 @@ func TestTheStalePruneOnlyRunsAfterACompletePass(t *testing.T) {
 		if err := collector.recordInventory(context.Background(), 7, apps, true); err != nil {
 			t.Fatalf("recordInventory: %v", err)
 		}
-		deletes := recorder.matching("DELETE FROM security_apps")
-		if len(deletes) != 1 {
-			t.Fatalf("DELETE statements = %d, want 1", len(deletes))
-		}
-		if !strings.Contains(deletes[0], "NOT IN ((?,?),(?,?))") {
-			t.Errorf("delete = %q, want the two surviving installations named", deletes[0])
-		}
-		args := recorder.argsFor("DELETE FROM security_apps")
-		want := []driver.Value{int64(7), AppWordPress, "/", AppNodeJS, "/app"}
-		if len(args) != len(want) {
-			t.Fatalf("delete arguments = %v, want %v", args, want)
-		}
-		for i := range want {
-			if args[i] != want[i] {
-				t.Fatalf("delete arguments = %v, want %v", args, want)
-			}
-		}
+		assertPruneNames(t, recorder, "NOT IN ((?,?),(?,?))",
+			[]driver.Value{int64(7), AppWordPress, "/", AppNodeJS, "/app"})
 	})
 
 	t.Run("incomplete", func(t *testing.T) {
@@ -259,6 +245,23 @@ func TestTheStalePruneOnlyRunsAfterACompletePass(t *testing.T) {
 			t.Errorf("delete = %q, want no exclusion list when nothing survives", deletes[0])
 		}
 	})
+}
+
+// assertPruneNames checks the one DELETE a complete pass writes: the exclusion
+// list it carries and the arguments bound to it.
+func assertPruneNames(t *testing.T, recorder *appRecorder, exclusion string, want []driver.Value) {
+	t.Helper()
+	deletes := recorder.matching("DELETE FROM security_apps")
+	if len(deletes) != 1 {
+		t.Fatalf("DELETE statements = %d, want 1", len(deletes))
+	}
+	if !strings.Contains(deletes[0], exclusion) {
+		t.Errorf("delete = %q, want %q", deletes[0], exclusion)
+	}
+	args := recorder.argsFor("DELETE FROM security_apps")
+	if !slices.Equal(args, want) {
+		t.Fatalf("delete arguments = %v, want %v", args, want)
+	}
 }
 
 // The path written and the path the prune protects must be the SAME string.

@@ -189,24 +189,8 @@ func (c *Collector) WordPressAdvisories(ctx context.Context, kind, slug, install
 	if !validWPSlug(slug) {
 		return nil, false, fmt.Errorf("slug is not a component name")
 	}
-	endpoint := c.wpFeedBase + "/" + url.PathEscape(kind) + "/" + url.PathEscape(slug) + "/"
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	decoded, err := c.wpRecord(ctx, kind, slug)
 	if err != nil {
-		return nil, false, err
-	}
-	request.Header.Set("Accept", "application/json")
-	response, err := c.client.Do(request)
-	if err != nil {
-		return nil, false, err
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("feed answered %s", response.Status)
-	}
-
-	var decoded wpResponse
-	if err := readCapped(response, &decoded); err != nil {
 		return nil, false, err
 	}
 	if decoded.Data == nil || len(decoded.Data.Vulnerability) == 0 {
@@ -217,7 +201,43 @@ func (c *Collector) WordPressAdvisories(ctx context.Context, kind, slug, install
 	if len(records) > maxRecordsPerPackage {
 		records = records[:maxRecordsPerPackage]
 	}
+	advisories, judgedAll := matchingWPAdvisories(records, installed)
+	return advisories, judgedAll, nil
+}
 
+// wpRecord reads one slug's record off the WordPress feed.
+func (c *Collector) wpRecord(ctx context.Context, kind, slug string) (wpResponse, error) {
+	var decoded wpResponse
+	endpoint := c.wpFeedBase + "/" + url.PathEscape(kind) + "/" + url.PathEscape(slug) + "/"
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return decoded, err
+	}
+	return decoded, c.send(request, &decoded)
+}
+
+// send performs one feed request and decodes the capped response. Both feeds
+// answer JSON and both are refused on any status but 200, so the two callers
+// share this rather than each carrying their own copy of it.
+func (c *Collector) send(request *http.Request, into any) error {
+	request.Header.Set("Accept", "application/json")
+	response, err := c.client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("feed answered %s", response.Status)
+	}
+	return readCapped(response, into)
+}
+
+// matchingWPAdvisories keeps the records whose range covers the installed
+// version, and reports whether every record could be judged. A record the
+// comparison cannot order is counted rather than dropped, because a sweep that
+// judged nothing must not read as a clean one.
+func matchingWPAdvisories(records []wpVulnerability, installed string) ([]Advisory, bool) {
 	out := make([]Advisory, 0, len(records))
 	judgedAll := true
 	for _, record := range records {
@@ -233,7 +253,7 @@ func (c *Collector) WordPressAdvisories(ctx context.Context, kind, slug, install
 		}
 		out = append(out, wpAdvisory(record))
 	}
-	return out, judgedAll, nil
+	return out, judgedAll
 }
 
 // wpAdvisory turns one feed record into an Advisory.
@@ -400,25 +420,36 @@ func osvAdvisory(record osvVuln) Advisory {
 			break
 		}
 	}
+	advisory.Source = osvSource(record)
+	advisory.FixedIn = osvFixedIn(record)
+	return advisory
+}
+
+// osvSource prefers the record's own advisory page and falls back to the OSV
+// entry, so a finding always carries somewhere to read the detail.
+func osvSource(record osvVuln) string {
 	for _, reference := range record.References {
 		if reference.Type == "ADVISORY" {
-			advisory.Source = reference.URL
-			break
+			return reference.URL
 		}
 	}
-	if advisory.Source == "" {
-		advisory.Source = "https://osv.dev/vulnerability/" + record.ID
-	}
+	return "https://osv.dev/vulnerability/" + record.ID
+}
+
+// osvFixedIn returns the last fixed release the record names, across every
+// range it carries.
+func osvFixedIn(record osvVuln) string {
+	var fixed string
 	for _, affected := range record.Affected {
 		for _, versionRange := range affected.Ranges {
 			for _, event := range versionRange.Events {
 				if event.Fixed != "" {
-					advisory.FixedIn = event.Fixed
+					fixed = event.Fixed
 				}
 			}
 		}
 	}
-	return advisory
+	return fixed
 }
 
 // postJSON sends one JSON request and decodes the capped response.
@@ -432,14 +463,5 @@ func (c *Collector) postJSON(ctx context.Context, endpoint string, body, into an
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	response, err := c.client.Do(request)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = response.Body.Close() }()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("feed answered %s", response.Status)
-	}
-	return readCapped(response, into)
+	return c.send(request, into)
 }

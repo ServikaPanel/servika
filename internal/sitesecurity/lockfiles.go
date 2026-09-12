@@ -56,25 +56,7 @@ func ParseNPMLock(body []byte) ([]Package, error) {
 		return nil, err
 	}
 
-	seen := map[Package]bool{}
-	var out []Package
-	add := func(name, version string) {
-		if len(out) >= maxPackagesPerLockfile {
-			return
-		}
-		name = strings.TrimSpace(name)
-		version = strings.TrimSpace(version)
-		if name == "" || version == "" || len(name) > maxPackageNameBytes {
-			return
-		}
-		pkg := Package{Name: name, Version: version}
-		if seen[pkg] {
-			return
-		}
-		seen[pkg] = true
-		out = append(out, pkg)
-	}
-
+	collected := newPackageSet()
 	for path, entry := range decoded.Packages {
 		// The root project is keyed by the empty string and is not a
 		// dependency; it has no published advisories and its "version" is the
@@ -84,35 +66,74 @@ func ParseNPMLock(body []byte) ([]Package, error) {
 		}
 		name := entry.Name
 		if name == "" {
-			// The key is a path, and the package name is everything after the
-			// LAST node_modules segment, so a scoped nested package
-			// ("node_modules/a/node_modules/@scope/b") keeps its scope.
-			_, after, found := strings.Cut(path, "node_modules/")
-			if !found {
-				continue
-			}
-			for {
-				_, deeper, nested := strings.Cut(after, "node_modules/")
-				if !nested {
-					break
-				}
-				after = deeper
-			}
-			name = after
+			name = nameFromLockPath(path)
 		}
-		add(name, entry.Version)
+		collected.add(name, entry.Version)
 	}
+	collected.walk(decoded.Dependencies)
 
-	var walk func(map[string]npmDep)
-	walk = func(deps map[string]npmDep) {
-		for name, dep := range deps {
-			add(name, dep.Version)
-			walk(dep.Dependencies)
+	return collected.out, nil
+}
+
+// nameFromLockPath reads a package name out of a v2 or v3 lockfile key.
+//
+// The key is a path, and the name is everything after the LAST node_modules
+// segment, so a scoped nested package ("node_modules/a/node_modules/@scope/b")
+// keeps its scope. A key with no such segment is not a dependency, and answers
+// the empty string that packageSet.add drops.
+func nameFromLockPath(path string) string {
+	_, after, found := strings.Cut(path, "node_modules/")
+	if !found {
+		return ""
+	}
+	for {
+		_, deeper, nested := strings.Cut(after, "node_modules/")
+		if !nested {
+			return after
 		}
+		after = deeper
 	}
-	walk(decoded.Dependencies)
+}
 
-	return out, nil
+// packageSet collects lockfile entries, deduplicated by name and version.
+//
+// One package at one version appears many times in a deep tree, and each copy
+// would otherwise be a separate feed query and a separate row saying the same
+// thing.
+type packageSet struct {
+	seen map[Package]bool
+	out  []Package
+}
+
+func newPackageSet() *packageSet {
+	return &packageSet{seen: map[Package]bool{}}
+}
+
+// add takes one entry, or drops it when it is empty, over the name ceiling or
+// already held.
+func (p *packageSet) add(name, version string) {
+	if len(p.out) >= maxPackagesPerLockfile {
+		return
+	}
+	name = strings.TrimSpace(name)
+	version = strings.TrimSpace(version)
+	if name == "" || version == "" || len(name) > maxPackageNameBytes {
+		return
+	}
+	pkg := Package{Name: name, Version: version}
+	if p.seen[pkg] {
+		return
+	}
+	p.seen[pkg] = true
+	p.out = append(p.out, pkg)
+}
+
+// walk takes a v1 lockfile's nested dependency tree.
+func (p *packageSet) walk(deps map[string]npmDep) {
+	for name, dep := range deps {
+		p.add(name, dep.Version)
+		p.walk(dep.Dependencies)
+	}
 }
 
 // composerLockfile is the part of a composer.lock this reads.

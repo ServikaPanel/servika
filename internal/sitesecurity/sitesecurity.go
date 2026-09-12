@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"servika/internal/bgjob"
+	"servika/internal/wordpress"
 )
 
 // App types, matching the security_findings ENUM exactly.
@@ -510,89 +511,132 @@ func truncate(value string, limit int) string {
 	return value[:limit]
 }
 
+// sourceScan accumulates one source's pass over one domain: what it counted,
+// what it found, and the FIRST failure it met. A later failure never replaces
+// the first one, because that is the failure an operator has to fix before the
+// rest of the pass means anything.
+type sourceScan struct {
+	collector *Collector
+	item      target
+	result    scanResult
+	firstErr  error
+}
+
+func (s *sourceScan) note(err error) {
+	if err != nil && s.firstErr == nil {
+		s.firstErr = err
+	}
+}
+
 // scanWordPress inspects every WordPress installation of one tenant.
 func (c *Collector) scanWordPress(ctx context.Context, item target) (scanResult, error) {
-	var result scanResult
-	var firstErr error
+	scan := sourceScan{collector: c, item: item}
 
 	for _, install := range discoverInstalls(item.systemUser) {
 		if ctx.Err() != nil {
-			return result, ctx.Err()
+			return scan.result, ctx.Err()
 		}
 		// The installation is recorded whether or not its version can be read
 		// and whether or not anything is found in it: wp-config.php is there, so
 		// this is a WordPress site the sweep looked at.
 		entry := Inventory{AppType: AppWordPress, InstallPath: install.Rel}
 
-		if version, err := coreVersion(item.systemUser, install.Dir); err == nil && version != "" {
-			entry.Version = version
-			entry.Packages++
-			result.counts.packages++
-			advisories, judged, err := c.WordPressAdvisories(ctx, "core", version, version)
-			if err != nil && firstErr == nil {
-				firstErr = err
-			}
-			if !judged {
-				result.counts.unparsed++
-			}
-			for _, advisory := range advisories {
-				result.findings = append(result.findings, Finding{
-					AppType: AppWordPress, InstallPath: install.Rel,
-					Package: "wordpress", Installed: version, Advisory: advisory,
-				})
-			}
+		scan.wordPressCore(ctx, install, &entry)
+		err := scan.wordPressComponents(ctx, install, &entry)
+		scan.result.apps = append(scan.result.apps, entry)
+		if err != nil {
+			return scan.result, err
 		}
-
-		for _, kind := range []string{"plugin", "theme"} {
-			components, err := wpComponents(ctx, item.systemUser, install.Dir, kind)
-			if err != nil {
-				if firstErr == nil {
-					firstErr = fmt.Errorf("%s list for %s: %w", kind, item.name, err)
-				}
-				continue
-			}
-			for _, component := range components {
-				if ctx.Err() != nil {
-					result.apps = append(result.apps, entry)
-					return result, ctx.Err()
-				}
-				entry.Packages++
-				result.counts.packages++
-				advisories, judged, err := c.WordPressAdvisories(ctx, kind, component.Name, component.Version)
-				if err != nil {
-					if firstErr == nil {
-						firstErr = err
-					}
-					continue
-				}
-				if !judged {
-					result.counts.unparsed++
-				}
-				for _, advisory := range advisories {
-					result.findings = append(result.findings, Finding{
-						AppType:     AppWordPress,
-						InstallPath: install.Rel,
-						Package:     kind + ":" + component.Name,
-						Installed:   component.Version,
-						Advisory:    advisory,
-					})
-				}
-			}
-		}
-		result.apps = append(result.apps, entry)
 	}
-	return result, firstErr
+	return scan.result, scan.firstErr
+}
+
+// wordPressCore inspects the core of one installation. A version that cannot be
+// read is not a failure: it is the normal answer for a directory that carries
+// wp-config.php and nothing the panel can run wp-cli against.
+func (s *sourceScan) wordPressCore(ctx context.Context, install wordpress.Install, entry *Inventory) {
+	version, err := coreVersion(s.item.systemUser, install.Dir)
+	if err != nil || version == "" {
+		return
+	}
+	entry.Version = version
+	entry.Packages++
+	s.result.counts.packages++
+
+	advisories, judged, err := s.collector.WordPressAdvisories(ctx, "core", version, version)
+	s.note(err)
+	if !judged {
+		s.result.counts.unparsed++
+	}
+	for _, advisory := range advisories {
+		s.result.findings = append(s.result.findings, Finding{
+			AppType: AppWordPress, InstallPath: install.Rel,
+			Package: "wordpress", Installed: version, Advisory: advisory,
+		})
+	}
+}
+
+// wordPressComponents inspects the plugins and the themes of one installation.
+//
+// It returns an error ONLY when the context ended, which stops the whole pass.
+// Every other failure is kept as the first error and the walk continues: a
+// broken plugin listing must not hide the themes beside it.
+func (s *sourceScan) wordPressComponents(ctx context.Context, install wordpress.Install, entry *Inventory) error {
+	for _, kind := range []string{"plugin", "theme"} {
+		components, err := wpComponents(ctx, s.item.systemUser, install.Dir, kind)
+		if err != nil {
+			s.note(fmt.Errorf("%s list for %s: %w", kind, s.item.name, err))
+			continue
+		}
+		for _, component := range components {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			s.wordPressComponent(ctx, install, kind, component, entry)
+		}
+	}
+	return nil
+}
+
+// wordPressComponent inspects one plugin or one theme. The package is counted
+// whether or not the feed can say anything about it, and a failed query is NOT
+// counted as an unjudged record: that count says the version could not be
+// ordered, which is a different thing from a feed that did not answer.
+func (s *sourceScan) wordPressComponent(ctx context.Context, install wordpress.Install,
+	kind string, component wordpress.Component, entry *Inventory) {
+	entry.Packages++
+	s.result.counts.packages++
+
+	advisories, judged, err := s.collector.WordPressAdvisories(ctx, kind, component.Name, component.Version)
+	if err != nil {
+		s.note(err)
+		return
+	}
+	if !judged {
+		s.result.counts.unparsed++
+	}
+	for _, advisory := range advisories {
+		s.result.findings = append(s.result.findings, Finding{
+			AppType:     AppWordPress,
+			InstallPath: install.Rel,
+			Package:     kind + ":" + component.Name,
+			Installed:   component.Version,
+			Advisory:    advisory,
+		})
+	}
 }
 
 // lockfileSources are the dependency lists this reads, relative to the tenant
 // home. The depth matches the WordPress discovery: the document root and one
 // directory below it.
-var lockfileSources = []struct {
+type lockfileSource struct {
 	file      string
 	ecosystem string
 	appType   string
 	parse     func([]byte) ([]Package, error)
-}{
+}
+
+var lockfileSources = []lockfileSource{
 	{"package-lock.json", ecosystemNPM, AppNodeJS, ParseNPMLock},
 	{"composer.lock", ecosystemPackagist, AppComposer, ParseComposerLock},
 }
@@ -604,23 +648,16 @@ var lockfileSources = []struct {
 // anywhere in the path cannot redirect this root-privileged read at a file
 // outside the home.
 func (c *Collector) scanLockfiles(ctx context.Context, item target) (scanResult, error) {
-	var result scanResult
-	var firstErr error
+	scan := sourceScan{collector: c, item: item}
 
 	home := filepath.Join(tenantHomeRoot, item.systemUser)
-	directories := []string{"public_html"}
-	names, err := listNamesBeneath(home, "public_html")
-	if err != nil {
-		firstErr = err
-	}
-	for _, name := range names {
-		directories = append(directories, "public_html/"+name)
-	}
+	directories, err := lockfileDirectories(home)
+	scan.note(err)
 
 	for _, dir := range directories {
 		for _, source := range lockfileSources {
 			if ctx.Err() != nil {
-				return result, ctx.Err()
+				return scan.result, ctx.Err()
 			}
 			body, err := readFileBeneath(home, dir+"/"+source.file, maxLockfileBytes)
 			if err != nil {
@@ -628,54 +665,71 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (scanResult,
 				// is not an error worth reporting.
 				continue
 			}
-			packages, err := source.parse(body)
-			if err != nil {
-				// A malformed lockfile drops that INSTALLATION, never the
-				// sweep. It is the tenant's file and they can break it. No
-				// inventory row is written either: the dependency list could
-				// not be read, so claiming the installation was inspected would
-				// be the false reassurance this record exists to prevent, and
-				// the error above stops the prune from removing what was known.
-				if firstErr == nil {
-					firstErr = fmt.Errorf("%s under %s: %w", source.file, item.name, err)
-				}
-				continue
-			}
-			result.counts.packages += len(packages)
-			rel := strings.TrimPrefix(dir, "public_html")
-			if rel == "" {
-				rel = "/"
-			}
-			result.apps = append(result.apps, Inventory{
-				AppType: source.appType, InstallPath: rel, Packages: len(packages),
-			})
-
-			affected, err := c.AffectedPackages(ctx, source.ecosystem, packages)
-			if err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			for _, pkg := range affected {
-				advisories, err := c.Advisories(ctx, source.ecosystem, pkg)
-				if err != nil {
-					if firstErr == nil {
-						firstErr = err
-					}
-					continue
-				}
-				for _, advisory := range advisories {
-					result.findings = append(result.findings, Finding{
-						AppType:     source.appType,
-						InstallPath: rel,
-						Package:     pkg.Name,
-						Installed:   pkg.Version,
-						Advisory:    advisory,
-					})
-				}
-			}
+			scan.lockfile(ctx, dir, source, body)
 		}
 	}
-	return result, firstErr
+	return scan.result, scan.firstErr
+}
+
+// lockfileDirectories names the directories one tenant's lockfiles may sit in:
+// the document root and one directory below it. A root that cannot be listed
+// still yields the root itself, along with the failure that stopped the listing.
+func lockfileDirectories(home string) ([]string, error) {
+	directories := []string{"public_html"}
+	names, err := listNamesBeneath(home, "public_html")
+	for _, name := range names {
+		directories = append(directories, "public_html/"+name)
+	}
+	return directories, err
+}
+
+// lockfile records one dependency list and files a finding for every advisory
+// its packages carry.
+func (s *sourceScan) lockfile(ctx context.Context, dir string, source lockfileSource, body []byte) {
+	packages, err := source.parse(body)
+	if err != nil {
+		// A malformed lockfile drops that INSTALLATION, never the sweep. It is
+		// the tenant's file and they can break it. No inventory row is written
+		// either: the dependency list could not be read, so claiming the
+		// installation was inspected would be the false reassurance this record
+		// exists to prevent, and the error stops the prune from removing what
+		// was known.
+		s.note(fmt.Errorf("%s under %s: %w", source.file, s.item.name, err))
+		return
+	}
+	s.result.counts.packages += len(packages)
+	rel := strings.TrimPrefix(dir, "public_html")
+	if rel == "" {
+		rel = "/"
+	}
+	s.result.apps = append(s.result.apps, Inventory{
+		AppType: source.appType, InstallPath: rel, Packages: len(packages),
+	})
+
+	affected, err := s.collector.AffectedPackages(ctx, source.ecosystem, packages)
+	if err != nil {
+		s.note(err)
+		return
+	}
+	for _, pkg := range affected {
+		s.packageFindings(ctx, source, rel, pkg)
+	}
+}
+
+// packageFindings files one package's advisories against one installation.
+func (s *sourceScan) packageFindings(ctx context.Context, source lockfileSource, rel string, pkg Package) {
+	advisories, err := s.collector.Advisories(ctx, source.ecosystem, pkg)
+	if err != nil {
+		s.note(err)
+		return
+	}
+	for _, advisory := range advisories {
+		s.result.findings = append(s.result.findings, Finding{
+			AppType:     source.appType,
+			InstallPath: rel,
+			Package:     pkg.Name,
+			Installed:   pkg.Version,
+			Advisory:    advisory,
+		})
+	}
 }
