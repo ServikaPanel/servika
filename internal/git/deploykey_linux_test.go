@@ -75,7 +75,13 @@ func TestTheDeployKeyPathIsNotResolvedByString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read git.go: %v", err)
 	}
-	source := string(body)
+	// The ssh config and known_hosts writes live in githubhostkeys.go, which
+	// generateDeployKey calls on every run, so both files are read here.
+	trust, err := os.ReadFile("githubhostkeys.go")
+	if err != nil {
+		t.Fatalf("read githubhostkeys.go: %v", err)
+	}
+	source := string(body) + string(trust)
 
 	for _, gone := range []string{
 		`os.MkdirAll(dir, 0700)`,
@@ -90,7 +96,7 @@ func TestTheDeployKeyPathIsNotResolvedByString(t *testing.T) {
 	for _, want := range []string{
 		`files.MkdirAllBeneath(home, relDir, systemUser)`,
 		`files.WriteFileBeneath(home, relPriv,`,
-		`files.WriteFileBeneath(home, relCfg,`,
+		`files.WriteFileBeneath(home, relSSHConfig,`,
 		`files.RestoreconBeneath(home, relDir)`,
 	} {
 		if !strings.Contains(source, want) {
