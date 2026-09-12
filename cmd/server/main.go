@@ -660,7 +660,7 @@ func main() {
 	seedDefaults(d, ipv4)
 	startHostServices(d, ipv4)
 
-	customerH := &customer.Handlers{DB: d, Secret: cfg.JWTSecret}
+	customerH := &customer.Handlers{DB: d, Secret: cfg.JWTSecret, LifetimeSec: cfg.JWTLifetime}
 	authH := &auth.Handlers{DB: d, Secret: cfg.JWTSecret, LifetimeSec: cfg.JWTLifetime}
 	usersH := &users.Handlers{DB: d}
 	domainsH := &domains.Handlers{DB: d, IPv4: ipv4}

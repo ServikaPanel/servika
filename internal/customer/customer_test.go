@@ -107,11 +107,20 @@ func login(t *testing.T, script *loginScript, username, password string) *httpte
 // postLogin sends one raw body, so a test can send what a client cannot.
 func postLogin(t *testing.T, script *loginScript, body string) *httptest.ResponseRecorder {
 	t.Helper()
+	return postLoginWith(t, &Handlers{Secret: testSecret}, script, body)
+}
+
+var testSecret = []byte(strings.Repeat("k", 32))
+
+// postLoginWith runs the login against a caller-built Handlers, so a test can
+// set the configured session lifetime. The DB is filled in from the script.
+func postLoginWith(t *testing.T, handlers *Handlers, script *loginScript, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	db := sql.OpenDB(loginConn{script: script})
 	t.Cleanup(func() { _ = db.Close() })
+	handlers.DB = db
 	recorder := httptest.NewRecorder()
-	(&Handlers{DB: db, Secret: []byte(strings.Repeat("k", 32))}).
-		Login(recorder, httptest.NewRequest(http.MethodPost, "/customer/login", strings.NewReader(body)))
+	handlers.Login(recorder, httptest.NewRequest(http.MethodPost, "/customer/login", strings.NewReader(body)))
 	return recorder
 }
 
@@ -124,7 +133,7 @@ func sessionCookie(recorder *httptest.ResponseRecorder) *http.Cookie {
 	return nil
 }
 
-// This endpoint issues a 24-hour session. An administrator or a reseller who
+// An administrator or a reseller who
 // reaches it with their correct password gets the answer a wrong password gets,
 // or it becomes a second way into their accounts that skips the management
 // panel's checks.

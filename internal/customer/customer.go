@@ -30,6 +30,25 @@ import (
 type Handlers struct {
 	DB     *sql.DB
 	Secret []byte
+	// LifetimeSec is the session lifetime SERVIKA_JWT_LIFETIME_SEC configures,
+	// the same value the management login uses. It was once hardcoded to 24
+	// hours here, so an operator who shortened the panel session shortened it
+	// for their own staff only and left every customer session running three
+	// times longer than the policy they set.
+	LifetimeSec int
+}
+
+// defaultCustomerLifetimeSec matches config.Load's own default and only applies
+// when a caller leaves LifetimeSec unset. Issuing a token with a zero lifetime
+// would hand out a session that has already expired.
+const defaultCustomerLifetimeSec = 8 * 3600
+
+// lifetimeSec reports the session lifetime to issue.
+func (h *Handlers) lifetimeSec() int {
+	if h.LifetimeSec <= 0 {
+		return defaultCustomerLifetimeSec
+	}
+	return h.LifetimeSec
 }
 
 type loginReq struct {
@@ -125,7 +144,8 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tok, err := auth.Issue(h.Secret, 24*3600, uid, req.Username, role, tokenVersion)
+	lifetime := h.lifetimeSec()
+	tok, err := auth.Issue(h.Secret, lifetime, uid, req.Username, role, tokenVersion)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "token generation failed")
 		return
@@ -136,10 +156,10 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Deliver the token only in the HttpOnly session cookie, never in the body.
-	httpx.SetSessionCookie(w, r, tok, 24*3600)
+	httpx.SetSessionCookie(w, r, tok, lifetime)
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"expires_at":    time.Now().Add(24 * time.Hour).Unix(),
+		"expires_at":    time.Now().Add(time.Duration(lifetime) * time.Second).Unix(),
 		"domain_id":     firstDomainID,
 		"domain_name":   firstDomainName,
 		"username":      req.Username,
