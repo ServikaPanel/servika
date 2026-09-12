@@ -158,7 +158,12 @@ func install(ctx context.Context, entry Entry, app App) error {
 	if err := prepareDirectories(entry.Code, systemUser); err != nil {
 		return err
 	}
+	return installService(entry, app, systemUser, binary)
+}
 
+// installService writes the unit that runs the program that was just unpacked,
+// and starts it.
+func installService(entry Entry, app App, systemUser, binary string) error {
 	arguments, err := buildArgv(entry, app.DataDir, app.Port)
 	if err != nil {
 		return err

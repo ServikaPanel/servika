@@ -108,28 +108,8 @@ func Unpack(ctx context.Context, entry Entry, archive, installDir string) error 
 	}
 	defer func() { _ = os.RemoveAll(staging) }()
 
-	switch entry.ArchiveKind {
-	case "binary":
-		target := filepath.Join(staging, entry.BinaryPath)
-		// #nosec G301 -- root-owned; the tree is handed to the service account afterwards.
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return fmt.Errorf("create the binary directory: %w", err)
-		}
-		if err := copyFile(archive, target); err != nil {
-			return err
-		}
-	case "zip":
-		if err := unpackWith(ctx, "unzip", "-q", "-o", archive, "-d", staging); err != nil {
-			return err
-		}
-	default:
-		flag := map[string]string{"tar.gz": "-xzf", "tar.xz": "-xJf", "tar.bz2": "-xjf"}[entry.ArchiveKind]
-		if flag == "" {
-			return refuse(ReasonUnpack, "%q is not an archive kind this understands", entry.ArchiveKind)
-		}
-		if err := unpackWith(ctx, "tar", flag, archive, "-C", staging, "--no-same-owner"); err != nil {
-			return err
-		}
+	if err := extractInto(ctx, entry, archive, staging); err != nil {
+		return err
 	}
 
 	source, err := descend(staging, entry.StripComponents)
@@ -137,6 +117,27 @@ func Unpack(ctx context.Context, entry Entry, archive, installDir string) error 
 		return err
 	}
 	return promote(source, installDir)
+}
+
+// extractInto lays the download out in the staging directory, using the tool
+// the archive kind needs.
+func extractInto(ctx context.Context, entry Entry, archive, staging string) error {
+	switch entry.ArchiveKind {
+	case "binary":
+		target := filepath.Join(staging, entry.BinaryPath)
+		// #nosec G301 -- root-owned; the tree is handed to the service account afterwards.
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("create the binary directory: %w", err)
+		}
+		return copyFile(archive, target)
+	case "zip":
+		return unpackWith(ctx, "unzip", "-q", "-o", archive, "-d", staging)
+	}
+	flag := map[string]string{"tar.gz": "-xzf", "tar.xz": "-xJf", "tar.bz2": "-xjf"}[entry.ArchiveKind]
+	if flag == "" {
+		return refuse(ReasonUnpack, "%q is not an archive kind this understands", entry.ArchiveKind)
+	}
+	return unpackWith(ctx, "tar", flag, archive, "-C", staging, "--no-same-owner")
 }
 
 // descend walks the requested number of levels into the unpacked tree, refusing

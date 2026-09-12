@@ -118,6 +118,23 @@ var archiveKinds = map[string]bool{
 // check is not redundant: the row can be edited between the two, and everything
 // in it reaches either a URL, a file path or a systemd unit.
 func ValidEntry(entry Entry) (string, error) {
+	if field, err := validIdentity(entry); err != nil {
+		return field, err
+	}
+	if field, err := validLayout(entry); err != nil {
+		return field, err
+	}
+	if field, err := validDownloads(entry); err != nil {
+		return field, err
+	}
+	if _, err := BuildArgv(entry, "/tmp/x", 31000); err != nil {
+		return "start_args", err
+	}
+	return "", nil
+}
+
+// validIdentity checks the fields that name the application.
+func validIdentity(entry Entry) (string, error) {
 	switch {
 	case !codePattern.MatchString(entry.Code):
 		return "code", refuse(ReasonBadEntry, "the code must be 2 to 32 lowercase letters and digits")
@@ -125,6 +142,14 @@ func ValidEntry(entry Entry) (string, error) {
 		return "name", refuse(ReasonBadEntry, "the name is required and may be at most 64 characters")
 	case strings.TrimSpace(entry.Version) == "" || len(entry.Version) > 64:
 		return "version", refuse(ReasonBadEntry, "the version is required")
+	}
+	return "", nil
+}
+
+// validLayout checks the fields that decide what is unpacked where and how the
+// program is started.
+func validLayout(entry Entry) (string, error) {
+	switch {
 	case !archiveKinds[entry.ArchiveKind]:
 		return "archive_kind", refuse(ReasonBadEntry, "%q is not an archive kind this understands", entry.ArchiveKind)
 	case entry.StripComponents < 0 || entry.StripComponents > 4:
@@ -136,6 +161,12 @@ func ValidEntry(entry Entry) (string, error) {
 	case entry.DefaultPort < 0 || entry.DefaultPort > 65535:
 		return "default_port", refuse(ReasonBadEntry, "the default port is not a port number")
 	}
+	return "", nil
+}
+
+// validDownloads checks the per-architecture URLs and checksums, and that the
+// row can be installed on at least one architecture at all.
+func validDownloads(entry Entry) (string, error) {
 	for field, url := range map[string]string{"url_amd64": entry.URLAMD64, "url_arm64": entry.URLARM64} {
 		if url != "" && !strings.HasPrefix(url, "https://") {
 			return field, refuse(ReasonBadEntry, "a download URL must start with https://")
@@ -148,9 +179,6 @@ func ValidEntry(entry Entry) (string, error) {
 	}
 	if entry.URLAMD64 == "" && entry.URLARM64 == "" {
 		return "url_amd64", refuse(ReasonBadEntry, "at least one architecture needs a download URL")
-	}
-	if _, err := BuildArgv(entry, "/tmp/x", 31000); err != nil {
-		return "start_args", err
 	}
 	return "", nil
 }
