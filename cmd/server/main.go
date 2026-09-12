@@ -227,9 +227,13 @@ func saveRedisPasswordIfAsked(d *sql.DB) bool {
 	return true
 }
 
-func main() {
+// subcommandAnswered answers every mode this binary serves besides the panel
+// itself, and reports whether one of them did. They all run before config.Load,
+// because none of them is a reason to need the JWT secret, the encryption key
+// or a database.
+func subcommandAnswered() bool {
 	if printPortsIfAsked() {
-		return
+		return true
 	}
 	// The malware scan runs as a subprocess of this same binary, placed in a
 	// systemd slice so the kernel enforces the operator's resource limits: a
@@ -239,42 +243,49 @@ func main() {
 	// file and nothing else, and it hands its findings back through a file
 	// rather than opening a database connection of its own.
 	if antivirus.RunWorkerIfAsked() {
-		return
+		return true
 	}
 	// Which malware rule set is loaded, for servika-verify. Same reasoning as
 	// the port reporter: the panel already reads and verifies the signed
 	// package, so the shell is handed that answer rather than growing a second
 	// reader of a binary container.
 	if antivirus.PrintRuleSetIfAsked() {
-		return
+		return true
 	}
 	// The real-time watcher, which is the same binary again under its own unit.
 	// It answers here for the same reason: watching files is not a reason to
 	// need the JWT secret. Unlike the scan worker it DOES open the database,
 	// because a long-running watcher has no parent to hand its findings to.
 	if antivirus.RunWatcherIfAsked() {
-		return
+		return true
 	}
 	// The nightly sweep, when a systemd timer owns the schedule rather than the
 	// in-process scheduler below. It opens the database like the watcher and for
 	// the same reason, and it answers here so a sweep does not need the JWT
 	// secret either.
 	if antivirus.RunSweepIfAsked() {
-		return
+		return true
 	}
 	// The process-behaviour watcher, its own unit and gate. It opens the database
 	// like the file watcher, because it too is long-running with no parent, and
 	// it answers here so it does not need the JWT secret.
 	if antivirus.RunProcWatcherIfAsked() {
-		return
+		return true
 	}
 	// The IonCube Loader install for one PHP version, re-invoked by a PHP install
 	// job so the loader is ready within the same detached job. It answers here for
 	// the reason the workers do: fetching and verifying the loader needs the
 	// archive URL and the interpreter path, not the JWT secret or the database.
 	if phpext.RunIonCubeInstallIfAsked() {
-		return
+		return true
 	}
+	return false
+}
+
+// bootstrap pins the temp directory, loads the configuration, unlocks the
+// encryption key and opens the database. Any failure here is fatal: the panel
+// cannot serve a request without all four.
+func bootstrap() (*config.Config, *sql.DB) {
 	pinTempDir()
 
 	cfg, err := config.Load()
@@ -288,24 +299,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
-	defer func() { _ = d.Close() }()
+	return cfg, d
+}
 
-	// The Redis password reader answers here rather than beside the workers
-	// above, because unsealing a value needs BOTH the encryption key and the
-	// database, which is exactly what the lines above have just prepared. It
-	// exists so assets/ops/servika-wp-redis.sh can reuse a tenant's existing
-	// password without holding the key itself: the column is ciphertext now, and
-	// a shell reading it directly would write the sealed text into wp-config as
-	// if it were the password.
-	if printRedisPasswordIfAsked(d) {
-		return
-	}
-	if saveRedisPasswordIfAsked(d) {
-		return
-	}
-
-	// migrations
-	runMigrations(d)
+// backfillCredentials brings every credential column that predates its own
+// encryption up to date. Each pass is idempotent, so they run at every boot.
+func backfillCredentials(d *sql.DB) {
 	// Hash any FTP passwords still stored as legacy cleartext, so the switch to
 	// Pure-FTPd MYSQLCrypt=crypt does not lock out existing accounts. Idempotent.
 	if n, err := credentials.BackfillCleartextPasswords(d); err != nil {
@@ -330,7 +329,12 @@ func main() {
 	// when 2FA is enabled, so nothing else would ever rewrite a legacy one.
 	// Idempotent.
 	datamigrate.EncryptTOTPSecrets(context.Background(), d)
-	provisioner.Init(d)
+}
+
+// healInterruptedWork repairs the state a restart strands. Every lock these
+// features hold lives in memory, so a row left saying "running" would say it
+// for good.
+func healInterruptedWork(d *sql.DB) {
 	// swap is the only buffer before the OOM-killer, which on a swapless host
 	// killed MariaDB and took every site down (2026-08-22 incident). The drop-ins
 	// that defend the DB are installed in provisioner.Init; this operator-facing
@@ -363,11 +367,11 @@ func main() {
 	if err := dns.HealZoneIncludes(context.Background(), d); err != nil {
 		log.Printf("DNS zone include heal warn: %v", err)
 	}
+}
 
-	ipv4 := config.PublicIPv4()
-	ipv6 := config.PublicIPv6()
-	log.Printf("server ipv4: %s ipv6: %q kernel ipv6: %t", ipv4, ipv6, config.HasIPv6())
-
+// seedDefaults writes the rows a fresh installation needs and keeps the stock
+// plans in step with the built-in set.
+func seedDefaults(d *sql.DB, ipv4 string) {
 	if err := domains.SeedIfEmpty(context.Background(), d, ipv4); err != nil {
 		log.Printf("seed warn: %v", err)
 	}
@@ -377,6 +381,12 @@ func main() {
 	if err := plans.SeedSync(context.Background(), d); err != nil {
 		log.Printf("plans seed sync warn: %v", err)
 	}
+}
+
+// startHostServices repairs the host configuration an existing installation
+// never receives any other way, and starts every background collector the panel
+// runs beside the HTTP server.
+func startHostServices(d *sql.DB, ipv4 string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
@@ -497,6 +507,142 @@ func main() {
 	// admin or reseller assigns one from the Customer Accounts screen.
 	datamigrate.BackfillCustomerAccounts(context.Background(), d)
 
+}
+
+// applyAntivirusLimits writes the antivirus resource slice from the stored
+// settings at every start.
+func applyAntivirusLimits(d *sql.DB) {
+	// Write the antivirus resource slice from the stored settings at every
+	// start.
+	//
+	// Nothing else creates the file: ApplyLimits used to run only when an
+	// operator SAVED the settings screen, so on an installation where nobody
+	// ever did, the file did not exist. Measured on real systemd: systemd then
+	// creates the slice implicitly, reports CPUQuota, MemoryMax and TasksMax all
+	// as infinity, and every scan the panel launches into it runs unlimited
+	// while the screen shows the capacity-derived values it computed.
+	//
+	// ApplyWatcher and ApplyScheduleTimer are deliberately NOT called here.
+	// Both start or restart a unit, and doing that at boot would interrupt the
+	// watcher of an operator who changed nothing, on every panel restart.
+	if s, err := avsettings.Read(context.Background(), d); err != nil {
+		log.Printf("antivirus: the resource limits could not be read at startup: %v", err)
+	} else if err := avsettings.ApplyLimits(s); err != nil {
+		log.Printf("antivirus: the resource limits could not be applied at startup: %v", err)
+	}
+}
+
+// wireFirewallReapply hands internal/hostapps a way to re-render the firewall.
+func wireFirewallReapply(d *sql.DB) {
+	// The firewall is what makes a server application reachable, so every change
+	// to its port policy has to re-render the ruleset. The hook is wired here
+	// because internal/firewall reads the port table directly and a call in the
+	// other direction would close an import cycle.
+	hostapps.SetReapply(func() {
+		if err := firewall.Reapply(d); err != nil {
+			log.Printf("host application firewall reapply warn: %v", err)
+		}
+	})
+}
+
+// startCollectors starts the samplers and reconcilers that run beside the HTTP
+// server, and wires the firewall to the panel's own ports.
+func startCollectors(d *sql.DB) {
+	monitor.StartLoadSampler(d, 60*time.Second) // dashboard load-history sampler
+	go chains.Start(d)                          // attack-chain correlator (EDR Phase 2)
+	stats.StartTrafficAggregator(d, 5*time.Minute)
+	slowquery.HealConfig(d)                    // ask MariaDB for the slow log, without restarting it
+	slowquery.StartCollector(d)                // per-tenant slow query shapes, drained from the MariaDB slow log
+	dbremote.HealBind(d)                       // realign the remote-access bind drop-in; never restarts MariaDB here
+	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
+	laravel.HealOnStartup(d)                   // realign queue worker units, and remove the ones whose row is gone
+	laravel.HealLogRotation()                  // rotate the worker and application logs, which grew without bound
+	// The firewall's protected set has to follow the panel's own ports. Left
+	// hardcoded it would go on guarding the numbers the panel used to be on and
+	// leave the ones it is on now closeable from the firewall screen, which
+	// locks the operator out weeks after the move with nothing connecting the
+	// two events. The two packages do not import each other; the reader is
+	// wired here, and a failed reading keeps the installed defaults.
+	firewall.SetPanelPorts(func() []int {
+		ports, err := panelport.Current()
+		if err != nil {
+			return []int{8080, 8443}
+		}
+		return []int{ports.Backend, ports.External}
+	})
+	// A detached port change ends with this process being replaced, so the
+	// panel that started it is not the panel that learns how it went. Its
+	// verdict is folded into the history table here.
+	panelport.FoldOutcome(d)
+	// The ops tools health-check the backend after a restart, and their URL used
+	// to be written with a port of its own that a backend port change never
+	// touched. servika-update then never saw the panel come up and restored the
+	// previous binary, every release asset and the pre-update database dump, so a
+	// healthy update rolled itself back on every attempt. The port change
+	// restarts this process, which is why the repair belongs here.
+	panelport.HealHealthURL()
+}
+
+// serve reapplies the firewall, listens, and shuts the server down on a signal.
+// The firewall is reapplied BEFORE the listener accepts anything.
+func serve(srv *http.Server, cfg *config.Config, d *sql.DB) {
+	firewall.TakeOverFirewalld()
+	if err := firewall.Reapply(d); err != nil {
+		log.Printf("firewall reapply warn: %v", err)
+	}
+
+	go func() {
+		log.Printf("servika %s listening on %s (env=%s)", version, cfg.ListenAddr, cfg.Env)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("listen: %v", err)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	log.Printf("shutting down...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
+}
+
+func main() {
+	if subcommandAnswered() {
+		return
+	}
+	cfg, d := bootstrap()
+	defer func() { _ = d.Close() }()
+
+	// The Redis password reader answers here rather than beside the workers
+	// above, because unsealing a value needs BOTH the encryption key and the
+	// database, which is exactly what the lines above have just prepared. It
+	// exists so assets/ops/servika-wp-redis.sh can reuse a tenant's existing
+	// password without holding the key itself: the column is ciphertext now, and
+	// a shell reading it directly would write the sealed text into wp-config as
+	// if it were the password.
+	if printRedisPasswordIfAsked(d) {
+		return
+	}
+	if saveRedisPasswordIfAsked(d) {
+		return
+	}
+
+	// migrations
+	runMigrations(d)
+	backfillCredentials(d)
+	provisioner.Init(d)
+	healInterruptedWork(d)
+
+	ipv4 := config.PublicIPv4()
+	ipv6 := config.PublicIPv6()
+	log.Printf("server ipv4: %s ipv6: %q kernel ipv6: %t", ipv4, ipv6, config.HasIPv6())
+
+	seedDefaults(d, ipv4)
+	startHostServices(d, ipv4)
+
 	customerH := &customer.Handlers{DB: d, Secret: cfg.JWTSecret}
 	authH := &auth.Handlers{DB: d, Secret: cfg.JWTSecret, LifetimeSec: cfg.JWTLifetime}
 	usersH := &users.Handlers{DB: d}
@@ -552,24 +698,7 @@ func main() {
 	avSettingsH := &avsettings.Handlers{DB: d}
 	chainsH := &chains.Handlers{DB: d}
 	notificationsH := &notifications.Handlers{DB: d}
-	// Write the antivirus resource slice from the stored settings at every
-	// start.
-	//
-	// Nothing else creates the file: ApplyLimits used to run only when an
-	// operator SAVED the settings screen, so on an installation where nobody
-	// ever did, the file did not exist. Measured on real systemd: systemd then
-	// creates the slice implicitly, reports CPUQuota, MemoryMax and TasksMax all
-	// as infinity, and every scan the panel launches into it runs unlimited
-	// while the screen shows the capacity-derived values it computed.
-	//
-	// ApplyWatcher and ApplyScheduleTimer are deliberately NOT called here.
-	// Both start or restart a unit, and doing that at boot would interrupt the
-	// watcher of an operator who changed nothing, on every panel restart.
-	if s, err := avsettings.Read(context.Background(), d); err != nil {
-		log.Printf("antivirus: the resource limits could not be read at startup: %v", err)
-	} else if err := avsettings.ApplyLimits(s); err != nil {
-		log.Printf("antivirus: the resource limits could not be applied at startup: %v", err)
-	}
+	applyAntivirusLimits(d)
 	copyH := &sitecopy.Handlers{DB: d}
 	importH := &siteimport.Handlers{DB: d}
 	wpH := &wordpress.Handlers{DB: d}
@@ -606,15 +735,7 @@ func main() {
 	// restart is one whose process is gone. Left alone it would show an install
 	// that never finishes and refuse a second attempt for good.
 	hostapps.HealRunningJobs(d)
-	// The firewall is what makes a server application reachable, so every change
-	// to its port policy has to re-render the ruleset. The hook is wired here
-	// because internal/firewall reads the port table directly and a call in the
-	// other direction would close an import cycle.
-	hostapps.SetReapply(func() {
-		if err := firewall.Reapply(d); err != nil {
-			log.Printf("host application firewall reapply warn: %v", err)
-		}
-	})
+	wireFirewallReapply(d)
 	// A migration job cannot survive a restart, so close the leftovers and wipe
 	// the source credentials they still hold.
 	transfersH.HealMigrationsOnStartup()
@@ -1485,61 +1606,9 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	monitor.StartLoadSampler(d, 60*time.Second) // dashboard load-history sampler
-	go chains.Start(d)                          // attack-chain correlator (EDR Phase 2)
-	stats.StartTrafficAggregator(d, 5*time.Minute)
-	slowquery.HealConfig(d)                    // ask MariaDB for the slow log, without restarting it
-	slowquery.StartCollector(d)                // per-tenant slow query shapes, drained from the MariaDB slow log
-	dbremote.HealBind(d)                       // realign the remote-access bind drop-in; never restarts MariaDB here
-	laravel.StartJobReconciler(d, time.Minute) // finalize stuck async jobs without client polling
-	laravel.HealOnStartup(d)                   // realign queue worker units, and remove the ones whose row is gone
-	laravel.HealLogRotation()                  // rotate the worker and application logs, which grew without bound
-	// The firewall's protected set has to follow the panel's own ports. Left
-	// hardcoded it would go on guarding the numbers the panel used to be on and
-	// leave the ones it is on now closeable from the firewall screen, which
-	// locks the operator out weeks after the move with nothing connecting the
-	// two events. The two packages do not import each other; the reader is
-	// wired here, and a failed reading keeps the installed defaults.
-	firewall.SetPanelPorts(func() []int {
-		ports, err := panelport.Current()
-		if err != nil {
-			return []int{8080, 8443}
-		}
-		return []int{ports.Backend, ports.External}
-	})
-	// A detached port change ends with this process being replaced, so the
-	// panel that started it is not the panel that learns how it went. Its
-	// verdict is folded into the history table here.
-	panelport.FoldOutcome(d)
-	// The ops tools health-check the backend after a restart, and their URL used
-	// to be written with a port of its own that a backend port change never
-	// touched. servika-update then never saw the panel come up and restored the
-	// previous binary, every release asset and the pre-update database dump, so a
-	// healthy update rolled itself back on every attempt. The port change
-	// restarts this process, which is why the repair belongs here.
-	panelport.HealHealthURL()
+	startCollectors(d)
+	serve(srv, cfg, d)
 
-	firewall.TakeOverFirewalld()
-	if err := firewall.Reapply(d); err != nil {
-		log.Printf("firewall reapply warn: %v", err)
-	}
-
-	go func() {
-		log.Printf("servika %s listening on %s (env=%s)", version, cfg.ListenAddr, cfg.Env)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %v", err)
-		}
-	}()
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	log.Printf("shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("shutdown: %v", err)
-	}
 }
 
 // migrationsDir is where a deployed host keeps the numbered SQL files. A local
