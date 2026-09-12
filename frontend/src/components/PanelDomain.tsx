@@ -15,6 +15,61 @@ type PanelDomainStatus = {
   has_ipv6: boolean
 }
 
+// StatusPanel lists what the operator has to match against their DNS: the
+// addresses the panel answers on, and the certificate state of the custom name.
+function StatusPanel({ status }: { status: PanelDomainStatus | null }) {
+  return (
+    <div className="text-xs text-slate-500 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900">
+      <AddressRows status={status} />
+      <CertificateRows status={status} />
+    </div>
+  )
+}
+
+// AddressRows names the addresses the operator has to point their DNS at. An
+// empty IPv6 is the ordinary state of an IPv4-only host, so it says which of
+// the two cases it is rather than showing a blank.
+function AddressRows({ status }: { status: PanelDomainStatus | null }) {
+  const { t } = useTranslation('PanelDomain')
+  const ipv6 = status?.server_ipv6 || (status?.has_ipv6 ? t('ipv6NoRoutable') : t('ipv6None'))
+  return (
+    <>
+      <div>{t('serverIpv4')} <span className="font-mono text-slate-800 dark:text-slate-100">{status?.server_ipv4 || t('unknown')}</span></div>
+      <div>{t('serverIpv6')} <span className="font-mono text-slate-800 dark:text-slate-100">{ipv6}</span></div>
+    </>
+  )
+}
+
+// CertificateRows reports the certificate state of the custom name.
+function CertificateRows({ status }: { status: PanelDomainStatus | null }) {
+  const { t } = useTranslation('PanelDomain')
+  const portless = status?.ssl_status === 'active' && status.custom_domain
+  return (
+    <>
+      <div>{t('sslStatus')} <span className="font-semibold text-slate-800 dark:text-slate-100">{status?.ssl_status || t('sslNone')}</span></div>
+      {portless && <div>{t('portlessUrl')} <span className="font-mono text-slate-800 dark:text-slate-100">https://{status.custom_domain}</span></div>}
+      {status?.ssl_expires && <div>{t('expires')} <span className="font-mono text-slate-800 dark:text-slate-100">{status.ssl_expires}</span></div>}
+    </>
+  )
+}
+
+// Notices carries the three lines this form can raise. They are not the shared
+// FormAlerts: the certificate warning is a third tone, and the form spaces its
+// children itself, so these carry no bottom margin of their own.
+function Notices({ status, message, error }: {
+  status: PanelDomainStatus | null
+  message: string
+  error: string
+}) {
+  return (
+    <>
+      {status?.ssl_error && <div className="text-sm px-3 py-2 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">{status.ssl_error}</div>}
+      {message && <div className="text-sm px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{message}</div>}
+      {error && <div className="text-sm px-3 py-2 rounded-lg border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">{error}</div>}
+    </>
+  )
+}
+
 export default function PanelDomain() {
   const { t } = useTranslation('PanelDomain')
   const [status, setStatus] = useState<PanelDomainStatus | null>(null)
@@ -98,18 +153,10 @@ export default function PanelDomain() {
             <input value={domain} onChange={event => setDomain(event.target.value)} placeholder={t('customDomainPlaceholder')} disabled={loading || saving}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-800 dark:text-slate-100 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none disabled:opacity-60" />
           </label>
-          <div className="text-xs text-slate-500 dark:text-slate-400 rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-900">
-            <div>{t('serverIpv4')} <span className="font-mono text-slate-800 dark:text-slate-100">{status?.server_ipv4 || t('unknown')}</span></div>
-            <div>{t('serverIpv6')} <span className="font-mono text-slate-800 dark:text-slate-100">{status?.server_ipv6 || (status?.has_ipv6 ? t('ipv6NoRoutable') : t('ipv6None'))}</span></div>
-            <div>{t('sslStatus')} <span className="font-semibold text-slate-800 dark:text-slate-100">{status?.ssl_status || t('sslNone')}</span></div>
-            {status?.ssl_status === 'active' && status.custom_domain && <div>{t('portlessUrl')} <span className="font-mono text-slate-800 dark:text-slate-100">https://{status.custom_domain}</span></div>}
-            {status?.ssl_expires && <div>{t('expires')} <span className="font-mono text-slate-800 dark:text-slate-100">{status.ssl_expires}</span></div>}
-          </div>
+          <StatusPanel status={status} />
         </div>
 
-        {status?.ssl_error && <div className="text-sm px-3 py-2 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">{status.ssl_error}</div>}
-        {message && <div className="text-sm px-3 py-2 rounded-lg border bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300">{message}</div>}
-        {error && <div className="text-sm px-3 py-2 rounded-lg border bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">{error}</div>}
+        <Notices status={status} message={message} error={error} />
 
         <div className="flex items-center gap-3 flex-wrap">
           <button type="submit" disabled={saving || !domain.trim()} className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-50">

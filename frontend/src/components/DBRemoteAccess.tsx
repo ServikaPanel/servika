@@ -37,6 +37,129 @@ export type RemoteStatus = {
   hosts: RemoteHost[]
 }
 
+// AddHostForm is the site owner's control. The admin view passes no account and
+// never mounts it, because a server-wide list has no single account to add to.
+function AddHostForm({ enabled, busy, host, label, onHost, onLabel, onAdd }: {
+  enabled: boolean
+  busy: boolean
+  host: string
+  label: string
+  onHost: (value: string) => void
+  onLabel: (value: string) => void
+  onAdd: () => void
+}) {
+  const { t } = useTranslation('DBRemoteAccess')
+  const locked = !enabled || busy
+  return (
+    <div className="mb-4 space-y-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex-1 min-w-[12rem]">
+          <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('field.host')}</span>
+          <input
+            value={host}
+            onChange={e => onHost(e.target.value)}
+            placeholder={t('field.hostPlaceholder')}
+            disabled={locked}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 disabled:opacity-50"
+          />
+        </label>
+        <label className="flex-1 min-w-[10rem]">
+          <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('field.label')}</span>
+          <input
+            value={label}
+            onChange={e => onLabel(e.target.value)}
+            placeholder={t('field.labelPlaceholder')}
+            disabled={locked}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 disabled:opacity-50"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={locked || host.trim() === ''}
+          className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+        >
+          {t('add')}
+        </button>
+      </div>
+      <p className="text-xs text-slate-400 dark:text-slate-500">{t('field.hint')}</p>
+    </div>
+  )
+}
+
+// HostTable lists the allowed addresses. The server-wide view names the tenant
+// and the account; a site owner's view already knows both.
+function HostTable({ rows, showDomain, busy, onRemove }: {
+  rows: RemoteHost[]
+  showDomain: boolean
+  busy: boolean
+  onRemove: (entry: RemoteHost) => void
+}) {
+  const { t } = useTranslation('DBRemoteAccess')
+  if (rows.length === 0) {
+    return <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('empty')}</p>
+  }
+  return (
+    <div className={responsiveTableContainerClass}>
+      <table className={responsiveTableClass}>
+        <thead className={responsiveTableHeadClass}>
+          <tr>
+            {showDomain && <th className="px-4 py-2.5 font-semibold">{t('column.domain')}</th>}
+            {showDomain && <th className="px-4 py-2.5 font-semibold">{t('column.user')}</th>}
+            <th className="px-4 py-2.5 font-semibold">{t('column.host')}</th>
+            <th className="px-4 py-2.5 font-semibold">{t('column.label')}</th>
+            <th className="px-4 py-2.5 font-semibold">{t('column.added')}</th>
+            <th className="px-4 py-2.5 text-right font-semibold">{t('column.actions')}</th>
+          </tr>
+        </thead>
+        <tbody className={responsiveTableBodyClass}>
+          {rows.map(entry => (
+            <tr key={entry.id} className={responsiveTableRowClass}>
+              {showDomain && (
+                <td className={responsiveTableCellClass} data-label={t('column.domain')}>{entry.domain_name}</td>
+              )}
+              {showDomain && (
+                <td className={responsiveTableCellClass} data-label={t('column.user')}>
+                  <span className="font-mono text-xs">{entry.db_user}</span>
+                </td>
+              )}
+              <td className={responsiveTableCellClass} data-label={t('column.host')}>
+                <span className="font-mono text-xs">{entry.host}</span>
+                {/* An account made before the panel required TLS carries no
+                    badge from the server, and its traffic crosses the
+                    internet in the clear. Say so on the row, since that is
+                    where the operator can act on it. */}
+                {!entry.requires_tls && (
+                  <span
+                    title={t('plaintextHint')}
+                    className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                  >
+                    {t('plaintext')}
+                  </span>
+                )}
+              </td>
+              <td className={responsiveTableCellClass} data-label={t('column.label')}>
+                {entry.label || <span className="text-slate-400">—</span>}
+              </td>
+              <td className={responsiveTableCellClass} data-label={t('column.added')}>{entry.created_at}</td>
+              <td className={`${responsiveTableCellClass} text-right`}>
+                <button
+                  type="button"
+                  onClick={() => onRemove(entry)}
+                  disabled={busy}
+                  className="rounded px-2 py-1 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                >
+                  {t('remove')}
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function DBRemoteAccess({
   domainId, dbUser, showDomain = false, onChange,
 }: {
@@ -122,102 +245,11 @@ export default function DBRemoteAccess({
       )}
 
       {domainId && dbUser && (
-        <div className="mb-4 space-y-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="flex-1 min-w-[12rem]">
-              <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('field.host')}</span>
-              <input
-                value={host}
-                onChange={e => setHost(e.target.value)}
-                placeholder={t('field.hostPlaceholder')}
-                disabled={!status.enabled || busy}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 disabled:opacity-50"
-              />
-            </label>
-            <label className="flex-1 min-w-[10rem]">
-              <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">{t('field.label')}</span>
-              <input
-                value={label}
-                onChange={e => setLabel(e.target.value)}
-                placeholder={t('field.labelPlaceholder')}
-                disabled={!status.enabled || busy}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 disabled:opacity-50"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={add}
-              disabled={!status.enabled || busy || host.trim() === ''}
-              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
-            >
-              {t('add')}
-            </button>
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">{t('field.hint')}</p>
-        </div>
+        <AddHostForm enabled={status.enabled} busy={busy} host={host} label={label}
+          onHost={setHost} onLabel={setLabel} onAdd={add} />
       )}
 
-      {rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('empty')}</p>
-      ) : (
-        <div className={responsiveTableContainerClass}>
-          <table className={responsiveTableClass}>
-            <thead className={responsiveTableHeadClass}>
-              <tr>
-                {showDomain && <th className="px-4 py-2.5 font-semibold">{t('column.domain')}</th>}
-                {showDomain && <th className="px-4 py-2.5 font-semibold">{t('column.user')}</th>}
-                <th className="px-4 py-2.5 font-semibold">{t('column.host')}</th>
-                <th className="px-4 py-2.5 font-semibold">{t('column.label')}</th>
-                <th className="px-4 py-2.5 font-semibold">{t('column.added')}</th>
-                <th className="px-4 py-2.5 text-right font-semibold">{t('column.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className={responsiveTableBodyClass}>
-              {rows.map(entry => (
-                <tr key={entry.id} className={responsiveTableRowClass}>
-                  {showDomain && (
-                    <td className={responsiveTableCellClass} data-label={t('column.domain')}>{entry.domain_name}</td>
-                  )}
-                  {showDomain && (
-                    <td className={responsiveTableCellClass} data-label={t('column.user')}>
-                      <span className="font-mono text-xs">{entry.db_user}</span>
-                    </td>
-                  )}
-                  <td className={responsiveTableCellClass} data-label={t('column.host')}>
-                    <span className="font-mono text-xs">{entry.host}</span>
-                    {/* An account made before the panel required TLS carries no
-                        badge from the server, and its traffic crosses the
-                        internet in the clear. Say so on the row, since that is
-                        where the operator can act on it. */}
-                    {!entry.requires_tls && (
-                      <span
-                        title={t('plaintextHint')}
-                        className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                      >
-                        {t('plaintext')}
-                      </span>
-                    )}
-                  </td>
-                  <td className={responsiveTableCellClass} data-label={t('column.label')}>
-                    {entry.label || <span className="text-slate-400">—</span>}
-                  </td>
-                  <td className={responsiveTableCellClass} data-label={t('column.added')}>{entry.created_at}</td>
-                  <td className={`${responsiveTableCellClass} text-right`}>
-                    <button
-                      type="button"
-                      onClick={() => remove(entry)}
-                      disabled={busy}
-                      className="rounded px-2 py-1 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30"
-                    >
-                      {t('remove')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <HostTable rows={rows} showDomain={showDomain} busy={busy} onRemove={remove} />
 
       <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">{t('security')}</p>
     </div>

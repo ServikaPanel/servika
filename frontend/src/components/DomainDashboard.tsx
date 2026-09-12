@@ -43,6 +43,33 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   )
 }
 
+// SslCard reads the certificate state once and draws the card from it.
+//
+// The self-signed fail-safe gets its own state rather than the green a real CA
+// earns: it encrypts and still leaves every visitor on a browser warning page,
+// so it carries a warning of its own here.
+function SslCard({ domain, onClick }: { domain: Domain; onClick: () => void }) {
+  const { t } = useTranslation('DomainDashboard')
+  const state = sslState(domain.ssl, domain.ssl_source)
+  const description = {
+    trusted: t('ssl.expires', { expiry: domain.ssl_expiry || '—' }),
+    selfSigned: t('ssl.selfSigned'),
+  }[state as string] ?? t('ssl.letsEncrypt')
+  const color = state === 'trusted' ? 'emerald' : state === 'selfSigned' ? 'amber' : 'rose'
+  const warning = { none: t('ssl.warning'), selfSigned: t('ssl.selfSignedWarning') }[state as string]
+  return (
+    <ToolCard
+      label={t('ssl.label')}
+      description={description}
+      icon={ICONS.ssl}
+      color={color}
+      phase="F7"
+      warning={warning}
+      onClick={onClick}
+    />
+  )
+}
+
 export default function DomainDashboard({ domain }: { domain: Domain }) {
   const navigate = useNavigate()
   const { t } = useTranslation('DomainDashboard')
@@ -86,24 +113,7 @@ export default function DomainDashboard({ domain }: { domain: Domain }) {
       </Group>
 
       <Group title={t('groups.security')}>
-        {/* The self-signed fail-safe gets its own state rather than the green
-            a real CA earns: it encrypts and still leaves every visitor on a
-            browser warning page, so it carries a warning of its own here. */}
-        <ToolCard
-          label={t('ssl.label')}
-          description={sslState(domain.ssl, domain.ssl_source) === 'trusted'
-            ? t('ssl.expires', { expiry: domain.ssl_expiry || '—' })
-            : sslState(domain.ssl, domain.ssl_source) === 'selfSigned'
-              ? t('ssl.selfSigned')
-              : t('ssl.letsEncrypt')}
-          icon={ICONS.ssl}
-          color={sslState(domain.ssl, domain.ssl_source) === 'trusted' ? 'emerald'
-            : sslState(domain.ssl, domain.ssl_source) === 'selfSigned' ? 'amber' : 'rose'}
-          phase="F7"
-          warning={sslState(domain.ssl, domain.ssl_source) === 'none' ? t('ssl.warning')
-            : sslState(domain.ssl, domain.ssl_source) === 'selfSigned' ? t('ssl.selfSignedWarning') : undefined}
-          onClick={navigateTo('ssl')}
-        />
+        <SslCard domain={domain} onClick={navigateTo('ssl')} />
         <ToolCard label={t('passwordProtection.label')} description={t('passwordProtection.desc')}       icon={ICONS.lock}      color="amber" phase="F7" onClick={navigateTo('password-protection')} />
         <ToolCard label={t('stats.label')}            description={t('stats.desc')}  icon={ICONS.stats} color="indigo" phase="F10" onClick={navigateTo('stats')} />
         <ToolCard label={t('accessControl.label')} description={t('accessControl.desc')} icon={ICONS.accessControl} color="rose" onClick={navigateTo('access-control')} />
