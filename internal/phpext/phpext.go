@@ -82,11 +82,20 @@ func safeName(s string) bool {
 		return false
 	}
 	for _, c := range s {
-		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' && c != '-' {
+		if !safeNameRune(c) {
 			return false
 		}
 	}
 	return true
+}
+
+// safeNameRune is the accepted set, one character at a time.
+func safeNameRune(c rune) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return c == '_' || c == '-'
 }
 
 func peclEnvironment(phpBin string) []string {
@@ -123,25 +132,8 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		if !enabled && !strings.HasSuffix(name, ".ini.disabled") {
 			continue
 		}
-		// Extract the name from XX-{name}.ini[.disabled].
-		clean := strings.TrimSuffix(name, ".disabled")
-		clean = strings.TrimSuffix(clean, ".ini")
-		// Remove a numeric prefix such as 20-.
-		if idx := strings.Index(clean, "-"); idx > 0 && idx < 4 {
-			pre := clean[:idx]
-			isNum := true
-			for _, c := range pre {
-				if c < '0' || c > '9' {
-					isNum = false
-					break
-				}
-			}
-			if isNum {
-				clean = clean[idx+1:]
-			}
-		}
 		exts = append(exts, Extension{
-			Name:    clean,
+			Name:    extensionName(name),
 			Enabled: enabled,
 			INIFile: name,
 		})
@@ -154,6 +146,23 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		"content":  exts,
 		"versions": installedVersions(),
 	})
+}
+
+// extensionName extracts the extension's own name from XX-{name}.ini[.disabled].
+func extensionName(fileName string) string {
+	clean := strings.TrimSuffix(fileName, ".disabled")
+	clean = strings.TrimSuffix(clean, ".ini")
+	// Remove a numeric prefix such as 20-.
+	idx := strings.Index(clean, "-")
+	if idx <= 0 || idx >= 4 {
+		return clean
+	}
+	for _, c := range clean[:idx] {
+		if c < '0' || c > '9' {
+			return clean
+		}
+	}
+	return clean[idx+1:]
 }
 
 // Toggle renames an ini file and reloads PHP-FPM.
@@ -186,22 +195,10 @@ func (h *Handlers) Toggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine the new name.
-	var newPath string
-	if req.Enabled {
-		// disabled -> enabled
-		newPath = strings.TrimSuffix(currentPath, ".disabled")
-		if currentPath == newPath {
-			httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "already enabled"})
-			return
-		}
-	} else {
-		// enabled -> disabled
-		if strings.HasSuffix(currentPath, ".disabled") {
-			httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "already disabled"})
-			return
-		}
-		newPath = currentPath + ".disabled"
+	newPath, message := toggledPath(currentPath, req.Enabled)
+	if newPath == "" {
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "message": message})
+		return
 	}
 
 	if err := os.Rename(currentPath, newPath); err != nil {
@@ -227,6 +224,25 @@ func (h *Handlers) Toggle(w http.ResponseWriter, r *http.Request) {
 		"file":    filepath.Base(newPath),
 		"active":  req.Enabled,
 	})
+}
+
+// toggledPath is the name the file has to carry for the requested state. An
+// empty path means it already carries it, and the message says which state that
+// is.
+func toggledPath(currentPath string, enable bool) (newPath, message string) {
+	if enable {
+		// disabled -> enabled
+		newPath = strings.TrimSuffix(currentPath, ".disabled")
+		if currentPath == newPath {
+			return "", "already enabled"
+		}
+		return newPath, ""
+	}
+	// enabled -> disabled
+	if strings.HasSuffix(currentPath, ".disabled") {
+		return "", "already disabled"
+	}
+	return currentPath + ".disabled", ""
 }
 
 // PECL installation.
