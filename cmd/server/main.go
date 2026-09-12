@@ -46,6 +46,7 @@ import (
 	"servika/internal/httpx"
 	"servika/internal/laravel"
 	"servika/internal/logs"
+	"servika/internal/logsink"
 	"servika/internal/logx"
 	"servika/internal/mail"
 	"servika/internal/mailreport"
@@ -502,6 +503,11 @@ func startHostServices(d *sql.DB, ipv4 string) {
 	// every signed-out session for the life of the installation.
 	sessionrevoke.StartSweep(context.Background(), d)
 
+	// The writer behind request_logs. Every API request queues a row; nothing is
+	// written until this goroutine runs, and a row queued before it starts waits
+	// in the buffer rather than being lost.
+	logsink.StartRequests(context.Background(), d)
+
 	// The signed malware rule package, if this build carries a signing key. The
 	// PANEL is the only process that fetches: the scan worker runs inside
 	// servika-av.slice with nested deadlines and the watcher's unit is sandboxed
@@ -834,6 +840,11 @@ func main() {
 	r.Use(middleware.EnforceSameOrigin)
 	r.Use(middleware.MaintenanceMode)
 	r.Use(middleware.BodyLimit)
+	// Record every request in request_logs. After BodyLimit so a body it reads
+	// is already capped, and outside RequireAuth on purpose: a failed login and
+	// a webhook call belong in the table too, with no identity to record.
+	// The row is queued, never written on the request path.
+	r.Use(middleware.RequestLog)
 
 	// Public webhook: throttle per IP so a leaked URL cannot drive unbounded
 	// repository pulls or unauthenticated DB lookups on invalid secrets.
