@@ -64,65 +64,18 @@ func (h *Handlers) UploadSQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The upload lands in the panel temp dir (TMPDIR, persistent disk) rather
-	// than the tenant home: it is transient, and a dump does not belong in a
-	// tenant's quota for the seconds it takes to apply.
-	spool, err := os.CreateTemp("", "servika-import-dump-*.sql")
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "a temporary file could not be created")
+	spool, cleanup, ok := spoolFile(w)
+	if !ok {
 		return
 	}
-	spoolName := spool.Name()
-	defer func() { _ = os.Remove(spoolName) }()
-	defer func() { _ = spool.Close() }()
-	if err := spool.Chmod(0600); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "a temporary file could not be secured")
+	defer cleanup()
+
+	upload, ok := readDumpParts(w, reader, spool)
+	if !ok {
 		return
 	}
 
-	var (
-		dbName    string
-		truncate  bool
-		written   int64
-		dumpFound bool
-	)
-	for {
-		part, partErr := reader.NextPart()
-		if errors.Is(partErr, io.EOF) {
-			break
-		}
-		if partErr != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "the upload could not be read or exceeded the size limit")
-			return
-		}
-		switch part.FormName() {
-		case "db_name":
-			dbName = strings.TrimSpace(readField(part))
-		case "truncate":
-			value := strings.TrimSpace(readField(part))
-			truncate = value == "1" || strings.EqualFold(value, "true")
-		case "dump":
-			written, err = io.Copy(spool, io.LimitReader(part, MaxDumpBytes+1))
-			_ = part.Close()
-			if err != nil {
-				httpx.WriteError(w, http.StatusBadRequest, "the dump could not be read")
-				return
-			}
-			if written > MaxDumpBytes {
-				httpx.WriteError(w, http.StatusRequestEntityTooLarge, "the dump exceeds the size limit")
-				return
-			}
-			dumpFound = true
-			continue
-		}
-		_ = part.Close()
-	}
-	if !dumpFound {
-		httpx.WriteError(w, http.StatusBadRequest, "the dump field is required")
-		return
-	}
-
-	chosen, err := h.databaseTarget(r, domainID, dbName)
+	chosen, err := h.databaseTarget(r, domainID, upload.dbName)
 	if err != nil {
 		httpx.WriteError(w, http.StatusForbidden, err.Error())
 		return
@@ -136,31 +89,127 @@ func (h *Handlers) UploadSQL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !applyDump(w, r, spool, chosen.DBName, upload.truncate) {
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, sqlResponse{
+		OK: true, DBName: chosen.DBName, Bytes: upload.written, Truncated: upload.truncate,
+	})
+}
+
+// applyDump empties the schema when asked and streams the spooled dump into it.
+// It answers the refusal itself.
+func applyDump(w http.ResponseWriter, r *http.Request, spool *os.File, dbName string, truncate bool) bool {
 	source, err := dumpReader(spool)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
-		return
+		return false
 	}
-	if closer, ok := source.(io.Closer); ok {
+	if closer, isCloser := source.(io.Closer); isCloser {
 		defer func() { _ = closer.Close() }()
 	}
 
 	if truncate {
-		if err := truncateDatabase(r.Context(), chosen.DBName); err != nil {
+		if err := truncateDatabase(r.Context(), dbName); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "the database could not be emptied")
-			return
+			return false
 		}
 	}
-	if err := importDump(r.Context(), chosen.DBName, source); err != nil {
+	if err := importDump(r.Context(), dbName, source); err != nil {
 		// The client failure text is the useful part of a failed import (a syntax
 		// error, a missing table) and it describes the caller's own dump going
 		// into the caller's own database, so it is returned rather than hidden.
 		httpx.WriteError(w, http.StatusBadRequest, importFailure(err))
-		return
+		return false
 	}
-	httpx.WriteJSON(w, http.StatusOK, sqlResponse{
-		OK: true, DBName: chosen.DBName, Bytes: written, Truncated: truncate,
-	})
+	return true
+}
+
+// spoolFile creates the file the upload is copied into, and the cleanup that
+// removes it.
+//
+// The upload lands in the panel temp dir (TMPDIR, persistent disk) rather than
+// the tenant home: it is transient, and a dump does not belong in a tenant's
+// quota for the seconds it takes to apply.
+func spoolFile(w http.ResponseWriter) (*os.File, func(), bool) {
+	spool, err := os.CreateTemp("", "servika-import-dump-*.sql")
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "a temporary file could not be created")
+		return nil, nil, false
+	}
+	spoolName := spool.Name()
+	cleanup := func() {
+		_ = spool.Close()
+		_ = os.Remove(spoolName)
+	}
+	if err := spool.Chmod(0600); err != nil {
+		cleanup()
+		httpx.WriteError(w, http.StatusInternalServerError, "a temporary file could not be secured")
+		return nil, nil, false
+	}
+	return spool, cleanup, true
+}
+
+// dumpUpload is what the multipart body asked for.
+type dumpUpload struct {
+	dbName   string
+	truncate bool
+	written  int64
+}
+
+// readDumpParts copies the dump into the spool and reads the fields beside it.
+// It answers the refusal itself.
+func readDumpParts(w http.ResponseWriter, reader *multipart.Reader, spool *os.File) (dumpUpload, bool) {
+	var (
+		upload    dumpUpload
+		dumpFound bool
+	)
+	for {
+		part, partErr := reader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
+		if partErr != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "the upload could not be read or exceeded the size limit")
+			return dumpUpload{}, false
+		}
+		switch part.FormName() {
+		case "db_name":
+			upload.dbName = strings.TrimSpace(readField(part))
+		case "truncate":
+			value := strings.TrimSpace(readField(part))
+			upload.truncate = value == "1" || strings.EqualFold(value, "true")
+		case "dump":
+			written, copyErr := io.Copy(spool, io.LimitReader(part, MaxDumpBytes+1))
+			_ = part.Close()
+			upload.written = written
+			if !spooled(w, written, copyErr) {
+				return dumpUpload{}, false
+			}
+			dumpFound = true
+			continue
+		}
+		_ = part.Close()
+	}
+	if !dumpFound {
+		httpx.WriteError(w, http.StatusBadRequest, "the dump field is required")
+		return dumpUpload{}, false
+	}
+	return upload, true
+}
+
+// spooled reports whether the dump landed whole, and answers the refusal when it
+// did not.
+func spooled(w http.ResponseWriter, written int64, err error) bool {
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "the dump could not be read")
+		return false
+	}
+	if written > MaxDumpBytes {
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "the dump exceeds the size limit")
+		return false
+	}
+	return true
 }
 
 // databaseTarget confirms the named database belongs to this domain and returns

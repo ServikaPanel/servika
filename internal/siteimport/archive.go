@@ -54,14 +54,49 @@ func (h *Handlers) UploadArchive(w http.ResponseWriter, r *http.Request) {
 	sweepStaging(home)
 
 	r.Body = http.MaxBytesReader(w, r.Body, MaxArchiveBytes+(1<<20))
-	// MultipartReader rather than ParseMultipartForm: the latter spools the whole
-	// upload into the temp directory before the handler sees a byte of it.
+	part, ok := archivePart(w, r)
+	if !ok {
+		return
+	}
+	defer func() { _ = part.Close() }()
+
+	stageID, written, ok := stageUpload(w, home, systemUser, part)
+	if !ok {
+		return
+	}
+
+	// Summarized through a pinned descriptor rather than the path just written:
+	// the staged file is owned by the tenant, who can replace it with a symlink
+	// between the write and this read.
+	relative := path.Join(stagingDir, stageID)
+	archive, err := openStagedArchive(home, stageID)
+	if err != nil {
+		_ = files.RemoveAllBeneath(home, relative)
+		httpx.WriteError(w, http.StatusInternalServerError, "the archive could not be stored")
+		return
+	}
+	defer archive.Close()
+	summary, err := archivex.Summarize(r.Context(), archive.Pinned, archive.Type, archiveLimits, markerFiles)
+	if err != nil {
+		_ = files.RemoveAllBeneath(home, relative)
+		httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(err))
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusOK,
+		inventory(stageID, path.Base(part.FileName()), written, summary, archive.Type))
+}
+
+// archivePart finds the upload's archive field.
+//
+// MultipartReader rather than ParseMultipartForm: the latter spools the whole
+// upload into the temp directory before the handler sees a byte of it.
+func archivePart(w http.ResponseWriter, r *http.Request) (*multipart.Part, bool) {
 	reader, err := r.MultipartReader()
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "a multipart body is required")
-		return
+		return nil, false
 	}
-	var part *multipart.Part
 	for {
 		next, partErr := reader.NextPart()
 		if errors.Is(partErr, io.EOF) {
@@ -69,28 +104,29 @@ func (h *Handlers) UploadArchive(w http.ResponseWriter, r *http.Request) {
 		}
 		if partErr != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "the upload could not be read or exceeded the size limit")
-			return
+			return nil, false
 		}
 		if next.FormName() == "archive" {
-			part = next
-			break
+			return next, true
 		}
 		_ = next.Close()
 	}
-	if part == nil {
-		httpx.WriteError(w, http.StatusBadRequest, "the archive field is required")
-		return
-	}
-	defer func() { _ = part.Close() }()
+	httpx.WriteError(w, http.StatusBadRequest, "the archive field is required")
+	return nil, false
+}
 
+// stageUpload stores the upload under a generated name and reports how much of
+// it landed. It answers the refusal itself, and removes a partial or oversized
+// copy rather than leaving it in the tenant's quota.
+func stageUpload(w http.ResponseWriter, home, systemUser string, part *multipart.Part) (string, int64, bool) {
 	stageID, err := newStageID(part.FileName())
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, err.Error())
-		return
+		return "", 0, false
 	}
 	if err := files.MkdirAllBeneath(home, stagingDir, systemUser); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "the import work area could not be created")
-		return
+		return "", 0, false
 	}
 	relative := path.Join(stagingDir, stageID)
 	// One byte past the cap, so a body that is exactly at the limit still lands
@@ -99,34 +135,21 @@ func (h *Handlers) UploadArchive(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		_ = files.RemoveAllBeneath(home, relative)
 		httpx.WriteError(w, http.StatusInternalServerError, "the archive could not be stored")
-		return
+		return "", 0, false
 	}
 	if written > MaxArchiveBytes {
 		_ = files.RemoveAllBeneath(home, relative)
 		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "the archive exceeds the size limit")
-		return
+		return "", 0, false
 	}
+	return stageID, written, true
+}
 
-	// Summarized through a pinned descriptor rather than the path just written:
-	// the staged file is owned by the tenant, who can replace it with a symlink
-	// between the write and this read.
-	archive, err := openStagedArchive(home, stageID)
-	if err != nil {
-		_ = files.RemoveAllBeneath(home, relative)
-		httpx.WriteError(w, http.StatusInternalServerError, "the archive could not be stored")
-		return
-	}
-	defer archive.Close()
-	archiveType := archive.Type
-	summary, err := archivex.Summarize(r.Context(), archive.Pinned, archiveType, archiveLimits, markerFiles)
-	if err != nil {
-		_ = files.RemoveAllBeneath(home, relative)
-		httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(err))
-		return
-	}
-
+// inventory turns a summary into the answer, with the warnings that decide what
+// the caller may choose next.
+func inventory(stageID, fileName string, written int64, summary archivex.Summary, archiveType archivex.Type) ArchiveSummary {
 	answer := ArchiveSummary{
-		StageID: stageID, FileName: path.Base(part.FileName()), Bytes: written,
+		StageID: stageID, FileName: fileName, Bytes: written,
 		Summary: summary, Warnings: []string{},
 	}
 	answer.App, answer.AppDir = archivex.AppRoot(summary)
@@ -140,7 +163,7 @@ func (h *Handlers) UploadArchive(w http.ResponseWriter, r *http.Request) {
 	if summary.ContainerRoot != "" && !archivex.StripSupported(archiveType) {
 		answer.Warnings = append(answer.Warnings, "strip_unavailable")
 	}
-	httpx.WriteJSON(w, http.StatusOK, answer)
+	return answer
 }
 
 type applyArchiveRequest struct {
@@ -184,34 +207,13 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The destination is created through openat2, so a tenant symlink at any
-	// component is refused rather than followed by a root-privileged mkdir.
-	if err := files.MkdirAllBeneath(home, target, systemUser); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "the destination could not be prepared")
+	if !prepareDestination(w, home, target, systemUser, request.CleanDest) {
 		return
 	}
-	if request.CleanDest {
-		// Emptied through the same fd-relative walk. A path-based RemoveAll would
-		// follow a component the tenant swapped while the request was in flight.
-		if err := files.ClearBeneath(home, target); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "the destination could not be emptied")
-			return
-		}
-	}
 
-	strip, skipped := 0, ""
-	if request.SkipRoot {
-		summary, summaryErr := archivex.Summarize(r.Context(), archive.Pinned, archive.Type, archiveLimits, nil)
-		if summaryErr != nil {
-			httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(summaryErr))
-			return
-		}
-		if summary.ContainerRoot == "" {
-			httpx.WriteError(w, http.StatusBadRequest,
-				"the archive has no single container directory to skip")
-			return
-		}
-		strip, skipped = 1, summary.ContainerRoot
+	strip, skipped, ok := containerRootToSkip(w, r, archive, request.SkipRoot)
+	if !ok {
+		return
 	}
 
 	absoluteTarget := path.Join(home, target)
@@ -231,6 +233,47 @@ func (h *Handlers) ApplyArchive(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, applyArchiveResponse{
 		OK: true, Target: target, SkippedRoot: skipped, Cleaned: request.CleanDest,
 	})
+}
+
+// prepareDestination creates the extraction directory, and empties it when the
+// caller asked for that. It answers the refusal itself.
+//
+// The destination is created through openat2, so a tenant symlink at any
+// component is refused rather than followed by a root-privileged mkdir.
+func prepareDestination(w http.ResponseWriter, home, target, systemUser string, clean bool) bool {
+	if err := files.MkdirAllBeneath(home, target, systemUser); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "the destination could not be prepared")
+		return false
+	}
+	if !clean {
+		return true
+	}
+	// Emptied through the same fd-relative walk. A path-based RemoveAll would
+	// follow a component the tenant swapped while the request was in flight.
+	if err := files.ClearBeneath(home, target); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the destination could not be emptied")
+		return false
+	}
+	return true
+}
+
+// containerRootToSkip resolves the strip depth and the directory it drops. It
+// answers the refusal itself when the archive has no single container directory.
+func containerRootToSkip(w http.ResponseWriter, r *http.Request, archive *stagedArchive, requested bool) (int, string, bool) {
+	if !requested {
+		return 0, "", true
+	}
+	summary, err := archivex.Summarize(r.Context(), archive.Pinned, archive.Type, archiveLimits, nil)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "the archive could not be read: "+archiveMessage(err))
+		return 0, "", false
+	}
+	if summary.ContainerRoot == "" {
+		httpx.WriteError(w, http.StatusBadRequest,
+			"the archive has no single container directory to skip")
+		return 0, "", false
+	}
+	return 1, summary.ContainerRoot, true
 }
 
 // adoptExtracted hands the extracted tree to the tenant and restores the labels

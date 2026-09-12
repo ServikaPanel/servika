@@ -202,6 +202,25 @@ func dotEnvValue(value string) string {
 	return `"` + escaped + `"`
 }
 
+// replaceOrAppend sets one dotenv assignment. The first uncommented line that
+// assigns the name is replaced in place, so the file keeps its own order; a name
+// that is not there yet is appended.
+func replaceOrAppend(lines []string, name, replacement string) []string {
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		assigned, _, hasSeparator := strings.Cut(trimmed, "=")
+		if !hasSeparator || strings.TrimSpace(assigned) != name {
+			continue
+		}
+		lines[i] = replacement
+		return lines
+	}
+	return append(lines, replacement)
+}
+
 func rewriteDotEnv(home, systemUser, directory string, chosen target) (ConfigChange, bool) {
 	relative := path.Join(directory, ".env")
 	content, err := files.ReadFileBeneath(home, relative, maxConfigBytes)
@@ -218,24 +237,7 @@ func rewriteDotEnv(home, systemUser, directory string, chosen target) (ConfigCha
 	change := ConfigChange{Path: relative, Kind: "laravel", Fields: []string{}}
 	lines := strings.Split(string(content), "\n")
 	for _, key := range dotEnvKeys {
-		replacement := key.Name + "=" + dotEnvValue(key.Value(chosen))
-		replaced := false
-		for i, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "#") {
-				continue
-			}
-			name, _, hasSeparator := strings.Cut(trimmed, "=")
-			if !hasSeparator || strings.TrimSpace(name) != key.Name {
-				continue
-			}
-			lines[i] = replacement
-			replaced = true
-			break
-		}
-		if !replaced {
-			lines = append(lines, replacement)
-		}
+		lines = replaceOrAppend(lines, key.Name, key.Name+"="+dotEnvValue(key.Value(chosen)))
 		change.Fields = append(change.Fields, key.Name)
 	}
 	if err := files.WriteFileBeneath(home, relative, []byte(strings.Join(lines, "\n")), 0640, systemUser); err != nil {
