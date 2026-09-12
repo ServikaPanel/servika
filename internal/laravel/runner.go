@@ -4,6 +4,7 @@ package laravel
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -258,6 +259,23 @@ func validRepoURL(u string) bool {
 	return strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "git@") || strings.HasPrefix(u, "ssh://")
 }
 
+// maxEnvBytes bounds the .env the editor round-trips.
+//
+// ONE bound for both directions. The editor reads the file, the operator edits
+// it and the answer replaces the file, so a read cap below the write cap means
+// a file the panel accepts is a file it can never show whole again.
+const maxEnvBytes = 2 << 20
+
+// errEnvTooLarge is a .env the editor must refuse rather than show.
+//
+// The read used to stop at the cap and return what fit, with no signal. Saving
+// that back through tee replaced the file with its first two megabytes, and the
+// panel reported success: a normal read-modify-write in the UI destroyed the
+// rest of a tenant's application configuration. internal/files refuses at the
+// same size (readFileBeneath -> errTooLarge -> 400) and this is now the same
+// contract.
+var errEnvTooLarge = errors.New(".env is too large to edit")
+
 func readEnvFile(appDir string) (string, error) {
 	path := filepath.Join(appDir, ".env")
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
@@ -274,16 +292,21 @@ func readEnvFile(appDir string) (string, error) {
 		return "", err
 	}
 	defer func() { _ = f.Close() }()
-	b, err := io.ReadAll(io.LimitReader(f, 2<<20))
+	// One byte past the cap, so a file exactly at it still opens and anything
+	// larger is refused rather than cut.
+	b, err := io.ReadAll(io.LimitReader(f, maxEnvBytes+1))
 	if err != nil {
 		return "", err
+	}
+	if len(b) > maxEnvBytes {
+		return "", errEnvTooLarge
 	}
 	return string(b), nil
 }
 
 func writeEnvFile(systemUser, appDir, content string) error {
-	if len(content) > 5<<20 {
-		return fmt.Errorf(".env is too large")
+	if len(content) > maxEnvBytes {
+		return errEnvTooLarge
 	}
 	dst := filepath.Join(appDir, ".env")
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.

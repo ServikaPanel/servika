@@ -2,6 +2,7 @@ package laravel
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"servika/internal/httpx"
@@ -19,6 +20,13 @@ func (h *Handlers) EnvRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	content, err := readEnvFile(appDir)
+	// A file too large to show is NOT reported as absent. The editor saves what
+	// it was given, so "no file" would invite the operator to replace a real
+	// configuration with an empty one.
+	if errors.Is(err, errEnvTooLarge) {
+		httpx.WriteError(w, http.StatusBadRequest, ".env is too large to edit")
+		return
+	}
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"exists": false, "content": ""})
 		return
