@@ -37,12 +37,21 @@ func safe(s string) bool {
 		return false
 	}
 	for _, c := range s {
-		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') &&
-			(c < '0' || c > '9') && c != '-' && c != '_' && c != '.' && c != '+' {
+		if !safeRune(c) {
 			return false
 		}
 	}
 	return true
+}
+
+// safeRune reports whether one character may appear in a package name that
+// becomes an argv element.
+func safeRune(c rune) bool {
+	switch {
+	case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		return true
+	}
+	return c == '-' || c == '_' || c == '.' || c == '+'
 }
 
 // Package describes an operating system package.
@@ -68,34 +77,31 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	// Parse the Name and Summary Matched sections from dnf search.
 	out, _ := runCommand(ctx, "dnf", "search", "--quiet", q).CombinedOutput()
-	lines := strings.Split(string(out), "\n")
+	packageList := searchResults(string(out))
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"q":       q,
+		"total":   len(packageList),
+		"content": packageList,
+	})
+}
+
+// searchResults parses the Name and Summary Matched sections of dnf search, at
+// most 200 of them.
+func searchResults(out string) []Package {
 	packageList := []Package{}
 	installedPackages := installedSet()
-	for _, ln := range lines {
+	for ln := range strings.SplitSeq(out, "\n") {
 		ln = strings.TrimSpace(ln)
-		if ln == "" || strings.HasPrefix(ln, "===") || strings.HasPrefix(ln, "Last metadata") {
+		if skipSearchLine(ln) {
 			continue
 		}
 		// format: "package-name.x86_64 : description"
-		if !strings.Contains(ln, " : ") {
-			continue
-		}
 		parts := strings.SplitN(ln, " : ", 2)
-		nameArch := strings.TrimSpace(parts[0])
-		desc := strings.TrimSpace(parts[1])
-		// strip arch suffix
-		name := nameArch
-		if i := strings.LastIndex(name, "."); i > 0 {
-			suf := name[i+1:]
-			if suf == "x86_64" || suf == "noarch" || suf == "i686" || suf == "src" || suf == "aarch64" {
-				name = name[:i]
-			}
-		}
+		name := stripArch(strings.TrimSpace(parts[0]))
 		packageList = append(packageList, Package{
 			Name:        name,
-			Description: desc,
+			Description: strings.TrimSpace(parts[1]),
 			Installed:   installedPackages[name],
 			Protected:   ProtectedPackages[name],
 		})
@@ -103,11 +109,28 @@ func (h *Handlers) Search(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"q":       q,
-		"total":   len(packageList),
-		"content": packageList,
-	})
+	return packageList
+}
+
+// skipSearchLine reports whether a line carries no package: a blank, one of
+// dnf's section headings, its metadata notice, or anything without the
+// name-to-description separator.
+func skipSearchLine(ln string) bool {
+	return ln == "" || strings.HasPrefix(ln, "===") ||
+		strings.HasPrefix(ln, "Last metadata") || !strings.Contains(ln, " : ")
+}
+
+// stripArch removes the architecture suffix dnf appends to a package name.
+func stripArch(nameArch string) string {
+	i := strings.LastIndex(nameArch, ".")
+	if i <= 0 {
+		return nameArch
+	}
+	switch nameArch[i+1:] {
+	case "x86_64", "noarch", "i686", "src", "aarch64":
+		return nameArch[:i]
+	}
+	return nameArch
 }
 
 // installedSet returns the set of all installed package names.
