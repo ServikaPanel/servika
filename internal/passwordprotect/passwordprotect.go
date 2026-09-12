@@ -17,7 +17,6 @@ import (
 
 	"servika/internal/httpx"
 	"servika/internal/provisioner"
-	"servika/internal/subdomain"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -27,7 +26,9 @@ type Handlers struct {
 	DB *sql.DB
 }
 
-const htpasswdDir = "/etc/nginx/htpasswd" // #nosec G101 -- filesystem path, not a credential
+// htpasswdDir is where the password files live. It is a variable so a test can
+// point the handlers at a directory it owns instead of the host's.
+var htpasswdDir = "/etc/nginx/htpasswd" // #nosec G101 -- filesystem path, not a credential
 
 // A password file holds bcrypt hashes for a protected directory, so it is a
 // secret and is kept away from every other account on the host. It used to be
@@ -202,7 +203,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "password cannot contain line breaks")
 		return
 	}
-	gid, err := nginxGID()
+	gid, err := gidOfNginx()
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not resolve the nginx account")
 		return
@@ -213,7 +214,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 	}
 	// MkdirAll leaves an existing directory's mode alone, so a host installed
 	// before this was tightened still carries 0755 here until this runs.
-	if err := secureHtpasswd(htpasswdDir, 0, gid, htpasswdDirMode); err != nil {
+	if err := secureFile(htpasswdDir, 0, gid, htpasswdDirMode); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not secure the htpasswd directory")
 		return
 	}
@@ -226,14 +227,14 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", file).Run() // Apply the SELinux httpd_config_t context.
-	if err := secureHtpasswd(file, 0, gid, htpasswdFileMode); err != nil {
+	_ = runCommand("restorecon", file).Run() // Apply the SELinux httpd_config_t context.
+	if err := secureFile(file, 0, gid, htpasswdFileMode); err != nil {
 		// The file already holds the hash, so leaving it behind would publish it
 		// to every account on the host while the screen reported success. Only a
 		// file this request created is removed; an existing one loses just the
 		// user that was added to it.
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command("htpasswd", "-D", file, req.Username).Run()
+		_ = runCommand("htpasswd", "-D", file, req.Username).Run()
 		if created {
 			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 			_ = os.Remove(file)
@@ -254,7 +255,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		// Roll back the record and htpasswd entry when vhost validation fails, then render again.
 		_, _ = h.DB.Exec(`DELETE FROM protected_directories WHERE domain_id=? AND subdomain_id=? AND path=? AND username=?`, id, subdomainID, path, req.Username)
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command("htpasswd", "-D", file, req.Username).Run()
+		_ = runCommand("htpasswd", "-D", file, req.Username).Run()
 		if remaining := h.userCount(id, subdomainID, path); remaining == 0 {
 			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 			_ = os.Remove(file)
@@ -314,7 +315,7 @@ func htpasswdCommand(file, username, password string, create bool) *exec.Cmd {
 		flag = "-ciB"
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec, and the password travels on stdin.
-	command := exec.Command("htpasswd", flag, file, username)
+	command := runCommand("htpasswd", flag, file, username)
 	// htpasswd reads one line and strips the terminator; Add rejects a password
 	// containing one, so nothing is lost here.
 	command.Stdin = strings.NewReader(password + "\n")
@@ -341,21 +342,21 @@ func (h *Handlers) userCount(id, subdomainID int64, path string) int {
 // subdomain's own server block, or the parent domain's.
 func (h *Handlers) render(domainID, subdomainID int64, systemUser, version string) error {
 	if subdomainID > 0 {
-		return subdomain.ReRender(h.DB, subdomainID)
+		return reRenderSub(h.DB, subdomainID)
 	}
 	return h.reRender(domainID, systemUser, version)
 }
 
 // reRender rebuilds the vhost and restores the backup when nginx validation fails.
 func (h *Handlers) reRender(domainID int64, systemUser, version string) error {
-	socket, err := provisioner.PHPSocketFor(systemUser, version)
+	socket, err := phpSocketFor(systemUser, version)
 	if err != nil {
 		return fmt.Errorf("php socket: %w", err)
 	}
 	cfg := "/etc/nginx/conf.d/dom_" + systemUser + ".conf"
 	// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	backup, _ := os.ReadFile(cfg) // Nil when no backup exists.
-	if err := provisioner.ApplyVhostForDomain(h.DB, domainID, socket, version); err != nil {
+	if err := applyVhost(h.DB, domainID, socket, version); err != nil {
 		if backup != nil {
 			// The restore is serialised with every other nginx writer. It rewrites
 			// a file `nginx -t` validates for the whole server, so a render in
@@ -365,7 +366,7 @@ func (h *Handlers) reRender(domainID int64, systemUser, version string) error {
 			provisioner.LockNginx()
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 			_ = os.WriteFile(cfg, backup, 0o644) // Restore the last known-good configuration.
-			_ = exec.Command("nginx", "-t").Run()
+			_ = runCommand("nginx", "-t").Run()
 			provisioner.UnlockNginx()
 		}
 		return err
