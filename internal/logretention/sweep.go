@@ -9,13 +9,34 @@ import (
 	"servika/internal/logx"
 )
 
-// The tables this package prunes. All three carry a ts column and nothing else
-// ever deletes from them.
+// logTable is one table this package prunes and the column that dates its rows.
+//
+// The column is carried with the name because the replay tables do not use ts:
+// a recording is dated by when it began and a batch by when it arrived.
+type logTable struct {
+	name   string
+	column string
+}
+
+// The tables this package prunes. Nothing else ever deletes from them.
+//
+// replay_sessions is dated by updated_at, which the ingest path bumps on every
+// batch, and NOT by started_at. A recording that began 31 days ago and received
+// a batch this morning would otherwise lose the row its batches point at, and
+// nothing would find them again. With updated_at the row outlives its newest
+// batch, so the batches are always gone first. replay_events is still swept
+// before it, so one pass never leaves the pair inconsistent.
 //
 // audit_log is deliberately ABSENT. It records who changed what, which is the
 // one log an operator may have to produce months later, and deleting it on a
 // timer set for request volume would throw that away as a side effect.
-var tables = []string{"request_logs", "app_logs"}
+var tables = []logTable{
+	{"request_logs", "ts"},
+	{"app_logs", "ts"},
+	{"ui_events", "ts"},
+	{"replay_events", "created_at"},
+	{"replay_sessions", "updated_at"},
+}
 
 // deleteBatch bounds one DELETE.
 //
@@ -59,16 +80,17 @@ func Sweep(ctx context.Context, db *sql.DB) {
 }
 
 // sweepTable deletes one table's expired rows, in batches.
-func sweepTable(ctx context.Context, db *sql.DB, table string, days int) {
-	// The table name is a constant from the list above and never a caller's
-	// string, which is why it can be pasted into the statement: a column name
-	// cannot be a placeholder.
-	statement := `DELETE FROM ` + table + ` WHERE ts < UTC_TIMESTAMP() - INTERVAL ? DAY LIMIT ?`
+func sweepTable(ctx context.Context, db *sql.DB, table logTable, days int) {
+	// The table and column names are constants from the list above and never a
+	// caller's string, which is why they can be pasted into the statement: an
+	// identifier cannot be a placeholder.
+	statement := `DELETE FROM ` + table.name +
+		` WHERE ` + table.column + ` < UTC_TIMESTAMP() - INTERVAL ? DAY LIMIT ?`
 	var total int64
 	for range maxBatches {
 		result, err := db.ExecContext(ctx, statement, days, deleteBatch) // #nosec G202 -- table is one of this package's own constants.
 		if err != nil {
-			logx.Errorf("log retention: %s could not be swept: %v", table, err)
+			logx.Errorf("log retention: %s could not be swept: %v", table.name, err)
 			return
 		}
 		deleted, err := result.RowsAffected()
@@ -81,7 +103,7 @@ func sweepTable(ctx context.Context, db *sql.DB, table string, days int) {
 		}
 	}
 	if total > 0 {
-		logx.Infof("log retention: %d row(s) older than %d day(s) removed from %s", total, days, table)
+		logx.Infof("log retention: %d row(s) older than %d day(s) removed from %s", total, days, table.name)
 	}
 }
 

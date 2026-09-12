@@ -90,6 +90,130 @@ func TestOnlyTheRowsPastTheWindowAreDeleted(t *testing.T) {
 	}
 }
 
+// The interface and replay tables were added after this package, and each one
+// dates its rows in a different column. A sweep that only knows ts leaves them
+// growing for ever, and the replay tables are the largest the panel writes.
+//
+// audit_log is checked in the SAME pass: it is the one log an operator may have
+// to produce months later, so it must survive a sweep that deleted everything
+// around it.
+func TestTheInterfaceAndReplayTablesAreSweptAndTheAuditLogIsNot(t *testing.T) {
+	handle := liveDB(t)
+	const marker = "logretention-tables-test"
+	seedExpired(t, handle, marker)
+	setDays(t, handle, 1)
+
+	Sweep(t.Context(), handle)
+
+	for _, check := range []struct {
+		table     string
+		statement string
+	}{
+		{"ui_events", `SELECT COUNT(*) FROM ui_events WHERE session_id=?`},
+		{"replay_events", `SELECT COUNT(*) FROM replay_events e JOIN replay_sessions s ON s.id=e.session_id WHERE s.session_id=?`},
+		{"replay_sessions", `SELECT COUNT(*) FROM replay_sessions WHERE session_id=?`},
+	} {
+		var n int
+		if err := handle.QueryRow(check.statement, marker).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", check.table, err)
+		}
+		if n != 0 {
+			t.Errorf("%d expired row(s) survived in %s", n, check.table)
+		}
+	}
+
+	var audits int
+	if err := handle.QueryRow(
+		`SELECT COUNT(*) FROM audit_log WHERE action=?`, marker).Scan(&audits); err != nil {
+		t.Fatalf("count audit_log: %v", err)
+	}
+	if audits != 1 {
+		t.Errorf("%d audit row(s) remain, expected the sweep to leave 1", audits)
+	}
+}
+
+// A recording that began before the window but is still receiving batches must
+// keep its session row. Deleting it would leave the batches pointing at a row
+// that is gone, and nothing would find them again.
+func TestALiveRecordingKeepsItsSessionRow(t *testing.T) {
+	handle := liveDB(t)
+	const marker = "logretention-live-recording"
+	t.Cleanup(func() {
+		_, _ = handle.Exec(
+			`DELETE e FROM replay_events e JOIN replay_sessions s ON s.id=e.session_id
+			  WHERE s.session_id=?`, marker)
+		_, _ = handle.Exec(`DELETE FROM replay_sessions WHERE session_id=?`, marker)
+	})
+	// Began 90 days ago, last batch a minute ago.
+	result, err := handle.Exec(
+		`INSERT INTO replay_sessions (session_id, page_url, started_at, updated_at, batches)
+		 VALUES (?,'/',?,UTC_TIMESTAMP(3),2)`,
+		marker, time.Now().UTC().Add(-90*24*time.Hour))
+	if err != nil {
+		t.Fatalf("insert the recording: %v", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("insert the recording: %v", err)
+	}
+	if _, err := handle.Exec(
+		`INSERT INTO replay_events (session_id, seq, batch) VALUES (?,0,'[]')`, id); err != nil {
+		t.Fatalf("insert the batch: %v", err)
+	}
+	setDays(t, handle, 1)
+
+	Sweep(t.Context(), handle)
+
+	var sessions int
+	if err := handle.QueryRow(
+		`SELECT COUNT(*) FROM replay_sessions WHERE session_id=?`, marker).Scan(&sessions); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if sessions != 1 {
+		t.Errorf("the recording lost its session row while a batch inside the window pointed at it")
+	}
+}
+
+// seedExpired writes one expired row in each table the check above reads.
+func seedExpired(t *testing.T, handle *sql.DB, marker string) {
+	t.Helper()
+	expired := time.Now().UTC().Add(-90 * 24 * time.Hour)
+	t.Cleanup(func() {
+		_, _ = handle.Exec(
+			`DELETE e FROM replay_events e JOIN replay_sessions s ON s.id=e.session_id
+			  WHERE s.session_id=?`, marker)
+		_, _ = handle.Exec(`DELETE FROM replay_sessions WHERE session_id=?`, marker)
+		_, _ = handle.Exec(`DELETE FROM ui_events WHERE session_id=?`, marker)
+		_, _ = handle.Exec(`DELETE FROM audit_log WHERE action=?`, marker)
+	})
+
+	if _, err := handle.Exec(
+		`INSERT INTO ui_events (ts, session_id, event_type, path) VALUES (?,?,'page_view','/')`,
+		expired, marker); err != nil {
+		t.Fatalf("insert the interface event: %v", err)
+	}
+	result, err := handle.Exec(
+		`INSERT INTO replay_sessions (session_id, page_url, started_at, updated_at, batches)
+		 VALUES (?,'/',?,?,1)`,
+		marker, expired, expired)
+	if err != nil {
+		t.Fatalf("insert the recording: %v", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("insert the recording: %v", err)
+	}
+	if _, err := handle.Exec(
+		`INSERT INTO replay_events (session_id, seq, batch, created_at) VALUES (?,0,'[]',?)`,
+		id, expired); err != nil {
+		t.Fatalf("insert the batch: %v", err)
+	}
+	if _, err := handle.Exec(
+		`INSERT INTO audit_log (ts, action, target) VALUES (?,?,'')`, expired, marker); err != nil {
+		t.Fatalf("insert the audit row: %v", err)
+	}
+}
+
 // A window nobody can set through the panel was written by hand. Acting on it
 // would delete rows on a number nobody meant, so the sweep must refuse.
 func TestAnOutOfRangeWindowDeletesNothing(t *testing.T) {
