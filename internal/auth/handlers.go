@@ -201,7 +201,7 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if IsRootUser(req.Username) {
-		if !verifyRootPassword(req.Password) {
+		if !rootPasswordOK(req.Password) {
 			WriteAudit(h.DB, 0, req.Username, auditIP, "auth.login", req.Username, false)
 			httpx.WriteError(w, http.StatusUnauthorized, "invalid username or password")
 			return

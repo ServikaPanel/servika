@@ -28,6 +28,9 @@ type totpScript struct {
 	// would still yield one row of zero columns, and Scan would report a
 	// column-count error instead of sql.ErrNoRows.
 	empty map[string]int
+	// fail maps a statement fragment to the error the driver answers with, which
+	// is how a write that the database refuses is scripted.
+	fail  map[string]error
 	execs []totpExec
 }
 
@@ -58,6 +61,18 @@ func (s *totpScript) recordExec(query string, args []driver.Value) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.execs = append(s.execs, totpExec{query: query, args: args})
+}
+
+// execError returns the scripted failure for a statement, or nil.
+func (s *totpScript) execError(query string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for fragment, err := range s.fail {
+		if strings.Contains(query, fragment) {
+			return err
+		}
+	}
+	return nil
 }
 
 // storedSeed returns the value written into totp_secret, and whether one was.
@@ -111,6 +126,9 @@ func (c totpConn) ExecContext(_ context.Context, query string, args []driver.Nam
 		plain = append(plain, a.Value)
 	}
 	c.script.recordExec(query, plain)
+	if err := c.script.execError(query); err != nil {
+		return nil, err
+	}
 	return totpResult{}, nil
 }
 

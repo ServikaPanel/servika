@@ -3,7 +3,6 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
-	"os/exec"
 	"strings"
 
 	"servika/internal/config"
@@ -114,7 +113,7 @@ func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	// verify from shadow, change with chpasswd. Reseller accounts have no system
 	// counterpart; they use users.password_hash.
 	if IsRootUser(c.Username) {
-		if !verifyRootPassword(b.Current) {
+		if !rootPasswordOK(b.Current) {
 			WriteAudit(h.DB, c.UserID, "root", httpx.AuditIP(r), "auth.password", "root", false)
 			httpx.WriteError(w, http.StatusUnauthorized, "current password is incorrect")
 			return
@@ -123,9 +122,7 @@ func (h *Handlers) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusBadRequest, "password contains invalid characters")
 			return
 		}
-		cmd := exec.Command("chpasswd")
-		cmd.Stdin = strings.NewReader("root:" + b.New)
-		if _, err := cmd.CombinedOutput(); err != nil {
+		if err := setRootPassword(b.New); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "password change failed")
 			return
 		}
