@@ -44,9 +44,9 @@ func TestAHangingReaderStillAnswers(t *testing.T) {
 				handlers.ServerLog(recorder, httptest.NewRequest(http.MethodGet, "/system/log?source=panel", nil))
 				return recorder
 			},
-			// The reader's own error is ignored by design; an empty log is the
-			// answer, and the point is that one arrives.
-			status: http.StatusOK,
+			// The reader was killed at the budget and wrote nothing, so there is
+			// no log to draw; the point is that an answer arrives at all.
+			status: http.StatusInternalServerError,
 		},
 	}
 	for _, tc := range cases {
