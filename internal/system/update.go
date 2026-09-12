@@ -106,7 +106,7 @@ func verifyUpdateTool(client *http.Client, body []byte) error {
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("the update tool signature is not published (HTTP %d)", response.StatusCode)
 	}
-	signature, err := io.ReadAll(io.LimitReader(response.Body, 4096))
+	signature, err := boundedBody(response.Body, maxUpdateSignatureBytes)
 	if err != nil {
 		return fmt.Errorf("read the update tool signature: %w", err)
 	}
@@ -114,6 +114,34 @@ func verifyUpdateTool(client *http.Client, body []byte) error {
 		return fmt.Errorf("the update tool signature does not verify")
 	}
 	return nil
+}
+
+const (
+	// maxUpdateToolBytes bounds the downloaded tool. The shipped
+	// assets/ops/servika-update is about 39 KB, so this leaves it far below.
+	maxUpdateToolBytes = 1 << 20
+	// maxUpdateSignatureBytes bounds the detached signature beside it.
+	maxUpdateSignatureBytes = 4096
+)
+
+// boundedBody reads a response and refuses one past the bound.
+//
+// It takes ONE byte past the limit and checks, rather than stopping at the
+// limit and returning what fit. The tool download is the reason: a body over
+// the bound was cut, the fragment still began with "#!" so the only content
+// check passed, and the panel wrote it 0755 and ran it as root under a
+// transient unit, part-way through whatever the script was defining. This is
+// the idiom internal/mailreport, internal/sitesecurity and
+// internal/antivirus/remoterules already use.
+func boundedBody(body io.Reader, limit int64) ([]byte, error) {
+	read, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(read)) > limit {
+		return nil, fmt.Errorf("the download is larger than %d bytes", limit)
+	}
+	return read, nil
 }
 
 func downloadUpdateTool() error {
@@ -127,7 +155,7 @@ func downloadUpdateTool() error {
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("download update tool: HTTP %d", response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	body, err := boundedBody(response.Body, maxUpdateToolBytes)
 	if err != nil {
 		return fmt.Errorf("read update tool: %w", err)
 	}

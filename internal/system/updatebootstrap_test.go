@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,56 @@ func TestWithNoKeyTheSignatureStepIsSkipped(t *testing.T) {
 	withKey(t, "")
 	if err := verifyUpdateTool(http.DefaultClient, []byte("#!/bin/sh\n")); err != nil {
 		t.Fatalf("an installation with no key configured was refused: %v", err)
+	}
+}
+
+// The body becomes a file the panel writes 0755 and runs as root. A response
+// over the bound used to be CUT: the fragment still began with "#!", so the
+// only content check passed, and a shell script ending part-way through a
+// function definition was installed and executed.
+func TestAnOversizedToolIsRefusedRatherThanTruncated(t *testing.T) {
+	whole := "#!/bin/sh\n" + strings.Repeat("#", maxUpdateToolBytes)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(whole))
+	}))
+	defer server.Close()
+	t.Setenv("SERVIKA_UPDATE_BOOTSTRAP_URL", server.URL+"/servika-update")
+	t.Setenv("SERVIKA_OPSBIN", t.TempDir())
+	withKey(t, "")
+
+	err := downloadUpdateTool()
+	if err == nil {
+		t.Fatal("an oversized tool was accepted")
+	}
+	if !strings.Contains(err.Error(), "larger than") {
+		t.Errorf("the refusal does not name the bound: %v", err)
+	}
+	if _, statErr := os.Stat(updateScript()); statErr == nil {
+		t.Error("the truncated tool was installed anyway")
+	}
+}
+
+// A tool at the bound is still installed, so the refusal is a ceiling rather
+// than a barrier.
+func TestAToolAtTheBoundIsInstalled(t *testing.T) {
+	body := "#!/bin/sh\n" + strings.Repeat("#", maxUpdateToolBytes-10)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	t.Setenv("SERVIKA_UPDATE_BOOTSTRAP_URL", server.URL+"/servika-update")
+	t.Setenv("SERVIKA_OPSBIN", t.TempDir())
+	withKey(t, "")
+
+	if err := downloadUpdateTool(); err != nil {
+		t.Fatalf("a tool at the bound was refused: %v", err)
+	}
+	installed, err := os.ReadFile(updateScript())
+	if err != nil {
+		t.Fatalf("the tool was not installed: %v", err)
+	}
+	if len(installed) != len(body) {
+		t.Errorf("installed %d bytes, want %d", len(installed), len(body))
 	}
 }
 
