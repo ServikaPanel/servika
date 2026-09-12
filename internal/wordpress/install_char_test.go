@@ -97,6 +97,23 @@ func TestInstallRefusesASecondInstallIntoTheSameDirectory(t *testing.T) {
 		http.StatusConflict, "already in progress")
 }
 
+// The subdirectory is created before anything else is done, and a document
+// root that is a file rather than a directory stops the install there.
+func TestInstallReportsATargetDirectoryItCouldNotCreate(t *testing.T) {
+	root := tenantRoot(t)
+	recordWP(t, nil)
+	host := recordHost(t)
+	if err := os.WriteFile(filepath.Join(root, "blog"), []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	assertStatus(t, runInstall(t, adminDomain(domainScript("c_test")), installBody),
+		http.StatusInternalServerError, "could not create target directory")
+	if len(host.created) != 0 {
+		t.Fatalf("a database was created for a directory that does not exist: %v", host.created)
+	}
+}
+
 func TestInstallReportsThePlanDatabaseLimit(t *testing.T) {
 	tenantRoot(t)
 	recordWP(t, nil)
