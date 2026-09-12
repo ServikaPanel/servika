@@ -85,6 +85,51 @@ func readRequests(t *testing.T, handle *sql.DB, statement string, arg []any) []R
 	return out
 }
 
+// The same for ui_events.
+func TestTheInterfaceQueryRunsAndScans(t *testing.T) {
+	handle := liveDB(t)
+	const sessionID = "logview-ui-test"
+	t.Cleanup(func() {
+		_, _ = handle.Exec(`DELETE FROM ui_events WHERE session_id=?`, sessionID)
+	})
+	if _, err := handle.Exec(
+		`INSERT INTO ui_events (session_id, event_type, path, event_data)
+		 VALUES (?, 'page_view', '/domains', '{"from":"/"}')`, sessionID); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	statement, arg, ok := buildUIQuery(map[string]string{
+		"session_id": sessionID, "event_type": "page_view",
+	}, 10)
+	if !ok {
+		t.Fatal("the query was refused")
+	}
+	rows, err := handle.Query(statement, arg...)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var found int
+	for rows.Next() {
+		var e UIEntry
+		if err := rows.Scan(&e.ID, &e.Time, &e.UserID, &e.Username, &e.SessionID,
+			&e.RequestID, &e.EventType, &e.Path, &e.EventData); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		found++
+		if e.Path != "/domains" || e.EventType != "page_view" {
+			t.Errorf("the row came back as %+v", e)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if found != 1 {
+		t.Errorf("%d row(s) matched every filter, expected 1", found)
+	}
+}
+
 // The same for app_logs: the projection and the scan must agree.
 func TestTheAppQueryRunsAndScans(t *testing.T) {
 	handle := liveDB(t)

@@ -163,6 +163,28 @@ func TestAnAnonymousRequestIsStillRecorded(t *testing.T) {
 	}
 }
 
+// A log ingest body is itself a log. Copying a session replay batch into
+// request_logs would hold megabytes in memory to store nothing, because the
+// batch is far past the capture limit and is dropped right after the copy.
+func TestALogIngestBodyIsNotCopiedIntoTheRow(t *testing.T) {
+	for _, target := range []string{"/api/v1/ui-events", "/api/v1/replay"} {
+		rows, seenByHandler := loggedCall(t, http.MethodPost, target, target,
+			"application/json", `{"session_id":"abc","events":[1,2,3]}`)
+
+		row := (*rows)[0]
+		if row.RequestBody != "" {
+			t.Errorf("%s stored its body in the row: %q", target, row.RequestBody)
+		}
+		if row.Endpoint != target {
+			t.Errorf("%s was not recorded at all: %+v", target, row)
+		}
+		// The handler must still receive the body it was sent.
+		if !strings.Contains(seenByHandler, `"session_id":"abc"`) {
+			t.Errorf("%s: the handler read %q, want the whole body", target, seenByHandler)
+		}
+	}
+}
+
 // moduleAction reads the pattern, so the table can be grouped by feature.
 func TestTheModuleAndActionComeFromTheRoutePattern(t *testing.T) {
 	for _, check := range []struct{ pattern, module, action string }{

@@ -85,8 +85,21 @@ func isLoggableBody(r *http.Request) bool {
 	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodDelete {
 		return false
 	}
+	if isLogIngest(r.URL.Path) {
+		return false
+	}
 	contentType := r.Header.Get("Content-Type")
 	return strings.HasPrefix(contentType, "application/json")
+}
+
+// isLogIngest names the endpoints whose body is ITSELF a log.
+//
+// A session replay batch is megabytes of DOM events. Copying it into
+// request_logs would hold it in memory a second time to store nothing, because
+// it is far past logsink.MaxBodyBytes and is dropped after the copy. The row
+// itself is still written; only the body is skipped.
+func isLogIngest(path string) bool {
+	return strings.HasSuffix(path, "/ui-events") || strings.HasSuffix(path, "/replay")
 }
 
 // buildRow assembles the row from the finished request.

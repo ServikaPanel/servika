@@ -87,6 +87,7 @@ import (
 	"servika/internal/subdomain"
 	"servika/internal/system"
 	"servika/internal/transfers"
+	"servika/internal/uievents"
 	"servika/internal/users"
 	"servika/internal/waf"
 	"servika/internal/wordpress"
@@ -515,6 +516,10 @@ func startHostServices(d *sql.DB, ipv4 string) {
 	// line written while the database is down is still in the journal.
 	logsink.StartApplicationLog(context.Background(), d)
 
+	// The writer behind ui_events. The browser reports what the interface did;
+	// nothing is written until this goroutine runs.
+	logsink.StartUIEvents(context.Background(), d)
+
 	// Nothing else ever deletes a log row, so without this the two tables above
 	// grow for the life of the installation.
 	logretention.StartSweep(context.Background(), d)
@@ -787,6 +792,7 @@ func main() {
 	packagesH := &packages.Handlers{DB: d}
 	panelSettingsH := &panelsettings.Handlers{DB: d, ServerIPv4: ipv4}
 	logViewH := &logview.Handlers{DB: d}
+	uiEventsH := &uievents.Handlers{DB: d}
 	phpVersionH := &phpversion.Handlers{DB: d}
 	appRuntimeH := &appruntime.Handlers{DB: d}
 	appsH := &apps.Handlers{DB: d}
@@ -1011,6 +1017,15 @@ func main() {
 			// The log tables themselves. Admin only: the rows carry every
 			// operator's requests, their redacted bodies and the panel's own
 			// failures, which is server-wide data rather than a tenant's.
+			r.With(middleware.AdminOnly).Get("/system/ui-events", logViewH.UIList)
+			// What the interface reported. Every role writes here, because the
+			// screens being reported on are the customer's as much as the
+			// operator's; only an admin reads it back.
+			// The limit is per IP and one browser tab flushes every ten
+			// seconds, so it is set for several tabs behind one office
+			// address rather than for one client.
+			r.With(middleware.RateLimit("ui-events", 60, time.Minute)).
+				Post("/ui-events", uiEventsH.Collect)
 			r.With(middleware.AdminOnly).Get("/system/request-logs", logViewH.List)
 			r.With(middleware.AdminOnly).Get("/system/app-logs", logViewH.AppList)
 			// The country database is a server-wide integration, so its credentials
