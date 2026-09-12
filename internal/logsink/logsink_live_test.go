@@ -3,11 +3,14 @@ package logsink
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"servika/internal/db"
+	"servika/internal/logx"
 )
 
 // liveDB opens the shared test database, or skips.
@@ -122,6 +125,54 @@ func TestAnApplicationLineIsWrittenWithoutARequest(t *testing.T) {
 	}
 	if errors != 1 {
 		t.Errorf("%d row(s) came back at ERROR, expected 1", errors)
+	}
+}
+
+// The whole app_logs path, end to end and off the HTTP path: a plain logx call
+// from ordinary code must reach the table on its own, because that is where the
+// panel writes almost everything it has to say.
+func TestALogxCallReachesTheTableWithoutARequest(t *testing.T) {
+	handle := liveDB(t)
+	const message = "logsink live test: the nightly sweep finished"
+	t.Cleanup(func() {
+		_, _ = handle.Exec(`DELETE FROM app_logs WHERE message=?`, message)
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	StartApplicationLog(ctx, handle)
+	t.Cleanup(func() { logx.SetSink(nil) })
+
+	logx.Infof("%s", message)
+	// Cancelling the context makes the writer drain what it is holding, so the
+	// test reads a written row rather than waiting out the flush interval.
+	cancel()
+
+	level, requestID := waitForAppRow(t, handle, message)
+	if level != "INFO" {
+		t.Errorf("the row came back at %q, want INFO", level)
+	}
+	if requestID != "" {
+		t.Errorf("a line with no request stored request_id=%q", requestID)
+	}
+}
+
+// waitForAppRow polls for the row the sink is writing in another goroutine.
+func waitForAppRow(t *testing.T, handle *sql.DB, message string) (level, requestID string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		err := handle.QueryRow(
+			`SELECT level, request_id FROM app_logs WHERE message=?`, message).Scan(&level, &requestID)
+		if err == nil {
+			return level, requestID
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("read: %v", err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the line never reached app_logs")
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

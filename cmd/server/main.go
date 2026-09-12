@@ -508,6 +508,11 @@ func startHostServices(d *sql.DB, ipv4 string) {
 	// in the buffer rather than being lost.
 	logsink.StartRequests(context.Background(), d)
 
+	// The same for app_logs, plus the logx sink that feeds it. journald keeps its
+	// copy of every line either way: this only adds a second destination, so a
+	// line written while the database is down is still in the journal.
+	logsink.StartApplicationLog(context.Background(), d)
+
 	// The signed malware rule package, if this build carries a signing key. The
 	// PANEL is the only process that fetches: the scan worker runs inside
 	// servika-av.slice with nested deadlines and the watcher's unit is sandboxed
