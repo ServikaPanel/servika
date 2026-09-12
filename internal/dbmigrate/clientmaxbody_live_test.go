@@ -79,9 +79,19 @@ func migrationUpdates(t *testing.T) []string {
 	return updates
 }
 
-func TestTheCeilingMigrationMovesEveryUnitAndStripsTheStatement(t *testing.T) {
-	db := migrationDB(t)
+// ceilingCase is one nginx_settings row before the migration, with what the two
+// UPDATE statements must leave behind.
+type ceilingCase struct {
+	id            int
+	before        string
+	wantCeiling   string
+	wantRemaining string
+}
 
+// createScratchTable makes a table with the same two columns, so the test never
+// touches a real nginx_settings row.
+func createScratchTable(t *testing.T, db *sql.DB) {
+	t.Helper()
 	drop := func() {
 		if _, err := db.Exec(`DROP TABLE IF EXISTS ` + scratchTable); err != nil {
 			t.Fatalf("drop scratch table: %v", err)
@@ -97,13 +107,56 @@ func TestTheCeilingMigrationMovesEveryUnitAndStripsTheStatement(t *testing.T) {
 	)`); err != nil {
 		t.Fatalf("create scratch table: %v", err)
 	}
+}
 
-	cases := []struct {
-		id            int
-		before        string
-		wantCeiling   string
-		wantRemaining string
-	}{
+// seedCeilingRows writes the rows the migration then rewrites.
+func seedCeilingRows(t *testing.T, db *sql.DB, cases []ceilingCase) {
+	t.Helper()
+	for _, tc := range cases {
+		if _, err := db.Exec(
+			`INSERT INTO `+scratchTable+`(id, extra_directives) VALUES(?,?)`, tc.id, tc.before); err != nil {
+			t.Fatalf("insert row %d: %v", tc.id, err)
+		}
+	}
+}
+
+// applyCeilingUpdates runs the migration's own UPDATE statements.
+func applyCeilingUpdates(t *testing.T, db *sql.DB) {
+	t.Helper()
+	for i, statement := range migrationUpdates(t) {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("migration UPDATE %d: %v\n%s", i+1, err, statement)
+		}
+	}
+}
+
+// assertCeilingRow checks one row after the migration.
+func assertCeilingRow(t *testing.T, db *sql.DB, tc ceilingCase) {
+	t.Helper()
+	var ceiling, remaining string
+	if err := db.QueryRow(
+		`SELECT client_max_body, extra_directives FROM `+scratchTable+` WHERE id=?`, tc.id).
+		Scan(&ceiling, &remaining); err != nil {
+		t.Fatalf("read row %d: %v", tc.id, err)
+	}
+	if ceiling != tc.wantCeiling {
+		t.Errorf("row %d ceiling = %q, want %q", tc.id, ceiling, tc.wantCeiling)
+	}
+	if remaining != tc.wantRemaining {
+		t.Errorf("row %d remaining directives = %q, want %q", tc.id, remaining, tc.wantRemaining)
+	}
+	// The point of the strip: a row still naming the directive would be refused
+	// the moment the customer pressed save, because it is now forbidden.
+	if strings.Contains(remaining, "client_max_body_size") {
+		t.Errorf("row %d still states the forbidden directive: %q", tc.id, remaining)
+	}
+}
+
+func TestTheCeilingMigrationMovesEveryUnitAndStripsTheStatement(t *testing.T) {
+	db := migrationDB(t)
+	createScratchTable(t, db)
+
+	cases := []ceilingCase{
 		{
 			id:            1,
 			before:        "client_max_body_size 8192m;\n",
@@ -141,36 +194,10 @@ func TestTheCeilingMigrationMovesEveryUnitAndStripsTheStatement(t *testing.T) {
 		},
 	}
 
-	for _, tc := range cases {
-		if _, err := db.Exec(
-			`INSERT INTO `+scratchTable+`(id, extra_directives) VALUES(?,?)`, tc.id, tc.before); err != nil {
-			t.Fatalf("insert row %d: %v", tc.id, err)
-		}
-	}
-
-	for i, statement := range migrationUpdates(t) {
-		if _, err := db.Exec(statement); err != nil {
-			t.Fatalf("migration UPDATE %d: %v\n%s", i+1, err, statement)
-		}
-	}
+	seedCeilingRows(t, db, cases)
+	applyCeilingUpdates(t, db)
 
 	for _, tc := range cases {
-		var ceiling, remaining string
-		if err := db.QueryRow(
-			`SELECT client_max_body, extra_directives FROM `+scratchTable+` WHERE id=?`, tc.id).
-			Scan(&ceiling, &remaining); err != nil {
-			t.Fatalf("read row %d: %v", tc.id, err)
-		}
-		if ceiling != tc.wantCeiling {
-			t.Errorf("row %d ceiling = %q, want %q", tc.id, ceiling, tc.wantCeiling)
-		}
-		if remaining != tc.wantRemaining {
-			t.Errorf("row %d remaining directives = %q, want %q", tc.id, remaining, tc.wantRemaining)
-		}
-		// The point of the strip: a row still naming the directive would be refused
-		// the moment the customer pressed save, because it is now forbidden.
-		if strings.Contains(remaining, "client_max_body_size") {
-			t.Errorf("row %d still states the forbidden directive: %q", tc.id, remaining)
-		}
+		assertCeilingRow(t, db, tc)
 	}
 }

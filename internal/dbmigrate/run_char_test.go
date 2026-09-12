@@ -48,6 +48,25 @@ func (s *runScript) ran(fragment string) bool {
 	return false
 }
 
+// order names the recorded statements of a whole migration, in the order they
+// ran.
+func (s *runScript) order() []string {
+	var order []string
+	for _, statement := range s.execs {
+		switch {
+		case strings.Contains(statement, "mig_one"):
+			order = append(order, "one")
+		case strings.Contains(statement, "mig_two"):
+			order = append(order, "two")
+		case strings.Contains(statement, "INSERT INTO schema_migrations"):
+			order = append(order, "applied")
+		case strings.Contains(statement, "DELETE FROM schema_migration_progress"):
+			order = append(order, "cleared")
+		}
+	}
+	return order
+}
+
 // argsOf returns the arguments of the first recorded statement carrying the
 // fragment.
 func (s *runScript) argsOf(t *testing.T, fragment string) []driver.Value {
@@ -352,19 +371,7 @@ func TestAFreshMigrationRunsEveryStatementThenRecordsItself(t *testing.T) {
 
 	// Measured order: the two statements, the applied row, then the progress
 	// row is cleared.
-	var order []string
-	for _, statement := range script.execs {
-		switch {
-		case strings.Contains(statement, "mig_one"):
-			order = append(order, "one")
-		case strings.Contains(statement, "mig_two"):
-			order = append(order, "two")
-		case strings.Contains(statement, "INSERT INTO schema_migrations"):
-			order = append(order, "applied")
-		case strings.Contains(statement, "DELETE FROM schema_migration_progress"):
-			order = append(order, "cleared")
-		}
-	}
+	order := script.order()
 	if strings.Join(order, ",") != "one,two,applied,cleared" {
 		t.Errorf("order = %v", order)
 	}

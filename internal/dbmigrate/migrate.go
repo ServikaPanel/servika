@@ -37,6 +37,17 @@ func Run(d *sql.DB, dir string) error {
 		return err
 	}
 
+	for _, name := range migrationNames(entries) {
+		if err := applyNamed(d, dir, name, applied); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migrationNames returns the migration files of a directory, in the order they
+// are applied. A directory is never a migration, whatever it is called.
+func migrationNames(entries []os.DirEntry) []string {
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
@@ -44,28 +55,27 @@ func Run(d *sql.DB, dir string) error {
 		}
 	}
 	sort.Strings(names)
+	return names
+}
 
-	for _, name := range names {
-		// #nosec G304 -- dir is a fixed system path and name comes from reading it.
-		body, err := os.ReadFile(dir + "/" + name)
-		if err != nil {
-			return fmt.Errorf("could not read %s: %w", name, err)
-		}
-		sum := sha256.Sum256(body)
-		checksum := hex.EncodeToString(sum[:])
-		done, err := reconcileApplied(d, name, checksum, applied)
-		if err != nil {
-			return err
-		}
-		if done {
-			continue
-		}
-		log.Printf("migration: %s", name)
-		if err := applyFile(d, name, string(body), checksum); err != nil {
-			return err
-		}
+// applyNamed applies one migration file unless its checksum says it already ran.
+func applyNamed(d *sql.DB, dir, name string, applied map[string]string) error {
+	// #nosec G304 -- dir is a fixed system path and name comes from reading it.
+	body, err := os.ReadFile(dir + "/" + name)
+	if err != nil {
+		return fmt.Errorf("could not read %s: %w", name, err)
 	}
-	return nil
+	sum := sha256.Sum256(body)
+	checksum := hex.EncodeToString(sum[:])
+	done, err := reconcileApplied(d, name, checksum, applied)
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+	log.Printf("migration: %s", name)
+	return applyFile(d, name, string(body), checksum)
 }
 
 // ensureTables creates the bookkeeping the runner owns. Neither table comes from
@@ -174,31 +184,50 @@ func splitStatements(body string) []string {
 func splitOnUnquotedSemicolons(sql string) []string {
 	var statements []string
 	var current strings.Builder
-	var quote rune // 0 outside a literal, else the character that opened it
-	escaped := false
+	var scan literalScanner
 
 	for _, c := range sql {
 		current.WriteRune(c)
-		switch {
-		case escaped:
-			// A backslash escapes the next character inside a MariaDB string, so
-			// a \' does not close the literal.
-			escaped = false
-		case quote != 0:
-			if c == '\\' && quote != '`' {
-				escaped = true
-			} else if c == quote {
-				quote = 0
-			}
-		case c == '\'' || c == '"' || c == '`':
-			quote = c
-		case c == ';':
-			text := current.String()
-			statements = appendStatement(statements, text[:len(text)-1])
-			current.Reset()
+		if !scan.terminator(c) {
+			continue
 		}
+		text := current.String()
+		statements = appendStatement(statements, text[:len(text)-1])
+		current.Reset()
 	}
 	return appendStatement(statements, current.String())
+}
+
+// literalScanner tracks whether the reader is inside a string literal.
+type literalScanner struct {
+	quote   rune // 0 outside a literal, else the character that opened it
+	escaped bool
+}
+
+// terminator reports whether c ends a statement, and advances the literal state.
+func (s *literalScanner) terminator(c rune) bool {
+	switch {
+	case s.escaped:
+		// A backslash escapes the next character inside a MariaDB string, so a
+		// \' does not close the literal.
+		s.escaped = false
+	case s.quote != 0:
+		s.inLiteral(c)
+	case c == '\'' || c == '"' || c == '`':
+		s.quote = c
+	case c == ';':
+		return true
+	}
+	return false
+}
+
+// inLiteral advances the state of a reader already inside a literal.
+func (s *literalScanner) inLiteral(c rune) {
+	if c == '\\' && s.quote != '`' {
+		s.escaped = true
+	} else if c == s.quote {
+		s.quote = 0
+	}
 }
 
 func appendStatement(statements []string, stmt string) []string {
