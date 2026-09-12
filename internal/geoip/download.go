@@ -3,8 +3,10 @@ package geoip
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/csv"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +31,24 @@ import (
 // string, so a key in the URL would be handed to a third party on every
 // download.
 var downloadURL = "https://download.maxmind.com/geoip/databases/GeoLite2-Country-CSV/download?suffix=zip"
+
+// digestURL is the sibling endpoint publishing that archive's sha256.
+//
+// The archive download redirects CROSS-HOST to object storage, and the
+// credential is deliberately not carried across that hop, so the bytes arrive
+// authenticated by the TLS certificate of a host that is not maxmind.com. The
+// digest is fetched from maxmind.com under the account credential and is what
+// ties the archive back to the account that ordered it.
+//
+// The files this builds drive the per-domain nginx geo check and the
+// server-wide nftables country set, so a wrong ranges file is a country allow
+// list that admits what it was written to refuse, with nothing downstream to
+// contradict it.
+var digestURL = "https://download.maxmind.com/geoip/databases/GeoLite2-Country-CSV/download?suffix=zip.sha256"
+
+// maxDigestBytes bounds the digest response. It carries one hex digest and a
+// file name.
+const maxDigestBytes = 4 << 10
 
 // downloadDialContext replaces the transport's dialer.
 //
@@ -131,7 +151,7 @@ func recordResult(ctx context.Context, db *sql.DB, buildDate, failure string) {
 // fetchAndBuild downloads the archive and writes the normalized files,
 // returning the edition's build date.
 func fetchAndBuild(ctx context.Context, account Account) (string, error) {
-	archive, err := fetchArchive(ctx, account)
+	archive, sum, err := fetchArchive(ctx, account)
 	if err != nil {
 		return "", err
 	}
@@ -139,6 +159,12 @@ func fetchAndBuild(ctx context.Context, account Account) (string, error) {
 		_ = archive.Close()
 		_ = os.Remove(archive.Name())
 	}()
+	// Before a single member is opened. An archive that is not the one MaxMind
+	// published is refused whole, and the previously built network files stay
+	// where they are.
+	if err := verifyDigest(ctx, account, sum); err != nil {
+		return "", err
+	}
 
 	info, err := archive.Stat()
 	if err != nil {
@@ -212,13 +238,46 @@ func writeBlockFiles(reader *zip.Reader, countries map[string]string) error {
 // enough that buffering it would be charged to the panel's own memory. The file
 // is created with an empty directory argument so it lands under TMPDIR, which
 // main pins to persistent disk.
-func fetchArchive(ctx context.Context, account Account) (*os.File, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+func fetchArchive(ctx context.Context, account Account) (*os.File, string, error) {
+	response, err := maxmindGet(ctx, account, downloadURL)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	file, err := os.CreateTemp("", "servika-geoip-*.zip")
+	if err != nil {
+		return nil, "", fmt.Errorf("create a temporary file: %w", err)
+	}
+	// The digest is taken from the bytes as they land, so it describes what was
+	// written rather than what a second read of the file returns.
+	hasher := sha256.New()
+	written, err := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(response.Body, MaxDownloadBytes+1))
+	if err != nil {
+		return nil, "", discardArchive(file, fmt.Errorf("read the archive: %w", err))
+	}
+	if written > MaxDownloadBytes {
+		return nil, "", discardArchive(file, errors.New("the archive is larger than the ceiling allows"))
+	}
+	return file, hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// discardArchive removes a partial download and hands back the reason.
+func discardArchive(file *os.File, reason error) error {
+	_ = file.Close()
+	_ = os.Remove(file.Name())
+	return reason
+}
+
+// maxmindGet performs an authenticated GET against a MaxMind endpoint.
+func maxmindGet(ctx context.Context, account Account, target string) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, fmt.Errorf("prepare the request: %w", err)
 	}
-	// Basic auth, never the URL. The redirect below crosses hosts, and Go's
-	// client strips this header when it does; a query parameter would survive.
+	// Basic auth, never the URL. The archive endpoint redirects across hosts,
+	// and Go's client strips this header when it does; a query parameter would
+	// survive and hand the license key to a third party.
 	request.SetBasicAuth(account.ID, account.Key)
 	request.Header.Set("User-Agent", "Servika")
 
@@ -226,30 +285,57 @@ func fetchArchive(ctx context.Context, account Account) (*os.File, error) {
 	if err != nil {
 		return nil, errors.New("the country database endpoint could not be reached")
 	}
-	defer func() { _ = response.Body.Close() }()
 	switch {
 	case response.StatusCode == http.StatusUnauthorized, response.StatusCode == http.StatusForbidden:
+		_ = response.Body.Close()
 		return nil, errors.New("MaxMind refused the account id and license key")
 	case response.StatusCode != http.StatusOK:
-		return nil, fmt.Errorf("the country database endpoint answered %d", response.StatusCode)
+		code := response.StatusCode
+		_ = response.Body.Close()
+		return nil, fmt.Errorf("the country database endpoint answered %d", code)
 	}
+	return response, nil
+}
 
-	file, err := os.CreateTemp("", "servika-geoip-*.zip")
+// verifyDigest compares the archive's own sha256 with the one MaxMind
+// publishes for the same edition.
+//
+// A digest that cannot be read refuses the update rather than accepting the
+// archive unverified: the network files already on disk are a working country
+// list, and keeping them costs an edition, while accepting an unverified
+// archive is the whole failure this guards.
+func verifyDigest(ctx context.Context, account Account, sum string) error {
+	published, err := publishedDigest(ctx, account)
 	if err != nil {
-		return nil, fmt.Errorf("create a temporary file: %w", err)
+		return err
 	}
-	written, err := io.Copy(file, io.LimitReader(response.Body, MaxDownloadBytes+1))
+	if !strings.EqualFold(published, sum) {
+		return errors.New("the archive does not match the checksum MaxMind publishes for it")
+	}
+	return nil
+}
+
+// publishedDigest reads the sha256 MaxMind publishes beside the archive. The
+// body is `<hex>  <filename>`, so only the first field is read.
+func publishedDigest(ctx context.Context, account Account) (string, error) {
+	response, err := maxmindGet(ctx, account, digestURL)
 	if err != nil {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
-		return nil, fmt.Errorf("read the archive: %w", err)
+		return "", err
 	}
-	if written > MaxDownloadBytes {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
-		return nil, errors.New("the archive is larger than the ceiling allows")
+	defer func() { _ = response.Body.Close() }()
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxDigestBytes))
+	if err != nil {
+		return "", fmt.Errorf("read the published checksum: %w", err)
 	}
-	return file, nil
+	fields := strings.Fields(string(body))
+	if len(fields) == 0 {
+		return "", errors.New("MaxMind published no checksum for this edition")
+	}
+	digest := strings.ToLower(fields[0])
+	if _, err := hex.DecodeString(digest); err != nil || len(digest) != hex.EncodedLen(sha256.Size) {
+		return "", errors.New("the published checksum is not a sha256")
+	}
+	return digest, nil
 }
 
 // archiveBuildDate reads the edition date out of the archive's directory name,

@@ -4,6 +4,8 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -78,7 +80,32 @@ func serveArchive(t *testing.T, body []byte, record *recorder) *httptest.Server 
 		_, _ = w.Write(body)
 	}))
 	t.Cleanup(server.Close)
+	// MaxMind publishes the archive's sha256 at a sibling endpoint, and the
+	// download refuses an archive it cannot match against it, so a fixture that
+	// stands in for MaxMind has to answer both. A test that wants a mismatch
+	// calls publishDigest afterwards with what it wants published.
+	publishDigest(t, sha256.Sum256(body))
 	return server
+}
+
+// publishDigest points digestURL at a server answering with digest, in the
+// `<hex>  <name>` shape MaxMind's endpoint uses.
+func publishDigest(t *testing.T, digest [sha256.Size]byte) {
+	t.Helper()
+	withDigestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(hex.EncodeToString(digest[:]) + "  GeoLite2-Country-CSV.zip\n"))
+	})
+}
+
+// withDigestServer points digestURL at a server answering with handler, for one
+// test.
+func withDigestServer(t *testing.T, handler http.HandlerFunc) {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	original := digestURL
+	digestURL = server.URL
+	t.Cleanup(func() { digestURL = original })
 }
 
 func withDownloadURL(t *testing.T, url string) {
