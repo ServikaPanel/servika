@@ -61,15 +61,22 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// Run five wp-cli calls concurrently so latency is bounded by the slowest call, usually check-update.
-	// Each goroutine writes to a distinct map key.
-	out := map[string]any{"version": "", "update_available": false, "target_version": "",
-		"php": "", "db_mb": "", "maintenance": false}
+	//
+	// Each goroutine writes its OWN variable, not a key of a shared map. A Go map
+	// is one object: two goroutines assigning different keys at the same time is
+	// a data race that the runtime can answer with a torn read or a fatal
+	// "concurrent map writes", and the race detector reports it on every run of
+	// this handler.
+	var (
+		version, targetVersion, php, dbMB string
+		updateAvailable, maintenance      bool
+	)
 	var wg sync.WaitGroup
 	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		if b, e := wpStdout(ctx, systemUser, "core", "version", "--path="+dir); e == nil {
-			out["version"] = strings.TrimSpace(string(b))
+			version = strings.TrimSpace(string(b))
 		}
 	}()
 	go func() {
@@ -81,8 +88,8 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 					Version string `json:"version"`
 				}
 				if json.Unmarshal([]byte(bt), &ups) == nil && len(ups) > 0 {
-					out["update_available"] = true
-					out["target_version"] = ups[0].Version
+					updateAvailable = true
+					targetVersion = ups[0].Version
 				}
 			}
 		}
@@ -90,21 +97,24 @@ func (h *Handlers) Status(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		if b, e := wpStdout(ctx, systemUser, "eval", "echo PHP_VERSION;", "--path="+dir); e == nil {
-			out["php"] = strings.TrimSpace(string(b))
+			php = strings.TrimSpace(string(b))
 		}
 	}()
 	go func() {
 		defer wg.Done()
 		if b, e := wpStdout(ctx, systemUser, "db", "size", "--size_format=mb", "--path="+dir); e == nil {
-			out["db_mb"] = strings.TrimSpace(string(b))
+			dbMB = strings.TrimSpace(string(b))
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		out["maintenance"] = maintenanceEnabled(dir)
+		maintenance = maintenanceEnabled(dir)
 	}()
 	wg.Wait()
-	httpx.WriteJSON(w, http.StatusOK, out)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"version": version, "update_available": updateAvailable, "target_version": targetVersion,
+		"php": php, "db_mb": dbMB, "maintenance": maintenance,
+	})
 }
 
 // GET /domains/{id}/wordpress/plugins?dir= lists plugins.

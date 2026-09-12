@@ -63,7 +63,7 @@ func (h *Handlers) domain(r *http.Request) (id int64, systemUser, domainName, ro
 		Scan(&systemUser, &domainName, &cert); err != nil {
 		return id, "", "", "", false, false
 	}
-	root = "/home/" + systemUser + "/public_html"
+	root = filepath.Join(tenantHomeRoot, systemUser, "public_html")
 	if raw := chi.URLParam(r, "sid"); raw != "" {
 		sid, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
@@ -114,6 +114,11 @@ func runWPTimeout(timeout time.Duration, systemUser string, args ...string) ([]b
 // long and it carries the site's database password and the new administrator
 // password, so a neighbouring c_* tenant only has to be looking.
 func runWPInput(timeout time.Duration, systemUser, stdin string, args ...string) ([]byte, error) {
+	return wpInput(timeout, systemUser, stdin, args...)
+}
+
+// execWPInput is the real wp-cli call runWPInput makes on a host.
+func execWPInput(timeout time.Duration, systemUser, stdin string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	full := append([]string{"-u", systemUser, "--", "env", "HOME=/home/" + systemUser,
@@ -372,6 +377,11 @@ func inspectInstallation(ctx context.Context, a wpCandidate) AllInstallation {
 // wpStdout runs wp-cli as the domain user with a context timeout and returns only stdout.
 // Discarding stderr prevents deprecation warnings from corrupting JSON output.
 func wpStdout(ctx context.Context, systemUser string, args ...string) ([]byte, error) {
+	return wpOutput(ctx, systemUser, args...)
+}
+
+// execWPStdout is the real wp-cli call wpStdout makes on a host.
+func execWPStdout(ctx context.Context, systemUser string, args ...string) ([]byte, error) {
 	full := append([]string{"-u", systemUser, "--", "env", "HOME=/home/" + systemUser,
 		"/usr/bin/php", "-d", "memory_limit=512M", wpBin()}, args...)
 	// #nosec G204 G702 -- fixed binary (runuser) with separate args (no shell); systemUser is validated before exec.
@@ -470,9 +480,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = exec.Command("chown", "-R", systemUser+":"+systemUser, target).Run()
+	_ = wpCommand("chown", "-R", systemUser+":"+systemUser, target).Run()
 	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = exec.Command("restorecon", "-R", target).Run()
+	_ = wpCommand("restorecon", "-R", target).Run()
 
 	// Enforce the plan database quota at this point of use, matching the normal
 	// database endpoint. Without this, repeated WordPress installs in different
@@ -489,7 +499,7 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		if err := quota.CheckDatabaseAllowed(r.Context(), h.DB, id); err != nil {
 			return err
 		}
-		return credentials.MySQLCreateDB(h.DB, id, dbName, dbUser, dbPass)
+		return createMySQLDB(h.DB, id, dbName, dbUser, dbPass)
 	}()
 	if dbErr != nil {
 		if limitErr, ok := errors.AsType[*quota.LimitError](dbErr); ok {
@@ -500,12 +510,12 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(stage string, out []byte) {
-		_ = credentials.MySQLDropDB(h.DB, dbName, dbUser)
+		_ = dropMySQLDB(h.DB, dbName, dbUser)
 		if req.SubDir != "" { // Remove only the subdirectory created by this operation.
 			// Best effort, and already logged inside: the install's own failure
 			// is what the caller is told, and a rollback that could not finish
 			// must not replace that message with its own.
-			_ = removeBeneathHome(systemUser, target, "wordpress install rollback")
+			_ = removeInstall(systemUser, target, "wordpress install rollback")
 		}
 		msg := strings.TrimSpace(string(out))
 		if len(msg) > 600 {
@@ -551,9 +561,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = exec.Command("chown", "-R", systemUser+":"+systemUser, target).Run()
+	_ = wpCommand("chown", "-R", systemUser+":"+systemUser, target).Run()
 	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = exec.Command("restorecon", "-R", target).Run()
+	_ = wpCommand("restorecon", "-R", target).Run()
 
 	version := ""
 	if b, err := runWP(systemUser, "core", "version", "--path="+target); err == nil {
@@ -640,7 +650,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 				// AND carry the wp_ prefix (prevents arbitrary DB drop via payload).
 				if h.dropAllowed(r, id, dbName) {
 					if dbUser, ok := managedDBAccount(dbName); ok {
-						_ = credentials.MySQLDropDB(h.DB, dbName, dbUser)
+						_ = dropMySQLDB(h.DB, dbName, dbUser)
 					}
 				}
 			}
@@ -648,7 +658,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	}
 	// The root path was rejected above, so this is a subdirectory.
-	if err := removeBeneathHome(systemUser, dir, "wordpress delete"); err != nil {
+	if err := removeInstall(systemUser, dir, "wordpress delete"); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not delete record")
 		return
 	}
@@ -690,7 +700,7 @@ func removeBeneathHome(systemUser, absolutePath, what string) error {
 // only to turn a path resolveDirectory already bounded to the document root into
 // the relative form openat2 needs.
 func homeRel(systemUser, absolutePath string) (home, rel string, err error) {
-	home = "/home/" + systemUser
+	home = filepath.Join(tenantHomeRoot, systemUser)
 	rel, ok := strings.CutPrefix(filepath.Clean(absolutePath), home+"/")
 	if !ok {
 		return "", "", fmt.Errorf("path is outside the tenant home")
