@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/月",
     "domains": "个域名",
     "databases": "个数据库",
-    "accounts": "个账户"
+    "accounts": "个账户",
+    "apps": "个应用"
   },
   "modal": {
     "newTitle": "新建套餐",

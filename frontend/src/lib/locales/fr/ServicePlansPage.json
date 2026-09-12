@@ -41,7 +41,8 @@
     "mbPerMonth": "Mo/mois",
     "domains": "domaines",
     "databases": "bases de données",
-    "accounts": "comptes"
+    "accounts": "comptes",
+    "apps": "applications"
   },
   "modal": {
     "newTitle": "Nouveau forfait",

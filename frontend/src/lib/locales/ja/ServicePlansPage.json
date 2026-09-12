@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/月",
     "domains": "ドメイン",
     "databases": "データベース",
-    "accounts": "アカウント"
+    "accounts": "アカウント",
+    "apps": "アプリケーション"
   },
   "modal": {
     "newTitle": "新規プラン",

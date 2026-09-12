@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/Monat",
     "domains": "Domains",
     "databases": "Datenbanken",
-    "accounts": "Konten"
+    "accounts": "Konten",
+    "apps": "Anwendungen"
   },
   "modal": {
     "newTitle": "Neuer Plan",

@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/ay",
     "domains": "alan adı",
     "databases": "veritabanı",
-    "accounts": "hesap"
+    "accounts": "hesap",
+    "apps": "uygulama"
   },
   "modal": {
     "newTitle": "Yeni Plan",

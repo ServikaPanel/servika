@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/měsíc",
     "domains": "domén",
     "databases": "databází",
-    "accounts": "účtů"
+    "accounts": "účtů",
+    "apps": "aplikací"
   },
   "modal": {
     "newTitle": "Nový tarif",

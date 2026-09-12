@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/mese",
     "domains": "domini",
     "databases": "database",
-    "accounts": "account"
+    "accounts": "account",
+    "apps": "applicazioni"
   },
   "modal": {
     "newTitle": "Nuovo Piano",

@@ -16,6 +16,12 @@
 //                          segments like countPre/countPost when word order
 //                          differs, but a dropped or misspelled token is caught)
 //
+// One check over the whole tree:
+//   4. code parity        — every literal t('key') in frontend/src resolves in
+//                          en. The three checks above compare the languages
+//                          with each other, so a key NO language defines passes
+//                          them all and the screen renders the raw key.
+//
 // Exits 1 on any problem so it can gate a commit / CI.
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
@@ -138,6 +144,75 @@ for (const lang of langs) {
     const extraTok = [...langTokens].filter((t) => !src[ns].tokens.has(t))
     if (missTok.length) problem(`${lang}/${ns}: missing placeholders — {{${missTok.join('}}, {{')}}}`)
     if (extraTok.length) problem(`${lang}/${ns}: unexpected placeholders — {{${extraTok.join('}}, {{')}}}`)
+  }
+}
+
+// 4. code parity — every literal t('key') the source asks for exists in en.
+//
+// Checks 1 to 3 compare the twelve languages against en, so a key the code asks
+// for and NO language provides passes all three: the screen then renders the
+// raw key, in every language at once. This check reads the other direction.
+//
+// It is deliberately literal-only: a computed key (a template literal, or a
+// variable) cannot be resolved without running the code, and guessing would
+// report keys that do exist. A file that never calls useTranslation is skipped
+// for the same reason, because its `t` arrives as a prop and its namespace is
+// the caller's.
+function sourceFiles(dir) {
+  const found = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) found.push(...sourceFiles(path))
+    else if (/\.tsx?$/.test(entry.name)) found.push(path)
+  }
+  return found
+}
+
+// namespacesOf returns the namespaces a file's useTranslation calls name.
+function namespacesOf(text) {
+  const found = new Set()
+  const re = /useTranslation\(\s*(['"])([\w.-]+)\1/g
+  let m
+  while ((m = re.exec(text)) !== null) found.add(m[2])
+  return found
+}
+
+// literalKeys returns every t('key') literal, template literals excluded.
+function literalKeys(text) {
+  const found = []
+  const re = /\bt\(\s*(['"])([^'"`$\\{}]+)\1/g
+  let m
+  while ((m = re.exec(text)) !== null) found.push(m[2])
+  return found
+}
+
+// resolves reports whether a key exists in one of the candidate namespaces,
+// counting the _other plural form as the key itself.
+function resolves(key, candidates) {
+  let name = key
+  let namespaces = candidates
+  const colon = key.indexOf(':')
+  if (colon > 0 && enFlat[`${key.slice(0, colon)}.json`]) {
+    namespaces = [`${key.slice(0, colon)}.json`]
+    name = key.slice(colon + 1)
+  }
+  return namespaces.some((ns) => {
+    const flat = enFlat[ns]
+    return flat !== undefined && (flat[name] !== undefined || flat[`${name}_other`] !== undefined)
+  })
+}
+
+const enFlat = {}
+for (const ns of sourceNamespaces) enFlat[ns] = flatten(readJSON(join(sourceDir, ns)), '', {})
+
+const SRC = join(HERE, '..', 'frontend', 'src')
+for (const path of sourceFiles(SRC)) {
+  const text = readFileSync(path, 'utf8')
+  const namespaces = [...namespacesOf(text)].map((n) => `${n}.json`).filter((n) => enFlat[n])
+  if (namespaces.length === 0) continue
+  const unknown = [...new Set(literalKeys(text))].filter((key) => !resolves(key, namespaces))
+  if (unknown.length) {
+    problem(`${path.slice(SRC.length + 1)}: keys the code asks for and en does not define — ${unknown.join(', ')}`)
   }
 }
 

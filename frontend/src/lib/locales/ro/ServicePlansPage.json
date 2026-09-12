@@ -41,7 +41,8 @@
     "mbPerMonth": "MB/lună",
     "domains": "domenii",
     "databases": "baze de date",
-    "accounts": "conturi"
+    "accounts": "conturi",
+    "apps": "aplicații"
   },
   "modal": {
     "newTitle": "Plan nou",
