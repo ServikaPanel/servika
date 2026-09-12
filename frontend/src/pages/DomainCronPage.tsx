@@ -249,29 +249,84 @@ function parseCommand(task: Task): { url: string; script: string; args: string }
   return { url: '', script: '', args: '' }
 }
 
+// The form's own shape. An older row can omit any field, so the defaults live
+// here rather than at each useState call.
+type CronDraft = {
+  enabled: boolean
+  type: string
+  minute: string
+  hour: string
+  day: string
+  month: string
+  weekday: string
+  command: string
+  url: string
+  script: string
+  args: string
+  phpVersion: string
+  notify: string
+  comment: string
+}
+
+function scheduleOf(task: Task): Pick<CronDraft, 'minute' | 'hour' | 'day' | 'month' | 'weekday'> {
+  return {
+    minute: task.minute || '0',
+    hour: task.hour || '3',
+    day: task.day || '*',
+    month: task.month || '*',
+    weekday: task.weekday || '*',
+  }
+}
+
+function payloadOf(task: Task, versions: string[]): Pick<CronDraft, 'type' | 'command' | 'url' | 'script' | 'args' | 'phpVersion' | 'notify' | 'comment'> {
+  const type = task.type || 'command'
+  const parsed = parseCommand(task)
+  return {
+    type,
+    command: type === 'command' ? task.command : '',
+    url: parsed.url,
+    script: parsed.script,
+    args: parsed.args,
+    phpVersion: task.php_version || versions[0],
+    notify: task.notify || 'none',
+    comment: task.comment || '',
+  }
+}
+
+function draftOf(task: Task | 'new', versions: string[]): CronDraft {
+  if (task === 'new') {
+    return {
+      enabled: true, type: 'command',
+      minute: '0', hour: '3', day: '*', month: '*', weekday: '*',
+      command: '', url: '', script: '', args: '',
+      phpVersion: versions[0], notify: 'none', comment: '',
+    }
+  }
+  return { enabled: task.enabled, ...scheduleOf(task), ...payloadOf(task, versions) }
+}
+
 function CronTaskModal({ task, phpVersions, domainId, onClose, onSaved }: {
   task: Task | 'new'; phpVersions: string[]; domainId: number; onClose: () => void; onSaved: () => void
 }) {
   const { t } = useTranslation('DomainCronPage')
   const isNew = task === 'new'
-  const existing = isNew ? null : (task as Task)
-  const parsed = existing ? parseCommand(existing) : { url: '', script: '', args: '' }
   const versions = phpVersions.length ? phpVersions : ['8.3']
+  const draft = draftOf(task, versions)
 
-  const [enabled, setEnabled] = useState(existing ? existing.enabled : true)
-  const [type, setType] = useState(existing?.type || 'command')
-  const [minute, setMinute] = useState(existing?.minute || '0')
-  const [hour, setHour] = useState(existing?.hour || '3')
-  const [day, setDay] = useState(existing?.day || '*')
-  const [month, setMonth] = useState(existing?.month || '*')
-  const [weekday, setWeekday] = useState(existing?.weekday || '*')
-  const [command, setCommand] = useState(existing && (existing.type || 'command') === 'command' ? existing.command : '')
-  const [url, setUrl] = useState(parsed.url)
-  const [script, setScript] = useState(parsed.script)
-  const [args, setArgs] = useState(parsed.args)
-  const [phpVersion, setPhpVersion] = useState(existing?.php_version || versions[0])
-  const [notify, setNotify] = useState(existing?.notify || 'none')
-  const [comment, setComment] = useState(existing?.comment || '')
+  const [enabled, setEnabled] = useState(draft.enabled)
+  const [type, setType] = useState(draft.type)
+  const [minute, setMinute] = useState(draft.minute)
+  const [hour, setHour] = useState(draft.hour)
+  const [day, setDay] = useState(draft.day)
+  const [month, setMonth] = useState(draft.month)
+  const [weekday, setWeekday] = useState(draft.weekday)
+  const [command, setCommand] = useState(draft.command)
+  const [url, setUrl] = useState(draft.url)
+  const [script, setScript] = useState(draft.script)
+  const [args, setArgs] = useState(draft.args)
+  const [phpVersion, setPhpVersion] = useState(draft.phpVersion)
+  const [notify, setNotify] = useState(draft.notify)
+  const [comment, setComment] = useState(draft.comment)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import { useReportError } from '@/lib/errors'
@@ -82,14 +83,8 @@ export default function DomainDatabaseDetailPage() {
     if (!(await confirm({ message: t('detail.optimizeConfirm', { name: db.db_name }), confirmLabel: t('detail.optimizeConfirmButton') }))) return
     setOptimizing(true)
     try {
-      const { data } = await api.post<{ before_bytes: number; after_bytes: number; reclaimed_bytes: number }>(`/databases/${db.id}/optimize`)
-      const reclaimed = Number(data?.reclaimed_bytes || 0)
-      await notify({
-        message: reclaimed > 0
-          ? t('detail.optimizeReclaimed', { reclaimed: formatBytes(reclaimed), before: formatBytes(Number(data?.before_bytes || 0)), after: formatBytes(Number(data?.after_bytes || 0)) })
-          : t('detail.optimizeTidy', { name: db.db_name }),
-        tone: 'info',
-      })
+      const { data } = await api.post<OptimizeResult>(`/databases/${db.id}/optimize`)
+      await notify({ message: optimizeMessage(t, db.db_name, data), tone: 'info' })
       fetchDatabase()
     } catch (e) {
       await notify({ message: apiError(e, t('errors.optimizeFailed')), tone: 'error' })
@@ -118,66 +113,155 @@ export default function DomainDatabaseDetailPage() {
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 sm:py-5 max-w-[900px]">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.databases'), href: `/subscriptions/${id}/databases` },
-        { label: db?.db_name || '...' },
-      ]} />
-
-      <div className="flex items-center gap-3 mb-5">
-        <Link to={`/subscriptions/${id}/databases`} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" title={t('detail.back')}>
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-        </Link>
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 font-mono truncate">{db?.db_name || t('title')}</h1>
-      </div>
+      <DetailHeader domain={domain} db={db} domainId={id} />
 
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
 
       {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : db && (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('detail.connectionInfo')}</h2>
-            <dl className="space-y-3">
-              <DetailRow label={t('columns.database')} value={db.db_name} mono />
-              <DetailRow label={t('columns.username')} value={db.db_user || t('detail.userNotDefined')} mono />
-              <DetailRow label={t('columns.host')} value={`${db.db_host}:3306`} mono />
-              <div className="flex items-start justify-between gap-3 py-1.5">
-                <dt className="text-sm text-slate-500 dark:text-slate-400 pt-1">{t('columns.password')}</dt>
-                <dd className="flex flex-wrap items-center gap-2 justify-end">
-                  <code className="font-mono text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded text-slate-800 dark:text-slate-200 break-all">
-                    {passwordShown ? db.db_pass : '••••••••••••'}
-                  </code>
-                  <button onClick={() => setPasswordShown(!passwordShown)} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-slate-600 dark:text-slate-300">{passwordShown ? t('password.hide') : t('password.show')}</button>
-                  {passwordShown && <button onClick={copyPassword} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-brand-900/40 rounded text-slate-600 dark:text-slate-300">{copied ? t('resultRow.copied') : t('password.copy')}</button>}
-                </dd>
-              </div>
-              <DetailRow label={t('columns.size')} value={formatBytes(db.size)} mono />
-              <DetailRow label={t('columns.created')} value={db.created_at} />
-            </dl>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('detail.operations')}</h2>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={openPma} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-md"><Icon d={ICON.lockOpen} className="h-4 w-4" />{t('row.pma')}</button>
-              <button onClick={() => setPwResetOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/40 rounded-md"><Icon d={ICON.key} className="h-4 w-4" />{db.db_user ? t('row.resetPassword') : t('row.createUser')}</button>
-              <button onClick={() => setRemoteOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md"><Icon d={ICON.globe} className="h-4 w-4" />{t('row.remoteAccess')}</button>
-              <button onClick={optimize} disabled={optimizing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md disabled:opacity-50"><Icon d={ICON.bolt} className={`h-4 w-4 ${optimizing ? 'animate-pulse' : ''}`} />{optimizing ? t('row.optimizing') : t('row.optimize')}</button>
-              <button onClick={() => setDeleteOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md ml-auto"><Icon d={ICON.trash} className="h-4 w-4" />{t('row.delete')}</button>
-            </div>
-          </div>
+          <ConnectionCard
+            db={db} passwordShown={passwordShown} copied={copied}
+            onTogglePassword={() => setPasswordShown(!passwordShown)} onCopyPassword={copyPassword}
+          />
+          <OperationsCard
+            db={db} optimizing={optimizing}
+            onPma={openPma} onPwReset={() => setPwResetOpen(true)} onRemote={() => setRemoteOpen(true)}
+            onOptimize={optimize} onDelete={() => setDeleteOpen(true)}
+          />
         </div>
       )}
 
+      <DetailModals
+        db={db} domainId={id}
+        pwResetOpen={pwResetOpen} remoteOpen={remoteOpen} deleteOpen={deleteOpen}
+        onPwResetClose={() => setPwResetOpen(false)}
+        onPwResetDone={() => { setPwResetOpen(false); fetchDatabase() }}
+        onRemoteClose={() => setRemoteOpen(false)}
+        onDeleteCancel={() => setDeleteOpen(false)}
+        onDeleteConfirm={remove}
+      />
+    </div>
+  )
+}
+
+type OptimizeResult = { before_bytes: number; after_bytes: number; reclaimed_bytes: number }
+
+// optimizeMessage reports how much the rebuild reclaimed. A table that was
+// already tidy reclaims nothing, and "reclaimed 0 B" reads as a failure.
+function optimizeMessage(t: TFunction, name: string, data?: OptimizeResult): string {
+  const reclaimed = Number(data?.reclaimed_bytes || 0)
+  if (reclaimed <= 0) return t('detail.optimizeTidy', { name })
+  return t('detail.optimizeReclaimed', {
+    reclaimed: formatBytes(reclaimed),
+    before: formatBytes(Number(data?.before_bytes || 0)),
+    after: formatBytes(Number(data?.after_bytes || 0)),
+  })
+}
+
+// DetailHeader names the database and the way back to its list.
+function DetailHeader({ domain, db, domainId }: { domain: Domain | null; db: DB | null; domainId?: string }) {
+  const { t } = useTranslation('DomainDatabasesPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${domainId}` },
+        { label: t('breadcrumb.databases'), href: `/subscriptions/${domainId}/databases` },
+        { label: db?.db_name || '...' },
+      ]} />
+
+      <div className="flex items-center gap-3 mb-5">
+        <Link to={`/subscriptions/${domainId}/databases`} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" title={t('detail.back')}>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+        </Link>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 font-mono truncate">{db?.db_name || t('title')}</h1>
+      </div>
+    </>
+  )
+}
+
+// ConnectionCard carries everything a client needs to connect.
+function ConnectionCard({ db, passwordShown, copied, onTogglePassword, onCopyPassword }: {
+  db: DB
+  passwordShown: boolean
+  copied: boolean
+  onTogglePassword: () => void
+  onCopyPassword: () => void
+}) {
+  const { t } = useTranslation('DomainDatabasesPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('detail.connectionInfo')}</h2>
+      <dl className="space-y-3">
+        <DetailRow label={t('columns.database')} value={db.db_name} mono />
+        <DetailRow label={t('columns.username')} value={db.db_user || t('detail.userNotDefined')} mono />
+        <DetailRow label={t('columns.host')} value={`${db.db_host}:3306`} mono />
+        <div className="flex items-start justify-between gap-3 py-1.5">
+          <dt className="text-sm text-slate-500 dark:text-slate-400 pt-1">{t('columns.password')}</dt>
+          <dd className="flex flex-wrap items-center gap-2 justify-end">
+            <code className="font-mono text-sm bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded text-slate-800 dark:text-slate-200 break-all">
+              {passwordShown ? db.db_pass : '••••••••••••'}
+            </code>
+            <button onClick={onTogglePassword} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-slate-600 dark:text-slate-300">{passwordShown ? t('password.hide') : t('password.show')}</button>
+            {passwordShown && <button onClick={onCopyPassword} className="text-xs px-2 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-brand-100 dark:hover:bg-brand-900/40 rounded text-slate-600 dark:text-slate-300">{copied ? t('resultRow.copied') : t('password.copy')}</button>}
+          </dd>
+        </div>
+        <DetailRow label={t('columns.size')} value={formatBytes(db.size)} mono />
+        <DetailRow label={t('columns.created')} value={db.created_at} />
+      </dl>
+    </div>
+  )
+}
+
+// OperationsCard holds the five actions this database supports.
+function OperationsCard({ db, optimizing, onPma, onPwReset, onRemote, onOptimize, onDelete }: {
+  db: DB
+  optimizing: boolean
+  onPma: () => void
+  onPwReset: () => void
+  onRemote: () => void
+  onOptimize: () => void
+  onDelete: () => void
+}) {
+  const { t } = useTranslation('DomainDatabasesPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">{t('detail.operations')}</h2>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={onPma} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-md"><Icon d={ICON.lockOpen} className="h-4 w-4" />{t('row.pma')}</button>
+        <button onClick={onPwReset} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/40 rounded-md"><Icon d={ICON.key} className="h-4 w-4" />{db.db_user ? t('row.resetPassword') : t('row.createUser')}</button>
+        <button onClick={onRemote} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md"><Icon d={ICON.globe} className="h-4 w-4" />{t('row.remoteAccess')}</button>
+        <button onClick={onOptimize} disabled={optimizing} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-md disabled:opacity-50"><Icon d={ICON.bolt} className={`h-4 w-4 ${optimizing ? 'animate-pulse' : ''}`} />{optimizing ? t('row.optimizing') : t('row.optimize')}</button>
+        <button onClick={onDelete} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md ml-auto"><Icon d={ICON.trash} className="h-4 w-4" />{t('row.delete')}</button>
+      </div>
+    </div>
+  )
+}
+
+// DetailModals holds the three dialogs this page can open.
+function DetailModals({ db, domainId, pwResetOpen, remoteOpen, deleteOpen, onPwResetClose, onPwResetDone, onRemoteClose, onDeleteCancel, onDeleteConfirm }: {
+  db: DB | null
+  domainId?: string
+  pwResetOpen: boolean
+  remoteOpen: boolean
+  deleteOpen: boolean
+  onPwResetClose: () => void
+  onPwResetDone: () => void
+  onRemoteClose: () => void
+  onDeleteCancel: () => void
+  onDeleteConfirm: () => void
+}) {
+  const { t } = useTranslation('DomainDatabasesPage')
+  return (
+    <>
       {pwResetOpen && db && (
-        <DBPasswordResetModal db={db} onClose={() => setPwResetOpen(false)} onDone={() => { setPwResetOpen(false); fetchDatabase() }} />
+        <DBPasswordResetModal db={db} onClose={onPwResetClose} onDone={onPwResetDone} />
       )}
 
       {/* Keyed by the database USER, not the row: one user can own several
           databases and a remote account is granted all of them at once. */}
-      <Modal open={remoteOpen} title={t('remote.title', { user: db?.db_user })} width="lg" onClose={() => setRemoteOpen(false)}>
-        {remoteOpen && db && <DBRemoteAccess domainId={Number(id)} dbUser={db.db_user} />}
+      <Modal open={remoteOpen} title={t('remote.title', { user: db?.db_user })} width="lg" onClose={onRemoteClose}>
+        {remoteOpen && db && <DBRemoteAccess domainId={Number(domainId)} dbUser={db.db_user} />}
       </Modal>
 
       <ConfirmDialog
@@ -186,10 +270,10 @@ export default function DomainDatabaseDetailPage() {
         message={t('delete.message', { name: db?.db_name })}
         dangerous
         confirmText={t('delete.confirm')}
-        onConfirm={remove}
-        onCancel={() => setDeleteOpen(false)}
+        onConfirm={onDeleteConfirm}
+        onCancel={onDeleteCancel}
       />
-    </div>
+    </>
   )
 }
 
