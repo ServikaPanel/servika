@@ -1727,9 +1727,15 @@ func bulkOwnerStatement(r *http.Request, req bulkOwnerReq, clearing bool) (strin
 	// The two id conditions are bracketed together, or the scope fragment would
 	// bind to the second alternative alone and a reseller could move an addon
 	// row of a domain they do not own.
+	//
+	// The id alternative is restricted to a TOP-LEVEL row. A child row carries
+	// the parent's system_user, so moving it on its own hands the new owner the
+	// parent tenant's home directory, database namespace and backups through
+	// that row's id. A child follows its parent through the second alternative
+	// and never moves alone.
 	idList := strings.Join(placeholders, ",")
 	// #nosec G202 -- only literal "?" placeholders and the constant ScopeSQL fragment are joined; all values are bound via args.
-	sql := `UPDATE domains d SET d.customer_id=? WHERE (d.id IN (` + idList + `) OR d.parent_domain_id IN (` + idList + `))` + scope
+	sql := `UPDATE domains d SET d.customer_id=? WHERE ((d.parent_domain_id IS NULL AND d.id IN (` + idList + `)) OR d.parent_domain_id IN (` + idList + `))` + scope
 	return sql, args
 }
 

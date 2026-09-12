@@ -282,8 +282,27 @@ func TestATransferTakesTheAddonRowsWithIt(t *testing.T) {
 	// The two id conditions must be bracketed together, or a scope fragment binds
 	// to the second alternative alone and a reseller moves an addon row of a
 	// domain they do not own.
-	if !strings.Contains(statement, "WHERE (d.id IN (?,?) OR d.parent_domain_id IN (?,?))") {
+	if !strings.Contains(statement, "WHERE ((d.parent_domain_id IS NULL AND d.id IN (?,?)) OR d.parent_domain_id IN (?,?))") {
 		t.Errorf("the two id conditions are not bracketed together: %q", statement)
+	}
+}
+
+// The move must reach a child row only THROUGH its parent. An addon row carries
+// the parent's system_user, and every per-domain handler resolves the home
+// directory, the database namespace and the backup tree from the row the URL
+// names, so a child moved on its own hands the new owner the parent tenant's
+// account.
+func TestAChildRowCannotBeMovedOnItsOwn(t *testing.T) {
+	handlers, recorder := ownerHarness(t, false)
+	response := httptest.NewRecorder()
+	handlers.BulkOwner(response, ownerRequest(adminActor, `{"ids":[1,2],"customer_id":5}`))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (%s)", response.Code, http.StatusOK, response.Body.String())
+	}
+	statement, _ := recorder.update()
+	if !strings.Contains(statement, "d.parent_domain_id IS NULL AND d.id IN (?,?)") {
+		t.Errorf("an id names any row, not only a top-level one: %q", statement)
 	}
 }
 
