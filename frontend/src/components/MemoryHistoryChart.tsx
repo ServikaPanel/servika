@@ -89,9 +89,6 @@ export default function MemoryHistoryChart() {
     setHover(Math.max(0, Math.min(pts.length - 1, Math.round(df * (pts.length - 1)))))
   }
 
-  const critical = currentValue != null && currentValue >= 85
-  const warning = currentValue != null && currentValue >= 70
-
   return (
     <div ref={wrapRef} className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/60">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -117,81 +114,130 @@ export default function MemoryHistoryChart() {
         </div>
       </div>
 
-      {/* live / hover value */}
-      <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR }} />
-          <span className="text-slate-500 dark:text-slate-400">{t('series')}</span>
-          <span className={`font-mono font-semibold tabular-nums ${critical ? 'text-red-600 dark:text-red-400' : warning ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>
-            {currentValue == null ? '—' : `${currentValue.toFixed(1)}%`}
-          </span>
-        </div>
-        {hp && <span className="ml-auto font-mono text-[11px] text-slate-400 dark:text-slate-500">{hp.ts.slice(5, 16).replace('-', '/').replace('T', ' ')}</span>}
-      </div>
+      <ValueRow currentValue={currentValue} hp={hp} />
 
-      {!g ? (
-        <div className="flex h-[200px] flex-col items-center justify-center text-center">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-9 w-9 text-slate-300 dark:text-slate-600">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125 8 8l3 6 4-9 3 6h4" />
-          </svg>
-          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{t('noData')}</p>
-          <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{t('noDataHint')}</p>
-        </div>
-      ) : (
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-          <defs>
-            <linearGradient id="mem-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={COLOR} stopOpacity="0.28" />
-              <stop offset="70%" stopColor={COLOR} stopOpacity="0.06" />
-              <stop offset="100%" stopColor={COLOR} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
-          {/* horizontal grid + Y labels */}
-          {g.yTicks.map((v, i) => (
-            <g key={i}>
-              <line x1={ML} y1={g.yAt(v)} x2={W - MR} y2={g.yAt(v)} className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="1" />
-              <text x={ML - 8} y={g.yAt(v) + 3.5} textAnchor="end" className="fill-slate-400 dark:fill-slate-500" fontSize="11" fontFamily="ui-monospace,monospace">{v}</text>
-            </g>
-          ))}
-
-          {/* 85% critical reference line */}
-          <g>
-            <line x1={ML} y1={g.yAt(85)} x2={W - MR} y2={g.yAt(85)} stroke="#ef4444" strokeWidth="1" strokeDasharray="5 5" opacity="0.5" />
-            <text x={W - MR} y={g.yAt(85) - 5} textAnchor="end" fill="#ef4444" fontSize="10" opacity="0.8">{t('criticalReference')}</text>
-          </g>
-
-          {/* X labels */}
-          {g.xTickIdx.map((idx, i) => (
-            <text key={i} x={g.xAt(idx)} y={H - 9} textAnchor={i === 0 ? 'start' : i === g.xTickIdx.length - 1 ? 'end' : 'middle'}
-              className="fill-slate-400 dark:fill-slate-500" fontSize="11" fontFamily="ui-monospace,monospace">{g.xLabel(pts[idx].ts)}</text>
-          ))}
-
-          {/* area + line */}
-          <path d={g.area} fill="url(#mem-area)" />
-          <path d={g.line} fill="none" stroke={COLOR} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
-
-          {/* last point pulse */}
-          {pts.length > 0 && (
-            <g>
-              <circle cx={g.xAt(pts.length - 1)} cy={g.yAt(pts[pts.length - 1].memory)} r="7" fill={COLOR} opacity="0.18">
-                <animate attributeName="r" values="4;9;4" dur="2.4s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.28;0;0.28" dur="2.4s" repeatCount="indefinite" />
-              </circle>
-              <circle cx={g.xAt(pts.length - 1)} cy={g.yAt(pts[pts.length - 1].memory)} r="3" fill={COLOR} />
-            </g>
-          )}
-
-          {/* hover crosshair + dot */}
-          {hp && hover != null && (
-            <g>
-              <line x1={g.xAt(hover)} y1={MT} x2={g.xAt(hover)} y2={H - MB} className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" strokeDasharray="3 3" />
-              <circle cx={g.xAt(hover)} cy={g.yAt(hp.memory)} r="3.5" fill={COLOR} stroke="#0d1524" strokeWidth="1.5" />
-            </g>
-          )}
-        </svg>
+      {!g ? <NoData /> : (
+        <ChartSvg W={W} g={g} pts={pts} hp={hp} hover={hover}
+          onMove={onMove} onLeave={() => setHover(null)} />
       )}
     </div>
+  )
+}
+
+// The plotted geometry of one render. It is computed once per data change and
+// read by the chart, so the two cannot disagree about where a point sits.
+type Geometry = {
+  yAt: (v: number) => number
+  xAt: (i: number) => number
+  line: string
+  area: string
+  yTicks: number[]
+  xLabel: (ts: string) => string
+  xTickIdx: number[]
+}
+
+// valueClass colours the reading by how close it is to exhausting memory.
+function valueClass(value: number | null): string {
+  if (value != null && value >= 85) return 'text-red-600 dark:text-red-400'
+  if (value != null && value >= 70) return 'text-amber-600 dark:text-amber-400'
+  return 'text-slate-900 dark:text-slate-100'
+}
+
+// ValueRow shows the hovered reading, or the latest one when nothing is hovered.
+function ValueRow({ currentValue, hp }: { currentValue: number | null; hp: Point | null }) {
+  const { t } = useTranslation('MemoryHistoryChart')
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: COLOR }} />
+        <span className="text-slate-500 dark:text-slate-400">{t('series')}</span>
+        <span className={`font-mono font-semibold tabular-nums ${valueClass(currentValue)}`}>
+          {currentValue == null ? '—' : `${currentValue.toFixed(1)}%`}
+        </span>
+      </div>
+      {hp && <span className="ml-auto font-mono text-[11px] text-slate-400 dark:text-slate-500">{hp.ts.slice(5, 16).replace('-', '/').replace('T', ' ')}</span>}
+    </div>
+  )
+}
+
+function NoData() {
+  const { t } = useTranslation('MemoryHistoryChart')
+  return (
+    <div className="flex h-[200px] flex-col items-center justify-center text-center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-9 w-9 text-slate-300 dark:text-slate-600">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125 8 8l3 6 4-9 3 6h4" />
+      </svg>
+      <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{t('noData')}</p>
+      <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{t('noDataHint')}</p>
+    </div>
+  )
+}
+
+type ChartProps = {
+  W: number
+  g: Geometry
+  pts: Point[]
+  hp: Point | null
+  hover: number | null
+  onMove: (e: React.MouseEvent<SVGSVGElement>) => void
+  onLeave: () => void
+}
+
+function ChartSvg({ W, g, pts, hp, hover, onMove, onLeave }: ChartProps) {
+  const { t } = useTranslation('MemoryHistoryChart')
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" onMouseMove={onMove} onMouseLeave={onLeave}>
+      <defs>
+        <linearGradient id="mem-area" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={COLOR} stopOpacity="0.28" />
+          <stop offset="70%" stopColor={COLOR} stopOpacity="0.06" />
+          <stop offset="100%" stopColor={COLOR} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* horizontal grid + Y labels */}
+      {g.yTicks.map((v, i) => (
+        <g key={i}>
+          <line x1={ML} y1={g.yAt(v)} x2={W - MR} y2={g.yAt(v)} className="stroke-slate-100 dark:stroke-slate-800" strokeWidth="1" />
+          <text x={ML - 8} y={g.yAt(v) + 3.5} textAnchor="end" className="fill-slate-400 dark:fill-slate-500" fontSize="11" fontFamily="ui-monospace,monospace">{v}</text>
+        </g>
+      ))}
+
+      {/* 85% critical reference line */}
+      <g>
+        <line x1={ML} y1={g.yAt(85)} x2={W - MR} y2={g.yAt(85)} stroke="#ef4444" strokeWidth="1" strokeDasharray="5 5" opacity="0.5" />
+        <text x={W - MR} y={g.yAt(85) - 5} textAnchor="end" fill="#ef4444" fontSize="10" opacity="0.8">{t('criticalReference')}</text>
+      </g>
+
+      {/* X labels */}
+      {g.xTickIdx.map((idx, i) => (
+        <text key={i} x={g.xAt(idx)} y={H - 9} textAnchor={i === 0 ? 'start' : i === g.xTickIdx.length - 1 ? 'end' : 'middle'}
+          className="fill-slate-400 dark:fill-slate-500" fontSize="11" fontFamily="ui-monospace,monospace">{g.xLabel(pts[idx].ts)}</text>
+      ))}
+
+      {/* area + line */}
+      <path d={g.area} fill="url(#mem-area)" />
+      <path d={g.line} fill="none" stroke={COLOR} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+
+      {/* last point pulse */}
+      {pts.length > 0 && (
+        <g>
+          <circle cx={g.xAt(pts.length - 1)} cy={g.yAt(pts[pts.length - 1].memory)} r="7" fill={COLOR} opacity="0.18">
+            <animate attributeName="r" values="4;9;4" dur="2.4s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.28;0;0.28" dur="2.4s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={g.xAt(pts.length - 1)} cy={g.yAt(pts[pts.length - 1].memory)} r="3" fill={COLOR} />
+        </g>
+      )}
+
+      {/* hover crosshair + dot */}
+      {hp && hover != null && (
+        <g>
+          <line x1={g.xAt(hover)} y1={MT} x2={g.xAt(hover)} y2={H - MB} className="stroke-slate-300 dark:stroke-slate-600" strokeWidth="1" strokeDasharray="3 3" />
+          <circle cx={g.xAt(hover)} cy={g.yAt(hp.memory)} r="3.5" fill={COLOR} stroke="#0d1524" strokeWidth="1.5" />
+        </g>
+      )}
+    </svg>
   )
 }
 
@@ -204,6 +250,12 @@ function smoothPath(data: Point[], xAt: (i: number) => number, yAt: (p: Point) =
   if (n === 1) return `M${xs[0].toFixed(1)},${ys[0].toFixed(1)}`
   const dx: number[] = [], m: number[] = []
   for (let i = 0; i < n - 1; i++) { dx[i] = xs[i + 1] - xs[i]; m[i] = (ys[i + 1] - ys[i]) / (dx[i] || 1) }
+  return cubicPath(xs, ys, dx, monotoneTangents(m, n))
+}
+
+// monotoneTangents returns one slope per sample, clamped so a segment cannot
+// overshoot the two samples it joins.
+function monotoneTangents(m: number[], n: number): number[] {
   const t: number[] = new Array(n)
   t[0] = m[0]; t[n - 1] = m[n - 2]
   for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2
@@ -212,8 +264,13 @@ function smoothPath(data: Point[], xAt: (i: number) => number, yAt: (p: Point) =
     const a = t[i] / m[i], b = t[i + 1] / m[i], h = Math.hypot(a, b)
     if (h > 3) { const s = 3 / h; t[i] = s * a * m[i]; t[i + 1] = s * b * m[i] }
   }
+  return t
+}
+
+// cubicPath writes one cubic segment per interval.
+function cubicPath(xs: number[], ys: number[], dx: number[], t: number[]): string {
   let p = `M${xs[0].toFixed(1)},${ys[0].toFixed(1)}`
-  for (let i = 0; i < n - 1; i++) {
+  for (let i = 0; i < xs.length - 1; i++) {
     const hi = dx[i]
     p += ` C${(xs[i] + hi / 3).toFixed(1)},${(ys[i] + t[i] * hi / 3).toFixed(1)} ${(xs[i + 1] - hi / 3).toFixed(1)},${(ys[i + 1] - t[i + 1] * hi / 3).toFixed(1)} ${xs[i + 1].toFixed(1)},${ys[i + 1].toFixed(1)}`
   }
