@@ -128,6 +128,25 @@ func chainsOf(t *testing.T, body map[string]any) []any {
 	return list
 }
 
+// assertStages checks that a chain carries exactly these stages, each with the
+// name the screen prints.
+func assertStages(t *testing.T, chain map[string]any, want ...string) {
+	t.Helper()
+	stages, _ := chain["stages"].([]any)
+	names, _ := chain["stage_names"].([]any)
+	if len(stages) != len(want) || len(names) != len(want) {
+		t.Fatalf("stages = %v, names = %v, want %v", stages, names, want)
+	}
+	for i, stage := range want {
+		if stages[i] != stage {
+			t.Errorf("stage %d = %v, want %q", i, stages[i], stage)
+		}
+		if names[i] != StageName(stage) {
+			t.Errorf("stage name %d = %v, want %q", i, names[i], StageName(stage))
+		}
+	}
+}
+
 // A chain is returned with its stages split, each stage named, and the timeline
 // of its domain's events.
 func TestAChainIsReturnedWithItsStagesAndTimeline(t *testing.T) {
@@ -150,14 +169,7 @@ func TestAChainIsReturnedWithItsStagesAndTimeline(t *testing.T) {
 		t.Fatalf("chains = %v, want one", list)
 	}
 	chain, _ := list[0].(map[string]any)
-	stages, _ := chain["stages"].([]any)
-	names, _ := chain["stage_names"].([]any)
-	if len(stages) != 2 || stages[0] != "entry" || stages[1] != "persist" {
-		t.Errorf("stages = %v", stages)
-	}
-	if len(names) != 2 || names[0] != StageName("entry") || names[1] != StageName("persist") {
-		t.Errorf("stage names = %v", names)
-	}
+	assertStages(t, chain, "entry", "persist")
 	events, _ := chain["events"].([]any)
 	if len(events) != 2 {
 		t.Errorf("events = %v, want the two in the window", events)

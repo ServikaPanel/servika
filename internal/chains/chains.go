@@ -121,6 +121,19 @@ func ChainScore(events []Event) Result {
 	causal := causalLink(events)
 	ordered := timeOrdered(events, stages)
 
+	level := notifications.LevelWarning
+	if causal || (distinct >= 3 && ordered) {
+		level = notifications.LevelCritical
+	}
+	return Result{
+		Confidence: chainConfidence(distinct, causal, ordered),
+		Stages:     stages, Level: level, Causal: causal, Enough: true,
+	}
+}
+
+// chainConfidence scores a chain: 40 + (distinct-1)*15, plus 25 for a causal
+// link, plus 5 when the stages are time-ordered, clamped to 99.
+func chainConfidence(distinct int, causal, ordered bool) int {
 	confidence := 40 + (distinct-1)*15
 	if causal {
 		confidence += 25
@@ -131,11 +144,7 @@ func ChainScore(events []Event) Result {
 	if confidence > 99 {
 		confidence = 99
 	}
-	level := notifications.LevelWarning
-	if causal || (distinct >= 3 && ordered) {
-		level = notifications.LevelCritical
-	}
-	return Result{Confidence: confidence, Stages: stages, Level: level, Causal: causal, Enough: true}
+	return confidence
 }
 
 // causalLink reports whether two events of DIFFERENT stages are causally linked:

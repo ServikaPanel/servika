@@ -89,20 +89,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, http.StatusInternalServerError, "an attack chain could not be read")
 			return
 		}
+		c.Stages, c.StageNames = namedStages(stageStr)
 		if dom.Valid {
 			c.DomainID = &dom.Int64
-		}
-		c.Stages = strings.Split(stageStr, ">")
-		c.StageNames = make([]string, 0, len(c.Stages))
-		for _, s := range c.Stages {
-			c.StageNames = append(c.StageNames, StageName(s))
-		}
-		if dom.Valid {
-			reseller, user := int64(-1), int64(-1)
-			if entryVisible {
-				reseller, user = domainOwners(ctx, h.DB, dom.Int64)
-			}
-			c.Events = h.chainEvents(ctx, dom.Int64, c.Time, cond, args, reseller, user)
+			c.Events = h.timelineOf(ctx, dom.Int64, c.Time, cond, args, entryVisible)
 		}
 		out = append(out, c)
 	}
@@ -113,6 +103,28 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"chains": out})
+}
+
+// namedStages splits a stored stage list and names each stage for the screen.
+func namedStages(stored string) (stages, names []string) {
+	stages = strings.Split(stored, ">")
+	names = make([]string, 0, len(stages))
+	for _, s := range stages {
+		names = append(names, StageName(s))
+	}
+	return stages, names
+}
+
+// timelineOf reads one chain's events, resolving the entry-event owners only
+// for a caller entitled to see a login attack on an account. A caller who is
+// not gets the two impossible ids, which the entry branch can never match.
+func (h *Handlers) timelineOf(ctx context.Context, domID int64, at, cond string,
+	args []any, entryVisible bool) []EventDTO {
+	reseller, user := int64(-1), int64(-1)
+	if entryVisible {
+		reseller, user = domainOwners(ctx, h.DB, domID)
+	}
+	return h.chainEvents(ctx, domID, at, cond, args, reseller, user)
 }
 
 // chainEvents reads the timeline for one chain's domain: the events in the
