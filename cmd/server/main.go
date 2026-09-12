@@ -74,6 +74,7 @@ import (
 	"servika/internal/resourcelimit"
 	"servika/internal/secret"
 	"servika/internal/serverip"
+	"servika/internal/sessionrevoke"
 	"servika/internal/sitecopy"
 	"servika/internal/siteimport"
 	"servika/internal/sitesecurity"
@@ -493,6 +494,11 @@ func startHostServices(d *sql.DB, ipv4 string) {
 	// the next one, so on a panel where nobody does that the last rows survive
 	// for the life of the installation and ride into every database dump.
 	pma.StartTokenSweep(context.Background(), d)
+
+	// A logout lists the session it surrendered. The row stops mattering when
+	// that token expires on its own, so without a sweep the table would keep
+	// every signed-out session for the life of the installation.
+	sessionrevoke.StartSweep(context.Background(), d)
 
 	// The signed malware rule package, if this build carries a signing key. The
 	// PANEL is the only process that fetches: the scan worker runs inside

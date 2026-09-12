@@ -17,6 +17,7 @@ import (
 
 	"servika/internal/httpx"
 	"servika/internal/logx"
+	"servika/internal/sessionrevoke"
 	"servika/internal/system"
 )
 
@@ -386,13 +387,44 @@ func (h *Handlers) secondFactorPassed(w http.ResponseWriter, who signedIn, code,
 	return true
 }
 
-// Logout clears the session cookie. It is a public endpoint: expiring a cookie
-// requires no authentication and must succeed even when the token is already
-// invalid. Server-side revocation for admins is handled separately by
-// RevokeSessions (token_version bump).
+// Logout clears the session cookie AND ends that one session on the server.
+//
+// It used to clear only the cookie, so the token the browser had just stopped
+// sending stayed valid for the rest of its lifetime. Anyone holding a captured
+// copy kept a working session, and pressing "sign out" on a shared machine
+// protected nothing server-side.
+//
+// Only the surrendered session is ended, by its jti claim. token_version stays
+// untouched, because a logout on one device must not sign the same person out
+// of the others; RevokeSessions is the control that does that deliberately.
+//
+// It remains a PUBLIC endpoint: expiring a cookie requires no authentication
+// and must succeed even when the token is already invalid or absent. A token
+// that does not parse, or that carries no jti because it predates the claim,
+// leaves nothing to record and the cookie is still cleared.
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
+	h.revokePresentedSession(r)
 	httpx.ClearSessionCookie(w, r)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// revokePresentedSession records the jti of the token the request presented.
+//
+// A failure is logged and not reported to the caller: the cookie clear is the
+// part the client can act on, and answering 500 would leave the browser holding
+// a session it asked to end.
+func (h *Handlers) revokePresentedSession(r *http.Request) {
+	ck, err := r.Cookie(httpx.SessionCookie)
+	if err != nil || ck.Value == "" {
+		return
+	}
+	c, err := Parse(h.Secret, ck.Value)
+	if err != nil || c.ID == "" || c.ExpiresAt == nil {
+		return
+	}
+	if err := sessionrevoke.Revoke(r.Context(), h.DB, c.ID, c.ExpiresAt.Time); err != nil {
+		httpx.LogR(r, "logout: the session could not be revoked for uid=%d: %v", c.UserID, err)
+	}
 }
 
 // ScopeOf resolves the reseller scope a user belongs to for audit_log.reseller_id:

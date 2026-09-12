@@ -9,6 +9,7 @@ import (
 	"servika/internal/auth"
 	"servika/internal/httpx"
 	"servika/internal/sessionidle"
+	"servika/internal/sessionrevoke"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -89,6 +90,67 @@ func tokenVersionMatches(ctx context.Context, table string, id, claimVersion int
 	return current == claimVersion, nil
 }
 
+// sessionRevoked reports whether this ONE session was signed out.
+//
+// It is the per-session counterpart of tokenVersionMatches and shares its
+// contract: it FAILS CLOSED, so a real read failure returns an error and the
+// caller denies the request. When scopeDB is unset (tests) it accepts, exactly
+// as the version check does.
+//
+// An empty jti is accepted without a read. A token issued before the jti claim
+// existed carries none, and refusing those would sign every operator out the
+// moment the panel restarted after the upgrade; such a token still expires on
+// its own exp.
+//
+// The read goes through readState for the same reason the version check does:
+// a database blip is retried, and then the answer last read for this session is
+// reused while it is fresh. A logout written DURING an outage is therefore not
+// visible for up to stateCacheTTL, the trade-off dbresilience.go already states
+// for revocation.
+func sessionRevoked(ctx context.Context, jti string) (bool, error) {
+	if scopeDB == nil || jti == "" {
+		return false, nil
+	}
+	listed, err := readState(ctx, "revoked_session:"+jti,
+		func(ctx context.Context) (int64, error) {
+			return sessionrevoke.Listed(ctx, scopeDB, jti)
+		})
+	if err != nil {
+		return false, err
+	}
+	return listed > 0, nil
+}
+
+// notRevoked answers the two revocation questions and reports whether the
+// request may continue. It writes the refusal itself when it may not.
+//
+// The two are separate on purpose. token_version is per ACCOUNT: a password
+// change or POST /me/sessions/revoke bumps it and every session the account
+// holds stops working. The jti list is per SESSION: a logout surrenders one
+// device and must leave the others signed in.
+//
+// Both FAIL CLOSED, and both answer 503 rather than 500 when they cannot be
+// read: the session may well be valid, the panel just cannot say so at this
+// moment, so the client is being told to come back rather than that its request
+// was wrong.
+func notRevoked(w http.ResponseWriter, r *http.Request, c *auth.Claims) bool {
+	ok, err := tokenVersionMatches(r.Context(), "users", c.UserID, c.TokenVersion)
+	if err == nil && ok {
+		var revoked bool
+		revoked, err = sessionRevoked(r.Context(), c.ID)
+		ok = !revoked
+	}
+	if err != nil {
+		httpx.WriteError(w, http.StatusServiceUnavailable, "could not verify session")
+		return false
+	}
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "session has been revoked")
+		return false
+	}
+	return true
+}
+
 // RequireAuth validates the session token and stores the claims in the request
 // context.
 //
@@ -118,16 +180,7 @@ func RequireAuth(secret []byte) func(http.Handler) http.Handler {
 				httpx.WriteError(w, http.StatusUnauthorized, "invalid session")
 				return
 			}
-			ok, verr := tokenVersionMatches(r.Context(), "users", c.UserID, c.TokenVersion)
-			if verr != nil {
-				// 503, not 500: the session may well be valid, the panel just
-				// cannot say so at this moment. The client is being told to come
-				// back, not that its request was wrong.
-				httpx.WriteError(w, http.StatusServiceUnavailable, "could not verify session")
-				return
-			}
-			if !ok {
-				httpx.WriteError(w, http.StatusUnauthorized, "session has been revoked")
+			if !notRevoked(w, r, c) {
 				return
 			}
 			// The idle timeout runs AFTER the revocation check, because the two
