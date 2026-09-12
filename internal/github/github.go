@@ -435,7 +435,7 @@ func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
 		_ = h.DB.QueryRowContext(r.Context(),
 			`SELECT webhook_id FROM github_connections WHERE domain_id=?`, id).Scan(&oldID)
 		if oldID > 0 {
-			_, _, _ = ghCall(r.Context(), "DELETE",
+			_, _, _ = githubCall(r.Context(), "DELETE",
 				fmt.Sprintf("/repos/%s/hooks/%d", req.Repo, oldID), pat, nil)
 		}
 		hook := ghHook{Name: "web", Active: true, Events: []string{"push"}}
@@ -445,7 +445,7 @@ func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
 		// the clear on every delivery and nginx writes to its access log.
 		hook.Config.Secret = signingKey
 		hook.Config.InsecureSSL = "0" // Require GitHub to verify the panel TLS certificate.
-		body, st, err := ghCall(r.Context(), "POST", "/repos/"+req.Repo+"/hooks", pat, hook)
+		body, st, err := githubCall(r.Context(), "POST", "/repos/"+req.Repo+"/hooks", pat, hook)
 		if err != nil || (st != 201 && st != 200) {
 			resp["webhook_ok"] = false
 			resp["webhook_error"] = patErrorMessage(st, body)
