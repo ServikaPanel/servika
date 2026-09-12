@@ -106,39 +106,43 @@ type writeReq struct {
 	MatchSubdomains *bool  `json:"match_subdomains"`
 }
 
-// POST /admin/banned-domains adds one name or a pasted list.
-func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
-	var req writeReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	entries := parseEntries(req.Domains)
+// requestedEntries reads a pasted list, and answers the request itself when it
+// names nothing usable or more than one request may carry.
+func requestedEntries(w http.ResponseWriter, blob string) ([]string, bool) {
+	entries := parseEntries(blob)
 	if len(entries) == 0 {
 		httpx.WriteError(w, http.StatusBadRequest, "no domain name was given")
-		return
+		return nil, false
 	}
 	if len(entries) > maxEntriesPerRequest {
 		httpx.WriteError(w, http.StatusBadRequest, "too many domain names in one request")
-		return
+		return nil, false
 	}
-	// The default is subdomains included, because a phisher hides the brand one
-	// label down. The field is a pointer so an explicit false is told apart from
-	// a body that never mentioned it.
-	match := 1
+	return entries, true
+}
+
+// storedRule returns the two columns every row of one request shares.
+//
+// The default is subdomains included, because a phisher hides the brand one
+// label down. The field is a pointer so an explicit false is told apart from a
+// body that never mentioned it.
+func storedRule(req writeReq) (match int, description string) {
+	match = 1
 	if req.MatchSubdomains != nil && !*req.MatchSubdomains {
 		match = 0
 	}
-	description := strings.TrimSpace(req.Description)
+	description = strings.TrimSpace(req.Description)
 	if len(description) > 255 {
 		description = description[:255]
 	}
+	return match, description
+}
 
-	var createdBy any
-	if claims := middleware.ClaimsFrom(r); claims != nil && claims.UserID > 0 {
-		createdBy = claims.UserID
-	}
-
+// writeEntries bans every valid name and reports the counts. It answers the
+// request itself when a write fails, because a partial ban must not be reported
+// as done.
+func (h *Handlers) writeEntries(w http.ResponseWriter, r *http.Request,
+	entries []string, description string, match int, createdBy any) (writeResult, bool) {
 	result := writeResult{Rejected: []string{}}
 	for _, name := range entries {
 		if provisioner.ValidateDomain(name) != nil {
@@ -153,7 +157,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			httpx.LogR(r, "banned domain insert: %v", err)
 			httpx.WriteError(w, http.StatusInternalServerError, "the list could not be written")
-			return
+			return result, false
 		}
 		// MariaDB answers 1 for an insert and 2 for a replaced row; both mean
 		// the name is now banned as asked, and 0 means the row was already
@@ -163,6 +167,31 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		result.Applied++
+	}
+	return result, true
+}
+
+// POST /admin/banned-domains adds one name or a pasted list.
+func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
+	var req writeReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	entries, ok := requestedEntries(w, req.Domains)
+	if !ok {
+		return
+	}
+	match, description := storedRule(req)
+
+	var createdBy any
+	if claims := middleware.ClaimsFrom(r); claims != nil && claims.UserID > 0 {
+		createdBy = claims.UserID
+	}
+
+	result, ok := h.writeEntries(w, r, entries, description, match, createdBy)
+	if !ok {
+		return
 	}
 	Invalidate()
 	// A count rather than the names: the list is bulk-pasted and bounded only by
@@ -187,13 +216,8 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	entries := parseEntries(req.Domains)
-	if len(entries) == 0 {
-		httpx.WriteError(w, http.StatusBadRequest, "no domain name was given")
-		return
-	}
-	if len(entries) > maxEntriesPerRequest {
-		httpx.WriteError(w, http.StatusBadRequest, "too many domain names in one request")
+	entries, ok := requestedEntries(w, req.Domains)
+	if !ok {
 		return
 	}
 
