@@ -154,21 +154,28 @@ func (h *Handlers) Proxy(w http.ResponseWriter, r *http.Request) {
 			},
 			ResponseHeaderTimeout: 0,
 		},
-		Director: func(request *http.Request) {
-			request.URL.Scheme = "http"
-			request.URL.Host = "plugin"
+		// Rewrite, not Director: Director cannot see the INBOUND request, so the
+		// identity headers below would be read from the same object they are
+		// written to. SetXForwarded is called explicitly because Rewrite does not
+		// add the forwarding headers Director used to append.
+		Rewrite: func(request *httputil.ProxyRequest) {
+			request.SetXForwarded()
+			request.Out.URL.Scheme = "http"
+			request.Out.URL.Host = "plugin"
 			prefix := "/api/v1/plugin/" + name
-			request.URL.Path = strings.TrimPrefix(request.URL.Path, prefix)
-			if request.URL.Path == "" {
-				request.URL.Path = "/"
+			request.Out.URL.Path = strings.TrimPrefix(request.Out.URL.Path, prefix)
+			if request.Out.URL.Path == "" {
+				request.Out.URL.Path = "/"
 			}
-			request.Header.Del("X-Servika-User")
-			request.Header.Del("X-Servika-Uid")
-			request.Header.Del("X-Servika-Role")
-			if claims := middleware.ClaimsFrom(request); claims != nil {
-				request.Header.Set("X-Servika-Uid", strconv.FormatInt(claims.UserID, 10))
-				request.Header.Set("X-Servika-User", claims.Username)
-				request.Header.Set("X-Servika-Role", claims.Role)
+			// Deleted before they are set: a caller that sent its own identity
+			// header would otherwise have it forwarded as the panel's word.
+			request.Out.Header.Del("X-Servika-User")
+			request.Out.Header.Del("X-Servika-Uid")
+			request.Out.Header.Del("X-Servika-Role")
+			if claims := middleware.ClaimsFrom(request.In); claims != nil {
+				request.Out.Header.Set("X-Servika-Uid", strconv.FormatInt(claims.UserID, 10))
+				request.Out.Header.Set("X-Servika-User", claims.Username)
+				request.Out.Header.Set("X-Servika-Role", claims.Role)
 			}
 		},
 		FlushInterval: -1,
