@@ -125,9 +125,17 @@ func (h *Handlers) LoadHistory(w http.ResponseWriter, r *http.Request) {
 	out := []LoadPoint{}
 	for rows.Next() {
 		var point LoadPoint
-		if err := rows.Scan(&point.Timestamp, &point.Load1, &point.Load5, &point.Load15, &point.Memory); err == nil {
-			out = append(out, point)
+		// A dropped point is a GAP in the chart, and a gap is exactly how a
+		// server that was too loaded to record a sample renders. Skipping the
+		// row would draw the incident the operator opened the chart to
+		// investigate, with nothing anywhere contradicting it, so the read is
+		// refused instead.
+		if err := rows.Scan(&point.Timestamp, &point.Load1, &point.Load5, &point.Load15, &point.Memory); err != nil {
+			httpx.LogR(r, "load history: a sample could not be read: %v", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to read load history")
+			return
 		}
+		out = append(out, point)
 	}
 	if err := rows.Err(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to process load history")
