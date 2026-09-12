@@ -32,16 +32,21 @@ func TestEveryRequestDrivenNginxWriterTakesTheSharedLock(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		body := string(source)
-		if !strings.Contains(body, `exec.Command("nginx", "-t")`) &&
-			!strings.Contains(body, `run(ctx, "nginx", "-t")`) &&
-			!strings.Contains(body, "ApplyVhostForDomain(") {
+		// The validation argument pair rather than the call around it: a package
+		// that runs nginx through a test seam of its own still validates the
+		// whole conf.d tree and still has to hold the lock.
+		if !strings.Contains(body, `"nginx", "-t"`) &&
+			!strings.Contains(body, "ApplyVhostForDomain(") &&
+			!strings.Contains(body, "applyVhost(") {
 			t.Errorf("%s no longer writes nginx configuration; drop it from this list", filepath.Base(path))
 			continue
 		}
 		if !strings.Contains(body, "provisioner.LockNginx()") {
 			t.Errorf("%s writes nginx configuration without taking provisioner.LockNginx", filepath.Base(path))
 		}
-		if strings.Count(body, "provisioner.LockNginx()") != strings.Count(body, "provisioner.UnlockNginx()") {
+		// The names rather than the call form: a writer may hand the release to a
+		// defer as a function value, which releases it just the same.
+		if strings.Count(body, "provisioner.LockNginx") != strings.Count(body, "provisioner.UnlockNginx") {
 			t.Errorf("%s takes the lock a different number of times than it releases it", filepath.Base(path))
 		}
 	}
