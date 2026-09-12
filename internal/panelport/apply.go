@@ -184,7 +184,7 @@ func writePlan(ctx context.Context, p plan) ([]changeSet, error) {
 			return nil, fmt.Errorf("write %s: %w", path, err)
 		}
 	}
-	if out, err := run(ctx, "nginx", "-t"); err != nil {
+	if out, err := runCommand(ctx, "nginx", "-t"); err != nil {
 		_ = restoreAll(changes)
 		return nil, refuse(ReasonVerifyFailed, "nginx refused the new configuration: %s", tail(out))
 	}
@@ -207,12 +207,12 @@ func ApplyExternal(ctx context.Context, current Ports, newPort int) error {
 		return err
 	}
 
-	if out, err := run(ctx, "systemctl", "reload", "nginx"); err != nil {
+	if out, err := runCommand(ctx, "systemctl", "reload", "nginx"); err != nil {
 		_ = restoreAll(changes)
-		_, _ = run(ctx, "systemctl", "reload", "nginx")
+		_, _ = runCommand(ctx, "systemctl", "reload", "nginx")
 		return refuse(ReasonVerifyFailed, "nginx would not reload: %s", tail(out))
 	}
-	if WaitReachable(ctx, "127.0.0.1", newPort, 20*time.Second) {
+	if portAnswers(ctx, "127.0.0.1", newPort, 20*time.Second) {
 		return nil
 	}
 
@@ -223,11 +223,11 @@ func ApplyExternal(ctx context.Context, current Ports, newPort int) error {
 	if restoreErr := restoreAll(changes); restoreErr != nil {
 		return restoreErr
 	}
-	if out, err := run(ctx, "systemctl", "reload", "nginx"); err != nil {
+	if out, err := runCommand(ctx, "systemctl", "reload", "nginx"); err != nil {
 		return refuse(ReasonRollbackFailed,
 			"the new port did not answer and nginx would not reload the old configuration: %s", tail(out))
 	}
-	if !WaitReachable(ctx, "127.0.0.1", current.External, 20*time.Second) {
+	if !portAnswers(ctx, "127.0.0.1", current.External, 20*time.Second) {
 		return refuse(ReasonRollbackFailed,
 			"the new port did not answer and port %d has not come back either", current.External)
 	}
@@ -266,7 +266,7 @@ func StartBackendChange(ctx context.Context, current Ports, newPort int, history
 		ClearOutcome()
 		return err
 	}
-	if out, err := run(ctx, "systemd-run", "--unit="+helperUnit, "--collect", helperPath()); err != nil {
+	if out, err := runCommand(ctx, "systemd-run", "--unit="+helperUnit, "--collect", helperPath()); err != nil {
 		_ = restoreAll(changes)
 		ClearOutcome()
 		return refuse(ReasonVerifyFailed, "the change helper would not start: %s", tail(out))

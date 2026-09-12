@@ -235,7 +235,7 @@ func FoldOutcome(db *sql.DB) {
 func helperStillRunning() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	out, _ := run(ctx, "systemctl", "is-active", helperUnit)
+	out, _ := runCommand(ctx, "systemctl", "is-active", helperUnit)
 	state := trimSpace(out)
 	return state == "active" || state == "activating"
 }
