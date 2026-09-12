@@ -2,6 +2,7 @@ package logview
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -83,6 +84,72 @@ func readRequests(t *testing.T, handle *sql.DB, statement string, arg []any) []R
 		t.Fatalf("read: %v", err)
 	}
 	return out
+}
+
+// The player takes ONE array. The batches are stored separately and joined
+// without being parsed, so a real round trip is what proves the join produces
+// JSON at all and produces it in seq order.
+func TestTheStoredBatchesJoinIntoOneArray(t *testing.T) {
+	handle := liveDB(t)
+	const sessionID = "logview-replay-test"
+	t.Cleanup(func() {
+		_, _ = handle.Exec(
+			`DELETE e FROM replay_events e JOIN replay_sessions s ON s.id=e.session_id
+			  WHERE s.session_id=?`, sessionID)
+		_, _ = handle.Exec(`DELETE FROM replay_sessions WHERE session_id=?`, sessionID)
+	})
+	id := seedReplay(t, handle, sessionID)
+
+	rows, err := handle.Query(`SELECT batch FROM replay_events WHERE session_id=? ORDER BY seq`, id)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	joined, err := joinBatches(rows.Scan, rows.Next)
+	if err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	var events []map[string]int
+	if err := json.Unmarshal([]byte(joined), &events); err != nil {
+		t.Fatalf("the join did not produce JSON: %v (%s)", err, joined)
+	}
+	if len(events) != 4 {
+		t.Fatalf("%d event(s) came back, expected 4: %s", len(events), joined)
+	}
+	for i, event := range events {
+		if event["n"] != i+1 {
+			t.Errorf("event %d is %v, so the batches were joined out of order: %s", i, event, joined)
+		}
+	}
+}
+
+// seedReplay writes one recording of two batches and returns its id.
+//
+// The batches are inserted OUT of seq order on purpose: the reader orders by
+// seq, not by the order they arrived in.
+func seedReplay(t *testing.T, handle *sql.DB, sessionID string) int64 {
+	t.Helper()
+	result, err := handle.Exec(
+		`INSERT INTO replay_sessions (session_id, page_url, batches) VALUES (?, '/', 2)`, sessionID)
+	if err != nil {
+		t.Fatalf("insert the session: %v", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatalf("insert the session: %v", err)
+	}
+	for _, batch := range []struct {
+		seq  int
+		body string
+	}{{1, `[{"n":3},{"n":4}]`}, {0, `[{"n":1},{"n":2}]`}} {
+		if _, err := handle.Exec(
+			`INSERT INTO replay_events (session_id, seq, batch) VALUES (?,?,?)`,
+			id, batch.seq, batch.body); err != nil {
+			t.Fatalf("insert a batch: %v", err)
+		}
+	}
+	return id
 }
 
 // The same for ui_events.

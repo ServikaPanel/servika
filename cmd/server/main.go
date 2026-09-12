@@ -1026,6 +1026,13 @@ func main() {
 			// address rather than for one client.
 			r.With(middleware.RateLimit("ui-events", 60, time.Minute)).
 				Post("/ui-events", uiEventsH.Collect)
+			// The session recording itself. Refused unless the operator turned
+			// the feature on AND the account agreed to be recorded; both are
+			// asked here, not only in the browser.
+			r.With(middleware.RateLimit("replay", 30, time.Minute)).
+				Post("/replay", uiEventsH.Replay)
+			r.With(middleware.AdminOnly).Get("/system/replay-sessions", logViewH.ReplayList)
+			r.With(middleware.AdminOnly).Get("/system/replay/{id}", logViewH.ReplayEvents)
 			r.With(middleware.AdminOnly).Get("/system/request-logs", logViewH.List)
 			r.With(middleware.AdminOnly).Get("/system/app-logs", logViewH.AppList)
 			// The country database is a server-wide integration, so its credentials
