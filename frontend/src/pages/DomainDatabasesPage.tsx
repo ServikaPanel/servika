@@ -161,8 +161,6 @@ function NewDatabaseModal({ domainId, systemUser, existingUsers, onClose, onDone
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ db_name: string; db_user: string; db_pass: string } | null>(null)
 
-  const dbNamePreview = prefix + (dbSuffix || '...')
-  const userPreview = prefix + (userSuffix || '...')
   const passwordStrengthIssue =
     password !== '' && (password.length < 12 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password))
 
@@ -203,23 +201,10 @@ function NewDatabaseModal({ domainId, systemUser, existingUsers, onClose, onDone
     }
   }
 
-  const inputCls = 'w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-md text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none disabled:opacity-50'
-
   return (
     <Modal open={true} title={t('newModal.title')} onClose={result ? onDone : onClose} width="lg">
       {result ? (
-        <div className="space-y-4">
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md p-4 space-y-3">
-            <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">{t('newModal.created')}</p>
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">{t('newModal.saveHint')}</p>
-            <ResultRow label={t('newModal.labelDatabase')} value={result.db_name} />
-            <ResultRow label={t('newModal.labelUser')} value={result.db_user} />
-            <ResultRow label={t('newModal.labelPassword')} value={result.db_pass} />
-          </div>
-          <div className="flex justify-end">
-            <button onClick={onDone} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded-md">{t('newModal.done')}</button>
-          </div>
-        </div>
+        <ResultPanel result={result} onDone={onDone} />
       ) : (
         <div className="space-y-5">
           <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -230,55 +215,15 @@ function NewDatabaseModal({ domainId, systemUser, existingUsers, onClose, onDone
           </label>
 
           {!auto && (
-            <div className="space-y-5 pt-1">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('newModal.dbNameLabel')}</label>
-                <div className="flex items-stretch">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm font-mono select-none">{prefix}</span>
-                  <input value={dbSuffix} onChange={e => setDbSuffix(e.target.value.toLowerCase())} placeholder={t('newModal.dbSuffixPlaceholder')} className={inputCls + ' rounded-l-none'} />
-                </div>
-                <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-mono">{dbNamePreview}</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">{t('newModal.dbUserLabel')}</label>
-                <div className="flex gap-4 mb-2">
-                  <label className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                    <input type="radio" name="userMode" checked={userMode === 'new'} onChange={() => setUserMode('new')} className="accent-brand-600" />
-                    {t('newModal.newUser')}
-                  </label>
-                  <label className={'flex items-center gap-1.5 text-sm cursor-pointer ' + (existingUsers.length ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600 cursor-not-allowed')}>
-                    <input type="radio" name="userMode" disabled={!existingUsers.length} checked={userMode === 'existing'} onChange={() => setUserMode('existing')} className="accent-brand-600" />
-                    {t('newModal.selectExistingUser')}
-                  </label>
-                </div>
-
-                {userMode === 'new' ? (
-                  <>
-                    <div className="flex items-stretch">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm font-mono select-none">{prefix}</span>
-                      <input value={userSuffix} onChange={e => setUserSuffix(e.target.value.toLowerCase())} placeholder={t('newModal.userSuffixPlaceholder')} className={inputCls + ' rounded-l-none'} />
-                    </div>
-                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-mono">{userPreview}</p>
-                  </>
-                ) : (
-                  <select value={existingUser} onChange={e => setExistingUser(e.target.value)} className={inputCls}>
-                    {existingUsers.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                )}
-              </div>
-
-              {userMode === 'new' && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('newModal.passwordLabel')} <span className="text-slate-400 dark:text-slate-500">{t('newModal.passwordOptional')}</span></label>
-                  <div className="flex gap-2">
-                    <input type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder={t('newModal.passwordPlaceholder')} className={inputCls} />
-                    <button type="button" onClick={() => setPassword(generateStrongPassword())} className="whitespace-nowrap px-3 py-2 bg-white dark:bg-slate-800 border border-brand-600 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/30 text-sm rounded-md">{t('newModal.generate')}</button>
-                  </div>
-                  {passwordStrengthIssue && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t('newModal.passwordStrength')}</p>}
-                </div>
-              )}
-            </div>
+            <ManualFields
+              prefix={prefix}
+              dbSuffix={dbSuffix} onDbSuffix={setDbSuffix}
+              userMode={userMode} onUserMode={setUserMode}
+              userSuffix={userSuffix} onUserSuffix={setUserSuffix}
+              existingUsers={existingUsers} existingUser={existingUser} onExistingUser={setExistingUser}
+              password={password} onPassword={setPassword}
+              passwordStrengthIssue={passwordStrengthIssue}
+            />
           )}
 
           {error && <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">{error}</div>}
@@ -290,6 +235,101 @@ function NewDatabaseModal({ domainId, systemUser, existingUsers, onClose, onDone
         </div>
       )}
     </Modal>
+  )
+}
+
+const INPUT_CLS = 'w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-md text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none disabled:opacity-50'
+
+type CreatedDatabase = { db_name: string; db_user: string; db_pass: string }
+
+function ResultPanel({ result, onDone }: { result: CreatedDatabase; onDone: () => void }) {
+  const { t } = useTranslation('DomainDatabasesPage')
+  return (
+    <div className="space-y-4">
+      <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md p-4 space-y-3">
+        <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium">{t('newModal.created')}</p>
+        <p className="text-xs text-emerald-700 dark:text-emerald-300">{t('newModal.saveHint')}</p>
+        <ResultRow label={t('newModal.labelDatabase')} value={result.db_name} />
+        <ResultRow label={t('newModal.labelUser')} value={result.db_user} />
+        <ResultRow label={t('newModal.labelPassword')} value={result.db_pass} />
+      </div>
+      <div className="flex justify-end">
+        <button onClick={onDone} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded-md">{t('newModal.done')}</button>
+      </div>
+    </div>
+  )
+}
+
+type ManualFieldsProps = {
+  prefix: string
+  dbSuffix: string
+  onDbSuffix: (v: string) => void
+  userMode: 'new' | 'existing'
+  onUserMode: (v: 'new' | 'existing') => void
+  userSuffix: string
+  onUserSuffix: (v: string) => void
+  existingUsers: string[]
+  existingUser: string
+  onExistingUser: (v: string) => void
+  password: string
+  onPassword: (v: string) => void
+  passwordStrengthIssue: boolean
+}
+
+function ManualFields(p: ManualFieldsProps) {
+  const { t } = useTranslation('DomainDatabasesPage')
+  const dbNamePreview = p.prefix + (p.dbSuffix || '...')
+  const userPreview = p.prefix + (p.userSuffix || '...')
+  return (
+    <div className="space-y-5 pt-1">
+      <div>
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('newModal.dbNameLabel')}</label>
+        <div className="flex items-stretch">
+          <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm font-mono select-none">{p.prefix}</span>
+          <input value={p.dbSuffix} onChange={e => p.onDbSuffix(e.target.value.toLowerCase())} placeholder={t('newModal.dbSuffixPlaceholder')} className={INPUT_CLS + ' rounded-l-none'} />
+        </div>
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-mono">{dbNamePreview}</p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">{t('newModal.dbUserLabel')}</label>
+        <div className="flex gap-4 mb-2">
+          <label className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="radio" name="userMode" checked={p.userMode === 'new'} onChange={() => p.onUserMode('new')} className="accent-brand-600" />
+            {t('newModal.newUser')}
+          </label>
+          <label className={'flex items-center gap-1.5 text-sm cursor-pointer ' + (p.existingUsers.length ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600 cursor-not-allowed')}>
+            <input type="radio" name="userMode" disabled={!p.existingUsers.length} checked={p.userMode === 'existing'} onChange={() => p.onUserMode('existing')} className="accent-brand-600" />
+            {t('newModal.selectExistingUser')}
+          </label>
+        </div>
+
+        {p.userMode === 'new' ? (
+          <>
+            <div className="flex items-stretch">
+              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-sm font-mono select-none">{p.prefix}</span>
+              <input value={p.userSuffix} onChange={e => p.onUserSuffix(e.target.value.toLowerCase())} placeholder={t('newModal.userSuffixPlaceholder')} className={INPUT_CLS + ' rounded-l-none'} />
+            </div>
+            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-mono">{userPreview}</p>
+          </>
+        ) : (
+          <select value={p.existingUser} onChange={e => p.onExistingUser(e.target.value)} className={INPUT_CLS}>
+            {p.existingUsers.map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+        )}
+      </div>
+
+      {p.userMode === 'new' && (
+        <div>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('newModal.passwordLabel')} <span className="text-slate-400 dark:text-slate-500">{t('newModal.passwordOptional')}</span></label>
+          <div className="flex gap-2">
+            <input type="text" value={p.password} onChange={e => p.onPassword(e.target.value)} placeholder={t('newModal.passwordPlaceholder')} className={INPUT_CLS} />
+            <button type="button" onClick={() => p.onPassword(generateStrongPassword())} className="whitespace-nowrap px-3 py-2 bg-white dark:bg-slate-800 border border-brand-600 text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-900/30 text-sm rounded-md">{t('newModal.generate')}</button>
+          </div>
+          {p.passwordStrengthIssue && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">{t('newModal.passwordStrength')}</p>}
+        </div>
+      )}
+    </div>
   )
 }
 
