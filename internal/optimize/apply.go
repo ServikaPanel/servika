@@ -118,7 +118,7 @@ func backupName(path string) string {
 // revert of such a row is a DELETION. That case is only reachable for the
 // panel's own drop-ins, which the panel creates.
 func backupFile(path string) (string, error) {
-	if !knownTarget(path) {
+	if !targetAllowed(path) {
 		return "", fmt.Errorf("%s is not a file this package tunes", path)
 	}
 	content, err := os.ReadFile(path) // #nosec G304 -- knownTarget restricted path to the compile-time specs table.
@@ -147,7 +147,7 @@ func backupFile(path string) (string, error) {
 
 // writeFileAs writes content preserving the mode of the file it replaces.
 func writeFileAs(path, content string) error {
-	if !knownTarget(path) {
+	if !targetAllowed(path) {
 		return fmt.Errorf("%s is not a file this package tunes", path)
 	}
 	mode := os.FileMode(0o644)
@@ -162,7 +162,7 @@ func writeFileAs(path, content string) error {
 
 // restore puts a backup back, or removes the file when there was none.
 func restore(path, backup string) error {
-	if !knownTarget(path) {
+	if !targetAllowed(path) {
 		return fmt.Errorf("%s is not a file this package tunes", path)
 	}
 	if backup == "" {
@@ -341,11 +341,11 @@ func applyFile(ctx context.Context, db *sql.DB, path string, proposals []Proposa
 func validate(ctx context.Context, service string) error {
 	switch service {
 	case ServiceNginx:
-		if out, err := run(ctx, "nginx", "-t"); err != nil {
+		if out, err := runCommand(ctx, "nginx", "-t"); err != nil {
 			return refuse(ReasonValidateFailed, "nginx refused the configuration: %s", tail(out))
 		}
 	case ServicePHPFPM:
-		out, err := run(ctx, "php-fpm", "-t")
+		out, err := runCommand(ctx, "php-fpm", "-t")
 		// php-fpm reports a pool it will not accept on stderr and, depending on
 		// the build, still exits 0. The text is the signal.
 		if err != nil || strings.Contains(out, "ERROR") || strings.Contains(out, "ALERT") {
@@ -366,18 +366,18 @@ func activate(ctx context.Context, db *sql.DB, proposals []Proposal) ([]string, 
 	var notes []string
 	switch proposals[0].Service {
 	case ServiceNginx:
-		if out, err := run(ctx, "systemctl", "reload", "nginx"); err != nil {
+		if out, err := runCommand(ctx, "systemctl", "reload", "nginx"); err != nil {
 			return nil, refuse(ReasonValidateFailed, "nginx would not reload: %s", tail(out))
 		}
 		notes = append(notes, "nginx reloaded")
 	case ServicePHPFPM:
-		if out, err := run(ctx, "systemctl", "restart", "php-fpm"); err != nil {
+		if out, err := runCommand(ctx, "systemctl", "restart", "php-fpm"); err != nil {
 			return nil, refuse(ReasonValidateFailed, "php-fpm would not restart: %s", tail(out))
 		}
 		notes = append(notes, "php-fpm restarted")
 	case ServiceSysctl:
 		for _, proposal := range proposals {
-			if out, err := run(ctx, "sysctl", "-w", proposal.Param+"="+proposal.Proposed); err != nil {
+			if out, err := runCommand(ctx, "sysctl", "-w", proposal.Param+"="+proposal.Proposed); err != nil {
 				return nil, refuse(ReasonNotApplied, "the kernel refused %s: %s", proposal.Param, tail(out))
 			}
 		}

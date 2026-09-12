@@ -174,7 +174,7 @@ func procSysPath(param string) (string, error) {
 	if strings.Contains(param, "..") {
 		return "", fmt.Errorf("sysctl name %q is not a name", param)
 	}
-	return filepath.Join("/proc/sys", strings.ReplaceAll(param, ".", "/")), nil
+	return filepath.Join(procSysRoot, strings.ReplaceAll(param, ".", "/")), nil
 }
 
 // parseNginxDirective returns the value of a simple one-argument directive.

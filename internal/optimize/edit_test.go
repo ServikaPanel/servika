@@ -135,6 +135,20 @@ func TestRewritingAParameterDoesNotDuplicateIt(t *testing.T) {
 	}
 }
 
+// A line with no "=" is not a setting. It is dropped rather than carried
+// through, because the file this rewrites is one the panel itself wrote and a
+// line it cannot parse is one it cannot put a value back into.
+func TestALineThatIsNotASettingIsDropped(t *testing.T) {
+	existing := "[mysqld]\nmax_connections = 300\nskip-name-resolve\n"
+	merged := MergeDropIn(existing, "[mysqld]", map[string]string{"table_open_cache": "8000"})
+	if strings.Contains(merged, "skip-name-resolve") {
+		t.Errorf("a line with no value was carried through:\n%s", merged)
+	}
+	if !strings.Contains(merged, "max_connections = 300") {
+		t.Errorf("the settings around it were lost:\n%s", merged)
+	}
+}
+
 // A sysctl drop-in has no sections, so it gets no header line. Writing
 // "[mysqld]" into /etc/sysctl.d makes sysctl report it as a malformed setting.
 func TestASysctlDropInCarriesNoSectionHeader(t *testing.T) {

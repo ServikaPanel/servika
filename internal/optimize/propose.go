@@ -51,8 +51,14 @@ const (
 	myCnfPath     = "/etc/my.cnf.d/servika-tuning.cnf"
 	sysctlPath    = "/etc/sysctl.d/99-zz-servika.conf"
 	sysctlOldPath = "/etc/sysctl.d/90-servika.conf" // pre-rename name; revert-only (a row outlives the code that wrote it)
-	nginxPath     = "/etc/nginx/nginx.conf"
-	fpmPoolPath   = "/etc/php-fpm.d/www.conf"
+)
+
+// The two files Current reads rather than writes. They are variables only so a
+// characterization test can point them at its own copies; specs holds the same
+// defaults and is built from them at init. See seams.go.
+var (
+	nginxPath   = "/etc/nginx/nginx.conf"
+	fpmPoolPath = "/etc/php-fpm.d/www.conf"
 )
 
 // Facts are what was measured off the host.
