@@ -32,6 +32,10 @@ type Handlers struct {
 	DB *sql.DB
 }
 
+// psCommand runs the process listing. It is a variable so a test can stand in
+// for the host's own ps, which prints a different table on every platform.
+var psCommand = exec.Command
+
 // GET /system/processes?n=15&sort=cpu|mem
 func Processes(w http.ResponseWriter, r *http.Request) {
 	n := 15
@@ -46,7 +50,7 @@ func Processes(w http.ResponseWriter, r *http.Request) {
 		sortFlag = "-pmem"
 	}
 
-	cmd := exec.Command("ps", "-eo", "pid,user:32,pcpu,pmem,args", "--no-headers", "--sort="+sortFlag)
+	cmd := psCommand("ps", "-eo", "pid,user:32,pcpu,pmem,args", "--no-headers", "--sort="+sortFlag)
 	out, err := cmd.Output()
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to read process list")
