@@ -316,6 +316,23 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
+	if !h.acceptedSettings(w, r, id, sid, &req.Settings) {
+		return
+	}
+	if err := Save(r.Context(), h.DB, id, sid, req.Settings); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to save nginx settings")
+		return
+	}
+	if !h.applyVhost(w, id, sid, systemUser, phpVersion) {
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// acceptedSettings pins the entitlement the customer may not change and refuses
+// a directive nginx must not be given.
+func (h *Handlers) acceptedSettings(w http.ResponseWriter, r *http.Request,
+	id, sid int64, settings *Settings) bool {
 	// The plan's request-body ceiling is an entitlement, not a setting. It is
 	// re-read from the scope's own state and written back, so the customer's
 	// payload can neither raise it nor drop it.
@@ -328,50 +345,50 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 	current, err := GetScoped(r.Context(), h.DB, id, sid)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to load nginx settings")
-		return
+		return false
 	}
-	req.Settings.ClientMaxBody = current.ClientMaxBody
+	settings.ClientMaxBody = current.ClientMaxBody
 
-	if directive := provisioner.DangerousNginxDirective(req.Settings.ExtraDirectives); directive != "" {
+	if directive := provisioner.DangerousNginxDirective(settings.ExtraDirectives); directive != "" {
 		httpx.WriteError(w, http.StatusBadRequest, "nginx directive is not allowed")
-		return
+		return false
 	}
-	if err := provisioner.ValidateNginxDirectives(req.Settings.ExtraDirectives); err != nil {
+	if err := provisioner.ValidateNginxDirectives(settings.ExtraDirectives); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid nginx directives")
-		return
+		return false
 	}
 	// nginx refuses to load a config naming an undefined keys_zone, so the shared
 	// zone has to exist before a vhost referencing it is written.
-	if req.Settings.FastCgiCache {
+	if settings.FastCgiCache {
 		if err := provisioner.EnsureCacheZone(); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to prepare the cache zone")
-			return
+			return false
 		}
 	}
-	if err := Save(r.Context(), h.DB, id, sid, req.Settings); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "failed to save nginx settings")
-		return
-	}
+	return true
+}
+
+// applyVhost re-renders the virtual host the saved settings belong to.
+func (h *Handlers) applyVhost(w http.ResponseWriter, id, sid int64, systemUser, phpVersion string) bool {
 	if sid > 0 {
 		if h.RerenderSubdomain == nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "subdomain rendering is not wired")
-			return
+			return false
 		}
 		if err := h.RerenderSubdomain(h.DB, sid); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply nginx virtual host")
-			return
+			return false
 		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
-		return
+		return true
 	}
 	socket, err := provisioner.PHPSocketFor(systemUser, phpVersion)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to resolve PHP socket")
-		return
+		return false
 	}
 	if err := provisioner.ApplyVhostForDomain(h.DB, id, socket, phpVersion); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to apply nginx virtual host")
-		return
+		return false
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+	return true
 }
