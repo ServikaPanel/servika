@@ -136,27 +136,9 @@ func TestTheSchedulerComparesTheDeadlineInSQL(t *testing.T) {
 }
 
 // A domain whose vhost could not be re-rendered stays due, so the next tick
-// tries again. Clearing the row anyway would leave the panel reporting the site
-// as open while nginx still answered 503 to every visitor, with nothing left to
-// notice it.
-func TestAFailedRenderLeavesTheDomainDue(t *testing.T) {
-	source := readSource(t, "maintenance_scheduler.go")
-	lift := source[strings.Index(source, "func liftMaintenance"):]
-
-	render := strings.Index(lift, "provisioner.RerenderVhost(")
-	clearDeadline := strings.Index(lift, "maintenance_until=NULL")
-	if render < 0 || clearDeadline < 0 {
-		t.Fatalf("unexpected shape:\n%s", lift)
-	}
-	if clearDeadline < render {
-		t.Error("the deadline is cleared before the vhost is known to have changed")
-	}
-	// The failure branch puts the switch back rather than leaving the domain
-	// half-open.
-	if !strings.Contains(lift, "maintenance_enabled=1 WHERE id=?") {
-		t.Error("a failed render does not restore the switch, so the retry never happens")
-	}
-}
+// tries again. That claim is measured rather than read: see
+// TestAFailedRenderLeavesTheDeadlineAndRestoresTheSwitch in
+// maintenance_lift_test.go, which runs the pass against a scripted database.
 
 // The pass runs under its own deadline, shorter than the interval, so a slow
 // pass cannot overlap the next one. main hands this package a context that
