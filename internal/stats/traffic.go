@@ -229,8 +229,18 @@ func mergeMonths(tx *sql.Tx, domainID int64, monthly map[string]int64) bool {
 	return true
 }
 
+// trafficMonth is the key both halves of this file use.
+//
+// nginx stamps the access log with $time_local, so parseTrafficLine writes a row
+// under the SERVER's LOCAL month. Reading it back under the UTC month made the
+// two disagree for the length of the offset at every month boundary: on a UTC+3
+// host the first three hours of a month summed the PREVIOUS month's row into
+// domains.traffic_kb, and the reseller traffic gate went on refusing an
+// allowance that had already reset.
+func trafficMonth(at time.Time) string { return at.Format("2006-01") }
+
 func refreshTrafficKB(db *sql.DB, domainID int64) {
-	month := time.Now().UTC().Format("2006-01")
+	month := trafficMonth(time.Now())
 	var bytes int64
 	_ = db.QueryRow("SELECT bytes FROM domain_traffic WHERE domain_id=? AND `year_month`=?", domainID, month).Scan(&bytes)
 	_, _ = db.Exec(`UPDATE domains SET traffic_kb=? WHERE id=?`, bytes/1024, domainID)
