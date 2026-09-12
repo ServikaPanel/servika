@@ -39,7 +39,9 @@ func TestTheApplicationCreateHoldsThePerCustomerLockAcrossTheInsert(t *testing.T
 	body := createBody(t)
 	lock := strings.Index(body, "quota.LockCustomerForDomain(")
 	check := strings.Index(body, "quota.CheckAppAllowed(")
-	insert := strings.Index(body, "INSERT INTO apps(")
+	// The statement itself lives in insertApp; what has to sit inside the lock
+	// is the call that runs it.
+	insert := strings.Index(body, "h.insertApp(")
 	release := strings.Index(body, "\n\tunlock()")
 	if lock < 0 || check < 0 || insert < 0 || release < 0 {
 		t.Fatal("the lock, the check, the insert or the release is missing from Create")

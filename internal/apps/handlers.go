@@ -202,12 +202,36 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	appID, err := h.insertApp(r.Context(), s, valid)
+	if err != nil {
+		h.createRefused(w, r, s.DomainID, err)
+		return
+	}
+	unlock()
+
+	app, err := Get(r.Context(), h.DB, s.DomainID, appID)
+	if err != nil {
+		httpx.LogR(r, "apps: reread application %d: %v", appID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
+		return
+	}
+	if err := h.apply(r, s, app, valid.appDir, valid.argv); err != nil {
+		h.rollBack(r, app.ID)
+		httpx.LogR(r, "apps: apply application %d: %v", app.ID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be started")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, h.view(app, s))
+}
+
+// insertApp writes the row with the first usable port and returns its id.
+func (h *Handlers) insertApp(ctx context.Context, s scope, valid validated) (int64, error) {
 	var appID int64
 	var subdomain any
 	if valid.request.SubdomainID > 0 {
 		subdomain = valid.request.SubdomainID
 	}
-	_, err = AllocatePort(r.Context(), h.DB, func(ctx context.Context, port int) error {
+	_, err := AllocatePort(ctx, h.DB, func(ctx context.Context, port int) error {
 		result, err := h.DB.ExecContext(ctx,
 			`INSERT INTO apps(domain_id, subdomain_id, name, runtime, runtime_version,
 			   app_root, start_command, mount_path, port, enabled)
@@ -220,39 +244,33 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		appID, err = result.LastInsertId()
 		return err
 	})
-	if err != nil {
-		if errors.Is(err, ErrNoFreePort) {
-			httpx.WriteError(w, http.StatusServiceUnavailable, "no free application port is available on this server")
-			return
-		}
-		if isDuplicateKey(err) {
-			httpx.WriteError(w, http.StatusConflict, "another application already answers on that path")
-			return
-		}
-		httpx.LogR(r, "apps: create on domain %d: %v", s.DomainID, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
-		return
-	}
-	unlock()
+	return appID, err
+}
 
-	app, err := Get(r.Context(), h.DB, s.DomainID, appID)
-	if err != nil {
-		httpx.LogR(r, "apps: reread application %d: %v", appID, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
+// createRefused answers a failed insert by its cause: an exhausted port range
+// needs a wider range, a taken mount needs a different path, and anything else
+// is a fault the operator reads in the log.
+func (h *Handlers) createRefused(w http.ResponseWriter, r *http.Request, domainID int64, err error) {
+	if errors.Is(err, ErrNoFreePort) {
+		httpx.WriteError(w, http.StatusServiceUnavailable, "no free application port is available on this server")
 		return
 	}
-	if err := h.apply(r, s, app, valid.appDir, valid.argv); err != nil {
-		// The row exists but the host does not match it. Remove both rather
-		// than leaving a port allocated to an application that never ran.
-		Teardown(app.ID)
-		if _, delErr := h.DB.ExecContext(r.Context(), `DELETE FROM apps WHERE id=?`, app.ID); delErr != nil {
-			httpx.LogR(r, "apps: roll back application %d: %v", app.ID, delErr)
-		}
-		httpx.LogR(r, "apps: apply application %d: %v", app.ID, err)
-		httpx.WriteError(w, http.StatusInternalServerError, "the application could not be started")
+	if isDuplicateKey(err) {
+		httpx.WriteError(w, http.StatusConflict, "another application already answers on that path")
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, h.view(app, s))
+	httpx.LogR(r, "apps: create on domain %d: %v", domainID, err)
+	httpx.WriteError(w, http.StatusInternalServerError, "the application could not be created")
+}
+
+// rollBack removes an application the host did not take. The row exists but the
+// host does not match it, so both go rather than leaving a port allocated to an
+// application that never ran.
+func (h *Handlers) rollBack(r *http.Request, appID int64) {
+	Teardown(appID)
+	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM apps WHERE id=?`, appID); err != nil {
+		httpx.LogR(r, "apps: roll back application %d: %v", appID, err)
+	}
 }
 
 // Update rewrites an application and restarts it under the new settings.
@@ -450,6 +468,33 @@ func (h *Handlers) EnvRead(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// acceptableEnv refuses everything that must not reach an EnvironmentFile. It
+// answers the request itself on a refusal and reports false.
+func acceptableEnv(w http.ResponseWriter, env map[string]string) bool {
+	if len(env) > 200 {
+		httpx.WriteError(w, http.StatusBadRequest, "too many environment variables")
+		return false
+	}
+	for name, value := range env {
+		if !ValidEnvName(name) {
+			httpx.WriteError(w, http.StatusBadRequest,
+				fmt.Sprintf("%q is not a valid environment variable name", name))
+			return false
+		}
+		if ReservedEnvNames[name] {
+			httpx.WriteError(w, http.StatusBadRequest,
+				fmt.Sprintf("%s is set by the panel and cannot be overridden", name))
+			return false
+		}
+		if !ValidEnvValue(value) {
+			httpx.WriteError(w, http.StatusBadRequest,
+				fmt.Sprintf("the value of %s holds a line break or is too long", name))
+			return false
+		}
+	}
+	return true
+}
+
 // EnvWrite replaces the application's environment and restarts it.
 // PUT /domains/{id}/apps/{aid}/env
 func (h *Handlers) EnvWrite(w http.ResponseWriter, r *http.Request) {
@@ -470,26 +515,8 @@ func (h *Handlers) EnvWrite(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if len(req.Env) > 200 {
-		httpx.WriteError(w, http.StatusBadRequest, "too many environment variables")
+	if !acceptableEnv(w, req.Env) {
 		return
-	}
-	for name, value := range req.Env {
-		if !ValidEnvName(name) {
-			httpx.WriteError(w, http.StatusBadRequest,
-				fmt.Sprintf("%q is not a valid environment variable name", name))
-			return
-		}
-		if ReservedEnvNames[name] {
-			httpx.WriteError(w, http.StatusBadRequest,
-				fmt.Sprintf("%s is set by the panel and cannot be overridden", name))
-			return
-		}
-		if !ValidEnvValue(value) {
-			httpx.WriteError(w, http.StatusBadRequest,
-				fmt.Sprintf("the value of %s holds a line break or is too long", name))
-			return
-		}
 	}
 	if err := ReplaceEnv(r.Context(), h.DB, app.ID, req.Env); err != nil {
 		httpx.LogR(r, "apps: write environment of application %d: %v", app.ID, err)

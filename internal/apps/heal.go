@@ -42,25 +42,39 @@ func HealOnStartup(db *sql.DB) {
 
 // healOne repairs one application's presence on the host.
 func healOne(ctx context.Context, db *sql.DB, app App) {
+	want, ok := wantedUnit(ctx, db, app)
+	if !ok {
+		return
+	}
+	if !healUnit(ctx, db, app, want) {
+		return
+	}
+	healRunState(app)
+}
+
+// wantedUnit renders the unit this row describes, or reports why it cannot.
+// Every refusal leaves the host untouched, because writing a unit from a row it
+// could not fully read is worse than logging and moving on.
+func wantedUnit(ctx context.Context, db *sql.DB, app App) (string, bool) {
 	var systemUser string
 	if err := db.QueryRowContext(ctx,
 		`SELECT system_user FROM domains WHERE id=?`, app.DomainID).Scan(&systemUser); err != nil {
 		log.Printf("apps: heal application %d: read its domain: %v", app.ID, err)
-		return
+		return "", false
 	}
 	if !ValidSystemUser(systemUser) {
 		log.Printf("apps: heal application %d: %q is not a tenant login", app.ID, systemUser)
-		return
+		return "", false
 	}
 	appDir, err := SafeAppDir(systemUser, app.AppRoot)
 	if err != nil {
 		log.Printf("apps: heal application %d: %v", app.ID, err)
-		return
+		return "", false
 	}
 	argv, err := ParseStartCommand(app.Start)
 	if err != nil {
 		log.Printf("apps: heal application %d: %v", app.ID, err)
-		return
+		return "", false
 	}
 	execStart, err := ResolveExec(app.Runtime, app.Version, appDir, argv)
 	if err != nil {
@@ -68,33 +82,44 @@ func healOne(ctx context.Context, db *sql.DB, app App) {
 		// so is the whole repair: rewriting the unit against a different one
 		// would run the application on a runtime nobody chose.
 		log.Printf("apps: application %d cannot start: %v", app.ID, err)
-		return
+		return "", false
 	}
+	return RenderUnit(app, systemUser, appDir, execStart), true
+}
 
-	want := RenderUnit(app, systemUser, appDir, execStart)
+// healUnit rewrites the unit and the files beside it when the installed one
+// does not match. A step that fails stops the rest, because a unit pointing at
+// an environment file that was not written would start the application without
+// its credentials.
+func healUnit(ctx context.Context, db *sql.DB, app App, want string) bool {
 	// #nosec G304 -- a fixed path this package owns, named after a row id.
 	have, readErr := os.ReadFile(UnitPath(app.ID))
-	if readErr != nil || string(have) != want {
-		values, err := ReadEnv(ctx, db, app.ID)
-		if err != nil {
-			log.Printf("apps: heal application %d: %v", app.ID, err)
-			return
-		}
-		if err := WriteEnvFile(app, values); err != nil {
-			log.Printf("apps: heal application %d: %v", app.ID, err)
-			return
-		}
-		if err := EnsureLogFile(app.ID); err != nil {
-			log.Printf("apps: heal application %d: %v", app.ID, err)
-			return
-		}
-		if err := InstallUnit(app.ID, want); err != nil {
-			log.Printf("apps: heal application %d: %v", app.ID, err)
-			return
-		}
-		log.Printf("apps: rewrote the unit of application %d", app.ID)
+	if readErr == nil && string(have) == want {
+		return true
 	}
+	values, err := ReadEnv(ctx, db, app.ID)
+	if err != nil {
+		log.Printf("apps: heal application %d: %v", app.ID, err)
+		return false
+	}
+	if err := WriteEnvFile(app, values); err != nil {
+		log.Printf("apps: heal application %d: %v", app.ID, err)
+		return false
+	}
+	if err := EnsureLogFile(app.ID); err != nil {
+		log.Printf("apps: heal application %d: %v", app.ID, err)
+		return false
+	}
+	if err := InstallUnit(app.ID, want); err != nil {
+		log.Printf("apps: heal application %d: %v", app.ID, err)
+		return false
+	}
+	log.Printf("apps: rewrote the unit of application %d", app.ID)
+	return true
+}
 
+// healRunState moves systemd to the state the row records.
+func healRunState(app App) {
 	status := UnitStatus(app.ID)
 	switch {
 	case app.Enabled && status.ActiveState != "active" && status.ActiveState != "activating":

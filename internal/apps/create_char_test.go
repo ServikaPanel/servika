@@ -290,6 +290,35 @@ func TestARollbackThatCannotRemoveTheRowStillFails(t *testing.T) {
 		http.StatusInternalServerError, "the application could not be started")
 }
 
+// The three answers a failed insert maps to. The duplicate-key answer cannot be
+// produced through AllocatePort, which retries a duplicate on the next port, so
+// the mapping is measured directly.
+func TestAFailedInsertIsReportedByItsCause(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		err     error
+		status  int
+		message string
+	}{
+		{"the range is exhausted", ErrNoFreePort, http.StatusServiceUnavailable, "no free application port"},
+		{
+			"the mount is taken",
+			errorString("Error 1062 (23000): Duplicate entry"),
+			http.StatusConflict, "already answers on that path",
+		},
+		{"anything else", errors.New("connection lost"), http.StatusInternalServerError, "could not be created"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodPost, "/domains/7/apps", nil)
+
+			(&Handlers{}).createRefused(recorder, r, 7, tc.err)
+
+			assertStatus(t, recorder, tc.status, tc.message)
+		})
+	}
+}
+
 // A host that does not take the application leaves no row and no port behind:
 // a half-applied create is worse than a failed one.
 func TestACreateThatCannotStartRollsTheRowBack(t *testing.T) {
