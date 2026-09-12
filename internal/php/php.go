@@ -486,7 +486,7 @@ func ApplyToFilesystem(systemUser, version string, s Settings) (socket string, e
 			// #nosec G703 -- same path as the stat above: fixed PoolDir plus the provisioned tenant account.
 			_ = os.Remove(old)
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-			_, _ = exec.Command("systemctl", "reload-or-restart", other.Service).CombinedOutput()
+			_, _ = runCommand("systemctl", "reload-or-restart", other.Service)
 		}
 	}
 
@@ -521,15 +521,15 @@ func ApplyToFilesystem(systemUser, version string, s Settings) (socket string, e
 		// #nosec G703 -- the same path as the write above.
 		_ = os.Remove(poolPath)
 	}
-	if fpm := provisioner.FPMBinaryFor(version); fpm != "" {
+	if fpm := fpmBinaryFor(version); fpm != "" {
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); the version is looked up in a fixed map.
-		if out, err := exec.Command(fpm, "-t").CombinedOutput(); err != nil {
+		if out, err := runCommand(fpm, "-t"); err != nil {
 			restorePool()
 			return "", fmt.Errorf("php-fpm -t (%s) failed, pool restored: %s: %w", version, strings.TrimSpace(string(out)), err)
 		}
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if out, err := exec.Command("systemctl", "reload-or-restart", sb.Service).CombinedOutput(); err != nil {
+	if out, err := runCommand("systemctl", "reload-or-restart", sb.Service); err != nil {
 		restorePool()
 		return "", fmt.Errorf("php-fpm reload (%s), pool restored: %s: %w", sb.Service, strings.TrimSpace(string(out)), err)
 	}
@@ -719,24 +719,24 @@ func (h *Handlers) PutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var socket string
-	provisioner.WriteDebugShim(h.DB, systemUser, id)
-	if provisioner.TenantFPMActive(systemUser) {
+	writeDebugShim(h.DB, systemUser, id)
+	if tenantFPMActive(systemUser) {
 		// The GUARDED variant: this is a person saving one domain's settings, so
 		// a master that starts and then dies is worth watching for and putting
 		// back. The watching is asynchronous and adds nothing to this response.
 		// The startup and drift paths keep calling the plain EnableTenantFPM.
-		socket, err = provisioner.EnableTenantFPMGuarded(h.DB, id, systemUser, version)
+		socket, err = enableTenantFPMGuarded(h.DB, id, systemUser, version)
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply tenant PHP-FPM configuration")
 			return
 		}
 	} else {
-		socket, err = ApplyToFilesystem(systemUser, version, req.Settings)
+		socket, err = applyPool(systemUser, version, req.Settings)
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply PHP pool configuration")
 			return
 		}
-		if err := provisioner.ApplyVhostForDomain(h.DB, id, socket, version); err != nil {
+		if err := applyVhostForDomain(h.DB, id, socket, version); err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to apply nginx virtual host")
 			return
 		}
@@ -898,7 +898,7 @@ func debugLogHome(systemUser string) (home, rel string, err error) {
 	if !debugSystemUserPattern.MatchString(systemUser) {
 		return "", "", fmt.Errorf("invalid system user")
 	}
-	return "/home/" + systemUser, ".servika/php_debug.log", nil
+	return tenantHomeRoot + "/" + systemUser, ".servika/php_debug.log", nil
 }
 
 // versionModules lists modules loaded by PHP-FPM for a version.

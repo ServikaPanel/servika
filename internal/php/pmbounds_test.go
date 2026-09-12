@@ -118,10 +118,13 @@ func TestTheSharedPoolWriteValidatesAndRollsBack(t *testing.T) {
 	}
 	source := string(body)
 
-	if !strings.Contains(source, `provisioner.FPMBinaryFor(version)`) {
+	// Both calls go through the package seams (seams.go), whose defaults are
+	// provisioner.FPMBinaryFor and exec.Command. The behaviour itself is pinned by
+	// TestAPoolIsWrittenTestedAndTheMasterReloaded and TestARefusedPoolIsPutBack.
+	if !strings.Contains(source, `fpmBinaryFor(version)`) {
 		t.Error("ApplyToFilesystem does not run php-fpm -t against the version's binary")
 	}
-	if !strings.Contains(source, `exec.Command(fpm, "-t")`) {
+	if !strings.Contains(source, `runCommand(fpm, "-t")`) {
 		t.Error("the pool is written without a php-fpm -t gate")
 	}
 	// Two failure paths put the previous bytes back: the php-fpm -t refusal and
