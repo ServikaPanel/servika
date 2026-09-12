@@ -156,6 +156,57 @@ export default function DomainLogsPage() {
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
+      <LogsHeader domain={domain} backHref={backHref} />
+
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
+
+      {/* Tabs */}
+      <div className="flex items-center flex-wrap gap-y-2 border-b border-slate-200 dark:border-slate-700 mb-3">
+        <FileTabs files={files} activeFile={activeFile} onSelect={setActive} />
+
+        <LogControls
+          view={view}
+          onView={setView}
+          autoScroll={autoScroll}
+          onAutoScroll={setAutoScroll}
+          live={live}
+          onToggleLive={() => {
+            if (live) { setLive(false); return }
+            setLines([]) // The live tail sends its own initial 200 lines.
+            setLive(true)
+          }}
+          onReload={initialLoad}
+          onClear={() => setLines([])}
+        />
+      </div>
+
+      <SearchBar search={search} onSearch={setSearch} visible={visibleLines.length} total={lines.length} />
+
+      {/* Log content */}
+      <div
+        ref={scrollRef}
+        className="bg-slate-900 border border-slate-800 rounded-2xl overflow-auto"
+        style={{ height: 540 }}
+      >
+        <LogContent
+          lines={lines}
+          visibleLines={visibleLines}
+          live={live}
+          view={view}
+          errorTab={errorTab}
+          search={search}
+        />
+      </div>
+
+      <LogFooter search={search} visible={visibleLines.length} total={lines.length} live={live} />
+    </div>
+  )
+}
+
+function LogsHeader({ domain, backHref }: { domain: Domain | null; backHref: string }) {
+  const { t } = useTranslation('DomainLogsPage')
+  return (
+    <>
       <Breadcrumb items={[
         { label: t('breadcrumb.home'), href: '/' },
         { label: t('breadcrumb.domains'), href: '/domains' },
@@ -171,131 +222,160 @@ export default function DomainLogsPage() {
           <span className="font-mono">/var/log/nginx/{domain.domain_name}.*.log</span>
         </p>
       )}
+    </>
+  )
+}
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
-
-      {/* Tabs */}
-      <div className="flex items-center flex-wrap gap-y-2 border-b border-slate-200 dark:border-slate-700 mb-3">
-        {files.map(d => (
-          <button
-            key={d.key}
-            onClick={() => setActive(d.key)}
-            className={`px-4 py-2.5 text-sm transition border-b-2 -mb-px ${
-              activeFile === d.key
-                ? 'border-brand-500 text-slate-900 dark:text-slate-100 font-semibold'
-                : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
-          >
-            {d.label}
-            {d.current && (
-              <span className="ml-2 text-[10px] font-mono text-slate-400 dark:text-slate-500">
-                {formatSize(d.size_b)}
-              </span>
-            )}
-          </button>
-        ))}
-
-        <div className="w-full flex flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
-          {/* View toggle */}
-          <div className="flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden text-xs">
-            <button
-              onClick={() => setView('table')}
-              className={`px-2.5 py-1.5 font-medium transition ${view === 'table' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-            >{t('view.table')}</button>
-            <button
-              onClick={() => setView('raw')}
-              className={`px-2.5 py-1.5 font-medium transition ${view === 'raw' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
-            >{t('view.raw')}</button>
-          </div>
-
-          <label className="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1.5 select-none cursor-pointer">
-            <input type="checkbox" checked={autoScroll} onChange={e => setAutoScroll(e.target.checked)} className="rounded" />
-            {t('autoScroll')}
-          </label>
-          <button
-            onClick={() => {
-              if (live) { setLive(false); return }
-              setLines([]) // The live tail sends its own initial 200 lines.
-              setLive(true)
-            }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
-              live
-                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700'
-            }`}
-          >
-            {live ? t('stop') : t('liveTail')}
-          </button>
-          <button
-            onClick={initialLoad}
-            disabled={live}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition disabled:opacity-50"
-          >
-            {t('last200')}
-          </button>
-          <button
-            onClick={() => setLines([])}
-            className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition"
-          >
-            {t('clear')}
-          </button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="flex flex-col gap-2 mb-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-          </svg>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t('searchPlaceholder')}
-            className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              aria-label={t('clearSearch')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none"
-            >×</button>
+function FileTabs({ files, activeFile, onSelect }: { files: LogFile[]; activeFile: string; onSelect: (key: string) => void }) {
+  return (
+    <>
+      {files.map(d => (
+        <button
+          key={d.key}
+          onClick={() => onSelect(d.key)}
+          className={`px-4 py-2.5 text-sm transition border-b-2 -mb-px ${
+            activeFile === d.key
+              ? 'border-brand-500 text-slate-900 dark:text-slate-100 font-semibold'
+              : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          {d.label}
+          {d.current && (
+            <span className="ml-2 text-[10px] font-mono text-slate-400 dark:text-slate-500">
+              {formatSize(d.size_b)}
+            </span>
           )}
-        </div>
-        {search && (
-          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-            {t('matches', { visible: visibleLines.length, total: lines.length })}
-          </span>
-        )}
+        </button>
+      ))}
+    </>
+  )
+}
+
+type LogControlsProps = {
+  view: 'table' | 'raw'
+  onView: (view: 'table' | 'raw') => void
+  autoScroll: boolean
+  onAutoScroll: (value: boolean) => void
+  live: boolean
+  onToggleLive: () => void
+  onReload: () => void
+  onClear: () => void
+}
+
+function LogControls(p: LogControlsProps) {
+  const { t } = useTranslation('DomainLogsPage')
+  return (
+    <div className="w-full flex flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center">
+      {/* View toggle */}
+      <div className="flex rounded-md border border-slate-200 dark:border-slate-700 overflow-hidden text-xs">
+        <button
+          onClick={() => p.onView('table')}
+          className={`px-2.5 py-1.5 font-medium transition ${p.view === 'table' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+        >{t('view.table')}</button>
+        <button
+          onClick={() => p.onView('raw')}
+          className={`px-2.5 py-1.5 font-medium transition ${p.view === 'raw' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+        >{t('view.raw')}</button>
       </div>
 
-      {/* Log content */}
-      <div
-        ref={scrollRef}
-        className="bg-slate-900 border border-slate-800 rounded-2xl overflow-auto"
-        style={{ height: 540 }}
+      <label className="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1.5 select-none cursor-pointer">
+        <input type="checkbox" checked={p.autoScroll} onChange={e => p.onAutoScroll(e.target.checked)} className="rounded" />
+        {t('autoScroll')}
+      </label>
+      <button
+        onClick={p.onToggleLive}
+        className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
+          p.live
+            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50'
+            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+        }`}
       >
-        {lines.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500 font-mono">{live ? t('waiting') : t('emptyFile')}</div>
-        ) : visibleLines.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500 font-mono">{t('noMatch', { search })}</div>
-        ) : view === 'raw' ? (
-          <div className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
-            {visibleLines.map((s, i) => (
-              <div key={i} className={selectColor(s)}>{s}</div>
-            ))}
-          </div>
-        ) : errorTab ? (
-          <ErrorTable lines={visibleLines} />
-        ) : (
-          <AccessTable lines={visibleLines} />
+        {p.live ? t('stop') : t('liveTail')}
+      </button>
+      <button
+        onClick={p.onReload}
+        disabled={p.live}
+        className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition disabled:opacity-50"
+      >
+        {t('last200')}
+      </button>
+      <button
+        onClick={p.onClear}
+        className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-md transition"
+      >
+        {t('clear')}
+      </button>
+    </div>
+  )
+}
+
+function SearchBar({ search, onSearch, visible, total }: { search: string; onSearch: (value: string) => void; visible: number; total: number }) {
+  const { t } = useTranslation('DomainLogsPage')
+  return (
+    <div className="flex flex-col gap-2 mb-2 sm:flex-row sm:items-center">
+      <div className="relative flex-1 max-w-md">
+        <svg className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+        </svg>
+        <input
+          value={search}
+          onChange={e => onSearch(e.target.value)}
+          placeholder={t('searchPlaceholder')}
+          className="w-full pl-8 pr-8 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
+        />
+        {search && (
+          <button
+            onClick={() => onSearch('')}
+            aria-label={t('clearSearch')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg leading-none"
+          >×</button>
         )}
       </div>
+      {search && (
+        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+          {t('matches', { visible, total })}
+        </span>
+      )}
+    </div>
+  )
+}
 
-      <div className="mt-2 text-xs text-slate-500 dark:text-slate-500 flex items-center justify-between">
-        <span>{search ? t('linesFiltered', { visible: visibleLines.length, total: lines.length }) : t('lines', { count: lines.length })}{t('windowSuffix', { max: MAX_WINDOW })}</span>
-        {live && <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>{t('liveStream')}</span>}
+type LogContentProps = {
+  lines: string[]
+  visibleLines: string[]
+  live: boolean
+  view: 'table' | 'raw'
+  errorTab: boolean
+  search: string
+}
+
+function LogContent({ lines, visibleLines, live, view, errorTab, search }: LogContentProps) {
+  const { t } = useTranslation('DomainLogsPage')
+  if (lines.length === 0) {
+    return <div className="p-6 text-sm text-slate-500 font-mono">{live ? t('waiting') : t('emptyFile')}</div>
+  }
+  if (visibleLines.length === 0) {
+    return <div className="p-6 text-sm text-slate-500 font-mono">{t('noMatch', { search })}</div>
+  }
+  if (view === 'raw') {
+    return (
+      <div className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
+        {visibleLines.map((s, i) => (
+          <div key={i} className={selectColor(s)}>{s}</div>
+        ))}
       </div>
+    )
+  }
+  if (errorTab) return <ErrorTable lines={visibleLines} />
+  return <AccessTable lines={visibleLines} />
+}
+
+function LogFooter({ search, visible, total, live }: { search: string; visible: number; total: number; live: boolean }) {
+  const { t } = useTranslation('DomainLogsPage')
+  return (
+    <div className="mt-2 text-xs text-slate-500 dark:text-slate-500 flex items-center justify-between">
+      <span>{search ? t('linesFiltered', { visible, total }) : t('lines', { count: total })}{t('windowSuffix', { max: MAX_WINDOW })}</span>
+      {live && <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>{t('liveStream')}</span>}
     </div>
   )
 }
@@ -471,23 +551,31 @@ function formatByteString(b: string): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+function userAgentOS(ua: string): string {
+  if (/Windows NT 10/.test(ua)) return 'Windows'
+  if (/Mac OS X/.test(ua)) return 'macOS'
+  if (/iPhone|iPad/.test(ua)) return 'iOS'
+  if (/Android/.test(ua)) return 'Android'
+  if (/Linux/.test(ua)) return 'Linux'
+  return ''
+}
+
+// Edge announces itself as Chrome and Chrome as Safari, so the order of these
+// tests is what makes the answer right.
+function userAgentBrowser(ua: string): string {
+  if (/Edg\//.test(ua)) return 'Edge'
+  if (/Chrome\//.test(ua)) return 'Chrome'
+  if (/Firefox\//.test(ua)) return 'Firefox'
+  if (/Safari\//.test(ua)) return 'Safari'
+  return ''
+}
+
 // Reduce the user agent to a short, readable summary.
 function shortUserAgent(ua: string): string {
   if (!ua || ua === '-') return '-'
   const bot = /(bot|crawl|spider|zgrab|curl|wget|python|go-http|scan|nikto|masscan)/i.exec(ua)
   if (bot) return `🤖 ${bot[1]}`
-  let os = ''
-  if (/Windows NT 10/.test(ua)) os = 'Windows'
-  else if (/Mac OS X/.test(ua)) os = 'macOS'
-  else if (/iPhone|iPad/.test(ua)) os = 'iOS'
-  else if (/Android/.test(ua)) os = 'Android'
-  else if (/Linux/.test(ua)) os = 'Linux'
-  let browser = ''
-  if (/Edg\//.test(ua)) browser = 'Edge'
-  else if (/Chrome\//.test(ua)) browser = 'Chrome'
-  else if (/Firefox\//.test(ua)) browser = 'Firefox'
-  else if (/Safari\//.test(ua)) browser = 'Safari'
-  const parts = [browser, os].filter(Boolean)
+  const parts = [userAgentBrowser(ua), userAgentOS(ua)].filter(Boolean)
   return parts.length ? parts.join(', ') : ua.slice(0, 40)
 }
 
