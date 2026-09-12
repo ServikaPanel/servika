@@ -18,7 +18,7 @@ fi
 
 # ── vulnerability gate ───────────────────────────────────────────────────
 # Fail the release before packaging if a known vulnerability is reachable from
-# our code. Combined with the `toolchain` directive in go.mod, this runs against
+# our code. Combined with the `go` directive in go.mod, this runs against
 # the pinned patched standard library. govulncheck is pinned for reproducibility
 # and invoked module-agnostically, so it does not modify go.mod/go.sum.
 GOVULNCHECK_VERSION="v1.6.0"

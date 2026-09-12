@@ -1,8 +1,6 @@
 module servika
 
-go 1.26.0
-
-toolchain go1.26.6
+go 1.26.6
 
 require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8

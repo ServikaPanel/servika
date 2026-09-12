@@ -340,7 +340,7 @@ This project is fully **open source** under the MIT license. You can build and d
 
 ### Requirements
 
-- **Go 1.25+** for the backend (`go.mod` pins `toolchain go1.26.6`, which the Go toolchain fetches automatically)
+- **Go 1.26.6+** for the backend (`go.mod` declares `go 1.26.6`; the default `GOTOOLCHAIN=auto` fetches it automatically, and an older local toolchain is refused rather than used)
 - **Node.js 24** and **npm** for the frontend (matches CI)
 - MariaDB/MySQL access for runtime execution; migrations and seed data are applied on startup
 
