@@ -69,10 +69,10 @@ func TestTheGitHubHookRegistersTheSigningKeyNotTheURLToken(t *testing.T) {
 	}
 	// A row carrying the backfilled pair has the two equal; this is where it is
 	// rotated apart.
-	if !strings.Contains(body, `if signingKey == "" || signingKey == secret {`) {
+	if !strings.Contains(body, `if signingKey == "" || signingKey == urlToken {`) {
 		t.Error("a repository still carrying the pre-separation pair is never rotated apart")
 	}
-	if !strings.Contains(body, "hookURL := strings.TrimRight(webhookBase, \"/\") + \"/api/v1/git-webhook/\" + secret") {
+	if !strings.Contains(body, "hookURL := strings.TrimRight(webhookBase, \"/\") + \"/api/v1/git-webhook/\" + urlToken") {
 		t.Error("the delivery URL no longer carries the path token; this test is out of date")
 	}
 }
