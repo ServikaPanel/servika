@@ -84,6 +84,7 @@ func sweepTable(ctx context.Context, db *sql.DB, table logTable, days int) {
 	// The table and column names are constants from the list above and never a
 	// caller's string, which is why they can be pasted into the statement: an
 	// identifier cannot be a placeholder.
+	// #nosec G202 -- table.name and table.column come from this package's own `tables` constant list, never from a caller; an identifier cannot be a placeholder.
 	statement := `DELETE FROM ` + table.name +
 		` WHERE ` + table.column + ` < UTC_TIMESTAMP() - INTERVAL ? DAY LIMIT ?`
 	var total int64

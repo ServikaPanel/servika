@@ -82,9 +82,11 @@ func ensureServerCertificate() error {
 // to offer TLS at all, and it refuses to start on a key it considers world
 // readable.
 func applyCertificatePermissions() error {
+	// #nosec G302 -- the public certificate is not a secret and MariaDB reads it as its own unprivileged user.
 	if err := os.Chmod(serverCertPath(), 0o644); err != nil {
 		return fmt.Errorf("remote db: certificate mode: %w", err)
 	}
+	// #nosec G302 -- MariaDB reads the key as its own unprivileged user, so 0600 leaves the server unable to offer TLS; the group is mysql and the mode denies other.
 	if err := os.Chmod(serverKeyPath(), 0o640); err != nil {
 		return fmt.Errorf("remote db: key mode: %w", err)
 	}

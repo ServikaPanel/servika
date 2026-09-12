@@ -232,6 +232,7 @@ func applyVhost(path, config string) error {
 }
 
 func fileExists(path string) bool {
+	// #nosec G703 -- every caller passes a path built from a fixed system directory plus a validated domain name, never a request string; tenant paths use safeio (openat2) instead.
 	_, err := os.Stat(path)
 	return err == nil
 }

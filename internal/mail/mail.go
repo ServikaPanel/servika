@@ -438,6 +438,7 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// The guard sits in the WHERE clause, not in a separate read, so the policy
 	// server cannot contain the mailbox between a check and the write.
 	operator := isMailOperator(r)
+	// #nosec G202 -- statusGuard returns one of two constant strings and never a caller's value; every value in the statement is bound as a placeholder.
 	res, err := h.DB.ExecContext(r.Context(),
 		`UPDATE mailboxes SET status=?,
 		   spam_suspended_at=IF(?='active',NULL,spam_suspended_at)

@@ -800,6 +800,7 @@ func resolveDirectory(root, directoryValue string) (string, error) {
 	if clean != root && !strings.HasPrefix(clean, root+"/") {
 		return "", fmt.Errorf("path is outside the domain directory")
 	}
+	// #nosec G703 -- clean is rejected above unless it equals root or sits under root+"/", and control characters are refused before the path is built.
 	if _, err := os.Stat(filepath.Join(clean, "wp-config.php")); err != nil {
 		return "", fmt.Errorf("WordPress was not found in this directory")
 	}

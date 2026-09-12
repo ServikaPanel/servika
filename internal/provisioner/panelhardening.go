@@ -19,6 +19,7 @@ var (
 
 // readProxySecret returns the persistent secret (>=32 chars), or "".
 func readProxySecret() string {
+	// #nosec G304 -- proxySecretPath is a fixed system path (httpx.ProxySecretPath); only a test redirects it, and no request value reaches it.
 	b, err := os.ReadFile(proxySecretPath)
 	if err != nil {
 		return ""

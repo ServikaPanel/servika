@@ -10,8 +10,10 @@ import (
 
 // serverTokensFile is the drop-in this heal owns. The 00 prefix keeps it beside
 // the other http-context files the panel writes.
+// #nosec G101 -- a file name, not a credential; "tokens" here names nginx's server_tokens directive.
 const serverTokensFile = "00-servika-hardening.conf"
 
+// #nosec G101 -- an nginx configuration body, not a credential; "tokens" here names nginx's server_tokens directive.
 const serverTokensBody = `# Servika nginx hardening, generated automatically.
 # nginx defaults server_tokens to on, so every response from the panel and from
 # every hosted site carries its exact version, and every nginx error page prints

@@ -16,6 +16,7 @@ var (
 
 	// runCommand runs a host command and returns its combined output.
 	runCommand = func(name string, args ...string) ([]byte, error) {
+		// #nosec G204 -- every caller passes a constant program name and an argument LIST, never a shell string; no request value reaches name.
 		return exec.Command(name, args...).CombinedOutput()
 	}
 

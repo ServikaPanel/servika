@@ -512,6 +512,7 @@ func compileSieve(ctx context.Context, home, rel string, script []byte, systemUs
 	if err := publishSieveFile(home, rel, ".dovecot.sieve", script, systemUser); err != nil {
 		return err
 	}
+	// #nosec G304 -- staged is a root-owned path this function built with os.MkdirTemp; no tenant or request value reaches it.
 	compiled, err := os.ReadFile(staged + ".svbin")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

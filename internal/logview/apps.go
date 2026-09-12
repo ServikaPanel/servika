@@ -53,6 +53,7 @@ func (h *Handlers) AppList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #nosec G701 -- buildAppQuery pastes only constant column and table names into the text; filter.eq/oneOf/numeric/since bind every query-string value as a placeholder.
 	rows, err := h.DB.QueryContext(r.Context(), statement, arg...)
 	if err != nil {
 		httpx.LogR(r, "app log list: %v", err)

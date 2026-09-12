@@ -118,6 +118,7 @@ func deliveryLogLimit(raw string) (int, string) {
 
 // readDeliveryEntries runs the query and reads every row it answers.
 func (h *Handlers) readDeliveryEntries(ctx context.Context, query string, args []any, limit int) ([]DeliveryEntry, error) {
+	// #nosec G701 -- deliveryLogQuery pastes only constant clauses into the text; every filter value, including the LIKE pattern, is bound as a placeholder.
 	rows, err := h.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
