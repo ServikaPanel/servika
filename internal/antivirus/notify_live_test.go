@@ -21,9 +21,8 @@ func TestThreeHundredFindingsAcrossThreeSitesWriteFourAlerts(t *testing.T) {
 	}
 	perDomain := map[int64]int{domains[0]: 150, domains[1]: 100, domains[2]: 50}
 
-	before := countNotifications(t, db)
 	notifySweep(ctx, db, 987654, perDomain, 0)
-	written := countNotifications(t, db) - before
+	written := countSweepAlerts(t, db, 987654)
 
 	if written != 4 {
 		t.Errorf("a 300-finding sweep across 3 sites wrote %d alerts, expected 4 (one per site plus one summary)", written)
@@ -64,10 +63,9 @@ func TestThreeHundredFindingsAcrossThreeSitesWriteFourAlerts(t *testing.T) {
 // every morning.
 func TestACleanSweepWritesNothingAtAll(t *testing.T) {
 	db := liveDB(t)
-	before := countNotifications(t, db)
 	notifySweep(context.Background(), db, 987655, map[int64]int{}, 0)
-	if after := countNotifications(t, db); after != before {
-		t.Errorf("a sweep that found nothing wrote %d alert(s)", after-before)
+	if wrote := countSweepAlerts(t, db, 987655); wrote != 0 {
+		t.Errorf("a sweep that found nothing wrote %d alert(s)", wrote)
 	}
 }
 
@@ -87,10 +85,20 @@ func makeDomain(t *testing.T, db *sql.DB, index int) int64 {
 	return id
 }
 
-func countNotifications(t *testing.T, db *sql.DB) int {
+// countSweepAlerts counts the rows ONE sweep wrote, by the scan it names.
+//
+// It used to be a COUNT(*) over the whole table, read before and after the
+// call, and the difference was the answer. Every live test in this repository
+// shares one database, and `go test ./...` runs packages in parallel, so a row
+// another package inserted or deleted inside that window changed the number:
+// measured, a single unrelated INSERT makes this test report 5 alerts instead
+// of 4. Counting by ref_id measures this sweep alone and no timing can reach
+// it.
+func countSweepAlerts(t *testing.T, db *sql.DB, scanID int64) int {
 	t.Helper()
 	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM notifications`).Scan(&n); err != nil {
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM notifications WHERE ref_type='av_scan' AND ref_id=?`, scanID).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	return n
