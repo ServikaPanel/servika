@@ -528,46 +528,65 @@ type opReq struct {
 	Resource string `json:"resource"`
 }
 
+// supported returns the declared metadata for a version and source pair.
+func supported(version, resource string) (VersionMetadata, bool) {
+	for _, d := range SupportedVersions {
+		if d.Version == version && d.Resource == resource {
+			return d, true
+		}
+	}
+	return VersionMetadata{}, false
+}
+
+// installable answers the request itself when an installation cannot start, and
+// reports whether the caller may go on.
+//
+// Graceful pre-check — LIVE AUTHORITATIVE dnf (NOT cache). Goal: PREVENT false negatives.
+// Only emit "EOL/unavailable" when dnf DEFINITELY returned "No match" (checked && !available).
+// If dnf could not be asked (lock/busy) NEVER say "unavailable" — return a distinct "could not
+// verify" message instead, so the user is not misled. A transient dnf lock no longer produces
+// a bogus 409.
+func installable(w http.ResponseWriter, m VersionMetadata, version string) bool {
+	available, checked := availabilityVerify(m)
+	if checked && !available {
+		httpx.WriteError(w, http.StatusConflict,
+			fmt.Sprintf("PHP %s is unavailable from the configured repositories (likely EOL). Select an installable version.", version))
+		return false
+	}
+	if !checked {
+		httpx.WriteError(w, http.StatusConflict,
+			fmt.Sprintf("could not verify PHP %s availability right now (dnf may be busy or locked — another install may be in progress). Please try again in a few minutes.", version))
+		return false
+	}
+	return !operationInFlight(w)
+}
+
+// operationInFlight answers the request when dnf is already busy with one of
+// this package's operations.
+//
+// dnf holds the rpm lock for the whole transaction, so a second operation
+// started now would wait on it and its output would interleave in one log.
+func operationInFlight(w http.ResponseWriter) bool {
+	if !phpOpRunning() {
+		return false
+	}
+	httpx.WriteError(w, http.StatusConflict,
+		"a PHP version operation is already running — try again when it finishes")
+	return true
+}
+
 func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	var req opReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	var m VersionMetadata
-	for _, d := range SupportedVersions {
-		if d.Version == req.Version && d.Resource == req.Resource {
-			m = d
-			break
-		}
-	}
-	if m.Version == "" {
+	m, ok := supported(req.Version, req.Resource)
+	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "unsupported version")
 		return
 	}
-
-	// Graceful pre-check — LIVE AUTHORITATIVE dnf (NOT cache). Goal: PREVENT false negatives.
-	// Only emit "EOL/unavailable" when dnf DEFINITELY returned "No match" (checked && !available).
-	// If dnf could not be asked (lock/busy) NEVER say "unavailable" — return a distinct "could not
-	// verify" message instead, so the user is not misled. A transient dnf lock no longer produces
-	// a bogus 409.
-	available, checked := availabilityVerify(m)
-	if checked && !available {
-		httpx.WriteError(w, http.StatusConflict,
-			fmt.Sprintf("PHP %s is unavailable from the configured repositories (likely EOL). Select an installable version.", req.Version))
-		return
-	}
-	if !checked {
-		httpx.WriteError(w, http.StatusConflict,
-			fmt.Sprintf("could not verify PHP %s availability right now (dnf may be busy or locked — another install may be in progress). Please try again in a few minutes.", req.Version))
-		return
-	}
-
-	// dnf holds the rpm lock for the whole transaction, so a second operation
-	// started now would wait on it and its output would interleave in one log.
-	if phpOpRunning() {
-		httpx.WriteError(w, http.StatusConflict,
-			"a PHP version operation is already running — try again when it finishes")
+	if !installable(w, m, req.Version) {
 		return
 	}
 
@@ -590,6 +609,27 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// removable answers the request itself when a removal cannot start, and
+// reports whether the caller may go on.
+//
+// The usage count is FAIL-CLOSED: a count error must not bypass this guard and
+// let dnf remove a PHP still serving live tenants.
+func (h *Handlers) removable(w http.ResponseWriter, r *http.Request, version string) bool {
+	var count int
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM domains WHERE php_version=?`, version).Scan(&count); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify version usage")
+		return false
+	}
+	if count > 0 {
+		httpx.WriteError(w, http.StatusConflict,
+			fmt.Sprintf("%d domains use this version; migrate them to another version first", count))
+		return false
+	}
+	// Stop PHP-FPM.
+	return !operationInFlight(w)
+}
+
 func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 	var req opReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -601,36 +641,12 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 			"AppStream PHP is the system default and cannot be removed")
 		return
 	}
-	var m VersionMetadata
-	for _, d := range SupportedVersions {
-		if d.Version == req.Version && d.Resource == req.Resource {
-			m = d
-			break
-		}
-	}
-	if m.Version == "" || m.Resource != "remi" {
+	m, ok := supported(req.Version, req.Resource)
+	if !ok || m.Resource != "remi" {
 		httpx.WriteError(w, http.StatusBadRequest, "unsupported version")
 		return
 	}
-
-	// Check whether any domain uses this version. FAIL-CLOSED: a count error must
-	// not bypass this guard and let dnf remove a PHP still serving live tenants.
-	var count int
-	if err := h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM domains WHERE php_version=?`, req.Version).Scan(&count); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not verify version usage")
-		return
-	}
-	if count > 0 {
-		httpx.WriteError(w, http.StatusConflict,
-			fmt.Sprintf("%d domains use this version; migrate them to another version first", count))
-		return
-	}
-
-	// Stop PHP-FPM.
-	if phpOpRunning() {
-		httpx.WriteError(w, http.StatusConflict,
-			"a PHP version operation is already running — try again when it finishes")
+	if !h.removable(w, r, req.Version) {
 		return
 	}
 
