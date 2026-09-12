@@ -96,6 +96,27 @@ var rateLimitAddrRules = []struct{ pattern, value string }{
 	{`^(?<ph>[0-9a-f]+(?::[0-9a-f]+){0,2})::`, "$ph::/64"},
 }
 
+// rateLimitAddrMap renders the ladder as an nginx map into the named variable.
+//
+// The panel's own login zone needs the same collapse and cannot use
+// $servika_rl_addr: the shared file is written by a domain render, so a panel
+// with no domain yet has none, and referencing an undefined variable makes
+// nginx refuse the whole configuration. It declares its own variable from this
+// one renderer instead, so the two ladders cannot drift.
+//
+// Every pattern is QUOTED. nginx reads an unquoted `{` as a block opener, so a
+// repetition count in a regex ends the directive early and the whole
+// configuration is refused with "unexpected {".
+func rateLimitAddrMap(variable string) string {
+	var body strings.Builder
+	fmt.Fprintf(&body, "map $remote_addr %s {\n", variable)
+	for _, rule := range rateLimitAddrRules {
+		fmt.Fprintf(&body, "    \"~*%s\"  \"%s\";\n", rule.pattern, rule.value)
+	}
+	body.WriteString("    default  \"$remote_addr\";\n}")
+	return body.String()
+}
+
 // buildSharedConf renders the http-context file.
 //
 // It is a pure function of what the callers ask for so the whole shape can be
@@ -134,14 +155,8 @@ func buildSharedConf(countries []string, ranges geoip.Ranges, rates []int) strin
 	body.WriteString("    ~^/\\.well-known/  \"_exempt\";\n")
 	body.WriteString("    default           $servika_geo_country;\n}\n\n")
 
-	// Every pattern is QUOTED. nginx reads an unquoted `{` as a block opener, so
-	// a repetition count in a regex ends the directive early and the whole
-	// configuration is refused with "unexpected {".
-	body.WriteString("map $remote_addr $servika_rl_addr {\n")
-	for _, rule := range rateLimitAddrRules {
-		fmt.Fprintf(&body, "    \"~*%s\"  \"%s\";\n", rule.pattern, rule.value)
-	}
-	body.WriteString("    default  \"$remote_addr\";\n}\n\n")
+	body.WriteString(rateLimitAddrMap("$servika_rl_addr"))
+	body.WriteString("\n\n")
 
 	// Keyed on $uri, never $request_uri. $request_uri is the full original request
 	// line INCLUDING the query string, and the extension test is anchored at the

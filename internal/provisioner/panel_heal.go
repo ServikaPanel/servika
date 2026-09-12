@@ -68,16 +68,39 @@ func replaceIndentedBlock(content, openLine, replacement string) (string, int) {
 	return strings.Join(out, "\n"), replaced
 }
 
+// panelRateLimitVar is the variable the panel's login zone counts.
+//
+// It is the panel's OWN copy of the collapse the tenant vhosts use, and not
+// $servika_rl_addr: that variable lives in the shared file a domain render
+// writes, so a panel with no domain yet would name a variable nginx does not
+// know and the whole configuration would be refused.
+const panelRateLimitVar = "$servika_panel_rl_addr"
+
 // panelLoginZoneLine is the http-context half of the rate limit. It is a line
 // rather than a block, so it is replaced by line and not through
 // replaceIndentedBlock.
-const panelLoginZoneLine = "limit_req_zone $binary_remote_addr zone=servika_login:10m rate=20r/m;"
+//
+// It counts the /64 for an IPv6 client, not the full address. $binary_remote_addr
+// gave every address inside a client's own network its own counter, and the
+// ceiling was never reached by a client that varied its source address, so the
+// nginx layer in front of the two login endpoints did not apply to half the
+// internet.
+const panelLoginZoneLine = "limit_req_zone " + panelRateLimitVar +
+	" zone=servika_login:10m rate=20r/m;"
 
-const panelLoginRateLimitHTTPBlock = panelLoginRateLimitSentinel + `
+// panelRateLimitMapOpen is the map's opening line, which is what the heal
+// matches an installed copy by.
+const panelRateLimitMapOpen = "map $remote_addr " + panelRateLimitVar + " {"
+
+// panelRateLimitMap renders the collapse from the one ladder in geo.go.
+func panelRateLimitMap() string { return rateLimitAddrMap(panelRateLimitVar) }
+
+func panelLoginRateLimitHTTPBlock() string {
+	return panelLoginRateLimitSentinel + `
 # Login endpoint defense at the nginx layer. The application also enforces
 # a per-IP failed-login lockout in middleware.LoginRateLimit.
-` + panelLoginZoneLine + `
-`
+` + panelRateLimitMap() + "\n" + panelLoginZoneLine + "\n"
+}
 
 // panelLoginPaths are the endpoints served under the shared rate limit. Both
 // take a password, so both are worth the same protection.
@@ -124,7 +147,7 @@ func PanelLoginLocations() string {
 // installation that already carries the sentinel.
 func ensureLoginRateLimitZone(content string) string {
 	if !strings.Contains(content, panelLoginRateLimitSentinel) {
-		return panelLoginRateLimitHTTPBlock + "\n" + content
+		return panelLoginRateLimitHTTPBlock() + "\n" + content
 	}
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
@@ -133,7 +156,25 @@ func ensureLoginRateLimitZone(content string) string {
 			lines[i] = panelLoginZoneLine
 		}
 	}
-	return strings.Join(lines, "\n")
+	return ensurePanelRateLimitMap(strings.Join(lines, "\n"))
+}
+
+// ensurePanelRateLimitMap brings the collapse map up to date, adding it above
+// the zone line on an installation that predates it.
+//
+// An installed vhost carries the sentinel already, so the block above never
+// runs again for it, and the zone line alone would then name a variable nginx
+// does not know. The map is REPLACED rather than skipped when it is there, so a
+// change to the ladder reaches an installation that already has one.
+func ensurePanelRateLimitMap(content string) string {
+	if updated, replaced := replaceIndentedBlock(content, panelRateLimitMapOpen, panelRateLimitMap()); replaced > 0 {
+		return updated
+	}
+	at := strings.Index(content, panelLoginZoneLine)
+	if at < 0 {
+		return content
+	}
+	return content[:at] + panelRateLimitMap() + "\n" + content[at:]
 }
 
 // applyLoginRateLimit returns the vhost with the current rate limit in place,

@@ -27,7 +27,7 @@ func TestTheShippedTemplateAlreadyCarriesTheLoginRateLimit(t *testing.T) {
 // installation that already carries the sentinel. Under the old heal the
 // sentinel ended the function and the rate stayed whatever it was.
 func TestAChangedRateReachesAnInstallationThatAlreadyHasTheSentinel(t *testing.T) {
-	stale := strings.Replace(panelLoginRateLimitHTTPBlock, panelLoginZoneLine,
+	stale := strings.Replace(panelLoginRateLimitHTTPBlock(), panelLoginZoneLine,
 		"limit_req_zone $binary_remote_addr zone=servika_login:10m rate=999r/m;", 1) +
 		"\nserver {\n" + panelLoginLocation(panelLoginPaths[0]) + "\n" +
 		panelLoginLocation(panelLoginPaths[1]) + "\n    location /api/ {\n        proxy_pass http://127.0.0.1:8080;\n    }\n}\n"
@@ -81,10 +81,71 @@ func TestAnInstallationWithoutTheRateLimitGetsItOnce(t *testing.T) {
 	}
 }
 
+// The panel's login zone counts what every other rate limit in this repository
+// counts: the full address for IPv4 and the /64 for IPv6. With
+// $binary_remote_addr every address inside an IPv6 client's own network had its
+// own counter, so the nginx layer in front of the two login endpoints did not
+// apply to an IPv6 client at all.
+func TestThePanelLoginZoneCountsTheSameUnitAsEveryOtherRateLimit(t *testing.T) {
+	body, err := os.ReadFile("../../assets/nginx/_panel.conf")
+	if err != nil {
+		t.Fatalf("read the panel vhost: %v", err)
+	}
+	template := string(body)
+
+	if strings.Contains(template, "limit_req_zone $binary_remote_addr") {
+		t.Error("the panel login zone still counts the whole IPv6 address")
+	}
+	if !strings.Contains(template, panelLoginZoneLine) {
+		t.Errorf("the template does not declare %q", panelLoginZoneLine)
+	}
+	// The template's map and the heal's are the same text, or a host repaired at
+	// startup would collapse addresses differently from a fresh one.
+	if !strings.Contains(template, panelRateLimitMap()) {
+		t.Errorf("the template's collapse map differs from the heal's:\n%s", panelRateLimitMap())
+	}
+	// And both are the ladder the tenant vhosts already use.
+	if panelRateLimitMap() != rateLimitAddrMap(panelRateLimitVar) {
+		t.Error("the panel map is not rendered from the shared ladder")
+	}
+}
+
+// An installation that carries the sentinel never re-enters the add branch, so
+// the map has to reach it through its own repair. Without it the updated zone
+// line would name a variable nginx does not know and refuse the whole
+// configuration.
+func TestAnInstalledPanelGetsTheCollapseMapAddedAboveItsZone(t *testing.T) {
+	stale := panelLoginRateLimitSentinel + `
+limit_req_zone $binary_remote_addr zone=servika_login:10m rate=20r/m;
+
+server {
+` + panelLoginLocation(panelLoginPaths[0]) + "\n" +
+		panelLoginLocation(panelLoginPaths[1]) + "\n" +
+		"    location /api/ {\n        proxy_pass http://127.0.0.1:8080;\n    }\n}\n"
+
+	updated, ok := applyLoginRateLimit(stale)
+	if !ok {
+		t.Fatal("the fixture has no canonical API location")
+	}
+	if !strings.Contains(updated, panelRateLimitMap()) {
+		t.Errorf("the collapse map was not added:\n%s", updated)
+	}
+	if strings.Index(updated, panelRateLimitMapOpen) > strings.Index(updated, panelLoginZoneLine) {
+		t.Error("the map was written below the zone that reads it")
+	}
+	if got := strings.Count(updated, panelRateLimitMapOpen); got != 1 {
+		t.Errorf("the vhost declares %d maps; a second one is a duplicate nginx refuses", got)
+	}
+	// A second pass must change nothing, or every boot rewrites and reloads.
+	if again, _ := applyLoginRateLimit(updated); again != updated {
+		t.Error("a second run changed the vhost again")
+	}
+}
+
 // Only one of the two locations present is the state a half-finished edit
 // leaves. The missing one is added and the present one is not duplicated.
 func TestOnlyTheMissingLoginLocationIsAdded(t *testing.T) {
-	partial := panelLoginRateLimitHTTPBlock + "\nserver {\n" +
+	partial := panelLoginRateLimitHTTPBlock() + "\nserver {\n" +
 		panelLoginLocation(panelLoginPaths[0]) + "\n" +
 		"    location /api/ {\n        proxy_pass http://127.0.0.1:8080;\n    }\n}\n"
 
