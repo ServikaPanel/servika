@@ -34,13 +34,15 @@ type fwScript struct {
 	remoteHosts [][]driver.Value
 	// hostApps is how many server applications are installed, and openPorts the
 	// ports the operator opened.
-	hostApps   int64
-	openPorts  [][]driver.Value
-	queryErr   map[string]error
-	execErr    map[string]error
-	execs      []string
-	execArgs   [][]driver.Value
-	lastInsert int64
+	hostApps  int64
+	openPorts [][]driver.Value
+	// templateCount is what a template's duplicate check reads back.
+	templateCount int64
+	queryErr      map[string]error
+	execErr       map[string]error
+	execs         []string
+	execArgs      [][]driver.Value
+	lastInsert    int64
 }
 
 // ranStatement returns the arguments of the first executed statement carrying
@@ -94,6 +96,11 @@ func (c fwConn) QueryContext(_ context.Context, query string, _ []driver.NamedVa
 		return nil, err
 	}
 	switch {
+	// Before the rule listing below: a template's duplicate check reads a single
+	// count out of the same table, and answering it with rule rows would fail
+	// the scan rather than the check.
+	case strings.Contains(query, "SELECT COUNT(*) FROM firewall_rules"):
+		return &fwRows{columns: 1, rows: [][]driver.Value{{c.script.templateCount}}}, nil
 	case strings.Contains(query, "FROM firewall_rules"):
 		return &fwRows{columns: 4, rows: c.script.rules}, nil
 	case strings.Contains(query, "FROM firewall_geo_rules"):

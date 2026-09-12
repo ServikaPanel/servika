@@ -303,28 +303,54 @@ func (h *Handlers) Template(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "unknown template")
 		return
 	}
+	added, storeErr := h.storeTemplateRules(r.Context(), rules)
+	// The rules that WERE written are rebuilt either way: leaving them out of
+	// nftables would make the running set disagree with the stored one, and the
+	// next unrelated rebuild would apply them without anybody asking.
+	if err := h.rebuild(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "firewall rules could not be applied")
+		return
+	}
+	if storeErr != nil {
+		httpx.LogR(r, "firewall template %s: %v", req.Template, storeErr)
+		httpx.WriteError(w, http.StatusInternalServerError,
+			"the template was applied only in part; some rules could not be stored")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "added": added})
+}
+
+// storeTemplateRules writes the rules of a template that are not stored yet,
+// and stops at the first one it could not write.
+//
+// Both error paths used to be the skip path. A failed duplicate check left
+// count at zero, which reads as "the rule is not there", and a failed insert
+// was simply not counted, so a run that stored nothing still answered 200 with
+// ok:true. The operator was then told the template was applied while the
+// firewall did not carry it.
+func (h *Handlers) storeTemplateRules(ctx context.Context, rules []templateRule) (int, error) {
 	added := 0
 	for _, rule := range rules {
 		if isProtectedPort(rule.Port) { // Skip critical ports even though templates must not contain them.
 			continue
 		}
 		var count int
-		_ = h.DB.QueryRow(`SELECT COUNT(*) FROM firewall_rules WHERE type=? AND port=? AND protocol=? AND ip=''`,
-			rule.Type, rule.Port, rule.Protocol).Scan(&count)
+		if err := h.DB.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM firewall_rules WHERE type=? AND port=? AND protocol=? AND ip=''`,
+			rule.Type, rule.Port, rule.Protocol).Scan(&count); err != nil {
+			return added, fmt.Errorf("read the stored rules for %d/%s: %w", rule.Port, rule.Protocol, err)
+		}
 		if count > 0 { // Skip existing rules to preserve idempotency.
 			continue
 		}
-		if _, err := h.DB.ExecContext(r.Context(),
+		if _, err := h.DB.ExecContext(ctx,
 			`INSERT INTO firewall_rules (type, ip, port, protocol, description, enabled) VALUES (?,'',?,?,?,1)`,
-			rule.Type, rule.Port, rule.Protocol, rule.Description); err == nil {
-			added++
+			rule.Type, rule.Port, rule.Protocol, rule.Description); err != nil {
+			return added, fmt.Errorf("store %d/%s: %w", rule.Port, rule.Protocol, err)
 		}
+		added++
 	}
-	if err := h.rebuild(); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "firewall rules could not be applied")
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "added": added})
+	return added, nil
 }
 
 // DELETE /firewall/{id}
