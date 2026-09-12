@@ -5,8 +5,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 // SessionCookie is the name of the HttpOnly cookie that carries the session JWT
@@ -75,12 +73,6 @@ func WriteJSON(w http.ResponseWriter, status int, body any) {
 // WriteError writes a standard JSON error response.
 func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, ErrorBody{Error: message})
-}
-
-// WriteErrorR writes a JSON error response annotated with the chi RequestID from context.
-func WriteErrorR(w http.ResponseWriter, r *http.Request, status int, message string) {
-	reqID := middleware.GetReqID(r.Context())
-	WriteJSON(w, status, ErrorBody{Error: message, RequestID: reqID})
 }
 
 // ClientIP returns the originating client address.

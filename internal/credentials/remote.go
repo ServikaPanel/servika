@@ -115,25 +115,6 @@ func RemoteHostsFor(db *sql.DB, dbUser string) ([]string, error) {
 	return hosts, rows.Err()
 }
 
-// DatabasesFor lists the schemas a database user owns, which is what a new
-// remote account has to be granted.
-func DatabasesFor(db *sql.DB, dbUser string) ([]string, error) {
-	rows, err := db.Query(`SELECT db_name FROM db_accounts WHERE db_user=?`, dbUser)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
 // remoteHostStatements applies a per-host statement builder to every remote host
 // a user answers on.
 //

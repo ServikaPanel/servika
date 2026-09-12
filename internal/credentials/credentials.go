@@ -318,12 +318,6 @@ func FTPPlainPassword(db *sql.DB, systemUser string) (string, error) {
 	return secret.Decrypt(enc.String)
 }
 
-// FTPDelete explicitly removes an FTP account even though domain deletion cascades.
-func FTPDelete(db *sql.DB, systemUser string) error {
-	_, err := db.Exec(`DELETE FROM ftp_accounts WHERE username=?`, systemUser)
-	return err
-}
-
 var (
 	mysqlIdentifierPattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
 	mysqlPasswordPattern   = regexp.MustCompile(`^[ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789]{1,255}$`)

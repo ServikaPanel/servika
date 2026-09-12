@@ -33,19 +33,6 @@ func validSystemUser(systemUser string) bool {
 	return systemUserPattern.MatchString(systemUser)
 }
 
-// RemoveDomainBackups removes a domain's backup directory after validating its system user.
-// It is intentionally not called by domain deletion so operators can recover accidental deletions.
-func RemoveDomainBackups(systemUser string) error {
-	if !validSystemUser(systemUser) {
-		return fmt.Errorf("invalid system user: %q", systemUser)
-	}
-	dir := filepath.Join(backupRoot(), systemUser)
-	if dir == backupRoot() || !strings.HasPrefix(dir, backupRoot()+"/") {
-		return fmt.Errorf("unsafe backup path: %q", dir)
-	}
-	return os.RemoveAll(dir)
-}
-
 // Backup describes a stored domain backup.
 type Backup struct {
 	ID        int64  `json:"id"`

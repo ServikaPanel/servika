@@ -132,12 +132,6 @@ func uniqueSorted(in []int) []int {
 	return slices.Compact(out)
 }
 
-// DefaultSSHPortInUse reports whether sshd still answers on port 22, alongside
-// any other port it may have been moved to.
-func DefaultSSHPortInUse() bool {
-	return slices.Contains(SSHPorts(), DefaultSSHPort)
-}
-
 // FirstSSHPort returns the port to show a customer as their SSH endpoint.
 func FirstSSHPort() int {
 	if ports := SSHPorts(); len(ports) > 0 {

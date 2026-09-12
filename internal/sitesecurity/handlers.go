@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"servika/internal/bgjob"
 	"servika/internal/httpx"
@@ -474,7 +473,3 @@ func (h *Handlers) Scan(w http.ResponseWriter, r *http.Request) {
 		})
 	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"started": true})
 }
-
-// Interval reports how often the unattended sweep runs, so the screen can say
-// so instead of hard-coding a number that would drift from the constant.
-func Interval() time.Duration { return scanInterval }

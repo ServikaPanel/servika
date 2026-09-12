@@ -50,10 +50,6 @@ func StartScheduler(db *sql.DB) {
 	}()
 }
 
-// TickOnce runs one scheduler pass, for a test or for an operator who wants the
-// nightly behaviour rather than a sweep started by hand.
-func TickOnce(db *sql.DB) { tickOnce(db, time.Now) }
-
 // tickOnce decides whether a sweep is due and starts one.
 //
 // The clock is injected so the hour comparison can be exercised without waiting

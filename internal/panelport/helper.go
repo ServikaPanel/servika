@@ -1,7 +1,6 @@
 package panelport
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -158,22 +157,4 @@ func plainPath(value string) bool {
 // becomes a line in a root script.
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
-}
-
-// MarshalOutcome is used by tests to build the file the helper writes.
-func MarshalOutcome(outcome Outcome) string {
-	raw, _ := json.Marshal(outcome)
-	return string(raw)
-}
-
-// RenderHelperForTest renders the helper against the paths currently
-// configured, so the generated script can be exercised outside the panel.
-func RenderHelperForTest() error {
-	return writeHelper(
-		[]changeSet{
-			{Path: envPath(), Backup: envPath() + ".bak"},
-			{Path: panelVhostPath(), Backup: panelVhostPath() + ".bak"},
-		},
-		Ports{Backend: 8080, BackendHost: "127.0.0.1", External: 8443},
-		9090, 42)
 }

@@ -269,16 +269,6 @@ func Table(ctx context.Context, d Details) (map[string]string, error) {
 	return table, nil
 }
 
-// Warm fills the cache for an installation and reports nothing.
-//
-// It is called on the path that is about to run wp-cli, while the network is by
-// definition working, because that is the only moment the cache CAN be filled.
-// Its failure is not the caller's problem: the check it protects has its own
-// answer either way.
-func Warm(ctx context.Context, d Details) {
-	_, _ = Table(ctx, d)
-}
-
 // fetch asks wordpress.org. A nil table with a nil error means the endpoint
 // answered but published nothing for this version and locale, which is a
 // different thing from a network failure and is remembered as such.
