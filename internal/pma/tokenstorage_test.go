@@ -37,17 +37,19 @@ func TestTheTokenCarriesNoCredential(t *testing.T) {
 // exists in exactly one place at rest.
 func TestRedeemReadsThePasswordFromTheAccountRow(t *testing.T) {
 	body := readPMASource(t, "pma.go")
+	// Redeem reads the account through liveToken and decrypts what it returned.
+	lookup := pmaFunction(t, body, "func (h *Handlers) liveToken(")
 	redeem := pmaFunction(t, body, "func (h *Handlers) Redeem(")
 
-	if !strings.Contains(redeem, "JOIN db_accounts a ON a.id=t.db_account_id") {
+	if !strings.Contains(lookup, "JOIN db_accounts a ON a.id=t.db_account_id") {
 		t.Error("Redeem does not resolve the account through the token's reference")
 	}
-	if !strings.Contains(redeem, "credentials.DecryptDBPass(dbUser, storedPassword)") {
+	if !strings.Contains(redeem, "credentials.DecryptDBPass(found.dbUser, found.storedPassword)") {
 		t.Error("Redeem does not decrypt the sealed password")
 	}
 	// An INNER join, so a token whose account was deleted inside the two-minute
 	// window answers "not found" rather than serving a stale credential.
-	if strings.Contains(redeem, "LEFT JOIN db_accounts") {
+	if strings.Contains(lookup, "LEFT JOIN db_accounts") {
 		t.Error("Redeem tolerates a token whose account no longer exists")
 	}
 }

@@ -115,25 +115,30 @@ func (h *Handlers) RequestToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Redeem validates internal authentication, returns credentials as JSON, and consumes the token once.
-// URL: POST /api/v1/internal/pma-redeem  (X-Internal-Auth header)
-func (h *Handlers) Redeem(w http.ResponseWriter, r *http.Request) {
+// internalCaller reports whether the request carries the internal token, and
+// answers the request itself when it does not. A host with no token file
+// accepts nothing, so the endpoint is closed rather than open by default.
+func internalCaller(w http.ResponseWriter, r *http.Request) bool {
 	auth := r.Header.Get("X-Internal-Auth")
 	expected := internalAuthToken()
 	if expected == "" || auth == "" || subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) != 1 {
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
-		return
+		return false
 	}
+	return true
+}
 
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
-		httpx.WriteError(w, http.StatusBadRequest, "token is required")
-		return
-	}
+// signonToken is the account a live token points at.
+type signonToken struct {
+	dbUser         string
+	dbName         string
+	storedPassword string
+}
 
-	var dbUser, dbName, storedPassword string
+// liveToken reads the account behind the token and answers the request itself
+// when the token cannot be redeemed.
+func (h *Handlers) liveToken(w http.ResponseWriter, r *http.Request, token string) (signonToken, bool) {
+	var found signonToken
 	var used, expired int
 	// Evaluate expiry with the MySQL clock so it matches how expires_at was written and how
 	// the consume UPDATE below compares it. A Go-side comparison can reject a valid token.
@@ -145,50 +150,81 @@ func (h *Handlers) Redeem(w http.ResponseWriter, r *http.Request) {
 	err := h.DB.QueryRowContext(r.Context(),
 		`SELECT t.db_user, t.db_name, a.db_pass_plain, t.used, (t.expires_at < NOW())
 		 FROM pma_tokens t JOIN db_accounts a ON a.id=t.db_account_id
-		 WHERE t.token=?`, req.Token).
-		Scan(&dbUser, &dbName, &storedPassword, &used, &expired)
+		 WHERE t.token=?`, token).
+		Scan(&found.dbUser, &found.dbName, &found.storedPassword, &used, &expired)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "token not found")
-		return
+		return signonToken{}, false
 	}
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
-		return
+		return signonToken{}, false
 	}
 	if used == 1 {
 		httpx.WriteError(w, http.StatusGone, "token has already been used")
-		return
+		return signonToken{}, false
 	}
 	if expired == 1 {
 		httpx.WriteError(w, http.StatusGone, "token has expired")
-		return
+		return signonToken{}, false
 	}
+	return found, true
+}
 
+// consumeToken marks the token used and reports whether THIS request is the one
+// that consumed it. Two requests racing on one token both pass the read, so the
+// row count here is what decides between them.
+func (h *Handlers) consumeToken(w http.ResponseWriter, r *http.Request, token string) bool {
 	result, err := h.DB.ExecContext(r.Context(),
-		`UPDATE pma_tokens SET used=1 WHERE token=? AND used=0 AND expires_at >= NOW()`, req.Token)
+		`UPDATE pma_tokens SET used=1 WHERE token=? AND used=0 AND expires_at >= NOW()`, token)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
-		return
+		return false
 	}
 	consumed, err := result.RowsAffected()
 	if err != nil || consumed != 1 {
 		httpx.WriteError(w, http.StatusGone, "token is no longer valid")
+		return false
+	}
+	return true
+}
+
+// Redeem validates internal authentication, returns credentials as JSON, and consumes the token once.
+// URL: POST /api/v1/internal/pma-redeem  (X-Internal-Auth header)
+func (h *Handlers) Redeem(w http.ResponseWriter, r *http.Request) {
+	if !internalCaller(w, r) {
+		return
+	}
+
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	found, ok := h.liveToken(w, r, req.Token)
+	if !ok {
+		return
+	}
+	if !h.consumeToken(w, r, req.Token) {
 		return
 	}
 
 	// db_pass_plain is sealed at rest, bound to db_user. Decrypting happens HERE,
 	// after the token is consumed, so a failed decrypt cannot be used to probe
 	// the same token twice. A legacy plaintext row passes through unchanged.
-	dbPassword, derr := credentials.DecryptDBPass(dbUser, storedPassword)
+	dbPassword, derr := credentials.DecryptDBPass(found.dbUser, found.storedPassword)
 	if derr != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "database operation failed")
 		return
 	}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
-		"username": dbUser,
+		"username": found.dbUser,
 		"password": dbPassword,
-		"db":       dbName,
+		"db":       found.dbName,
 		"host":     "localhost",
 	})
 }
