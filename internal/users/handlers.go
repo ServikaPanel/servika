@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"servika/internal/auth"
-	"servika/internal/domains"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
 	"servika/internal/quota"
@@ -489,7 +488,7 @@ func (h *Handlers) SetStatus(w http.ResponseWriter, r *http.Request) {
 	// stayed live. Suspend/resume every domain owned by this reseller's customers.
 	// Non-fatal: the account status change already succeeded. This is a no-op for
 	// a customer account (it owns no customers, so the sweep matches nothing).
-	if affected, failed, err := domains.SuspendResellerDomains(r.Context(), h.DB, id, b.Status == "suspended"); err != nil {
+	if affected, failed, err := suspendResellerDomains(r.Context(), h.DB, id, b.Status == "suspended"); err != nil {
 		httpx.LogR(r, "hosting suspend cascade for reseller %d failed: %v", id, err)
 	} else if affected > 0 || failed > 0 {
 		httpx.LogR(r, "hosting suspend cascade for reseller %d: %d applied, %d failed", id, affected, failed)
