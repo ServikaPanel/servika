@@ -1,0 +1,16 @@
+{
+  "title": "Retenção de logs",
+  "description": "Durante quanto tempo o painel guarda as suas próprias linhas de log de pedidos e de aplicação. As linhas mais antigas são eliminadas a cada hora. O log de auditoria não é afetado.",
+  "label": "Dias",
+  "hint": "Entre {{min}} e {{max}} dias.",
+  "apply": "Aplicar",
+  "applying": "A aplicar…",
+  "messages": {
+    "saved": "As linhas de log passam a ser guardadas {{days}} dias."
+  },
+  "errors": {
+    "load": "Não foi possível ler a definição",
+    "save": "Não foi possível guardar a definição",
+    "outOfRange": "Introduza um valor entre {{min}} e {{max}} dias."
+  }
+}

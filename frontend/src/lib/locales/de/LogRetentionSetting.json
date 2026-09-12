@@ -1,0 +1,16 @@
+{
+  "title": "Log-Aufbewahrung",
+  "description": "Wie lange das Panel seine eigenen Request- und Anwendungs-Log-Zeilen behält. Ältere Zeilen werden stündlich gelöscht. Das Audit-Log ist nicht betroffen.",
+  "label": "Tage",
+  "hint": "Zwischen {{min}} und {{max}} Tagen.",
+  "apply": "Übernehmen",
+  "applying": "Wird übernommen…",
+  "messages": {
+    "saved": "Log-Zeilen werden jetzt {{days}} Tage aufbewahrt."
+  },
+  "errors": {
+    "load": "Die Einstellung konnte nicht gelesen werden",
+    "save": "Die Einstellung konnte nicht gespeichert werden",
+    "outOfRange": "Geben Sie einen Wert zwischen {{min}} und {{max}} Tagen ein."
+  }
+}

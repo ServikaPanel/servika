@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import PanelDomain from '@/components/PanelDomain'
@@ -6,6 +6,7 @@ import HostnameSetting from '@/components/HostnameSetting'
 import NameserverSetting from '@/components/NameserverSetting'
 import ServerRebootButton from '@/components/ServerRebootButton'
 import SessionIdleSetting from '@/components/SessionIdleSetting'
+import LogRetentionSetting from '@/components/LogRetentionSetting'
 import Breadcrumb from '@/components/Breadcrumb'
 import { useAuth } from '@/store/auth'
 import { setTheme as applyThemePreference, type Theme } from '@/lib/theme'
@@ -76,7 +77,7 @@ export default function SettingsPage() {
   }
   useEffect(load, [])
 
-  async function saveProfile(event: React.FormEvent) {
+  async function saveProfile(event: FormEvent) {
     event.preventDefault(); setProfileSuccess(''); setProfileError(''); setIsProfileLoading(true)
     try {
       await api.put('/me', { full_name: fullName, email })
@@ -85,7 +86,7 @@ export default function SettingsPage() {
     } catch (error) { setProfileError(apiError(error, t('account.saveFailed'))) } finally { setIsProfileLoading(false) }
   }
 
-  async function changePassword(event: React.FormEvent) {
+  async function changePassword(event: FormEvent) {
     event.preventDefault(); setPasswordSuccess(''); setPasswordError('')
     if (newPassword.length < 8) { setPasswordError(t('password.tooShort')); return }
     if (newPassword !== confirmPassword) { setPasswordError(t('password.mismatch')); return }
@@ -110,14 +111,14 @@ export default function SettingsPage() {
     try { const response = await api.get<{ secret: string; otpauth: string; otpauth_uri?: string; qr_data_uri?: string }>('/me/2fa/setup'); setTwoFactorSetup(response.data) }
     catch (error) { setTwoFactorError(apiError(error)) }
   }
-  async function enableTwoFactor(event: React.FormEvent) {
+  async function enableTwoFactor(event: FormEvent) {
     event.preventDefault(); setTwoFactorError(''); setIsTwoFactorLoading(true)
     try {
       await api.post('/me/2fa/enable', { secret: twoFactorSetup!.secret, code: twoFactorCode })
       setTwoFactorSetup(null); setTwoFactorCode(''); load()
     } catch (error) { setTwoFactorError(apiError(error, t('twoFa.verifyFailed'))) } finally { setIsTwoFactorLoading(false) }
   }
-  async function confirmDisableTwoFactor(event: React.FormEvent) {
+  async function confirmDisableTwoFactor(event: FormEvent) {
     event.preventDefault(); setTwoFactorError(''); setIsTwoFactorLoading(true)
     try { await api.post('/me/2fa/disable', { code: disableCode }); setIsDisablingTwoFactor(false); setDisableCode(''); load() }
     catch (error) { setTwoFactorError(apiError(error, t('twoFa.verifyFailed'))) } finally { setIsTwoFactorLoading(false) }
@@ -151,6 +152,7 @@ export default function SettingsPage() {
             never sees. */}
         <NameserverSetting audience="reseller" />
         <SessionIdleSetting />
+        <LogRetentionSetting />
         <ServerRebootButton />
 
         {/* 1. Account information */}

@@ -1,0 +1,16 @@
+{
+  "title": "Păstrarea logurilor",
+  "description": "Cât timp păstrează panoul propriile rânduri de log pentru cereri și aplicație. Rândurile mai vechi sunt șterse în fiecare oră. Logul de audit nu este afectat.",
+  "label": "Zile",
+  "hint": "Între {{min}} și {{max}} zile.",
+  "apply": "Aplică",
+  "applying": "Se aplică…",
+  "messages": {
+    "saved": "Rândurile de log sunt păstrate acum {{days}} zile."
+  },
+  "errors": {
+    "load": "Setarea nu a putut fi citită",
+    "save": "Setarea nu a putut fi salvată",
+    "outOfRange": "Introduceți o valoare între {{min}} și {{max}} zile."
+  }
+}

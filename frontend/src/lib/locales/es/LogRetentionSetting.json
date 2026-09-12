@@ -1,0 +1,16 @@
+{
+  "title": "Retención de logs",
+  "description": "Cuánto tiempo conserva el panel sus propias líneas de log de peticiones y de aplicación. Las líneas más antiguas se borran cada hora. El log de auditoría no se ve afectado.",
+  "label": "Días",
+  "hint": "Entre {{min}} y {{max}} días.",
+  "apply": "Aplicar",
+  "applying": "Aplicando…",
+  "messages": {
+    "saved": "Las líneas de log ahora se conservan {{days}} días."
+  },
+  "errors": {
+    "load": "No se pudo leer el ajuste",
+    "save": "No se pudo guardar el ajuste",
+    "outOfRange": "Introduzca un valor entre {{min}} y {{max}} días."
+  }
+}

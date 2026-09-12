@@ -45,6 +45,7 @@ import (
 	"servika/internal/hostapps"
 	"servika/internal/httpx"
 	"servika/internal/laravel"
+	"servika/internal/logretention"
 	"servika/internal/logs"
 	"servika/internal/logsink"
 	"servika/internal/logx"
@@ -512,6 +513,10 @@ func startHostServices(d *sql.DB, ipv4 string) {
 	// copy of every line either way: this only adds a second destination, so a
 	// line written while the database is down is still in the journal.
 	logsink.StartApplicationLog(context.Background(), d)
+
+	// Nothing else ever deletes a log row, so without this the two tables above
+	// grow for the life of the installation.
+	logretention.StartSweep(context.Background(), d)
 
 	// The signed malware rule package, if this build carries a signing key. The
 	// PANEL is the only process that fetches: the scan worker runs inside
@@ -997,6 +1002,10 @@ func main() {
 			// operator's session ends, which is not a per-user preference.
 			r.With(middleware.AdminOnly).Get("/system/session-idle", panelSettingsH.SessionIdleGet)
 			r.With(middleware.AdminOnly).Put("/system/session-idle", panelSettingsH.SessionIdleSave)
+			// How long the panel keeps its own log rows. Admin only: the rows
+			// cover every operator's requests, so the window is a server policy.
+			r.With(middleware.AdminOnly).Get("/system/log-retention", panelSettingsH.LogRetentionGet)
+			r.With(middleware.AdminOnly).Put("/system/log-retention", panelSettingsH.LogRetentionSave)
 			// The country database is a server-wide integration, so its credentials
 			// and download live with the other system settings rather than on a
 			// domain. The license key is never returned by any of these.

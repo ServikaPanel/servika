@@ -1,0 +1,16 @@
+{
+  "title": "Log saklama süresi",
+  "description": "Panel kendi request ve uygulama log satırlarını ne kadar süre saklar. Daha eski satırlar her saat silinir. Audit log bundan etkilenmez.",
+  "label": "Gün",
+  "hint": "{{min}} ile {{max}} gün arasında.",
+  "apply": "Uygula",
+  "applying": "Uygulanıyor…",
+  "messages": {
+    "saved": "Log satırları artık {{days}} gün saklanıyor."
+  },
+  "errors": {
+    "load": "Ayar okunamadı",
+    "save": "Ayar kaydedilemedi",
+    "outOfRange": "{{min}} ile {{max}} gün arasında bir değer girin."
+  }
+}

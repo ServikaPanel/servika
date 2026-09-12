@@ -1,0 +1,16 @@
+{
+  "title": "Log retention",
+  "description": "How long the panel keeps its own request and application log rows. Older rows are deleted every hour. The audit log is not affected.",
+  "label": "Days",
+  "hint": "Between {{min}} and {{max}} days.",
+  "apply": "Apply",
+  "applying": "Applying…",
+  "messages": {
+    "saved": "Log rows are now kept for {{days}} days."
+  },
+  "errors": {
+    "load": "The setting could not be read",
+    "save": "The setting could not be saved",
+    "outOfRange": "Enter a value between {{min}} and {{max}} days."
+  }
+}

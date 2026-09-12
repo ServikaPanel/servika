@@ -1,0 +1,16 @@
+{
+  "title": "Conservation des logs",
+  "description": "Durée pendant laquelle le panneau conserve ses propres lignes de log de requêtes et d'application. Les lignes plus anciennes sont supprimées chaque heure. Le log d'audit n'est pas concerné.",
+  "label": "Jours",
+  "hint": "Entre {{min}} et {{max}} jours.",
+  "apply": "Appliquer",
+  "applying": "Application…",
+  "messages": {
+    "saved": "Les lignes de log sont désormais conservées {{days}} jours."
+  },
+  "errors": {
+    "load": "Le réglage n'a pas pu être lu",
+    "save": "Le réglage n'a pas pu être enregistré",
+    "outOfRange": "Saisissez une valeur entre {{min}} et {{max}} jours."
+  }
+}

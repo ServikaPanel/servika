@@ -1,0 +1,16 @@
+{
+  "title": "Conservazione dei log",
+  "description": "Per quanto tempo il pannello conserva le proprie righe di log delle richieste e dell'applicazione. Le righe più vecchie vengono eliminate ogni ora. Il log di audit non è interessato.",
+  "label": "Giorni",
+  "hint": "Tra {{min}} e {{max}} giorni.",
+  "apply": "Applica",
+  "applying": "Applicazione…",
+  "messages": {
+    "saved": "Le righe di log ora vengono conservate {{days}} giorni."
+  },
+  "errors": {
+    "load": "Impossibile leggere l'impostazione",
+    "save": "Impossibile salvare l'impostazione",
+    "outOfRange": "Inserisci un valore tra {{min}} e {{max}} giorni."
+  }
+}

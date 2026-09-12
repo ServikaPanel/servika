@@ -1,0 +1,16 @@
+{
+  "title": "日志保留期",
+  "description": "面板保留自身 request 日志和应用日志记录的时长。更早的记录每小时删除一次。audit log 不受影响。",
+  "label": "天数",
+  "hint": "介于 {{min}} 天和 {{max}} 天之间。",
+  "apply": "应用",
+  "applying": "正在应用…",
+  "messages": {
+    "saved": "日志记录现在保留 {{days}} 天。"
+  },
+  "errors": {
+    "load": "无法读取设置",
+    "save": "无法保存设置",
+    "outOfRange": "请输入介于 {{min}} 天和 {{max}} 天之间的值。"
+  }
+}

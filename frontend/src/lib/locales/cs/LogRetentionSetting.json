@@ -1,0 +1,16 @@
+{
+  "title": "Uchovávání logů",
+  "description": "Jak dlouho panel uchovává vlastní řádky logu požadavků a aplikace. Starší řádky se mažou každou hodinu. Auditní log to neovlivní.",
+  "label": "Dny",
+  "hint": "Mezi {{min}} a {{max}} dny.",
+  "apply": "Použít",
+  "applying": "Používá se…",
+  "messages": {
+    "saved": "Řádky logu se nyní uchovávají {{days}} dní."
+  },
+  "errors": {
+    "load": "Nastavení se nepodařilo načíst",
+    "save": "Nastavení se nepodařilo uložit",
+    "outOfRange": "Zadejte hodnotu mezi {{min}} a {{max}} dny."
+  }
+}
