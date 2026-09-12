@@ -23,13 +23,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"servika/internal/bgjob"
-	"servika/internal/files"
-	"servika/internal/wordpress"
 )
 
 // App types, matching the security_findings ENUM exactly.
@@ -516,7 +515,7 @@ func (c *Collector) scanWordPress(ctx context.Context, item target) (scanResult,
 	var result scanResult
 	var firstErr error
 
-	for _, install := range wordpress.Discover(item.systemUser) {
+	for _, install := range discoverInstalls(item.systemUser) {
 		if ctx.Err() != nil {
 			return result, ctx.Err()
 		}
@@ -525,7 +524,7 @@ func (c *Collector) scanWordPress(ctx context.Context, item target) (scanResult,
 		// this is a WordPress site the sweep looked at.
 		entry := Inventory{AppType: AppWordPress, InstallPath: install.Rel}
 
-		if version, err := wordpress.CoreVersion(item.systemUser, install.Dir); err == nil && version != "" {
+		if version, err := coreVersion(item.systemUser, install.Dir); err == nil && version != "" {
 			entry.Version = version
 			entry.Packages++
 			result.counts.packages++
@@ -545,7 +544,7 @@ func (c *Collector) scanWordPress(ctx context.Context, item target) (scanResult,
 		}
 
 		for _, kind := range []string{"plugin", "theme"} {
-			components, err := wordpress.Components(ctx, item.systemUser, install.Dir, kind)
+			components, err := wpComponents(ctx, item.systemUser, install.Dir, kind)
 			if err != nil {
 				if firstErr == nil {
 					firstErr = fmt.Errorf("%s list for %s: %w", kind, item.name, err)
@@ -608,9 +607,9 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (scanResult,
 	var result scanResult
 	var firstErr error
 
-	home := "/home/" + item.systemUser
+	home := filepath.Join(tenantHomeRoot, item.systemUser)
 	directories := []string{"public_html"}
-	names, err := files.ListNamesBeneath(home, "public_html")
+	names, err := listNamesBeneath(home, "public_html")
 	if err != nil {
 		firstErr = err
 	}
@@ -623,7 +622,7 @@ func (c *Collector) scanLockfiles(ctx context.Context, item target) (scanResult,
 			if ctx.Err() != nil {
 				return result, ctx.Err()
 			}
-			body, err := files.ReadFileBeneath(home, dir+"/"+source.file, maxLockfileBytes)
+			body, err := readFileBeneath(home, dir+"/"+source.file, maxLockfileBytes)
 			if err != nil {
 				// An absent lockfile is the normal case for most sites, so it
 				// is not an error worth reporting.
