@@ -475,13 +475,44 @@ func (h *Handlers) Close(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	disconnectWordPress(systemUser) // Remove the WordPress drop-in while the credentials are still valid.
-	if err := disableUser(systemUser); err != nil {
+	// The Valkey account and the WordPress drop-in are named after the SYSTEM
+	// USER, not after this domain, so a shared name makes neither this domain's
+	// to remove. Only the row is. This is the same question the domain deletion
+	// path asks before it calls CloseDomain.
+	if h.sharedSystemUser(r, id, systemUser) {
+		h.forgetRow(w, r, id)
+		return
+	}
+	detachWordPress(systemUser) // Remove the WordPress drop-in while the credentials are still valid.
+	if err := revokeACL(systemUser); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "redis disable ACL user %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "could not revoke Redis credentials")
 		return
 	}
+	h.forgetRow(w, r, id)
+}
+
+// sharedSystemUser reports whether another TOP-LEVEL domain answers to the same
+// system user. An addon row is not counted: it belongs to the same tenant and
+// shares the account by design.
+//
+// A failed lookup counts as shared. Keeping a live account costs a stale
+// credential; revoking a shared one takes the other tenant's cache down.
+func (h *Handlers) sharedSystemUser(r *http.Request, id int64, systemUser string) bool {
+	var others int
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM domains WHERE system_user=? AND parent_domain_id IS NULL AND id<>?`,
+		systemUser, id).Scan(&others); err != nil {
+		// #nosec G706 -- logged values are a validated identifier and an error; no raw tenant string with CR/LF reaches the log.
+		httpx.LogR(r, "redis disable: sibling lookup for %s failed: %v", systemUser, err)
+		return true
+	}
+	return others > 0
+}
+
+// forgetRow removes the domain_redis row and answers the request.
+func (h *Handlers) forgetRow(w http.ResponseWriter, r *http.Request, id int64) {
 	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_redis WHERE domain_id=?`, id); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "redis delete domain_redis row %d: %v", id, err)
