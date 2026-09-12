@@ -27,25 +27,36 @@ func TestSerializeParseRoundTrip(t *testing.T) {
 		t.Fatalf("got %d tasks, want %d\n%s", len(out), len(in), data)
 	}
 	for i := range in {
-		w, g := in[i], out[i]
-		if g.Minute != w.Minute || g.Hour != w.Hour || g.Day != w.Day || g.Month != w.Month || g.Week != w.Week {
-			t.Errorf("task %d schedule = %v, want %v", i, g, w)
-		}
-		if g.Command != w.Command {
-			t.Errorf("task %d command = %q, want %q", i, g.Command, w.Command)
-		}
-		if g.Comment != w.Comment {
-			t.Errorf("task %d comment = %q, want %q", i, g.Comment, w.Comment)
-		}
-		if g.Enabled != w.Enabled {
-			t.Errorf("task %d enabled = %v, want %v", i, g.Enabled, w.Enabled)
-		}
-		if g.Type != w.Type {
-			t.Errorf("task %d type = %q, want %q", i, g.Type, w.Type)
-		}
-		if g.PHPVersion != w.PHPVersion {
-			t.Errorf("task %d php_version = %q, want %q", i, g.PHPVersion, w.PHPVersion)
-		}
+		assertSameTask(t, i, out[i], in[i])
+	}
+}
+
+// scheduleOf is a task's five schedule fields as one comparable value.
+func scheduleOf(task Task) [5]string {
+	return [5]string{task.Minute, task.Hour, task.Day, task.Month, task.Week}
+}
+
+// assertSameTask compares one task that survived a write and a read against the
+// one that went in. Idx is not compared: it is assigned by the parse.
+func assertSameTask(t *testing.T, index int, g, w Task) {
+	t.Helper()
+	if scheduleOf(g) != scheduleOf(w) {
+		t.Errorf("task %d schedule = %v, want %v", index, g, w)
+	}
+	if g.Command != w.Command {
+		t.Errorf("task %d command = %q, want %q", index, g.Command, w.Command)
+	}
+	if g.Comment != w.Comment {
+		t.Errorf("task %d comment = %q, want %q", index, g.Comment, w.Comment)
+	}
+	if g.Enabled != w.Enabled {
+		t.Errorf("task %d enabled = %v, want %v", index, g.Enabled, w.Enabled)
+	}
+	if g.Type != w.Type {
+		t.Errorf("task %d type = %q, want %q", index, g.Type, w.Type)
+	}
+	if g.PHPVersion != w.PHPVersion {
+		t.Errorf("task %d php_version = %q, want %q", index, g.PHPVersion, w.PHPVersion)
 	}
 }
 
