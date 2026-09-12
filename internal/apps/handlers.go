@@ -458,7 +458,10 @@ func (h *Handlers) EnvRead(w http.ResponseWriter, r *http.Request) {
 	}
 	values, err := ReadEnv(r.Context(), h.DB, app.ID)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		// The driver's message names the table and the column, and this endpoint
+		// is reachable by the domain's own customer.
+		httpx.LogR(r, "apps: read the environment of application %d: %v", app.ID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the application environment could not be read")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
