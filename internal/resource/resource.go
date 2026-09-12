@@ -5,13 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
-	"os/exec"
 	"strconv"
 	"strings"
 
-	"servika/internal/diskusage"
 	"servika/internal/httpx"
-	"servika/internal/resourcelimit"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -116,7 +113,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	// size: zero reads as an empty home and would show a tenant far below a quota
 	// they may be over. The last known value is served instead.
 	home := "/home/" + o.SystemUser
-	if size, duErr := diskusage.Bytes(ctx, home); duErr == nil {
+	if size, duErr := homeBytes(ctx, home); duErr == nil {
 		o.DiskMB.Usage = size / (1024 * 1024)
 		_, _ = h.DB.ExecContext(ctx, `UPDATE domains SET size_kb=? WHERE id=?`, size/1024, id)
 	} else {
@@ -128,7 +125,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	// When XFS user quota is ACTIVE, pull real disk usage/limit and inode usage/limit from
 	// the filesystem (more accurate than du, and includes inodes). On noquota, QuotaStatus
 	// returns all zeros and du-based values are preserved.
-	if usedMB, limitMB, usedIno, limitIno := resourcelimit.QuotaStatus(o.SystemUser); limitMB > 0 || limitIno > 0 {
+	if usedMB, limitMB, usedIno, limitIno := quotaStatus(o.SystemUser); limitMB > 0 || limitIno > 0 {
 		if usedMB > 0 {
 			o.DiskMB.Usage = int64(usedMB)
 		}
@@ -188,7 +185,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 
 	// Count jobs in the user's host crontab.
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if out, err := exec.Command("crontab", "-u", o.SystemUser, "-l").CombinedOutput(); err == nil {
+	if out, err := runCommand("crontab", "-u", o.SystemUser, "-l").CombinedOutput(); err == nil {
 		for ln := range strings.SplitSeq(string(out), "\n") {
 			s := strings.TrimSpace(ln)
 			if s != "" && !strings.HasPrefix(s, "#") {
