@@ -1,7 +1,11 @@
 import axios, { AxiosError } from 'axios'
 import { useAuth } from '@/store/auth'
 
-const baseURL = (import.meta.env.VITE_API_BASE as string) || '/api/v1'
+// Exported because sendBeacon does not go through axios and still has to reach
+// the same API.
+export const apiBase = (import.meta.env.VITE_API_BASE as string) || '/api/v1'
+
+const baseURL = apiBase
 
 export const api = axios.create({
   baseURL,

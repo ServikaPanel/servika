@@ -8,6 +8,7 @@ import TopBar from './TopBar'
 import DomainPicker from './DomainPicker'
 import ReplayConsentBanner from './ReplayConsentBanner'
 import { api } from '@/lib/api'
+import { useInterfaceTracking } from '@/lib/tracking'
 import { useAuth } from '@/store/auth'
 
 type VersionFooter = { current?: string; build_date?: string }
@@ -237,6 +238,10 @@ export default function DashboardLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [footer, setFooter] = useState<VersionFooter | null>(null)
   const location = useLocation()
+
+  // Mounted once, here: this layout wraps every authenticated screen, and the
+  // hook needs the router to see a route change at all.
+  useInterfaceTracking()
 
   // /system/version rather than /system/version-check: the latter is
   // ResellerOrAbove, so a customer only ever received a 403 and the footer named

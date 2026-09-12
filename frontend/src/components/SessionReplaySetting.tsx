@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import { consentChangedEvent } from '@/lib/tracking'
 import { useAuth } from '@/store/auth'
 
 export type ReplayConsent = {
@@ -46,6 +47,9 @@ export default function SessionReplaySetting() {
     try {
       await action()
       setMessage(done)
+      // The recorder decides from the same two answers, so it is told rather
+      // than left to notice on the next page load.
+      window.dispatchEvent(new Event(consentChangedEvent))
     } catch (cause) {
       setError(apiError(cause, t('errors.save')))
     } finally {

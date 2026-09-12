@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { getCookie, setCookie } from '@/lib/cookies'
+import { consentChangedEvent } from '@/lib/tracking'
 import type { ReplayConsent } from './SessionReplaySetting'
 
 // The refusal is remembered for a year, the same window the panel gives its
@@ -35,6 +36,8 @@ export default function ReplayConsentBanner() {
     try {
       const { data } = await api.put<ReplayConsent>('/me/replay-consent', { accepted: true })
       setState(data)
+      // Without this the recorder would only start on the next page load.
+      window.dispatchEvent(new Event(consentChangedEvent))
     } finally {
       setBusy(false)
     }
