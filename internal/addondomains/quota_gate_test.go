@@ -50,7 +50,8 @@ func TestTheAddonPathAppliesBothTheCustomerAndTheResellerCeilings(t *testing.T) 
 func TestTheAddonCeilingsRunBeforeTheDocumentRootIsPrepared(t *testing.T) {
 	body := createBody(t)
 	reseller := strings.Index(body, "quota.CheckResellerAllowedForCustomer(")
-	prepare := strings.Index(body, "prepareDocRoot(")
+	// prepareRoot is the seam that stands in for prepareDocRoot in a test.
+	prepare := strings.Index(body, "prepareRoot(")
 	if reseller < 0 || prepare < 0 {
 		t.Fatal("one of the two steps is missing from Create")
 	}

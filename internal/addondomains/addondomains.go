@@ -18,7 +18,6 @@ import (
 
 	"servika/internal/credentials"
 	"servika/internal/dns"
-	"servika/internal/domainblock"
 	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/provisioner"
@@ -142,7 +141,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid domain name")
 		return
 	}
-	if domainblock.RefuseIfBlocked(w, r, h.DB, req.DomainName) {
+	if refuseIfBlocked(w, r, h.DB, req.DomainName) {
 		return
 	}
 	if req.DomainName == parent.DomainName {
@@ -203,7 +202,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	docroot := provisioner.SafeWebRoot(parent.SystemUser, parent.WebRoot)
 	if !req.Parked {
 		docroot = provisioner.AddonWebRoot(parent.SystemUser, req.DomainName)
-		if err := prepareDocRoot(docroot, parent.SystemUser, req.DomainName); err != nil {
+		if err := prepareRoot(docroot, parent.SystemUser, req.DomainName); err != nil {
 			httpx.LogR(r, "addon domain docroot prepare %q: %v", req.DomainName, err)
 			httpx.WriteError(w, http.StatusInternalServerError, "document root creation failed")
 			return
@@ -224,16 +223,16 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	unlock()
 	addonID, _ := res.LastInsertId()
 
-	if err := provisioner.RerenderVhost(h.DB, addonID); err != nil {
+	if err := renderVhost(h.DB, addonID); err != nil {
 		httpx.LogR(r, "addon domain vhost render %q: %v", req.DomainName, err)
-		_, _ = Cleanup(r.Context(), h.DB, addonID)
+		_, _ = cleanupAddon(r.Context(), h.DB, addonID)
 		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
 		return
 	}
-	if _, err := dns.SeedDefaults(r.Context(), h.DB, addonID, req.DomainName, h.IPv4); err != nil {
+	if _, err := seedDNS(r.Context(), h.DB, addonID, req.DomainName, h.IPv4); err != nil {
 		httpx.LogR(r, "DNS SeedDefaults %q error: %v", req.DomainName, err)
 	}
-	if err := dns.WriteZone(r.Context(), h.DB, addonID); err != nil {
+	if err := writeZone(r.Context(), h.DB, addonID); err != nil {
 		httpx.LogR(r, "DNS WriteZone %q error: %v", req.DomainName, err)
 	}
 
