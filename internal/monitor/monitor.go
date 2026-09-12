@@ -36,45 +36,64 @@ type Handlers struct {
 // for the host's own ps, which prints a different table on every platform.
 var psCommand = exec.Command
 
+// rowLimit reads how many processes the caller asked for. An unreadable or
+// out-of-range value takes the default rather than an unbounded listing.
+func rowLimit(r *http.Request) int {
+	s := r.URL.Query().Get("n")
+	if s == "" {
+		return 15
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v <= 0 || v > 100 {
+		return 15
+	}
+	return v
+}
+
+// sortFlagOf maps the requested order onto the ps flag. The sort runs in ps,
+// because it holds the whole process table and the panel holds a page of it.
+func sortFlagOf(r *http.Request) string {
+	if r.URL.Query().Get("sort") == "mem" {
+		return "-pmem"
+	}
+	return "-pcpu"
+}
+
+// parseProcess reads one ps row. It reports false for a row that does not carry
+// all five columns, so a short line is skipped instead of listed as a process
+// with no name.
+func parseProcess(line string) (Process, bool) {
+	f := strings.Fields(strings.TrimSpace(line))
+	if len(f) < 5 {
+		return Process{}, false
+	}
+	pid, _ := strconv.Atoi(f[0])
+	cpu, _ := strconv.ParseFloat(f[2], 64)
+	mem, _ := strconv.ParseFloat(f[3], 64)
+	command := strings.Join(f[4:], " ")
+	if len(command) > 120 {
+		command = command[:120] + "…"
+	}
+	return Process{PID: pid, User: f[1], CPU: cpu, Mem: mem, Command: command}, true
+}
+
 // GET /system/processes?n=15&sort=cpu|mem
 func Processes(w http.ResponseWriter, r *http.Request) {
-	n := 15
-	if s := r.URL.Query().Get("n"); s != "" {
-		if v, err := strconv.Atoi(s); err == nil && v > 0 && v <= 100 {
-			n = v
-		}
-	}
-	sortBy := r.URL.Query().Get("sort")
-	sortFlag := "-pcpu"
-	if sortBy == "mem" {
-		sortFlag = "-pmem"
-	}
+	n := rowLimit(r)
 
-	cmd := psCommand("ps", "-eo", "pid,user:32,pcpu,pmem,args", "--no-headers", "--sort="+sortFlag)
+	cmd := psCommand("ps", "-eo", "pid,user:32,pcpu,pmem,args", "--no-headers", "--sort="+sortFlagOf(r))
 	out, err := cmd.Output()
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to read process list")
 		return
 	}
-	lines := strings.Split(string(out), "\n")
 	procs := make([]Process, 0, n)
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	for line := range strings.SplitSeq(string(out), "\n") {
+		p, ok := parseProcess(line)
+		if !ok {
 			continue
 		}
-		f := strings.Fields(line)
-		if len(f) < 5 {
-			continue
-		}
-		pid, _ := strconv.Atoi(f[0])
-		cpu, _ := strconv.ParseFloat(f[2], 64)
-		mem, _ := strconv.ParseFloat(f[3], 64)
-		command := strings.Join(f[4:], " ")
-		if len(command) > 120 {
-			command = command[:120] + "…"
-		}
-		procs = append(procs, Process{PID: pid, User: f[1], CPU: cpu, Mem: mem, Command: command})
+		procs = append(procs, p)
 		if len(procs) >= n {
 			break
 		}
