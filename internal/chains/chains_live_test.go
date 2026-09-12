@@ -9,26 +9,33 @@ import (
 	"os"
 	"testing"
 
+	"servika/internal/db"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
 const testDomainID = 990001
 
+// liveDB opens the test database through db.Open, the same constructor the
+// panel uses.
+//
+// It used to call sql.Open directly, so a DSN without parseTime made every
+// event here unreadable and these tests failed while the panel they describe
+// was fine. The correlator's dependence on that parameter is now enforced in
+// db.Open, and this harness has to go through it or it tests a connection the
+// panel never opens.
 func liveDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("SERVIKA_TEST_DSN")
 	if dsn == "" {
 		t.Skip("SERVIKA_TEST_DSN is not set")
 	}
-	db, err := sql.Open("mysql", dsn)
+	handle, err := db.Open(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := db.Ping(); err != nil {
-		t.Fatalf("ping: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db
+	t.Cleanup(func() { _ = handle.Close() })
+	return handle
 }
 
 // setup gives the test a clean slate and a real domains row, because
