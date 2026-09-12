@@ -7,6 +7,61 @@ import { useResourceScope } from '@/lib/scope'
 
 type Status = { installed: boolean; version: string; composer_json: boolean; username: string; dir: string }
 
+const BTN_BASE = 'px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50'
+const BTN_FILLED = `${BTN_BASE} bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900`
+const BTN_OUTLINE = `${BTN_BASE} border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800`
+
+// PackageRow requires or removes one named package.
+function PackageRow({ runningCommand, packageName, onPackageName, onRun }: {
+  runningCommand: string | null
+  packageName: string
+  onPackageName: (value: string) => void
+  onRun: (command: string, pkt?: string) => void
+}) {
+  const { t } = useTranslation('DomainComposerPage')
+  const blocked = !!runningCommand || !packageName.trim()
+  return (
+    <div className="mt-3 flex gap-2">
+      <input value={packageName} onChange={e => onPackageName(e.target.value)} placeholder={t('packagePlaceholder')}
+        className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+      <button disabled={blocked} onClick={() => onRun('require', packageName.trim())} className={`${BTN_BASE} bg-emerald-600 hover:bg-emerald-700 text-white`}>require</button>
+      <button disabled={blocked} onClick={() => onRun('remove', packageName.trim())} className={`${BTN_BASE} border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20`}>remove</button>
+    </div>
+  )
+}
+
+// CommandBar runs the five composer commands this panel offers.
+function CommandBar({ status, runningCommand, packageName, onPackageName, onRun }: {
+  status: Status
+  runningCommand: string | null
+  packageName: string
+  onPackageName: (value: string) => void
+  onRun: (command: string, pkt?: string) => void
+}) {
+  const { t } = useTranslation('DomainComposerPage')
+  const busy = !!runningCommand
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <span className="text-xs font-mono text-slate-500">{status.version}</span>
+          <span className={`ml-2 text-xs ${status.composer_json ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+            {status.composer_json ? t('composerJsonFound') : t('composerJsonNotFound')}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button disabled={busy} onClick={() => onRun('install')} className={BTN_FILLED}>{runningCommand === 'install' ? '…' : 'install'}</button>
+        <button disabled={busy} onClick={() => onRun('update')} className={BTN_FILLED}>{runningCommand === 'update' ? '…' : 'update'}</button>
+        <button disabled={busy} onClick={() => onRun('dump-autoload')} className={BTN_OUTLINE}>dump-autoload</button>
+        <button disabled={busy} onClick={() => onRun('validate')} className={BTN_OUTLINE}>validate</button>
+        <button disabled={busy} onClick={() => onRun('show')} className={BTN_OUTLINE}>show</button>
+      </div>
+      <PackageRow runningCommand={runningCommand} packageName={packageName} onPackageName={onPackageName} onRun={onRun} />
+    </div>
+  )
+}
+
 export default function DomainComposerPage() {
   const { t } = useTranslation('DomainComposerPage')
   const { id, base, backHref, backLabel } = useResourceScope()
@@ -48,8 +103,6 @@ export default function DomainComposerPage() {
   if (loading) return <div className="px-6 py-5 text-slate-400">{t('loading')}</div>
   if (!d) return <div className="px-6 py-5"><div className="text-sm text-red-600">{error || t('notFound')}</div></div>
 
-  const btnBase = 'px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-50'
-
   return (
     <div className="px-6 py-5">
       <div>
@@ -71,29 +124,10 @@ export default function DomainComposerPage() {
           </div>
         ) : (
           <>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <span className="text-xs font-mono text-slate-500">{d.version}</span>
-                  <span className={`ml-2 text-xs ${d.composer_json ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                    {d.composer_json ? t('composerJsonFound') : t('composerJsonNotFound')}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button disabled={!!runningCommand} onClick={() => run('install')} className={`${btnBase} bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900`}>{runningCommand === 'install' ? '…' : 'install'}</button>
-                <button disabled={!!runningCommand} onClick={() => run('update')} className={`${btnBase} bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900`}>{runningCommand === 'update' ? '…' : 'update'}</button>
-                <button disabled={!!runningCommand} onClick={() => run('dump-autoload')} className={`${btnBase} border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800`}>dump-autoload</button>
-                <button disabled={!!runningCommand} onClick={() => run('validate')} className={`${btnBase} border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800`}>validate</button>
-                <button disabled={!!runningCommand} onClick={() => run('show')} className={`${btnBase} border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800`}>show</button>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <input value={packageName} onChange={e => setPackageName(e.target.value)} placeholder={t('packagePlaceholder')}
-                  className="flex-1 px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-                <button disabled={!!runningCommand || !packageName.trim()} onClick={() => run('require', packageName.trim())} className={`${btnBase} bg-emerald-600 hover:bg-emerald-700 text-white`}>require</button>
-                <button disabled={!!runningCommand || !packageName.trim()} onClick={() => run('remove', packageName.trim())} className={`${btnBase} border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20`}>remove</button>
-              </div>
-            </div>
+            <CommandBar
+              status={d} runningCommand={runningCommand} packageName={packageName}
+              onPackageName={setPackageName} onRun={run}
+            />
 
             {output && (
               <div className="bg-slate-900 rounded-2xl p-4 shadow-sm">

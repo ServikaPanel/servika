@@ -55,6 +55,147 @@ function isRunning(app: App) {
   return app.status.active_state === 'active'
 }
 
+const CARD_BUTTON_CLASS = 'rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'
+
+// AppsHeader names the domain this list belongs to.
+function AppsHeader({ domain, domainId }: { domain: Domain | null; domainId?: string }) {
+  const { t } = useTranslation('DomainAppsPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${domainId}` },
+        { label: t('breadcrumb.current') },
+      ]} />
+
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+        {domain && (
+          <Link to={`/subscriptions/${domainId}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 font-medium">{domain.domain_name}</Link>
+        )}
+        {domain && ', '}
+        {t('subtitle')}
+      </p>
+    </>
+  )
+}
+
+// AppCard is one application: its state, its unit facts and its actions.
+function AppCard({ app, busy, onAct, onLog, onEnv, onInstall, onEdit, onRemove }: {
+  app: App
+  busy: number | null
+  onAct: (app: App, action: 'start' | 'stop' | 'restart') => void
+  onLog: (app: App) => void
+  onEnv: (app: App) => void
+  onInstall: (app: App) => void
+  onEdit: (app: App) => void
+  onRemove: (app: App) => void
+}) {
+  const { t } = useTranslation('DomainAppsPage')
+  const running = isRunning(app)
+  const locked = busy === app.id
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/60">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{app.name}</span>
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+              running
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+            }`}>
+              {running ? t('badges.running') : t('badges.stopped')}
+            </span>
+            <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+              {app.runtime === 'node' ? 'Node.js' : 'Python'} {app.runtime_version}
+            </span>
+          </div>
+          <div className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">
+            {app.mount_path} &rarr; 127.0.0.1:{app.port}
+          </div>
+        </div>
+      </div>
+
+      <dl className="mb-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+        <div className="flex gap-2"><dt className="shrink-0 text-slate-400">{t('card.directory')}</dt><dd className="truncate">~/{app.app_root}</dd></div>
+        <div className="flex gap-2"><dt className="shrink-0 text-slate-400">{t('card.command')}</dt><dd className="truncate" title={app.resolved_command}>{app.start_command}</dd></div>
+        <div className="flex gap-2"><dt className="shrink-0 text-slate-400">{t('card.state')}</dt><dd>{app.status.active_state || t('card.unknown')} / {app.status.sub_state || '-'}{app.status.restarts ? ' ' + t('card.restarts', { count: Number(app.status.restarts) }) : ''}</dd></div>
+      </dl>
+
+      <div className="flex flex-wrap gap-1.5">
+        {running ? (
+          <button onClick={() => onAct(app, 'stop')} disabled={locked} className={CARD_BUTTON_CLASS}>
+            {t('actions.stop')}
+          </button>
+        ) : (
+          <button onClick={() => onAct(app, 'start')} disabled={locked}
+            className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50">
+            {t('actions.start')}
+          </button>
+        )}
+        <button onClick={() => onAct(app, 'restart')} disabled={locked} className={CARD_BUTTON_CLASS}>
+          {t('actions.restart')}
+        </button>
+        <button onClick={() => onLog(app)} className={CARD_BUTTON_CLASS}>
+          {t('actions.log')}
+        </button>
+        <button onClick={() => onEnv(app)} className={CARD_BUTTON_CLASS}>
+          {t('actions.env')}
+        </button>
+        <button onClick={() => onInstall(app)} disabled={locked} className={CARD_BUTTON_CLASS}>
+          {t('actions.installDeps')}
+        </button>
+        <button onClick={() => onEdit(app)} className={CARD_BUTTON_CLASS}>
+          {t('actions.edit')}
+        </button>
+        <button onClick={() => onRemove(app)} disabled={locked}
+          className="ml-auto rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30">
+          {t('actions.delete')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// AppsBody answers with the spinner, the empty state or the cards.
+function AppsBody({ apps, loading, busy, onAct, onLog, onEnv, onInstall, onEdit, onRemove }: {
+  apps: App[]
+  loading: boolean
+  busy: number | null
+  onAct: (app: App, action: 'start' | 'stop' | 'restart') => void
+  onLog: (app: App) => void
+  onEnv: (app: App) => void
+  onInstall: (app: App) => void
+  onEdit: (app: App) => void
+  onRemove: (app: App) => void
+}) {
+  const { t } = useTranslation('DomainAppsPage')
+  if (loading) return <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+  if (apps.length === 0) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center dark:border-slate-800 dark:bg-slate-900/60">
+        <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+          <svg className="w-7 h-7 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+          </svg>
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('empty')}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+      {apps.map(app => (
+        <AppCard key={app.id} app={app} busy={busy}
+          onAct={onAct} onLog={onLog} onEnv={onEnv} onInstall={onInstall}
+          onEdit={onEdit} onRemove={onRemove} />
+      ))}
+    </div>
+  )
+}
+
 export default function DomainAppsPage() {
   const { t } = useTranslation('DomainAppsPage')
   const { confirm, notify } = useDialog()
@@ -142,21 +283,7 @@ export default function DomainAppsPage() {
 
   return (
     <div className="w-full px-4 py-4 sm:px-6 sm:py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.current') },
-      ]} />
-
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-        {domain && (
-          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 font-medium">{domain.domain_name}</Link>
-        )}
-        {domain && ', '}
-        {t('subtitle')}
-      </p>
+      <AppsHeader domain={domain} domainId={id} />
 
       <div className="grid grid-cols-2 gap-2 mb-4 sm:flex sm:items-center">
         <button
@@ -174,89 +301,11 @@ export default function DomainAppsPage() {
 
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-      {loading ? (
-        <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
-      ) : apps.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center dark:border-slate-800 dark:bg-slate-900/60">
-          <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-            <svg className="w-7 h-7 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
-            </svg>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t('empty')}</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {apps.map(app => (
-            <div key={app.id} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/60">
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">{app.name}</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                      isRunning(app)
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                    }`}>
-                      {isRunning(app) ? t('badges.running') : t('badges.stopped')}
-                    </span>
-                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
-                      {app.runtime === 'node' ? 'Node.js' : 'Python'} {app.runtime_version}
-                    </span>
-                  </div>
-                  <div className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">
-                    {app.mount_path} &rarr; 127.0.0.1:{app.port}
-                  </div>
-                </div>
-              </div>
-
-              <dl className="mb-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
-                <div className="flex gap-2"><dt className="shrink-0 text-slate-400">{t('card.directory')}</dt><dd className="truncate">~/{app.app_root}</dd></div>
-                <div className="flex gap-2"><dt className="shrink-0 text-slate-400">{t('card.command')}</dt><dd className="truncate" title={app.resolved_command}>{app.start_command}</dd></div>
-                <div className="flex gap-2"><dt className="shrink-0 text-slate-400">{t('card.state')}</dt><dd>{app.status.active_state || t('card.unknown')} / {app.status.sub_state || '-'}{app.status.restarts ? ' ' + t('card.restarts', { count: Number(app.status.restarts) }) : ''}</dd></div>
-              </dl>
-
-              <div className="flex flex-wrap gap-1.5">
-                {isRunning(app) ? (
-                  <button onClick={() => act(app, 'stop')} disabled={busy === app.id}
-                    className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-                    {t('actions.stop')}
-                  </button>
-                ) : (
-                  <button onClick={() => act(app, 'start')} disabled={busy === app.id}
-                    className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50">
-                    {t('actions.start')}
-                  </button>
-                )}
-                <button onClick={() => act(app, 'restart')} disabled={busy === app.id}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-                  {t('actions.restart')}
-                </button>
-                <button onClick={() => setLogOf(app)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-                  {t('actions.log')}
-                </button>
-                <button onClick={() => setEnvOf(app)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-                  {t('actions.env')}
-                </button>
-                <button onClick={() => install(app)} disabled={busy === app.id}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-                  {t('actions.installDeps')}
-                </button>
-                <button onClick={() => setEditing(app)}
-                  className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-                  {t('actions.edit')}
-                </button>
-                <button onClick={() => remove(app)} disabled={busy === app.id}
-                  className="ml-auto rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30">
-                  {t('actions.delete')}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <AppsBody
+        apps={apps} loading={loading} busy={busy}
+        onAct={act} onLog={setLogOf} onEnv={setEnvOf} onInstall={install}
+        onEdit={setEditing} onRemove={remove}
+      />
 
       {(creating || editing) && (
         // Keyed so switching from one application to another REMOUNTS the form.

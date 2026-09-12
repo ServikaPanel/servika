@@ -188,19 +188,272 @@ const BTN = {
   dangerFilled: `${BTN_BASE} bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/50`,
 }
 
+const PANEL_CLASS = 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm'
+
+// A level the panel does not know is shown verbatim rather than dropped or
+// relabelled: a row from a newer backend must not read as something milder
+// than it is.
+function levelClass(level: string): string {
+  return level === 'suspicious'
+    ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
+    : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400'
+}
+
+function LevelBadge({ level }: { level: string }) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  const label = level === 'critical' || level === 'suspicious' ? t(`findings.level.${level}`) : level
+  return <span className={`text-xs px-1.5 py-0.5 rounded ${levelClass(level)}`}>{label}</span>
+}
+
+// StatusCard names the engine, the last scan and the cost of the next one.
+function StatusCard({ lastScan, scanning, onScan }: {
+  lastScan: Status['last_scan']
+  scanning: boolean
+  onScan: () => void
+}) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  return (
+    <div className={`${PANEL_CLASS} mb-4`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm space-y-0.5">
+          <div className="flex items-center gap-2">
+            {/* The own engine always runs, so the dot is always green. ClamAV
+                is a backend fallback and its presence is no longer surfaced. */}
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-slate-700 dark:text-slate-200">{t('status.enginePrefix')} <span className="font-medium">{t('status.engineName')}</span></span>
+          </div>
+          {lastScan && <div className="text-xs text-slate-400 ml-4">
+            {t('status.latestScan', { date: lastScan.finished_at || lastScan.started_at, scanned: lastScan.scanned, infected: lastScan.infected })}
+          </div>}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button onClick={onScan} disabled={scanning}
+            className="px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-lg disabled:opacity-50">
+            {scanning ? t('status.scanning') : t('status.scanNow')}</button>
+        </div>
+      </div>
+      {scanning ? (
+        <div className="mt-3 flex items-center gap-2 text-sm text-brand-600 dark:text-brand-400">
+          <span className="inline-block w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          {t('status.inProgress')}
+        </div>
+      ) : (
+        /* Stated before the scan starts, not while it runs: by then the cost
+           has already been paid and the progress line has the floor. */
+        <div className="mt-3">
+          <ResourceNotice>{t('status.resourceWarning')}</ResourceNotice>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// FindingRow is one finding of the latest scan.
+function FindingRow({ finding, onQuarantine }: {
+  finding: Finding
+  onQuarantine: (finding: Finding) => void
+}) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  return (
+    <tr className={responsiveTableRowClass}>
+      <td data-label={t('findings.colFile')} className={`${responsiveTableCellClass} lg:min-w-[20rem]`}><PathBox path={finding.file} /></td>
+      <td data-label={t('findings.colLevel')} className={responsiveTableCellClass}>
+        <LevelBadge level={finding.level} />
+      </td>
+      <td data-label={t('findings.colSignature')} className={responsiveTableCellClass}>
+        <div>{finding.signature}</div>
+        {/* The other rules that fired. A suspicious verdict is reached by adding
+            up evidence, so showing only the strongest one hides why the total
+            got there. */}
+        {finding.rules && finding.rules !== finding.signature && (
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">{finding.rules}</div>
+        )}
+      </td>
+      <td data-label={t('findings.colEngine')} className={responsiveTableCellClass}><span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500">{finding.engine}</span></td>
+      <td data-label={t('findings.colStatus')} className={responsiveTableCellClass}>
+        {finding.quarantined ? <span className="text-xs text-amber-600 dark:text-amber-400">{t('findings.quarantined')}</span>
+          : <span className="text-xs text-red-600 dark:text-red-400">{t('findings.active')}</span>}
+      </td>
+      <td className={responsiveTableActionCellClass}>
+        {/* A finding whose subject is not a file has nothing to contain, and the
+            server refuses it, so no button is drawn rather than one that always
+            fails. */}
+        {!finding.quarantined && (containable(finding.engine)
+          ? <button onClick={() => onQuarantine(finding)} className={`${BTN.dangerOutline} lg:ml-auto`}><Icon d={ICON_PATH.lock} /> {t('findings.quarantine')}</button>
+          : <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{t('findings.notAFile')}</span>)}
+      </td>
+    </tr>
+  )
+}
+
+// FindingsCard reports what the latest scan found.
+function FindingsCard({ findings, activeFindings, lastScan, busy, scanning, onQuarantine, onQuarantineAll }: {
+  findings: Finding[]
+  activeFindings: Finding[]
+  lastScan: Status['last_scan']
+  busy: boolean
+  scanning: boolean
+  onQuarantine: (finding: Finding) => void
+  onQuarantineAll: (scanID: number, count: number) => void
+}) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  return (
+    <div className={PANEL_CLASS}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          {t('findings.title')} {lastScan && <span className="text-xs font-normal text-slate-400">{t('findings.fromLatest')}</span>}
+        </h3>
+        {lastScan && activeFindings.length > 0 && (
+          <button
+            onClick={() => onQuarantineAll(lastScan.id, activeFindings.length)}
+            disabled={busy || scanning}
+            className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+          >
+            {t('findings.quarantineAll', { count: activeFindings.length })}
+          </button>
+        )}
+      </div>
+      {!lastScan ? (
+        <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">{t('findings.noScans')}</div>
+      ) : findings.length === 0 ? (
+        <div className="text-center py-8">
+          <Shield scanning={false} className="mx-auto mb-2 h-14 w-14" />
+          <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{t('findings.clean')}</p>
+        </div>
+      ) : (
+        <div className={responsiveTableContainerClass}>
+          <table className={responsiveTableClass}>
+            <thead className={responsiveTableHeadClass}>
+              <tr>
+                <th className="py-2 pr-3 text-left">{t('findings.colFile')}</th>
+                <th className="py-2 pr-3 text-left">{t('findings.colLevel')}</th>
+                <th className="py-2 pr-3 text-left">{t('findings.colSignature')}</th>
+                <th className="py-2 pr-3 text-left">{t('findings.colEngine')}</th>
+                <th className="py-2 pr-3 text-left">{t('findings.colStatus')}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody className={responsiveTableBodyClass}>
+              {findings.map((finding, i) => (
+                <FindingRow key={i} finding={finding} onQuarantine={onQuarantine} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// PreviewBox shows what is inside the held file being inspected.
+function PreviewBox({ preview }: { preview: Preview | null }) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
+      {!preview ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">{t('held.inspectLoading')}</p>
+      ) : preview.binary ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {t('held.inspectBinary', { size: preview.size })}
+        </p>
+      ) : (
+        <>
+          <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+            {preview.truncated
+              ? t('held.inspectTruncated', { shown: preview.shown, size: preview.size })
+              : t('held.inspectWhole', { size: preview.size })}
+          </p>
+          {/* The content is a KNOWN MALICIOUS file. React escapes text, so it is
+              drawn as text and never as markup, and nothing here evaluates it. */}
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-[11px] leading-relaxed text-slate-800 dark:bg-slate-950 dark:text-slate-200">
+            {preview.content}
+          </pre>
+        </>
+      )}
+    </div>
+  )
+}
+
+// HeldRow is one quarantined file.
+function HeldRow({ entry, busy, open, onInspect, onRestore, onPurge }: {
+  entry: Quarantined
+  busy: boolean
+  open: boolean
+  onInspect: (entry: Quarantined) => void
+  onRestore: (entry: Quarantined) => void
+  onPurge: (entry: Quarantined) => void
+}) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  return (
+    <tr className={responsiveTableRowClass}>
+      <td data-label={t('held.colFile')} className={`${responsiveTableCellClass} lg:min-w-[20rem]`}><PathBox path={entry.orig_path} /></td>
+      <td data-label={t('held.colSignature')} className={responsiveTableCellClass}>{entry.signature || '-'}</td>
+      <td data-label={t('held.colDate')} className={responsiveTableCellClass}>
+        {entry.restored_at ? t('held.restoredOn', { date: entry.restored_at }) : entry.created_at}
+      </td>
+      <td className={responsiveTableActionCellClass}>
+        {!entry.restored_at && (
+          <div className="flex flex-wrap gap-1.5 lg:justify-end">
+            <button onClick={() => onInspect(entry)} className={BTN.neutral}>
+              <Icon d={ICON_PATH.search} /> {open ? t('held.inspectClose') : t('held.inspect')}</button>
+            <button onClick={() => onRestore(entry)} disabled={busy} className={BTN.confirmOutline}>
+              <Icon d={ICON_PATH.restore} /> {t('held.restore')}</button>
+            <button onClick={() => onPurge(entry)} disabled={busy} className={BTN.dangerFilled}>
+              <Icon d={ICON_PATH.trash} /> {t('held.delete')}</button>
+          </div>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+// QuarantineCard lists the files the panel is holding.
+function QuarantineCard({ held, heldFailed, busy, previewID, preview, onInspect, onRestore, onPurge }: {
+  held: Quarantined[]
+  heldFailed: boolean
+  busy: boolean
+  previewID: number | null
+  preview: Preview | null
+  onInspect: (entry: Quarantined) => void
+  onRestore: (entry: Quarantined) => void
+  onPurge: (entry: Quarantined) => void
+}) {
+  const { t } = useTranslation('DomainAntivirusPage')
+  return (
+    <div className={PANEL_CLASS}>
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('held.title')}</h3>
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('held.subtitle')}</p>
+      {heldFailed ? (
+        <div className="py-6 text-center text-sm text-red-600 dark:text-red-400">{t('held.loadFailed')}</div>
+      ) : held.length === 0 ? (
+        <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('held.empty')}</div>
+      ) : (
+        <div className={responsiveTableContainerClass}>
+          <table className={responsiveTableClass}>
+            <thead className={responsiveTableHeadClass}>
+              <tr>
+                <th className="py-2 pr-3 text-left">{t('held.colFile')}</th>
+                <th className="py-2 pr-3 text-left">{t('held.colSignature')}</th>
+                <th className="py-2 pr-3 text-left">{t('held.colDate')}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody className={responsiveTableBodyClass}>
+              {held.map(entry => (
+                <HeldRow key={entry.id} entry={entry} busy={busy} open={previewID === entry.id}
+                  onInspect={onInspect} onRestore={onRestore} onPurge={onPurge} />
+              ))}
+            </tbody>
+          </table>
+          {previewID !== null && <PreviewBox preview={preview} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DomainAntivirusPage() {
   const { t } = useTranslation('DomainAntivirusPage')
-
-  // A level the panel does not know is shown verbatim rather than dropped or
-  // relabelled: a row from a newer backend must not read as something milder
-  // than it is.
-  const levelLabel = (level: string) =>
-    level === 'critical' || level === 'suspicious' ? t(`findings.level.${level}`) : level
-  const levelClass = (level: string) =>
-    level === 'suspicious'
-      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'
-      : 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400'
-
   const { confirm } = useDialog()
   const { id } = useParams()
   const [d, setD] = useState<Status | null>(null)
@@ -348,39 +601,7 @@ export default function DomainAntivirusPage() {
 
         {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-        {/* Status and actions */}
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm space-y-0.5">
-              <div className="flex items-center gap-2">
-                {/* The own engine always runs, so the dot is always green. ClamAV
-                    is a backend fallback and its presence is no longer surfaced. */}
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-slate-700 dark:text-slate-200">{t('status.enginePrefix')} <span className="font-medium">{t('status.engineName')}</span></span>
-              </div>
-              {d.last_scan && <div className="text-xs text-slate-400 ml-4">
-                {t('status.latestScan', { date: d.last_scan.finished_at || d.last_scan.started_at, scanned: d.last_scan.scanned, infected: d.last_scan.infected })}
-              </div>}
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <button onClick={scan} disabled={scanning}
-                className="px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-lg disabled:opacity-50">
-                {scanning ? t('status.scanning') : t('status.scanNow')}</button>
-            </div>
-          </div>
-          {scanning ? (
-            <div className="mt-3 flex items-center gap-2 text-sm text-brand-600 dark:text-brand-400">
-              <span className="inline-block w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-              {t('status.inProgress')}
-            </div>
-          ) : (
-            /* Stated before the scan starts, not while it runs: by then the cost
-               has already been paid and the progress line has the floor. */
-            <div className="mt-3">
-              <ResourceNotice>{t('status.resourceWarning')}</ResourceNotice>
-            </div>
-          )}
-        </div>
+        <StatusCard lastScan={d.last_scan} scanning={scanning} onScan={scan} />
 
         {/* The status and action bar stays above the tabs, because the scan
             button and the engine line belong to both sections. The two lists
@@ -391,154 +612,22 @@ export default function DomainAntivirusPage() {
           <TabButton enabled={tab === 'quarantine'} count={held.length} onClick={() => selectTab('quarantine')}>{t('tabs.quarantine')}</TabButton>
         </div>
 
-        {/* Findings */}
         {tab === 'findings' && (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {t('findings.title')} {d.last_scan && <span className="text-xs font-normal text-slate-400">{t('findings.fromLatest')}</span>}
-            </h3>
-            {d.last_scan && activeFindings.length > 0 && (
-              <button
-                onClick={() => quarantineAll(d.last_scan!.id, activeFindings.length)}
-                disabled={busy || scanning}
-                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
-              >
-                {t('findings.quarantineAll', { count: activeFindings.length })}
-              </button>
-            )}
-          </div>
-          {!d.last_scan ? (
-            <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">{t('findings.noScans')}</div>
-          ) : activeFindings.length === 0 && d.findings.length === 0 ? (
-            <div className="text-center py-8">
-              <Shield scanning={false} className="mx-auto mb-2 h-14 w-14" />
-              <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">{t('findings.clean')}</p>
-            </div>
-          ) : (
-            <div className={responsiveTableContainerClass}>
-              <table className={responsiveTableClass}>
-                <thead className={responsiveTableHeadClass}>
-                  <tr>
-                    <th className="py-2 pr-3 text-left">{t('findings.colFile')}</th>
-                    <th className="py-2 pr-3 text-left">{t('findings.colLevel')}</th>
-                    <th className="py-2 pr-3 text-left">{t('findings.colSignature')}</th>
-                    <th className="py-2 pr-3 text-left">{t('findings.colEngine')}</th>
-                    <th className="py-2 pr-3 text-left">{t('findings.colStatus')}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody className={responsiveTableBodyClass}>
-                  {d.findings.map((b, i) => (
-                    <tr key={i} className={responsiveTableRowClass}>
-                      <td data-label={t('findings.colFile')} className={`${responsiveTableCellClass} lg:min-w-[20rem]`}><PathBox path={b.file} /></td>
-                      <td data-label={t('findings.colLevel')} className={responsiveTableCellClass}>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${levelClass(b.level)}`}>{levelLabel(b.level)}</span>
-                      </td>
-                      <td data-label={t('findings.colSignature')} className={responsiveTableCellClass}>
-                        <div>{b.signature}</div>
-                        {/* The other rules that fired. A suspicious verdict is
-                            reached by adding up evidence, so showing only the
-                            strongest one hides why the total got there. */}
-                        {b.rules && b.rules !== b.signature && (
-                          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 break-words">{b.rules}</div>
-                        )}
-                      </td>
-                      <td data-label={t('findings.colEngine')} className={responsiveTableCellClass}><span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500">{b.engine}</span></td>
-                      <td data-label={t('findings.colStatus')} className={responsiveTableCellClass}>
-                        {b.quarantined ? <span className="text-xs text-amber-600 dark:text-amber-400">{t('findings.quarantined')}</span>
-                          : <span className="text-xs text-red-600 dark:text-red-400">{t('findings.active')}</span>}
-                      </td>
-                      <td className={responsiveTableActionCellClass}>
-                        {/* A finding whose subject is not a file has nothing to
-                            contain, and the server refuses it, so no button is
-                            drawn rather than one that always fails. */}
-                        {!b.quarantined && (containable(b.engine)
-                          ? <button onClick={() => quarantineFinding(b)} className={`${BTN.dangerOutline} lg:ml-auto`}><Icon d={ICON_PATH.lock} /> {t('findings.quarantine')}</button>
-                          : <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{t('findings.notAFile')}</span>)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+          <FindingsCard
+            findings={d.findings} activeFindings={activeFindings} lastScan={d.last_scan}
+            busy={busy} scanning={scanning}
+            onQuarantine={quarantineFinding} onQuarantineAll={quarantineAll}
+          />
         )}
 
         {/* Held files. Listed even when no scan has run, because they outlive the
             scan that produced them and a false positive has to be reachable. */}
         {tab === 'quarantine' && (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('held.title')}</h3>
-          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('held.subtitle')}</p>
-          {heldFailed ? (
-            <div className="py-6 text-center text-sm text-red-600 dark:text-red-400">{t('held.loadFailed')}</div>
-          ) : held.length === 0 ? (
-            <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('held.empty')}</div>
-          ) : (
-            <div className={responsiveTableContainerClass}>
-              <table className={responsiveTableClass}>
-                <thead className={responsiveTableHeadClass}>
-                  <tr>
-                    <th className="py-2 pr-3 text-left">{t('held.colFile')}</th>
-                    <th className="py-2 pr-3 text-left">{t('held.colSignature')}</th>
-                    <th className="py-2 pr-3 text-left">{t('held.colDate')}</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody className={responsiveTableBodyClass}>
-                  {held.map(entry => (
-                    <tr key={entry.id} className={responsiveTableRowClass}>
-                      <td data-label={t('held.colFile')} className={`${responsiveTableCellClass} lg:min-w-[20rem]`}><PathBox path={entry.orig_path} /></td>
-                      <td data-label={t('held.colSignature')} className={responsiveTableCellClass}>{entry.signature || '-'}</td>
-                      <td data-label={t('held.colDate')} className={responsiveTableCellClass}>
-                        {entry.restored_at ? t('held.restoredOn', { date: entry.restored_at }) : entry.created_at}
-                      </td>
-                      <td className={responsiveTableActionCellClass}>
-                        {!entry.restored_at && (
-                          <div className="flex flex-wrap gap-1.5 lg:justify-end">
-                            <button onClick={() => inspect(entry)} className={BTN.neutral}>
-                              <Icon d={ICON_PATH.search} /> {previewID === entry.id ? t('held.inspectClose') : t('held.inspect')}</button>
-                            <button onClick={() => restore(entry)} disabled={busy} className={BTN.confirmOutline}>
-                              <Icon d={ICON_PATH.restore} /> {t('held.restore')}</button>
-                            <button onClick={() => purge(entry)} disabled={busy} className={BTN.dangerFilled}>
-                              <Icon d={ICON_PATH.trash} /> {t('held.delete')}</button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {previewID !== null && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-                  {!preview ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{t('held.inspectLoading')}</p>
-                  ) : preview.binary ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {t('held.inspectBinary', { size: preview.size })}
-                    </p>
-                  ) : (
-                    <>
-                      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                        {preview.truncated
-                          ? t('held.inspectTruncated', { shown: preview.shown, size: preview.size })
-                          : t('held.inspectWhole', { size: preview.size })}
-                      </p>
-                      {/* The content is a KNOWN MALICIOUS file. React escapes
-                          text, so it is drawn as text and never as markup, and
-                          nothing here evaluates it. */}
-                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-2 text-[11px] leading-relaxed text-slate-800 dark:bg-slate-950 dark:text-slate-200">
-                        {preview.content}
-                      </pre>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          <QuarantineCard
+            held={held} heldFailed={heldFailed} busy={busy}
+            previewID={previewID} preview={preview}
+            onInspect={inspect} onRestore={restore} onPurge={purge}
+          />
         )}
       </div>
     </div>

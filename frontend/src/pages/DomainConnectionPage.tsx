@@ -109,8 +109,7 @@ export default function DomainConnectionPage() {
         <PasswordResetModal
           type={passwordModal.type}
           domainId={id!}
-          ftpUser={domain?.ftp_user || ''}
-          dbUser={domain?.db_user || ''}
+          user={connectionUser(passwordModal.type, domain)}
           onClose={() => setPasswordModal(null)}
         />
       )}
@@ -185,8 +184,43 @@ function Password({ e, onOpen }: { e: string; id: string; type: string; onOpen: 
 // Only the fields the reset flow reads; the endpoint returns more.
 type DatabaseRow = { id: number; db_pass?: string; db_pass_plain?: string }
 
-function PasswordResetModal({ type, domainId, ftpUser, dbUser, onClose }:
-  { type: 'ftp' | 'db'; domainId: string; ftpUser: string; dbUser: string; onClose: () => void }) {
+// connectionUser names the account a reset applies to.
+function connectionUser(type: 'ftp' | 'db', domain: Domain | null): string {
+  if (type === 'ftp') return domain?.ftp_user || ''
+  return domain?.db_user || ''
+}
+
+// CurrentPassword reveals the stored password on request.
+function CurrentPassword({ showCurrent, currentPassword, onShow }: {
+  showCurrent: boolean
+  currentPassword: string | null
+  onShow: () => void
+}) {
+  const { t } = useTranslation('DomainConnectionPage')
+  return (
+    <div className="mb-4">
+      {!showCurrent ? (
+        <button onClick={onShow}
+          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded-md text-slate-700 dark:text-slate-300">
+          {t('modal.showCurrent')}
+        </button>
+      ) : (
+        <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded">
+          <div className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-1">{t('modal.currentPasswordLabel')}</div>
+          <div className="flex items-center gap-2">
+            <code className="font-mono text-sm text-slate-900 dark:text-slate-100 flex-1 break-all">{currentPassword || '...'}</code>
+            {currentPassword && currentPassword.length > 5 && (
+              <CopyButton text={currentPassword} color="amber" />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PasswordResetModal({ type, domainId, user, onClose }:
+  { type: 'ftp' | 'db'; domainId: string; user: string; onClose: () => void }) {
   const [newPassword, setNewPassword] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -229,7 +263,6 @@ function PasswordResetModal({ type, domainId, ftpUser, dbUser, onClose }:
     finally { setProcessing(false) }
   }
 
-  const user = type === 'ftp' ? ftpUser : dbUser
   const typeName = type === 'ftp' ? t('typeName.ftp') : t('typeName.db')
 
   return (
@@ -247,24 +280,7 @@ function PasswordResetModal({ type, domainId, ftpUser, dbUser, onClose }:
 
         {/* Show the current password */}
         {!newPassword && (
-          <div className="mb-4">
-            {!showCurrent ? (
-              <button onClick={() => setShowCurrent(true)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded-md text-slate-700 dark:text-slate-300">
-                {t('modal.showCurrent')}
-              </button>
-            ) : (
-              <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded">
-                <div className="text-[10px] uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-1">{t('modal.currentPasswordLabel')}</div>
-                <div className="flex items-center gap-2">
-                  <code className="font-mono text-sm text-slate-900 dark:text-slate-100 flex-1 break-all">{currentPassword || '...'}</code>
-                  {currentPassword && currentPassword.length > 5 && (
-                    <CopyButton text={currentPassword} color="amber" />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <CurrentPassword showCurrent={showCurrent} currentPassword={currentPassword} onShow={() => setShowCurrent(true)} />
         )}
 
         {/* New password */}
