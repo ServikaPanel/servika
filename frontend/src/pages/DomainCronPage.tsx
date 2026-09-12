@@ -279,7 +279,7 @@ function CronTaskModal({ task, phpVersions, domainId, onClose, onSaved }: {
     setMinute(preset.minute); setHour(preset.hour); setDay(preset.day); setMonth(preset.month); setWeekday(preset.weekday)
   }
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent) {
     e.preventDefault()
     setProcessing(true); setError(null)
     try {

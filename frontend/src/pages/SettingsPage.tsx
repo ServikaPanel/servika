@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import PanelDomain from '@/components/PanelDomain'
@@ -77,7 +77,7 @@ export default function SettingsPage() {
   }
   useEffect(load, [])
 
-  async function saveProfile(event: FormEvent) {
+  async function saveProfile(event: SubmitEvent) {
     event.preventDefault(); setProfileSuccess(''); setProfileError(''); setIsProfileLoading(true)
     try {
       await api.put('/me', { full_name: fullName, email })
@@ -86,7 +86,7 @@ export default function SettingsPage() {
     } catch (error) { setProfileError(apiError(error, t('account.saveFailed'))) } finally { setIsProfileLoading(false) }
   }
 
-  async function changePassword(event: FormEvent) {
+  async function changePassword(event: SubmitEvent) {
     event.preventDefault(); setPasswordSuccess(''); setPasswordError('')
     if (newPassword.length < 8) { setPasswordError(t('password.tooShort')); return }
     if (newPassword !== confirmPassword) { setPasswordError(t('password.mismatch')); return }
@@ -111,14 +111,14 @@ export default function SettingsPage() {
     try { const response = await api.get<{ secret: string; otpauth: string; otpauth_uri?: string; qr_data_uri?: string }>('/me/2fa/setup'); setTwoFactorSetup(response.data) }
     catch (error) { setTwoFactorError(apiError(error)) }
   }
-  async function enableTwoFactor(event: FormEvent) {
+  async function enableTwoFactor(event: SubmitEvent) {
     event.preventDefault(); setTwoFactorError(''); setIsTwoFactorLoading(true)
     try {
       await api.post('/me/2fa/enable', { secret: twoFactorSetup!.secret, code: twoFactorCode })
       setTwoFactorSetup(null); setTwoFactorCode(''); load()
     } catch (error) { setTwoFactorError(apiError(error, t('twoFa.verifyFailed'))) } finally { setIsTwoFactorLoading(false) }
   }
-  async function confirmDisableTwoFactor(event: FormEvent) {
+  async function confirmDisableTwoFactor(event: SubmitEvent) {
     event.preventDefault(); setTwoFactorError(''); setIsTwoFactorLoading(true)
     try { await api.post('/me/2fa/disable', { code: disableCode }); setIsDisablingTwoFactor(false); setDisableCode(''); load() }
     catch (error) { setTwoFactorError(apiError(error, t('twoFa.verifyFailed'))) } finally { setIsTwoFactorLoading(false) }

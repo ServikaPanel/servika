@@ -310,7 +310,7 @@ export default function DomainMailboxPage() {
     }
   }
 
-  async function saveAutoresponder(event: React.FormEvent) {
+  async function saveAutoresponder(event: React.SubmitEvent) {
     event.preventDefault()
     if (!autoresponder) return
     setIsSavingAutoresponder(true)
@@ -324,7 +324,7 @@ export default function DomainMailboxPage() {
     }
   }
 
-  async function saveForwarding(event: React.FormEvent) {
+  async function saveForwarding(event: React.SubmitEvent) {
     event.preventDefault()
     const destinations = destinationText.split(/[\n,]/).map(value => value.trim()).filter(Boolean)
     if (forwarding.enabled && destinations.length === 0) {
@@ -351,7 +351,7 @@ export default function DomainMailboxPage() {
     }
   }
 
-  async function runImport(event: React.FormEvent) {
+  async function runImport(event: React.SubmitEvent) {
     event.preventDefault()
     if (!uploadFile) return
     setIsImporting(true)

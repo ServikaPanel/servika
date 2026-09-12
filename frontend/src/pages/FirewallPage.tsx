@@ -120,7 +120,7 @@ export default function FirewallPage() {
     finally { setBusy(null) }
   }
 
-  async function add(event: React.FormEvent) {
+  async function add(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setBusy('manual')
     try {
@@ -149,7 +149,7 @@ export default function FirewallPage() {
     finally { setBusy(null) }
   }
 
-  async function saveCredentials(event: React.FormEvent) {
+  async function saveCredentials(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setBusy('credentials')
     try {
@@ -174,7 +174,7 @@ export default function FirewallPage() {
     finally { setBusy(null) }
   }
 
-  async function blockCountry(event: React.FormEvent) {
+  async function blockCountry(event: React.SubmitEvent) {
     event.preventDefault()
     const code = newCountry
     if (!code) return

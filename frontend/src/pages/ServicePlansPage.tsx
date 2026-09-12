@@ -215,7 +215,7 @@ function PlanModal({ plan, versions, onClose, onSave }: { plan: Plan; versions: 
     ...(versions.length === 0 ? ['7.4', '8.1', '8.2', '8.3', '8.4'] : []),
   ].filter(Boolean)))
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent) {
     e.preventDefault()
     setProcessing(true); setError(null)
     try {

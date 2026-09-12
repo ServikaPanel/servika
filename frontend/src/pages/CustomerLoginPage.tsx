@@ -16,7 +16,7 @@ export default function CustomerLoginPage() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  async function signIn(e: React.FormEvent) {
+  async function signIn(e: React.SubmitEvent) {
     e.preventDefault()
     setLoading(true); setError(null)
     try {

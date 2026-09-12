@@ -43,7 +43,7 @@ export default function DomainSubdomainsPage() {
 
   useEffect(() => { fetchSubdomains() }, [fetchSubdomains])
 
-  async function create(event: React.FormEvent) {
+  async function create(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setSaving(true)
     try {

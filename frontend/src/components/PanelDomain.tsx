@@ -48,7 +48,7 @@ export default function PanelDomain() {
 
   useEffect(() => { fetchStatus() }, [fetchStatus])
 
-  async function save(event: React.FormEvent) {
+  async function save(event: React.SubmitEvent) {
     event.preventDefault()
     setMessage('')
     setError('')

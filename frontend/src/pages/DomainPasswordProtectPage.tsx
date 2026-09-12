@@ -39,7 +39,7 @@ export default function DomainPasswordProtectPage() {
 
   useEffect(() => { fetchProtections() }, [fetchProtections])
 
-  async function add(e: React.FormEvent) {
+  async function add(e: React.SubmitEvent) {
     e.preventDefault()
     setError(null); setSuccess(null); setIsSaving(true)
     try {

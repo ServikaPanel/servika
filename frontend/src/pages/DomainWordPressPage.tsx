@@ -67,7 +67,7 @@ export default function DomainWordPressPage() {
 
   useEffect(() => { fetchInstalls() }, [fetchInstalls])
 
-  async function install(e: React.FormEvent) {
+  async function install(e: React.SubmitEvent) {
     e.preventDefault()
     setError(null); setResult(null); setInstalling(true)
     try {
@@ -507,7 +507,7 @@ function UserList({ items, busy, onReset, onRetry }: { items: Loaded<User>; busy
 function InstallForm(props: {
   title: string; setTitle: (value: string) => void; subdirectory: string; setSubdirectory: (value: string) => void
   adminUser: string; setAdminUser: (value: string) => void; adminEmail: string; setAdminEmail: (value: string) => void
-  install: (event: React.FormEvent) => void; installing: boolean; close?: () => void
+  install: (event: React.SubmitEvent) => void; installing: boolean; close?: () => void
 }) {
   const { t } = useTranslation('DomainWordPressPage')
   return (

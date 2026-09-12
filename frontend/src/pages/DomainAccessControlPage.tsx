@@ -125,7 +125,7 @@ export default function DomainAccessControlPage() {
       .filter(Boolean)
   }
 
-  async function saveHotlink(event: React.FormEvent) {
+  async function saveHotlink(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setBusy(true)
     try {
@@ -148,7 +148,7 @@ export default function DomainAccessControlPage() {
     finally { setBusy(false) }
   }
 
-  async function addRule(event: React.FormEvent) {
+  async function addRule(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setBusy(true)
     try {

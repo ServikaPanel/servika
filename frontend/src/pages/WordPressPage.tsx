@@ -70,7 +70,7 @@ export default function WordPressPage() {
       .finally(() => setLoadingInstallations(false))
   }
 
-  async function install(event: React.FormEvent) {
+  async function install(event: React.SubmitEvent) {
     event.preventDefault()
     if (!domainId) return
     setError(null); setResult(null); setInstalling(true)

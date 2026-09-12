@@ -198,7 +198,7 @@ export default function DomainsPage() {
     loadModalData() // lazy: fetch plans/php versions if they haven't been loaded yet
   }
 
-  async function submitCreate(e: React.FormEvent) {
+  async function submitCreate(e: React.SubmitEvent) {
     e.preventDefault()
     setError(null)
     const domainName = formDomainName.trim().toLowerCase()

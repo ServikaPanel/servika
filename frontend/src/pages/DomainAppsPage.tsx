@@ -304,7 +304,7 @@ function AppModal({ app, runtimes, subs, domainId, onClose, onSaved }: {
 
   const available = draft.runtime === 'node' ? runtimes.node : runtimes.python
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent) {
     e.preventDefault()
     setProcessing(true); setError(null)
     try {

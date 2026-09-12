@@ -83,7 +83,7 @@ export default function DomainAddonDomainsPage() {
 
   useEffect(() => { fetchAddons() }, [fetchAddons])
 
-  async function create(event: React.FormEvent) {
+  async function create(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setSaving(true)
     try {
@@ -107,7 +107,7 @@ export default function DomainAddonDomainsPage() {
     } catch (error) { setError(apiError(error, t('toast.deleteFailed'))) }
   }
 
-  async function saveRedirect(event: React.FormEvent) {
+  async function saveRedirect(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null); setSuccess(null); setRedirectSaving(true)
     try {

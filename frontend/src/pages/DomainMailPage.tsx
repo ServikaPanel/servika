@@ -239,7 +239,7 @@ export default function DomainMailPage() {
     }
   }
 
-  async function addMailbox(event: React.FormEvent) {
+  async function addMailbox(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null)
     setSuccess(null)
@@ -258,7 +258,7 @@ export default function DomainMailPage() {
     }
   }
 
-  async function addAlias(event: React.FormEvent) {
+  async function addAlias(event: React.SubmitEvent) {
     event.preventDefault()
     setError(null)
     setSuccess(null)
@@ -368,7 +368,7 @@ export default function DomainMailPage() {
     }
   }
 
-  async function saveSpam(event: React.FormEvent) {
+  async function saveSpam(event: React.SubmitEvent) {
     event.preventDefault()
     setIsSavingSpam(true)
     setError(null)
@@ -385,7 +385,7 @@ export default function DomainMailPage() {
     }
   }
 
-  async function saveAutoresponder(event: React.FormEvent) {
+  async function saveAutoresponder(event: React.SubmitEvent) {
     event.preventDefault()
     setIsSavingAutoresponder(true)
     setError(null)
@@ -414,7 +414,7 @@ export default function DomainMailPage() {
     }
   }
 
-  async function addFilter(event: React.FormEvent) {
+  async function addFilter(event: React.SubmitEvent) {
     event.preventDefault()
     setIsSavingFilter(true)
     setError(null)
@@ -442,7 +442,7 @@ export default function DomainMailPage() {
     }
   }
 
-  async function saveSendLimits(event: React.FormEvent) {
+  async function saveSendLimits(event: React.SubmitEvent) {
     event.preventDefault()
     setIsSavingLimits(true)
     setError(null)

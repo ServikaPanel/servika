@@ -181,7 +181,7 @@ export default function MailOverviewPage() {
 
   useEffect(() => { loadPool() }, [loadPool])
 
-  async function addPoolAddress(event: React.FormEvent) {
+  async function addPoolAddress(event: React.SubmitEvent) {
     event.preventDefault()
     setPoolBusy(true)
     setPoolError(null)
@@ -221,7 +221,7 @@ export default function MailOverviewPage() {
     }
   }
 
-  async function addFilter(event: React.FormEvent) {
+  async function addFilter(event: React.SubmitEvent) {
     event.preventDefault()
     setFilterBusy(true)
     setFilterError(null)
@@ -250,7 +250,7 @@ export default function MailOverviewPage() {
     }
   }
 
-  async function saveSettings(event: React.FormEvent) {
+  async function saveSettings(event: React.SubmitEvent) {
     event.preventDefault()
     if (!settings) return
     setSettingsSaving(true)

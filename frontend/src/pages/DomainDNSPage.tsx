@@ -659,7 +659,7 @@ function RecordModal({ current, domainId, ipv4, onClose, onSaved }: {
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent) {
     e.preventDefault()
     setProcessing(true); setError(null)
     try {

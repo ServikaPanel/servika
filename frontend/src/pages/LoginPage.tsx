@@ -69,7 +69,7 @@ export default function LoginPage() {
     }
   }
 
-  function onSubmit(event: React.FormEvent) {
+  function onSubmit(event: React.SubmitEvent) {
     event.preventDefault()
     void signIn(code)
   }
