@@ -537,7 +537,8 @@ func parseRemoteSize(output, fileName string) int64 {
 
 // deleteFromRemote removes a single backup file from the destination.
 //
-//nolint:unused // reserved for the remote retention-prune path (not yet wired to a handler); kept alongside uploadToRemote so the destination round-trip stays complete.
+// It is reached from removeRemoteCopy, which every path that deletes a backup
+// calls: the delete endpoint, manual retention and the scheduler.
 func deleteFromRemote(ctx context.Context, db *sql.DB, d *Destination, fileName string) error {
 	if objectStorageType(d.Type) {
 		return deleteS3Object(ctx, d, fileName)
@@ -800,8 +801,6 @@ func connectionTestError(out []byte, err error) error {
 	return fmt.Errorf("%s", short)
 }
 
-// pushToDestinationAsync: triggers a background upload after the backup is created successfully.
-// Does not block the API response even on error; last_status/last_error are written to the DB.
 // removeRemoteCopy deletes a backup's copy from the domain's destination.
 //
 // Every path that removes a backup has to call it. Retention and the delete
@@ -864,6 +863,9 @@ func (h *Handlers) HealRemoteUploads() {
 	}
 }
 
+// pushToDestinationAsync triggers a background upload after a backup is created
+// successfully. It does not block the API response even on error;
+// remote_status and remote_error record the outcome in the row.
 func pushToDestinationAsync(db *sql.DB, domainID, backupID int64, localPath, fileName string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
