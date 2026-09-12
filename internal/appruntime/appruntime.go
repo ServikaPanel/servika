@@ -169,9 +169,23 @@ func installedPython() []Runtime {
 	if binExists(systemPythonBin) {
 		out = append(out, Runtime{Kind: Python, Version: SystemVersion, Path: systemPythonBin, System: true})
 	}
+	for _, version := range pythonVersionNames() {
+		bin := filepath.Join(systemBinDir, "python"+version)
+		if !binExists(bin) || sameAsSystemPython(sysInfo, bin) {
+			continue
+		}
+		out = append(out, Runtime{Kind: Python, Version: version, Path: bin})
+	}
+	return out
+}
+
+// pythonVersionNames returns the versioned interpreter names in the system
+// binary directory, newest first. A host whose directory cannot be read simply
+// has none.
+func pythonVersionNames() []string {
 	entries, err := os.ReadDir(systemBinDir)
 	if err != nil {
-		return out
+		return nil
 	}
 	var names []string
 	for _, entry := range entries {
@@ -186,25 +200,20 @@ func installedPython() []Runtime {
 		names = append(names, version)
 	}
 	sortNewestFirst(names)
-	for _, version := range names {
-		bin := filepath.Join(systemBinDir, "python"+version)
-		if !binExists(bin) {
-			continue
-		}
-		// Skip the versioned name of the OS interpreter itself. On AlmaLinux 10
-		// the base python3 IS 3.12, so /usr/bin/python3.12 is the same file as
-		// /usr/bin/python3, already listed above as the system runtime. Offering
-		// it as a separate removable version would let a removal run
-		// `dnf remove python3.12`, which pulls out the interpreter dnf, the
-		// panel's ops scripts and PHP tooling all depend on. Keyed on os.SameFile
-		// rather than a hardcoded "3.12", so it holds whatever minor the host's
-		// base python happens to be.
-		if info, statErr := os.Stat(bin); statErr == nil && sysInfo != nil && os.SameFile(sysInfo, info) {
-			continue
-		}
-		out = append(out, Runtime{Kind: Python, Version: version, Path: bin})
-	}
-	return out
+	return names
+}
+
+// sameAsSystemPython reports whether a versioned name IS the OS interpreter.
+//
+// On AlmaLinux 10 the base python3 IS 3.12, so /usr/bin/python3.12 is the same
+// file as /usr/bin/python3, already listed as the system runtime. Offering it as
+// a separate removable version would let a removal run `dnf remove python3.12`,
+// which pulls out the interpreter dnf, the panel's ops scripts and PHP tooling
+// all depend on. Keyed on os.SameFile rather than a hardcoded "3.12", so it
+// holds whatever minor the host's base python happens to be.
+func sameAsSystemPython(sysInfo os.FileInfo, bin string) bool {
+	info, err := os.Stat(bin)
+	return err == nil && sysInfo != nil && os.SameFile(sysInfo, info)
 }
 
 // Resolve returns the interpreter for a kind and version.

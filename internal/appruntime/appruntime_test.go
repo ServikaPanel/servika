@@ -230,3 +230,65 @@ func TestSystemPythonIsNotOfferedUnderItsVersionedName(t *testing.T) {
 		t.Error("the genuinely separate 3.13 interpreter was not listed")
 	}
 }
+
+// pointPythonAt redirects both Python paths at a directory for one test.
+func pointPythonAt(t *testing.T, bin, dir string) {
+	t.Helper()
+	previousBin, previousDir := systemPythonBin, systemBinDir
+	systemPythonBin, systemBinDir = bin, dir
+	t.Cleanup(func() { systemPythonBin, systemBinDir = previousBin, previousDir })
+}
+
+// pythonVersions is what Installed offers, other than the system runtime.
+func pythonVersions(t *testing.T) map[string]bool {
+	t.Helper()
+	versions := map[string]bool{}
+	for _, runtime := range Installed(Python) {
+		if !runtime.System {
+			versions[runtime.Version] = true
+		}
+	}
+	return versions
+}
+
+// A version this package offers is one a removal may run `dnf remove` on, so
+// only a name that is a real interpreter of a real version reaches the list.
+func TestOnlyRealPythonInterpretersAreListed(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"php", "pythonX.Y", "python3.13"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	// A directory carrying an interpreter's name is not an interpreter.
+	if err := os.Mkdir(filepath.Join(dir, "python3.14"), 0o750); err != nil {
+		t.Fatalf("make the directory: %v", err)
+	}
+	pointPythonAt(t, filepath.Join(dir, "python3"), dir)
+
+	versions := pythonVersions(t)
+	if !versions["3.13"] {
+		t.Error("the real interpreter was not listed")
+	}
+	for _, unwanted := range []string{"X.Y", "3.14", ""} {
+		if versions[unwanted] {
+			t.Errorf("%q was offered as a removable runtime: %v", unwanted, versions)
+		}
+	}
+}
+
+// A directory that cannot be read is not a failure: the system interpreter is
+// still there and is still what a domain created before any extra runtime uses.
+func TestAnUnreadableBinDirectoryStillReportsTheSystemRuntime(t *testing.T) {
+	dir := t.TempDir()
+	system := filepath.Join(dir, "python3")
+	if err := os.WriteFile(system, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write the system interpreter: %v", err)
+	}
+	pointPythonAt(t, system, filepath.Join(dir, "absent"))
+
+	found := Installed(Python)
+	if len(found) != 1 || !found[0].System {
+		t.Fatalf("Installed(Python) = %v, want only the system runtime", found)
+	}
+}
