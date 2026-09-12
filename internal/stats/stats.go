@@ -229,46 +229,79 @@ func (a *accumulator) consume(reader io.Reader) error {
 		if a.lines > maxLines {
 			break
 		}
-		ip, date, method, path, statusCode, byteCount, userAgent := matches[1], matches[2], matches[3], matches[4], matches[5], matches[6], matches[7]
-		a.requests++
-		a.ips[ip]++
-		// Normalize the path by removing its query string.
-		if i := strings.IndexByte(path, '?'); i >= 0 {
-			path = path[:i]
-		}
-		if len(path) > 80 {
-			path = path[:80]
-		}
-		a.paths[method+" "+path]++
-		a.statuses[statusCode]++
-		switch statusCode[0] {
-		case '2':
-			a.statusGroup["2xx"]++
-		case '3':
-			a.statusGroup["3xx"]++
-		case '4':
-			a.statusGroup["4xx"]++
-		case '5':
-			a.statusGroup["5xx"]++
-		}
-		a.days[date]++
-		if byteCount != "-" {
-			if parsedBytes, parseErr := strconv.ParseInt(byteCount, 10, 64); parseErr == nil {
-				a.totalBytes += parsedBytes
-			}
-		}
-		lowerUserAgent := strings.ToLower(userAgent)
-		for _, botKey := range botKeys {
-			if strings.Contains(lowerUserAgent, botKey) {
-				a.botHits++ // Count bot requests before converting to a percentage.
-				break
-			}
-		}
-		if len(a.recent) < 40 {
-			a.recent = append(a.recent, statusCode+" "+method+" "+path+" ("+ip+")")
-		}
+		a.count(matches)
 	}
 	return scanner.Err()
+}
+
+// count folds one parsed access log line into the counters.
+func (a *accumulator) count(matches []string) {
+	ip, date, method, path, statusCode, byteCount, userAgent :=
+		matches[1], matches[2], matches[3], matches[4], matches[5], matches[6], matches[7]
+	a.requests++
+	a.ips[ip]++
+	path = shortPath(path)
+	a.paths[method+" "+path]++
+	a.statuses[statusCode]++
+	a.countStatusGroup(statusCode)
+	a.days[date]++
+	a.addBytes(byteCount)
+	if isBot(userAgent) {
+		a.botHits++ // Count bot requests before converting to a percentage.
+	}
+	if len(a.recent) < 40 {
+		a.recent = append(a.recent, statusCode+" "+method+" "+path+" ("+ip+")")
+	}
+}
+
+// countStatusGroup counts the four groups the screen charts. A status outside
+// them is counted in a.statuses only, so an unexpected class cannot invent a
+// group the screen does not know how to draw.
+func (a *accumulator) countStatusGroup(statusCode string) {
+	switch statusCode[0] {
+	case '2':
+		a.statusGroup["2xx"]++
+	case '3':
+		a.statusGroup["3xx"]++
+	case '4':
+		a.statusGroup["4xx"]++
+	case '5':
+		a.statusGroup["5xx"]++
+	}
+}
+
+// shortPath drops the query string and cuts what is left, because the result
+// becomes a map key and its length is the tenant's to choose.
+func shortPath(path string) string {
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	if len(path) > 80 {
+		path = path[:80]
+	}
+	return path
+}
+
+// addBytes adds a response size, ignoring the "-" nginx writes when there was
+// no body and anything else that is not a number.
+func (a *accumulator) addBytes(byteCount string) {
+	if byteCount == "-" {
+		return
+	}
+	if parsedBytes, parseErr := strconv.ParseInt(byteCount, 10, 64); parseErr == nil {
+		a.totalBytes += parsedBytes
+	}
+}
+
+// isBot reports whether a user agent names one of the known crawlers.
+func isBot(userAgent string) bool {
+	lowerUserAgent := strings.ToLower(userAgent)
+	for _, botKey := range botKeys {
+		if strings.Contains(lowerUserAgent, botKey) {
+			return true
+		}
+	}
+	return false
 }
 
 // finalize computes derived values from the accumulated counters and writes them

@@ -83,7 +83,11 @@ func TestARotatedLogIsReadFromTheStart(t *testing.T) {
 		offset, stored int64
 	}{
 		{name: "the log is shorter than the offset", offset: 1 << 20, stored: 1 << 20},
-		{name: "the log is shorter than the recorded size", stored: 1 << 20},
+		// The offset alone still fits this log, so only the recorded size says
+		// the file was replaced. Reading from the offset here would count the
+		// new file's first lines as if they were already accounted.
+		{name: "the log is shorter than the recorded size",
+			offset: int64(2 * len(trafficLine)), stored: 1 << 20},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			captureTrafficLog(t)

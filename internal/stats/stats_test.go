@@ -98,18 +98,25 @@ func TestAccumulatorSumsMultipleLogs(t *testing.T) {
 	if wantMB := float64(2*1048576+10) / (1024 * 1024); summary.TotalBandwidthMB != wantMB {
 		t.Fatalf("TotalBandwidthMB = %v, want %v", summary.TotalBandwidthMB, wantMB)
 	}
-	want := map[string]int{"2xx": 1, "3xx": 1, "4xx": 1, "5xx": 1}
-	for group, count := range want {
-		if summary.StatusGroup[group] != count {
-			t.Fatalf("StatusGroup = %#v, want %#v", summary.StatusGroup, want)
-		}
-	}
+	assertOneOfEachStatusGroup(t, summary)
 	// Days from both logs survive, so the parent's chart spans subdomain traffic.
 	if len(summary.Daily) != 2 {
 		t.Fatalf("Daily = %#v, want two days", summary.Daily)
 	}
 	if len(summary.TopPaths) != 2 {
 		t.Fatalf("TopPaths = %#v, want both paths", summary.TopPaths)
+	}
+}
+
+// assertOneOfEachStatusGroup checks that each of the four charted groups was
+// counted once across the combined logs.
+func assertOneOfEachStatusGroup(t *testing.T, summary Summary) {
+	t.Helper()
+	want := map[string]int{"2xx": 1, "3xx": 1, "4xx": 1, "5xx": 1}
+	for group, count := range want {
+		if summary.StatusGroup[group] != count {
+			t.Fatalf("StatusGroup = %#v, want %#v", summary.StatusGroup, want)
+		}
 	}
 }
 

@@ -85,18 +85,43 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 	}
 	size := info.Size()
 
-	// `offset` is backticked because OFFSET is a reserved word from MariaDB 10.6
-	// onward. Unquoted it is a parse error.
-	//
-	// The error is NOT discarded, and that is the whole point. sql.ErrNoRows is
-	// the legitimate first pass and means "start at zero"; anything else means
-	// the cursor could not be read, and starting at zero there re-parses the
-	// entire access log and ADDS it on top of what is already stored, because
-	// the merge below is `bytes=bytes+VALUES(bytes)`. That figure is not
-	// cosmetic: it becomes domains.traffic_kb, which a reseller's contracted
-	// traffic ceiling is measured against, so one transient read failure could
-	// push a reseller over a quota they never used, for the rest of the month,
-	// with nothing in the journal saying so.
+	start, ok := readCursor(db, domainID, size)
+	if !ok {
+		return false
+	}
+	if start == size {
+		refreshTrafficKB(db, domainID)
+		return true
+	}
+
+	monthly, consumed, ok := readLog(logPath, domainID, start)
+	if !ok {
+		return false
+	}
+
+	if !storeTraffic(db, domainID, monthly, consumed, size) {
+		return false
+	}
+	refreshTrafficKB(db, domainID)
+	return true
+}
+
+// readCursor returns the offset this pass starts at, and whether the pass may
+// go on at all.
+//
+// The error is NOT discarded, and that is the whole point. sql.ErrNoRows is
+// the legitimate first pass and means "start at zero"; anything else means
+// the cursor could not be read, and starting at zero there re-parses the
+// entire access log and ADDS it on top of what is already stored, because
+// the merge is `bytes=bytes+VALUES(bytes)`. That figure is not cosmetic:
+// it becomes domains.traffic_kb, which a reseller's contracted traffic ceiling
+// is measured against, so one transient read failure could push a reseller over
+// a quota they never used, for the rest of the month, with nothing in the
+// journal saying so.
+//
+// `offset` is backticked because OFFSET is a reserved word from MariaDB 10.6
+// onward. Unquoted it is a parse error.
+func readCursor(db *sql.DB, domainID, size int64) (start int64, ok bool) {
 	var offset, previousSize int64
 	switch err := db.QueryRow("SELECT `offset`, `size` FROM domain_traffic_cursor WHERE domain_id=?",
 		domainID).Scan(&offset, &previousSize); {
@@ -105,23 +130,25 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 	case err != nil:
 		// #nosec G706 -- an integer domain id and a MariaDB driver error for a parameterized statement; no tenant string reaches the log.
 		log.Printf("traffic cursor read domain=%d: %v; this domain is not accounted this pass", domainID, err)
-		return false
+		return 0, false
 	}
-	start := offset
 	if size < offset || size < previousSize {
-		start = 0
+		// The log is smaller than it was, so it rotated and the stored offset
+		// points into a different file.
+		return 0, true
 	}
-	if start == size {
-		refreshTrafficKB(db, domainID)
-		return true
-	}
+	return offset, true
+}
 
+// readLog counts the bytes each month gained since start, and reports where the
+// reading stopped.
+func readLog(logPath string, domainID, start int64) (monthly map[string]int64, consumed int64, ok bool) {
 	// #nosec G304 -- path is a fixed system/config path, a server-internal temp/archive path, or built from a validated identifier; tenant file reads go through safeio (openat2), not this call.
 	file, err := os.Open(logPath)
 	if err != nil {
 		// #nosec G706 -- an integer domain id and an os error naming a path built from a validated domain name; no raw tenant string reaches the log.
 		log.Printf("traffic log open domain=%d: %v; this domain is not accounted this pass", domainID, err)
-		return false
+		return nil, 0, false
 	}
 	defer func() { _ = file.Close() }()
 	if start > 0 {
@@ -132,18 +159,18 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 			// #nosec G706 -- an integer domain id, an integer offset and an os error; no tenant string reaches the log.
 			log.Printf("traffic log seek domain=%d offset=%d: %v; this domain is not accounted this pass",
 				domainID, start, err)
-			return false
+			return nil, 0, false
 		}
 	}
 
 	reader := bufio.NewReaderSize(file, 256*1024)
-	monthly := map[string]int64{}
-	consumed := start
+	monthly = map[string]int64{}
+	consumed = start
 	for {
 		line, readErr := reader.ReadString('\n')
 		if len(line) > 0 && strings.HasSuffix(line, "\n") {
 			consumed += int64(len(line))
-			if month, bytes, ok := parseTrafficLine(line); ok {
+			if month, bytes, parsed := parseTrafficLine(line); parsed {
 				monthly[month] += bytes
 			}
 		}
@@ -151,27 +178,21 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 			break
 		}
 	}
+	return monthly, consumed, true
+}
 
+// storeTraffic merges the counted months and the new cursor in ONE transaction,
+// so a failure leaves the cursor where it was and the same bytes are counted
+// again rather than lost or doubled.
+func storeTraffic(db *sql.DB, domainID int64, monthly map[string]int64, consumed, size int64) bool {
 	tx, err := db.Begin()
 	if err != nil {
 		log.Printf("begin traffic update domain=%d: %v", domainID, err)
 		return false
 	}
 	defer func() { _ = tx.Rollback() }()
-	for month, bytes := range monthly {
-		if bytes <= 0 {
-			continue
-		}
-		// `year_month` is backticked for the same reason as `offset` above: it is
-		// an interval unit, so MariaDB reserves it and reads it unquoted as
-		// syntax rather than a column name.
-		if _, err := tx.Exec(
-			"INSERT INTO domain_traffic(domain_id, `year_month`, bytes) VALUES(?,?,?)\n"+
-				" ON DUPLICATE KEY UPDATE bytes=bytes+VALUES(bytes)",
-			domainID, month, bytes); err != nil {
-			log.Printf("traffic upsert domain=%d month=%s: %v", domainID, month, err)
-			return false
-		}
+	if !mergeMonths(tx, domainID, monthly) {
+		return false
 	}
 	if _, err := tx.Exec(
 		"INSERT INTO domain_traffic_cursor(domain_id, `offset`, `size`) VALUES(?,?,?)\n"+
@@ -184,7 +205,27 @@ func aggregateDomain(db *sql.DB, domainID int64, domainName string) bool {
 		log.Printf("commit traffic update domain=%d: %v", domainID, err)
 		return false
 	}
-	refreshTrafficKB(db, domainID)
+	return true
+}
+
+// mergeMonths adds each counted month to the stored total.
+//
+// `year_month` is backticked for the same reason as `offset` above: it is an
+// interval unit, so MariaDB reserves it and reads it unquoted as syntax rather
+// than a column name.
+func mergeMonths(tx *sql.Tx, domainID int64, monthly map[string]int64) bool {
+	for month, bytes := range monthly {
+		if bytes <= 0 {
+			continue
+		}
+		if _, err := tx.Exec(
+			"INSERT INTO domain_traffic(domain_id, `year_month`, bytes) VALUES(?,?,?)\n"+
+				" ON DUPLICATE KEY UPDATE bytes=bytes+VALUES(bytes)",
+			domainID, month, bytes); err != nil {
+			log.Printf("traffic upsert domain=%d month=%s: %v", domainID, month, err)
+			return false
+		}
+	}
 	return true
 }
 
