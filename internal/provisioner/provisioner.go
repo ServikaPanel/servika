@@ -3533,13 +3533,17 @@ func repairHardenedPanelVhost(content string, original []byte) {
 	const beforeObjectSrc = "frame-ancestors 'self'; base-uri 'self'"
 	const afterObjectSrc = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
 	patched = strings.ReplaceAll(patched, beforeObjectSrc, afterObjectSrc)
+	// A location that declares add_header keeps NONE of the inherited ones, and
+	// the hand-written repeats had drifted: the static-asset locations re-emitted
+	// four of the six headers.
+	patched = repeatMissingPanelHeaders(patched)
 	if patched == content {
 		return // already current
 	}
 	applyPanelVhostRepair(patched, original, panelVhostRepair{
-		writeFailure: "could not update CSP",
-		step:         "CSP",
-		success:      "CSP updated for the domain preview + nginx reloaded",
+		writeFailure: "could not update the policies",
+		step:         "policies",
+		success:      "the header policies were brought up to date + nginx reloaded",
 	})
 }
 
@@ -3597,6 +3601,10 @@ func addPanelSecurityHeaders(content string, original []byte) {
 		"        add_header Referrer-Policy \"strict-origin-when-cross-origin\" always;\n" +
 		"        add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;"
 	updated = strings.ReplaceAll(updated, cacheHeader, repeatedHeaders)
+	// The repeat above is the four headers this pass has always written; the
+	// remaining two are added by the same repair a hardened vhost gets, so both
+	// paths end on one header set.
+	updated = repeatMissingPanelHeaders(updated)
 
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
 	if err := os.WriteFile(panelVhostPath, []byte(updated), 0644); err != nil {
