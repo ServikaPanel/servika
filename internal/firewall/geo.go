@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"servika/internal/geoip"
@@ -27,7 +28,8 @@ import (
 // block. A country runs to thousands of intervals, and keeping them out of
 // buildRuleset leaves that function small enough to assert the ORDER of the
 // base rules, which is the part that decides whether the block can be bypassed.
-const geoIncludeFile = "/etc/nftables/servika-geo.nft"
+// A variable so a test can exercise the write under a temporary directory.
+var geoIncludeFile = "/etc/nftables/servika-geo.nft"
 
 const (
 	geoSetV4 = "servika_geo4"
@@ -113,7 +115,7 @@ func writeGeoSets(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	// #nosec G301 -- root-owned nftables configuration directory; it holds public address ranges, not secrets.
-	if err := os.MkdirAll("/etc/nftables", 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(geoIncludeFile), 0o755); err != nil {
 		return fmt.Errorf("create the nftables directory: %w", err)
 	}
 	// #nosec G306 -- root-owned nftables configuration file the nft tool must read; it carries public address ranges, not secrets.

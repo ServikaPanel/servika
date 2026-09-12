@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -34,7 +35,6 @@ import (
 
 const (
 	tableName = "servika_fw"
-	rulesFile = "/etc/nftables/servika_fw.nft"
 	// The range internal/apps allocates tenant application ports from. It is
 	// repeated here rather than imported so the firewall does not depend on the
 	// application package; internal/apps.PortMin/PortMax must match.
@@ -140,6 +140,11 @@ var firewallTemplates = map[string][]templateRule{
 		{"close", "tcp", "Template: NFS closed", 2049},
 	},
 }
+
+// rulesFile is where the applied ruleset is persisted, so panel startup can
+// reload it after a reboot. A variable so a test can exercise the write under a
+// temporary directory.
+var rulesFile = "/etc/nftables/servika_fw.nft"
 
 // Handlers provides HTTP handlers for firewall rule operations.
 type Handlers struct{ DB *sql.DB }
@@ -407,7 +412,7 @@ func (h *Handlers) rebuild() error {
 	}
 	// 3. Persist the ruleset so panel startup can reload it after reboot.
 	// #nosec G301 -- root-owned system directory whose daemon (nginx/php-fpm/named) must traverse it; contains no secret material.
-	_ = os.MkdirAll("/etc/nftables", 0o755)
+	_ = os.MkdirAll(filepath.Dir(rulesFile), 0o755)
 	_ = os.WriteFile(rulesFile, ruleset, 0o600)
 	return nil
 }
@@ -664,14 +669,17 @@ func dport(proto string, port int) string {
 	return proto + " dport " + strconv.Itoa(port) + " "
 }
 
-func nftCheck(ruleset []byte) (string, error) {
+// nftCheck and nftApply reach the host, so they are variables a test can stand
+// in for. Their defaults are the real nft calls, and the two-step shape follows
+// the nginx -t pattern: an invalid ruleset is never applied.
+var nftCheck = func(ruleset []byte) (string, error) {
 	cmd := exec.Command("nft", "-c", "-f", "-")
 	cmd.Stdin = bytes.NewReader(ruleset)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
-func nftApply(ruleset []byte) (string, error) {
+var nftApply = func(ruleset []byte) (string, error) {
 	cmd := exec.Command("nft", "-f", "-")
 	cmd.Stdin = bytes.NewReader(ruleset)
 	out, err := cmd.CombinedOutput()
