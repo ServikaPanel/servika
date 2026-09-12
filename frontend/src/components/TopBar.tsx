@@ -139,6 +139,180 @@ function copyToClipboard(text: string): boolean {
   }
 }
 
+// A session with no role claim is treated as a plain user, the least privileged
+// of the three.
+function sessionRole(user?: { role?: string } | null): string {
+  return user?.role || 'user'
+}
+
+// openSubscriptionID names the domain the panel currently has open, if any.
+function openSubscriptionID(pathname: string): string | undefined {
+  return pathname.match(/^\/subscriptions\/(\d+)/)?.[1]
+}
+
+// Per-kind tone of the result badge. A page keeps the neutral slate tone.
+const KIND_STYLES: Record<SearchEntry['kind'], { badge: string; letter: string }> = {
+  domain:    { badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300', letter: 'D' },
+  subdomain: { badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300', letter: 'S' },
+  customer:  { badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', letter: 'C' },
+  user:      { badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', letter: 'U' },
+  page:      { badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', letter: '↗' },
+}
+
+// SearchResultRow is one hit of the global search.
+function SearchResultRow({ entry, active, onHover, onSelect }: {
+  entry: SearchEntry
+  active: boolean
+  onHover: () => void
+  onSelect: () => void
+}) {
+  const style = KIND_STYLES[entry.kind]
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={active}
+      onMouseEnter={onHover}
+      onClick={onSelect}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition ${active ? 'bg-brand-50 dark:bg-brand-900/25' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+    >
+      <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-semibold ${style.badge}`}>{style.letter}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{entry.title}</span>
+        <span className="block text-xs text-slate-500 dark:text-slate-400 truncate">{entry.subtitle}</span>
+      </span>
+      <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{entry.kind}</span>
+    </button>
+  )
+}
+
+// SearchDropdown is the result list under the search input.
+function SearchDropdown({ results, selected, loading, onHover, onSelect }: {
+  results: SearchEntry[]
+  selected: number
+  loading: boolean
+  onHover: (index: number) => void
+  onSelect: (entry: SearchEntry) => void
+}) {
+  const { t } = useTranslation('TopBar')
+  return (
+    <div id="global-search-results" role="listbox" className="absolute top-full left-0 right-0 mt-2 max-h-[min(70vh,32rem)] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 p-1.5">
+      {results.map((entry, i) => (
+        <SearchResultRow
+          key={`${entry.kind}-${entry.path}-${entry.title}`}
+          entry={entry}
+          active={i === selected}
+          onHover={() => onHover(i)}
+          onSelect={() => onSelect(entry)}
+        />
+      ))}
+      {loading && <div className="px-3 py-3 text-sm text-slate-500">{t('loadingRecords')}</div>}
+      {!loading && results.length === 0 && (
+        <div className="px-3 py-6 text-center text-sm text-slate-500">{t('noResults')}</div>
+      )}
+    </div>
+  )
+}
+
+// ServerIpButton shows this server's address and copies it on click.
+function ServerIpButton({ serverIp, copied, onCopy }: { serverIp: string | null; copied: boolean; onCopy: () => void }) {
+  const { t } = useTranslation('TopBar')
+  if (!serverIp) return null
+  return (
+    <button
+      onClick={onCopy}
+      title={t('copyIp')}
+      className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-mono text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
+    >
+      <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+      </svg>
+      {copied ? (
+        <span className="text-emerald-600 dark:text-emerald-400 font-sans font-medium">{t('copied')}</span>
+      ) : (
+        <span>{serverIp}</span>
+      )}
+    </button>
+  )
+}
+
+// ThemeIcon draws the glyph of the theme that is active right now.
+function ThemeIcon({ theme }: { theme: Theme }) {
+  if (theme === 'dark') {
+    return (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+      </svg>
+    )
+  }
+  if (theme === 'light') {
+    return (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    )
+  }
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  )
+}
+
+// AccountMenu is the avatar button and the menu it opens.
+function AccountMenu({ user, open, onToggle, onProfile, onLogout }: {
+  user?: { full_name?: string; name?: string; role?: string } | null
+  open: boolean
+  onToggle: () => void
+  onProfile: () => void
+  onLogout: () => void
+}) {
+  const { t } = useTranslation('TopBar')
+  const label = user?.full_name || user?.name
+  return (
+    <div className="relative">
+      <button
+        onClick={onToggle}
+        aria-label={t('accountMenu')}
+        className="flex items-center gap-2 px-1.5 sm:px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
+      >
+        <div className="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-semibold text-xs flex items-center justify-center">
+          {(label || '?').slice(0, 1).toUpperCase()}
+        </div>
+        <span className="hidden sm:inline text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[180px] truncate">{label}</span>
+        <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onToggle} />
+          <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 py-1">
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{label}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-500 capitalize">{user?.role}</div>
+            </div>
+            <button
+              onClick={onProfile}
+              className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              {t('profileMenu')}
+            </button>
+            <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+            <button
+              onClick={onLogout}
+              className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
+            >
+              {t('logout')}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function TopBar({ onMenuClick }: TopBarProps) {
   const { t } = useTranslation('TopBar')
   const username = useAuth((s) => s.username)
@@ -159,11 +333,11 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const [records, setRecords] = useState<SearchEntry[]>([])
   const [recordsLoaded, setRecordsLoaded] = useState(false)
 
-  const role = username?.role || 'user'
+  const role = sessionRole(username)
   // Global search targets management data (domains/customers/users) and admin
   // pages; a customer portal session has none of these, so it is never shown.
   const canSearch = !isCustomer && (role === 'admin' || role === 'reseller')
-  const openDomainID = location.pathname.match(/^\/subscriptions\/(\d+)/)?.[1]
+  const openDomainID = openSubscriptionID(location.pathname)
 
   const results = useMemo(() => {
     const q = normalize(query.trim())
@@ -342,36 +516,13 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             />
             <span className="hidden sm:block absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 pointer-events-none">Ctrl K</span>
             {searchOpen && query.trim() && (
-              <div id="global-search-results" role="listbox" className="absolute top-full left-0 right-0 mt-2 max-h-[min(70vh,32rem)] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50 p-1.5">
-                {results.map((entry, i) => (
-                  <button
-                    key={`${entry.kind}-${entry.path}-${entry.title}`}
-                    type="button"
-                    role="option"
-                    aria-selected={i === selected}
-                    onMouseEnter={() => setSelected(i)}
-                    onClick={() => goToResult(entry)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition ${i === selected ? 'bg-brand-50 dark:bg-brand-900/25' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                  >
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-semibold ${
-                      entry.kind === 'domain' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
-                      : entry.kind === 'subdomain' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
-                      : entry.kind === 'customer' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                      : entry.kind === 'user' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
-                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                    }`}>{entry.kind === 'domain' ? 'D' : entry.kind === 'subdomain' ? 'S' : entry.kind === 'customer' ? 'C' : entry.kind === 'user' ? 'U' : '↗'}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{entry.title}</span>
-                      <span className="block text-xs text-slate-500 dark:text-slate-400 truncate">{entry.subtitle}</span>
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500">{entry.kind}</span>
-                  </button>
-                ))}
-                {searchLoading && <div className="px-3 py-3 text-sm text-slate-500">{t('loadingRecords')}</div>}
-                {!searchLoading && results.length === 0 && (
-                  <div className="px-3 py-6 text-center text-sm text-slate-500">{t('noResults')}</div>
-                )}
-              </div>
+              <SearchDropdown
+                results={results}
+                selected={selected}
+                loading={searchLoading}
+                onHover={setSelected}
+                onSelect={goToResult}
+              />
             )}
           </div>
         </div>
@@ -380,82 +531,22 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
       <div className="flex-1" />
 
       <div className="flex items-center justify-end gap-1">
-        {serverIp && (
-          <button
-            onClick={handleCopyIp}
-            title={t('copyIp')}
-            className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-mono text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
-          >
-            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-            </svg>
-            {ipCopied ? (
-              <span className="text-emerald-600 dark:text-emerald-400 font-sans font-medium">{t('copied')}</span>
-            ) : (
-              <span>{serverIp}</span>
-            )}
-          </button>
-        )}
+        <ServerIpButton serverIp={serverIp} copied={ipCopied} onCopy={handleCopyIp} />
         <button onClick={cycleTheme}
           className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
           title={t('themeToggle', { theme })}>
-          {theme === 'dark' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg>
-          ) : theme === 'light' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          )}
+          <ThemeIcon theme={theme} />
         </button>
         <LanguageSwitcher />
         <NotificationBell />
 
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen((value) => !value)}
-            aria-label={t('accountMenu')}
-            className="flex items-center gap-2 px-1.5 sm:px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
-          >
-            <div className="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-semibold text-xs flex items-center justify-center">
-              {(username?.full_name || username?.name || '?').slice(0, 1).toUpperCase()}
-            </div>
-            <span className="hidden sm:inline text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[180px] truncate">{username?.full_name || username?.name}</span>
-            <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 py-1">
-                <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100">{username?.full_name || username?.name}</div>
-                  <div className="text-xs text-slate-500 dark:text-slate-500 capitalize">{username?.role}</div>
-                </div>
-                <button
-                  onClick={() => { setMenuOpen(false); navigate('/profile') }}
-                  className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  {t('profileMenu')}
-                </button>
-                <div className="border-t border-slate-100 dark:border-slate-800 my-1"></div>
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
-                >
-                  {t('logout')}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        <AccountMenu
+          user={username}
+          open={menuOpen}
+          onToggle={() => setMenuOpen((value) => !value)}
+          onProfile={() => { setMenuOpen(false); navigate('/profile') }}
+          onLogout={handleLogout}
+        />
       </div>
     </header>
   )

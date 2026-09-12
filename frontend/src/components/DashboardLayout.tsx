@@ -147,6 +147,76 @@ function domainNav(id: string): NavGroup[] {
   ]
 }
 
+// Customer menu — one fixed domain, so every entry is built from that id.
+function customerNav(domainID: string | number | null | undefined): NavGroup[] {
+  const s = (sub = '') => `/subscriptions/${domainID}${sub}`
+  return [
+    { titleKey: 'myDomain', items: [
+      { to: s(), labelKey: 'overview', icon: ICONS.home },
+      { to: s('/files'), labelKey: 'fileManager', icon: ICONS.domain },
+      { to: s('/databases'), labelKey: 'databases', icon: ICONS.plan },
+      { to: s('/ftp'), labelKey: 'ftp', icon: ICONS.reseller },
+      { to: s('/php'), labelKey: 'php', icon: ICONS.tools },
+      { to: s('/web-server'), labelKey: 'webServer', icon: ICONS.tools },
+      { to: s('/dns'), labelKey: 'dnsSettings', icon: ICONS.domain },
+      { to: s('/ssl'), labelKey: 'sslTls', icon: ICONS.lock },
+      { to: s('/cron'), labelKey: 'scheduledTasks', icon: ICONS.monitoring },
+      { to: s('/apps'), labelKey: 'applications', icon: ICONS.extensions },
+      { to: s('/git'), labelKey: 'gitDeploy', icon: ICONS.extensions },
+      { to: s('/laravel'), labelKey: 'laravel', icon: ICONS.extensions },
+      { to: s('/logs'), labelKey: 'logs', icon: ICONS.stats },
+      { to: s('/backups'), labelKey: 'backups', icon: ICONS.tools },
+      { to: '/attack-chains', labelKey: 'attackChains', icon: ICONS.chains },
+    ]},
+  ]
+}
+
+// selectNav picks the menu for this session. isCustomer marks a session opened
+// through the customer portal (/cp); such a session is always role='user', so
+// the two conditions agree and both land on the customer menu. A reseller may
+// also enter domain mode (its own customer's domain); only the customer stays
+// on its fixed menu.
+function selectNav(session: {
+  isCustomer: boolean
+  role?: string
+  domainMode: boolean
+  activeDomainID: string
+  customerDomainID: string | number | null | undefined
+}): NavGroup[] {
+  if (session.isCustomer || session.role === 'user') return customerNav(session.customerDomainID)
+  if (session.domainMode) return domainNav(session.activeDomainID)
+  if (session.role === 'reseller') return RESELLER_NAV
+  return NAV
+}
+
+// mobileNavItems is the bottom bar, which carries four destinations at most.
+function mobileNavItems(isCustomer: boolean, customerDomainID: string | number | null | undefined, t: TFunction) {
+  if (isCustomer) {
+    return [
+      { to: `/subscriptions/${customerDomainID}`, label: t('mobile.overview'), icon: ICONS.home, end: true },
+      { to: `/subscriptions/${customerDomainID}/files`, label: t('mobile.files'), icon: ICONS.domain },
+      { to: `/subscriptions/${customerDomainID}/databases`, label: t('mobile.db'), icon: ICONS.plan },
+      { to: `/subscriptions/${customerDomainID}/backups`, label: t('mobile.backups'), icon: ICONS.tools },
+    ]
+  }
+  return [
+    { to: '/', label: t('mobile.home'), icon: ICONS.home, end: true },
+    { to: '/domains', label: t('mobile.domains'), icon: ICONS.domain },
+    { to: '/tools-settings', label: t('mobile.tools'), icon: ICONS.tools },
+    { to: '/profile', label: t('mobile.profile'), icon: ICONS.profile },
+  ]
+}
+
+// VersionFooterLine names this installation, and its version once it is known.
+function VersionFooterLine({ footer }: { footer: VersionFooter | null }) {
+  return (
+    <footer className="py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+      Servika{footer?.current ? ` v${footer.current}` : ''}
+      {footer?.build_date ? ` · Build: ${footer.build_date}` : ''}
+    </footer>
+  )
+}
+
 function SidebarNav({ groups, openGroups, onToggle, onNavigate, topSlot, t }: {
   groups: NavGroup[]
   openGroups: Record<string, boolean>
@@ -295,57 +365,14 @@ export default function DashboardLayout() {
     }
   }, [mobileOpen])
 
-  const customerNav: NavGroup[] = [
-    { titleKey: 'myDomain', items: [
-      { to: `/subscriptions/${customerDomainID}`, labelKey: 'overview', icon: ICONS.home },
-      { to: `/subscriptions/${customerDomainID}/files`, labelKey: 'fileManager', icon: ICONS.domain },
-      { to: `/subscriptions/${customerDomainID}/databases`, labelKey: 'databases', icon: ICONS.plan },
-      { to: `/subscriptions/${customerDomainID}/ftp`, labelKey: 'ftp', icon: ICONS.reseller },
-      { to: `/subscriptions/${customerDomainID}/php`, labelKey: 'php', icon: ICONS.tools },
-      { to: `/subscriptions/${customerDomainID}/web-server`, labelKey: 'webServer', icon: ICONS.tools },
-      { to: `/subscriptions/${customerDomainID}/dns`, labelKey: 'dnsSettings', icon: ICONS.domain },
-      { to: `/subscriptions/${customerDomainID}/ssl`, labelKey: 'sslTls', icon: ICONS.lock },
-      { to: `/subscriptions/${customerDomainID}/cron`, labelKey: 'scheduledTasks', icon: ICONS.monitoring },
-      { to: `/subscriptions/${customerDomainID}/apps`, labelKey: 'applications', icon: ICONS.extensions },
-      { to: `/subscriptions/${customerDomainID}/git`, labelKey: 'gitDeploy', icon: ICONS.extensions },
-      { to: `/subscriptions/${customerDomainID}/laravel`, labelKey: 'laravel', icon: ICONS.extensions },
-      { to: `/subscriptions/${customerDomainID}/logs`, labelKey: 'logs', icon: ICONS.stats },
-      { to: `/subscriptions/${customerDomainID}/backups`, labelKey: 'backups', icon: ICONS.tools },
-      { to: '/attack-chains', labelKey: 'attackChains', icon: ICONS.chains },
-    ]},
-  ]
-
   // Domain mode: while an admin is under /subscriptions/:id/* the sidebar shows
   // that domain's tool menu. Customer sessions keep their fixed single-domain nav.
   const domainMatch = location.pathname.match(/^\/subscriptions\/(\d+)/)
   const activeDomainID = domainMatch ? domainMatch[1] : ''
   const domainMode = !isCustomer && activeDomainID !== ''
 
-  // The menu is derived from the role. isCustomer marks a session opened through
-  // the customer portal (/cp); such a session is always role='user', so the two
-  // conditions agree and both land on the customer menu. A reseller may also
-  // enter domain mode (its own customer's domain); only the customer stays on
-  // its fixed menu.
-  const activeNav = isCustomer || role === 'user'
-    ? customerNav
-    : domainMode
-    ? domainNav(activeDomainID)
-    : role === 'reseller'
-    ? RESELLER_NAV
-    : NAV
-  const mobileItems = isCustomer
-    ? [
-        { to: `/subscriptions/${customerDomainID}`, label: t('mobile.overview'), icon: ICONS.home, end: true },
-        { to: `/subscriptions/${customerDomainID}/files`, label: t('mobile.files'), icon: ICONS.domain },
-        { to: `/subscriptions/${customerDomainID}/databases`, label: t('mobile.db'), icon: ICONS.plan },
-        { to: `/subscriptions/${customerDomainID}/backups`, label: t('mobile.backups'), icon: ICONS.tools },
-      ]
-    : [
-        { to: '/', label: t('mobile.home'), icon: ICONS.home, end: true },
-        { to: '/domains', label: t('mobile.domains'), icon: ICONS.domain },
-        { to: '/tools-settings', label: t('mobile.tools'), icon: ICONS.tools },
-        { to: '/profile', label: t('mobile.profile'), icon: ICONS.profile },
-      ]
+  const activeNav = selectNav({ isCustomer, role, domainMode, activeDomainID, customerDomainID })
+  const mobileItems = mobileNavItems(isCustomer, customerDomainID, t)
 
   function toggle(title: string) {
     setOpenGroups((state) => ({ ...state, [title]: !state[title] }))
@@ -385,10 +412,7 @@ export default function DashboardLayout() {
               <Outlet />
             </Suspense>
           </div>
-          <footer className="py-4 text-center text-xs text-slate-400 dark:text-slate-600">
-            Servika{footer?.current ? ` v${footer.current}` : ''}
-            {footer?.build_date ? ` · Build: ${footer.build_date}` : ''}
-          </footer>
+          <VersionFooterLine footer={footer} />
         </main>
       </div>
 
