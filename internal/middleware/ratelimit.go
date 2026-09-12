@@ -233,7 +233,33 @@ func loginAccount(r *http.Request) (name string, oversize bool) {
 	if json.Unmarshal(body, &payload) != nil {
 		return "", false // unreadable body; the per-IP counter still applies
 	}
-	return strings.ToLower(strings.TrimSpace(payload.Username)), false
+	return accountKey(strings.ToLower(strings.TrimSpace(payload.Username))), false
+}
+
+// maxAccountKey bounds one account counter key.
+//
+// users.username is VARCHAR(64), so a longer value names no account that can
+// exist and the only real thing about it is the memory it commits. The reaper
+// holds a failed attempt's entry for accountWindow+accountLock, and the body
+// bound alone let each one carry about 8 KB for that long: the per-address lock
+// caps that at five entries per counted address, but the counted address is the
+// IPv6 /64, and a routed /48 holds 65536 of them.
+//
+// Two impossible names that share their first 64 characters share one counter.
+// That makes the limiter stricter for names nobody can log in with, which costs
+// nothing.
+const maxAccountKey = 64
+
+// accountKey cuts a name to maxAccountKey runes, never mid-rune.
+func accountKey(name string) string {
+	runes := 0
+	for i := range name {
+		if runes == maxAccountKey {
+			return name[:i]
+		}
+		runes++
+	}
+	return name
 }
 
 // durationText formats remaining seconds into human-readable text.

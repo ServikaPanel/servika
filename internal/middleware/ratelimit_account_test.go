@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // resetLoginCounters clears both maps so one test cannot lock another out.
@@ -64,6 +65,47 @@ func TestLoginAccountIgnoresAnUnreadableBody(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader("not json"))
 	if name, oversize := loginAccount(request); name != "" || oversize {
 		t.Errorf("loginAccount = (%q, %v), want no account and no refusal", name, oversize)
+	}
+}
+
+// The account counter key is a constant cost. The body bound alone let one
+// failed attempt commit about 8 KB of the map for accountWindow+accountLock,
+// and the counted address is the IPv6 /64, so a routed /48 could hold gigabytes
+// against an endpoint that authenticates nobody.
+func TestTheAccountKeyIsBoundedWhateverTheCallerSends(t *testing.T) {
+	resetLoginCounters(t)
+	long := strings.Repeat("a", maxLoginBody-40)
+	request := httptest.NewRequest(http.MethodPost, "/auth/login",
+		strings.NewReader(`{"username":"`+long+`","password":"x"}`))
+
+	name, oversize := loginAccount(request)
+	if oversize {
+		t.Fatal("a body inside the bound was reported as oversize")
+	}
+	if len(name) > maxAccountKey {
+		t.Errorf("the stored key is %d bytes, want at most %d", len(name), maxAccountKey)
+	}
+	if name != strings.Repeat("a", maxAccountKey) {
+		t.Errorf("the key is not the first %d characters: %q", maxAccountKey, name)
+	}
+	// A name that can really exist is stored whole, or the limiter would merge
+	// two accounts that both fit the column.
+	full := strings.Repeat("b", maxAccountKey)
+	whole := httptest.NewRequest(http.MethodPost, "/auth/login",
+		strings.NewReader(`{"username":"`+full+`","password":"x"}`))
+	if got, _ := loginAccount(whole); got != full {
+		t.Errorf("a %d character name was cut to %q", maxAccountKey, got)
+	}
+}
+
+// The cut is by rune, so a multi-byte name never leaves a broken one behind.
+func TestTheAccountKeyIsNeverCutInsideARune(t *testing.T) {
+	name := accountKey(strings.Repeat("ş", maxAccountKey+20))
+	if !utf8.ValidString(name) {
+		t.Errorf("the key is not valid UTF-8: %q", name)
+	}
+	if got := utf8.RuneCountInString(name); got != maxAccountKey {
+		t.Errorf("the key holds %d runes, want %d", got, maxAccountKey)
 	}
 }
 
