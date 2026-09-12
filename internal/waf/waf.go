@@ -131,7 +131,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Effective (same resolver as provisioner — no drift)
-	efActive, efEngine, efPL := provisioner.WAFEffective(h.DB, sk)
+	efActive, efEngine, efPL := wafEffective(h.DB, sk)
 	ef := effectiveInfo{Active: efActive, Engine: efEngine, Paranoia: efPL}
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
@@ -139,7 +139,7 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 		"settings":      s,
 		"plan":          plan,
 		"effective":     ef,
-		"module_loaded": provisioner.WAFModuleLoaded(),
+		"module_loaded": wafModuleLoaded(),
 	})
 }
 
@@ -187,10 +187,10 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	efActive, efEngine, efPL := provisioner.WAFEffective(h.DB, sk)
+	efActive, efEngine, efPL := wafEffective(h.DB, sk)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":            true,
 		"effective":     effectiveInfo{Active: efActive, Engine: efEngine, Paranoia: efPL},
-		"module_loaded": provisioner.WAFModuleLoaded(),
+		"module_loaded": wafModuleLoaded(),
 	})
 }
