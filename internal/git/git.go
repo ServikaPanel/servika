@@ -434,22 +434,29 @@ func gitClone(systemUser, repoURL, branch, targetDir, token string) (sha string,
 	return sha, log, nil
 }
 
+// pullPreconditions vets what a pull is about to act on and returns the address
+// pin for the remote.
+//
+// The fetch reaches the SAME remote the clone did, so it needs the same pin. The
+// URL comes from the stored row rather than from the repository's own config,
+// which the tenant owns and can rewrite.
+func pullPreconditions(repoURL, targetDir, branch string) ([]string, error) {
+	if !validTargetDir(targetDir) {
+		return nil, errors.New("invalid target directory")
+	}
+	if !validBranch(branch) {
+		return nil, errors.New("invalid branch")
+	}
+	if !validRepoURL(repoURL) {
+		return nil, errors.New("invalid repository URL")
+	}
+	return resolveArgsFor(repoURL)
+}
+
 // gitPull updates an existing repository.
 // token authenticates a private HTTPS repository (empty => public/deploy-key).
 func gitPull(systemUser, repoURL, targetDir, branch, token string) (sha string, log string, err error) {
-	if !validTargetDir(targetDir) {
-		return "", "", errors.New("invalid target directory")
-	}
-	if !validBranch(branch) {
-		return "", "", errors.New("invalid branch")
-	}
-	// The fetch reaches the SAME remote the clone did, so it needs the same pin.
-	// The URL comes from the stored row rather than from the repository's own
-	// config, which the tenant owns and can rewrite.
-	if !validRepoURL(repoURL) {
-		return "", "", errors.New("invalid repository URL")
-	}
-	resolveArgs, err := resolveArgsFor(repoURL)
+	resolveArgs, err := pullPreconditions(repoURL, targetDir, branch)
 	if err != nil {
 		return "", "", err
 	}
@@ -513,6 +520,37 @@ func (h *Handlers) Get(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, repo)
 }
 
+// acceptedRepository fills in the defaults and vets every field a connect
+// stores. It answers the refusal itself.
+func acceptedRepository(w http.ResponseWriter, req connectRequest) (connectRequest, bool) {
+	req.RepoURL = strings.TrimSpace(req.RepoURL)
+	req.Branch = strings.TrimSpace(req.Branch)
+	req.TargetDir = strings.TrimSpace(req.TargetDir)
+	if req.Branch == "" {
+		req.Branch = "main"
+	}
+	if req.TargetDir == "" {
+		req.TargetDir = "public_html"
+	}
+	if !validRepoURL(req.RepoURL) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid repo_url")
+		return req, false
+	}
+	if err := checkGitURL(req.RepoURL); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "repository host is not permitted")
+		return req, false
+	}
+	if !validBranch(req.Branch) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid branch")
+		return req, false
+	}
+	if !validTargetDir(req.TargetDir) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid target_dir")
+		return req, false
+	}
+	return req, true
+}
+
 // Connect creates a deploy key and stores the repository URL without cloning.
 func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 	id, systemUser, err := h.lookupDomain(r)
@@ -529,29 +567,8 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	req.RepoURL = strings.TrimSpace(req.RepoURL)
-	req.Branch = strings.TrimSpace(req.Branch)
-	req.TargetDir = strings.TrimSpace(req.TargetDir)
-	if req.Branch == "" {
-		req.Branch = "main"
-	}
-	if req.TargetDir == "" {
-		req.TargetDir = "public_html"
-	}
-	if !validRepoURL(req.RepoURL) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid repo_url")
-		return
-	}
-	if err := checkGitURL(req.RepoURL); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "repository host is not permitted")
-		return
-	}
-	if !validBranch(req.Branch) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid branch")
-		return
-	}
-	if !validTargetDir(req.TargetDir) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid target_dir")
+	req, ok := acceptedRepository(w, req)
+	if !ok {
 		return
 	}
 	pub, err := deployKeyFor(systemUser)
@@ -682,58 +699,15 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the HMAC-SHA256 signature before running any pull. The URL token
-	// only locates the repository; the signature proves the body came from the
-	// configured remote.
-	//
-	// The key is a SEPARATE column from the path token. They used to be one
-	// value, which meant anyone who learned the URL could forge a signature for
-	// any body, and the URL is written to the nginx access log on every
-	// delivery. An empty key is refused rather than falling back to the token:
-	// a fallback would restore exactly the property this separation removes.
-	if signingKey == "" {
-		httpx.WriteError(w, http.StatusServiceUnavailable,
-			"this repository has no webhook signing key; reconnect it from the panel")
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // webhook body over 1MB is abuse
-	body, rerr := io.ReadAll(r.Body)
-	if rerr != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "could not read request body")
-		return
-	}
-	sig := r.Header.Get("X-Hub-Signature-256")
-	if sig == "" {
-		httpx.WriteError(w, http.StatusUnauthorized, "signature required")
-		return
-	}
-	if !validGitHubSignature(signingKey, body, sig) {
-		httpx.WriteError(w, http.StatusUnauthorized, "signature verification failed")
+	if !signedByTheRemote(w, r, signingKey) {
 		return
 	}
 
 	event := strings.TrimSpace(r.Header.Get("X-GitHub-Event"))
 	delivery := strings.TrimSpace(r.Header.Get("X-GitHub-Delivery"))
-	if delivery == "" || len(delivery) > 128 {
-		httpx.WriteError(w, http.StatusBadRequest, "delivery id missing or invalid")
+	if !h.firstDelivery(w, r, delivery, gid, event) {
 		return
 	}
-	// GitHub assigns each delivery a unique id. INSERT IGNORE against the UNIQUE
-	// primary key atomically rejects a replay of the same signed request, whether
-	// it arrives over the wire twice or is deliberately resent.
-	res, derr := h.DB.ExecContext(r.Context(),
-		`INSERT IGNORE INTO git_webhook_deliveries(delivery_id, git_repo_id, event)
-		 VALUES(?,?,?)`, delivery, gid, event)
-	if derr != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not record webhook delivery")
-		return
-	}
-	if affected, aerr := res.RowsAffected(); aerr != nil || affected != 1 {
-		httpx.WriteError(w, http.StatusConflict, "webhook delivery already processed")
-		return
-	}
-	_, _ = h.DB.ExecContext(r.Context(),
-		`DELETE FROM git_webhook_deliveries WHERE received_at < NOW() - INTERVAL 30 DAY`)
 
 	if event == "ping" {
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "pong": true})
@@ -763,6 +737,66 @@ func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "commit": sha,
 	})
+}
+
+// signedByTheRemote verifies the HMAC-SHA256 signature before any pull runs.
+// The URL token only locates the repository; the signature proves the body came
+// from the configured remote. It answers the refusal itself.
+//
+// The key is a SEPARATE column from the path token. They used to be one value,
+// which meant anyone who learned the URL could forge a signature for any body,
+// and the URL is written to the nginx access log on every delivery. An empty key
+// is refused rather than falling back to the token: a fallback would restore
+// exactly the property this separation removes.
+func signedByTheRemote(w http.ResponseWriter, r *http.Request, signingKey string) bool {
+	if signingKey == "" {
+		httpx.WriteError(w, http.StatusServiceUnavailable,
+			"this repository has no webhook signing key; reconnect it from the panel")
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // webhook body over 1MB is abuse
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "could not read request body")
+		return false
+	}
+	sig := r.Header.Get("X-Hub-Signature-256")
+	if sig == "" {
+		httpx.WriteError(w, http.StatusUnauthorized, "signature required")
+		return false
+	}
+	if !validGitHubSignature(signingKey, body, sig) {
+		httpx.WriteError(w, http.StatusUnauthorized, "signature verification failed")
+		return false
+	}
+	return true
+}
+
+// firstDelivery records the delivery and reports whether this is its first
+// arrival. It answers the refusal itself.
+//
+// GitHub assigns each delivery a unique id. INSERT IGNORE against the UNIQUE
+// primary key atomically rejects a replay of the same signed request, whether it
+// arrives over the wire twice or is deliberately resent.
+func (h *Handlers) firstDelivery(w http.ResponseWriter, r *http.Request, delivery string, gid int64, event string) bool {
+	if delivery == "" || len(delivery) > 128 {
+		httpx.WriteError(w, http.StatusBadRequest, "delivery id missing or invalid")
+		return false
+	}
+	res, err := h.DB.ExecContext(r.Context(),
+		`INSERT IGNORE INTO git_webhook_deliveries(delivery_id, git_repo_id, event)
+		 VALUES(?,?,?)`, delivery, gid, event)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not record webhook delivery")
+		return false
+	}
+	if affected, affectedErr := res.RowsAffected(); affectedErr != nil || affected != 1 {
+		httpx.WriteError(w, http.StatusConflict, "webhook delivery already processed")
+		return false
+	}
+	_, _ = h.DB.ExecContext(r.Context(),
+		`DELETE FROM git_webhook_deliveries WHERE received_at < NOW() - INTERVAL 30 DAY`)
+	return true
 }
 
 // validGitHubSignature reports whether sig is the GitHub HMAC-SHA256 signature

@@ -23,15 +23,21 @@ func TestTheWebhookSigningKeyIsNotTheURLToken(t *testing.T) {
 		t.Error("Connect does not store a signing key")
 	}
 
+	// The delivery reads the key column; signedByTheRemote is where the key is
+	// used, so the verification itself is read there.
 	webhook := sourceFunction(t, body, "func (h *Handlers) Webhook(")
-	if strings.Contains(webhook, "validGitHubSignature(webhookSecret") {
+	verify := sourceFunction(t, body, "func signedByTheRemote(")
+	if strings.Contains(verify, "validGitHubSignature(webhookSecret") {
 		t.Error("the webhook still verifies the signature with the URL path token")
 	}
-	if !strings.Contains(webhook, "validGitHubSignature(signingKey") {
+	if !strings.Contains(verify, "validGitHubSignature(signingKey") {
 		t.Error("the webhook does not verify the signature with the separate signing key")
 	}
 	if !strings.Contains(webhook, "g.webhook_signing_key") {
 		t.Error("the webhook does not read the signing key column")
+	}
+	if !strings.Contains(webhook, "signedByTheRemote(w, r, signingKey)") {
+		t.Error("the webhook does not hand the signing key to the verification")
 	}
 }
 
@@ -39,9 +45,9 @@ func TestTheWebhookSigningKeyIsNotTheURLToken(t *testing.T) {
 // fallback would restore exactly the property the separation removes, and it
 // would do so silently on whichever rows happened to be missing the key.
 func TestAnEmptySigningKeyRefusesTheDelivery(t *testing.T) {
-	webhook := sourceFunction(t, readGitSource(t, "git.go"), "func (h *Handlers) Webhook(")
-	refusal := strings.Index(webhook, `if signingKey == "" {`)
-	verify := strings.Index(webhook, "validGitHubSignature(")
+	verifier := sourceFunction(t, readGitSource(t, "git.go"), "func signedByTheRemote(")
+	refusal := strings.Index(verifier, `if signingKey == "" {`)
+	verify := strings.Index(verifier, "validGitHubSignature(")
 	if refusal < 0 {
 		t.Fatal("the webhook does not refuse an empty signing key")
 	}

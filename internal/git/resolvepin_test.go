@@ -106,8 +106,12 @@ func TestBothNetworkPathsCarryThePin(t *testing.T) {
 			end = len(body) - start
 		}
 		// gitPull reaches the pin through the resolveArgsFor seam (seams.go),
-		// whose default IS gitResolveArgs, so either spelling is the pin.
+		// whose default IS gitResolveArgs, and through pullPreconditions, which
+		// is where its own vetting now lives. Any of the three is the pin.
 		reached := body[start : start+end]
+		if strings.Contains(reached, "pullPreconditions(") {
+			reached = sourceFunction(t, body, "func pullPreconditions(")
+		}
 		if !strings.Contains(reached, "gitResolveArgs(repoURL)") &&
 			!strings.Contains(reached, "resolveArgsFor(repoURL)") {
 			t.Errorf("%s does not pin its remote", fn)
