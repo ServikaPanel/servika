@@ -12,6 +12,10 @@ export LC_ALL=C
 
 ENV_FILE=/etc/servika/env
 
+# Every ops tool carries its own copy of this loader on purpose. A sourced
+# library (see servika-offsite-lib) is best effort, because a release where
+# it has not landed yet must still work; reading the environment cannot be.
+# A Go test fails the build if these parse loops ever drift apart.
 load_servika_env() {
   [ -f "$ENV_FILE" ] || return 0
   [ "$(stat -c %u "$ENV_FILE" 2>/dev/null)" = 0 ] || { echo "insecure environment file owner" >&2; exit 1; }
