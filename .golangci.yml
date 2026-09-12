@@ -1,0 +1,20 @@
+version: "2"
+
+# The project rule is a cyclomatic complexity of 10 or less for every function,
+# and a linter has to enforce it or the limit is a suggestion. gocyclo is added
+# on top of the standard set, which is what ran here before this file existed.
+#
+# There is no exclusion, no //nolint and no raised limit. Test files are inside
+# the gate too: a test function past 10 is as hard to follow as any other.
+linters:
+  default: standard
+  enable:
+    - gocyclo
+  settings:
+    gocyclo:
+      min-complexity: 10
+  exclusions:
+    # Vendored JavaScript ships a Go sample of its own. It is not part of this
+    # module, the go tool never builds it, and it is not ours to refactor.
+    paths:
+      - frontend/node_modules
