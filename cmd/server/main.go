@@ -372,10 +372,12 @@ func healInterruptedWork(d *sql.DB) {
 
 // seedDefaults writes the rows a fresh installation needs and keeps the stock
 // plans in step with the built-in set.
-func seedDefaults(d *sql.DB, ipv4 string) {
-	if err := domains.SeedIfEmpty(context.Background(), d, ipv4); err != nil {
-		logx.Warnf("seed warn: %v", err)
-	}
+//
+// Domains are NOT seeded. A fresh install ships with zero of them, and the
+// demo seeder that used to run here was removed rather than left as a no-op:
+// it read as a startup step, it carried an error branch that could never fire,
+// and it was the reason deleting every domain regenerated the demos.
+func seedDefaults(d *sql.DB) {
 	if err := plans.SeedIfEmpty(context.Background(), d); err != nil {
 		logx.Warnf("plans seed warn: %v", err)
 	}
@@ -663,7 +665,7 @@ func main() {
 	ipv6 := config.PublicIPv6()
 	logx.Infof("server ipv4: %s ipv6: %q kernel ipv6: %t", ipv4, ipv6, config.HasIPv6())
 
-	seedDefaults(d, ipv4)
+	seedDefaults(d)
 	startHostServices(d, ipv4)
 
 	customerH := &customer.Handlers{DB: d, Secret: cfg.JWTSecret, LifetimeSec: cfg.JWTLifetime}
