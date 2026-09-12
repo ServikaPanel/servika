@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"servika/internal/config"
-	"servika/internal/credentials"
 	"servika/internal/files"
 	"servika/internal/httpx"
 	"servika/internal/system"
@@ -47,7 +46,7 @@ const sshDirRel = ".ssh"
 // the primitive performs replaces the `chown -R` that stood here: GNU chown
 // defaults to -P and would have relabelled the symlink rather than its target.
 func prepareSSHDir(systemUser string) error {
-	home := filepath.Join("/home", systemUser)
+	home := filepath.Join(tenantHomeRoot, systemUser)
 	if err := files.MkdirAllBeneath(home, sshDirRel, systemUser); err != nil {
 		return err
 	}
@@ -85,7 +84,7 @@ func validSystemUser(systemUser string) bool {
 
 func currentShell(systemUser string) string {
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	out, err := exec.Command("getent", "passwd", systemUser).Output()
+	out, err := runCommand("getent", "passwd", systemUser).Output()
 	if err != nil {
 		return ""
 	}
@@ -98,7 +97,7 @@ func currentShell(systemUser string) string {
 
 func hasKey(systemUser string) bool {
 	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	st, err := os.Stat(filepath.Join("/home", systemUser, ".ssh", "authorized_keys"))
+	st, err := os.Stat(filepath.Join(tenantHomeRoot, systemUser, ".ssh", "authorized_keys"))
 	return err == nil && st.Size() > 0
 }
 
@@ -158,19 +157,19 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 		shell = enabledShell
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if _, err := exec.Command("usermod", "-s", shell, systemUser).CombinedOutput(); err != nil {
+	if _, err := runCommand("usermod", "-s", shell, systemUser).CombinedOutput(); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
 	if req.Enabled {
 		// Prepare ~/.ssh for key uploads. Not fatal: the key upload itself refuses
 		// the same directory and reports the failure to the caller.
-		if err := prepareSSHDir(systemUser); err != nil {
+		if err := sshDirReady(systemUser); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			httpx.LogR(r, "ssh enable: prepare ssh directory %s: %v", systemUser, err)
 		}
 		// Synchronize the SSH password with the FTP password.
-		if err := credentials.SyncSSHPassword(h.DB, systemUser); err != nil {
+		if err := syncSSHPassword(h.DB, systemUser); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			httpx.LogR(r, "ssh enable: password sync %s: %v", systemUser, err)
 		}
@@ -178,34 +177,34 @@ func (h *Handlers) Configure(w http.ResponseWriter, r *http.Request) {
 		// confinement controls (sshd Match keys on servika-ssh membership).
 		// FAIL-CLOSED: if confinement cannot be established, revert the login shell
 		// and do NOT persist ssh_access=1, so we never leave SSH on but unconfined.
-		_ = exec.Command("groupadd", "-f", "servika-ssh").Run()
+		_ = runCommand("groupadd", "-f", "servika-ssh").Run()
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		if out, err := exec.Command(servikaJailBin(), "setup", systemUser).CombinedOutput(); err != nil {
+		if out, err := runCommand(servikaJailBin(), "setup", systemUser).CombinedOutput(); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			httpx.LogR(r, "ssh enable: jail setup %s: %v: %s", systemUser, err, strings.TrimSpace(string(out)))
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-			_, _ = exec.Command("usermod", "-s", disabledShell, systemUser).CombinedOutput()
+			_, _ = runCommand("usermod", "-s", disabledShell, systemUser).CombinedOutput()
 			httpx.WriteError(w, http.StatusInternalServerError, "SSH jail could not be configured")
 			return
 		}
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		if out, err := exec.Command("gpasswd", "-a", systemUser, "servika-ssh").CombinedOutput(); err != nil {
+		if out, err := runCommand("gpasswd", "-a", systemUser, "servika-ssh").CombinedOutput(); err != nil {
 			// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 			httpx.LogR(r, "ssh enable: group add %s: %v: %s", systemUser, err, strings.TrimSpace(string(out)))
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-			_, _ = exec.Command(servikaJailBin(), "teardown", systemUser).CombinedOutput()
+			_, _ = runCommand(servikaJailBin(), "teardown", systemUser).CombinedOutput()
 			// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-			_, _ = exec.Command("usermod", "-s", disabledShell, systemUser).CombinedOutput()
+			_, _ = runCommand("usermod", "-s", disabledShell, systemUser).CombinedOutput()
 			httpx.WriteError(w, http.StatusInternalServerError, "SSH access group could not be configured")
 			return
 		}
 	} else {
 		// When disabling SSH, remove the group membership and jail, then lock the password.
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command("gpasswd", "-d", systemUser, "servika-ssh").Run()
+		_ = runCommand("gpasswd", "-d", systemUser, "servika-ssh").Run()
 		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = exec.Command(servikaJailBin(), "teardown", systemUser).Run()
-		_ = credentials.LockSSHPassword(systemUser)
+		_ = runCommand(servikaJailBin(), "teardown", systemUser).Run()
+		_ = lockSSHPassword(systemUser)
 	}
 	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE domains SET ssh_access=? WHERE id=?`, boolToInt(req.Enabled), id); err != nil {
@@ -250,7 +249,7 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 		}
 	}
-	if err := prepareSSHDir(systemUser); err != nil {
+	if err := sshDirReady(systemUser); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "ssh key: prepare ssh directory %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
@@ -264,9 +263,9 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 	// a symlink at authorized_keys would otherwise make root truncate and rewrite
 	// whatever it points at with request-supplied text, and the endpoint is
 	// AdminOnly, so the administrator is the deputy the tenant confuses.
-	home := filepath.Join("/home", systemUser)
+	home := filepath.Join(tenantHomeRoot, systemUser)
 	akRel := filepath.Join(sshDirRel, "authorized_keys")
-	if err := files.WriteFileBeneath(home, akRel, []byte(body), 0600, systemUser); err != nil {
+	if err := writeAuthorizedKeys(home, akRel, []byte(body), 0600, systemUser); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "ssh key: write authorized_keys %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
@@ -274,7 +273,7 @@ func (h *Handlers) SaveKey(w http.ResponseWriter, r *http.Request) {
 	}
 	// WriteFileBeneath keeps the mode of a file that already exists, so pin 0600
 	// rather than trusting whatever the previous owner of the entry left behind.
-	if err := files.ChmodBeneath(home, akRel, 0600); err != nil {
+	if err := chmodAuthorizedKeys(home, akRel, 0600); err != nil {
 		// #nosec G706 -- logged values are integer IDs, validated identifiers (^c_[A-Za-z0-9_]+$), template-derived names, or error/command output; no raw tenant string with CR/LF reaches the log.
 		httpx.LogR(r, "ssh key: chmod authorized_keys %s: %v", systemUser, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")

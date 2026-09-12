@@ -27,10 +27,17 @@ func TestNoPathResolvingWritesUnderTenantHome(t *testing.T) {
 			}
 		}
 	}
-	for _, want := range []string{"files.MkdirAllBeneath(", "files.WriteFileBeneath("} {
-		if !bytes.Contains(src, []byte(want)) {
-			t.Fatalf("package no longer calls %s, so the SSH directory is not pinned beneath the tenant home", want)
-		}
+	if !bytes.Contains(src, []byte("files.MkdirAllBeneath(")) {
+		t.Fatal("package no longer calls files.MkdirAllBeneath(, so the SSH directory is not pinned beneath the tenant home")
+	}
+	// The key write goes through a seam so the handler can be exercised off
+	// Linux. The primitive is then asserted where the seam's default lives.
+	seams, err := os.ReadFile("seams.go")
+	if err != nil {
+		t.Fatalf("read the seam source: %v", err)
+	}
+	if !bytes.Contains(seams, []byte("writeAuthorizedKeys = files.WriteFileBeneath")) {
+		t.Fatal("the key write seam no longer defaults to files.WriteFileBeneath, so authorized_keys is not pinned beneath the tenant home")
 	}
 }
 
