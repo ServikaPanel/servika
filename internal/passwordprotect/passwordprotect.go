@@ -158,6 +158,113 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
+// entry is the user a request asks to add to a directory.
+type entry struct {
+	path     string
+	username string
+	password string
+}
+
+// requestedEntry reads the entry the request asks for and answers the request
+// itself when any part of it cannot be used.
+func requestedEntry(w http.ResponseWriter, r *http.Request) (entry, bool) {
+	var req struct {
+		Path     string `json:"path"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return entry{}, false
+	}
+	path := normalizePath(req.Path)
+	if !pathPattern.MatchString(path) || strings.Contains(path, "..") {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid path (example: /private)")
+		return entry{}, false
+	}
+	if !reUser.MatchString(req.Username) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid username")
+		return entry{}, false
+	}
+	if len(req.Password) < 4 || len(req.Password) > 128 {
+		httpx.WriteError(w, http.StatusBadRequest, "password must contain 4 to 128 characters")
+		return entry{}, false
+	}
+	// htpasswd reads one line from stdin, so a line break would silently store a
+	// truncated password and lock the customer out of the directory they just
+	// protected. NUL would truncate it the same way.
+	if strings.ContainsAny(req.Password, "\r\n\x00") {
+		httpx.WriteError(w, http.StatusBadRequest, "password cannot contain line breaks")
+		return entry{}, false
+	}
+	return entry{path: path, username: req.Username, password: req.Password}, true
+}
+
+// prepareDir resolves the nginx group and closes the password directory to
+// every other account. The group is resolved BEFORE anything is written, so a
+// host with no nginx account refuses the request instead of leaving a hash
+// behind that nothing can close.
+func prepareDir(w http.ResponseWriter) (int, bool) {
+	gid, err := gidOfNginx()
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not resolve the nginx account")
+		return 0, false
+	}
+	if err := os.MkdirAll(htpasswdDir, htpasswdDirMode); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not create htpasswd directory")
+		return 0, false
+	}
+	// MkdirAll leaves an existing directory's mode alone, so a host installed
+	// before this was tightened still carries 0755 here until this runs.
+	if err := secureFile(htpasswdDir, 0, gid, htpasswdDirMode); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not secure the htpasswd directory")
+		return 0, false
+	}
+	return gid, true
+}
+
+// writeHash writes the entry into the password file and closes the file to
+// every account but nginx.
+func writeHash(w http.ResponseWriter, file string, requested entry, gid int) bool {
+	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+	_, statErr := os.Stat(file)
+	created := statErr != nil
+	if _, err := htpasswdCommand(file, requested.username, requested.password, created).CombinedOutput(); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return false
+	}
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+	_ = runCommand("restorecon", file).Run() // Apply the SELinux httpd_config_t context.
+	if err := secureFile(file, 0, gid, htpasswdFileMode); err != nil {
+		// The file already holds the hash, so leaving it behind would publish it
+		// to every account on the host while the screen reported success. Only a
+		// file this request created is removed; an existing one loses just the
+		// user that was added to it.
+		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+		_ = runCommand("htpasswd", "-D", file, requested.username).Run()
+		if created {
+			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+			_ = os.Remove(file)
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "could not secure the password file")
+		return false
+	}
+	return true
+}
+
+// rollbackAdd undoes the record and the htpasswd entry when vhost validation
+// fails, then renders again.
+func (h *Handlers) rollbackAdd(id, subdomainID int64, requested entry, file, systemUser, version string) {
+	_, _ = h.DB.Exec(`DELETE FROM protected_directories WHERE domain_id=? AND subdomain_id=? AND path=? AND username=?`, id, subdomainID, requested.path, requested.username)
+	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
+	_ = runCommand("htpasswd", "-D", file, requested.username).Run()
+	if remaining := h.userCount(id, subdomainID, requested.path); remaining == 0 {
+		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
+		_ = os.Remove(file)
+	}
+	_ = h.render(id, subdomainID, systemUser, version)
+}
+
 // POST /domains/{id}/password-protection {path, username, password}
 func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 	id, systemUser, version, ok := h.domain(r)
@@ -174,93 +281,29 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "subdomain not found")
 		return
 	}
-	var req struct {
-		Path     string `json:"path"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	requested, ok := requestedEntry(w, r)
+	if !ok {
 		return
 	}
-	path := normalizePath(req.Path)
-	if !pathPattern.MatchString(path) || strings.Contains(path, "..") {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid path (example: /private)")
+	gid, ok := prepareDir(w)
+	if !ok {
 		return
 	}
-	if !reUser.MatchString(req.Username) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid username")
-		return
-	}
-	if len(req.Password) < 4 || len(req.Password) > 128 {
-		httpx.WriteError(w, http.StatusBadRequest, "password must contain 4 to 128 characters")
-		return
-	}
-	// htpasswd reads one line from stdin, so a line break would silently store a
-	// truncated password and lock the customer out of the directory they just
-	// protected. NUL would truncate it the same way.
-	if strings.ContainsAny(req.Password, "\r\n\x00") {
-		httpx.WriteError(w, http.StatusBadRequest, "password cannot contain line breaks")
-		return
-	}
-	gid, err := gidOfNginx()
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not resolve the nginx account")
-		return
-	}
-	if err := os.MkdirAll(htpasswdDir, htpasswdDirMode); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not create htpasswd directory")
-		return
-	}
-	// MkdirAll leaves an existing directory's mode alone, so a host installed
-	// before this was tightened still carries 0755 here until this runs.
-	if err := secureFile(htpasswdDir, 0, gid, htpasswdDirMode); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not secure the htpasswd directory")
-		return
-	}
-	file := htpasswdFile(id, subdomainID, path)
-	// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-	_, statErr := os.Stat(file)
-	created := statErr != nil
-	if _, err := htpasswdCommand(file, req.Username, req.Password, created).CombinedOutput(); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
-	}
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = runCommand("restorecon", file).Run() // Apply the SELinux httpd_config_t context.
-	if err := secureFile(file, 0, gid, htpasswdFileMode); err != nil {
-		// The file already holds the hash, so leaving it behind would publish it
-		// to every account on the host while the screen reported success. Only a
-		// file this request created is removed; an existing one loses just the
-		// user that was added to it.
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = runCommand("htpasswd", "-D", file, req.Username).Run()
-		if created {
-			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-			_ = os.Remove(file)
-		}
-		httpx.WriteError(w, http.StatusInternalServerError, "could not secure the password file")
+	file := htpasswdFile(id, subdomainID, requested.path)
+	if !writeHash(w, file, requested, gid) {
 		return
 	}
 
 	if _, err := h.DB.Exec(
 		`INSERT INTO protected_directories (domain_id, subdomain_id, path, username, htpasswd_file) VALUES (?,?,?,?,?)
 		 ON DUPLICATE KEY UPDATE htpasswd_file=VALUES(htpasswd_file)`,
-		id, subdomainID, path, req.Username, file); err != nil {
+		id, subdomainID, requested.path, requested.username, file); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not add record")
 		return
 	}
 
 	if err := h.render(id, subdomainID, systemUser, version); err != nil {
-		// Roll back the record and htpasswd entry when vhost validation fails, then render again.
-		_, _ = h.DB.Exec(`DELETE FROM protected_directories WHERE domain_id=? AND subdomain_id=? AND path=? AND username=?`, id, subdomainID, path, req.Username)
-		// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-		_ = runCommand("htpasswd", "-D", file, req.Username).Run()
-		if remaining := h.userCount(id, subdomainID, path); remaining == 0 {
-			// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
-			_ = os.Remove(file)
-		}
-		_ = h.render(id, subdomainID, systemUser, version)
+		h.rollbackAdd(id, subdomainID, requested, file, systemUser, version)
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
 	}
