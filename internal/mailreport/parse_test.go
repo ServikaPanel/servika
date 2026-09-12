@@ -100,6 +100,32 @@ func TestAnUnusableRowRejectsTheWholeReport(t *testing.T) {
 	}
 }
 
+// The parser's ceiling is the COLUMN's ceiling. dmarc_report_rows.message_count
+// is INT UNSIGNED, and the parser used to accept up to 1<<40: every value in
+// between passed and then met a column that cannot hold it, which under
+// MariaDB's default strict mode drops the whole report and without it stores a
+// clamped number the dashboard sums as if it were real.
+func TestACountTheColumnCannotHoldIsRefusedAtTheParser(t *testing.T) {
+	fixedNow(t)
+	const columnMax = 4294967295
+
+	report, err := ParseAggregate([]byte(aggregateXML("192.0.2.1", "4294967295", "google.com")))
+	if err != nil {
+		t.Fatalf("the largest value the column holds was refused: %v", err)
+	}
+	if got := report.Rows[0].MessageCount; got != columnMax {
+		t.Errorf("count = %d, want %d", got, uint64(columnMax))
+	}
+
+	if _, err := ParseAggregate([]byte(aggregateXML("192.0.2.1", "4294967296", "google.com"))); err == nil {
+		t.Error("a count one past the column's ceiling was accepted")
+	}
+	if MaxDMARCMessageCount != columnMax {
+		t.Errorf("the ceiling is %d, want the INT UNSIGNED maximum %d",
+			uint64(MaxDMARCMessageCount), uint64(columnMax))
+	}
+}
+
 // org_name is two thirds of the deduplication key, so an oversized one is
 // refused rather than truncated: shortening it would let one report be stored
 // twice under two different keys.

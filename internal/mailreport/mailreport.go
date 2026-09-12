@@ -14,6 +14,7 @@ package mailreport
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"time"
@@ -36,10 +37,22 @@ const (
 	// MaxRecords bounds the rows in one report, so a hostile document cannot
 	// turn one message into a million inserts.
 	MaxRecords = 20000
-	// MaxMessageCount bounds a single row's message tally. The dashboard sums
+	// MaxMessageCount bounds a single TLS-RPT session tally. The dashboard sums
 	// these, and a value near the integer ceiling would make every total
-	// meaningless.
+	// meaningless. The columns behind it are BIGINT UNSIGNED, which holds this.
 	MaxMessageCount = 1 << 40
+	// MaxDMARCMessageCount bounds one DMARC row's message tally.
+	//
+	// It is SMALLER than MaxMessageCount because the column behind it is
+	// different: dmarc_report_rows.message_count is INT UNSIGNED
+	// (migrations/0085_mail_reports.sql:38), so everything between this and
+	// MaxMessageCount passed the parser and then met a column that cannot hold
+	// it. Under MariaDB's default strict mode that is error 1264, the
+	// transaction rolls back and the whole report is dropped with a log line;
+	// with strict mode off the value is clamped and the totals become fiction.
+	// The DNS template publishes rua=mailto:postmaster@<domain>, so the input is
+	// anyone who can send mail there.
+	MaxDMARCMessageCount = math.MaxUint32
 )
 
 // Field length ceilings, matched to the columns in migrations/0085_mail_reports.sql.

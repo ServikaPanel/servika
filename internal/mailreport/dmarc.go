@@ -175,15 +175,15 @@ func parseEpoch(value string) (time.Time, error) {
 	return time.Unix(seconds, 0).UTC(), nil
 }
 
-// parseCount reads a row's message tally and refuses a value that would make
-// every total on the dashboard meaningless.
+// parseCount reads a row's message tally and refuses a value the column that
+// stores it cannot hold.
 func parseCount(value string) (uint64, error) {
 	count, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
 	if err != nil {
 		return 0, errors.New("count is not a whole number")
 	}
-	if count > MaxMessageCount {
-		return 0, fmt.Errorf("count is larger than %d", MaxMessageCount)
+	if count > MaxDMARCMessageCount {
+		return 0, fmt.Errorf("count is larger than %d", uint64(MaxDMARCMessageCount))
 	}
 	return count, nil
 }
