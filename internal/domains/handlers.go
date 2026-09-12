@@ -861,8 +861,9 @@ func (h *Handlers) tearDownTenant(r *http.Request, id int64, domainName, sk stri
 	// Mail metadata uses cascading foreign keys. The hook keeps domain deletion extensible.
 	cleanupMailDomain(h.DB, id, sk)
 	// NOTE: Preserve /var/backups/servika/<sk>/ intentionally.
-	// The customer may have deleted the domain by accident, so backups are kept for recovery.
-	// (backups.RemoveDomainBackups is available for manual cleanup.)
+	// The customer may have deleted the domain by accident, so backups are kept
+	// for recovery. Removing that directory is an operator's decision, taken on
+	// the host; the panel has no helper for it.
 	return siblings
 }
 
