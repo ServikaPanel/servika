@@ -318,13 +318,13 @@ func TestImportRefusals(t *testing.T) {
 		}, fullImport, http.StatusInternalServerError, "could not read the created domain response", false},
 		{"a helper file past the metadata limit", func(*importHarness) {}, func(t *testing.T) *http.Request {
 			return importRequest(t, bigAlias...)
-		}, http.StatusInternalServerError, "could not read archive helper files: security: the archive exceeds the inventory limit", true},
-		{"web files the host refuses", func(hs *importHarness) { withCommands(hs.t, []string{"find"}) }, fullImport, http.StatusInternalServerError, "could not transfer web files: clearing target: refused", true},
-		{"an additional database the server refuses", func(hs *importHarness) { hs.creates.fail["c_example_com_demo_wp"] = true }, fullImport, http.StatusInternalServerError, "could not create the additional database: scripted failure", true},
-		{"a dump the server refuses", func(hs *importHarness) { hs.imports.fail = errScripted }, fullImport, http.StatusInternalServerError, "could not transfer the database: scripted failure", true},
-		{"mail the server refuses", func(hs *importHarness) { setForTest(hs.t, &enableMailDomain, failingMail) }, fullImport, http.StatusInternalServerError, "could not transfer email: scripted failure", true},
-		{"no cron provider", func(hs *importHarness) { hs.h.Cron = nil }, fullImport, http.StatusInternalServerError, "could not transfer cron jobs: cron provider is not ready", true},
-		{"a certificate the server refuses", func(hs *importHarness) { setForTest(hs.t, &installImportedSSL, failingSSL) }, fullImport, http.StatusInternalServerError, "could not transfer the SSL certificate: scripted failure", true},
+		}, http.StatusInternalServerError, "could not read archive helper files", true},
+		{"web files the host refuses", func(hs *importHarness) { withCommands(hs.t, []string{"find"}) }, fullImport, http.StatusInternalServerError, "could not transfer web files", true},
+		{"an additional database the server refuses", func(hs *importHarness) { hs.creates.fail["c_example_com_demo_wp"] = true }, fullImport, http.StatusInternalServerError, "could not create the additional database", true},
+		{"a dump the server refuses", func(hs *importHarness) { hs.imports.fail = errScripted }, fullImport, http.StatusInternalServerError, "could not transfer the database", true},
+		{"mail the server refuses", func(hs *importHarness) { setForTest(hs.t, &enableMailDomain, failingMail) }, fullImport, http.StatusInternalServerError, "could not transfer email", true},
+		{"no cron provider", func(hs *importHarness) { hs.h.Cron = nil }, fullImport, http.StatusInternalServerError, "could not transfer cron jobs", true},
+		{"a certificate the server refuses", func(hs *importHarness) { setForTest(hs.t, &installImportedSSL, failingSSL) }, fullImport, http.StatusInternalServerError, "could not transfer the SSL certificate", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -336,6 +336,22 @@ func TestImportRefusals(t *testing.T) {
 			assertResponse(t, w, c.status, c.fragment)
 			assertRollback(t, hs, c.rollback)
 		})
+	}
+}
+
+// The step name is all a screen needs. The underlying error carries host paths,
+// rsync output and driver text, so it belongs in the log only.
+func TestAFailedImportStepDoesNotSurfaceTheUnderlyingError(t *testing.T) {
+	hs := newImportHarness(t)
+	request := fullImport(t)
+	hs.imports.fail = errScripted
+
+	w := httptest.NewRecorder()
+	hs.h.Import(w, request)
+
+	assertResponse(t, w, http.StatusInternalServerError, "could not transfer the database")
+	if strings.Contains(w.Body.String(), errScripted.Error()) {
+		t.Errorf("the response carries the underlying error: %s", w.Body)
 	}
 }
 

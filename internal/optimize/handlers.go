@@ -93,7 +93,10 @@ func (h *Handlers) ApplyChosen(w http.ResponseWriter, r *http.Request) {
 			writeRefusal(w, http.StatusConflict, reason, err.Error())
 			return
 		}
-		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		// An internal fault carries host paths and command output. The reason-code
+		// branch above is what puts an operator-actionable message on the screen;
+		// everything else is already in the log line above.
+		httpx.WriteError(w, http.StatusInternalServerError, "the optimization could not be applied")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
@@ -128,7 +131,7 @@ func (h *Handlers) RevertChange(w http.ResponseWriter, r *http.Request) {
 			writeRefusal(w, http.StatusConflict, reason, err.Error())
 			return
 		}
-		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		httpx.WriteError(w, http.StatusInternalServerError, "the change could not be reverted")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"reverted": id})

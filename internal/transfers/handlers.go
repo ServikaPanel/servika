@@ -245,14 +245,19 @@ func analyzeSavedArchive(w http.ResponseWriter, tmpPath string) (Inventory, bool
 func (h *Handlers) restoreAccount(w http.ResponseWriter, r *http.Request, tmpPath string, inv Inventory, created createdDomain) (importResponse, bool) {
 	// Read the archive's small helper members (the SSL pair plus the alias table)
 	// in a single pass; none of the steps below rescan the archive.
+	// Each step reports the step it failed at and nothing else. The underlying
+	// error carries host paths, rsync output and driver text, so it goes to the
+	// log rather than onto the screen.
 	extras, err := readArchiveExtras(tmpPath, inv)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not read archive helper files: "+err.Error())
+		httpx.LogR(r, "transfers: read archive helper files: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not read archive helper files")
 		return importResponse{}, false
 	}
 
 	if err := h.restoreWeb(r.Context(), tmpPath, inv.ArchiveRoot, created.SystemUser); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer web files: "+err.Error())
+		httpx.LogR(r, "transfers: restore web files: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer web files")
 		return importResponse{}, false
 	}
 	dbMaps, ok := h.restoreImportDatabases(w, r, tmpPath, inv, created)
@@ -261,17 +266,20 @@ func (h *Handlers) restoreAccount(w http.ResponseWriter, r *http.Request, tmpPat
 	}
 	mailCreds, aliasCount, err := h.importMail(r, tmpPath, extras, inv, created.ID, created.DomainName, created.SystemUser)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer email: "+err.Error())
+		httpx.LogR(r, "transfers: import mail: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer email")
 		return importResponse{}, false
 	}
 	cronCount, err := h.importCron(r, inv, created.ID, created.SystemUser)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer cron jobs: "+err.Error())
+		httpx.LogR(r, "transfers: import cron jobs: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer cron jobs")
 		return importResponse{}, false
 	}
 	sslImported, sslExpires, sslWarning, err := h.importSSL(r, extras, inv, created.ID, created.DomainName)
 	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the SSL certificate: "+err.Error())
+		httpx.LogR(r, "transfers: import the SSL certificate: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the SSL certificate")
 		return importResponse{}, false
 	}
 	skipped := []string{}
@@ -296,7 +304,8 @@ func (h *Handlers) restoreImportDatabases(w http.ResponseWriter, r *http.Request
 		// same DB user, so rollback via domains.Delete drops them all.
 		if i > 0 {
 			if err := createMySQLDBForUser(h.DB, created.ID, m.Target, created.DBUser); err != nil {
-				httpx.WriteError(w, http.StatusInternalServerError, "could not create the additional database: "+err.Error())
+				httpx.LogR(r, "transfers: create the additional database %q: %v", m.Target, err)
+				httpx.WriteError(w, http.StatusInternalServerError, "could not create the additional database")
 				return nil, false
 			}
 		}
@@ -304,7 +313,8 @@ func (h *Handlers) restoreImportDatabases(w http.ResponseWriter, r *http.Request
 	// Import every dump in a SINGLE archive pass; a per-dump pass meant one full
 	// gzip decompress per database (gzip has no random access).
 	if err := h.restoreDatabases(r.Context(), tmpPath, inv.ArchiveRoot, dbMaps); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the database: "+err.Error())
+		httpx.LogR(r, "transfers: restore the databases: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "could not transfer the database")
 		return nil, false
 	}
 	return dbMaps, true
