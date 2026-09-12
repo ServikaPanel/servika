@@ -262,6 +262,11 @@ cat > ` + shellQuote(phpdDir+"/99-servika-input.ini") + ` <<'INI'
 ; Servika: supports large forms and imports (phpMyAdmin, WordPress)
 max_input_vars = 10000
 INI
+cat > ` + shellQuote(phpdDir+"/99-servika-hardening.ini") + ` <<'INI'
+; Servika PHP hardening, generated automatically.
+; expose_php on makes PHP answer every request with its exact version.
+expose_php = Off
+INI
 
 systemctl enable --now ` + shellQuote(service) + ` || echo "WARNING: ` + service + ` did not start"
 ` + ioncube + `echo "Done: PHP ` + m.Version + ` is installed"

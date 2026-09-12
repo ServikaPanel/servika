@@ -777,6 +777,12 @@ func main() {
 	// version missing it, and returns without downloading anything when none are.
 	// It runs in the background because it fetches over the network and execs php.
 	go phpext.HealIonCube(context.Background())
+	// PHP's own banner. The installer writes the drop-in and so does a version
+	// installed later, but a host provisioned before that existed still answers
+	// every unauthenticated request with X-Powered-By and its exact patch level.
+	// It reloads nothing when every file already matches, so this is silent on a
+	// normal boot.
+	phpext.HealExposePHP()
 	// Which malware rule set the scanner is on, for the antivirus settings
 	// screen. A hook for the same reason as the line above: internal/antivirus
 	// imports internal/avsettings to read the settings, so the dependency

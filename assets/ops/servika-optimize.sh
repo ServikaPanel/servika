@@ -243,6 +243,11 @@ fi
 echo "════════ PHP ════════"
 PHP_DROPIN='; Servika: prevents stalls during large forms and imports (phpMyAdmin, WordPress)
 max_input_vars = 10000'
+# With expose_php on, PHP answers every request with X-Powered-By: PHP/<exact
+# version>, so one unauthenticated HEAD request tells a scanner the patch level
+# of every site here. nginx server_tokens is already off above; same class.
+PHP_HARDENING='; Servika PHP hardening, generated automatically.
+expose_php = Off'
 PHP_RESTART=0
 # OPcache tuning for PHP-heavy workloads
 OPC_COMMON='; Servika OPcache tuning for PHP-heavy workloads
@@ -260,6 +265,7 @@ for d in /etc/opt/remi/php*/php.d; do
   [ -d "$d" ] || continue
   printf '%s\n' "$PHP_DROPIN" > "$d/99-servika-input.ini"
   printf '%s\n' "$OPC_COMMON" > "$d/99-servika-opcache.ini"
+  printf '%s\n' "$PHP_HARDENING" > "$d/99-servika-hardening.ini"
   # Keep OPcache JIT disabled because it conflicts with opcode-handler extensions on
   # some hosts and adds noisy warnings to wp-cli. Memory and file tuning provide the gain.
   PHP_RESTART=1
@@ -268,6 +274,7 @@ done
 if [ -d /etc/php.d ]; then
   printf '%s\n' "$PHP_DROPIN" > /etc/php.d/99-servika-input.ini
   printf '%s\n' "$OPC_COMMON" > /etc/php.d/99-servika-opcache.ini
+  printf '%s\n' "$PHP_HARDENING" > /etc/php.d/99-servika-hardening.ini
   PHP_RESTART=1
 fi
 # Explicit php_value entry for the phpMyAdmin pool
@@ -285,7 +292,7 @@ if [ "$PHP_RESTART" = 1 ]; then
   for svc in php-fpm php74-php-fpm php80-php-fpm php81-php-fpm php82-php-fpm php83-php-fpm php84-php-fpm php85-php-fpm; do
     systemctl is-active --quiet "$svc" 2>/dev/null && systemctl reload-or-restart "$svc" 2>/dev/null
   done
-  log "✓ PHP max_input_vars=10000 applied to all versions and phpMyAdmin"
+  log "✓ PHP max_input_vars=10000 and expose_php=Off applied to all versions and phpMyAdmin"
 fi
 
 echo "════════ ✓ Optimization complete ════════"
