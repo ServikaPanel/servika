@@ -75,7 +75,9 @@ function isReportable(err: unknown): boolean {
  * is throttled, so nothing is lost to the rate limit.
  */
 function reportError(context: string, err: unknown) {
-  console.error(`[servika] ${context}:`, err)
+  // The label is a separate argument, never part of the format string: a `%s`
+  // inside a translated label would otherwise consume `err` and hide it.
+  console.error('[servika]', `${context}:`, err)
   if (!isReportable(err)) return
 
   const now = Date.now()
