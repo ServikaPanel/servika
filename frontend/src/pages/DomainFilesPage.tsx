@@ -84,7 +84,6 @@ export default function DomainFilesPage() {
   const [dragCounter, setDragCounter] = useState(0)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false)
-  const [newMenuOpen, setNewMenuOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: Entry } | null>(null)
   const longPressRef = useRef<number | undefined>(undefined)
   const longPressTriggeredRef = useRef(false)
@@ -551,21 +550,7 @@ export default function DomainFilesPage() {
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.files') },
-      ]} />
-
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-      {domain && (
-        <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
-          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
-          {', '}
-          <span className="font-mono text-slate-600 dark:text-slate-400 dark:text-slate-500">/home/{domain.system_user}</span>
-        </p>
-      )}
+      <FilesHeader domain={domain} id={id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)] gap-4">
         <aside>
@@ -578,245 +563,52 @@ export default function DomainFilesPage() {
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-      {dragCounter > 0 && (
-        <div className="absolute inset-0 z-30 border-2 border-dashed border-brand-500 bg-brand-50 dark:bg-brand-900/20 backdrop-blur-sm rounded-lg flex items-center justify-center pointer-events-none">
-          <div className="text-center">
-            <svg className="w-14 h-14 mx-auto text-brand-600 dark:text-brand-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            <div className="text-lg font-semibold text-brand-700 dark:text-brand-300">{t('dropZone.title')}</div>
-            <div className="text-sm text-brand-600 dark:text-brand-400/80 mt-1">{t('dropZone.targetDir')}<code className="font-mono bg-white dark:bg-slate-800/60 px-1.5 py-0.5 rounded">{path}</code></div>
-          </div>
-        </div>
-      )}
+      {dragCounter > 0 && <DropOverlay path={path} />}
       {selectedPaths.size > 0 && (
-        <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-md flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">{t('selection.count', { count: selectedPaths.size })}</span>
-          <span className="text-xs text-amber-700/80 dark:text-amber-300/80">{t('selection.rightClick')}</span>
-          <button onClick={() => setBulkDeleteConfirmOpen(true)} className="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium">{t('selection.delete', { count: selectedPaths.size })}</button>
-          <button onClick={() => setSelectedPaths(new Set())} className="text-xs px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 rounded">{t('selection.clear')}</button>
-        </div>
+        <SelectionBar
+          count={selectedPaths.size}
+          onDelete={() => setBulkDeleteConfirmOpen(true)}
+          onClear={() => setSelectedPaths(new Set())}
+        />
       )}
-      {bulkUpload && (
-        <div className="mb-3 px-3 py-2.5 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 rounded-md text-sm text-sky-800">
-          <div className="flex items-center gap-3 mb-1.5">
-            <svg className="w-4 h-4 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm">
-                {t('upload.uploading')} <span className="font-mono">{bulkUpload.activeIndex + 1} / {bulkUpload.total}</span>
-              </div>
-              <div className="text-xs text-sky-700/90 truncate">{bulkUpload.activeFile}</div>
-            </div>
-            <div className="flex-shrink-0 text-right">
-              <div className="text-sm font-mono font-semibold">{bulkUpload.percent.toFixed(1)}%</div>
-              <div className="text-[10px] text-sky-700/80">{formatBytes(bulkUpload.uploadedBytes)} / {formatBytes(bulkUpload.totalBytes)}</div>
-            </div>
-          </div>
-          {/* Progress bar */}
-          <div className="h-1.5 bg-sky-100 rounded overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-sky-500 to-sky-600 transition-all duration-100"
-              style={{ width: `${Math.min(100, bulkUpload.percent)}%` }}
-            />
-          </div>
-          {/* Speed and ETA */}
-          <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-sky-700/80">
-            <span>{bulkUpload.speedBps > 0 ? formatSpeed(bulkUpload.speedBps) : '-'}</span>
-            <span>{bulkUpload.etaSeconds > 0 ? t('upload.remaining', { eta: formatEta(bulkUpload.etaSeconds, t) }) : ''}</span>
-          </div>
-        </div>
-      )}
-      {extractJob && (
-        <div className="mb-3 px-3 py-2.5 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 rounded-md text-sm text-sky-800">
-          <div className="flex items-center gap-3 mb-1.5">
-            <svg className="w-4 h-4 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            <div className="flex-1 min-w-0 font-medium text-sm">
-              {t('extractProgress')}
-              {extractJob.total > 0 && <span className="font-mono"> {extractJob.done} / {extractJob.total}</span>}
-            </div>
-          </div>
-          <div className="h-1.5 bg-sky-100 rounded overflow-hidden">
-            <div
-              className={`h-full bg-gradient-to-r from-sky-500 to-sky-600 ${extractJob.total > 0 ? 'transition-all duration-300' : 'animate-pulse w-1/3'}`}
-              style={extractJob.total > 0 ? { width: `${Math.min(100, Math.round((extractJob.done / extractJob.total) * 100))}%` } : undefined}
-            />
-          </div>
-        </div>
-      )}
-      {/* Toolbar */}
-      <div className="flex items-center gap-1.5 mb-3 flex-wrap relative">
-        {/* Create and upload dropdown */}
-        <div className="relative">
-          <button onClick={() => setNewMenuOpen(value => !value)}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded shadow-sm">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M5.516 7.548c.436-.446 1.043-.481 1.576 0L10 10.405l2.908-2.857c.533-.481 1.141-.446 1.576 0 .436.445.408 1.197 0 1.615-.406.418-3.695 3.629-3.695 3.629a1.105 1.105 0 01-1.576 0S5.924 9.581 5.516 9.163c-.409-.418-.436-1.17 0-1.615z" />
-            </svg>
-          </button>
-          {newMenuOpen && (
-            <div className="absolute z-40 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg min-w-[180px] py-1">
-              <button onClick={() => { setNewMenuOpen(false); fileInputRef.current?.click() }} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800">{t('menu.uploadFiles')}</button>
-              <button onClick={() => { setNewMenuOpen(false); createFolder() }} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800">{t('menu.newFolder')}</button>
-              <button onClick={() => { setNewMenuOpen(false); setNewFileModal(true) }} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800">{t('menu.newFile')}</button>
-            </div>
-          )}
-        </div>
+      {bulkUpload && <UploadProgress state={bulkUpload} />}
+      {extractJob && <ExtractProgress job={extractJob} />}
+      <Toolbar
+        uploadInput={<input ref={fileInputRef} type="file" multiple onChange={e => { const list = Array.from(e.target.files || []); if (list.length) uploadFiles(list); e.target.value = ""; }} className="hidden" />}
+        onPickFiles={() => fileInputRef.current?.click()}
+        onNewFolder={createFolder}
+        onNewFile={() => setNewFileModal(true)}
+        onRefresh={scan}
+        selectedCount={selectedPaths.size}
+        onBulkDelete={() => setBulkDeleteConfirmOpen(true)}
+        searchQuery={searchQuery}
+        onSearchQuery={setSearchQuery}
+        onSearch={search}
+        hasResults={searchResults !== null}
+        onClearSearch={() => { setSearchQuery(''); setSearchResults(null) }}
+        itemCount={content.length}
+      />
 
-        {/* Refresh */}
-        <button onClick={scan}
-          className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">
-          {t('toolbar.refresh')}
-        </button>
+      <PathBar parts={parts} onNavigate={navigateTo} />
 
-        {/* Bulk delete */}
-        {selectedPaths.size > 1 && (
-          <button onClick={() => setBulkDeleteConfirmOpen(true)}
-            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm rounded font-medium">
-            {t('toolbar.delete', { count: selectedPaths.size })}
-          </button>
-        )}
+      <Notices error={error} truncated={truncated} loading={loading} />
 
-        <div className="flex-1" />
-
-        {/* Search */}
-        <div className="relative">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search()}
-            placeholder={t('toolbar.searchPlaceholder')}
-            className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm w-56 focus:border-brand-500 outline-none"
-          />
-          {searchResults && (
-            <button onClick={() => { setSearchQuery(''); setSearchResults(null) }}
-              className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300">×</button>
-          )}
-        </div>
-
-        {/* Hidden upload input */}
-        <input ref={fileInputRef} type="file" multiple onChange={e => { const list = Array.from(e.target.files || []); if (list.length) uploadFiles(list); e.target.value = ""; }} className="hidden" />
-
-        <div className="ml-auto text-sm text-slate-500 dark:text-slate-500">{t('toolbar.itemCount', { count: content.length })}</div>
-      </div>
-
-      {/* Path breadcrumb */}
-      <div className="flex items-center gap-1 mb-4 text-sm flex-wrap bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
-        <button onClick={() => navigateTo('/')} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-mono">~</button>
-        {parts.map((p, i) => {
-          const pathHere = '/' + parts.slice(0, i + 1).join('/')
-          return (
-            <span key={i} className="flex items-center gap-1">
-              <span className="text-slate-300">/</span>
-              <button onClick={() => navigateTo(pathHere)} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-mono">{p}</button>
-            </span>
-          )
-        })}
-      </div>
-
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
-
-      {/* The listing is capped, so say so rather than letting the table read as
-          the whole directory. Search still reaches the entries left out. */}
-      {truncated && !loading && (
-        <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-300">
-          {t('truncated', { shown: truncated.shown, total: truncated.total })}
-        </div>
-      )}
-
-      {/* File table */}
-      <div className={responsiveTableContainerClass}>
-        {loading ? (
-          <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
-        ) : (
-          <table className={responsiveTableClass}>
-            <thead className={responsiveTableHeadClass}>
-              <tr>
-                <th className="px-3 py-2.5 w-10 text-center"><input type="checkbox" checked={content.length > 0 && selectedPaths.size === content.length} ref={ref => { if (ref) ref.indeterminate = selectedPaths.size > 0 && selectedPaths.size < content.length }} onChange={e => selectAllItems(e.target.checked)} className="cursor-pointer" /></th>
-                <th className="text-left px-4 py-2.5">{t('columns.name')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.size')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.permissions')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.modified')}</th>
-                <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className={responsiveTableBodyClass}>
-              {path !== '/' && (
-                <tr className={responsiveTableRowClass} onClick={goUp}>
-                  <td className="px-4 py-2.5 text-sm" colSpan={6}>
-                    <span className="text-slate-500 dark:text-slate-500">{t('parentFolder')}</span>
-                  </td>
-                </tr>
-              )}
-              {content.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('empty')}</td>
-                </tr>
-              )}
-              {(searchResults ?? content).map((e) => (
-                <tr key={e.path}
-                  onContextMenu={(ev) => rowContext(ev, e)}
-                  onTouchStart={(ev) => touchStart(ev, e)}
-                  onTouchEnd={touchEnd}
-                  onTouchMove={touchMove}
-                  className={`${responsiveTableRowClass} ${selectedPaths.has(e.path) ? 'bg-brand-50 dark:bg-brand-900/20' : ''}`}>
-                  <td data-label={t('columns.select')} className={responsiveTableCellClass}>
-                    <input type="checkbox" checked={selectedPaths.has(e.path)}
-                      onChange={() => toggleSelection2(e.path)}
-                      onClick={ev => ev.stopPropagation()}
-                      className="cursor-pointer" />
-                  </td>
-                  <td data-label={t('columns.name')} className={responsiveTableCellClass}>
-                    {e.type === 'folder' ? (
-                      <button
-                        onClick={() => navigateTo(e.path)}
-                        className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium flex items-center gap-2"
-                      >
-                        <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z" />
-                        </svg>
-                        {e.name}
-                      </button>
-                    ) : (
-                      <span className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                        <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>{e.name}</span>
-                      </span>
-                    )}
-                  </td>
-                  <td data-label={t('columns.size')} className={responsiveTableCodeCellClass}>
-                    {e.type === 'folder' ? '-' : formatSize(e.size_b)}
-                  </td>
-                  <td data-label={t('columns.permissions')} className={responsiveTableCodeCellClass}>
-                    <div>{e.permissions || e.mode}</div>
-                    {(e.owner || e.group) && <div className="text-xs text-slate-400 dark:text-slate-500">{e.owner}:{e.group}</div>}
-                  </td>
-                  <td data-label={t('columns.modified')} className={responsiveTableCellClass}>{formatDate(e.changed)}</td>
-                  <td className={responsiveTableActionCellClass}>
-                    <button
-                      onClick={(ev) => { ev.stopPropagation(); openContext(ev.clientX, ev.clientY, e) }}
-                      className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:hover:bg-slate-800 rounded transition"
-                      title={t('actionsTitle')}>
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <FilesTable
+        loading={loading}
+        path={path}
+        content={content}
+        searchResults={searchResults}
+        selectedPaths={selectedPaths}
+        onSelectAll={selectAllItems}
+        onToggle={toggleSelection2}
+        onGoUp={goUp}
+        onNavigate={navigateTo}
+        onRowContext={rowContext}
+        onTouchStart={touchStart}
+        onTouchEnd={touchEnd}
+        onTouchMove={touchMove}
+        onOpenContext={openContext}
+      />
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -824,79 +616,37 @@ export default function DomainFilesPage() {
           items={buildCtxItems()}
           onClose={() => setContextMenu(null)} />
       )}
-      {editor && (
-        <CodeEditor path={editor.path} content={editor.content}
-          onChange={s => setEditor({ ...editor, content: s })}
-          onSave={saveEditor}
-          onClose={() => setEditor(null)} />
-      )}
-      {renameFor && (
-        <RenameModal entry={renameFor}
-          onDone={name => rename(renameFor, name)}
-          onCancel={() => setRenameFor(null)} />
-      )}
-      {chmodFor && (
-        <ChmodModal entry={chmodFor}
-          onDone={mod => changePermissions(chmodFor, mod)}
-          onCancel={() => setChmodFor(null)} />
-      )}
-      {copyMoveModal && (
-        <CopyMoveModal
-          type={copyMoveModal.type}
-          paths={copyMoveModal.paths}
-          onDone={copyOrMove}
-          onCancel={() => setCopyModal(null)} />
-      )}
-      {archiveModal && (
-        <ArchiveModal
-          itemCount={selectedPaths.size}
-          onDone={archive}
-          onCancel={() => setArchiveModal(false)} />
-      )}
-      {newFileModal && (
-        <NewFileModal
-          onDone={createNewFile}
-          onCancel={() => setNewFileModal(false)} />
-      )}
-      {sizeResult && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setSizeResult(null)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('sizeModal.title')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-3 font-mono">{sizeResult.path}</p>
-            <div className="text-2xl font-bold text-brand-700 dark:text-brand-300 mb-2">
-              {(() => {
-                const b = sizeResult.size
-                if (b < 1024) return b + ' B'
-                if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB'
-                if (b < 1024*1024*1024) return (b/1024/1024).toFixed(1) + ' MB'
-                return (b/1024/1024/1024).toFixed(2) + ' GB'
-              })()}
-            </div>
-            <div className="text-xs text-slate-500 dark:text-slate-500 font-mono">{t('sizeModal.bytes', { bytes: sizeResult.size.toLocaleString('en-US') })}</div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={() => setSizeResult(null)} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded">{t('sizeModal.done')}</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {bulkDeleteConfirmOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setBulkDeleteConfirmOpen(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-red-700 dark:text-red-300 mb-2">{t('bulkDelete.title')}</h3>
-            <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
-              <span className="font-semibold">{t('bulkDelete.messageBold', { count: selectedPaths.size })}</span>{t('bulkDelete.messagePost')}
-            </p>
-            <ul className="text-xs font-mono text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 rounded p-2 max-h-40 overflow-auto mb-4">
-              {Array.from(selectedPaths).slice(0, 8).map(y => <li key={y} className="truncate">{y}</li>)}
-              {selectedPaths.size > 8 && <li className="text-slate-400 dark:text-slate-500 italic">{t('bulkDelete.moreItems', { count: selectedPaths.size - 8 })}</li>}
-            </ul>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setBulkDeleteConfirmOpen(false)} className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('bulkDelete.cancel')}</button>
-              <button onClick={bulkDelete} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded font-medium">{t('bulkDelete.confirm')}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EntryModals
+        editor={editor}
+        onEditorChange={s => setEditor(current => current ? { ...current, content: s } : current)}
+        onEditorSave={saveEditor}
+        onEditorClose={() => setEditor(null)}
+        renameFor={renameFor}
+        onRename={rename}
+        onRenameCancel={() => setRenameFor(null)}
+        chmodFor={chmodFor}
+        onChmod={changePermissions}
+        onChmodCancel={() => setChmodFor(null)}
+        copyMove={copyMoveModal}
+        onCopyMove={copyOrMove}
+        onCopyMoveCancel={() => setCopyModal(null)}
+      />
+
+      <ActionModals
+        archiveOpen={archiveModal}
+        selectedCount={selectedPaths.size}
+        onArchive={archive}
+        onArchiveCancel={() => setArchiveModal(false)}
+        newFileOpen={newFileModal}
+        onNewFile={createNewFile}
+        onNewFileCancel={() => setNewFileModal(false)}
+        sizeResult={sizeResult}
+        onSizeClose={() => setSizeResult(null)}
+        bulkDeleteOpen={bulkDeleteConfirmOpen}
+        selectedPaths={selectedPaths}
+        onBulkDelete={bulkDelete}
+        onBulkDeleteCancel={() => setBulkDeleteConfirmOpen(false)}
+      />
 
         </section>
       </div>
@@ -926,6 +676,504 @@ function formatDate(iso: string): string {
   }
 }
 
+
+function FilesHeader({ domain, id }: { domain: Domain | null; id?: string }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
+        { label: t('breadcrumb.files') },
+      ]} />
+
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      {domain && (
+        <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
+          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
+          {', '}
+          <span className="font-mono text-slate-600 dark:text-slate-400 dark:text-slate-500">/home/{domain.system_user}</span>
+        </p>
+      )}
+    </>
+  )
+}
+
+function DropOverlay({ path }: { path: string }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className="absolute inset-0 z-30 border-2 border-dashed border-brand-500 bg-brand-50 dark:bg-brand-900/20 backdrop-blur-sm rounded-lg flex items-center justify-center pointer-events-none">
+      <div className="text-center">
+        <svg className="w-14 h-14 mx-auto text-brand-600 dark:text-brand-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+        <div className="text-lg font-semibold text-brand-700 dark:text-brand-300">{t('dropZone.title')}</div>
+        <div className="text-sm text-brand-600 dark:text-brand-400/80 mt-1">{t('dropZone.targetDir')}<code className="font-mono bg-white dark:bg-slate-800/60 px-1.5 py-0.5 rounded">{path}</code></div>
+      </div>
+    </div>
+  )
+}
+
+function SelectionBar({ count, onDelete, onClear }: { count: number; onDelete: () => void; onClear: () => void }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-md flex items-center gap-3 flex-wrap">
+      <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">{t('selection.count', { count })}</span>
+      <span className="text-xs text-amber-700/80 dark:text-amber-300/80">{t('selection.rightClick')}</span>
+      <button onClick={onDelete} className="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium">{t('selection.delete', { count })}</button>
+      <button onClick={onClear} className="text-xs px-3 py-1.5 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 rounded">{t('selection.clear')}</button>
+    </div>
+  )
+}
+
+type UploadState = {
+  completed: number
+  total: number
+  activeFile: string
+  activeIndex: number
+  uploadedBytes: number
+  totalBytes: number
+  speedBps: number
+  etaSeconds: number
+  percent: number
+}
+
+function UploadProgress({ state }: { state: UploadState }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className="mb-3 px-3 py-2.5 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 rounded-md text-sm text-sky-800">
+      <div className="flex items-center gap-3 mb-1.5">
+        <svg className="w-4 h-4 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm">
+            {t('upload.uploading')} <span className="font-mono">{state.activeIndex + 1} / {state.total}</span>
+          </div>
+          <div className="text-xs text-sky-700/90 truncate">{state.activeFile}</div>
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <div className="text-sm font-mono font-semibold">{state.percent.toFixed(1)}%</div>
+          <div className="text-[10px] text-sky-700/80">{formatBytes(state.uploadedBytes)} / {formatBytes(state.totalBytes)}</div>
+        </div>
+      </div>
+      {/* Progress bar */}
+      <div className="h-1.5 bg-sky-100 rounded overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-sky-500 to-sky-600 transition-all duration-100"
+          style={{ width: `${Math.min(100, state.percent)}%` }}
+        />
+      </div>
+      {/* Speed and ETA */}
+      <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-sky-700/80">
+        <span>{state.speedBps > 0 ? formatSpeed(state.speedBps) : '-'}</span>
+        <span>{state.etaSeconds > 0 ? t('upload.remaining', { eta: formatEta(state.etaSeconds, t) }) : ''}</span>
+      </div>
+    </div>
+  )
+}
+
+function ExtractProgress({ job }: { job: { done: number; total: number } }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className="mb-3 px-3 py-2.5 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 rounded-md text-sm text-sky-800">
+      <div className="flex items-center gap-3 mb-1.5">
+        <svg className="w-4 h-4 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        <div className="flex-1 min-w-0 font-medium text-sm">
+          {t('extractProgress')}
+          {job.total > 0 && <span className="font-mono"> {job.done} / {job.total}</span>}
+        </div>
+      </div>
+      <div className="h-1.5 bg-sky-100 rounded overflow-hidden">
+        <div
+          className={`h-full bg-gradient-to-r from-sky-500 to-sky-600 ${job.total > 0 ? 'transition-all duration-300' : 'animate-pulse w-1/3'}`}
+          style={job.total > 0 ? { width: `${Math.min(100, Math.round((job.done / job.total) * 100))}%` } : undefined}
+        />
+      </div>
+    </div>
+  )
+}
+
+type ToolbarProps = {
+  uploadInput: React.ReactNode
+  onPickFiles: () => void
+  onNewFolder: () => void
+  onNewFile: () => void
+  onRefresh: () => void
+  selectedCount: number
+  onBulkDelete: () => void
+  searchQuery: string
+  onSearchQuery: (value: string) => void
+  onSearch: () => void
+  hasResults: boolean
+  onClearSearch: () => void
+  itemCount: number
+}
+
+function Toolbar(p: ToolbarProps) {
+  const { t } = useTranslation('DomainFilesPage')
+  const [newMenuOpen, setNewMenuOpen] = useState(false)
+  return (
+    <div className="flex items-center gap-1.5 mb-3 flex-wrap relative">
+      {/* Create and upload dropdown */}
+      <div className="relative">
+        <button onClick={() => setNewMenuOpen(value => !value)}
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded shadow-sm">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M5.516 7.548c.436-.446 1.043-.481 1.576 0L10 10.405l2.908-2.857c.533-.481 1.141-.446 1.576 0 .436.445.408 1.197 0 1.615-.406.418-3.695 3.629-3.695 3.629a1.105 1.105 0 01-1.576 0S5.924 9.581 5.516 9.163c-.409-.418-.436-1.17 0-1.615z" />
+          </svg>
+        </button>
+        {newMenuOpen && (
+          <div className="absolute z-40 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg min-w-[180px] py-1">
+            <button onClick={() => { setNewMenuOpen(false); p.onPickFiles() }} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800">{t('menu.uploadFiles')}</button>
+            <button onClick={() => { setNewMenuOpen(false); p.onNewFolder() }} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800">{t('menu.newFolder')}</button>
+            <button onClick={() => { setNewMenuOpen(false); p.onNewFile() }} className="block w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800">{t('menu.newFile')}</button>
+          </div>
+        )}
+      </div>
+
+      {/* Refresh */}
+      <button onClick={p.onRefresh}
+        className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">
+        {t('toolbar.refresh')}
+      </button>
+
+      {/* Bulk delete */}
+      {p.selectedCount > 1 && (
+        <button onClick={p.onBulkDelete}
+          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm rounded font-medium">
+          {t('toolbar.delete', { count: p.selectedCount })}
+        </button>
+      )}
+
+      <div className="flex-1" />
+
+      {/* Search */}
+      <div className="relative">
+        <input
+          type="text"
+          value={p.searchQuery}
+          onChange={e => p.onSearchQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && p.onSearch()}
+          placeholder={t('toolbar.searchPlaceholder')}
+          className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm w-56 focus:border-brand-500 outline-none"
+        />
+        {p.hasResults && (
+          <button onClick={p.onClearSearch}
+            className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300">×</button>
+        )}
+      </div>
+
+      {/* Hidden upload input */}
+      {p.uploadInput}
+
+      <div className="ml-auto text-sm text-slate-500 dark:text-slate-500">{t('toolbar.itemCount', { count: p.itemCount })}</div>
+    </div>
+  )
+}
+
+function PathBar({ parts, onNavigate }: { parts: string[]; onNavigate: (path: string) => void }) {
+  return (
+    <div className="flex items-center gap-1 mb-4 text-sm flex-wrap bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+      <button onClick={() => onNavigate('/')} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-mono">~</button>
+      {parts.map((p, i) => {
+        const pathHere = '/' + parts.slice(0, i + 1).join('/')
+        return (
+          <span key={i} className="flex items-center gap-1">
+            <span className="text-slate-300">/</span>
+            <button onClick={() => onNavigate(pathHere)} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-mono">{p}</button>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+// The listing is capped, so say so rather than letting the table read as the
+// whole directory. Search still reaches the entries left out.
+function Notices({ error, truncated, loading }: { error: string | null; truncated: { shown: number; total: number } | null; loading: boolean }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
+
+      {truncated && !loading && (
+        <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-300">
+          {t('truncated', { shown: truncated.shown, total: truncated.total })}
+        </div>
+      )}
+    </>
+  )
+}
+
+type FilesTableProps = {
+  loading: boolean
+  path: string
+  content: Entry[]
+  searchResults: Entry[] | null
+  selectedPaths: Set<string>
+  onSelectAll: (selectAll: boolean) => void
+  onToggle: (path: string) => void
+  onGoUp: () => void
+  onNavigate: (path: string) => void
+  onRowContext: (ev: React.MouseEvent, entry: Entry) => void
+  onTouchStart: (ev: React.TouchEvent, entry: Entry) => void
+  onTouchEnd: (ev: React.TouchEvent) => void
+  onTouchMove: () => void
+  onOpenContext: (clientX: number, clientY: number, entry: Entry) => void
+}
+
+function FilesTable(p: FilesTableProps) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className={responsiveTableContainerClass}>
+      {p.loading ? (
+        <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+      ) : (
+        <table className={responsiveTableClass}>
+          <thead className={responsiveTableHeadClass}>
+            <tr>
+              <th className="px-3 py-2.5 w-10 text-center"><input type="checkbox" checked={p.content.length > 0 && p.selectedPaths.size === p.content.length} ref={ref => { if (ref) ref.indeterminate = p.selectedPaths.size > 0 && p.selectedPaths.size < p.content.length }} onChange={e => p.onSelectAll(e.target.checked)} className="cursor-pointer" /></th>
+              <th className="text-left px-4 py-2.5">{t('columns.name')}</th>
+              <th className="text-left px-4 py-2.5">{t('columns.size')}</th>
+              <th className="text-left px-4 py-2.5">{t('columns.permissions')}</th>
+              <th className="text-left px-4 py-2.5">{t('columns.modified')}</th>
+              <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
+            </tr>
+          </thead>
+          <tbody className={responsiveTableBodyClass}>
+            {p.path !== '/' && (
+              <tr className={responsiveTableRowClass} onClick={p.onGoUp}>
+                <td className="px-4 py-2.5 text-sm" colSpan={6}>
+                  <span className="text-slate-500 dark:text-slate-500">{t('parentFolder')}</span>
+                </td>
+              </tr>
+            )}
+            {p.content.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('empty')}</td>
+              </tr>
+            )}
+            {(p.searchResults ?? p.content).map(entry => (
+              <FileRow
+                key={entry.path}
+                entry={entry}
+                selected={p.selectedPaths.has(entry.path)}
+                onToggle={p.onToggle}
+                onNavigate={p.onNavigate}
+                onRowContext={p.onRowContext}
+                onTouchStart={p.onTouchStart}
+                onTouchEnd={p.onTouchEnd}
+                onTouchMove={p.onTouchMove}
+                onOpenContext={p.onOpenContext}
+              />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+type FileRowProps = {
+  entry: Entry
+  selected: boolean
+  onToggle: (path: string) => void
+  onNavigate: (path: string) => void
+  onRowContext: (ev: React.MouseEvent, entry: Entry) => void
+  onTouchStart: (ev: React.TouchEvent, entry: Entry) => void
+  onTouchEnd: (ev: React.TouchEvent) => void
+  onTouchMove: () => void
+  onOpenContext: (clientX: number, clientY: number, entry: Entry) => void
+}
+
+function FileRow({ entry: e, selected, onToggle, onNavigate, onRowContext, onTouchStart, onTouchEnd, onTouchMove, onOpenContext }: FileRowProps) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <tr
+      onContextMenu={ev => onRowContext(ev, e)}
+      onTouchStart={ev => onTouchStart(ev, e)}
+      onTouchEnd={onTouchEnd}
+      onTouchMove={onTouchMove}
+      className={`${responsiveTableRowClass} ${selected ? 'bg-brand-50 dark:bg-brand-900/20' : ''}`}>
+      <td data-label={t('columns.select')} className={responsiveTableCellClass}>
+        <input type="checkbox" checked={selected}
+          onChange={() => onToggle(e.path)}
+          onClick={ev => ev.stopPropagation()}
+          className="cursor-pointer" />
+      </td>
+      <td data-label={t('columns.name')} className={responsiveTableCellClass}>
+        {e.type === 'folder' ? (
+          <button
+            onClick={() => onNavigate(e.path)}
+            className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium flex items-center gap-2"
+          >
+            <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z" />
+            </svg>
+            {e.name}
+          </button>
+        ) : (
+          <span className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <svg className="w-4 h-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>{e.name}</span>
+          </span>
+        )}
+      </td>
+      <td data-label={t('columns.size')} className={responsiveTableCodeCellClass}>
+        {e.type === 'folder' ? '-' : formatSize(e.size_b)}
+      </td>
+      <td data-label={t('columns.permissions')} className={responsiveTableCodeCellClass}>
+        <div>{e.permissions || e.mode}</div>
+        {(e.owner || e.group) && <div className="text-xs text-slate-400 dark:text-slate-500">{e.owner}:{e.group}</div>}
+      </td>
+      <td data-label={t('columns.modified')} className={responsiveTableCellClass}>{formatDate(e.changed)}</td>
+      <td className={responsiveTableActionCellClass}>
+        <button
+          onClick={ev => { ev.stopPropagation(); onOpenContext(ev.clientX, ev.clientY, e) }}
+          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:hover:bg-slate-800 rounded transition"
+          title={t('actionsTitle')}>
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+type EntryModalsProps = {
+  editor: { path: string; content: string } | null
+  onEditorChange: (content: string) => void
+  onEditorSave: () => void
+  onEditorClose: () => void
+  renameFor: Entry | null
+  onRename: (entry: Entry, name: string) => void
+  onRenameCancel: () => void
+  chmodFor: Entry | null
+  onChmod: (entry: Entry, mode: string) => void
+  onChmodCancel: () => void
+  copyMove: { type: 'copy' | 'move'; paths: string[] } | null
+  onCopyMove: (target: string) => void
+  onCopyMoveCancel: () => void
+}
+
+function EntryModals(p: EntryModalsProps) {
+  return (
+    <>
+      {p.editor && (
+        <CodeEditor path={p.editor.path} content={p.editor.content}
+          onChange={p.onEditorChange}
+          onSave={p.onEditorSave}
+          onClose={p.onEditorClose} />
+      )}
+      {p.renameFor && (
+        <RenameModal entry={p.renameFor}
+          onDone={name => p.onRename(p.renameFor as Entry, name)}
+          onCancel={p.onRenameCancel} />
+      )}
+      {p.chmodFor && (
+        <ChmodModal entry={p.chmodFor}
+          onDone={mod => p.onChmod(p.chmodFor as Entry, mod)}
+          onCancel={p.onChmodCancel} />
+      )}
+      {p.copyMove && (
+        <CopyMoveModal
+          type={p.copyMove.type}
+          paths={p.copyMove.paths}
+          onDone={p.onCopyMove}
+          onCancel={p.onCopyMoveCancel} />
+      )}
+    </>
+  )
+}
+
+type ActionModalsProps = {
+  archiveOpen: boolean
+  selectedCount: number
+  onArchive: (name: string, format: 'zip' | 'tar.gz') => void
+  onArchiveCancel: () => void
+  newFileOpen: boolean
+  onNewFile: (name: string) => void
+  onNewFileCancel: () => void
+  sizeResult: { path: string; size: number } | null
+  onSizeClose: () => void
+  bulkDeleteOpen: boolean
+  selectedPaths: Set<string>
+  onBulkDelete: () => void
+  onBulkDeleteCancel: () => void
+}
+
+function ActionModals(p: ActionModalsProps) {
+  return (
+    <>
+      {p.archiveOpen && (
+        <ArchiveModal
+          itemCount={p.selectedCount}
+          onDone={p.onArchive}
+          onCancel={p.onArchiveCancel} />
+      )}
+      {p.newFileOpen && (
+        <NewFileModal
+          onDone={p.onNewFile}
+          onCancel={p.onNewFileCancel} />
+      )}
+      {p.sizeResult && <SizeModal result={p.sizeResult} onClose={p.onSizeClose} />}
+      {p.bulkDeleteOpen && (
+        <BulkDeleteModal paths={p.selectedPaths} onConfirm={p.onBulkDelete} onCancel={p.onBulkDeleteCancel} />
+      )}
+    </>
+  )
+}
+
+function SizeModal({ result, onClose }: { result: { path: string; size: number }; onClose: () => void }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('sizeModal.title')}</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-500 mb-3 font-mono">{result.path}</p>
+        <div className="text-2xl font-bold text-brand-700 dark:text-brand-300 mb-2">
+          {formatSize(result.size)}
+        </div>
+        <div className="text-xs text-slate-500 dark:text-slate-500 font-mono">{t('sizeModal.bytes', { bytes: result.size.toLocaleString('en-US') })}</div>
+        <div className="mt-4 flex justify-end">
+          <button onClick={onClose} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm rounded">{t('sizeModal.done')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BulkDeleteModal({ paths, onConfirm, onCancel }: { paths: Set<string>; onConfirm: () => void; onCancel: () => void }) {
+  const { t } = useTranslation('DomainFilesPage')
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-red-700 dark:text-red-300 mb-2">{t('bulkDelete.title')}</h3>
+        <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
+          <span className="font-semibold">{t('bulkDelete.messageBold', { count: paths.size })}</span>{t('bulkDelete.messagePost')}
+        </p>
+        <ul className="text-xs font-mono text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 rounded p-2 max-h-40 overflow-auto mb-4">
+          {Array.from(paths).slice(0, 8).map(y => <li key={y} className="truncate">{y}</li>)}
+          {paths.size > 8 && <li className="text-slate-400 dark:text-slate-500 italic">{t('bulkDelete.moreItems', { count: paths.size - 8 })}</li>}
+        </ul>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('bulkDelete.cancel')}</button>
+          <button onClick={onConfirm} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded font-medium">{t('bulkDelete.confirm')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ===== Context Menu Component =====
 function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: CtxItem[]; onClose: () => void }) {
