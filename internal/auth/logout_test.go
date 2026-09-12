@@ -180,7 +180,7 @@ func otherKeyToken(t *testing.T) string {
 // Two sessions must be distinguishable, or listing one would end the other.
 func TestEverySessionGetsItsOwnIdentifier(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		token, err := Issue(logoutSecret, 3600, 7, "operator", "admin", 3)
 		if err != nil {
 			t.Fatalf("Issue: %v", err)
