@@ -339,24 +339,22 @@ func (h *Handlers) ListBranches(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, names)
 }
 
-// POST /domains/{id}/github/use — body: { repo, branch, target_dir, auto_deploy }
-// Use stores the selected repository in git_repos and creates a GitHub webhook when auto_deploy is true.
-func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
-	id, systemUser, err := h.lookupDomain(r)
-	if err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
-	}
-	var req struct {
-		Repo       string `json:"repo"` // owner/name
-		Branch     string `json:"branch"`
-		TargetDir  string `json:"target_dir"`
-		AutoDeploy bool   `json:"auto_deploy"`
-	}
+// useReq is the repository selection a request carries.
+type useReq struct {
+	Repo       string `json:"repo"` // owner/name
+	Branch     string `json:"branch"`
+	TargetDir  string `json:"target_dir"`
+	AutoDeploy bool   `json:"auto_deploy"`
+}
+
+// requestedRepo reads the selection and fills the defaults, answering the
+// request itself when it names no repository.
+func requestedRepo(w http.ResponseWriter, r *http.Request) (useReq, bool) {
+	var req useReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil ||
 		req.Repo == "" || !strings.Contains(req.Repo, "/") {
 		httpx.WriteError(w, http.StatusBadRequest, "repo (owner/name) and branch are required")
-		return
+		return req, false
 	}
 	if req.Branch == "" {
 		req.Branch = "main"
@@ -364,51 +362,55 @@ func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
 	if req.TargetDir == "" {
 		req.TargetDir = "public_html"
 	}
-	_ = systemUser
+	return req, true
+}
 
-	pat := h.tokenOf(r.Context(), id)
-	if pat == "" {
-		httpx.WriteError(w, http.StatusBadRequest, "connect with a token first")
-		return
+// webhookValues returns the delivery URL token and the HMAC signing key of this
+// domain, creating either one that is missing.
+//
+// The two are INDEPENDENT values. They used to be one column, which meant
+// anyone who learned the delivery URL also held the signing key and could forge
+// a valid signature for any body; the URL is written to the nginx access log on
+// every delivery, so it is not a secret in practice.
+//
+// A row that still carries the pre-separation pair (the migration backfilled
+// the key from the token so no configured webhook broke) gets a fresh
+// independent key HERE, because the caller re-registers the hook at GitHub in
+// the same request and can therefore rotate without leaving a delivery signing
+// with a value the panel no longer accepts.
+func (h *Handlers) webhookValues(ctx context.Context, id int64) (urlToken, signingKey string) {
+	var existingSecret, existingKey string
+	_ = h.DB.QueryRowContext(ctx,
+		`SELECT COALESCE(webhook_secret,''), COALESCE(webhook_signing_key,'') FROM git_repos WHERE domain_id=?`,
+		id).Scan(&existingSecret, &existingKey)
+	urlToken = existingSecret
+	if urlToken == "" {
+		urlToken = randomHex(20)
 	}
+	signingKey = existingKey
+	if signingKey == "" || signingKey == urlToken {
+		signingKey = randomHex(32)
+	}
+	return urlToken, signingKey
+}
 
+// storeSelection writes the repository and the connection state, answering the
+// request itself when either write fails.
+func (h *Handlers) storeSelection(w http.ResponseWriter, r *http.Request, id int64, req useReq, urlToken, signingKey string) bool {
 	// Store the repo URL without the token; the token is supplied at git time via
 	// GIT_ASKPASS (see internal/git), so it never lands in .git/config.
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", req.Repo)
 
 	// Create or update the git_repos record.
-	// The URL path token and the HMAC key are two INDEPENDENT values. They used
-	// to be one column, which meant anyone who learned the delivery URL also
-	// held the signing key and could forge a valid signature for any body; the
-	// URL is written to the nginx access log on every delivery, so it is not a
-	// secret in practice.
-	//
-	// A row that still carries the pre-separation pair (the migration backfilled
-	// the key from the token so no configured webhook broke) gets a fresh
-	// independent key HERE, because this call re-registers the hook at GitHub in
-	// the same request and can therefore rotate without leaving a delivery
-	// signing with a value the panel no longer accepts.
-	var existingSecret, existingKey string
-	_ = h.DB.QueryRowContext(r.Context(),
-		`SELECT COALESCE(webhook_secret,''), COALESCE(webhook_signing_key,'') FROM git_repos WHERE domain_id=?`,
-		id).Scan(&existingSecret, &existingKey)
-	secret := existingSecret
-	if secret == "" {
-		secret = randomHex(20)
-	}
-	signingKey := existingKey
-	if signingKey == "" || signingKey == secret {
-		signingKey = randomHex(32)
-	}
 	if _, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_signing_key, last_status)
 		 VALUES(?,?,?,?, '', ?,?, 'pending')
 		 ON DUPLICATE KEY UPDATE repo_url=VALUES(repo_url), branch=VALUES(branch),
 		   target_dir=VALUES(target_dir), webhook_secret=VALUES(webhook_secret),
 		   webhook_signing_key=VALUES(webhook_signing_key)`,
-		id, cloneURL, req.Branch, req.TargetDir, secret, signingKey); err != nil {
+		id, cloneURL, req.Branch, req.TargetDir, urlToken, signingKey); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
-		return
+		return false
 	}
 
 	// Update the connection state.
@@ -416,53 +418,87 @@ func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
 		`UPDATE github_connections SET selected_repo=?, selected_branch=? WHERE domain_id=?`,
 		req.Repo, req.Branch, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return false
+	}
+	return true
+}
+
+// createHook registers the delivery hook at GitHub and reports the outcome into
+// resp. A failure here is reported rather than returned: the repository is
+// already stored, so the request itself succeeded.
+func (h *Handlers) createHook(r *http.Request, id int64, req useReq, pat, hookURL, signingKey string, resp map[string]any) {
+	// Remove the previous webhook first.
+	var oldID int64
+	_ = h.DB.QueryRowContext(r.Context(),
+		`SELECT webhook_id FROM github_connections WHERE domain_id=?`, id).Scan(&oldID)
+	if oldID > 0 {
+		_, _, _ = githubCall(r.Context(), "DELETE",
+			fmt.Sprintf("/repos/%s/hooks/%d", req.Repo, oldID), pat, nil)
+	}
+	hook := ghHook{Name: "web", Active: true, Events: []string{"push"}}
+	hook.Config.URL = hookURL
+	hook.Config.ContentType = "json"
+	// NOT the URL token: that value is the URL path segment, which GitHub sends
+	// in the clear on every delivery and nginx writes to its access log.
+	hook.Config.Secret = signingKey
+	hook.Config.InsecureSSL = "0" // Require GitHub to verify the panel TLS certificate.
+	body, st, err := githubCall(r.Context(), "POST", "/repos/"+req.Repo+"/hooks", pat, hook)
+	if err != nil || (st != 201 && st != 200) {
+		resp["webhook_ok"] = false
+		resp["webhook_error"] = patErrorMessage(st, body)
+		return
+	}
+	var created ghHook
+	if err := json.Unmarshal(body, &created); err != nil {
+		resp["webhook_ok"] = false
+		resp["webhook_error"] = "could not parse webhook response from GitHub"
+		return
+	}
+	_, _ = h.DB.ExecContext(r.Context(),
+		`UPDATE github_connections SET webhook_id=?, webhook_url=? WHERE domain_id=?`,
+		created.ID, hookURL, id)
+	resp["webhook_ok"] = true
+	resp["webhook_id"] = created.ID
+	resp["webhook_url"] = hookURL
+}
+
+// POST /domains/{id}/github/use — body: { repo, branch, target_dir, auto_deploy }
+// Use stores the selected repository in git_repos and creates a GitHub webhook when auto_deploy is true.
+func (h *Handlers) Use(w http.ResponseWriter, r *http.Request) {
+	id, _, err := h.lookupDomain(r)
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
+	req, ok := requestedRepo(w, r)
+	if !ok {
+		return
+	}
+
+	pat := h.tokenOf(r.Context(), id)
+	if pat == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "connect with a token first")
+		return
+	}
+
+	urlToken, signingKey := h.webhookValues(r.Context(), id)
+	if !h.storeSelection(w, r, id, req, urlToken, signingKey) {
 		return
 	}
 
 	// Configure the automatic webhook.
 	resp := map[string]any{"ok": true, "repo": req.Repo, "branch": req.Branch, "auto_deploy": req.AutoDeploy}
 	webhookBase, trusted := h.trustedWebhookBase(r.Context())
-	if req.AutoDeploy && !trusted {
+	switch {
+	case req.AutoDeploy && !trusted:
 		// GitHub verifies the panel TLS certificate on delivery. The default
 		// IP-based endpoint cannot obtain a trusted certificate, so refuse to
 		// register an insecure webhook and tell the operator how to enable it.
 		resp["webhook_ok"] = false
 		resp["webhook_error"] = "configure a panel domain with a valid TLS certificate before enabling auto-deploy"
-	} else if req.AutoDeploy {
-		hookURL := strings.TrimRight(webhookBase, "/") + "/api/v1/git-webhook/" + secret
-		// Remove the previous webhook first.
-		var oldID int64
-		_ = h.DB.QueryRowContext(r.Context(),
-			`SELECT webhook_id FROM github_connections WHERE domain_id=?`, id).Scan(&oldID)
-		if oldID > 0 {
-			_, _, _ = githubCall(r.Context(), "DELETE",
-				fmt.Sprintf("/repos/%s/hooks/%d", req.Repo, oldID), pat, nil)
-		}
-		hook := ghHook{Name: "web", Active: true, Events: []string{"push"}}
-		hook.Config.URL = hookURL
-		hook.Config.ContentType = "json"
-		// NOT `secret`: that value is the URL path segment, which GitHub sends in
-		// the clear on every delivery and nginx writes to its access log.
-		hook.Config.Secret = signingKey
-		hook.Config.InsecureSSL = "0" // Require GitHub to verify the panel TLS certificate.
-		body, st, err := githubCall(r.Context(), "POST", "/repos/"+req.Repo+"/hooks", pat, hook)
-		if err != nil || (st != 201 && st != 200) {
-			resp["webhook_ok"] = false
-			resp["webhook_error"] = patErrorMessage(st, body)
-		} else {
-			var created ghHook
-			if err := json.Unmarshal(body, &created); err != nil {
-				resp["webhook_ok"] = false
-				resp["webhook_error"] = "could not parse webhook response from GitHub"
-			} else {
-				_, _ = h.DB.ExecContext(r.Context(),
-					`UPDATE github_connections SET webhook_id=?, webhook_url=? WHERE domain_id=?`,
-					created.ID, hookURL, id)
-				resp["webhook_ok"] = true
-				resp["webhook_id"] = created.ID
-				resp["webhook_url"] = hookURL
-			}
-		}
+	case req.AutoDeploy:
+		hookURL := strings.TrimRight(webhookBase, "/") + "/api/v1/git-webhook/" + urlToken
+		h.createHook(r, id, req, pat, hookURL, signingKey, resp)
 	}
 	httpx.WriteJSON(w, http.StatusOK, resp)
 }

@@ -305,10 +305,9 @@ func TestTheStoredRepositoryTakesTheDefaults(t *testing.T) {
 // still carrying the pre-separation pair gets a fresh key.
 func TestTheURLTokenAndTheSigningKeyStayIndependent(t *testing.T) {
 	fresh := connected()
-	if recorder, _ := useRepo(t, fresh, &fakeGitHub{}, `{"repo":"acme/site"}`); recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d", recorder.Code)
-	}
-	args := fresh.argsOf(insRepo)
+
+	args := storedPair(t, fresh, `{"repo":"acme/site"}`)
+
 	token, key := args[4].(string), args[5].(string)
 	if len(token) != 40 || len(key) != 64 {
 		t.Errorf("token is %d characters and key %d, want 40 and 64", len(token), len(key))
@@ -316,22 +315,42 @@ func TestTheURLTokenAndTheSigningKeyStayIndependent(t *testing.T) {
 	if token == key {
 		t.Error("a fresh row got one value for both the URL token and the signing key")
 	}
+}
 
-	kept := connected()
-	kept.rows[qSecrets] = []driver.Value{"oldtoken", "oldkey"}
-	if recorder, _ := useRepo(t, kept, &fakeGitHub{}, `{"repo":"acme/site"}`); recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d", recorder.Code)
+// storedPair runs the handler and returns the arguments of the git_repos write.
+func storedPair(t *testing.T, script *useScript, body string) []driver.Value {
+	t.Helper()
+	if recorder, _ := useRepo(t, script, &fakeGitHub{}, body); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
-	if args := kept.argsOf(insRepo); args[4] != "oldtoken" || args[5] != "oldkey" {
+	args := script.argsOf(insRepo)
+	if len(args) != 6 {
+		t.Fatalf("insert arguments = %v", args)
+	}
+	return args
+}
+
+// A pair that is already two independent values is kept, so choosing another
+// branch does not break every configured delivery.
+func TestAnExistingPairIsKept(t *testing.T) {
+	script := connected()
+	script.rows[qSecrets] = []driver.Value{"oldtoken", "oldkey"}
+
+	args := storedPair(t, script, `{"repo":"acme/site"}`)
+
+	if args[4] != "oldtoken" || args[5] != "oldkey" {
 		t.Errorf("an existing pair was replaced: %v", args)
 	}
+}
 
-	legacy := connected()
-	legacy.rows[qSecrets] = []driver.Value{"sameforboth", "sameforboth"}
-	if recorder, _ := useRepo(t, legacy, &fakeGitHub{}, `{"repo":"acme/site"}`); recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d", recorder.Code)
-	}
-	args = legacy.argsOf(insRepo)
+// A row still carrying the pre-separation pair gets a fresh signing key, and
+// keeps the URL token that configured deliveries already use.
+func TestASharedPairIsSplitApart(t *testing.T) {
+	script := connected()
+	script.rows[qSecrets] = []driver.Value{"sameforboth", "sameforboth"}
+
+	args := storedPair(t, script, `{"repo":"acme/site"}`)
+
 	if args[4] != "sameforboth" {
 		t.Errorf("the URL token was rotated: %v", args[4])
 	}
@@ -415,6 +434,19 @@ func TestTheRegisteredHookSignsWithTheKeyAndTheOldOneIsRemoved(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", recorder.Code, recorder.Body)
 	}
+	wantURL := "https://panel.example.com/api/v1/git-webhook/urltoken"
+	assertHookCalls(t, gh, wantURL)
+	if answer["webhook_ok"] != true || answer["webhook_url"] != wantURL {
+		t.Errorf("answer = %v", answer)
+	}
+	if stored := script.argsOf(updWebURL); len(stored) != 3 || stored[0] != int64(4242) {
+		t.Errorf("the webhook id was stored as %v", stored)
+	}
+}
+
+// assertHookCalls checks the delete-then-create pair and the created hook.
+func assertHookCalls(t *testing.T, gh *fakeGitHub, wantURL string) {
+	t.Helper()
 	if len(gh.calls) != 2 {
 		t.Fatalf("GitHub was called %v, want a delete and a create", gh.calls)
 	}
@@ -431,21 +463,18 @@ func TestTheRegisteredHookSignsWithTheKeyAndTheOldOneIsRemoved(t *testing.T) {
 	if !ok {
 		t.Fatalf("the created hook is %T", gh.calls[1].body)
 	}
-	if hook.Config.Secret != "signingkey" {
-		t.Errorf("the hook signs with %q, want the signing key", hook.Config.Secret)
-	}
-	if hook.Config.InsecureSSL != "0" {
-		t.Errorf("insecure_ssl = %q, want 0", hook.Config.InsecureSSL)
-	}
-	wantURL := "https://panel.example.com/api/v1/git-webhook/urltoken"
-	if hook.Config.URL != wantURL {
-		t.Errorf("delivery url = %q, want %q", hook.Config.URL, wantURL)
-	}
-	if answer["webhook_ok"] != true || answer["webhook_url"] != wantURL {
-		t.Errorf("answer = %v", answer)
-	}
-	if stored := script.argsOf(updWebURL); len(stored) != 3 || stored[0] != int64(4242) {
-		t.Errorf("the webhook id was stored as %v", stored)
+	for _, field := range []struct {
+		name string
+		got  string
+		want string
+	}{
+		{name: "signing secret", got: hook.Config.Secret, want: "signingkey"},
+		{name: "insecure_ssl", got: hook.Config.InsecureSSL, want: "0"},
+		{name: "delivery url", got: hook.Config.URL, want: wantURL},
+	} {
+		if field.got != field.want {
+			t.Errorf("%s = %q, want %q", field.name, field.got, field.want)
+		}
 	}
 }
 
