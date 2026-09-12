@@ -106,35 +106,56 @@ func (h *Handlers) planExists(w http.ResponseWriter, r *http.Request, planID *in
 	return true
 }
 
-// CreateCustomer creates a customer account.
-func (h *Handlers) CreateCustomer(w http.ResponseWriter, r *http.Request) {
+// newCustomer reads the request body, and answers the request itself when the
+// body is unusable or names no customer.
+func newCustomer(w http.ResponseWriter, r *http.Request) (Customer, bool) {
 	var cs Customer
 	if err := json.NewDecoder(r.Body).Decode(&cs); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
+		return cs, false
 	}
 	if cs.Name == "" || cs.Email == "" {
 		httpx.WriteError(w, http.StatusBadRequest, "name and email are required")
-		return
+		return cs, false
 	}
 	if cs.Status == "" {
 		cs.Status = "active"
 	}
+	return cs, true
+}
 
-	// Ownership: a customer a reseller creates is bound to it; a customer an
-	// admin creates is unowned (belongs directly to admin). A reseller's quota
-	// is also enforced here.
-	var owner any
-	if c := middleware.ClaimsFrom(r); c != nil && c.Role == middleware.RoleReseller {
-		if err := quota.CheckResellerCustomerAllowed(r.Context(), h.DB, c.UserID); err != nil {
-			if le, ok := errors.AsType[*quota.LimitError](err); ok {
-				httpx.WriteError(w, http.StatusForbidden, le.Message)
-				return
-			}
-			httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
-			return
+// ownerFor reports the reseller the new customer belongs to, and answers the
+// request itself when that reseller may not create one.
+//
+// Ownership: a customer a reseller creates is bound to it; a customer an admin
+// creates is unowned (belongs directly to admin). A reseller's quota is also
+// enforced here.
+func (h *Handlers) ownerFor(w http.ResponseWriter, r *http.Request) (any, bool) {
+	c := middleware.ClaimsFrom(r)
+	if c == nil || c.Role != middleware.RoleReseller {
+		return nil, true
+	}
+	if err := quota.CheckResellerCustomerAllowed(r.Context(), h.DB, c.UserID); err != nil {
+		if le, ok := errors.AsType[*quota.LimitError](err); ok {
+			httpx.WriteError(w, http.StatusForbidden, le.Message)
+			return nil, false
 		}
-		owner = c.UserID
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify reseller limit")
+		return nil, false
+	}
+	return c.UserID, true
+}
+
+// CreateCustomer creates a customer account.
+func (h *Handlers) CreateCustomer(w http.ResponseWriter, r *http.Request) {
+	cs, ok := newCustomer(w, r)
+	if !ok {
+		return
+	}
+
+	owner, ok := h.ownerFor(w, r)
+	if !ok {
+		return
 	}
 
 	if !h.planExists(w, r, cs.PlanID) {
