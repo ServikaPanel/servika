@@ -28,6 +28,13 @@ func TestBodyLimitExemptsUpload(t *testing.T) {
 		// The apply and config calls are ordinary JSON and stay capped.
 		{"import apply capped", http.MethodPost, "/api/v1/domains/5/import/archive/apply", true},
 		{"import config capped", http.MethodPost, "/api/v1/domains/5/import/config", true},
+		// A mailbox arrives as a Maildir tar, an mbox or a .pst, and the handler
+		// enforces its own 4 GiB limit. A MaxBytesReader composes with the one
+		// under it, so the JSON cap here would decide instead.
+		{"mailbox import exempt", http.MethodPost, "/api/v1/domains/5/mail/9/import", false},
+		// A BIND zone arrives as JSON on a path with the same last segment, so
+		// the suffix alone must not exempt it.
+		{"dns import capped", http.MethodPost, "/api/v1/domains/5/dns/import", true},
 		{"json capped", http.MethodPost, "/api/v1/domains/5/databases", true},
 		{"get on upload path capped", http.MethodGet, "/api/v1/domains/5/files/upload", true},
 	}
