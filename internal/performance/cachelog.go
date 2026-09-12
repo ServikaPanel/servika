@@ -151,27 +151,34 @@ func tailReader(file *os.File) (io.Reader, error) {
 	return buffered, nil
 }
 
+// count tallies one upstream_cache_status token. A token nginx does not emit is
+// counted nowhere rather than into a bucket of its own, so Total stays the
+// number of requests the seven states describe.
+func (s *CacheStats) count(token string) {
+	switch token {
+	case "HIT":
+		s.Hit++
+	case "MISS":
+		s.Miss++
+	case "EXPIRED":
+		s.Expired++
+	case "BYPASS":
+		s.Bypass++
+	case "STALE":
+		s.Stale++
+	case "UPDATING":
+		s.Updating++
+	case "REVALIDATED":
+		s.Revalidated++
+	}
+}
+
 // countCacheStatuses tallies the upstream_cache_status tokens in a reader.
 func countCacheStatuses(reader io.Reader) (*CacheStats, error) {
 	var stats CacheStats
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		switch strings.TrimSpace(scanner.Text()) {
-		case "HIT":
-			stats.Hit++
-		case "MISS":
-			stats.Miss++
-		case "EXPIRED":
-			stats.Expired++
-		case "BYPASS":
-			stats.Bypass++
-		case "STALE":
-			stats.Stale++
-		case "UPDATING":
-			stats.Updating++
-		case "REVALIDATED":
-			stats.Revalidated++
-		}
+		stats.count(strings.TrimSpace(scanner.Text()))
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
