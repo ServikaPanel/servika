@@ -21,6 +21,130 @@ export type RestorePayload = {
   allow_corrupt?: boolean
 }
 
+// canSubmitOf reports whether the chosen mode has everything it needs. A
+// selected-files restore with nothing ticked, and a single-database restore
+// with no source, are the two the server would refuse.
+function canSubmitOf(busy: boolean, mode: RestoreMode, selected: string[], sourceDB: string): boolean {
+  if (busy) return false
+  if (mode === 'file') return selected.length > 0
+  if (mode === 'db') return sourceDB !== ''
+  return true
+}
+
+// CleanOption offers to empty the target before writing. Only the two whole
+// restores can do it; a partial restore has nothing safe to empty.
+function CleanOption({ mode, clean, onClean }: {
+  mode: RestoreMode
+  clean: boolean
+  onClean: (value: boolean) => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (mode !== 'full' && mode !== 'files') return null
+  return (
+    <div className="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+        <input type="checkbox" checked={clean} onChange={e => onClean(e.target.checked)} />
+        {t('restore.cleanLabel')}
+      </label>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('restore.cleanHint')}</p>
+    </div>
+  )
+}
+
+function ContentsStatus({ loading, loadError }: { loading: boolean; loadError: string | null }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (loadError) return <p className="text-sm text-red-600">{loadError}</p>
+  if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400">{t('restore.loadingContents')}</p>
+  return null
+}
+
+// FileSelector picks the paths of a selected-files restore and where they land.
+function FileSelector({ mode, contents, filter, onFilter, selected, onToggle, visibleFiles, target, onTarget }: {
+  mode: RestoreMode
+  contents: Contents | null
+  filter: string
+  onFilter: (value: string) => void
+  selected: string[]
+  onToggle: (path: string) => void
+  visibleFiles: ContentFile[]
+  target: string
+  onTarget: (value: string) => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (mode !== 'file' || !contents) return null
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <input value={filter} onChange={e => onFilter(e.target.value)}
+          placeholder={t('restore.searchPlaceholder')}
+          className="flex-1 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800" />
+        <span className="text-xs text-slate-500 dark:text-slate-400">{t('restore.selectedCount', { n: selected.length })}</span>
+      </div>
+      {contents.files.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('restore.noFiles')}</p>
+      ) : (
+        <div className="max-h-56 overflow-auto border border-slate-200 dark:border-slate-700 rounded-md divide-y divide-slate-100 dark:divide-slate-700">
+          {visibleFiles.map(f => (
+            <label key={f.path} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900">
+              <input type="checkbox" checked={selected.includes(f.path)} onChange={() => onToggle(f.path)} />
+              <span className="truncate text-slate-700 dark:text-slate-300">{f.is_dir ? `${f.path}/` : f.path}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {contents.truncated && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('restore.truncated')}</p>}
+
+      <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-3 mb-1">{t('restore.targetLabel')}</p>
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input type="radio" name="restore-target" checked={target === 'folder'} onChange={() => onTarget('folder')} />
+          {t('restore.target.folder')}
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input type="radio" name="restore-target" checked={target === 'in_place'} onChange={() => onTarget('in_place')} />
+          {t('restore.target.inPlace')}
+        </label>
+      </div>
+    </div>
+  )
+}
+
+// DatabasePicker chooses which database in the archive is restored, and under
+// which name it lands.
+function DatabasePicker({ mode, contents, systemUser, sourceDB, onSourceDB, targetDB, onTargetDB }: {
+  mode: RestoreMode
+  contents: Contents | null
+  systemUser: string
+  sourceDB: string
+  onSourceDB: (value: string) => void
+  targetDB: string
+  onTargetDB: (value: string) => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (mode !== 'db' || !contents) return null
+  if (contents.databases.length === 0) {
+    return (
+      <div className="mb-4">
+        <p className="text-sm text-slate-500 dark:text-slate-400">{t('restore.noDatabases')}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('restore.sourceDbLabel')}</label>
+      <select value={sourceDB} onChange={e => onSourceDB(e.target.value)}
+        className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 mb-3">
+        {contents.databases.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+      </select>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('restore.targetDbLabel')}</label>
+      <input value={targetDB} onChange={e => onTargetDB(e.target.value)}
+        placeholder={`${systemUser}_`}
+        className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800" />
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('restore.targetDbHint', { prefix: `${systemUser}_` })}</p>
+    </div>
+  )
+}
+
 // RestoreDialog collects the granular restore options for one backup archive.
 // Modes needing archive contents (selected files, single database) fetch the
 // read-only listing lazily, so opening the dialog stays cheap.
@@ -100,7 +224,7 @@ export default function RestoreDialog({
     onSubmit({ mode, clean })
   }
 
-  const canSubmit = !busy && !(mode === 'file' && selected.length === 0) && !(mode === 'db' && !sourceDB)
+  const canSubmit = canSubmitOf(busy, mode, selected, sourceDB)
 
   const modes: { value: RestoreMode; label: string }[] = [
     { value: 'full', label: t('restore.mode.full') },
@@ -125,75 +249,16 @@ export default function RestoreDialog({
         ))}
       </div>
 
-      {(mode === 'full' || mode === 'files') && (
-        <div className="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
-          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input type="checkbox" checked={clean} onChange={e => setClean(e.target.checked)} />
-            {t('restore.cleanLabel')}
-          </label>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('restore.cleanHint')}</p>
-        </div>
-      )}
+      <CleanOption mode={mode} clean={clean} onClean={setClean} />
 
-      {loading && <p className="text-sm text-slate-500 dark:text-slate-400">{t('restore.loadingContents')}</p>}
-      {loadError && <p className="text-sm text-red-600">{loadError}</p>}
+      <ContentsStatus loading={loading} loadError={loadError} />
 
-      {mode === 'file' && contents && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <input value={filter} onChange={e => setFilter(e.target.value)}
-              placeholder={t('restore.searchPlaceholder')}
-              className="flex-1 px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800" />
-            <span className="text-xs text-slate-500 dark:text-slate-400">{t('restore.selectedCount', { n: selected.length })}</span>
-          </div>
-          {contents.files.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t('restore.noFiles')}</p>
-          ) : (
-            <div className="max-h-56 overflow-auto border border-slate-200 dark:border-slate-700 rounded-md divide-y divide-slate-100 dark:divide-slate-700">
-              {visibleFiles.map(f => (
-                <label key={f.path} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900">
-                  <input type="checkbox" checked={selected.includes(f.path)} onChange={() => toggle(f.path)} />
-                  <span className="truncate text-slate-700 dark:text-slate-300">{f.is_dir ? `${f.path}/` : f.path}</span>
-                </label>
-              ))}
-            </div>
-          )}
-          {contents.truncated && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('restore.truncated')}</p>}
+      <FileSelector mode={mode} contents={contents} filter={filter} onFilter={setFilter}
+        selected={selected} onToggle={toggle} visibleFiles={visibleFiles}
+        target={target} onTarget={setTarget} />
 
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mt-3 mb-1">{t('restore.targetLabel')}</p>
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-              <input type="radio" name="restore-target" checked={target === 'folder'} onChange={() => setTarget('folder')} />
-              {t('restore.target.folder')}
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-              <input type="radio" name="restore-target" checked={target === 'in_place'} onChange={() => setTarget('in_place')} />
-              {t('restore.target.inPlace')}
-            </label>
-          </div>
-        </div>
-      )}
-
-      {mode === 'db' && contents && (
-        <div className="mb-4">
-          {contents.databases.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">{t('restore.noDatabases')}</p>
-          ) : (
-            <>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('restore.sourceDbLabel')}</label>
-              <select value={sourceDB} onChange={e => setSourceDB(e.target.value)}
-                className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 mb-3">
-                {contents.databases.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
-              </select>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('restore.targetDbLabel')}</label>
-              <input value={targetDB} onChange={e => setTargetDB(e.target.value)}
-                placeholder={`${systemUser}_`}
-                className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800" />
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('restore.targetDbHint', { prefix: `${systemUser}_` })}</p>
-            </>
-          )}
-        </div>
-      )}
+      <DatabasePicker mode={mode} contents={contents} systemUser={systemUser}
+        sourceDB={sourceDB} onSourceDB={setSourceDB} targetDB={targetDB} onTargetDB={setTargetDB} />
 
       <div className="flex justify-end gap-2 pt-2">
         <button onClick={onCancel} disabled={busy}

@@ -55,9 +55,7 @@ function TreeNode({
       .finally(() => setLoaded(true))
   }, [domainId, path])
 
-  const selectedNorm = selected === '' ? '/' : selected
-  const childPrefix = path === '/' ? '/' : path + '/'
-  const onSelectedBranch = selectedNorm === path || selectedNorm.startsWith(childPrefix)
+  const { selectedNorm, onSelectedBranch } = nodePaths(path, selected)
 
   // When a folder is entered from the right-hand panel (selected changes), this
   // node auto-opens if it is on or above that path — otherwise the folder browsed
@@ -94,68 +92,139 @@ function TreeNode({
     setOpen(!open)
   }
 
-  const isSelected = path === selected || (path === '/' && (selected === '' || selected === '/'))
   const hasChildren = !loaded || folders.length > 0
 
   return (
     <div>
-      <div
-        ref={rowRef}
-        onClick={() => onSelect(path)}
-        className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition ${
-          isSelected ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300' : 'hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-        }`}
-        style={{ paddingLeft: 8 + depth * 14 }}
-        title={path}
-      >
-        {hasChildren ? (
-          <button
-            onClick={handleChevronClick}
-            className="w-4 h-4 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300"
-          >
-            <svg
-              className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        ) : (
-          <span className="w-4" />
-        )}
-        <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-        </svg>
-        <span className="truncate text-sm">{name}</span>
-      </div>
+      <NodeRow
+        rowRef={rowRef}
+        path={path}
+        name={name}
+        depth={depth}
+        open={open}
+        hasChildren={hasChildren}
+        isSelected={isSelectedNode(path, selected)}
+        onSelect={onSelect}
+        onChevron={handleChevronClick}
+      />
 
-      {open && (
-        <div>
-          {!loaded && folders.length === 0 && (
-            <div className="px-3 py-1 text-xs text-slate-400 dark:text-slate-500" style={{ paddingLeft: 24 + depth * 14 }}>
-              loading…
-            </div>
-          )}
-          {folders.map(k => (
-            <TreeNode
-              key={k.path}
-              domainId={domainId}
-              path={k.path}
-              name={k.name}
-              selected={selected}
-              onSelect={onSelect}
-              // A child opens at mount when it is on (or is) the selected branch,
-              // so a deep path restored from the saved cookie is expanded all the
-              // way down on first render. The runtime auto-open above handles a
-              // selection that changes later; this handles the initial one, which
-              // that logic (keyed on a change of `selected`) does not.
-              initiallyOpen={selectedNorm === k.path || selectedNorm.startsWith(k.path + '/')}
-              depth={depth + 1}
-              refreshKey={refreshKey}
-            />
-          ))}
+      <ChildNodes
+        open={open}
+        loaded={loaded}
+        folders={folders}
+        depth={depth}
+        domainId={domainId}
+        selected={selected}
+        selectedNorm={selectedNorm}
+        onSelect={onSelect}
+        refreshKey={refreshKey}
+      />
+    </div>
+  )
+}
+
+// nodePaths normalises the selection against this node's own path. An empty
+// selection means the home directory, which the tree draws as "/".
+function nodePaths(path: string, selected: string) {
+  const selectedNorm = selected === '' ? '/' : selected
+  const childPrefix = path === '/' ? '/' : path + '/'
+  return {
+    selectedNorm,
+    onSelectedBranch: selectedNorm === path || selectedNorm.startsWith(childPrefix),
+  }
+}
+
+// isSelectedNode reports whether this row is the selected folder. The home
+// directory answers to three spellings, because the right-hand panel and the
+// saved cookie do not write it the same way.
+function isSelectedNode(path: string, selected: string): boolean {
+  if (path === selected) return true
+  return path === '/' && (selected === '' || selected === '/')
+}
+
+// NodeRow is one folder line: the chevron, the icon and the name.
+function NodeRow({ rowRef, path, name, depth, open, hasChildren, isSelected, onSelect, onChevron }: {
+  rowRef: React.RefObject<HTMLDivElement | null>
+  path: string
+  name: string
+  depth: number
+  open: boolean
+  hasChildren: boolean
+  isSelected: boolean
+  onSelect: (path: string) => void
+  onChevron: (e: React.MouseEvent) => void
+}) {
+  return (
+    <div
+      ref={rowRef}
+      onClick={() => onSelect(path)}
+      className={`flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition ${
+        isSelected ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300' : 'hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+      }`}
+      style={{ paddingLeft: 8 + depth * 14 }}
+      title={path}
+    >
+      {hasChildren ? (
+        <button
+          onClick={onChevron}
+          className="w-4 h-4 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300"
+        >
+          <svg
+            className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      ) : (
+        <span className="w-4" />
+      )}
+      <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+      </svg>
+      <span className="truncate text-sm">{name}</span>
+    </div>
+  )
+}
+
+// ChildNodes draws the sub-folders of an open node.
+function ChildNodes({ open, loaded, folders, depth, domainId, selected, selectedNorm, onSelect, refreshKey }: {
+  open: boolean
+  loaded: boolean
+  folders: Entry[]
+  depth: number
+  domainId: number | string
+  selected: string
+  selectedNorm: string
+  onSelect: (path: string) => void
+  refreshKey?: number
+}) {
+  if (!open) return null
+  return (
+    <div>
+      {!loaded && folders.length === 0 && (
+        <div className="px-3 py-1 text-xs text-slate-400 dark:text-slate-500" style={{ paddingLeft: 24 + depth * 14 }}>
+          loading…
         </div>
       )}
+      {folders.map(k => (
+        <TreeNode
+          key={k.path}
+          domainId={domainId}
+          path={k.path}
+          name={k.name}
+          selected={selected}
+          onSelect={onSelect}
+          // A child opens at mount when it is on (or is) the selected branch,
+          // so a deep path restored from the saved cookie is expanded all the
+          // way down on first render. The runtime auto-open in TreeNode handles
+          // a selection that changes later; this handles the initial one, which
+          // that logic (keyed on a change of `selected`) does not.
+          initiallyOpen={selectedNorm === k.path || selectedNorm.startsWith(k.path + '/')}
+          depth={depth + 1}
+          refreshKey={refreshKey}
+        />
+      ))}
     </div>
   )
 }

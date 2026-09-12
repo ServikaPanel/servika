@@ -57,11 +57,94 @@ interface Props {
   onClose: () => void
 }
 
-export default function CodeEditor({ path, content, onChange, onSave, onClose }: Props) {
+type SaveStatus = 'clean' | 'dirty' | 'saving' | 'saved'
+
+// SaveBadge names the state of the buffer beside the file name.
+function SaveBadge({ status }: { status: SaveStatus }) {
   const { t } = useTranslation('CodeEditor')
+  if (status === 'dirty') return <span className="text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">{t('unsaved')}</span>
+  if (status === 'saving') return <span className="text-[10px] uppercase tracking-wider text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded">{t('saving')}</span>
+  if (status === 'saved') return <span className="text-[10px] uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded">{t('saved')}</span>
+  return null
+}
+
+// Toolbar holds the syntax picker and the three window buttons.
+function Toolbar({ language, onLanguage, fullscreen, onFullscreen, status, onSave, onClose }: {
+  language: Language
+  onLanguage: (code: Language) => void
+  fullscreen: boolean
+  onFullscreen: () => void
+  status: SaveStatus
+  onSave: () => void
+  onClose: () => void
+}) {
+  const { t } = useTranslation('CodeEditor')
+  return (
+    <div className="flex items-center gap-1.5 flex-shrink-0">
+      <select
+        value={language}
+        onChange={e => onLanguage(e.target.value as Language)}
+        className="text-xs bg-slate-700 text-slate-100 border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-slate-400"
+        title={t('syntax')}
+      >
+        {LANGUAGES.map(d => <option key={d.code} value={d.code}>{d.code === 'text' ? t('langPlainText') : d.name}</option>)}
+      </select>
+      <button
+        onClick={onFullscreen}
+        className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded"
+        title={fullscreen ? t('exitFullscreen') : t('fullscreen')}
+      >
+        <Icon d={fullscreen ? ICON.close : ICON.fullscreen} className="h-4 w-4" />
+      </button>
+      <button
+        onClick={onSave}
+        disabled={status === 'saving' || status === 'clean'}
+        className="text-xs px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded font-medium"
+        title="Ctrl+S"
+      >
+        {t('save')}
+      </button>
+      <button
+        onClick={onClose}
+        className="text-xs px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded"
+        title="ESC"
+      >
+        {t('close')}
+      </button>
+    </div>
+  )
+}
+
+// StatusBar reports the caret, the size of the buffer and the active syntax.
+function StatusBar({ cursor, content, language }: {
+  cursor: { line: number; column: number }
+  content: string
+  language: Language
+}) {
+  const { t } = useTranslation('CodeEditor')
+  const byteCount = new TextEncoder().encode(content).length
+  const syntax = language === 'text' ? t('langPlainText') : LANGUAGES.find(d => d.code === language)?.name
+  return (
+    <div className="flex items-center justify-between gap-4 px-3 py-1.5 bg-slate-800 border-t border-slate-700 text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+      <div className="flex items-center gap-4">
+        <span>{t('cursor', { line: cursor.line, column: cursor.column })}</span>
+        <span>{t('lines', { count: content.split('\n').length })}</span>
+        <span>{t('bytes', { count: byteCount })}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span>UTF-8</span>
+        <span>LF</span>
+        <span className="text-slate-300">{syntax}</span>
+        <span className="text-slate-500 dark:text-slate-500">{t('shortcuts')}</span>
+      </div>
+    </div>
+  )
+}
+
+export default function CodeEditor({ path, content, onChange, onSave, onClose }: Props) {
   const [fullscreen, setFullscreen] = useState(false)
   const [language, setLanguage] = useState<Language>(() => detectLanguage(path))
-  const [saveStatus, setSaveStatus] = useState<'clean' | 'dirty' | 'saving' | 'saved'>('clean')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('clean')
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   // Tracks the content as last persisted, NOT as first opened. Comparing against
   // the opened content made every buffer look dirty forever after the first
@@ -119,9 +202,6 @@ export default function CodeEditor({ path, content, onChange, onSave, onClose }:
 
   const fileName = path.split('/').filter(Boolean).pop() || path
 
-  // Size info
-  const byteCount = new TextEncoder().encode(content).length
-
   return (
     <div
       className={`fixed inset-0 z-50 bg-black/50 flex items-center justify-center ${fullscreen ? '' : 'p-4'}`}
@@ -145,43 +225,14 @@ export default function CodeEditor({ path, content, onChange, onSave, onClose }:
             </svg>
             <span className="text-sm font-semibold text-slate-100 truncate">{fileName}</span>
             <span className="text-xs text-slate-500 dark:text-slate-500 truncate min-w-0 hidden md:inline">— {path}</span>
-            {saveStatus === 'dirty' && <span className="text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">{t('unsaved')}</span>}
-            {saveStatus === 'saving' && <span className="text-[10px] uppercase tracking-wider text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded">{t('saving')}</span>}
-            {saveStatus === 'saved' && <span className="text-[10px] uppercase tracking-wider text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded">{t('saved')}</span>}
+            <SaveBadge status={saveStatus} />
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <select
-              value={language}
-              onChange={e => setLanguage(e.target.value as Language)}
-              className="text-xs bg-slate-700 text-slate-100 border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-slate-400"
-              title={t('syntax')}
-            >
-              {LANGUAGES.map(d => <option key={d.code} value={d.code}>{d.code === 'text' ? t('langPlainText') : d.name}</option>)}
-            </select>
-            <button
-              onClick={() => setFullscreen(!fullscreen)}
-              className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded"
-              title={fullscreen ? t('exitFullscreen') : t('fullscreen')}
-            >
-              <Icon d={fullscreen ? ICON.close : ICON.fullscreen} className="h-4 w-4" />
-            </button>
-            <button
-              onClick={save}
-              disabled={saveStatus === 'saving' || saveStatus === 'clean'}
-              className="text-xs px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded font-medium"
-              title="Ctrl+S"
-            >
-              {t('save')}
-            </button>
-            <button
-              onClick={onClose}
-              className="text-xs px-3 py-1 bg-slate-700 hover:bg-slate-600 text-slate-100 rounded"
-              title="ESC"
-            >
-              {t('close')}
-            </button>
-          </div>
+          <Toolbar
+            language={language} onLanguage={setLanguage}
+            fullscreen={fullscreen} onFullscreen={() => setFullscreen(!fullscreen)}
+            status={saveStatus} onSave={save} onClose={onClose}
+          />
         </div>
 
         {/* Editor */}
@@ -214,20 +265,7 @@ export default function CodeEditor({ path, content, onChange, onSave, onClose }:
           />
         </div>
 
-        {/* Status bar */}
-        <div className="flex items-center justify-between gap-4 px-3 py-1.5 bg-slate-800 border-t border-slate-700 text-[11px] text-slate-400 dark:text-slate-500 font-mono">
-          <div className="flex items-center gap-4">
-            <span>{t('cursor', { line: cursor.line, column: cursor.column })}</span>
-            <span>{t('lines', { count: content.split('\n').length })}</span>
-            <span>{t('bytes', { count: byteCount })}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span>UTF-8</span>
-            <span>LF</span>
-            <span className="text-slate-300">{language === 'text' ? t('langPlainText') : LANGUAGES.find(d => d.code === language)?.name}</span>
-            <span className="text-slate-500 dark:text-slate-500">{t('shortcuts')}</span>
-          </div>
-        </div>
+        <StatusBar cursor={cursor} content={content} language={language} />
       </div>
     </div>
   )
