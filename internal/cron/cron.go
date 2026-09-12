@@ -396,7 +396,7 @@ const dangerousMeta = "'\n\r`;|&<>$\""
 // runs the wrong interpreter silently; here the path comes from the same
 // discovery the rest of the panel uses (`phpversion.AllVersions`).
 func phpBinFor(version string) (string, error) {
-	for _, v := range phpversion.AllVersions() {
+	for _, v := range installedVersions() {
 		if v.Version == version && v.Loaded && v.PHPBin != "" {
 			return v.PHPBin, nil
 		}
