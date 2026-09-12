@@ -53,7 +53,7 @@ func Versions() []Version {
 }
 
 func versionByID(id string) (Version, bool) {
-	for _, s := range Versions() {
+	for _, s := range installedVersions() {
 		if s.Version == id {
 			return s, true
 		}
@@ -152,7 +152,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		"version":  version,
 		"total":    len(exts),
 		"content":  exts,
-		"versions": Versions(),
+		"versions": installedVersions(),
 	})
 }
 
@@ -211,7 +211,7 @@ func (h *Handlers) Toggle(w http.ResponseWriter, r *http.Request) {
 
 	// FPM reload
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	if _, err := exec.Command("systemctl", "reload-or-restart", s.Service).CombinedOutput(); err != nil {
+	if _, err := runCommand("systemctl", "reload-or-restart", s.Service); err != nil {
 		// Restore the original name when reload fails.
 		_ = os.Rename(newPath, currentPath)
 		httpx.WriteError(w, http.StatusInternalServerError, "failed to reload PHP-FPM")
@@ -219,7 +219,7 @@ func (h *Handlers) Toggle(w http.ResponseWriter, r *http.Request) {
 	}
 	// Each tenant runs its own isolated master, so reload those too or the toggle
 	// stays invisible to the tenant's running site.
-	provisioner.ReloadAllTenantFPM()
+	reloadTenantMasters()
 
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok":      true,
