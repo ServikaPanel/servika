@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"servika/internal/provisioner"
@@ -258,18 +259,16 @@ func TestApplyDomainSuspendReachesEveryDependent(t *testing.T) {
 }
 
 // Suspending closes the FTP, mail-domain and mailbox rows of the domain and its
-// addons and revokes FTP sessions; resuming opens them and revokes nothing.
+// addons; resuming opens them.
 func TestTheSuspensionStateReachesFTPAndMail(t *testing.T) {
+	const ftpStatement = `UPDATE ftp_accounts SET status=? WHERE ` + ownedByDomainOrItsAddons
 	for _, tc := range []struct {
 		name      string
 		suspended bool
-		ftp       string
 		status    string
 	}{
-		{name: "suspend", suspended: true,
-			ftp:    `UPDATE ftp_accounts SET status=?, token_version=token_version+1 WHERE ` + ownedByDomainOrItsAddons,
-			status: "suspended"},
-		{name: "resume", ftp: `UPDATE ftp_accounts SET status=? WHERE ` + ownedByDomainOrItsAddons, status: "active"},
+		{name: "suspend", suspended: true, status: "suspended"},
+		{name: "resume", status: "active"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			newSuspendFakes(t)
@@ -278,13 +277,63 @@ func TestTheSuspensionStateReachesFTPAndMail(t *testing.T) {
 				t.Fatal(err)
 			}
 			bound := []driver.Value{tc.status, int64(7), int64(7)}
-			if statements := script.execsContaining("UPDATE ftp_accounts"); len(statements) != 1 || statements[0].query != tc.ftp {
-				t.Errorf("FTP statements = %+v, want %q", statements, tc.ftp)
+			if statements := script.execsContaining("UPDATE ftp_accounts"); len(statements) != 1 || statements[0].query != ftpStatement {
+				t.Errorf("FTP statements = %+v, want %q", statements, ftpStatement)
 			}
 			assertExecArgs(t, script, "UPDATE ftp_accounts", bound)
 			assertExecArgs(t, script, "UPDATE mail_domains SET status=?", bound)
 			assertExecArgs(t, script, "UPDATE mailboxes SET status=?", bound)
 		})
+	}
+}
+
+// The revocation the suspension documents actually happens, and it happens on
+// the ONE column an authentication path reads. The cascade used to bump
+// ftp_accounts.token_version, which nothing has read since customer login moved
+// off the FTP identity, so the customer's panel session survived the
+// suspension: every authenticated route that is not domain-scoped stayed
+// reachable.
+func TestSuspendingRevokesTheCustomerPanelSession(t *testing.T) {
+	newSuspendFakes(t)
+	script := suspendScript()
+
+	if _, err := ApplyDomainSuspend(context.Background(), scriptDB(t, script), 7, true); err != nil {
+		t.Fatal(err)
+	}
+
+	statements := script.execsContaining("UPDATE users")
+	if len(statements) != 1 {
+		t.Fatalf("the suspension ran %d token_version bumps on users, want 1", len(statements))
+	}
+	written := statements[0].query
+	if !strings.Contains(written, "u.token_version = u.token_version + 1") {
+		t.Errorf("the bump does not increment users.token_version:\n%s", written)
+	}
+	// The CUSTOMER's account, never the reseller who owns them: suspending one
+	// domain must not sign a reseller out of the panel.
+	if !strings.Contains(written, "c.user_id = u.id") {
+		t.Errorf("the bump does not join through customers.user_id:\n%s", written)
+	}
+	if strings.Contains(written, "owner_user_id") {
+		t.Errorf("the bump reaches the reseller's own account:\n%s", written)
+	}
+	if len(script.execsContaining("ftp_accounts SET status=?, token_version")) != 0 {
+		t.Error("the dead ftp_accounts bump is still written")
+	}
+}
+
+// Resuming revokes nothing: the session was already cut when the suspension
+// went in, and signing the customer out again on the way back is not a
+// boundary, only an interruption.
+func TestResumingDoesNotRevokeAnything(t *testing.T) {
+	newSuspendFakes(t)
+	script := suspendScript()
+
+	if _, err := ApplyDomainSuspend(context.Background(), scriptDB(t, script), 7, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(script.execsContaining("token_version")); got != 0 {
+		t.Errorf("a resume ran %d token_version writes, want 0", got)
 	}
 }
 

@@ -284,8 +284,14 @@ func FTPCreate(db *sql.DB, domainID int64, systemUser, password string, uidN, gi
 }
 
 // FTPUpdatePassword updates an existing FTP account password, writing both the
-// SHA-512-crypt ($6$) hash and the AES-256-GCM encrypted copy. Bumping
-// token_version revokes any customer JWT that was issued with the old password.
+// SHA-512-crypt ($6$) hash and the AES-256-GCM encrypted copy.
+//
+// It does NOT touch a panel session, and no longer bumps
+// ftp_accounts.token_version. That write used to be documented as revoking any
+// customer JWT issued with the old password, which stopped being true when
+// customer login moved off the FTP identity: no authentication path reads that
+// column. A write that revokes nothing is worse than no write, because the next
+// reader believes it.
 func FTPUpdatePassword(db *sql.DB, systemUser, password string) error {
 	hash, err := HashPassword(password)
 	if err != nil {
@@ -296,7 +302,7 @@ func FTPUpdatePassword(db *sql.DB, systemUser, password string) error {
 		return err
 	}
 	_, err = db.Exec(
-		`UPDATE ftp_accounts SET password_md5=?, ftp_password_enc=?, token_version=token_version+1 WHERE username=?`,
+		`UPDATE ftp_accounts SET password_md5=?, ftp_password_enc=? WHERE username=?`,
 		hash, enc, systemUser)
 	return err
 }

@@ -173,6 +173,33 @@ func ApplyDomainSuspend(ctx context.Context, db *sql.DB, id int64, suspended boo
 	return domainName, nil
 }
 
+// revokeCustomerSession invalidates the customer's panel token.
+//
+// The bump goes on users.token_version, because that is the ONLY column any
+// authentication path reads (middleware.RequireAuth -> tokenVersionMatches,
+// against "users"). The cascade used to bump ftp_accounts.token_version
+// instead, a column nothing has read since customer login moved off the FTP
+// identity, so the session the comment said was revoked at once survived the
+// suspension untouched.
+//
+// Only the CUSTOMER's account is revoked, never customers.owner_user_id: a
+// reseller suspending one of their domains must not be logged out of the
+// panel. A customer with no panel account bumps nothing.
+//
+// Suspension is still enforced per request by CustomerScope, so a failure here
+// is logged rather than failing the suspension. What the bump adds is the
+// defence for a route that is authenticated but not domain-scoped.
+func revokeCustomerSession(ctx context.Context, db *sql.DB, domainID int64) {
+	if _, err := db.ExecContext(ctx,
+		`UPDATE users u
+		   JOIN customers c ON c.user_id = u.id
+		   JOIN domains d ON d.customer_id = c.id
+		    SET u.token_version = u.token_version + 1
+		  WHERE d.id = ?`, domainID); err != nil {
+		logx.Errorf("revoke the customer session for domain %d: %v", domainID, err)
+	}
+}
+
 // suspensionState is the suspended flag and the status a domains row takes.
 func suspensionState(suspended bool) (int, string) {
 	if suspended {
@@ -186,14 +213,13 @@ func suspensionState(suspended bool) (int, string) {
 // others still run.
 func cascadeSuspension(ctx context.Context, db *sql.DB, id int64, suspended bool) {
 	ftpStatus := "active"
-	// Suspending bumps token_version so any active customer JWT is revoked at once;
-	// resuming only restores status and leaves the version untouched.
-	ftpQuery := `UPDATE ftp_accounts SET status=? WHERE ` + ownedByDomainOrItsAddons
 	if suspended {
 		ftpStatus = "suspended"
-		ftpQuery = `UPDATE ftp_accounts SET status=?, token_version=token_version+1 WHERE ` + ownedByDomainOrItsAddons
+		revokeCustomerSession(ctx, db, id)
 	}
-	if _, err := db.ExecContext(ctx, ftpQuery, ftpStatus, id, id); err != nil {
+	if _, err := db.ExecContext(ctx,
+		`UPDATE ftp_accounts SET status=? WHERE `+ownedByDomainOrItsAddons,
+		ftpStatus, id, id); err != nil {
 		logx.Errorf("update FTP account suspension state for domain %d: %v", id, err)
 	}
 	mailStatus := "active"
