@@ -53,24 +53,32 @@ func TestTheRealLogParses(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if entry.DBUser != "u_shop_wp" {
-			t.Errorf("DBUser = %q, want u_shop_wp", entry.DBUser)
-		}
-		if entry.Schema != "shop" {
-			t.Errorf("Schema = %q, want shop", entry.Schema)
-		}
-		if entry.QueryMS < 2000 {
-			t.Errorf("QueryMS = %d, want at least 2000", entry.QueryMS)
-		}
-		if entry.At.IsZero() {
-			t.Errorf("the record's own # Time: line was not read: %q", entry.SQL)
-		}
-		if strings.Contains(strings.ToUpper(entry.SQL), "SET TIMESTAMP") {
-			t.Errorf("the SET timestamp prologue survived: %q", entry.SQL)
-		}
-		if strings.HasPrefix(strings.ToLower(entry.SQL), "use ") {
-			t.Errorf("the use prologue survived: %q", entry.SQL)
-		}
+		assertRealEntry(t, entry)
+	}
+}
+
+// assertRealEntry checks one entry parsed out of the real fixture: the account
+// and schema it belongs to, that it is slow, that it carries its own time, and
+// that neither prologue line survived into the body.
+func assertRealEntry(t *testing.T, entry Entry) {
+	t.Helper()
+	if entry.DBUser != "u_shop_wp" {
+		t.Errorf("DBUser = %q, want u_shop_wp", entry.DBUser)
+	}
+	if entry.Schema != "shop" {
+		t.Errorf("Schema = %q, want shop", entry.Schema)
+	}
+	if entry.QueryMS < 2000 {
+		t.Errorf("QueryMS = %d, want at least 2000", entry.QueryMS)
+	}
+	if entry.At.IsZero() {
+		t.Errorf("the record's own # Time: line was not read: %q", entry.SQL)
+	}
+	if strings.Contains(strings.ToUpper(entry.SQL), "SET TIMESTAMP") {
+		t.Errorf("the SET timestamp prologue survived: %q", entry.SQL)
+	}
+	if strings.HasPrefix(strings.ToLower(entry.SQL), "use ") {
+		t.Errorf("the use prologue survived: %q", entry.SQL)
 	}
 }
 

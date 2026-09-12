@@ -48,34 +48,7 @@ func Parse(record Record, previous time.Time) (Entry, bool) {
 			bodyStart = i
 			break
 		}
-		switch {
-		case strings.HasPrefix(line, "# Time:"):
-			if at, ok := parseLogTime(strings.TrimSpace(line[len("# Time:"):])); ok {
-				entry.At = at
-			}
-		case strings.HasPrefix(line, recordMarker):
-			entry.DBUser = parseUser(line[len(recordMarker):])
-		default:
-			fields := headerFields(line)
-			if value, ok := fields["Schema"]; ok {
-				entry.Schema = value
-			}
-			if value, ok := fields["Query_time"]; ok {
-				entry.QueryMS = secondsToMS(value)
-			}
-			if value, ok := fields["Lock_time"]; ok {
-				entry.LockMS = secondsToMS(value)
-			}
-			if value, ok := fields["Rows_sent"]; ok {
-				entry.RowsSent = parseCount(value)
-			}
-			if value, ok := fields["Rows_examined"]; ok {
-				entry.RowsExamined = parseCount(value)
-			}
-			if value, ok := fields["Full_scan"]; ok {
-				entry.FullScan = strings.EqualFold(value, "Yes")
-			}
-		}
+		entry.readHeaderLine(line)
 	}
 	if entry.DBUser == "" || entry.QueryMS <= 0 {
 		return Entry{}, false
@@ -85,6 +58,43 @@ func Parse(record Record, previous time.Time) (Entry, bool) {
 		return Entry{}, false
 	}
 	return entry, true
+}
+
+// readHeaderLine applies one `#` header line to the entry. A line it does not
+// recognise leaves every field alone.
+func (e *Entry) readHeaderLine(line string) {
+	switch {
+	case strings.HasPrefix(line, "# Time:"):
+		if at, ok := parseLogTime(strings.TrimSpace(line[len("# Time:"):])); ok {
+			e.At = at
+		}
+	case strings.HasPrefix(line, recordMarker):
+		e.DBUser = parseUser(line[len(recordMarker):])
+	default:
+		e.readMeasurements(headerFields(line))
+	}
+}
+
+// readMeasurements applies the `name: value` pairs of one header line.
+func (e *Entry) readMeasurements(fields map[string]string) {
+	if value, ok := fields["Schema"]; ok {
+		e.Schema = value
+	}
+	if value, ok := fields["Query_time"]; ok {
+		e.QueryMS = secondsToMS(value)
+	}
+	if value, ok := fields["Lock_time"]; ok {
+		e.LockMS = secondsToMS(value)
+	}
+	if value, ok := fields["Rows_sent"]; ok {
+		e.RowsSent = parseCount(value)
+	}
+	if value, ok := fields["Rows_examined"]; ok {
+		e.RowsExamined = parseCount(value)
+	}
+	if value, ok := fields["Full_scan"]; ok {
+		e.FullScan = strings.EqualFold(value, "Yes")
+	}
 }
 
 // parseUser reads the account out of `dbuser[dbuser] @ localhost []`.

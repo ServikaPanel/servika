@@ -26,42 +26,14 @@ func Normalize(sql string) (normalized, digest string) {
 	state := newSQLState()
 	i := 0
 	for i < len(sql) {
-		c := sql[i]
-
-		// A literal or a comment begins here: consume the whole run.
+		// A literal, a comment or a number begins here: consume the whole run.
 		if state.outsideCode() {
-			switch {
-			case c == '\'' || c == '"':
-				i = skipQuoted(sql, i)
-				writeToken(&b, "?")
-				continue
-			case c == '`':
-				end := skipQuoted(sql, i)
-				// A quoted identifier is a NAME, not a value, so it survives.
-				b.WriteString(sql[i:end])
-				i = end
-				continue
-			case c == '#', c == '-' && i+1 < len(sql) && sql[i+1] == '-',
-				c == '/' && i+1 < len(sql) && sql[i+1] == '*':
-				i = skipComment(sql, i)
-				writeSpace(&b)
-				continue
-			case isDigit(c), c == '.' && i+1 < len(sql) && isDigit(sql[i+1]):
-				// Only when the number is not part of an identifier such as
-				// wp_2_options, which is a table name and must not collapse.
-				if i == 0 || !isIdentByte(sql[i-1]) {
-					i = skipNumber(sql, i)
-					writeToken(&b, "?")
-					continue
-				}
-			case c == ' ', c == '\t', c == '\n', c == '\r':
-				writeSpace(&b)
-				i++
+			if next, consumed := writeNormalizedRun(&b, sql, i); consumed {
+				i = next
 				continue
 			}
 		}
-
-		b.WriteByte(c)
+		b.WriteByte(sql[i])
 		state.step(sql, i)
 		i++
 	}
@@ -72,6 +44,56 @@ func Normalize(sql string) (normalized, digest string) {
 	}
 	sum := sha256.Sum256([]byte(normalized))
 	return normalized, hex.EncodeToString(sum[:])[:32]
+}
+
+// writeNormalizedRun writes the shape of whatever run begins at i and returns
+// the offset just past it. It reports false when nothing there is a run, and
+// then writes nothing.
+func writeNormalizedRun(b *strings.Builder, sql string, i int) (int, bool) {
+	switch c := sql[i]; {
+	case c == '\'' || c == '"':
+		writeToken(b, "?")
+		return skipQuoted(sql, i), true
+	case c == '`':
+		// A quoted identifier is a NAME, not a value, so it survives.
+		end := skipQuoted(sql, i)
+		b.WriteString(sql[i:end])
+		return end, true
+	case commentStarts(sql, i):
+		writeSpace(b)
+		return skipComment(sql, i), true
+	case numberStarts(sql, i):
+		writeToken(b, "?")
+		return skipNumber(sql, i), true
+	case isSpaceByte(c):
+		writeSpace(b)
+		return i + 1, true
+	}
+	return i, false
+}
+
+// commentStarts reports whether a comment opens at i.
+func commentStarts(sql string, i int) bool {
+	c := sql[i]
+	return c == '#' ||
+		(c == '-' && i+1 < len(sql) && sql[i+1] == '-') ||
+		(c == '/' && i+1 < len(sql) && sql[i+1] == '*')
+}
+
+// numberStarts reports whether a numeric literal begins at i. A digit that
+// follows an identifier byte does not: wp_2_options is a table name, and
+// collapsing the 2 would merge it with wp_3_options.
+func numberStarts(sql string, i int) bool {
+	if i > 0 && isIdentByte(sql[i-1]) {
+		return false
+	}
+	c := sql[i]
+	return isDigit(c) || (c == '.' && i+1 < len(sql) && isDigit(sql[i+1]))
+}
+
+// isSpaceByte reports whether a byte is whitespace that collapses to one space.
+func isSpaceByte(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
 }
 
 // writeToken appends a token, inserting a separating space only when the
@@ -131,12 +153,8 @@ func skipComment(sql string, i int) int {
 // skipNumber returns the offset just past the numeric literal at i, including a
 // decimal point, an exponent and a hexadecimal form.
 func skipNumber(sql string, i int) int {
-	if sql[i] == '0' && i+1 < len(sql) && (sql[i+1] == 'x' || sql[i+1] == 'X') {
-		i += 2
-		for i < len(sql) && isHexByte(sql[i]) {
-			i++
-		}
-		return i
+	if hexPrefix(sql, i) {
+		return skipHexDigits(sql, i+2)
 	}
 	for i < len(sql) {
 		c := sql[i]
@@ -144,16 +162,38 @@ func skipNumber(sql string, i int) int {
 		case isDigit(c), c == '.':
 			i++
 		case c == 'e' || c == 'E':
-			if i+1 < len(sql) && (isDigit(sql[i+1]) || sql[i+1] == '+' || sql[i+1] == '-') {
-				i += 2
-				continue
+			if !exponentFollows(sql, i) {
+				return i
 			}
-			return i
+			i += 2
 		default:
 			return i
 		}
 	}
 	return i
+}
+
+// hexPrefix reports whether a hexadecimal literal begins at i.
+func hexPrefix(sql string, i int) bool {
+	return sql[i] == '0' && i+1 < len(sql) && (sql[i+1] == 'x' || sql[i+1] == 'X')
+}
+
+// skipHexDigits returns the offset just past the hexadecimal digits at i.
+func skipHexDigits(sql string, i int) int {
+	for i < len(sql) && isHexByte(sql[i]) {
+		i++
+	}
+	return i
+}
+
+// exponentFollows reports whether the `e` at i is an exponent marker rather
+// than the first letter of what comes after the number.
+func exponentFollows(sql string, i int) bool {
+	if i+1 >= len(sql) {
+		return false
+	}
+	c := sql[i+1]
+	return isDigit(c) || c == '+' || c == '-'
 }
 
 // collapsePlaceholderLists rewrites `IN (?, ?, ?)` as `IN (?)`.

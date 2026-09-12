@@ -72,12 +72,7 @@ func ScanRecords(data []byte) (records []Record, consumed int) {
 // CLAUDE.md.
 func markerOffsets(text string) []int {
 	var offsets []int
-	state := newSQLState()
-	atLineStart := true
-	// The last non-space byte of plain SQL seen since the current record began.
-	// Zero means "nothing yet", which only holds before the first record.
-	var lastSignificant byte
-	seenRecord := false
+	scan := markerScan{state: newSQLState(), atLineStart: true}
 
 	for i := 0; i < len(text); i++ {
 		// mysqld appends its own banner every time it opens the log, which
@@ -86,19 +81,14 @@ func markerOffsets(text string) []int {
 		// read as the previous statement's last significant byte and every
 		// record after it would be swallowed. Measured against real 10.11
 		// output; testdata/mariadb-10.11-slow.log carries one mid-file.
-		if atLineStart && state.outsideCode() && isBannerLine(text[i:]) {
+		if scan.atMarkerPosition() && isBannerLine(text[i:]) {
 			i = skipBanner(text, i)
-			atLineStart = true
-			state = newSQLState()
-			lastSignificant = ';'
+			scan.restart(';')
 			continue
 		}
-		terminated := lastSignificant == ';' || !seenRecord
-		if atLineStart && state.outsideCode() && terminated &&
-			strings.HasPrefix(text[i:], recordMarker) {
+		if scan.atMarkerPosition() && scan.terminated() && strings.HasPrefix(text[i:], recordMarker) {
 			offsets = append(offsets, recordStart(text, i))
-			seenRecord = true
-			lastSignificant = 0
+			scan.seenRecord = true
 			// The marker line is MariaDB's own text, not SQL. Skip it whole so
 			// its `#` cannot open a comment and its content cannot set state.
 			end := strings.IndexByte(text[i:], '\n')
@@ -106,26 +96,62 @@ func markerOffsets(text string) []int {
 				return offsets
 			}
 			i += end
-			atLineStart = true
-			state = newSQLState()
+			scan.restart(0)
 			continue
 		}
-		atLineStart = text[i] == '\n'
-		// The byte only counts when it is plain SQL both before AND after the
-		// step. Checking only "before" would let the `#` that OPENS MariaDB's own
-		// `# Time:` line count as the last significant byte, which then makes the
-		// marker under it look unterminated and swallows every later record.
-		before := state.outsideCode()
-		state.step(text, i)
-		if before && state.outsideCode() {
-			switch c := text[i]; c {
-			case ' ', '\t', '\r', '\n':
-			default:
-				lastSignificant = c
-			}
-		}
+		scan.readByte(text, i)
 	}
 	return offsets
+}
+
+// markerScan is what the record scan carries from one byte to the next.
+type markerScan struct {
+	state       *sqlState
+	atLineStart bool
+	// lastSignificant is the last non-space byte of plain SQL seen since the
+	// current record began. Zero means "nothing yet", which only holds before
+	// the first record.
+	lastSignificant byte
+	seenRecord      bool
+}
+
+// atMarkerPosition reports whether a record marker could begin at this byte:
+// the start of a line, outside every literal and comment.
+func (m *markerScan) atMarkerPosition() bool {
+	return m.atLineStart && m.state.outsideCode()
+}
+
+// terminated reports whether the statement before this point has ended. A
+// marker only begins a record when it has, because a planted line inside an
+// unterminated statement is a `#` comment as far as MySQL is concerned.
+func (m *markerScan) terminated() bool {
+	return m.lastSignificant == ';' || !m.seenRecord
+}
+
+// restart begins reading plain SQL again at the next line, as if nothing before
+// it had been seen.
+func (m *markerScan) restart(lastSignificant byte) {
+	m.atLineStart = true
+	m.state = newSQLState()
+	m.lastSignificant = lastSignificant
+}
+
+// readByte advances the scan over one byte of the log.
+func (m *markerScan) readByte(text string, i int) {
+	m.atLineStart = text[i] == '\n'
+	// The byte only counts when it is plain SQL both before AND after the
+	// step. Checking only "before" would let the `#` that OPENS MariaDB's own
+	// `# Time:` line count as the last significant byte, which then makes the
+	// marker under it look unterminated and swallows every later record.
+	before := m.state.outsideCode()
+	m.state.step(text, i)
+	if before && m.state.outsideCode() {
+		switch c := text[i]; c {
+		case ' ', '\t', '\r', '\n':
+		default:
+			m.lastSignificant = c
+		}
+	}
 }
 
 // isBannerLine reports whether the text at a line start is the first line of
@@ -233,54 +259,93 @@ func (s *sqlState) step(text string, i int) {
 	}
 	c := text[i]
 
-	if s.line {
+	switch {
+	case s.line:
 		if c == '\n' {
 			s.line = false
 		}
-		return
+	case s.block:
+		s.stepInBlockComment(text, i)
+	case s.quote != 0:
+		s.stepInQuote(text, i)
+	default:
+		s.stepInCode(text, i)
 	}
-	if s.block {
-		if c == '*' && i+1 < len(text) && text[i+1] == '/' {
-			s.block = false
-			s.skip = 1
-		}
-		return
-	}
-	if s.quote != 0 {
-		switch {
-		case s.escaped:
-			s.escaped = false
-		case c == '\\':
-			// MariaDB honours backslash escapes inside a string literal unless
-			// NO_BACKSLASH_ESCAPES is set. Treating one as an escape when the
-			// server would not only ever ends a literal LATER than the server
-			// does, which keeps a planted marker inside the statement.
-			s.escaped = true
-		case c == s.quote:
-			if i+1 < len(text) && text[i+1] == s.quote {
-				// Doubled quote: an escaped quote, not the end.
-				s.skip = 1
-				return
-			}
-			s.quote = 0
-		}
-		return
-	}
+}
 
-	switch {
-	case c == '\'' || c == '"' || c == '`':
+// stepInBlockComment closes a /* */ comment at its terminator.
+func (s *sqlState) stepInBlockComment(text string, i int) {
+	if text[i] == '*' && i+1 < len(text) && text[i+1] == '/' {
+		s.block = false
+		s.skip = 1
+	}
+}
+
+// stepInQuote advances inside a string literal or a quoted identifier, and
+// closes it only at a quote that really ends it.
+func (s *sqlState) stepInQuote(text string, i int) {
+	switch c := text[i]; {
+	case s.escaped:
+		s.escaped = false
+	case c == '\\':
+		// MariaDB honours backslash escapes inside a string literal unless
+		// NO_BACKSLASH_ESCAPES is set. Treating one as an escape when the
+		// server would not only ever ends a literal LATER than the server
+		// does, which keeps a planted marker inside the statement.
+		s.escaped = true
+	case c == s.quote:
+		if i+1 < len(text) && text[i+1] == s.quote {
+			// Doubled quote: an escaped quote, not the end.
+			s.skip = 1
+			return
+		}
+		s.quote = 0
+	}
+}
+
+// stepInCode opens whatever the byte at i begins: a literal, a quoted
+// identifier or a comment.
+func (s *sqlState) stepInCode(text string, i int) {
+	switch c := text[i]; {
+	case isQuoteByte(c):
 		s.quote = c
 	case c == '#':
 		s.line = true
-	case c == '-' && i+1 < len(text) && text[i+1] == '-':
-		// MariaDB requires whitespace or end of input after `--`.
-		if i+2 >= len(text) || text[i+2] == ' ' || text[i+2] == '\t' ||
-			text[i+2] == '\n' || text[i+2] == '\r' {
-			s.line = true
-			s.skip = 1
-		}
-	case c == '/' && i+1 < len(text) && text[i+1] == '*':
+	case dashCommentStarts(text, i):
+		s.line = true
+		s.skip = 1
+	case c == '/' && byteAt(text, i+1) == '*':
 		s.block = true
 		s.skip = 1
+	}
+}
+
+// isQuoteByte reports whether a byte opens a string literal or a quoted
+// identifier.
+func isQuoteByte(c byte) bool { return c == '\'' || c == '"' || c == '`' }
+
+// byteAt returns the byte at i, or 0 past the end, so a lookahead needs no
+// bounds test of its own.
+func byteAt(text string, i int) byte {
+	if i < len(text) {
+		return text[i]
+	}
+	return 0
+}
+
+// dashCommentStarts reports whether a `--` comment opens at i. MariaDB requires
+// whitespace or end of input after the two dashes.
+func dashCommentStarts(text string, i int) bool {
+	if text[i] != '-' || byteAt(text, i+1) != '-' {
+		return false
+	}
+	if i+2 >= len(text) {
+		return true
+	}
+	switch text[i+2] {
+	case ' ', '\t', '\n', '\r':
+		return true
+	default:
+		return false
 	}
 }
