@@ -153,20 +153,38 @@ func VerifyPassword(stored, password string) bool {
 // existing FTP users. Idempotent: already-hashed rows are skipped. Returns the
 // number of rows migrated.
 func BackfillCleartextPasswords(db *sql.DB) (int, error) {
-	rows, err := db.Query(`SELECT id, password_md5 FROM ftp_accounts`)
+	pending, err := cleartextFTPPasswords(db)
 	if err != nil {
 		return 0, err
 	}
-	type row struct {
-		id       int64
-		password string
+	n := 0
+	for _, r := range pending {
+		if err := hashOneFTPPassword(db, r); err != nil {
+			return n, err
+		}
+		n++
 	}
-	var pending []row
+	return n, nil
+}
+
+// cleartextFTPRow is one account still holding a readable password.
+type cleartextFTPRow struct {
+	id       int64
+	password string
+}
+
+// cleartextFTPPasswords lists the accounts this pass has work to do on.
+func cleartextFTPPasswords(db *sql.DB) ([]cleartextFTPRow, error) {
+	rows, err := db.Query(`SELECT id, password_md5 FROM ftp_accounts`)
+	if err != nil {
+		return nil, err
+	}
+	var pending []cleartextFTPRow
 	for rows.Next() {
-		var r row
+		var r cleartextFTPRow
 		if err := rows.Scan(&r.id, &r.password); err != nil {
 			_ = rows.Close() // read-only cursor; Close error is not actionable here
-			return 0, err
+			return nil, err
 		}
 		if !IsHashed(r.password) {
 			pending = append(pending, r)
@@ -174,27 +192,27 @@ func BackfillCleartextPasswords(db *sql.DB) (int, error) {
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close() // read-only cursor; Close error is not actionable here
-		return 0, err
+		return nil, err
 	}
 	if err := rows.Close(); err != nil {
-		return 0, err
+		return nil, err
 	}
-	n := 0
-	for _, r := range pending {
-		h, err := HashPassword(r.password)
-		if err != nil {
-			return n, err
-		}
-		enc, err := secret.Encrypt(r.password)
-		if err != nil {
-			return n, err
-		}
-		if _, err := db.Exec(`UPDATE ftp_accounts SET password_md5=?, ftp_password_enc=? WHERE id=?`, h, enc, r.id); err != nil {
-			return n, err
-		}
-		n++
+	return pending, nil
+}
+
+// hashOneFTPPassword writes the hash and the encrypted copy in one statement,
+// because the hash overwrites the cleartext the copy is made from.
+func hashOneFTPPassword(db *sql.DB, r cleartextFTPRow) error {
+	h, err := HashPassword(r.password)
+	if err != nil {
+		return err
 	}
-	return n, nil
+	enc, err := secret.Encrypt(r.password)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec(`UPDATE ftp_accounts SET password_md5=?, ftp_password_enc=? WHERE id=?`, h, enc, r.id)
+	return err
 }
 
 // BackfillDBPasswords encrypts any db_accounts.db_pass_plain rows still stored
@@ -341,6 +359,15 @@ func StrongPassword(password string) (bool, string) {
 	if len([]rune(password)) < 12 {
 		return false, "password must be at least 12 characters"
 	}
+	if !hasLetterAndDigit(password) {
+		return false, "password must contain both letters and digits"
+	}
+	return true, ""
+}
+
+// hasLetterAndDigit reports whether a password mixes the two classes. The
+// letter class is ASCII only, which is what the rule has always measured.
+func hasLetterAndDigit(password string) bool {
 	var hasLetter, hasDigit bool
 	for _, r := range password {
 		switch {
@@ -350,10 +377,7 @@ func StrongPassword(password string) (bool, string) {
 			hasDigit = true
 		}
 	}
-	if !hasLetter || !hasDigit {
-		return false, "password must contain both letters and digits"
-	}
-	return true, ""
+	return hasLetter && hasDigit
 }
 
 func escapeSQLString(value string) string {

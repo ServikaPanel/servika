@@ -44,6 +44,26 @@ func TestPanelPasswordHashFitsItsColumn(t *testing.T) {
 	}
 }
 
+// declaredWidth returns the last width one migration file declares, and whether
+// it declared any. A migration that only mentions the column in a comment must
+// not count, so only statement lines are considered.
+func declaredWidth(pattern *regexp.Regexp, body string) (int, bool) {
+	width, found := 0, false
+	for line := range strings.SplitSeq(body, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "--") {
+			continue
+		}
+		match := pattern.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		if parsed, convErr := strconv.Atoi(match[1]); convErr == nil {
+			width, found = parsed, true
+		}
+	}
+	return width, found
+}
+
 // columnWidth returns the VARCHAR width a column has after all migrations, which
 // is the width declared by the LAST migration that mentions it.
 func columnWidth(t *testing.T, table, column string) int {
@@ -70,18 +90,8 @@ func columnWidth(t *testing.T, table, column string) int {
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
-		// A migration that only mentions the column in a comment must not count,
-		// so only statement lines are considered.
-		for line := range strings.SplitSeq(string(body), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "--") {
-				continue
-			}
-			if match := pattern.FindStringSubmatch(line); match != nil {
-				parsed, convErr := strconv.Atoi(match[1])
-				if convErr == nil {
-					width = parsed
-				}
-			}
+		if declared, found := declaredWidth(pattern, string(body)); found {
+			width = declared
 		}
 	}
 	if width == 0 {
