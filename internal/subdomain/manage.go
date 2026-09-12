@@ -98,14 +98,7 @@ func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "PHP version is not installed on the server")
 		return
 	}
-	protected := protectedBlocks(h.DB, id, sid, socket)
-	certPath, keyPath := certificatePaths(systemUser, fqdn)
-	https := fileExists(certPath) && fileExists(keyPath)
-	web := loadWebRender(r.Context(), h.DB, id, sid, fqdn, https)
-	config := vhost(fqdn, docroot, socket, protected, web)
-	if https {
-		config = vhostSSL(fqdn, docroot, socket, certPath, keyPath, protected, web)
-	}
+	config := renderedVhost(r.Context(), h.DB, id, sid, systemUser, fqdn, docroot, socket)
 	if err := applyVhost(confPath(systemUser, subdomainName), config); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "nginx rejected the configuration")
 		return
@@ -116,6 +109,20 @@ func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "php_version": phpVersion})
+}
+
+// renderedVhost builds the server block this subdomain is served through. It is
+// TLS-aware: a certificate pair on disk renders the HTTPS block, so a change
+// that only meant to move the PHP pool never drops the site to plain HTTP.
+func renderedVhost(ctx context.Context, db *sql.DB, domainID, subdomainID int64, systemUser, fqdn, docroot, socket string) string {
+	protected := protectedBlocks(db, domainID, subdomainID, socket)
+	certPath, keyPath := certificatePaths(systemUser, fqdn)
+	https := fileExists(certPath) && fileExists(keyPath)
+	web := loadWebRender(ctx, db, domainID, subdomainID, fqdn, https)
+	if https {
+		return vhostSSL(fqdn, docroot, socket, certPath, keyPath, protected, web)
+	}
+	return vhost(fqdn, docroot, socket, protected, web)
 }
 
 // ReRender rewrites one subdomain's vhost from its current database state,
@@ -136,14 +143,7 @@ func ReRender(db *sql.DB, subdomainID int64) error {
 		return err
 	}
 	docroot := docrootOf(systemUser, fqdn)
-	protected := protectedBlocks(db, domainID, subdomainID, socket)
-	certPath, keyPath := certificatePaths(systemUser, fqdn)
-	https := fileExists(certPath) && fileExists(keyPath)
-	web := loadWebRender(context.Background(), db, domainID, subdomainID, fqdn, https)
-	config := vhost(fqdn, docroot, socket, protected, web)
-	if https {
-		config = vhostSSL(fqdn, docroot, socket, certPath, keyPath, protected, web)
-	}
+	config := renderedVhost(context.Background(), db, domainID, subdomainID, systemUser, fqdn, docroot, socket)
 	return applyVhost(confPath(systemUser, subdomainName), config)
 }
 

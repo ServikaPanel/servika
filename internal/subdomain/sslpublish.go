@@ -37,6 +37,17 @@ func issueAndPublish(systemUser, fqdn, certificateType string) error {
 	}
 	defer func() { _ = os.RemoveAll(stage) }()
 
+	certificate, key, err := stageCertificate(fqdn, certificateType, stage)
+	if err != nil {
+		return err
+	}
+	return publishCertificate(systemUser, fqdn, certificate, key)
+}
+
+// stageCertificate issues the pair into the staging directory and reads it
+// back. Material an issuing tool did not produce, produced empty, or produced
+// far more of than a certificate is, is refused here rather than installed.
+func stageCertificate(fqdn, certificateType, stage string) (certificate, key []byte, err error) {
 	stagedCert := filepath.Join(stage, "cert.pem")
 	stagedKey := filepath.Join(stage, "key.pem")
 	if certificateType == "letsencrypt" {
@@ -45,23 +56,30 @@ func issueAndPublish(systemUser, fqdn, certificateType string) error {
 		err = issueSelfSignedCertificate(fqdn, stagedCert, stagedKey)
 	}
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// #nosec G304 G703 -- a path this function composed from its own os.MkdirTemp directory.
-	certificate, err := os.ReadFile(stagedCert)
+	certificate, err = os.ReadFile(stagedCert)
 	if err != nil {
-		return fmt.Errorf("read the staged certificate: %w", err)
+		return nil, nil, fmt.Errorf("read the staged certificate: %w", err)
 	}
 	// #nosec G304 G703 -- a path this function composed from its own os.MkdirTemp directory.
-	key, err := os.ReadFile(stagedKey)
+	key, err = os.ReadFile(stagedKey)
 	if err != nil {
-		return fmt.Errorf("read the staged key: %w", err)
+		return nil, nil, fmt.Errorf("read the staged key: %w", err)
 	}
 	if len(certificate) == 0 || len(key) == 0 || len(certificate) > certMaxBytes || len(key) > certMaxBytes {
-		return fmt.Errorf("the issued certificate material is not usable")
+		return nil, nil, fmt.Errorf("the issued certificate material is not usable")
 	}
+	return certificate, key, nil
+}
 
+// publishCertificate installs the staged pair beneath the tenant home. Every
+// write goes through the safeio primitives, which resolve each component with
+// openat2 and refuse a symlink; a plain os.WriteFile to the same path would
+// follow exactly the link this staging rule exists to close.
+func publishCertificate(systemUser, fqdn string, certificate, key []byte) error {
 	home := tenantHome(systemUser)
 	if err := files.MkdirAllBeneath(home, sslRelDir, systemUser); err != nil {
 		return fmt.Errorf("prepare the certificate directory: %w", err)

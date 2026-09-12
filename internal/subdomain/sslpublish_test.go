@@ -25,11 +25,17 @@ func TestTheCertificateIsIssuedIntoAStagingDirectory(t *testing.T) {
 	// The issuing tools must be handed the STAGED paths, never the tenant ones.
 	// They are reached through the seams in seams.go, whose defaults are checked
 	// below, so a test can issue without openssl or acme.sh.
+	stage := sslFunction(t, readSubdomainSource(t, "sslpublish.go"), "func stageCertificate(")
 	for _, staged := range []string{"stagedCert", "stagedKey"} {
-		if !strings.Contains(publish, "issueSelfSignedCertificate(fqdn, stagedCert, stagedKey)") ||
-			!strings.Contains(publish, "issueLetsEncryptCertificate(fqdn, stagedCert, stagedKey)") {
+		if !strings.Contains(stage, "issueSelfSignedCertificate(fqdn, stagedCert, stagedKey)") ||
+			!strings.Contains(stage, "issueLetsEncryptCertificate(fqdn, stagedCert, stagedKey)") {
 			t.Errorf("an issuing tool is not pointed at %s", staged)
 		}
+	}
+	// And the staged paths are inside the directory issueAndPublish created.
+	if !strings.Contains(stage, `filepath.Join(stage, "cert.pem")`) ||
+		!strings.Contains(stage, `filepath.Join(stage, "key.pem")`) {
+		t.Error("the staged paths are not inside the staging directory")
 	}
 	seams := readSubdomainSource(t, "seams.go")
 	for _, binding := range []string{
@@ -49,7 +55,7 @@ func TestTheCertificateIsIssuedIntoAStagingDirectory(t *testing.T) {
 // The publish half must go through the beneath-primitives. A plain os.WriteFile
 // to the same path would follow exactly the symlink this change closes.
 func TestTheCertificateIsPublishedBeneathTheHome(t *testing.T) {
-	publish := sslFunction(t, readSubdomainSource(t, "sslpublish.go"), "func issueAndPublish(")
+	publish := sslFunction(t, readSubdomainSource(t, "sslpublish.go"), "func publishCertificate(")
 
 	for _, call := range []string{
 		"files.MkdirAllBeneath(home, sslRelDir, systemUser)",
