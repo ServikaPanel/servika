@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"servika/internal/appruntime"
+	"servika/internal/config"
 )
 
 // App is one managed application.
@@ -37,12 +38,12 @@ type App struct {
 	Enabled     bool   `json:"enabled"`
 }
 
-// Port range. It sits BELOW the default ephemeral range
-// (net.ipv4.ip_local_port_range = 32768 60999) so an outgoing connection can
-// never take a port an application is meant to hold.
+// Port range. The numbers live in internal/config because the firewall, the
+// panel-port validator and the vhost renderer need the same pair and cannot
+// import this package: internal/apps depends on internal/provisioner.
 const (
-	PortMin = 30000
-	PortMax = 30999
+	PortMin = config.AppPortMin
+	PortMax = config.AppPortMax
 )
 
 var (

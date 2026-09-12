@@ -70,9 +70,11 @@ var reProxyMount = regexp.MustCompile(`^/([A-Za-z0-9._~-]+/)*$`)
 // appProxyPort is the range internal/apps allocates from. A row outside it is
 // not rendered, so a hand-edited port cannot make nginx proxy to a service the
 // panel does not manage.
+// The numbers come from internal/config, because this package cannot import
+// the allocator: internal/apps depends on this one.
 const (
-	appProxyPortMin = 30000
-	appProxyPortMax = 30999
+	appProxyPortMin = config.AppPortMin
+	appProxyPortMax = config.AppPortMax
 )
 
 // readAppProxies returns the applications published on one scope: subdomainID 0

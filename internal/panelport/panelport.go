@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"servika/internal/config"
 )
 
 // The two things that can move.
@@ -87,9 +89,11 @@ var reservedPorts = map[int]string{
 // panel moved into it would be reachable from loopback and from nowhere else:
 // the operator's browser would simply time out, with nothing in any log to say
 // why.
+// The numbers come from internal/config, so the panel cannot start refusing a
+// range the firewall no longer drops, or accepting one it does.
 const (
-	appPortMin = 30000
-	appPortMax = 30999
+	appPortMin = config.AppPortMin
+	appPortMax = config.AppPortMax
 )
 
 // ValidatePort decides whether a port may be taken at all.

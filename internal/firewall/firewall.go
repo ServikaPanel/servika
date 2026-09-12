@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"servika/internal/config"
 	"servika/internal/hostapps"
 	"servika/internal/httpx"
 	"servika/internal/logx"
@@ -36,11 +37,10 @@ import (
 
 const (
 	tableName = "servika_fw"
-	// The range internal/apps allocates tenant application ports from. It is
-	// repeated here rather than imported so the firewall does not depend on the
-	// application package; internal/apps.PortMin/PortMax must match.
-	appPortMin = 30000
-	appPortMax = 30999
+	// The range internal/apps allocates tenant application ports from, read
+	// from internal/config so the firewall and the allocator cannot drift.
+	appPortMin = config.AppPortMin
+	appPortMax = config.AppPortMax
 	// The range internal/hostapps allocates SERVER application ports from,
 	// repeated here on the same terms; internal/hostapps.PortMin/PortMax must
 	// match. It is a separate range from the tenant one above because the two get
