@@ -206,8 +206,9 @@ func reopenIfRotated(f *os.File, path string) (*os.File, bool) {
 	return rotated, true
 }
 
-// streamLines sends every new line until the caller goes away.
-func streamLines(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, f *os.File, path string) {
+// streamLines sends every new line until the caller goes away. renew lengthens
+// the request's own budget and is called on every keepalive.
+func streamLines(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, f *os.File, path string, renew func()) {
 	reader := bufio.NewReader(f)
 	tick := time.NewTicker(15 * time.Second) // keepalive
 	defer tick.Stop()
@@ -218,13 +219,16 @@ func streamLines(ctx context.Context, w http.ResponseWriter, flusher http.Flushe
 			return
 		}
 		if line != "" {
+			// A log busy enough never to reach EOF renews here instead of on the
+			// keepalive, which only runs while the reader is waiting.
+			renew()
 			sendLine(w, strings.TrimRight(line, "\n\r"))
 			flusher.Flush()
 		}
 		if err != io.EOF {
 			continue
 		}
-		rotated, ok := waitForMore(ctx, w, flusher, tick, f, path)
+		rotated, ok := waitForMore(ctx, w, flusher, tick, f, path, renew)
 		if !ok {
 			return
 		}
@@ -238,7 +242,11 @@ func streamLines(ctx context.Context, w http.ResponseWriter, flusher http.Flushe
 // waitForMore waits at the end of the file for the next line, sending a
 // keepalive on the ticker. It reports false when the stream must end.
 func waitForMore(ctx context.Context, w http.ResponseWriter, flusher http.Flusher,
-	tick *time.Ticker, f *os.File, path string) (*os.File, bool) {
+	tick *time.Ticker, f *os.File, path string, renew func()) (*os.File, bool) {
+	// A tail is long-lived by design, so it buys its next budget here rather
+	// than dying at the router's default. Renewing on the poll rather than on
+	// the keepalive keeps it independent of how quiet the log is.
+	renew()
 	select {
 	case <-ctx.Done():
 		return f, false
@@ -280,7 +288,33 @@ func (h *Handlers) Tail(w http.ResponseWriter, r *http.Request) {
 	// Seek to the end.
 	_, _ = f.Seek(0, io.SeekEnd)
 
-	streamLines(r.Context(), w, flusher, f, path)
+	streamLines(r.Context(), w, flusher, f, path, tailRenewal(w, r))
+}
+
+var (
+	// tailBudget is how far ahead each renewal pushes the tail's deadline. The
+	// stream lives as long as the client reads it and still ends promptly once
+	// the client goes away, because the parent request context is unchanged.
+	tailBudget = 5 * time.Minute
+	// tailRenewInterval bounds how often the two deadline syscalls run, so a
+	// busy log costs no syscall per line.
+	tailRenewInterval = 15 * time.Second
+)
+
+// tailRenewal returns the function the tail calls to buy its next budget. A
+// failed extension is logged and the stream continues on the budget it has: the
+// router ends it, which is the behaviour that existed before.
+func tailRenewal(w http.ResponseWriter, r *http.Request) func() {
+	var last time.Time
+	return func() {
+		if time.Since(last) < tailRenewInterval {
+			return
+		}
+		last = time.Now()
+		if err := httpx.ExtendDeadline(w, r, tailBudget); err != nil {
+			httpx.LogR(r, "log tail deadline extension: %v", err)
+		}
+	}
 }
 
 // lastNLines reads N lines from the end of a file.

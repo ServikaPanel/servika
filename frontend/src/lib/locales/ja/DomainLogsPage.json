@@ -6,6 +6,7 @@
   },
   "title": "ログ",
   "streamFailed": "ストリームを開始できませんでした (HTTP {{status}})",
+  "streamEnded": "ライブストリームが終了しました。再接続するには Live Tail を押してください。",
   "view": {
     "table": "テーブル",
     "raw": "生データ"

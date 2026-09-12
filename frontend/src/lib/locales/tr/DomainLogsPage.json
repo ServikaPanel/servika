@@ -6,6 +6,7 @@
   },
   "title": "Kayıtlar",
   "streamFailed": "Akış başlatılamadı (HTTP {{status}})",
+  "streamEnded": "Canlı akış sona erdi. Yeniden bağlanmak için Canlı İzle düğmesine basın.",
   "view": {
     "table": "Tablo",
     "raw": "Ham"

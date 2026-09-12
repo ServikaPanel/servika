@@ -6,6 +6,7 @@
   },
   "title": "Protokoly",
   "streamFailed": "Přenos se nepodařilo spustit (HTTP {{status}})",
+  "streamEnded": "Živý přenos skončil. Pro opětovné připojení stiskněte Live Tail.",
   "view": {
     "table": "Tabulka",
     "raw": "Nezpracované"

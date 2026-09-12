@@ -6,6 +6,7 @@
   },
   "title": "Jurnale",
   "streamFailed": "Fluxul nu a putut porni (HTTP {{status}})",
+  "streamEnded": "Fluxul live s-a încheiat. Apăsați Live Tail pentru a vă reconecta.",
   "view": {
     "table": "Tabel",
     "raw": "Brut"

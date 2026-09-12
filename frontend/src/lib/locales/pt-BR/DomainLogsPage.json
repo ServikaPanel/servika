@@ -6,6 +6,7 @@
   },
   "title": "Registros",
   "streamFailed": "Falha ao iniciar o stream (HTTP {{status}})",
+  "streamEnded": "A transmissão ao vivo terminou. Toque em Live Tail para reconectar.",
   "view": {
     "table": "Tabela",
     "raw": "Bruto"

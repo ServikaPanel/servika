@@ -6,6 +6,7 @@
   },
   "title": "日志",
   "streamFailed": "数据流启动失败（HTTP {{status}}）",
+  "streamEnded": "实时流已结束。按 Live Tail 重新连接。",
   "view": {
     "table": "表格",
     "raw": "原始"

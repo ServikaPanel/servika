@@ -6,6 +6,7 @@
   },
   "title": "Registros",
   "streamFailed": "El flujo no pudo iniciarse (HTTP {{status}})",
+  "streamEnded": "La transmisión en vivo terminó. Pulse Live Tail para volver a conectar.",
   "view": {
     "table": "Tabla",
     "raw": "Sin formato"

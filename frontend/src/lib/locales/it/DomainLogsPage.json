@@ -6,6 +6,7 @@
   },
   "title": "Log",
   "streamFailed": "Avvio dello stream non riuscito (HTTP {{status}})",
+  "streamEnded": "Lo stream dal vivo è terminato. Premi Live Tail per riconnetterti.",
   "view": {
     "table": "Tabella",
     "raw": "Grezzo"

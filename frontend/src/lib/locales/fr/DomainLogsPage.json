@@ -6,6 +6,7 @@
   },
   "title": "Journaux",
   "streamFailed": "Le flux n'a pas pu démarrer (HTTP {{status}})",
+  "streamEnded": "Le flux en direct s'est arrêté. Cliquez sur Live Tail pour vous reconnecter.",
   "view": {
     "table": "Tableau",
     "raw": "Brut"

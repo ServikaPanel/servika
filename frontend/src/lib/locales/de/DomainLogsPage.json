@@ -6,6 +6,7 @@
   },
   "title": "Protokolle",
   "streamFailed": "Stream konnte nicht gestartet werden (HTTP {{status}})",
+  "streamEnded": "Der Live-Stream wurde beendet. Klicken Sie auf Live Tail, um neu zu verbinden.",
   "view": {
     "table": "Tabelle",
     "raw": "Roh"

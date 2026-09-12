@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"servika/internal/httpx"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -80,6 +82,11 @@ func (s *stream) Write(b []byte) (int, error) {
 
 func (s *stream) WriteHeader(status int) { s.status = status }
 func (s *stream) Flush()                 {}
+
+// A real connection carries these, and http.NewResponseController needs them
+// for the socket half of an extension.
+func (s *stream) SetReadDeadline(time.Time) error  { return nil }
+func (s *stream) SetWriteDeadline(time.Time) error { return nil }
 
 func (s *stream) text() string {
 	s.mu.Lock()
@@ -272,6 +279,43 @@ func TestALineWrittenAfterTheStartIsDelivered(t *testing.T) {
 		t.Fatalf("a line written during the tail never arrived: %q", answer.text())
 	}
 	cancel()
+	<-done
+}
+
+// The router gives every request a bounded budget, and a tail outlives it by
+// design. Without a renewal the stream ends while the client is still reading
+// and the screen keeps claiming it is live, so the tail buys its own budget
+// while the client is there.
+func TestTheTailRenewsItsRequestBudget(t *testing.T) {
+	handlers, directory := logHandlers(t, domainRow{domain: "site.example.com", user: "c_shop"})
+	path := filepath.Join(directory, "site.example.com.access.log")
+	writeLog(t, path, "backlog\n")
+
+	previousBudget, previousInterval := tailBudget, tailRenewInterval
+	tailBudget, tailRenewInterval = 2*time.Second, 10*time.Millisecond
+	t.Cleanup(func() { tailBudget, tailRenewInterval = previousBudget, previousInterval })
+
+	// Shorter than the line that arrives below, so an unrenewed budget ends the
+	// stream before it.
+	ctx, release := httpx.WithHandlerTimeout(context.Background(), 300*time.Millisecond)
+	defer release()
+
+	answer := newStream()
+	done := make(chan struct{})
+	go func() {
+		handlers.Tail(answer, tailRequest(ctx, ""))
+		close(done)
+	}()
+	if !waitFor(answer, "data: backlog") {
+		t.Fatalf("the backlog never arrived: %q", answer.text())
+	}
+
+	time.Sleep(700 * time.Millisecond) // past the budget the router handed out
+	appendLog(t, path, "after the budget\n")
+	if !waitFor(answer, "data: after the budget") {
+		t.Fatalf("the stream died at the router's budget: %q", answer.text())
+	}
+	release()
 	<-done
 }
 

@@ -6,6 +6,7 @@
   },
   "title": "Registos",
   "streamFailed": "Falha ao iniciar o fluxo (HTTP {{status}})",
+  "streamEnded": "A transmissão em direto terminou. Prima Live Tail para voltar a ligar.",
   "view": {
     "table": "Tabela",
     "raw": "Bruto"

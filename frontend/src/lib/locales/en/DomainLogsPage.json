@@ -6,6 +6,7 @@
   },
   "title": "Logs",
   "streamFailed": "Stream failed to start (HTTP {{status}})",
+  "streamEnded": "The live stream ended. Press Live Tail to reconnect.",
   "view": {
     "table": "Table",
     "raw": "Raw"

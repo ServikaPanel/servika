@@ -20,6 +20,25 @@ type ReadResp = { file: string; path: string; lines: string[]; current: boolean 
 
 const MAX_WINDOW = 1000
 
+type SSEBlock = { data: string; isError: boolean }
+
+// takeBlocks splits the complete SSE blocks off the front of the buffer and
+// returns the partial one that is left. A block with no `data:` line is a
+// comment keepalive and is dropped; `event: error` is reported, because the
+// server sends it once the headers are out and no status code is left to use.
+function takeBlocks(buf: string): { blocks: SSEBlock[]; rest: string } {
+  const blocks: SSEBlock[] = []
+  let idx
+  while ((idx = buf.indexOf('\n\n')) >= 0) {
+    const blkLines = buf.slice(0, idx).split('\n')
+    buf = buf.slice(idx + 2)
+    const data = blkLines.filter(l => l.startsWith('data: ')).map(l => l.slice(6))
+    if (data.length === 0) continue
+    blocks.push({ data: data.join('\n'), isError: blkLines.some(l => l.startsWith('event: error')) })
+  }
+  return { blocks, rest: buf }
+}
+
 export default function DomainLogsPage() {
   const { t } = useTranslation('DomainLogsPage')
   const report = useReportError()
@@ -100,18 +119,24 @@ export default function DomainLogsPage() {
         let buf = ''
         while (true) {
           const { value, done } = await reader.read()
-          if (done) break
+          if (done) {
+            // The server closed the stream. Nothing will arrive again, so the
+            // screen must stop reporting a live tail.
+            setError(t('streamEnded'))
+            setLive(false)
+            break
+          }
           buf += dec.decode(value, { stream: true })
-          // Parse SSE events by splitting on "\n\n".
-          let idxBlk
-          while ((idxBlk = buf.indexOf('\n\n')) >= 0) {
-            const blk = buf.slice(0, idxBlk)
-            buf = buf.slice(idxBlk + 2)
-            const dataLines = blk.split('\n').filter(l => l.startsWith('data: ')).map(l => l.slice(6))
-            if (dataLines.length === 0) continue
-            const line = dataLines.join('\n')
+          const { blocks, rest } = takeBlocks(buf)
+          buf = rest
+          for (const block of blocks) {
+            if (block.isError) {
+              setError(block.data)
+              setLive(false)
+              return
+            }
             setLines(prev => {
-              const next = [...prev, line]
+              const next = [...prev, block.data]
               return next.length > MAX_WINDOW ? next.slice(-MAX_WINDOW) : next
             })
           }
