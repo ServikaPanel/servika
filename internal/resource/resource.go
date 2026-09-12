@@ -50,27 +50,6 @@ type Handlers struct {
 	DB *sql.DB
 }
 
-// dbTotalMB returns the total database size for panel-managed users in megabytes.
-func dbTotalMB(ctx context.Context, db *sql.DB, dbUsers []string) int64 {
-	if len(dbUsers) == 0 {
-		return 0
-	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(dbUsers)), ",")
-	args := make([]any, len(dbUsers))
-	for i, user := range dbUsers {
-		args[i] = user
-	}
-	// Sum data and index sizes from information_schema.
-	query := `SELECT COALESCE(SUM((data_length+index_length))/1024/1024, 0)
-	      FROM information_schema.tables
-	      WHERE table_schema IN (
-	          SELECT db_name FROM panel.db_accounts WHERE db_user IN (` + placeholders + `)
-	      )`
-	var mb float64
-	_ = db.QueryRowContext(ctx, query, args...).Scan(&mb)
-	return int64(mb)
-}
-
 // planLimits carries the ceilings the plan sets. A zero means unlimited.
 type planLimits struct {
 	name    string
@@ -253,9 +232,8 @@ func (h *Handlers) Show(w http.ResponseWriter, r *http.Request) {
 	o.EmailCount.Limit = limits.email
 	o.DomainCount.Limit = limits.domain
 
-	// Keep database usage separate from DiskMB.Usage because databases may reside on another disk.
-	// DiskMB currently measures only the home directory.
-	_ = dbTotalMB // future use
-
+	// DiskMB measures the home directory only. Database size is deliberately not
+	// added to it: the databases may sit on another disk, so one number covering
+	// both would report a quota nobody can act on.
 	httpx.WriteJSON(w, http.StatusOK, o)
 }
