@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -80,18 +79,18 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "server IPv4 address could not be detected")
 		return
 	}
-	ips, err := net.LookupHost(domain)
+	ips, err := lookupHost(domain)
 	if err != nil || !containsIP(ips, serverIP) {
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "domain A record must point to this server before certificate issuance")
 		return
 	}
 
 	sslStatus, sslError, sslExpires := "active", "", ""
-	if err := issuePanelCertificate(domain); err != nil {
+	if err := issueCert(domain); err != nil {
 		sslStatus = "failed"
 		sslError = "certificate issuance failed"
-		restorePanelSelfSigned()
-	} else if expires, ok := certificateExpiry(panelCertPath, panelKeyPath); ok {
+		restoreSelf()
+	} else if expires, ok := certExpiry(panelCertPath, panelKeyPath); ok {
 		sslExpires = expires.Format("2006-01-02")
 	}
 
@@ -101,9 +100,9 @@ func (h *Handlers) Save(w http.ResponseWriter, r *http.Request) {
 	}
 	response := map[string]any{"ok": true, "custom_domain": domain, "ssl_status": sslStatus}
 	if sslStatus != "active" {
-		removePortlessPanelVhost()
+		removePortless()
 		response["warning"] = "The domain was saved, but Let's Encrypt certificate issuance failed. The panel remains available with the existing certificate."
-	} else if err := writePortlessPanelVhost(domain); err != nil {
+	} else if err := writePortless(domain); err != nil {
 		response["warning"] = "The certificate was installed, but portless panel access could not be configured. The panel remains available on port 8443."
 	}
 	httpx.WriteJSON(w, http.StatusOK, response)
@@ -139,7 +138,7 @@ func (h *Handlers) serverIPv4() string {
 	if h.ServerIPv4 != "" {
 		return h.ServerIPv4
 	}
-	return config.PublicIPv4()
+	return publicIPv4()
 }
 
 func issuePanelCertificate(domain string) error {
