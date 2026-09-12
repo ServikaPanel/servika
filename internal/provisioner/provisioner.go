@@ -2096,7 +2096,7 @@ func prepareHTTPContext(opts VhostOpts) ([]restorer, error) {
 	// rejects the whole configuration and the rollback below fires on a defect
 	// that is not in the vhost.
 	if opts.AppBlocks != "" {
-		if err := ensureUpgradeMap(); err != nil {
+		if err := EnsureUpgradeMap(); err != nil {
 			return nil, err
 		}
 	}

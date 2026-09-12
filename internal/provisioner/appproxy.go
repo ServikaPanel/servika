@@ -33,8 +33,12 @@ map $http_upgrade $connection_upgrade {
 `
 }
 
-// ensureUpgradeMap writes the map file when it is missing or has drifted.
-func ensureUpgradeMap() error {
+// EnsureUpgradeMap writes the map file when it is missing or has drifted.
+//
+// It is exported for internal/subdomain, which writes its own server blocks
+// rather than going through renderAndReload and so reaches the same precondition
+// by a second path.
+func EnsureUpgradeMap() error {
 	path := upgradeMapConf()
 	body := upgradeMapBody()
 	// #nosec G304 -- a fixed system configuration path this package owns.

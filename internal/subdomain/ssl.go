@@ -192,6 +192,16 @@ func applyVhost(path, config string) error {
 	// internal/provisioner/nginxlock.go.
 	provisioner.LockNginx()
 	defer provisioner.UnlockNginx()
+	// $connection_upgrade is defined by a managed map in http context, which the
+	// DOMAIN render writes. A subdomain is a second, independent writer: on a
+	// server where no domain-level application exists the map is missing, and
+	// nginx rejects the WHOLE configuration for an undefined variable, so the
+	// rollback below would fire on a defect that is not in this vhost.
+	if strings.Contains(config, "$connection_upgrade") {
+		if err := provisioner.EnsureUpgradeMap(); err != nil {
+			return err
+		}
+	}
 	// #nosec G703 G304 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	previous, readErr := os.ReadFile(path)
 	// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
