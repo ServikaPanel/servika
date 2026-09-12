@@ -208,6 +208,18 @@ func EnvURL(key, fallback string) (string, error) {
 }
 
 // ShellQuote quotes a value for POSIX shell command strings.
+//
+// Nothing is interpreted inside single quotes; an embedded single quote closes
+// the run, is escaped, and the run reopens. This is the ONE quoter in the
+// panel: internal/backups, internal/laravel, internal/panelport,
+// internal/phpversion and internal/transfers each carried a byte-identical
+// copy, only one of which had a test, and the untested set included the one
+// processing values from an attacker-controlled remote server. A hardening
+// change to the rule had to be made in five places to take effect.
+//
+// Hostile input reaches a command line only through this function, so keep it
+// that way: quote here rather than adding a local variant, even when the value
+// looks tame.
 func ShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }

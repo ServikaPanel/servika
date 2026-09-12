@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"strings"
 
+	"servika/internal/config"
 	"servika/internal/provisioner"
 )
 
@@ -88,7 +89,7 @@ const (
 // variables so they cannot break out of the surrounding paths. An unknown panel
 // returns an empty script, which the caller reads as "no certificate".
 func sourceCertificateScript(panelType, domainName, sourceUser string) string {
-	d := shellQuote(domainName)
+	d := config.ShellQuote(domainName)
 	switch panelType {
 	case "cpanel":
 		// cPanel keeps the installed certificate, chain and key concatenated in one
@@ -114,7 +115,7 @@ func sourceCertificateScript(panelType, domainName, sourceUser string) string {
 		if strings.TrimSpace(sourceUser) == "" {
 			return ""
 		}
-		u := shellQuote(sourceUser)
+		u := config.ShellQuote(sourceUser)
 		return "d=" + d + "\nu=" + u + "\n" +
 			`b="/usr/local/directadmin/data/users/$u/domains/$d"` + "\n" +
 			`if [ -f "$b.cert" ] && [ -f "$b.key" ]; then` + "\n" +

@@ -204,16 +204,6 @@ func readOpLog() string {
 	return string(body)
 }
 
-// shellQuote renders a value as a single-quoted shell word.
-//
-// Everything substituted into the wrapper is a path this package composed or a
-// field of a VersionMetadata the request was matched against, so none of it is
-// caller text. Quoting anyway is what keeps that true if a future version code
-// is ever less tame than "83".
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
-}
-
 // IonCubePostInstall, when set, returns shell that is appended to a PHP install
 // so the IonCube Loader is ready on the new version within the same detached
 // job. It is a hook wired in main rather than a direct call, because
@@ -235,7 +225,7 @@ func installScript(m VersionMetadata) string {
 	}
 	packages := make([]string, 0, len(PackageNames(m)))
 	for _, name := range PackageNames(m) {
-		packages = append(packages, shellQuote(name))
+		packages = append(packages, config.ShellQuote(name))
 	}
 
 	// The loader step runs after the service is enabled, so the pool it reloads
@@ -257,25 +247,25 @@ if ! dnf install -y ` + strings.Join(packages, " ") + `; then
   exit 1
 fi
 
-mkdir -p ` + shellQuote(poolDir) + `
+mkdir -p ` + config.ShellQuote(poolDir) + `
 # Remi ships www.conf disabled so a fresh install serves nothing by accident.
 # It is enabled only when there is no pool of that name already.
-if [ -f ` + shellQuote(poolDir+"/www.conf.disabled") + ` ] && [ ! -f ` + shellQuote(poolDir+"/www.conf") + ` ]; then
-  mv ` + shellQuote(poolDir+"/www.conf.disabled") + ` ` + shellQuote(poolDir+"/www.conf") + `
+if [ -f ` + config.ShellQuote(poolDir+"/www.conf.disabled") + ` ] && [ ! -f ` + config.ShellQuote(poolDir+"/www.conf") + ` ]; then
+  mv ` + config.ShellQuote(poolDir+"/www.conf.disabled") + ` ` + config.ShellQuote(poolDir+"/www.conf") + `
 fi
 
-mkdir -p ` + shellQuote(phpdDir) + `
-cat > ` + shellQuote(phpdDir+"/99-servika-input.ini") + ` <<'INI'
+mkdir -p ` + config.ShellQuote(phpdDir) + `
+cat > ` + config.ShellQuote(phpdDir+"/99-servika-input.ini") + ` <<'INI'
 ; Servika: supports large forms and imports (phpMyAdmin, WordPress)
 max_input_vars = 10000
 INI
-cat > ` + shellQuote(phpdDir+"/99-servika-hardening.ini") + ` <<'INI'
+cat > ` + config.ShellQuote(phpdDir+"/99-servika-hardening.ini") + ` <<'INI'
 ; Servika PHP hardening, generated automatically.
 ; expose_php on makes PHP answer every request with its exact version.
 expose_php = Off
 INI
 
-systemctl enable --now ` + shellQuote(service) + ` || echo "WARNING: ` + service + ` did not start"
+systemctl enable --now ` + config.ShellQuote(service) + ` || echo "WARNING: ` + service + ` did not start"
 ` + ioncube + `echo "Done: PHP ` + m.Version + ` is installed"
 `
 }
@@ -288,8 +278,8 @@ func removeScript(m VersionMetadata) string {
 set -uo pipefail
 
 echo "Removing PHP ` + m.Version + `"
-systemctl disable --now ` + shellQuote(service) + ` || true
-if ! dnf remove -y ` + shellQuote("php"+m.Code+"-*") + `; then
+systemctl disable --now ` + config.ShellQuote(service) + ` || true
+if ! dnf remove -y ` + config.ShellQuote("php"+m.Code+"-*") + `; then
   echo "FAILED: dnf could not remove the packages"
   exit 1
 fi

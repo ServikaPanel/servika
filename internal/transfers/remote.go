@@ -9,7 +9,7 @@
 //  1. No shell locally: every local process runs through newTransferCommand
 //     (exec.CommandContext with separate args) — never "sh -c".
 //  2. Remote commands are FIXED templates. A variable value is wrapped by
-//     shellQuote() because a shell is unavoidable on the remote side.
+//     config.ShellQuote() because a shell is unavoidable on the remote side.
 //  3. Host and user names pass an allowlist regexp and a leading '-' is
 //     REJECTED, otherwise ssh/rsync reads the value as a FLAG (arg injection).
 //  4. ssh is always called as "-l <user> -- <host>" (no user@host parsing).
@@ -151,13 +151,6 @@ func (s *RemoteSource) validateCredentials() error {
 	return nil
 }
 
-// shellQuote wraps a value in single quotes for the remote shell. Nothing is
-// interpreted inside single quotes; an embedded single quote is closed and
-// escaped. Hostile remote values enter a command only through this helper.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // mysqlAdminAuth returns the REMOTE-shell prefix that authenticates the source
 // MySQL admin client, per panel type. cPanel returns empty because root reads
 // its own ~/.my.cnf; Plesk and DirectAdmin keep the MySQL admin account
@@ -260,7 +253,7 @@ func (s *RemoteSource) sshCommand(ctx context.Context, keyFile, remoteCommand st
 
 // Run executes a command on the remote server and returns stdout. remoteCommand
 // is a FIXED template produced by this package; any variable value inside it
-// must already have gone through shellQuote().
+// must already have gone through config.ShellQuote().
 func (s *RemoteSource) Run(ctx context.Context, remoteCommand string) (string, error) {
 	keyFile, cleanup, err := s.writeKeyFile()
 	if err != nil {

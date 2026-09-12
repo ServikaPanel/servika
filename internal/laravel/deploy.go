@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"servika/internal/config"
 	"servika/internal/httpx"
 	"servika/internal/logx"
 )
@@ -23,7 +24,7 @@ func deployScript(appDir, php, nodeDir string, migrate, npmBuild bool) string {
 	var b strings.Builder
 	b.WriteString("#!/bin/bash\n")
 	fmt.Fprintf(&b, "export PATH=%s:%s\n", nodeDir, systemPath)
-	fmt.Fprintf(&b, "cd %s || exit 1\n", shellQuote(appDir))
+	fmt.Fprintf(&b, "cd %s || exit 1\n", config.ShellQuote(appDir))
 	// FAILED records the first required step that fails. Critical steps no longer use
 	// "|| true"; instead a failure is recorded and later steps still run so maintenance
 	// mode is always lifted, but the final status reflects the first failure.
@@ -34,11 +35,11 @@ func deployScript(appDir, php, nodeDir string, migrate, npmBuild bool) string {
 	b.WriteString("echo '== git pull =='\n")
 	b.WriteString("if [ -d .git ]; then git pull --ff-only 2>&1 || git pull 2>&1 || fail 'git pull'; else echo '(not a git repository, skipped)'; fi\n")
 	b.WriteString("echo '== composer install (--no-dev) =='\n")
-	fmt.Fprintf(&b, "%s %s install --no-interaction --prefer-dist --no-dev 2>&1 || fail 'composer install'\n", php, shellQuote(composerBin()))
+	fmt.Fprintf(&b, "%s %s install --no-interaction --prefer-dist --no-dev 2>&1 || fail 'composer install'\n", php, config.ShellQuote(composerBin()))
 	if npmBuild {
 		b.WriteString("echo '== npm ci + build =='\n")
-		fmt.Fprintf(&b, "{ %s/npm ci --prefix %s --no-fund --no-audit 2>&1 || %s/npm install --prefix %s 2>&1; } || fail 'npm install'\n", nodeDir, shellQuote(appDir), nodeDir, shellQuote(appDir))
-		fmt.Fprintf(&b, "%s/npm run build --prefix %s 2>&1 || fail 'npm build'\n", nodeDir, shellQuote(appDir))
+		fmt.Fprintf(&b, "{ %s/npm ci --prefix %s --no-fund --no-audit 2>&1 || %s/npm install --prefix %s 2>&1; } || fail 'npm install'\n", nodeDir, config.ShellQuote(appDir), nodeDir, config.ShellQuote(appDir))
+		fmt.Fprintf(&b, "%s/npm run build --prefix %s 2>&1 || fail 'npm build'\n", nodeDir, config.ShellQuote(appDir))
 	}
 	if migrate {
 		b.WriteString("echo '== migrate --force =='\n")

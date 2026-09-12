@@ -293,13 +293,8 @@ func IonCubeInstallShell(version string) string {
 	if err != nil || strings.TrimSpace(self) == "" {
 		return ""
 	}
-	return "\n" + ionCubeShellQuote(self) + " -" + ionCubeInstallFlag + " " + ionCubeShellQuote(version) +
+	return "\n" + config.ShellQuote(self) + " -" + ionCubeInstallFlag + " " + config.ShellQuote(version) +
 		` || echo "WARNING: the IonCube Loader was not installed for PHP ` + version + `"` + "\n"
-}
-
-// ionCubeShellQuote renders a value as a single-quoted shell word.
-func ionCubeShellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 // maxLoaderRedirects bounds the redirect chain. Go's own default is 10; the

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"servika/internal/config"
 	"servika/internal/httpx"
 	"servika/internal/logx"
 )
@@ -216,9 +217,9 @@ func detachedInstall(id int64, systemUser, appDir, logPath, script string) error
 }
 
 func scaffoldInstallScript(appDir, php, tmp string) string {
-	cp := php + " " + shellQuote(composerBin()) + " create-project --no-interaction --prefer-dist"
+	cp := php + " " + config.ShellQuote(composerBin()) + " create-project --no-interaction --prefer-dist"
 	return "#!/bin/bash\nset -e\n" +
-		"DEST=" + shellQuote(appDir) + "\nTMP=" + shellQuote(tmp) + "\n" +
+		"DEST=" + config.ShellQuote(appDir) + "\nTMP=" + config.ShellQuote(tmp) + "\n" +
 		"if [ -z \"$(ls -A \"$DEST\" 2>/dev/null)\" ]; then\n" +
 		"  " + cp + " laravel/laravel \"$DEST\" || " + cp + " laravel/laravel:^11 \"$DEST\"\n" +
 		"else\n" +
@@ -237,20 +238,18 @@ func scaffoldInstallScript(appDir, php, tmp string) string {
 
 func remoteInstallScript(appDir, repoURL, branch, php, tmp string) string {
 	return "#!/bin/bash\nset -e\n" +
-		"DEST=" + shellQuote(appDir) + "\nTMP=" + shellQuote(tmp) + "\n" +
+		"DEST=" + config.ShellQuote(appDir) + "\nTMP=" + config.ShellQuote(tmp) + "\n" +
 		"rm -rf \"$TMP\"\n" +
-		"/usr/bin/git clone --depth 1 --branch " + shellQuote(branch) + " -- " + shellQuote(repoURL) + " \"$TMP\"\n" +
+		"/usr/bin/git clone --depth 1 --branch " + config.ShellQuote(branch) + " -- " + config.ShellQuote(repoURL) + " \"$TMP\"\n" +
 		// Hardlink within the same filesystem to preserve the tenant's inode/file-count
 		// quota; fall back to a full copy when hardlinking is unavailable.
 		"cp -al \"$TMP\"/. \"$DEST\"/ 2>/dev/null || cp -a \"$TMP\"/. \"$DEST\"/\n" +
 		"rm -rf \"$TMP\"\n" +
 		"cd \"$DEST\"\n" +
 		"[ -f .env ] || { [ -f .env.example ] && cp .env.example .env; }\n" +
-		php + " " + shellQuote(composerBin()) + " install --no-interaction --prefer-dist || true\n" +
+		php + " " + config.ShellQuote(composerBin()) + " install --no-interaction --prefer-dist || true\n" +
 		"[ -f artisan ] && " + php + " artisan key:generate --force || true\n"
 }
-
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // unitRunning reports whether a job's unit is still working.
 func unitRunning(unit string) bool {

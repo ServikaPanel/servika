@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"servika/internal/archivex"
+	"servika/internal/config"
 	"servika/internal/credentials"
 	"servika/internal/files"
 	"servika/internal/httpx"
@@ -27,12 +28,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 )
-
-// shellQuote single-quotes a value for a bash -c command line (mysql/mysqldump
-// file paths and DB names). All embedded single quotes are escaped.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
 
 // isSystemDB reports databases that must never be dumped or overwritten.
 func isSystemDB(n string) bool {
@@ -279,7 +274,7 @@ func dumpDatabase(ctx context.Context, dbDir, dbName string) bool {
 	// #nosec G204 G702 -- dbName is a credentials.ValidDBIdentifier-checked, non-system name and target is an internal staging path, both shell-quoted; no tenant shell input.
 	cmd := newRestoreCommand(ctx, "bash", "-c",
 		fmt.Sprintf("mysqldump --single-transaction --skip-lock-tables --routines --events --triggers --default-character-set=utf8mb4 --hex-blob %s > %s 2>/dev/null",
-			shellQuote(dbName), shellQuote(target)))
+			config.ShellQuote(dbName), config.ShellQuote(target)))
 	if err := cmd.Run(); err != nil {
 		// The database comes from the panel's own records, so a dump error is a
 		// real or transient failure, never "no such database". Record it so the

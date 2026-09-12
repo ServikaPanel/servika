@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"servika/internal/config"
 )
 
 // opPaths points the job's three files at a temporary directory, so a test never
@@ -173,7 +175,7 @@ func TestTheOperationClearsItsOwnLogRatherThanThePanel(t *testing.T) {
 	if !strings.Contains(readOpLog(), "older run") {
 		t.Error("the panel cleared the log itself, so a refused launch destroys a running job's record")
 	}
-	if !strings.HasPrefix(script, "#!/usr/bin/env bash\n: > "+shellQuote(logPath)+"\n") {
+	if !strings.HasPrefix(script, "#!/usr/bin/env bash\n: > "+config.ShellQuote(logPath)+"\n") {
 		t.Errorf("the operation does not clear its own log first:\n%s", script)
 	}
 	if !strings.Contains(script, "echo '════════ PHP "+m.Version) {
@@ -266,7 +268,7 @@ func TestTheRemoveScriptStopsTheServiceFirst(t *testing.T) {
 // Nothing caller-supplied reaches the wrapper today, and quoting is what keeps
 // that true if a version code is ever less tame than "83".
 func TestShellQuotingSurvivesAQuoteInAValue(t *testing.T) {
-	got := shellQuote(`a'b`)
+	got := config.ShellQuote(`a'b`)
 	if got != `'a'\''b'` {
 		t.Errorf("shellQuote = %s, want the value in one quoted word", got)
 	}

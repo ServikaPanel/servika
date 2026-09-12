@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"servika/internal/config"
 	"servika/internal/credentials"
 )
 
@@ -754,10 +755,10 @@ func downloadDump(ctx context.Context, source *RemoteSource, sourceDB string, tm
 	// credential-less mysqldump is refused there with 1045 (mysqlAdminAuth).
 	dumpEnv, dumpUser := source.mysqlAdminAuth()
 	inner := dumpEnv + "mysqldump " + dumpUser + "--single-transaction --quick --routines --triggers " +
-		"--no-tablespaces --default-character-set=utf8mb4 " + shellQuote(sourceDB) + " | gzip -c"
+		"--no-tablespaces --default-character-set=utf8mb4 " + config.ShellQuote(sourceDB) + " | gzip -c"
 	// bash is forced for pipefail; without it the command falls back to sh and
 	// the end-of-dump marker is the only remaining guard.
-	remote := "if command -v bash >/dev/null 2>&1; then bash -o pipefail -c " + shellQuote(inner) +
+	remote := "if command -v bash >/dev/null 2>&1; then bash -o pipefail -c " + config.ShellQuote(inner) +
 		"; else " + inner + "; fi"
 
 	keyFile, cleanup, err := source.writeKeyFile()
@@ -1137,7 +1138,7 @@ func (h *Handlers) migrateDNS(ctx context.Context, source *RemoteSource, domainI
 
 // readSourceRecords reads the domain's records from the source server.
 func readSourceRecords(ctx context.Context, source *RemoteSource, domainName string) []zoneRecord {
-	quoted := shellQuote(domainName)
+	quoted := config.ShellQuote(domainName)
 	var records []zoneRecord
 
 	// Plesk keeps DNS in its own store rather than a zone file, so it is read

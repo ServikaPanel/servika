@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"servika/internal/config"
 )
 
 // helperUnit is the transient unit the detached change runs under.
@@ -97,17 +99,17 @@ func writeHelper(changes []changeSet, current Ports, newPort int, historyID int6
 			// The file did not exist before, so putting it back means removing
 			// it. That case is unreachable for the two files a backend change
 			// touches; it is handled so a later addition cannot skip it.
-			fmt.Fprintf(&restore, "rm -f %s\n", shellQuote(change.Path))
+			fmt.Fprintf(&restore, "rm -f %s\n", config.ShellQuote(change.Path))
 			continue
 		}
 		if !plainPath(change.Path) || !plainPath(change.Backup) {
 			return fmt.Errorf("refusing to write a restore line for %q", change.Path)
 		}
-		fmt.Fprintf(&restore, "cp -p %s %s\n", shellQuote(change.Backup), shellQuote(change.Path))
+		fmt.Fprintf(&restore, "cp -p %s %s\n", config.ShellQuote(change.Backup), config.ShellQuote(change.Path))
 	}
 
 	body := fmt.Sprintf(helperTemplate,
-		shellQuote(outcomePath()), shellQuote(probeHost),
+		config.ShellQuote(outcomePath()), config.ShellQuote(probeHost),
 		newPort, current.Backend, int(verifyDeadline.Seconds()),
 		historyID, restore.String())
 
@@ -150,11 +152,4 @@ func plainPath(value string) bool {
 		}
 	}
 	return !strings.Contains(value, "..")
-}
-
-// shellQuote wraps a value in single quotes. Combined with plainPath and
-// plainHost it is belt and braces, which is the right amount for a string that
-// becomes a line in a root script.
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
