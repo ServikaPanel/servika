@@ -37,12 +37,47 @@ func TestTheHealthURLIsDialableForEveryListenForm(t *testing.T) {
 // again on the next update, and rewriting a value this does not understand
 // destroys something an operator wrote deliberately.
 func TestSetEnvHealthPort(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		text        string
-		wantChanged bool
-		wantLine    string
-	}{
+	for _, tc := range healthPortCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			out, changed, err := SetEnvHealthPort(tc.text, 9080)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if changed != tc.wantChanged {
+				t.Fatalf("changed = %v, want %v\n%s", changed, tc.wantChanged, out)
+			}
+			if tc.wantLine != "" && !strings.Contains(out, tc.wantLine+"\n") {
+				t.Errorf("the result does not carry %q:\n%s", tc.wantLine, out)
+			}
+			assertAssignmentSurvived(t, tc, out)
+		})
+	}
+}
+
+// assertAssignmentSurvived checks the two ways the heal could damage a file:
+// dropping an assignment it decided not to change, and adding one that was
+// never there.
+func assertAssignmentSurvived(t *testing.T, tc healthPortCase, out string) {
+	t.Helper()
+	if !tc.wantChanged && !strings.Contains(out, envHealthName) &&
+		strings.Contains(tc.text, envHealthName) {
+		t.Errorf("an assignment disappeared:\n%s", out)
+	}
+	if !strings.Contains(tc.text, envHealthName) && strings.Contains(out, envHealthName) {
+		t.Errorf("an absent assignment was added:\n%s", out)
+	}
+}
+
+// healthPortCase is one state the heal has to tell apart.
+type healthPortCase struct {
+	name        string
+	text        string
+	wantChanged bool
+	wantLine    string
+}
+
+func healthPortCases() []healthPortCase {
+	return []healthPortCase{
 		{
 			name:        "a stale port is corrected",
 			text:        "SERVIKA_LISTEN=127.0.0.1:9080\nSERVIKA_HEALTH=http://127.0.0.1:8080/healthz\n",
@@ -90,26 +125,6 @@ func TestSetEnvHealthPort(t *testing.T) {
 			wantChanged: true,
 			wantLine:    "SERVIKA_HEALTH=http://127.0.0.2:9080/some/other/path",
 		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			out, changed, err := SetEnvHealthPort(tc.text, 9080)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if changed != tc.wantChanged {
-				t.Fatalf("changed = %v, want %v\n%s", changed, tc.wantChanged, out)
-			}
-			if tc.wantLine != "" && !strings.Contains(out, tc.wantLine+"\n") {
-				t.Errorf("the result does not carry %q:\n%s", tc.wantLine, out)
-			}
-			if !tc.wantChanged && !strings.Contains(out, envHealthName) &&
-				strings.Contains(tc.text, envHealthName) {
-				t.Errorf("an assignment disappeared:\n%s", out)
-			}
-			if !strings.Contains(tc.text, envHealthName) && strings.Contains(out, envHealthName) {
-				t.Errorf("an absent assignment was added:\n%s", out)
-			}
-		})
 	}
 }
 

@@ -368,11 +368,7 @@ func TestABackendChangeHandsOffToTheHelper(t *testing.T) {
 	if err := StartBackendChange(context.Background(), currentPorts(t), 9090, 42); err != nil {
 		t.Fatalf("StartBackendChange: %v", err)
 	}
-	outcome, ok := ReadOutcome()
-	if !ok || outcome.HistoryID != 42 || outcome.State != StateRunning ||
-		outcome.Kind != KindBackend || outcome.OldPort != 8080 || outcome.NewPort != 9090 {
-		t.Fatalf("outcome = %+v, ok = %v", outcome, ok)
-	}
+	assertRunningOutcome(t)
 	if !strings.Contains(readFileFor(t, envPath()), "SERVIKA_LISTEN=127.0.0.1:9090") {
 		t.Error("the environment file is not on the new port")
 	}
@@ -382,6 +378,24 @@ func TestABackendChangeHandsOffToTheHelper(t *testing.T) {
 	if len(host.probed) != 0 {
 		t.Errorf("probed %v, want nothing: the helper does the waiting", host.probed)
 	}
+	assertHelperScript(t)
+}
+
+// assertRunningOutcome checks the record a detached change leaves for the panel
+// that comes back after it.
+func assertRunningOutcome(t *testing.T) {
+	t.Helper()
+	outcome, ok := ReadOutcome()
+	if !ok || outcome.HistoryID != 42 || outcome.State != StateRunning ||
+		outcome.Kind != KindBackend || outcome.OldPort != 8080 || outcome.NewPort != 9090 {
+		t.Fatalf("outcome = %+v, ok = %v", outcome, ok)
+	}
+}
+
+// assertHelperScript checks that the script carries both ports and the line
+// that undoes the change.
+func assertHelperScript(t *testing.T) {
+	t.Helper()
 	helper := readFileFor(t, helperPath())
 	if !strings.Contains(helper, "NEW_PORT=9090") || !strings.Contains(helper, "OLD_PORT=8080") {
 		t.Errorf("the helper does not carry both ports:\n%s", helper)

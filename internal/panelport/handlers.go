@@ -86,20 +86,7 @@ func (h *Handlers) Change(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if !ValidKind(body.Kind) {
-		writeRefusal(w, http.StatusBadRequest, ReasonUnknownKind, "unknown port kind")
-		return
-	}
-	if err := ValidatePort(body.Port); err != nil {
-		h.fail(w, err, "that port cannot be used")
-		return
-	}
-
-	// A change already in flight must not be joined by a second one: the first
-	// one's rollback restores files the second one just rewrote.
-	if outcome, ok := ReadOutcome(); ok && outcome.State == StateRunning {
-		writeRefusal(w, http.StatusConflict, ReasonBusy,
-			"a port change is already running")
+	if !h.acceptable(w, body.Kind, body.Port) {
 		return
 	}
 
@@ -153,6 +140,26 @@ func (h *Handlers) Change(w http.ResponseWriter, r *http.Request) {
 		"kind": body.Kind, "port": body.Port, "verified": false,
 		"note": "the panel is restarting; this screen will report the result once it is back",
 	})
+}
+
+// acceptable answers the request itself when a change cannot be started at
+// all, and reports whether the caller may go on.
+func (h *Handlers) acceptable(w http.ResponseWriter, kind string, port int) bool {
+	if !ValidKind(kind) {
+		writeRefusal(w, http.StatusBadRequest, ReasonUnknownKind, "unknown port kind")
+		return false
+	}
+	if err := ValidatePort(port); err != nil {
+		h.fail(w, err, "that port cannot be used")
+		return false
+	}
+	// A change already in flight must not be joined by a second one: the first
+	// one's rollback restores files the second one just rewrote.
+	if outcome, ok := ReadOutcome(); ok && outcome.State == StateRunning {
+		writeRefusal(w, http.StatusConflict, ReasonBusy, "a port change is already running")
+		return false
+	}
+	return true
 }
 
 func (h *Handlers) record(ctx context.Context, kind string, oldPort, newPort int, actor any) (int64, error) {

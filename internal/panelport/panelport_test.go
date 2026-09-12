@@ -142,7 +142,21 @@ func TestBothAddressFamiliesMoveTogether(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var v4, v6 bool
+	v4, v6 := movedListenLines(t, moved)
+	if !v4 || !v6 {
+		t.Errorf("IPv4 moved: %v, IPv6 moved: %v; both must move together", v4, v6)
+	}
+	// The "ssl default_server" tail survives, or nginx serves plaintext on the
+	// panel port and every browser refuses the connection.
+	if !strings.Contains(moved, "ssl default_server") {
+		t.Error("the ssl default_server tail was lost")
+	}
+}
+
+// movedListenLines reports which address families reached the new port, and
+// fails the test for any default_server line still on the old one.
+func movedListenLines(t *testing.T, moved string) (v4, v6 bool) {
+	t.Helper()
 	for line := range strings.SplitSeq(moved, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "listen ") || !strings.Contains(trimmed, "default_server") {
@@ -157,14 +171,7 @@ func TestBothAddressFamiliesMoveTogether(t *testing.T) {
 			t.Errorf("a listen line was left on the old port: %q", trimmed)
 		}
 	}
-	if !v4 || !v6 {
-		t.Errorf("IPv4 moved: %v, IPv6 moved: %v; both must move together", v4, v6)
-	}
-	// The "ssl default_server" tail survives, or nginx serves plaintext on the
-	// panel port and every browser refuses the connection.
-	if !strings.Contains(moved, "ssl default_server") {
-		t.Error("the ssl default_server tail was lost")
-	}
+	return v4, v6
 }
 
 // A file with no default_server listen line is refused rather than appended to.

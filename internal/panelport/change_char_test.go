@@ -257,12 +257,27 @@ func TestAnAcceptedExternalChangeIsReportedVerified(t *testing.T) {
 	if body["verified"] != true || body["kind"] != KindExternal || body["port"] != float64(9443) {
 		t.Errorf("body = %v", body)
 	}
-	if got := script.argsOf(t, "INSERT INTO panel_port_history"); len(got) != 4 ||
-		got[0] != KindExternal || got[1] != int64(8443) || got[2] != int64(9443) || got[3] != nil {
+	assertHistoryOpened(t, script)
+	assertHistoryClosedAsSuccess(t, script)
+}
+
+// assertHistoryOpened checks the row written before the change is made.
+func assertHistoryOpened(t *testing.T, script *sqlScript) {
+	t.Helper()
+	got := script.argsOf(t, "INSERT INTO panel_port_history")
+	if len(got) != 4 || got[0] != KindExternal || got[1] != int64(8443) ||
+		got[2] != int64(9443) || got[3] != nil {
 		t.Errorf("history insert args = %v", got)
 	}
-	if got := script.argsOf(t, "UPDATE panel_port_history"); len(got) != 4 ||
-		got[0] != int64(1) || got[1] != int64(0) || got[2] != "" || got[3] != int64(7) {
+}
+
+// assertHistoryClosedAsSuccess checks the row is closed on the id the insert
+// reported.
+func assertHistoryClosedAsSuccess(t *testing.T, script *sqlScript) {
+	t.Helper()
+	got := script.argsOf(t, "UPDATE panel_port_history")
+	if len(got) != 4 || got[0] != int64(1) || got[1] != int64(0) ||
+		got[2] != "" || got[3] != int64(7) {
 		t.Errorf("history close args = %v, want succeeded on row 7", got)
 	}
 }

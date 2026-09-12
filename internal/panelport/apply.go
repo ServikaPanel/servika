@@ -97,58 +97,81 @@ func planChange(kind string, current Ports, newPort int) (plan, error) {
 	}
 	domainText, domainPresent := readOptional(panelDomainVhostPath())
 
+	domain := optionalDomain{text: domainText, present: domainPresent}
 	switch kind {
 	case KindBackend:
-		result.oldPort = current.Backend
-
-		envText, err := os.ReadFile(envPath()) // #nosec G304 -- fixed path.
-		if err != nil {
-			return result, refuse(ReasonUnreadable, "%s could not be read: %v", envPath(), err)
-		}
-		written, err := SetEnvListen(string(envText), current.BackendHost, newPort)
-		if err != nil {
-			return result, err
-		}
-		result.add(envPath(), written)
-
-		moved, replaced := SetProxyPort(string(panelText), current.Backend, newPort)
-		if replaced == 0 {
-			return result, refuse(ReasonNotFound,
-				"%s does not proxy to 127.0.0.1:%d, so this panel is not the one it serves",
-				panelVhostPath(), current.Backend)
-		}
-		result.add(panelVhostPath(), moved)
-
-		if domainPresent {
-			if movedDomain, count := SetProxyPort(domainText, current.Backend, newPort); count > 0 {
-				result.add(panelDomainVhostPath(), movedDomain)
-			}
-		}
-
+		err = result.planBackend(string(panelText), domain, current, newPort)
 	case KindExternal:
-		result.oldPort = current.External
-
-		moved, err := SetNginxListenPort(string(panelText), newPort)
-		if err != nil {
-			return result, err
-		}
-		result.add(panelVhostPath(), moved)
-
-		if domainPresent {
-			// The custom domain proxies to the panel's external port over TLS.
-			if movedDomain, count := SetProxyPort(domainText, current.External, newPort); count > 0 {
-				result.add(panelDomainVhostPath(), movedDomain)
-			}
-		}
-
+		err = result.planExternal(string(panelText), domain, current, newPort)
 	default:
 		return result, refuse(ReasonUnknownKind, "%q is not something this can move", kind)
+	}
+	if err != nil {
+		return result, err
 	}
 
 	if result.oldPort == newPort {
 		return result, refuse(ReasonSamePort, "the panel is already on port %d", newPort)
 	}
 	return result, nil
+}
+
+// optionalDomain is the custom panel domain vhost, which exists only when an
+// operator set a panel hostname.
+type optionalDomain struct {
+	text    string
+	present bool
+}
+
+// planBackend moves SERVIKA_LISTEN and every proxy_pass that names the old
+// backend port.
+func (p *plan) planBackend(panelText string, domain optionalDomain, current Ports, newPort int) error {
+	p.oldPort = current.Backend
+
+	envText, err := os.ReadFile(envPath()) // #nosec G304 -- fixed path.
+	if err != nil {
+		return refuse(ReasonUnreadable, "%s could not be read: %v", envPath(), err)
+	}
+	written, err := SetEnvListen(string(envText), current.BackendHost, newPort)
+	if err != nil {
+		return err
+	}
+	p.add(envPath(), written)
+
+	moved, replaced := SetProxyPort(panelText, current.Backend, newPort)
+	if replaced == 0 {
+		return refuse(ReasonNotFound,
+			"%s does not proxy to 127.0.0.1:%d, so this panel is not the one it serves",
+			panelVhostPath(), current.Backend)
+	}
+	p.add(panelVhostPath(), moved)
+	p.addDomain(domain, current.Backend, newPort)
+	return nil
+}
+
+// planExternal moves the listen lines a browser connects to.
+func (p *plan) planExternal(panelText string, domain optionalDomain, current Ports, newPort int) error {
+	p.oldPort = current.External
+
+	moved, err := SetNginxListenPort(panelText, newPort)
+	if err != nil {
+		return err
+	}
+	p.add(panelVhostPath(), moved)
+	// The custom domain proxies to the panel's external port over TLS.
+	p.addDomain(domain, current.External, newPort)
+	return nil
+}
+
+// addDomain moves the custom panel domain when it exists and names the port
+// being moved.
+func (p *plan) addDomain(domain optionalDomain, oldPort, newPort int) {
+	if !domain.present {
+		return
+	}
+	if moved, count := SetProxyPort(domain.text, oldPort, newPort); count > 0 {
+		p.add(panelDomainVhostPath(), moved)
+	}
 }
 
 func (p *plan) add(path, content string) {
