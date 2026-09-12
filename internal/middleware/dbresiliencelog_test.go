@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -15,19 +14,14 @@ import (
 // throttle, so one case cannot decide the outcome of the next.
 func captureStateLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
-	var buf bytes.Buffer
-	previousOutput, previousFlags := log.Writer(), log.Flags()
-	log.SetOutput(&buf)
-	log.SetFlags(0)
+	buf := captureLog(t)
 	resetStateCache()
 	resetStateComplaints()
 	t.Cleanup(func() {
-		log.SetOutput(previousOutput)
-		log.SetFlags(previousFlags)
 		resetStateCache()
 		resetStateComplaints()
 	})
-	return &buf
+	return buf
 }
 
 // Serving a request from the stale cache is the degraded mode whose documented

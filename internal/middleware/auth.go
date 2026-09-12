@@ -273,7 +273,7 @@ func CustomerScopeParam(param string) func(http.Handler) http.Handler {
 // RequestIDHeader echoes the chi RequestID from the request context into the
 // X-Request-Id response header, so every response (including error responses that
 // use httpx.WriteError) carries a correlation ID without touching each call site.
-// Mount it after chimw.RequestID, which populates the context value.
+// Mount it after RequestID, which populates the context value.
 func RequestIDHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if id := chimw.GetReqID(r.Context()); id != "" {

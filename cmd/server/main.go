@@ -795,7 +795,9 @@ func main() {
 	go pluginH.HealthLoop(context.Background())
 
 	r := chi.NewRouter()
-	r.Use(chimw.RequestID)
+	// Not chimw.RequestID directly: it would take the id from the client's own
+	// X-Request-Id header. See the comment on middleware.RequestID.
+	r.Use(middleware.RequestID)
 	// Echo the request ID into the X-Request-Id response header so every response,
 	// including error responses, carries a correlation ID for support and log matching.
 	r.Use(middleware.RequestIDHeader)

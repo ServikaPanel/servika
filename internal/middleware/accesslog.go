@@ -17,7 +17,7 @@ import (
 // need during incidents (endpoint rate, failing route, latency spikes, affected
 // request ID) without an external tracing stack.
 //
-// Mount it after chimw.RequestID so the correlation ID is available. The chi
+// Mount it after RequestID so the correlation ID is available. The chi
 // route pattern is only populated once the request has been routed, so it is
 // read after next.ServeHTTP returns.
 func AccessLog(next http.Handler) http.Handler {

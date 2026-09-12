@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -12,18 +11,11 @@ import (
 
 func captureLockoutLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
-	var buf bytes.Buffer
-	previousOutput, previousFlags := log.Writer(), log.Flags()
-	log.SetOutput(&buf)
-	log.SetFlags(0)
+	buf := captureLog(t)
 	resetLockoutLog()
 	resetLoginState(t)
-	t.Cleanup(func() {
-		log.SetOutput(previousOutput)
-		log.SetFlags(previousFlags)
-		resetLockoutLog()
-	})
-	return &buf
+	t.Cleanup(resetLockoutLog)
+	return buf
 }
 
 // resetLoginState clears both limiter maps so one case cannot decide the next.
