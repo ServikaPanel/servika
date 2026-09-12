@@ -23,10 +23,21 @@ func TestTheCertificateIsIssuedIntoAStagingDirectory(t *testing.T) {
 		t.Error("the certificate is not issued into a root-owned staging directory")
 	}
 	// The issuing tools must be handed the STAGED paths, never the tenant ones.
+	// They are reached through the seams in seams.go, whose defaults are checked
+	// below, so a test can issue without openssl or acme.sh.
 	for _, staged := range []string{"stagedCert", "stagedKey"} {
-		if !strings.Contains(publish, "issueSelfSigned(fqdn, stagedCert, stagedKey)") ||
-			!strings.Contains(publish, "issueLetsEncrypt(fqdn, stagedCert, stagedKey)") {
+		if !strings.Contains(publish, "issueSelfSignedCertificate(fqdn, stagedCert, stagedKey)") ||
+			!strings.Contains(publish, "issueLetsEncryptCertificate(fqdn, stagedCert, stagedKey)") {
 			t.Errorf("an issuing tool is not pointed at %s", staged)
+		}
+	}
+	seams := readSubdomainSource(t, "seams.go")
+	for _, binding := range []string{
+		"issueSelfSignedCertificate  = issueSelfSigned",
+		"issueLetsEncryptCertificate = issueLetsEncrypt",
+	} {
+		if !strings.Contains(seams, binding) {
+			t.Errorf("the seam does not default to the real tool: %s", binding)
 		}
 	}
 	// And the staging directory is cleaned up, or a private key is left in /tmp.

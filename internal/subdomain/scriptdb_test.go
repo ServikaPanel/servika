@@ -34,6 +34,9 @@ type sqlScript struct {
 	// steps records every query and statement in order.
 	steps []string
 	execs []sqlScriptExec
+	// insertID is what LastInsertId reports for every statement. It is how a
+	// test reaches the work a handler only does for a row it just created.
+	insertID int64
 }
 
 type sqlScriptExec struct {
@@ -99,7 +102,7 @@ func (s *sqlScript) exec(query string, args []driver.NamedValue) (driver.Result,
 	if fragment, err := s.fragmentFor(query); err == nil && s.fail[fragment] != nil {
 		return nil, s.fail[fragment]
 	}
-	return sqlScriptResult{rows: 1}, nil
+	return sqlScriptResult{id: s.insertID, rows: 1}, nil
 }
 
 type sqlScriptResult struct{ id, rows int64 }

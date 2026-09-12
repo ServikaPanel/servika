@@ -21,7 +21,7 @@ import (
 var managedUserPattern = regexp.MustCompile(`^c_[a-z0-9_]{1,26}$`)
 
 func sslDirectory(systemUser string) string {
-	return filepath.Join("/home", systemUser, "ssl")
+	return filepath.Join(tenantHome(systemUser), "ssl")
 }
 
 func certificatePaths(systemUser, fqdn string) (string, string) {
@@ -104,7 +104,7 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "type must be self-signed or letsencrypt")
 		return
 	}
-	socket, err := provisioner.PHPSocketFor(systemUser, phpVersion)
+	socket, err := phpSocketFor(systemUser, phpVersion)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "PHP version is not installed on the server")
 		return
@@ -115,7 +115,7 @@ func (h *Handlers) SSLIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protected := provisioner.ProtectedBlocks(h.DB, domainID, subdomainID, socket)
+	protected := protectedBlocks(h.DB, domainID, subdomainID, socket)
 	web := loadWebRender(r.Context(), h.DB, domainID, subdomainID, fqdn, true)
 	config := vhostSSL(fqdn, docrootOf(systemUser, fqdn), socket, certPath, keyPath, protected, web)
 	if err := applyVhost(confPath(systemUser, name), config); err != nil {
@@ -141,12 +141,12 @@ func (h *Handlers) SSLRemove(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "subdomain not found")
 		return
 	}
-	socket, err := provisioner.PHPSocketFor(systemUser, phpVersion)
+	socket, err := phpSocketFor(systemUser, phpVersion)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "PHP version is not installed on the server")
 		return
 	}
-	protected := provisioner.ProtectedBlocks(h.DB, domainID, subdomainID, socket)
+	protected := protectedBlocks(h.DB, domainID, subdomainID, socket)
 	web := loadWebRender(r.Context(), h.DB, domainID, subdomainID, fqdn, false)
 	if err := applyVhost(confPath(systemUser, name), vhost(fqdn, docrootOf(systemUser, fqdn), socket, protected, web)); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not disable SSL")
@@ -155,7 +155,7 @@ func (h *Handlers) SSLRemove(w http.ResponseWriter, r *http.Request) {
 	// Beneath the home, not by path: os.Remove does not follow a symlink at the
 	// FINAL component, but it does follow one at `ssl`, so a tenant who made
 	// that a link had root delete files under whatever it pointed at.
-	home := filepath.Join("/home", systemUser)
+	home := tenantHome(systemUser)
 	_ = files.RemoveAllBeneath(home, sslRelPath(fqdn, ".crt"))
 	_ = files.RemoveAllBeneath(home, sslRelPath(fqdn, ".key"))
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -172,7 +172,7 @@ func issueLetsEncrypt(fqdn, certPath, keyPath string) error {
 	if err := os.MkdirAll("/var/www/_acme", 0o755); err != nil {
 		return err
 	}
-	_ = exec.Command("restorecon", "-R", "/var/www/_acme").Run()
+	_ = runCommand("restorecon", "-R", "/var/www/_acme")
 	// RunACMEIssue also recovers from an invalidContact account lock-out and sets HOME so
 	// acme.sh finds its own store. RENEW_SKIP means the store already holds a valid
 	// certificate, so installation must continue instead of reporting a failure; without
@@ -199,7 +199,7 @@ func applyVhost(path, config string) error {
 		return err
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", path).Run()
+	_ = runCommand("restorecon", path)
 	rollback := func() {
 		if readErr == nil {
 			// #nosec G306 G703 -- root-owned system integration file (nginx/php-fpm/named/systemd config, script, or web content) that its daemon must read/execute; no secret stored here (secrets use 0600/0640).
@@ -209,13 +209,13 @@ func applyVhost(path, config string) error {
 			_ = os.Remove(path)
 		}
 	}
-	if err := exec.Command("nginx", "-t").Run(); err != nil {
+	if err := runCommand("nginx", "-t"); err != nil {
 		rollback()
 		return err
 	}
-	if err := exec.Command("systemctl", "reload", "nginx").Run(); err != nil {
+	if err := runCommand("systemctl", "reload", "nginx"); err != nil {
 		rollback()
-		_ = exec.Command("systemctl", "reload", "nginx").Run()
+		_ = runCommand("systemctl", "reload", "nginx")
 		return err
 	}
 	return nil

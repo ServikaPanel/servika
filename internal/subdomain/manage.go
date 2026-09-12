@@ -39,7 +39,7 @@ func (h *Handlers) Detail(w http.ResponseWriter, r *http.Request) {
 		"subdomain":   s.Subdomain,
 		"fqdn":        s.FQDN,
 		"php_version": s.PHPVersion,
-		"php_locked":  provisioner.TenantFPMActive(systemUser),
+		"php_locked":  tenantFPMActive(systemUser),
 		"docroot":     s.DocRoot,
 		"created_at":  s.CreatedAt,
 		"parent_id":   id,
@@ -77,7 +77,7 @@ func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
 	// a per-tenant FPM account its one socket regardless of the version. Saying
 	// so is the only honest answer; the parent domain's version is the lever that
 	// works.
-	if phpVersionLocked(provisioner.TenantFPMActive(systemUser), parentPHP, phpVersion) {
+	if phpVersionLocked(tenantFPMActive(systemUser), parentPHP, phpVersion) {
 		httpx.WriteError(w, http.StatusConflict, reasonPHPVersionLocked)
 		return
 	}
@@ -93,12 +93,12 @@ func (h *Handlers) SetPHP(w http.ResponseWriter, r *http.Request) {
 	// The pool lives inside the parent tenant's own FPM unit whenever it can, so the
 	// subdomain stays in the tenant mount namespace and slice; ApplySubdomainFPM
 	// falls back to the shared master and reports the socket either way.
-	socket, err := provisioner.ApplySubdomainFPM(h.DB, id, sid, systemUser, docroot, phpVersion)
+	socket, err := applySubdomainFPM(h.DB, id, sid, systemUser, docroot, phpVersion)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "PHP version is not installed on the server")
 		return
 	}
-	protected := provisioner.ProtectedBlocks(h.DB, id, sid, socket)
+	protected := protectedBlocks(h.DB, id, sid, socket)
 	certPath, keyPath := certificatePaths(systemUser, fqdn)
 	https := fileExists(certPath) && fileExists(keyPath)
 	web := loadWebRender(r.Context(), h.DB, id, sid, fqdn, https)
@@ -136,7 +136,7 @@ func ReRender(db *sql.DB, subdomainID int64) error {
 		return err
 	}
 	docroot := docrootOf(systemUser, fqdn)
-	protected := provisioner.ProtectedBlocks(db, domainID, subdomainID, socket)
+	protected := protectedBlocks(db, domainID, subdomainID, socket)
 	certPath, keyPath := certificatePaths(systemUser, fqdn)
 	https := fileExists(certPath) && fileExists(keyPath)
 	web := loadWebRender(context.Background(), db, domainID, subdomainID, fqdn, https)

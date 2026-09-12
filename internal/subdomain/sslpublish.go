@@ -40,9 +40,9 @@ func issueAndPublish(systemUser, fqdn, certificateType string) error {
 	stagedCert := filepath.Join(stage, "cert.pem")
 	stagedKey := filepath.Join(stage, "key.pem")
 	if certificateType == "letsencrypt" {
-		err = issueLetsEncrypt(fqdn, stagedCert, stagedKey)
+		err = issueLetsEncryptCertificate(fqdn, stagedCert, stagedKey)
 	} else {
-		err = issueSelfSigned(fqdn, stagedCert, stagedKey)
+		err = issueSelfSignedCertificate(fqdn, stagedCert, stagedKey)
 	}
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func issueAndPublish(systemUser, fqdn, certificateType string) error {
 		return fmt.Errorf("the issued certificate material is not usable")
 	}
 
-	home := filepath.Join("/home", systemUser)
+	home := tenantHome(systemUser)
 	if err := files.MkdirAllBeneath(home, sslRelDir, systemUser); err != nil {
 		return fmt.Errorf("prepare the certificate directory: %w", err)
 	}

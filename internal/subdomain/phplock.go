@@ -77,7 +77,7 @@ func HealSubdomainPHPVersions(db *sql.DB) {
 		if parentVersion == "" {
 			continue
 		}
-		if phpVersionLocked(provisioner.TenantFPMActive(systemUser), parentVersion, recorded) {
+		if phpVersionLocked(tenantFPMActive(systemUser), parentVersion, recorded) {
 			corrections = append(corrections, drift{id: id, fqdn: fqdn, served: parentVersion})
 		}
 	}

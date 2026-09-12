@@ -10,13 +10,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"servika/internal/dns"
 	"servika/internal/domainblock"
 	"servika/internal/files"
 	"servika/internal/httpx"
@@ -61,7 +59,12 @@ func (h *Handlers) parent(r *http.Request) (id int64, systemUser, domainName, ph
 	return id, systemUser, domainName, phpVersion, true
 }
 
-func docrootOf(systemUser, fqdn string) string { return "/home/" + systemUser + "/subdomains/" + fqdn }
+func docrootOf(systemUser, fqdn string) string {
+	return tenantHomeRoot + "/" + systemUser + "/subdomains/" + fqdn
+}
+
+// tenantHome is the home every safeio call resolves beneath.
+func tenantHome(systemUser string) string { return filepath.Join(tenantHomeRoot, systemUser) }
 
 // Scope describes the document root a request targets. Tools that operate on a
 // site's files (WordPress, Composer) and on its nginx logs use it so a subdomain
@@ -105,7 +108,7 @@ func ResolveScope(ctx context.Context, db *sql.DB, domainID, subdomainID int64) 
 	}, true
 }
 func confPath(systemUser, subdomainName string) string {
-	return "/etc/nginx/conf.d/sub_" + systemUser + "_" + subdomainName + ".conf"
+	return filepath.Join(nginxConfDir, "sub_"+systemUser+"_"+subdomainName+".conf")
 }
 
 // GET /domains/{id}/subdomain lists subdomains.
@@ -124,7 +127,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = rows.Close() }()
 	// Read once per request: the answer is a property of the TENANT, not of any
 	// one subdomain, and it reaches the filesystem.
-	phpLocked := provisioner.TenantFPMActive(systemUser)
+	phpLocked := tenantFPMActive(systemUser)
 	out := []Sub{}
 	for rows.Next() {
 		var s Sub
@@ -193,11 +196,11 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// Refused rather than quietly downgraded to the parent's version. PHPSocketFor
 	// answers a per-tenant FPM account with its one socket whatever version is
 	// asked for, so accepting this would record a version the server never serves.
-	if phpVersionLocked(provisioner.TenantFPMActive(systemUser), parentPHP, phpVersion) {
+	if phpVersionLocked(tenantFPMActive(systemUser), parentPHP, phpVersion) {
 		httpx.WriteError(w, http.StatusConflict, reasonPHPVersionLocked)
 		return
 	}
-	socket, err := provisioner.PHPSocketFor(systemUser, phpVersion)
+	socket, err := phpSocketFor(systemUser, phpVersion)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "PHP version is not installed on the server: "+phpVersion)
 		return
@@ -207,7 +210,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// os.MkdirAll follows one, so root would create the document root outside the
 	// jail. openat2(RESOLVE_BENEATH|NO_SYMLINKS) refuses that, and chowns each
 	// directory it creates through that directory's own fd.
-	if err := files.MkdirAllBeneath("/home/"+systemUser, "subdomains/"+fqdn, systemUser); err != nil {
+	if err := files.MkdirAllBeneath(tenantHome(systemUser), "subdomains/"+fqdn, systemUser); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create document root")
 		return
 	}
@@ -219,9 +222,9 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 			[]byte(provisioner.WelcomeHTML(fqdn)), 0o644)
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("chown", "-R", systemUser+":"+systemUser, "/home/"+systemUser+"/subdomains").Run()
+	_ = runCommand("chown", "-R", systemUser+":"+systemUser, filepath.Join(tenantHome(systemUser), "subdomains"))
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("chcon", "-R", "-t", "httpd_sys_content_t", docroot).Run()
+	_ = runCommand("chcon", "-R", "-t", "httpd_sys_content_t", docroot)
 
 	// Write the nginx server block.
 	conf := confPath(systemUser, subdomainName)
@@ -249,10 +252,10 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	// through the parent pool, so log the loss of its own pool instead of deleting a
 	// working subdomain.
 	if sid, idErr := result.LastInsertId(); idErr == nil && sid > 0 {
-		if _, fpmErr := provisioner.ApplySubdomainFPM(h.DB, id, sid, systemUser, docroot, phpVersion); fpmErr != nil {
+		if _, fpmErr := applySubdomainFPM(h.DB, id, sid, systemUser, docroot, phpVersion); fpmErr != nil {
 			// #nosec G706 -- fqdn passed provisioner.ValidateDomain above, so it carries no CR/LF; the error value is command output, not raw tenant input.
 			httpx.LogR(r, "subdomain %s dedicated PHP-FPM pool: %v", fqdn, fpmErr)
-		} else if rerr := ReRender(h.DB, sid); rerr != nil {
+		} else if rerr := reRenderSubdomain(h.DB, sid); rerr != nil {
 			// #nosec G706 -- fqdn passed provisioner.ValidateDomain above, so it carries no CR/LF; the error value is command output, not raw tenant input.
 			httpx.LogR(r, "subdomain %s vhost re-render after pool install: %v", fqdn, rerr)
 		}
@@ -261,7 +264,7 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	if h.IPv4 != "" {
 		_, _ = h.DB.Exec(`INSERT INTO dns_records (domain_id, name, type, value, ttl, priority, enabled) VALUES (?,?,?,?,?,?,1)`,
 			id, subdomainName, "A", h.IPv4, 3600, 0)
-		_ = dns.WriteZone(r.Context(), h.DB, id)
+		_ = writeZone(r.Context(), h.DB, id)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "fqdn": fqdn, "docroot": docroot})
 }
@@ -284,15 +287,15 @@ func publishSubdomainVhost(conf, body string) (string, error) {
 		return "could not write virtual host configuration", err
 	}
 	// #nosec G204 G702 -- fixed binary with separate args (no shell); tenant input is validated before exec.
-	_ = exec.Command("restorecon", conf).Run()
-	if out, err := exec.Command("nginx", "-t").CombinedOutput(); err != nil {
+	_ = runCommand("restorecon", conf)
+	if out, err := commandOutput("nginx", "-t"); err != nil {
 		// Remove the invalid configuration so the running nginx is unaffected.
 		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 		_ = os.Remove(conf)
-		_ = exec.Command("nginx", "-t").Run()
+		_ = runCommand("nginx", "-t")
 		return "operation failed", fmt.Errorf("nginx -t: %s: %w", strings.TrimSpace(string(out)), err)
 	}
-	if out, err := exec.Command("systemctl", "reload", "nginx").CombinedOutput(); err != nil {
+	if out, err := commandOutput("systemctl", "reload", "nginx"); err != nil {
 		// Validated above but not live: remove it and report failure rather than
 		// a false success.
 		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
@@ -311,7 +314,7 @@ func withdrawSubdomainVhost(conf string) {
 
 	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
 	_ = os.Remove(conf)
-	_ = exec.Command("systemctl", "reload", "nginx").Run()
+	_ = runCommand("systemctl", "reload", "nginx")
 }
 
 // DELETE /domains/{id}/subdomain/{sid} removes a subdomain.
@@ -348,14 +351,14 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.Exec(`DELETE FROM nginx_settings WHERE domain_id=? AND subdomain_id=?`, id, sid); err != nil {
 		httpx.LogR(r, "delete subdomain nginx settings %d: %v", sid, err)
 	}
-	provisioner.RemoveSubdomainFPM(systemUser, sid)
+	removeSubdomainFPM(systemUser, sid)
 	if _, err := h.DB.Exec(`DELETE FROM dns_records WHERE domain_id=? AND name=? AND type='A'`, id, subdomainName); err != nil {
 		httpx.LogR(r, "delete subdomain DNS record %s: %v", subdomainName, err)
 		// #nosec G703 -- path is built from a validated identifier (systemUser ^c_[A-Za-z0-9_]+$ / validated domainName), a fixed system path, or a server-internal temp path; tenant file-manager paths use safeio (openat2) instead.
 	}
 	// #nosec G703 -- path built from a validated identifier / fixed system path / server-internal temp path; tenant paths use safeio (openat2).
 	_ = os.Remove(confPath(systemUser, subdomainName))
-	_ = exec.Command("systemctl", "reload", "nginx").Run()
+	_ = runCommand("systemctl", "reload", "nginx")
 	// Remove the document root the same way it was created, through openat2.
 	//
 	// The guard here used to be a string prefix on the path, which cannot see
@@ -363,7 +366,7 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// to the tenant: replace it with a symlink and os.RemoveAll follows it out of
 	// the jail while the string still reads /home/<user>/subdomains/... The mkdir
 	// a few lines up already refuses that; the removal did not.
-	if err := files.RemoveAllBeneath("/home/"+systemUser, "subdomains/"+fqdn); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := files.RemoveAllBeneath(tenantHome(systemUser), "subdomains/"+fqdn); err != nil && !errors.Is(err, os.ErrNotExist) {
 		httpx.LogR(r, "delete subdomain document root %s: %v", fqdn, err)
 	}
 	// The certificate goes with it. Left behind, ~/ssl/<fqdn>.crt and .key
@@ -373,11 +376,11 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	//
 	// Same removal as above, for the same reason: ~/ssl is the tenant's too.
 	for _, extension := range []string{".crt", ".key"} {
-		if err := files.RemoveAllBeneath("/home/"+systemUser, "ssl/"+fqdn+extension); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := files.RemoveAllBeneath(tenantHome(systemUser), "ssl/"+fqdn+extension); err != nil && !errors.Is(err, os.ErrNotExist) {
 			httpx.LogR(r, "delete subdomain certificate %s%s: %v", fqdn, extension, err)
 		}
 	}
-	if err := dns.WriteZone(r.Context(), h.DB, id); err != nil {
+	if err := writeZone(r.Context(), h.DB, id); err != nil {
 		httpx.LogR(r, "write DNS zone after subdomain delete %s: %v", subdomainName, err)
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
