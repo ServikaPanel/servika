@@ -2,6 +2,7 @@ package autoconfig
 
 import (
 	"encoding/xml"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -128,6 +129,9 @@ func TestNormalizeHost(t *testing.T) {
 		"exam ple.com":        "",
 		"localhost":           "",
 		"exa<mple.com":        "",
+		// A label longer than DNS allows. The value reaches a query and the
+		// response body, so it is refused rather than truncated.
+		strings.Repeat("a", 64) + ".example.com": "",
 	}
 	for input, want := range cases {
 		if got := normalizeHost(input); got != want {
@@ -141,7 +145,7 @@ func autodiscoverPost(address string) []byte {
 	buf.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
 	buf.WriteString(`<Autodiscover xmlns="` + autodiscoverRequestNS + `"><Request>`)
 	buf.WriteString(`<AcceptableResponseSchema>` + autodiscoverPayloadNS + `</AcceptableResponseSchema>`)
-	buf.WriteString(`<EMailAddress>` + address + `</EMailAddress>`)
+	fmt.Fprintf(&buf, `<EMailAddress>%s</EMailAddress>`, address)
 	buf.WriteString(`</Request></Autodiscover>`)
 	return []byte(buf.String())
 }

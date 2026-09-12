@@ -359,15 +359,23 @@ func isHostname(host string) bool {
 		return false
 	}
 	for label := range strings.SplitSeq(host, ".") {
-		if label == "" || len(label) > 63 {
+		if !isLabel(label) {
 			return false
 		}
-		for _, r := range label {
-			switch {
-			case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
-			default:
-				return false
-			}
+	}
+	return true
+}
+
+// isLabel reports whether one dot-separated part of a name is usable.
+func isLabel(label string) bool {
+	if label == "" || len(label) > 63 {
+		return false
+	}
+	for _, r := range label {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+		default:
+			return false
 		}
 	}
 	return true
