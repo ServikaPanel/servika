@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Início",
+  "title": "Session Replay",
+  "subtitle": "Reproduza uma sessão do painel gravada ao lado dos events de interface da mesma sessão.",
+  "maskingNote": "O texto é mascarado em todas as gravações. Uma reprodução mostra o que foi feito, nunca o que estava na tela.",
+  "loading": "Carregando…",
+  "pickOne": "Escolha uma gravação para reproduzi-la.",
+  "anonymous": "Conta desconhecida",
+  "batches": "{{count}} batch(es)",
+  "columns": {
+    "time": "Hora",
+    "event": "Evento",
+    "path": "Caminho",
+    "data": "Dados"
+  },
+  "empty": {
+    "title": "Ainda não há gravações",
+    "description": "As gravações aparecem quando o session replay está ligado e uma conta consentiu ser gravada."
+  },
+  "errors": {
+    "load": "Não foi possível ler as gravações",
+    "play": "Não foi possível reproduzir a gravação",
+    "tooShort": "Esta gravação é curta demais para reproduzir."
+  }
+}

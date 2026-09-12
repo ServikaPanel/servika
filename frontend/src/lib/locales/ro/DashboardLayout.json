@@ -58,7 +58,8 @@
     "siteImport": "Import site",
     "malwareScan": "Scanare malware",
     "attackChains": "Lanțuri de atac",
-    "phpWizard": "Asistent PHP & Server"
+    "phpWizard": "Asistent PHP & Server",
+    "sessionReplay": "Session Replay"
   },
   "mobile": {
     "overview": "Prezentare",

@@ -58,7 +58,8 @@
     "siteImport": "サイトインポート",
     "malwareScan": "マルウェアスキャン",
     "attackChains": "攻撃チェーン",
-    "phpWizard": "PHP & サーバーウィザード"
+    "phpWizard": "PHP & サーバーウィザード",
+    "sessionReplay": "セッションリプレイ"
   },
   "mobile": {
     "overview": "概要",

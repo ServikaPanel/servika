@@ -147,6 +147,10 @@
     "phpWizard": {
       "title": "PHP 与服务器向导",
       "subtitle": "版本、扩展、加载器和 Web 服务器"
+    },
+    "sessionReplay": {
+      "title": "会话回放",
+      "subtitle": "已记录的面板会话"
     }
   },
   "domain": {
@@ -313,7 +317,7 @@
     },
     "backup": {
       "backupFailed": "{{domain}} 的备份失败，因此本次运行没有可用的恢复点：{{reason}}",
-        "uploadFailed": "{{domain}} 的异地 backup 上传失败：{{reason}}",
+      "uploadFailed": "{{domain}} 的异地 backup 上传失败：{{reason}}",
       "dumpFailed": "{{domain}} 的备份不包含 {{count}} 个转储失败的数据库：{{databases}}",
       "diskGate": "自动 backup 因磁盘保护被停止：{{reason}}。",
       "corruptMissing": "无法读取 {{domain}} 的最新 backup（{{file}}）；用于恢复可能无效。",

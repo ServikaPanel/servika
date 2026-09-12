@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Accueil",
+  "title": "Session Replay",
+  "subtitle": "Rejouez une session du panel enregistrée à côté des events d'interface de la même session.",
+  "maskingNote": "Le texte est masqué dans chaque enregistrement. Un replay montre ce qui a été fait, jamais ce qui était à l'écran.",
+  "loading": "Chargement…",
+  "pickOne": "Choisissez un enregistrement pour le lire.",
+  "anonymous": "Compte inconnu",
+  "batches": "{{count}} batch(es)",
+  "columns": {
+    "time": "Heure",
+    "event": "Event",
+    "path": "Chemin",
+    "data": "Données"
+  },
+  "empty": {
+    "title": "Aucun enregistrement",
+    "description": "Les enregistrements apparaissent une fois le session replay activé et un compte ayant donné son accord."
+  },
+  "errors": {
+    "load": "Les enregistrements n'ont pas pu être lus",
+    "play": "L'enregistrement n'a pas pu être lu",
+    "tooShort": "Cet enregistrement est trop court pour être lu."
+  }
+}

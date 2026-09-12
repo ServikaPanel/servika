@@ -85,6 +85,7 @@ const SiteMigrationPage = lazy(() => import('@/pages/SiteMigrationPage'))
 const AuditLogPage = lazy(() => import('@/pages/AuditLogPage'))
 const RequestLogPage = lazy(() => import('@/pages/RequestLogPage'))
 const AppLogPage = lazy(() => import('@/pages/AppLogPage'))
+const SessionReplayPage = lazy(() => import('@/pages/SessionReplayPage'))
 const UsersPage = lazy(() => import('@/pages/UsersPage'))
 const ServerStatusPage = lazy(() => import('@/pages/ServerStatusPage'))
 const ServicesPage = lazy(() => import('@/pages/ServicesPage'))
@@ -214,6 +215,7 @@ export default function App() {
         <Route path="audit-log"  element={<AuditLogPage />} />
         <Route path="request-log" element={<RequestLogPage />} />
         <Route path="app-log"     element={<AppLogPage />} />
+        <Route path="session-replay" element={<SessionReplayPage />} />
         <Route path="users"         element={<UsersPage />} />
         <Route path="server-status" element={<ServerStatusPage />} />
 

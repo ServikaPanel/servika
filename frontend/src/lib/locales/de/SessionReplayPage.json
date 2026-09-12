@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Startseite",
+  "title": "Session Replay",
+  "subtitle": "Spielen Sie eine aufgezeichnete Panel-Sitzung neben den Interface-Events derselben Sitzung ab.",
+  "maskingNote": "Text ist in jeder Aufzeichnung maskiert. Ein Replay zeigt, was getan wurde, nie, was auf dem Bildschirm stand.",
+  "loading": "Wird geladen…",
+  "pickOne": "Wählen Sie eine Aufzeichnung aus, um sie abzuspielen.",
+  "anonymous": "Unbekanntes Konto",
+  "batches": "{{count}} Batch(es)",
+  "columns": {
+    "time": "Zeit",
+    "event": "Event",
+    "path": "Pfad",
+    "data": "Daten"
+  },
+  "empty": {
+    "title": "Noch keine Aufzeichnungen",
+    "description": "Aufzeichnungen erscheinen, sobald Session Replay an ist und ein Konto der Aufzeichnung zugestimmt hat."
+  },
+  "errors": {
+    "load": "Die Aufzeichnungen konnten nicht gelesen werden",
+    "play": "Die Aufzeichnung konnte nicht abgespielt werden",
+    "tooShort": "Diese Aufzeichnung ist zu kurz zum Abspielen."
+  }
+}

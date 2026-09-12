@@ -32,6 +32,7 @@
     "react-i18next": "^17.0.11",
     "react-router": "^8.3.0",
     "rrweb": "2.1.4",
+    "rrweb-player": "2.1.4",
     "zustand": "^5.0.2"
   },
   "devDependencies": {

@@ -58,7 +58,8 @@
     "siteImport": "站点导入",
     "malwareScan": "恶意软件扫描",
     "attackChains": "攻击链",
-    "phpWizard": "PHP 与服务器向导"
+    "phpWizard": "PHP 与服务器向导",
+    "sessionReplay": "会话回放"
   },
   "mobile": {
     "overview": "概览",

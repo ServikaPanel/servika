@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "首页",
+  "title": "会话回放",
+  "subtitle": "回放已记录的面板会话，并在旁边显示同一会话的 interface event。",
+  "maskingNote": "每份记录中的文本都被遮蔽。回放显示做了什么，绝不显示屏幕上有什么。",
+  "loading": "加载中…",
+  "pickOne": "选择一份记录来回放。",
+  "anonymous": "未知账户",
+  "batches": "{{count}} 个 batch",
+  "columns": {
+    "time": "时间",
+    "event": "事件",
+    "path": "路径",
+    "data": "数据"
+  },
+  "empty": {
+    "title": "暂无记录",
+    "description": "开启会话回放并且账户同意被记录后，记录会出现在这里。"
+  },
+  "errors": {
+    "load": "无法读取记录",
+    "play": "无法回放该记录",
+    "tooShort": "这份记录太短，无法回放。"
+  }
+}

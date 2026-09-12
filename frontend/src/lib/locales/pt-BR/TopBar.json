@@ -147,6 +147,10 @@
     "phpWizard": {
       "title": "Assistente PHP & Servidor",
       "subtitle": "Versões, extensões, loader e servidor web"
+    },
+    "sessionReplay": {
+      "title": "Session Replay",
+      "subtitle": "Sessões do painel gravadas"
     }
   },
   "domain": {
@@ -313,7 +317,7 @@
     },
     "backup": {
       "backupFailed": "O backup de {{domain}} falhou, então não há ponto de recuperação desta execução: {{reason}}",
-        "uploadFailed": "Falha no upload do backup off-site de {{domain}}: {{reason}}",
+      "uploadFailed": "Falha no upload do backup off-site de {{domain}}: {{reason}}",
       "dumpFailed": "O backup de {{domain}} não contém {{count}} banco(s) de dados cujo dump falhou: {{databases}}",
       "diskGate": "Os backups automáticos foram interrompidos pela proteção de disco: {{reason}}.",
       "corruptMissing": "O backup mais recente de {{domain}} não pôde ser lido ({{file}}); pode ser inválido para recuperação.",

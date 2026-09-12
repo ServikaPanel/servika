@@ -58,7 +58,8 @@
     "siteImport": "Import webu",
     "malwareScan": "Kontrola malwaru",
     "attackChains": "Řetězce útoků",
-    "phpWizard": "Průvodce PHP & Server"
+    "phpWizard": "Průvodce PHP & Server",
+    "sessionReplay": "Session Replay"
   },
   "mobile": {
     "overview": "Přehled",

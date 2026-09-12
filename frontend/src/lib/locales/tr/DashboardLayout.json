@@ -58,7 +58,8 @@
     "siteImport": "Site İçe Aktarma",
     "malwareScan": "Zararlı Yazılım Taraması",
     "attackChains": "Saldırı Zincirleri",
-    "phpWizard": "PHP & Sunucu Sihirbazı"
+    "phpWizard": "PHP & Sunucu Sihirbazı",
+    "sessionReplay": "Oturum Replay"
   },
   "mobile": {
     "overview": "Genel Bakış",

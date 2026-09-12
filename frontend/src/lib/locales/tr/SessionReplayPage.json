@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Ana Sayfa",
+  "title": "Oturum Replay",
+  "subtitle": "Kaydedilmiş bir panel oturumunu, aynı oturumun interface olaylarının yanında oynatın.",
+  "maskingNote": "Her kayıtta metin maskelidir. Replay ne yapıldığını gösterir, ekranda ne olduğunu göstermez.",
+  "loading": "Yükleniyor…",
+  "pickOne": "Oynatmak için bir kayıt seçin.",
+  "anonymous": "Bilinmeyen hesap",
+  "batches": "{{count}} batch",
+  "columns": {
+    "time": "Zaman",
+    "event": "Olay",
+    "path": "Path",
+    "data": "Veri"
+  },
+  "empty": {
+    "title": "Henüz kayıt yok",
+    "description": "Oturum replay açıldığında ve bir hesap kaydedilmeyi kabul ettiğinde kayıtlar burada görünür."
+  },
+  "errors": {
+    "load": "Kayıtlar okunamadı",
+    "play": "Kayıt oynatılamadı",
+    "tooShort": "Bu kayıt oynatmak için çok kısa."
+  }
+}

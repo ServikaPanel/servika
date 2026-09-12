@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Domů",
+  "title": "Session Replay",
+  "subtitle": "Přehrajte zaznamenanou relaci panelu vedle interface events téže relace.",
+  "maskingNote": "Text je v každém záznamu maskovaný. Přehrání ukazuje, co se udělalo, nikdy to, co bylo na obrazovce.",
+  "loading": "Načítání…",
+  "pickOne": "Vyberte záznam a přehrajte ho.",
+  "anonymous": "Neznámý účet",
+  "batches": "{{count}} batch",
+  "columns": {
+    "time": "Čas",
+    "event": "Událost",
+    "path": "Cesta",
+    "data": "Data"
+  },
+  "empty": {
+    "title": "Zatím žádné záznamy",
+    "description": "Záznamy se objeví, jakmile je session replay zapnutý a účet souhlasil se záznamem."
+  },
+  "errors": {
+    "load": "Záznamy se nepodařilo načíst",
+    "play": "Záznam se nepodařilo přehrát",
+    "tooShort": "Tento záznam je příliš krátký na přehrání."
+  }
+}

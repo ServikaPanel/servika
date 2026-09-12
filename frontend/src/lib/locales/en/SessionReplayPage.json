@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Home",
+  "title": "Session Replay",
+  "subtitle": "Play back a recorded panel session beside the interface events of the same session.",
+  "maskingNote": "Text is masked in every recording. A replay shows what was done, never what was on the screen.",
+  "loading": "Loading…",
+  "pickOne": "Pick a recording to play it.",
+  "anonymous": "Unknown account",
+  "batches": "{{count}} batch(es)",
+  "columns": {
+    "time": "Time",
+    "event": "Event",
+    "path": "Path",
+    "data": "Data"
+  },
+  "empty": {
+    "title": "No recordings yet",
+    "description": "Recordings appear once session replay is on and an account has agreed to be recorded."
+  },
+  "errors": {
+    "load": "The recordings could not be read",
+    "play": "The recording could not be played",
+    "tooShort": "This recording is too short to play."
+  }
+}

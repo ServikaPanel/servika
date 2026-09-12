@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Home",
+  "title": "Session Replay",
+  "subtitle": "Riproduci una sessione del panel registrata accanto agli event di interfaccia della stessa sessione.",
+  "maskingNote": "Il testo è mascherato in ogni registrazione. Un replay mostra cosa è stato fatto, mai cosa c'era sullo schermo.",
+  "loading": "Caricamento…",
+  "pickOne": "Scegli una registrazione per riprodurla.",
+  "anonymous": "Account sconosciuto",
+  "batches": "{{count}} batch",
+  "columns": {
+    "time": "Ora",
+    "event": "Evento",
+    "path": "Percorso",
+    "data": "Dati"
+  },
+  "empty": {
+    "title": "Nessuna registrazione",
+    "description": "Le registrazioni compaiono quando il session replay è attivo e un account ha acconsentito."
+  },
+  "errors": {
+    "load": "Impossibile leggere le registrazioni",
+    "play": "Impossibile riprodurre la registrazione",
+    "tooShort": "Questa registrazione è troppo breve per essere riprodotta."
+  }
+}

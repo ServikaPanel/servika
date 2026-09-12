@@ -147,6 +147,10 @@
     "phpWizard": {
       "title": "PHP & サーバーウィザード",
       "subtitle": "バージョン、拡張機能、ローダー、Webサーバー"
+    },
+    "sessionReplay": {
+      "title": "セッションリプレイ",
+      "subtitle": "記録されたパネルのセッション"
     }
   },
   "domain": {
@@ -313,7 +317,7 @@
     },
     "backup": {
       "backupFailed": "{{domain}} のバックアップが失敗したため、この実行による復旧ポイントはありません: {{reason}}",
-        "uploadFailed": "{{domain}} のオフサイト backup のアップロードに失敗しました: {{reason}}",
+      "uploadFailed": "{{domain}} のオフサイト backup のアップロードに失敗しました: {{reason}}",
       "dumpFailed": "{{domain}} のバックアップには、ダンプに失敗した {{count}} 個のデータベースが含まれていません: {{databases}}",
       "diskGate": "ディスク保護により自動 backup が停止されました: {{reason}}。",
       "corruptMissing": "{{domain}} の最新の backup を読み取れませんでした（{{file}}）。復元に使用できない可能性があります。",

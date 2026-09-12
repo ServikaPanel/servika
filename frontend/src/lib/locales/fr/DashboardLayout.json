@@ -58,7 +58,8 @@
     "siteImport": "Import de site",
     "malwareScan": "Analyse de logiciels malveillants",
     "attackChains": "Chaînes d'attaque",
-    "phpWizard": "Assistant PHP & Serveur"
+    "phpWizard": "Assistant PHP & Serveur",
+    "sessionReplay": "Session Replay"
   },
   "mobile": {
     "overview": "Aperçu",

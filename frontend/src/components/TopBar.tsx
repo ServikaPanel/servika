@@ -54,6 +54,7 @@ const PAGES: ReadonlyArray<{ tkey: string; path: string; keywords: string; roles
   { tkey: 'auditLog', path: '/audit-log', keywords: 'audit event', roles: ['admin'] },
   { tkey: 'requestLog', path: '/request-log', keywords: 'request api endpoint status body log', roles: ['admin'] },
   { tkey: 'appLog', path: '/app-log', keywords: 'application error warning journald log', roles: ['admin'] },
+  { tkey: 'sessionReplay', path: '/session-replay', keywords: 'replay recording session rrweb playback', roles: ['admin'] },
   { tkey: 'services', path: '/tools/services', keywords: 'systemd nginx mysql php', roles: ['admin'] },
   { tkey: 'phpWizard', path: '/php-server-wizard', keywords: 'fpm version extension pecl ioncube loader easyapache web server nginx', roles: ['admin'] },
   { tkey: 'packages', path: '/tools/packages', keywords: 'dnf rpm', roles: ['admin'] },
@@ -126,6 +127,10 @@ function copyToClipboard(text: string): boolean {
     ta.style.opacity = '0'
     document.body.appendChild(ta)
     ta.select()
+    // execCommand is deprecated and stays. This branch only runs when
+    // navigator.clipboard is absent, which is a non-secure context: the panel
+    // before its certificate exists. There is no replacement API there, so
+    // removing this would remove copying from that case entirely.
     document.execCommand('copy')
     document.body.removeChild(ta)
     return true

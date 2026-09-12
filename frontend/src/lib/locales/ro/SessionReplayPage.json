@@ -1,0 +1,25 @@
+{
+  "breadcrumbHome": "Acasă",
+  "title": "Session Replay",
+  "subtitle": "Redați o sesiune a panoului înregistrată lângă interface events ale aceleiași sesiuni.",
+  "maskingNote": "Textul este mascat în fiecare înregistrare. O redare arată ce s-a făcut, niciodată ce era pe ecran.",
+  "loading": "Se încarcă…",
+  "pickOne": "Alegeți o înregistrare pentru a o reda.",
+  "anonymous": "Cont necunoscut",
+  "batches": "{{count}} batch",
+  "columns": {
+    "time": "Oră",
+    "event": "Eveniment",
+    "path": "Cale",
+    "data": "Date"
+  },
+  "empty": {
+    "title": "Încă nu există înregistrări",
+    "description": "Înregistrările apar după ce session replay este pornit și un cont a acceptat să fie înregistrat."
+  },
+  "errors": {
+    "load": "Înregistrările nu au putut fi citite",
+    "play": "Înregistrarea nu a putut fi redată",
+    "tooShort": "Această înregistrare este prea scurtă pentru redare."
+  }
+}

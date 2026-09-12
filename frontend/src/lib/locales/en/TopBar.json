@@ -147,6 +147,10 @@
     "phpWizard": {
       "title": "PHP & Server Wizard",
       "subtitle": "Versions, extensions, loader and web server"
+    },
+    "sessionReplay": {
+      "title": "Session Replay",
+      "subtitle": "Recorded panel sessions"
     }
   },
   "domain": {
@@ -313,7 +317,7 @@
     },
     "backup": {
       "backupFailed": "The backup of {{domain}} failed, so it has no recovery point from this run: {{reason}}",
-        "uploadFailed": "The off-site backup upload for {{domain}} failed: {{reason}}",
+      "uploadFailed": "The off-site backup upload for {{domain}} failed: {{reason}}",
       "dumpFailed": "The backup of {{domain}} does not contain {{count}} database(s) whose dump failed: {{databases}}",
       "diskGate": "Automatic backups were stopped by the disk guard: {{reason}}.",
       "corruptMissing": "The newest backup for {{domain}} could not be read ({{file}}); it may be invalid for recovery.",
