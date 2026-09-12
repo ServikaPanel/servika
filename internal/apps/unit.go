@@ -3,7 +3,6 @@ package apps
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -12,7 +11,9 @@ import (
 	"servika/internal/config"
 )
 
-const unitDir = "/etc/systemd/system"
+// unitDir is where the application units are written. A variable, not a
+// constant, so a test can point it at a directory of its own.
+var unitDir = "/etc/systemd/system"
 
 // UnitName is the systemd unit for an application.
 func UnitName(id int64) string { return "servika-app-" + strconv.FormatInt(id, 10) + ".service" }
@@ -32,18 +33,6 @@ func EnvPath(id int64) string {
 // tenant able to write the directory would redirect a root-opened descriptor.
 func LogPath(id int64) string {
 	return filepath.Join(config.AppLogDir(), strconv.FormatInt(id, 10)+".log")
-}
-
-// systemCommand runs a privileged tool without inheriting panel secrets.
-func systemCommand(name string, arguments ...string) *exec.Cmd {
-	// #nosec G204 G702 -- fixed binary with separate args (no shell); every value is validated before exec.
-	command := exec.Command(name, arguments...)
-	command.Env = []string{
-		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-		"LANG=C",
-		"LC_ALL=C",
-	}
-	return command
 }
 
 // RenderUnit builds the systemd unit for an application.

@@ -22,7 +22,7 @@ func UnitStatus(id int64) Status {
 	if _, err := os.Stat(UnitPath(id)); err == nil {
 		status.Installed = true
 	}
-	output, err := systemCommand("systemctl", "show",
+	output, err := runSystemCommand("systemctl", "show",
 		"-p", "ActiveState", "-p", "SubState", "-p", "NRestarts", UnitName(id)).Output()
 	if err != nil {
 		return status
@@ -50,7 +50,7 @@ func InstallUnit(id int64, body string) error {
 	if err := os.WriteFile(UnitPath(id), []byte(body), 0o644); err != nil {
 		return fmt.Errorf("write the unit: %w", err)
 	}
-	if output, err := systemCommand("systemctl", "daemon-reload").CombinedOutput(); err != nil {
+	if output, err := runSystemCommand("systemctl", "daemon-reload").CombinedOutput(); err != nil {
 		return fmt.Errorf("reload systemd: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
@@ -58,7 +58,7 @@ func InstallUnit(id int64, body string) error {
 
 // Enable starts an application and makes it survive a reboot.
 func Enable(id int64) error {
-	if output, err := systemCommand("systemctl", "enable", "--now", UnitName(id)).CombinedOutput(); err != nil {
+	if output, err := runSystemCommand("systemctl", "enable", "--now", UnitName(id)).CombinedOutput(); err != nil {
 		return fmt.Errorf("start the application: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
@@ -70,7 +70,7 @@ func Enable(id int64) error {
 // Restart=always, so a process killed by anything other than systemd comes
 // straight back.
 func Disable(id int64) error {
-	if output, err := systemCommand("systemctl", "disable", "--now", UnitName(id)).CombinedOutput(); err != nil {
+	if output, err := runSystemCommand("systemctl", "disable", "--now", UnitName(id)).CombinedOutput(); err != nil {
 		return fmt.Errorf("stop the application: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
@@ -78,7 +78,7 @@ func Disable(id int64) error {
 
 // Restart restarts an application in place.
 func Restart(id int64) error {
-	if output, err := systemCommand("systemctl", "restart", UnitName(id)).CombinedOutput(); err != nil {
+	if output, err := runSystemCommand("systemctl", "restart", UnitName(id)).CombinedOutput(); err != nil {
 		return fmt.Errorf("restart the application: %s: %w", strings.TrimSpace(string(output)), err)
 	}
 	return nil
@@ -87,10 +87,10 @@ func Restart(id int64) error {
 // Teardown removes everything one application left on the host. It is best
 // effort per step so a missing piece does not strand the rest.
 func Teardown(id int64) {
-	_, _ = systemCommand("systemctl", "disable", "--now", UnitName(id)).CombinedOutput()
+	_, _ = runSystemCommand("systemctl", "disable", "--now", UnitName(id)).CombinedOutput()
 	_ = os.Remove(UnitPath(id))
-	_, _ = systemCommand("systemctl", "daemon-reload").CombinedOutput()
-	_, _ = systemCommand("systemctl", "reset-failed", UnitName(id)).CombinedOutput()
+	_, _ = runSystemCommand("systemctl", "daemon-reload").CombinedOutput()
+	_, _ = runSystemCommand("systemctl", "reset-failed", UnitName(id)).CombinedOutput()
 	_ = os.Remove(EnvPath(id))
 	_ = os.Remove(LogPath(id))
 }

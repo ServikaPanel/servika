@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-
-	"servika/internal/provisioner"
 )
 
 // RenderSubdomain rewrites a subdomain's own server block. It is a hook rather
@@ -58,9 +56,9 @@ func (h *Handlers) render(s scope, subdomainID int64) error {
 		}
 		return RenderSubdomain(h.DB, subdomainID)
 	}
-	socket, err := provisioner.PHPSocketFor(s.SystemUser, s.PHPVersion)
+	socket, err := phpSocketFor(s.SystemUser, s.PHPVersion)
 	if err != nil {
 		return fmt.Errorf("resolve the PHP socket: %w", err)
 	}
-	return provisioner.ApplyVhostForDomain(h.DB, s.DomainID, socket, s.PHPVersion)
+	return applyVhostForDomain(h.DB, s.DomainID, socket, s.PHPVersion)
 }

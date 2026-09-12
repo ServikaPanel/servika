@@ -35,7 +35,7 @@ func runtimeCommand(runtime, version, word string) (string, bool) {
 	case appruntime.Node:
 		switch word {
 		case "node":
-			return appruntime.Resolve(appruntime.Node, version)
+			return resolveRuntimePath(appruntime.Node, version)
 		case "npm", "npx":
 			bin := filepath.Join(appruntime.NodeBinDir(version), word)
 			if info, err := os.Stat(bin); err == nil && info.Mode().IsRegular() {
@@ -44,7 +44,7 @@ func runtimeCommand(runtime, version, word string) (string, bool) {
 		}
 	case appruntime.Python:
 		if word == "python" || word == "python3" {
-			return appruntime.Resolve(appruntime.Python, version)
+			return resolveRuntimePath(appruntime.Python, version)
 		}
 	}
 	return "", false

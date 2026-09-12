@@ -114,7 +114,7 @@ func SafeAppDir(systemUser, appRoot string) (string, error) {
 	if len(rel) > 255 || strings.Contains(rel, "..") || !reAppRoot.MatchString(rel) {
 		return "", errors.New("invalid application directory")
 	}
-	home := filepath.Join("/home", systemUser)
+	home := filepath.Join(tenantHomeRoot, systemUser)
 	abs := filepath.Clean(filepath.Join(home, rel))
 	if abs != home && !strings.HasPrefix(abs, home+"/") {
 		return "", errors.New("application directory cannot leave the home directory")
@@ -267,7 +267,7 @@ func ResolveRuntime(runtime, version string) (string, error) {
 	if !appruntime.ValidKind(runtime) {
 		return "", errors.New("runtime must be node or python")
 	}
-	path, ok := appruntime.Resolve(appruntime.Kind(runtime), version)
+	path, ok := resolveRuntimePath(appruntime.Kind(runtime), version)
 	if !ok {
 		return "", fmt.Errorf("%s %s is not installed on this server", runtime, displayVersion(version))
 	}
