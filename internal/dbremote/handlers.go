@@ -144,7 +144,7 @@ func (h *Handlers) ServerSet(w http.ResponseWriter, r *http.Request) {
 		action = "db_remote.enable"
 	}
 
-	if err := Apply(ctx, h.DB, *request.Enabled); err != nil {
+	if err := applySwitch(ctx, h.DB, *request.Enabled); err != nil {
 		middleware.RecordAudit(h.DB, r, action, "mariadb", false)
 		h.recordError(r.Context(), err.Error())
 		// A missing key pair is its own refusal. Opening the port without one
@@ -251,7 +251,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := credentials.MySQLGrantRemote(request.DBUser, mysqlHost, password, databases); err != nil {
+	if err := grantRemote(request.DBUser, mysqlHost, password, databases); err != nil {
 		httpx.LogR(r, "remote db: grant %s@%s: %v", request.DBUser, mysqlHost, err)
 		writeReason(w, http.StatusInternalServerError,
 			"MariaDB did not accept the remote account", reasonApplyFailed)
@@ -265,7 +265,7 @@ func (h *Handlers) DomainAdd(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// The grant is undone rather than left behind: an account reachable from
 		// an address the panel has no record of is a credential nobody can find.
-		if revokeErr := credentials.MySQLRevokeRemote(request.DBUser, mysqlHost); revokeErr != nil {
+		if revokeErr := revokeRemote(request.DBUser, mysqlHost); revokeErr != nil {
 			httpx.LogR(r, "remote db: could not undo the grant for %s@%s: %v", request.DBUser, mysqlHost, revokeErr)
 		}
 		if isDuplicate(err) {
@@ -326,7 +326,7 @@ func (h *Handlers) DomainDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	// The stored mysql_host is used verbatim: deriving it again here would fail
 	// to drop an account written under an earlier conversion.
-	if err := credentials.MySQLRevokeRemote(dbUser, mysqlHost); err != nil {
+	if err := revokeRemote(dbUser, mysqlHost); err != nil {
 		httpx.LogR(r, "remote db: could not drop %s@%s: %v", dbUser, mysqlHost, err)
 		writeReason(w, http.StatusInternalServerError,
 			"the address was removed but MariaDB still holds the account", reasonApplyFailed)

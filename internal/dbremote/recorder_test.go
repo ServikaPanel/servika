@@ -29,6 +29,39 @@ type statusRecorder struct {
 	// accounts maps db_user to the domain that owns it.
 	accounts map[string]int64
 	queries  []string
+	// execErr and queryErr fail the statement whose text carries the fragment,
+	// so a test can drive the failure branch of one write or one read.
+	execErr  map[string]error
+	queryErr map[string]error
+	// execArgs records what each executed statement was told, keyed by the
+	// fragment the test looks for.
+	execArgs map[string][]driver.Value
+	// hostRow is the db_user and mysql_host a withdrawal looks up. A nil entry
+	// means the entry is not there.
+	hostRow []driver.Value
+}
+
+// failureFor returns the injected error for a statement, if there is one.
+func failureFor(table map[string]error, query string) error {
+	for fragment, err := range table {
+		if strings.Contains(query, fragment) {
+			return err
+		}
+	}
+	return nil
+}
+
+// execArgsOf returns the arguments of the executed statement carrying the
+// fragment, and whether it ran at all.
+func (r *statusRecorder) execArgsOf(fragment string) ([]driver.Value, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for recorded, args := range r.execArgs {
+		if strings.Contains(recorded, fragment) {
+			return args, true
+		}
+	}
+	return nil, false
 }
 
 func (r *statusRecorder) saw(fragment string) bool {
@@ -78,11 +111,23 @@ type statusStmt struct {
 
 func (s *statusStmt) Close() error  { return nil }
 func (s *statusStmt) NumInput() int { return -1 }
-func (s *statusStmt) Exec([]driver.Value) (driver.Result, error) {
+func (s *statusStmt) Exec(args []driver.Value) (driver.Result, error) {
+	s.recorder.mu.Lock()
+	if s.recorder.execArgs == nil {
+		s.recorder.execArgs = map[string][]driver.Value{}
+	}
+	s.recorder.execArgs[s.query] = args
+	s.recorder.mu.Unlock()
+	if err := failureFor(s.recorder.execErr, s.query); err != nil {
+		return nil, err
+	}
 	return driver.RowsAffected(1), nil
 }
 
 func (s *statusStmt) Query(args []driver.Value) (driver.Rows, error) {
+	if err := failureFor(s.recorder.queryErr, s.query); err != nil {
+		return nil, err
+	}
 	switch {
 	case strings.Contains(s.query, "COUNT(*) FROM firewall_rules"):
 		return &statusRows{columns: []string{"c"}, values: [][]driver.Value{{int64(s.recorder.portRules)}}}, nil
@@ -93,6 +138,12 @@ func (s *statusStmt) Query(args []driver.Value) (driver.Rows, error) {
 		}, nil
 	case strings.Contains(s.query, "db_remote_enabled"):
 		return &statusRows{columns: []string{"enabled"}, values: [][]driver.Value{{int64(boolToInt(s.recorder.enabled))}}}, nil
+	case strings.Contains(s.query, "SELECT db_user, mysql_host"):
+		columns := []string{"db_user", "mysql_host"}
+		if s.recorder.hostRow == nil {
+			return &statusRows{columns: columns}, nil
+		}
+		return &statusRows{columns: columns, values: [][]driver.Value{s.recorder.hostRow}}, nil
 	case strings.Contains(s.query, "FROM db_accounts"):
 		// Modelled as a real table would answer, so the QUERY decides the
 		// outcome. The arguments are read by kind rather than by position, and
@@ -176,5 +227,15 @@ func statusDB(t *testing.T, recorder *statusRecorder) *sql.DB {
 func withDomainParam(r *http.Request, id string) *http.Request {
 	ctx := chi.NewRouteContext()
 	ctx.URLParams.Add("id", id)
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, ctx))
+}
+
+// withHostParam adds the {hid} route parameter a withdrawal reads.
+func withHostParam(r *http.Request, hid string) *http.Request {
+	ctx, ok := r.Context().Value(chi.RouteCtxKey).(*chi.Context)
+	if !ok {
+		ctx = chi.NewRouteContext()
+	}
+	ctx.URLParams.Add("hid", hid)
 	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, ctx))
 }
