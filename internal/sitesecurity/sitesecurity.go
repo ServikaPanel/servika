@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"servika/internal/bgjob"
 	"servika/internal/logx"
@@ -481,10 +482,7 @@ type Finding struct {
 // been present for months reads differently from one that appeared today.
 func (c *Collector) upsert(ctx context.Context, domainID int64, finding Finding) (string, error) {
 	key := findingKey(domainID, finding.InstallPath, finding.Package, finding.Advisory.ID)
-	var cvss any
-	if finding.Advisory.CVSS > 0 {
-		cvss = finding.Advisory.CVSS
-	}
+	cvss := storedCVSS(finding.Advisory.CVSS)
 	_, err := c.DB.ExecContext(ctx,
 		`INSERT INTO security_findings
 		   (finding_key, domain_id, app_type, install_path, package_name,
@@ -502,11 +500,39 @@ func (c *Collector) upsert(ctx context.Context, domainID int64, finding Finding)
 	return key, err
 }
 
+// maxCVSS is the highest base score the scale defines, and also the most the
+// cvss DECIMAL(3,1) column holds with room to spare (it stops at 99.9).
+const maxCVSS = 10.0
+
+// storedCVSS returns the score to write, or nil when the feed's number is not
+// one this column can hold.
+//
+// The score arrives from a remote JSON document with no shape checks. A value
+// over the column's range makes the INSERT fail with error 1264, and that
+// failure sets firstErr in the pass, which suppresses the stale-row prune for
+// the whole domain. A screen whose purpose is to list vulnerable packages then
+// silently omits one and keeps findings for installations that are gone.
+// Recording no score is a smaller loss than losing the finding.
+func storedCVSS(score float64) any {
+	if score <= 0 || score > maxCVSS {
+		return nil
+	}
+	return score
+}
+
 // truncate bounds a value to its column. A feed that grows a longer field must
 // not fail the whole write.
 func truncate(value string, limit int) string {
 	if len(value) <= limit {
 		return value
+	}
+	// The cut lands on a RUNE boundary. A plain byte slice splits a multi-byte
+	// character in half, and MariaDB refuses the parameter as invalid utf8mb4
+	// (error 1366), which loses the finding and the domain's prune with it. The
+	// column counts characters and this limit is its byte width, so cutting a
+	// few bytes short of it can never overflow the column.
+	for limit > 0 && !utf8.RuneStart(value[limit]) {
+		limit--
 	}
 	return value[:limit]
 }
