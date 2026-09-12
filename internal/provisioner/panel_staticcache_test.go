@@ -131,6 +131,34 @@ func TestTheRewrittenLineKeepsTheLocationsIndent(t *testing.T) {
 	}
 }
 
+// The panel compresses CSS, JavaScript, JSON and SVG, and nginx defaults
+// gzip_vary off. Measured against nginx 1.27 without it: the gzip response
+// carried `Content-Encoding: gzip` and no `Vary` at all.
+func TestCompressionDeclaresItsVariant(t *testing.T) {
+	const compressed = "http {\n    gzip on;\n    gzip_types text/css;\n}\n"
+
+	repaired := applyPanelStaticCache(compressed)
+
+	if !strings.Contains(repaired, "    gzip_vary on;") {
+		t.Errorf("a compressing vhost does not declare Vary: Accept-Encoding:\n%s", repaired)
+	}
+	if n := strings.Count(repaired, "gzip_vary on;"); n != 1 {
+		t.Errorf("the repair wrote gzip_vary %d times, want 1", n)
+	}
+	if twice := applyPanelStaticCache(repaired); twice != repaired {
+		t.Errorf("the second pass added another gzip_vary:\n%s", twice)
+	}
+}
+
+// A vhost that does not compress gains nothing, because gzip_vary alone would
+// be a directive with no subject.
+func TestAVhostThatDoesNotCompressGainsNoVary(t *testing.T) {
+	const plain = "http {\n    server {\n        listen 80;\n    }\n}\n"
+	if applyPanelStaticCache(plain) != plain {
+		t.Error("the repair added gzip_vary to a vhost that does not compress")
+	}
+}
+
 // Running twice must change nothing, because the heal runs at every startup.
 func TestTheRepairIsIdempotent(t *testing.T) {
 	once := applyPanelStaticCache(installedStaticCache)

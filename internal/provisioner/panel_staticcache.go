@@ -95,10 +95,35 @@ func bodyIndent(body []string) string {
 	return "        "
 }
 
+// ensureGzipVary adds `gzip_vary on;` under the panel's `gzip on;`.
+//
+// A compressed response and an uncompressed one share one URL, so a cache that
+// does not know the encoding belongs in the key can hand gzip bytes to a client
+// that asked for none. nginx defaults gzip_vary off, and the panel compresses
+// CSS, JavaScript, JSON and SVG.
+func ensureGzipVary(lines []string) []string {
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "gzip_vary on;" {
+			return lines
+		}
+	}
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "gzip on;" {
+			continue
+		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		out := make([]string, 0, len(lines)+1)
+		out = append(out, lines[:i+1]...)
+		out = append(out, indent+"gzip_vary on;")
+		return append(out, lines[i+1:]...)
+	}
+	return lines
+}
+
 // applyPanelStaticCache returns the vhost with one correct Cache-Control in
-// each static location.
+// each static location, and with the compression variant declared.
 func applyPanelStaticCache(content string) string {
-	lines := strings.Split(content, "\n")
+	lines := ensureGzipVary(strings.Split(content, "\n"))
 	for _, location := range panelStaticCacheLocations {
 		start, end, ok := blockBounds(lines, location.open)
 		if !ok {
