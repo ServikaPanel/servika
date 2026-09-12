@@ -161,16 +161,7 @@ func TestAnIdleSliceIsNotAFailure(t *testing.T) {
 // It needs root and a running systemd, so it is skipped on every development
 // machine. Run it on a real host after a systemd upgrade.
 func TestTheKernelReallyEnforcesTheSlice(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip("root required: this test writes a real systemd unit")
-	}
-	if err := exec.Command("systemctl", "is-system-running").Run(); err != nil {
-		// is-system-running exits non-zero for "degraded" too, which is fine;
-		// what matters is that systemctl could talk to a manager at all.
-		if _, lookErr := exec.LookPath("systemctl"); lookErr != nil {
-			t.Skip("no systemd on this host")
-		}
-	}
+	requireLiveSystemd(t)
 
 	if err := ApplyLimits(Settings{CPUPercent: 150, RAMMB: 400, IOWeight: 50}); err != nil {
 		t.Fatalf("apply failed: %v", err)
@@ -195,18 +186,10 @@ func TestTheKernelReallyEnforcesTheSlice(t *testing.T) {
 	}
 	base := "/sys/fs/cgroup" + strings.TrimSpace(string(group))
 
-	// 150% of one core, expressed as a quota over a 100ms period.
-	if b, err := os.ReadFile(base + "/cpu.max"); err != nil {
-		t.Errorf("cpu.max is unreadable: %v", err)
-	} else if got := strings.TrimSpace(string(b)); got != "150000 100000" {
-		t.Errorf("cpu.max = %q, want \"150000 100000\"", got)
-	}
-	// 400M in bytes.
-	if b, err := os.ReadFile(base + "/memory.max"); err != nil {
-		t.Errorf("memory.max is unreadable: %v", err)
-	} else if got := strings.TrimSpace(string(b)); got != "419430400" {
-		t.Errorf("memory.max = %q, want \"419430400\"", got)
-	}
+	// 150% of one core, expressed as a quota over a 100ms period, and 400M in
+	// bytes.
+	assertCgroup(t, base+"/cpu.max", "150000 100000", "")
+	assertCgroup(t, base+"/memory.max", "419430400", "")
 
 	// An override this package did not write pins the limit and survives every
 	// reboot. An operator's own set-property produces exactly this, and so did
@@ -238,15 +221,40 @@ func TestTheKernelReallyEnforcesTheSlice(t *testing.T) {
 	if out, err := exec.Command("systemctl", "daemon-reload").CombinedOutput(); err != nil {
 		t.Fatalf("daemon-reload failed: %s: %v", out, err)
 	}
-	if b, err := os.ReadFile(base + "/cpu.max"); err != nil {
-		t.Errorf("cpu.max is unreadable after the second apply: %v", err)
-	} else if got := strings.TrimSpace(string(b)); got != "250000 100000" {
-		t.Errorf("a foreign override outlived the apply: cpu.max = %q, want \"250000 100000\"", got)
+	assertCgroup(t, base+"/cpu.max", "250000 100000", "a foreign override outlived the apply")
+	assertCgroup(t, base+"/memory.max", "629145600", "a foreign override outlived the apply")
+}
+
+// requireLiveSystemd skips unless this host can be written to for real.
+func requireLiveSystemd(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() != 0 {
+		t.Skip("root required: this test writes a real systemd unit")
 	}
-	if b, err := os.ReadFile(base + "/memory.max"); err != nil {
-		t.Errorf("memory.max is unreadable after the second apply: %v", err)
-	} else if got := strings.TrimSpace(string(b)); got != "629145600" {
-		t.Errorf("a foreign override outlived the apply: memory.max = %q, want \"629145600\"", got)
+	if err := exec.Command("systemctl", "is-system-running").Run(); err != nil {
+		// is-system-running exits non-zero for "degraded" too, which is fine;
+		// what matters is that systemctl could talk to a manager at all.
+		if _, lookErr := exec.LookPath("systemctl"); lookErr != nil {
+			t.Skip("no systemd on this host")
+		}
+	}
+}
+
+// assertCgroup reads one value out of the cgroup filesystem, which is the kernel
+// reporting what it enforces rather than systemd reporting what it was told.
+func assertCgroup(t *testing.T, path, want, complaint string) {
+	t.Helper()
+	body, err := os.ReadFile(path) // #nosec G304 -- a cgroup path this test just built.
+	if err != nil {
+		t.Errorf("%s is unreadable: %v", path, err)
+		return
+	}
+	if got := strings.TrimSpace(string(body)); got != want {
+		if complaint != "" {
+			t.Errorf("%s: %s = %q, want %q", complaint, path, got, want)
+			return
+		}
+		t.Errorf("%s = %q, want %q", path, got, want)
 	}
 }
 

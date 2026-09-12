@@ -73,27 +73,14 @@ func identifiersUnder(t *testing.T, root string) []string {
 	fileSet := token.NewFileSet()
 	for _, tree := range []string{"internal", "cmd"} {
 		err := filepath.WalkDir(filepath.Join(root, tree), func(path string, entry os.DirEntry, err error) error {
-			if err != nil || entry.IsDir() {
+			if err != nil || entry.IsDir() || !goSourceFile(path) {
 				return err
 			}
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-				return nil
-			}
-			parsed, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+			found, parseErr := identifiersIn(fileSet, path)
 			if parseErr != nil {
 				return parseErr
 			}
-			for _, decl := range parsed.Decls {
-				if isPlumbing(decl) {
-					continue
-				}
-				ast.Inspect(decl, func(node ast.Node) bool {
-					if ident, ok := node.(*ast.Ident); ok {
-						names = append(names, ident.Name)
-					}
-					return true
-				})
-			}
+			names = append(names, found...)
 			return nil
 		})
 		if err != nil {
@@ -101,6 +88,33 @@ func identifiersUnder(t *testing.T, root string) []string {
 		}
 	}
 	return names
+}
+
+// goSourceFile reports whether the path is Go source the panel ships.
+func goSourceFile(path string) bool {
+	return strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go")
+}
+
+// identifiersIn collects every identifier one file names, outside the storage
+// plumbing.
+func identifiersIn(fileSet *token.FileSet, path string) ([]string, error) {
+	parsed, err := parser.ParseFile(fileSet, path, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, decl := range parsed.Decls {
+		if isPlumbing(decl) {
+			continue
+		}
+		ast.Inspect(decl, func(node ast.Node) bool {
+			if ident, ok := node.(*ast.Ident); ok {
+				names = append(names, ident.Name)
+			}
+			return true
+		})
+	}
+	return names, nil
 }
 
 // isPlumbing reports whether a declaration is one of the storage helpers or the

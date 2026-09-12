@@ -101,6 +101,18 @@ func TestTheWriteAnswersWithWhatIsStoredAndNotWithWhatWasSent(t *testing.T) {
 	}
 }
 
+// stepAt returns where one step of Write appears in the source, and stops the
+// test when the step is gone: an order this test cannot see is one it cannot
+// measure.
+func stepAt(t *testing.T, body, call, missing string) int {
+	t.Helper()
+	at := strings.Index(body, call)
+	if at < 0 {
+		t.Fatal(missing)
+	}
+	return at
+}
+
 // Write applies the limits as well as storing them. Storing the row alone
 // leaves the panel reporting a limit the kernel has never heard of.
 func TestSavingAlsoApplies(t *testing.T) {
@@ -113,19 +125,15 @@ func TestSavingAlsoApplies(t *testing.T) {
 	// statement itself lives in writeRow so a live test can exercise the column
 	// list without reaching systemd, and its position in the file says nothing
 	// about the order Write does things in, which is what this test is about.
-	update := strings.Index(body, "if err := writeRow(ctx, db, s); err != nil {")
-	apply := strings.Index(body, "if err := ApplyLimits(s); err != nil {")
-	watch := strings.Index(body, "if err := ApplyWatcher(s); err != nil {")
-	timer := strings.Index(body, "return ApplyScheduleTimer(s)")
+	update := stepAt(t, body, "if err := writeRow(ctx, db, s); err != nil {",
+		"the settings are no longer stored; this test has to follow the call")
+	apply := stepAt(t, body, "if err := ApplyLimits(s); err != nil {",
+		"saving no longer applies the resource limits")
+	watch := stepAt(t, body, "if err := ApplyWatcher(s); err != nil {",
+		"saving no longer starts or stops the watcher")
+	timer := stepAt(t, body, "return ApplyScheduleTimer(s)",
+		"saving no longer arms or disarms the scheduled sweep timer")
 	switch {
-	case update < 0:
-		t.Fatal("the settings are no longer stored; this test has to follow the call")
-	case apply < 0:
-		t.Fatal("saving no longer applies the resource limits")
-	case watch < 0:
-		t.Fatal("saving no longer starts or stops the watcher")
-	case timer < 0:
-		t.Fatal("saving no longer arms or disarms the scheduled sweep timer")
 	case apply < update:
 		t.Error("the limits are applied before the row is stored")
 	case watch < apply:

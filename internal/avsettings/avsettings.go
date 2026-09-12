@@ -400,6 +400,18 @@ func Read(ctx context.Context, db *sql.DB) (Settings, error) {
 // has. Passing the measurement in rather than taking it here also keeps the
 // tests independent of whatever machine they run on.
 func (s Settings) Validate(c Capacity) error {
+	if err := s.validateShares(); err != nil {
+		return err
+	}
+	if err := s.validateCeilings(c); err != nil {
+		return err
+	}
+	return s.validateSchedule()
+}
+
+// validateShares checks the scope, the detection threshold and the two cgroup
+// weights.
+func (s Settings) validateShares() error {
 	if s.Scope != ScopeHost && s.Scope != ScopeServer {
 		return refuse(ReasonScopeInvalid, "scope must be "+ScopeHost+" or "+ScopeServer)
 	}
@@ -421,6 +433,11 @@ func (s Settings) Validate(c Capacity) error {
 			"cpu weight must be between 1 and "+strconv.Itoa(MaxCgroupWeight)+
 				" or 0 for automatic")
 	}
+	return nil
+}
+
+// validateCeilings checks the CPU and memory limits against the machine.
+func (s Settings) validateCeilings(c Capacity) error {
 	if s.CPUPercent < 0 || s.RAMMB < 0 {
 		return refuse(ReasonNegativeLimit, "resource limits cannot be negative (0 means automatic)")
 	}
@@ -448,6 +465,11 @@ func (s Settings) Validate(c Capacity) error {
 			"memory ceiling must be below this server's "+strconv.Itoa(c.TotalRAMMB)+
 				"M of memory or 0 for automatic (a higher one never takes effect)")
 	}
+	return nil
+}
+
+// validateSchedule checks when the scan runs and how hard it is allowed to work.
+func (s Settings) validateSchedule() error {
 	if s.ScheduledHour < 0 || s.ScheduledHour > 23 {
 		return refuse(ReasonHourOutOfRange, "scheduled hour must be between 0 and 23")
 	}
