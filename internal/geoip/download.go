@@ -148,17 +148,8 @@ func fetchAndBuild(ctx context.Context, account Account) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("open the archive: %w", err)
 	}
-	// The entry count is checked BEFORE any member is opened, so an archive
-	// built to exhaust the reader never gets a member decompressed at all.
-	if len(reader.File) > MaxArchiveEntries {
-		return "", fmt.Errorf("the archive holds %d entries", len(reader.File))
-	}
-	var declared uint64
-	for _, file := range reader.File {
-		declared += file.UncompressedSize64
-		if declared > MaxUnpackedBytes {
-			return "", errors.New("the archive declares more content than the ceiling allows")
-		}
+	if err := archiveWithinCeilings(reader); err != nil {
+		return "", err
 	}
 
 	countries, err := readLocations(reader)
@@ -168,19 +159,8 @@ func fetchAndBuild(ctx context.Context, account Account) (string, error) {
 	if len(countries) == 0 {
 		return "", errors.New("the archive names no country")
 	}
-	// 0750 is enough: the only reader is the nginx MASTER process, which parses
-	// the include while still running as root, so the worker user never opens
-	// it and no tenant needs to traverse the directory.
-	if err := os.MkdirAll(config.GeoIPDir(), 0o750); err != nil {
-		return "", fmt.Errorf("create the data directory: %w", err)
-	}
-	for _, pair := range []struct{ member, target string }{
-		{"GeoLite2-Country-Blocks-IPv4.csv", ipv4File},
-		{"GeoLite2-Country-Blocks-IPv6.csv", ipv6File},
-	} {
-		if err := writeNetworks(reader, pair.member, pair.target, countries); err != nil {
-			return "", err
-		}
+	if err := writeBlockFiles(reader, countries); err != nil {
+		return "", err
 	}
 
 	buildDate := archiveBuildDate(reader)
@@ -188,6 +168,42 @@ func fetchAndBuild(ctx context.Context, account Account) (string, error) {
 		return "", err
 	}
 	return buildDate, nil
+}
+
+// archiveWithinCeilings checks the archive's shape BEFORE any member is opened,
+// so an archive built to exhaust the reader never gets a member decompressed at
+// all.
+func archiveWithinCeilings(reader *zip.Reader) error {
+	if len(reader.File) > MaxArchiveEntries {
+		return fmt.Errorf("the archive holds %d entries", len(reader.File))
+	}
+	var declared uint64
+	for _, file := range reader.File {
+		declared += file.UncompressedSize64
+		if declared > MaxUnpackedBytes {
+			return errors.New("the archive declares more content than the ceiling allows")
+		}
+	}
+	return nil
+}
+
+// writeBlockFiles turns both blocks members into normalized network files.
+func writeBlockFiles(reader *zip.Reader, countries map[string]string) error {
+	// 0750 is enough: the only reader is the nginx MASTER process, which parses
+	// the include while still running as root, so the worker user never opens
+	// it and no tenant needs to traverse the directory.
+	if err := os.MkdirAll(config.GeoIPDir(), 0o750); err != nil {
+		return fmt.Errorf("create the data directory: %w", err)
+	}
+	for _, pair := range []struct{ member, target string }{
+		{"GeoLite2-Country-Blocks-IPv4.csv", ipv4File},
+		{"GeoLite2-Country-Blocks-IPv6.csv", ipv6File},
+	} {
+		if err := writeNetworks(reader, pair.member, pair.target, countries); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // fetchArchive streams the archive to a temporary FILE rather than into memory.
@@ -319,20 +335,29 @@ func readLocations(reader *zip.Reader) (map[string]string, error) {
 		if done {
 			break
 		}
-		if row == nil {
-			continue
+		if id, code, ok := countryRow(row, idColumn, codeColumn); ok {
+			countries[id] = code
 		}
-		if idColumn >= len(row) || codeColumn >= len(row) {
-			continue
-		}
-		code := NormalizeCountry(row[codeColumn])
-		id := strings.TrimSpace(row[idColumn])
-		if code == "" || id == "" {
-			continue
-		}
-		countries[id] = code
 	}
 	return countries, nil
+}
+
+// countryRow reads one row of the country list. A row the edition cannot place
+// (a continent, a short row, an empty code) answers false and is skipped, which
+// is not a failure: the edition carries such rows on every release.
+func countryRow(row []string, idColumn, codeColumn int) (id, code string, ok bool) {
+	if row == nil {
+		return "", "", false
+	}
+	if idColumn >= len(row) || codeColumn >= len(row) {
+		return "", "", false
+	}
+	code = NormalizeCountry(row[codeColumn])
+	id = strings.TrimSpace(row[idColumn])
+	if code == "" || id == "" {
+		return "", "", false
+	}
+	return id, code, true
 }
 
 // writeNetworks turns one blocks CSV into `network,CC` lines sorted by country.
@@ -353,44 +378,35 @@ func writeNetworks(reader *zip.Reader, memberName, target string, countries map[
 	if err != nil {
 		return fmt.Errorf("read the %s header: %w", memberName, err)
 	}
-	networkColumn := columnIndex(header, "network")
-	geonameColumn := columnIndex(header, "geoname_id")
-	registeredColumn := columnIndex(header, "registered_country_geoname_id")
-	if networkColumn < 0 || geonameColumn < 0 {
+	columns, ok := networkColumns(header)
+	if !ok {
 		return fmt.Errorf("%s is missing a required column", memberName)
 	}
 
+	body, err := networkBody(records, columns, countries, memberName)
+	if err != nil {
+		return err
+	}
+	return writeAtomic(dataPath(target), []byte(body))
+}
+
+// networkBody turns the rows of one blocks CSV into `network,CC` lines. A file
+// that produced nothing is a failure: it would replace a working list with an
+// empty one, which reads as "this country is not blocked anywhere".
+func networkBody(records *csv.Reader, columns blockColumns,
+	countries map[string]string, memberName string) (string, error) {
 	var body strings.Builder
 	written := 0
 	for {
 		row, done, fatal := nextRecord(records)
 		if fatal != nil {
-			return fmt.Errorf("read %s: %w", memberName, fatal)
+			return "", fmt.Errorf("read %s: %w", memberName, fatal)
 		}
 		if done {
 			break
 		}
-		if row == nil {
-			continue
-		}
-		if networkColumn >= len(row) {
-			continue
-		}
-		network := strings.TrimSpace(row[networkColumn])
-		if _, _, err := net.ParseCIDR(network); err != nil {
-			continue
-		}
-		code := ""
-		if geonameColumn < len(row) {
-			code = countries[strings.TrimSpace(row[geonameColumn])]
-		}
-		// MaxMind leaves geoname_id empty for a network it cannot place but
-		// still knows the registering country for. Falling back keeps ranges
-		// that would otherwise silently drop out of a block list.
-		if code == "" && registeredColumn >= 0 && registeredColumn < len(row) {
-			code = countries[strings.TrimSpace(row[registeredColumn])]
-		}
-		if code == "" {
+		network, code, ok := networkRow(row, columns, countries)
+		if !ok {
 			continue
 		}
 		body.WriteString(network)
@@ -399,13 +415,62 @@ func writeNetworks(reader *zip.Reader, memberName, target string, countries map[
 		body.WriteByte('\n')
 		written++
 		if written > MaxNetworks {
-			return fmt.Errorf("%s holds more networks than the ceiling allows", memberName)
+			return "", fmt.Errorf("%s holds more networks than the ceiling allows", memberName)
 		}
 	}
 	if written == 0 {
-		return fmt.Errorf("%s produced no usable network", memberName)
+		return "", fmt.Errorf("%s produced no usable network", memberName)
 	}
-	return writeAtomic(dataPath(target), []byte(body.String()))
+	return body.String(), nil
+}
+
+// blockColumns are the columns a blocks CSV is read through. registered is -1
+// when the file does not carry it, which is not a refusal: it is only a
+// fallback.
+type blockColumns struct {
+	network    int
+	geoname    int
+	registered int
+}
+
+// networkColumns locates the columns of a blocks CSV, or answers false when a
+// required one is missing.
+func networkColumns(header []string) (blockColumns, bool) {
+	columns := blockColumns{
+		network:    columnIndex(header, "network"),
+		geoname:    columnIndex(header, "geoname_id"),
+		registered: columnIndex(header, "registered_country_geoname_id"),
+	}
+	if columns.network < 0 || columns.geoname < 0 {
+		return blockColumns{}, false
+	}
+	return columns, true
+}
+
+// networkRow reads one row of a blocks CSV into a network and its country.
+// A row that is malformed, short, not a CIDR or names no known country answers
+// false and is skipped.
+func networkRow(row []string, columns blockColumns, countries map[string]string) (network, code string, ok bool) {
+	if row == nil || columns.network >= len(row) {
+		return "", "", false
+	}
+	network = strings.TrimSpace(row[columns.network])
+	if _, _, err := net.ParseCIDR(network); err != nil {
+		return "", "", false
+	}
+	if columns.geoname < len(row) {
+		code = countries[strings.TrimSpace(row[columns.geoname])]
+	}
+	// MaxMind leaves geoname_id empty for a network it cannot place but still
+	// knows the registering country for. Falling back keeps ranges that would
+	// otherwise silently drop out of a block list.
+	if code == "" && columns.registered >= 0 && columns.registered < len(row) {
+		code = countries[strings.TrimSpace(row[columns.registered])]
+	}
+	if code == "" {
+		return "", "", false
+	}
+	return network, code, true
 }
 
 func columnIndex(header []string, name string) int {

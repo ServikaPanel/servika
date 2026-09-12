@@ -49,28 +49,10 @@ func (h *Handlers) SaveCredentials(w http.ResponseWriter, r *http.Request) {
 	licenseKey := strings.TrimSpace(request.LicenseKey)
 
 	if accountID == "" && licenseKey == "" {
-		// Clearing is a legitimate action: it turns the feature off without
-		// touching the country rules already stored, which then render nothing
-		// and are reported as unenforced rather than silently dropped.
-		if _, err := h.DB.ExecContext(r.Context(),
-			`UPDATE panel_settings SET maxmind_account_id='', maxmind_license_key=NULL,
-			        geoip_last_error='' WHERE id=1`); err != nil {
-			httpx.WriteError(w, http.StatusInternalServerError, "the credentials could not be cleared")
-			return
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+		h.clearCredentials(w, r)
 		return
 	}
-	if accountID == "" || licenseKey == "" {
-		httpx.WriteError(w, http.StatusBadRequest, "both the account id and the license key are required")
-		return
-	}
-	if !isAccountID(accountID) {
-		httpx.WriteError(w, http.StatusBadRequest, "the account id is a number")
-		return
-	}
-	if strings.ContainsAny(licenseKey, " \t\r\n") {
-		httpx.WriteError(w, http.StatusBadRequest, "the license key contains whitespace")
+	if !acceptableAccount(w, accountID, licenseKey) {
 		return
 	}
 
@@ -87,6 +69,38 @@ func (h *Handlers) SaveCredentials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// clearCredentials turns the feature off.
+//
+// Clearing is a legitimate action: it leaves the country rules already stored
+// untouched, and they then render nothing and are reported as unenforced rather
+// than silently dropped.
+func (h *Handlers) clearCredentials(w http.ResponseWriter, r *http.Request) {
+	if _, err := h.DB.ExecContext(r.Context(),
+		`UPDATE panel_settings SET maxmind_account_id='', maxmind_license_key=NULL,
+		        geoip_last_error='' WHERE id=1`); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "the credentials could not be cleared")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// acceptableAccount checks the two halves and writes the refusal itself.
+func acceptableAccount(w http.ResponseWriter, accountID, licenseKey string) bool {
+	if accountID == "" || licenseKey == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "both the account id and the license key are required")
+		return false
+	}
+	if !isAccountID(accountID) {
+		httpx.WriteError(w, http.StatusBadRequest, "the account id is a number")
+		return false
+	}
+	if strings.ContainsAny(licenseKey, " \t\r\n") {
+		httpx.WriteError(w, http.StatusBadRequest, "the license key contains whitespace")
+		return false
+	}
+	return true
 }
 
 // Update downloads the country database now.

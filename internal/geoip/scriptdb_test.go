@@ -179,11 +179,3 @@ func newScript() *sqlScript {
 		endWith: map[string]error{},
 	}
 }
-
-// setForTest replaces a package variable for one test.
-func setForTest[T any](t *testing.T, target *T, value T) {
-	t.Helper()
-	previous := *target
-	*target = value
-	t.Cleanup(func() { *target = previous })
-}
