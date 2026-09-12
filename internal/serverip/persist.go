@@ -14,9 +14,9 @@ import (
 // quietly disappear the first time the server restarted, which is exactly when
 // nobody is watching for it.
 const (
-	unitPath   = "/etc/systemd/system/servika-server-ips.service"
-	scriptPath = "/usr/local/sbin/servika-server-ips"
-	unitName   = "servika-server-ips.service"
+	defaultUnitPath   = "/etc/systemd/system/servika-server-ips.service"
+	defaultScriptPath = "/usr/local/sbin/servika-server-ips"
+	unitName          = "servika-server-ips.service"
 )
 
 // unitBody is FIXED. Nothing a request carries reaches it; the addresses live
@@ -26,7 +26,8 @@ const (
 // these addresses finds it there. RemainAfterExit keeps the unit "active" once
 // the addresses are on, which is what makes "systemctl status" readable rather
 // than permanently showing a dead oneshot.
-const unitBody = `[Unit]
+func unitBody() string {
+	return `[Unit]
 Description=Servika additional server addresses
 After=network-online.target
 Wants=network-online.target
@@ -40,6 +41,7 @@ ExecStart=` + scriptPath + `
 [Install]
 WantedBy=multi-user.target
 `
+}
 
 // scriptHeader opens the generated script.
 //
@@ -103,13 +105,13 @@ func WritePersistence(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	// #nosec G306 -- a systemd unit file the manager must read.
-	if err := os.WriteFile(unitPath, []byte(unitBody), 0o644); err != nil {
+	if err := os.WriteFile(unitPath, []byte(unitBody()), 0o644); err != nil {
 		return err
 	}
-	if out, err := run(ctx, "systemctl", "daemon-reload"); err != nil {
+	if out, err := runCommand(ctx, "systemctl", "daemon-reload"); err != nil {
 		return fmt.Errorf("daemon-reload: %s", strings.TrimSpace(out))
 	}
-	if out, err := run(ctx, "systemctl", "enable", unitName); err != nil {
+	if out, err := runCommand(ctx, "systemctl", "enable", unitName); err != nil {
 		return fmt.Errorf("enable %s: %s", unitName, strings.TrimSpace(out))
 	}
 	return nil

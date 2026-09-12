@@ -81,12 +81,12 @@ type listed struct {
 // way round. An address configured outside the panel is the one that must be
 // shown and must not be removable, and it exists in no table this owns.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	addresses, err := HostAddresses(r.Context())
+	addresses, err := readHostAddresses(r.Context())
 	if err != nil {
 		h.fail(w, err, "the host's addresses could not be read")
 		return
 	}
-	bound, err := BoundAddresses()
+	bound, err := readBoundAddresses()
 	if err != nil {
 		// FAIL CLOSED. An unreadable socket table is not evidence that nothing
 		// is bound, and "nothing is bound" is the answer that permits every
@@ -173,7 +173,7 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 	// absent from the table and present on the server, and adding it again
 	// would either fail at the kernel or, worse, succeed and leave the panel
 	// believing it owns an address it did not put there.
-	existing, err := HostAddresses(r.Context())
+	existing, err := readHostAddresses(r.Context())
 	if err != nil {
 		h.fail(w, err, "the host's addresses could not be read")
 		return
@@ -220,12 +220,12 @@ func (h *Handlers) Add(w http.ResponseWriter, r *http.Request) {
 	// then the boot script. A failure after this point takes the row back out,
 	// because a row for an address the server does not have would put that
 	// address on at the next reboot.
-	if err := AddToHost(r.Context(), ip, body.Prefix, device, label); err != nil {
+	if err := addToHost(r.Context(), ip, body.Prefix, device, label); err != nil {
 		h.forget(r, id)
 		h.fail(w, err, "the address could not be added")
 		return
 	}
-	if err := WritePersistence(r.Context(), h.DB); err != nil {
+	if err := writePersistence(r.Context(), h.DB); err != nil {
 		httpx.LogR(r, "server ip persistence: %v", err)
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"id": id, "ip": ip.String(), "interface": device, "label": label,
@@ -274,12 +274,12 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addresses, err := HostAddresses(r.Context())
+	addresses, err := readHostAddresses(r.Context())
 	if err != nil {
 		h.fail(w, err, "the host's addresses could not be read")
 		return
 	}
-	bound, err := BoundAddresses()
+	bound, err := readBoundAddresses()
 	if err != nil {
 		h.fail(w, err, "the listening sockets could not be read")
 		return
@@ -302,7 +302,7 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		// alternative leaves a script that puts back an address somebody
 		// already took away by hand.
 		h.forget(r, id)
-		if err := WritePersistence(r.Context(), h.DB); err != nil {
+		if err := writePersistence(r.Context(), h.DB); err != nil {
 			httpx.LogR(r, "server ip persistence: %v", err)
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"removed": id, "was_absent": true})
@@ -312,12 +312,12 @@ func (h *Handlers) Remove(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, err, "the address cannot be removed")
 		return
 	}
-	if err := RemoveFromHost(r.Context(), found); err != nil {
+	if err := removeFromHost(r.Context(), found); err != nil {
 		h.fail(w, err, "the address could not be removed")
 		return
 	}
 	h.forget(r, id)
-	if err := WritePersistence(r.Context(), h.DB); err != nil {
+	if err := writePersistence(r.Context(), h.DB); err != nil {
 		httpx.LogR(r, "server ip persistence: %v", err)
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"removed": id,
