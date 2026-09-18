@@ -160,6 +160,10 @@ func (a *accountHarness) answer(argv []string) commandAnswer {
 		return a.aliases
 	case strings.Contains(last, "/shadow"):
 		return a.mailboxes
+	case strings.Contains(last, "mysql.user"):
+		// This server already holds an account of the source's name, so the
+		// migration renames rather than keeping the source identity.
+		return commandAnswer{output: "acme\n"}
 	}
 	return commandAnswer{}
 }

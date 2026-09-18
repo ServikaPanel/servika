@@ -549,34 +549,50 @@ func (h *Handlers) databasesKeepTheirNames(ctx context.Context, databases []stri
 // existing, so the caller declines to keep the original identity and falls back
 // to the unique-name path rather than acting on an unknown.
 //
-// The name is concatenated into the statement because the mysql CLI takes no
+// The statement is FIXED and the name never enters it. The mysql CLI takes no
 // placeholders, and the panel's own connection cannot read mysql.user (it is
-// granted on panel.* alone), which is why this goes over the root socket at all.
-// The allowlist is therefore the whole boundary and is checked first.
+// granted on panel.* alone), which is why this goes over the root socket at all;
+// listing the accounts and comparing in Go is the structural equivalent of a
+// parameterized query. The allowlist stays as the first gate.
 func (h *Handlers) dbUserExists(ctx context.Context, user string) bool {
 	if !credentials.ValidDBIdentifier(user) {
 		return true
 	}
 	out, err := newTransferCommand(ctx, "mysql", "-N", "-B", "-e",
-		"SELECT COUNT(*) FROM mysql.user WHERE User='"+user+"' AND Host='localhost'").Output()
+		"SELECT User FROM mysql.user WHERE Host='localhost'").Output()
 	if err != nil {
 		return true
 	}
-	return strings.TrimSpace(string(out)) != "0"
+	// mysql.user.User is a binary-collation column, so MySQL compared it exactly
+	// and this comparison keeps that.
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.TrimSpace(line) == user {
+			return true
+		}
+	}
+	return false
 }
 
 // dbNameAvailable reports whether the target server has no schema of this name.
-// It fails closed the same way: an unanswerable query reads as taken.
+// It fails closed the same way: an unanswerable query reads as taken. The
+// statement is FIXED here too, for the reason dbUserExists states.
 func (h *Handlers) dbNameAvailable(ctx context.Context, name string) bool {
 	if !credentials.ValidDBIdentifier(name) {
 		return false
 	}
 	out, err := newTransferCommand(ctx, "mysql", "-N", "-B", "-e",
-		"SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='"+name+"'").Output()
+		"SELECT SCHEMA_NAME FROM information_schema.SCHEMATA").Output()
 	if err != nil {
 		return false
 	}
-	return strings.TrimSpace(string(out)) == "0"
+	// information_schema.SCHEMATA compares case-insensitively, so EqualFold keeps
+	// the answer this returned before the statement became fixed.
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.EqualFold(strings.TrimSpace(line), name) {
+			return false
+		}
+	}
+	return true
 }
 
 // configDBIdentity reads the database user and password out of the site's own

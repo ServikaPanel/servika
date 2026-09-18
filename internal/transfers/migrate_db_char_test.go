@@ -86,9 +86,10 @@ func TestUniqueTargetDBEdges(t *testing.T) {
 	}
 }
 
-// mysqlCounts answers the two local mysql lookups keepOriginalIdentity makes:
-// the account count and the schema count, or a failed client when fail is set.
-func mysqlCounts(t *testing.T, users, schemas string, fail bool) *commandRecorder {
+// mysqlNames answers the two local mysql lookups keepOriginalIdentity makes.
+// Both statements are fixed and list every row, so the stub returns the names
+// that are already taken, or a failed client when fail is set.
+func mysqlNames(t *testing.T, users, schemas string, fail bool) *commandRecorder {
 	t.Helper()
 	return withCommandScript(t, func(argv []string) commandAnswer {
 		switch {
@@ -135,20 +136,20 @@ func TestKeepOriginalIdentity(t *testing.T) {
 		fail           bool
 		keep           bool
 	}{
-		{"a user outside the identifier set", "acme-user", []string{"acme_app"}, "0", "0", false, false},
-		{"a system account name", "mysql", []string{"acme_app"}, "0", "0", false, false},
-		{"an account that already exists", "acme_user", []string{"acme_app"}, "1", "0", false, false},
-		{"a mysql client that fails", "acme_user", []string{"acme_app"}, "0", "0", true, false},
-		{"no database", "acme_user", nil, "0", "0", false, false},
-		{"a database outside the remote name set", "acme_user", []string{"acme app"}, "0", "0", false, false},
-		{"a database outside the identifier set", "acme_user", []string{"acme-app"}, "0", "0", false, false},
-		{"a system database", "acme_user", []string{"information_schema"}, "0", "0", false, false},
-		{"a schema that already exists", "acme_user", []string{"acme_app"}, "0", "1", false, false},
-		{"every condition holds", "acme_user", []string{"acme_app", "acme_shop"}, "0", "0", false, true},
+		{"a user outside the identifier set", "acme-user", []string{"acme_app"}, "", "", false, false},
+		{"a system account name", "mysql", []string{"acme_app"}, "", "", false, false},
+		{"an account that already exists", "acme_user", []string{"acme_app"}, "acme_user", "", false, false},
+		{"a mysql client that fails", "acme_user", []string{"acme_app"}, "", "", true, false},
+		{"no database", "acme_user", nil, "", "", false, false},
+		{"a database outside the remote name set", "acme_user", []string{"acme app"}, "", "", false, false},
+		{"a database outside the identifier set", "acme_user", []string{"acme-app"}, "", "", false, false},
+		{"a system database", "acme_user", []string{"information_schema"}, "", "", false, false},
+		{"a schema that already exists", "acme_user", []string{"acme_app"}, "", "acme_app", false, false},
+		{"every condition holds", "acme_user", []string{"acme_app", "acme_shop"}, "", "", false, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			mysqlCounts(t, c.users, c.schemas, c.fail)
+			mysqlNames(t, c.users, c.schemas, c.fail)
 			root := siteWithEnv(t, fmt.Sprintf(creds, c.user))
 			user, password, ok := (&Handlers{}).keepOriginalIdentity(t.Context(), RemoteAccount{Databases: c.databases}, root)
 			assertIdentity(t, user, password, ok, c.keep)
@@ -480,8 +481,9 @@ func TestMigrateDatabasesOnTheUniqueNamePath(t *testing.T) {
 func TestMigrateDatabasesKeepsTheSourceIdentity(t *testing.T) {
 	complete := dumpFile(t, completeDump)
 	remoteAnswers(t, map[string]commandAnswer{
-		"SELECT COUNT(*)": {output: "0\n"},
-		"mysqldump":       {file: complete},
+		"mysql.user":                  {output: "\n"},
+		"information_schema.SCHEMATA": {output: "\n"},
+		"mysqldump":                   {file: complete},
 	})
 	withSQLImports(t, nil)
 	creates := withDBCreates(t)
