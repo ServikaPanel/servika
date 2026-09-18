@@ -53,7 +53,19 @@ func TestAHangingReaderStillAnswers(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.arrange(t)
 			answered := make(chan *httptest.ResponseRecorder, 1)
-			go func() { answered <- tc.call() }()
+			returned := make(chan struct{})
+			go func() { answered <- tc.call(); close(returned) }()
+			// Cleanups run last registered first, so this one waits for the
+			// handler before hangEvery puts the real command back. Without it a
+			// failing case restores the package variables while the goroutine is
+			// still reading them, and the race detector reports that instead of
+			// the timeout that caused it.
+			t.Cleanup(func() {
+				select {
+				case <-returned:
+				case <-time.After(35 * time.Second):
+				}
+			})
 			select {
 			case recorder := <-answered:
 				if recorder.Code != tc.status {
@@ -76,6 +88,15 @@ func hangEvery(t *testing.T, command *func(ctx context.Context, name string, arg
 	*command = sleepForever
 }
 
+// sleepForever is the command that never returns on its own.
+//
+// It runs sleep DIRECTLY rather than through `sh -c`, because the budget kills
+// the process it started and nothing below it. A shell that forks instead of
+// exec'ing leaves the real sleeper alive holding the inherited stdout pipe, and
+// cmd.Output() waits on that pipe, so the handler stays blocked for the full 30
+// seconds and the test reads it as the defect it guards against. Whether the
+// shell forks or execs depends on which /bin/sh the host has, which is why this
+// passed on macOS and failed on the Linux runner.
 func sleepForever(ctx context.Context, _ string, _ ...string) *exec.Cmd {
-	return exec.CommandContext(ctx, "/bin/sh", "-c", "sleep 30")
+	return exec.CommandContext(ctx, "sleep", "30")
 }
