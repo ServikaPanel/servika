@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"servika/internal/apphealth"
+	"servika/internal/appmetrics"
 	"servika/internal/bgjob"
 	"servika/internal/httpx"
 	"servika/internal/logx"
@@ -471,6 +472,26 @@ func waitForApp(ctx context.Context, action string, app App) string {
 		return err.Error()
 	}
 	return ""
+}
+
+// Metrics reports what one application is consuming.
+// GET /domains/{id}/apps/{aid}/metrics
+//
+// Answered per application rather than per domain, because a tenant screen
+// shows one application at a time and a whole-domain sweep would run a `du` for
+// every application on every refresh.
+func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
+	s, app, ok := h.scopedApp(w, r)
+	if !ok {
+		return
+	}
+	// A directory that no longer resolves is not a reason to answer nothing: the
+	// unit numbers are still true, and the disk figure is simply absent.
+	tree, err := SafeAppDir(s.SystemUser, app.AppRoot)
+	if err != nil {
+		tree = ""
+	}
+	httpx.WriteJSON(w, http.StatusOK, appmetrics.Collect(r.Context(), UnitName(app.ID), tree))
 }
 
 // BackupList returns the application's archives, newest first.

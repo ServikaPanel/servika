@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"servika/internal/apphealth"
+	"servika/internal/appmetrics"
 )
 
 // working serialises the operations that change what is on the host.
@@ -267,6 +268,9 @@ func remove(ctx context.Context, db *sql.DB, app App) error {
 	}
 
 	TeardownFiles(app.Code)
+	// The unit is gone, so its cached CPU sample and disk size would never be
+	// replaced by a newer reading.
+	appmetrics.Forget(UnitName(app.Code), InstallDir(app.Code))
 	if err := RemoveUser(app.SystemUser); err != nil {
 		return err
 	}

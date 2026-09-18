@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"servika/internal/appmetrics"
 	"servika/internal/bgjob"
 	"servika/internal/httpx"
 	"servika/internal/middleware"
@@ -300,6 +301,43 @@ func (h *Handlers) SetEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	middleware.RecordAudit(h.DB, r, action, "host_apps", true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
+}
+
+// appMetrics is one application's live consumption, named by the row it
+// belongs to so the screen can match it to a line in the installed table.
+type appMetrics struct {
+	AppID int64  `json:"app_id"`
+	Code  string `json:"code"`
+	appmetrics.Metrics
+}
+
+// Metrics — GET /system/host-apps/metrics (AdminOnly).
+//
+// Answered for every installed application in one call rather than one request
+// per row: the screen refreshes the whole table, and a CPU percentage needs two
+// readings of the same unit, so a per-row endpoint would reset the interval
+// every time a row was added or removed from the view.
+func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
+	list, err := Installed(r.Context(), h.DB)
+	if err != nil {
+		complain("read the installed applications: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return
+	}
+	live := map[string]bool{}
+	out := make([]appMetrics, 0, len(list))
+	for _, app := range list {
+		unit := UnitName(app.Code)
+		live[unit] = true
+		out = append(out, appMetrics{
+			AppID:   app.ID,
+			Code:    app.Code,
+			Metrics: appmetrics.Collect(r.Context(), unit, InstallDir(app.Code)),
+		})
+	}
+	// A removed application must not keep a CPU sample and a disk size for ever.
+	appmetrics.Retain(live)
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"metrics": out})
 }
 
 // Backups — GET /system/host-apps/{id}/backups (AdminOnly).
