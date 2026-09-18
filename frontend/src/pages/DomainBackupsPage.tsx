@@ -38,6 +38,472 @@ type Destination = {
   last_upload?: string; last_status?: string; last_error?: string
 }
 
+type DestForm = {
+  type: DestType; host: string; port: number; username: string; password: string
+  remote_dir: string; bucket: string; region: string; endpoint: string
+  path_style: boolean; active: boolean
+}
+
+function PageHeader({ domain, id, sched }: { domain: Domain | null; id?: string; sched: Schedule }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
+        { label: t('breadcrumb.backups') },
+      ]} />
+
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      {domain && <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
+        <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
+        {', '}{t('subtitle.prefix')}{sched.freq === 'none'
+          ? t('subtitle.disabled')
+          : t('subtitle.enabled', {
+              freq: sched.freq === 'daily' ? t('freq.daily') : t('freq.weekly'),
+              hour: String(sched.hour).padStart(2, '0'),
+              retention: sched.retention,
+            })}
+      </p>}
+    </>
+  )
+}
+
+function ScheduleCard({ sched, unread, saving, onSave, onSched }: {
+  sched: Schedule; unread: boolean; saving: boolean
+  onSave: (next: Schedule) => void; onSched: (updater: (current: Schedule) => Schedule) => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  // Automatic backup schedule.
+  return (
+    <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <div className="flex flex-col gap-3 mb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('schedule.heading')}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
+            {t('schedule.description')}
+          </p>
+        </div>
+        {sched.last_backup_at && (
+          <div className="text-xs text-slate-500 dark:text-slate-500">{t('schedule.lastBackup')} <span className="font-mono">{sched.last_backup_at.replace('T',' ').replace('Z','')}</span></div>
+        )}
+      </div>
+      {unread && <UnreadNotice text={t('schedule.unread')} />}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {(['none','daily','weekly'] as const).map(f => {
+          const isSelected = sched.freq === f
+          const meta: Record<string,{name:string;icon:string;description:string;color:string}> = {
+            none: { name:t('schedule.options.none.name'), icon:ICON.pause, description:t('schedule.options.none.description'), color:'slate' },
+            daily: { name:t('schedule.options.daily.name'), icon:ICON.moon, description:t('schedule.options.daily.description'), color:'emerald' },
+            weekly: { name:t('schedule.options.weekly.name'), icon:ICON.calendar, description:t('schedule.options.weekly.description'), color:'indigo' },
+          }
+          const m = meta[f]
+          const color: Record<string,string> = {
+            slate:   isSelected ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-400/20'      : 'border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800',
+            emerald: isSelected ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-2 ring-emerald-500/20': 'border-slate-200 dark:border-slate-700 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 dark:bg-emerald-900/20',
+            indigo:  isSelected ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-500/20'   : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:bg-indigo-900/20',
+          }
+          return (
+            <button key={f} type="button" disabled={saving || isSelected}
+              onClick={() => onSave({ ...sched, freq: f })}
+              className={`text-left p-3 border rounded-lg transition disabled:cursor-default ${color[m.color]}`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-slate-600 dark:text-slate-300"><Icon d={m.icon} className="h-5 w-5" /></span>
+                {isSelected && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-300">{t('schedule.active')}</span>}
+              </div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.name}</div>
+              <div className="text-[11px] text-slate-600 dark:text-slate-400 dark:text-slate-500 mt-1 leading-snug">{m.description}</div>
+            </button>
+          )
+        })}
+      </div>
+
+      {sched.freq !== 'none' && (
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500">{t('schedule.runTime')}</span>
+            <select
+              value={sched.hour}
+              onChange={e => onSave({ ...sched, hour: Number(e.target.value) })}
+              disabled={saving}
+              className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800">
+              {Array.from({length:24},(_,i)=>i).map(h =>
+                <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>
+              )}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500">{t('schedule.retentionLabel')}</span>
+            <input type="number" min={1} max={90} value={sched.retention}
+              onChange={e => onSched(s => ({...s, retention: Math.max(1, Math.min(90, Number(e.target.value)||1))}))}
+              onBlur={() => onSave(sched)}
+              disabled={saving}
+              className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+            <span className="text-[10px] text-slate-500 dark:text-slate-500 mt-0.5 block">{t('schedule.retentionHint')}</span>
+          </label>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The password is left blank on purpose: the panel never reads the stored
+// secret back, so pre-filling it would send a placeholder as the new value.
+function destFormOf(d: Destination): DestForm {
+  return {
+    type: (d.type || 'sftp') as DestType,
+    host: d.host || '',
+    port: d.port || (d.type === 'ftp' ? 21 : 22),
+    username: d.username || '',
+    password: '',
+    remote_dir: d.remote_dir || '/',
+    bucket: d.bucket || '',
+    region: d.region || '',
+    endpoint: d.endpoint || '',
+    path_style: !!d.path_style,
+    active: !!d.active,
+  }
+}
+
+type DestFormSetter = (updater: (current: DestForm) => DestForm) => void
+
+function DestStatusBadge({ dest }: { dest: Destination }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (dest.missing || !dest.last_status) return null
+  const tone = dest.last_status === 'successful'
+    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+    : dest.last_status === 'error'
+      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 dark:text-slate-500'
+  const label = dest.last_status === 'successful'
+    ? t('destination.statusSuccessful')
+    : dest.last_status === 'error' ? t('destination.statusError') : dest.last_status
+  return <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded ${tone}`}>{label}</span>
+}
+
+function DestLastUpload({ dest }: { dest: Destination }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (dest.missing || !dest.last_upload) return null
+  return (
+    <div className="mb-3 text-xs text-slate-500 dark:text-slate-500">
+      {t('destination.lastUpload')} <span className="font-mono">{dest.last_upload}</span>
+      {dest.last_status === 'error' && dest.last_error && (
+        <div className="mt-1 text-[11px] text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 font-mono whitespace-pre-wrap">{dest.last_error}</div>
+      )}
+    </div>
+  )
+}
+
+function DestTypePicker({ destForm, setDestForm }: { destForm: DestForm; setDestForm: DestFormSetter }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+      <div className="mb-3">
+        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.typeLabel')}</label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {([
+            { t: 'sftp' as const, label: t('destination.type.sftp'), port: 22 },
+            { t: 'ftp' as const, label: t('destination.type.ftp'), port: 21 },
+            { t: 's3' as const, label: t('destination.type.s3'), port: 443 },
+            { t: 'b2' as const, label: t('destination.type.b2'), port: 443 },
+          ]).map(o => {
+            const isSelected = destForm.type === o.t
+            return (
+              <button key={o.t} type="button"
+                onClick={() => setDestForm(f => ({...f, type: o.t, port: o.port}))}
+                className={`text-xs px-3 py-2 rounded border ${isSelected ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-semibold' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
+                {o.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+  )
+}
+
+function ObjectStorageFields({ dest, destForm, setDestForm }: { dest: Destination; destForm: DestForm; setDestForm: DestFormSetter }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+
+      <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-3">
+        <div className="sm:col-span-3">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.bucket')}</label>
+          <input type="text" value={destForm.bucket} placeholder="my-backups"
+            onChange={e => setDestForm(f => ({...f, bucket: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-3">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.region')} {destForm.type === 's3' && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.regionHint')}</span>}</label>
+          <input type="text" value={destForm.region} placeholder="us-east-1"
+            onChange={e => setDestForm(f => ({...f, region: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-6">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.endpoint')} {destForm.type === 's3' && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.endpointHint')}</span>}</label>
+          <input type="text" value={destForm.endpoint} placeholder={destForm.type === 'b2' ? 's3.us-west-002.backblazeb2.com' : 'https://s3.example.com'}
+            onChange={e => setDestForm(f => ({...f, endpoint: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-3">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.accessKeyId')}</label>
+          <input type="text" value={destForm.username} autoComplete="off"
+            onChange={e => setDestForm(f => ({...f, username: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-3">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.secretAccessKey')} {!dest.missing && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.secretKeepHint')}</span>}</label>
+          <input type="password" value={destForm.password} autoComplete="new-password"
+            onChange={e => setDestForm(f => ({...f, password: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-4">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.keyPrefix')}</label>
+          <input type="text" value={destForm.remote_dir} placeholder="/"
+            onChange={e => setDestForm(f => ({...f, remote_dir: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-2 flex items-end">
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={destForm.path_style}
+              onChange={e => setDestForm(f => ({...f, path_style: e.target.checked}))}
+              className="cursor-pointer"/>
+            {t('destination.pathStyle')}
+          </label>
+        </div>
+      </div>
+  )
+}
+
+function HostFields({ dest, destForm, setDestForm }: { dest: Destination; destForm: DestForm; setDestForm: DestFormSetter }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+
+      <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-3">
+        <div className="sm:col-span-4">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.host')}</label>
+          <input type="text" value={destForm.host} placeholder="backup.firma.com"
+            onChange={e => setDestForm(f => ({...f, host: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.port')}</label>
+          <input type="number" value={destForm.port}
+            onChange={e => setDestForm(f => ({...f, port: Number(e.target.value)||0}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.username')}</label>
+          <input type="text" value={destForm.username} autoComplete="off"
+            onChange={e => setDestForm(f => ({...f, username: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.password')} {!dest.missing && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.passwordKeepHint')}</span>}</label>
+          <input type="password" value={destForm.password} autoComplete="new-password"
+            onChange={e => setDestForm(f => ({...f, password: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.remoteDir')}</label>
+          <input type="text" value={destForm.remote_dir}
+            onChange={e => setDestForm(f => ({...f, remote_dir: e.target.value}))}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
+        </div>
+      </div>
+  )
+}
+
+function DestActions({ dest, destForm, setDestForm, saving, destTest, incomplete, onSave, onTest, onDelete }: {
+  dest: Destination; destForm: DestForm; setDestForm: DestFormSetter
+  saving: boolean; destTest: { ok: boolean; error?: string } | null; incomplete: boolean
+  onSave: () => void; onTest: () => void; onDelete: () => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input type="checkbox" checked={destForm.active}
+            onChange={e => setDestForm(f => ({...f, active: e.target.checked}))}
+            className="cursor-pointer"/>
+          {t('destination.activeLabel')}
+        </label>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {destTest && (
+            <span className={`text-xs px-2 py-1 rounded font-medium ${destTest.ok ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
+              {destTest.ok ? t('destination.testSuccess') : t('destination.testError') + (destTest.error?.slice(0, 80) || t('destination.testErrorFallback'))}
+            </span>
+          )}
+          <button type="button" onClick={onTest} disabled={saving || incomplete}
+            className="text-xs px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 disabled:opacity-50">
+            {saving ? t('destination.testing') : t('destination.testConnection')}
+          </button>
+          <button type="button" onClick={onSave} disabled={saving || incomplete}
+            className="text-xs px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 rounded font-medium">
+            {t('destination.save')}
+          </button>
+          {!dest.missing && (
+            <button type="button" onClick={onDelete} disabled={saving}
+              className="text-xs px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 rounded">
+              {t('destination.deleteDestination')}
+            </button>
+          )}
+        </div>
+      </div>
+  )
+}
+
+function DestinationCard({ dest, destForm, setDestForm, unread, saving, destTest, incomplete, isObjectStorage, onSave, onTest, onDelete }: {
+  dest: Destination; destForm: DestForm; setDestForm: DestFormSetter
+  unread: boolean; saving: boolean; destTest: { ok: boolean; error?: string } | null
+  incomplete: boolean; isObjectStorage: boolean
+  onSave: () => void; onTest: () => void; onDelete: () => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  // Remote backup destination (FTP/SFTP).
+  return (
+    <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <div className="flex flex-col gap-3 mb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('destination.heading')}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
+            {t('destination.description')}
+          </p>
+        </div>
+        <DestStatusBadge dest={dest} />
+      </div>
+      {unread && <UnreadNotice text={t('destination.unread')} />}
+
+      <DestLastUpload dest={dest} />
+
+      <DestTypePicker destForm={destForm} setDestForm={setDestForm} />
+
+      {isObjectStorage
+        ? <ObjectStorageFields dest={dest} destForm={destForm} setDestForm={setDestForm} />
+        : <HostFields dest={dest} destForm={destForm} setDestForm={setDestForm} />}
+
+      <DestActions dest={dest} destForm={destForm} setDestForm={setDestForm} saving={saving}
+        destTest={destTest} incomplete={incomplete} onSave={onSave} onTest={onTest} onDelete={onDelete} />
+    </div>
+  )
+}
+
+function ActionsBar({ processing, count, onCreate, onRefresh }: {
+  processing: boolean; count: number; onCreate: () => void; onRefresh: () => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+    <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center">
+      <button onClick={onCreate} disabled={processing} className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
+        {processing ? t('backingUp') : t('backupNow')}
+      </button>
+      <button onClick={onRefresh} className="px-3 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded-md">{t('refresh')}</button>
+      <span className="text-sm text-slate-500 dark:text-slate-500 sm:ml-auto">{t('backupCount', { count })}</span>
+    </div>
+  )
+}
+
+function progressDotClass(progress: Progress): string {
+  if (!progress.done) return 'bg-amber-500 animate-pulse'
+  return progress.error ? 'bg-red-500' : 'bg-emerald-500'
+}
+
+function progressBarClass(progress: Progress): string {
+  if (progress.error) return 'bg-red-500'
+  return progress.done ? 'bg-emerald-500' : 'bg-amber-400'
+}
+
+function progressMetrics(progress: Progress): string {
+  const percent = progress.percent > 0 ? `${progress.percent}%` : ''
+  const total = progress.total_bytes > 0 ? ` / ${formatBytes(progress.total_bytes)}` : ''
+  const moved = progress.done_bytes > 0 ? ` · ${formatBytes(progress.done_bytes)}${total}` : ''
+  return `${percent}${moved} · ${progress.elapsed_s}s`
+}
+
+function ProgressCard({ progress }: { progress: Progress | null }) {
+  const { t } = useTranslation('DomainBackupsPage')
+  if (!progress) return null
+  return (
+    <div className="mb-4 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <span className={`w-2 h-2 rounded-full ${progressDotClass(progress)}`} />
+        <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+          {progress.op === 'restore' ? t('progress.restoring') : t('progress.backingUp')}
+        </span>
+        <span className="text-sm text-slate-500 dark:text-slate-400">· {t(`progress.stage.${progress.stage}`, progress.stage)}</span>
+        <span className="ml-auto text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+          {progressMetrics(progress)}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+        {progress.percent > 0 ? (
+          <div className={`h-full rounded-full transition-all duration-700 ${progressBarClass(progress)}`} style={{ width: `${progress.percent}%` }} />
+        ) : (
+          <div className="h-full w-1/3 rounded-full bg-amber-400 animate-pulse" />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function BackupsTable({ backups, loading, onDownload, onRestore, onDelete }: {
+  backups: Backup[]; loading: boolean
+  onDownload: (backup: Backup) => void; onRestore: (backup: Backup) => void; onDelete: (backup: Backup) => void
+}) {
+  const { t } = useTranslation('DomainBackupsPage')
+  return (
+    <div className={responsiveTableContainerClass}>
+      {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> :
+       backups.length === 0 ? <div className="py-16 text-center text-sm text-slate-500 dark:text-slate-500">{t('empty')}</div> :
+      <table className={responsiveTableClass}>
+        <thead className={responsiveTableHeadClass}>
+          <tr>
+            <th className="text-left px-4 py-2.5">{t('columns.file')}</th>
+            <th className="text-left px-4 py-2.5">{t('columns.type')}</th>
+            <th className="text-left px-4 py-2.5">{t('columns.size')}</th>
+            <th className="text-left px-4 py-2.5">{t('columns.created')}</th>
+            <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
+          </tr>
+        </thead>
+        <tbody className={responsiveTableBodyClass}>
+          {backups.map(y => (
+            <tr key={y.id} className={responsiveTableRowClass}>
+              <td data-label={t('columns.file')} className={responsiveTableCodeCellClass}>
+                {y.file}
+                {y.verification === 'corrupt' && (
+                  <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">{t('verify.corrupt')}</span>
+                )}
+                {y.verification === 'remote' && (
+                  <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded font-medium bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300">{t('verify.remote')}</span>
+                )}
+              </td>
+              <td data-label={t('columns.type')} className={responsiveTableCellClass}>
+                <span className={`text-xs px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold ${
+                  y.type === 'scheduled' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 dark:text-slate-500'
+                }`}>{y.type === 'scheduled' ? t('typeScheduled') : y.type}</span>
+              </td>
+              <td data-label={t('columns.size')} className={responsiveTableCodeCellClass}>{formatSize(y.size_b)}</td>
+              <td data-label={t('columns.created')} className={responsiveTableCellClass}>{y.created_at}</td>
+              <td className={responsiveTableActionCellClass}>
+                <button onClick={() => onDownload(y)} className="text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded">{t('row.download')}</button>
+                <button onClick={() => onRestore(y)} className="text-sm text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 dark:bg-amber-900/20 px-2 py-1 rounded">{t('row.restore')}</button>
+                <button onClick={() => onDelete(y)} className="text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 px-2 py-1 rounded">{t('row.delete')}</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>}
+    </div>
+  )
+}
+
 export default function DomainBackupsPage() {
   const { t } = useTranslation('DomainBackupsPage')
   const { confirm, notify } = useDialog()
@@ -97,21 +563,7 @@ export default function DomainBackupsPage() {
       setDestinationUnread(d === null)
       if (d) {
         setDest(d)
-        if (!d.missing) {
-          setDestForm({
-            type: (d.type || 'sftp') as DestType,
-            host: d.host || '',
-            port: d.port || (d.type === 'ftp' ? 21 : 22),
-            username: d.username || '',
-            password: '',  // Security: leave blank unless the user chooses to enter it again.
-            remote_dir: d.remote_dir || '/',
-            bucket: d.bucket || '',
-            region: d.region || '',
-            endpoint: d.endpoint || '',
-            path_style: !!d.path_style,
-            active: !!d.active,
-          })
-        }
+        if (!d.missing) setDestForm(destFormOf(d))
       }
     })
       .catch(e => setError(apiError(e)))
@@ -301,333 +753,24 @@ export default function DomainBackupsPage() {
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.backups') },
-      ]} />
+      <PageHeader domain={domain} id={id} sched={sched} />
 
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-      {domain && <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
-        <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
-        {', '}{t('subtitle.prefix')}{sched.freq === 'none'
-          ? t('subtitle.disabled')
-          : t('subtitle.enabled', {
-              freq: sched.freq === 'daily' ? t('freq.daily') : t('freq.weekly'),
-              hour: String(sched.hour).padStart(2, '0'),
-              retention: sched.retention,
-            })}
-      </p>}
+      <ScheduleCard sched={sched} unread={scheduleUnread} saving={scheduleSaving}
+        onSave={saveSchedule} onSched={setSched} />
 
-      {/* Automatic backup schedule */}
-      <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <div className="flex flex-col gap-3 mb-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('schedule.heading')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
-              {t('schedule.description')}
-            </p>
-          </div>
-          {sched.last_backup_at && (
-            <div className="text-xs text-slate-500 dark:text-slate-500">{t('schedule.lastBackup')} <span className="font-mono">{sched.last_backup_at.replace('T',' ').replace('Z','')}</span></div>
-          )}
-        </div>
-        {scheduleUnread && <UnreadNotice text={t('schedule.unread')} />}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {(['none','daily','weekly'] as const).map(f => {
-            const isSelected = sched.freq === f
-            const meta: Record<string,{name:string;icon:string;description:string;color:string}> = {
-              none: { name:t('schedule.options.none.name'), icon:ICON.pause, description:t('schedule.options.none.description'), color:'slate' },
-              daily: { name:t('schedule.options.daily.name'), icon:ICON.moon, description:t('schedule.options.daily.description'), color:'emerald' },
-              weekly: { name:t('schedule.options.weekly.name'), icon:ICON.calendar, description:t('schedule.options.weekly.description'), color:'indigo' },
-            }
-            const m = meta[f]
-            const color: Record<string,string> = {
-              slate:   isSelected ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-400/20'      : 'border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800',
-              emerald: isSelected ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-2 ring-emerald-500/20': 'border-slate-200 dark:border-slate-700 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 dark:bg-emerald-900/20',
-              indigo:  isSelected ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-500/20'   : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:bg-indigo-900/20',
-            }
-            return (
-              <button key={f} type="button" disabled={scheduleSaving || isSelected}
-                onClick={() => saveSchedule({ ...sched, freq: f })}
-                className={`text-left p-3 border rounded-lg transition disabled:cursor-default ${color[m.color]}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-slate-600 dark:text-slate-300"><Icon d={m.icon} className="h-5 w-5" /></span>
-                  {isSelected && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-300">{t('schedule.active')}</span>}
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{m.name}</div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-400 dark:text-slate-500 mt-1 leading-snug">{m.description}</div>
-              </button>
-            )
-          })}
-        </div>
+      <DestinationCard dest={dest} destForm={destForm} setDestForm={setDestForm}
+        unread={destinationUnread} saving={destinationSaving} destTest={destTest}
+        incomplete={destIncomplete} isObjectStorage={isObjectStorage}
+        onSave={saveDest} onTest={testDestination} onDelete={destDelete} />
 
-        {sched.freq !== 'none' && (
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500">{t('schedule.runTime')}</span>
-              <select
-                value={sched.hour}
-                onChange={e => saveSchedule({ ...sched, hour: Number(e.target.value) })}
-                disabled={scheduleSaving}
-                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800">
-                {Array.from({length:24},(_,i)=>i).map(h =>
-                  <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>
-                )}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500">{t('schedule.retentionLabel')}</span>
-              <input type="number" min={1} max={90} value={sched.retention}
-                onChange={e => setSched(s => ({...s, retention: Math.max(1, Math.min(90, Number(e.target.value)||1))}))}
-                onBlur={() => saveSchedule(sched)}
-                disabled={scheduleSaving}
-                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-              <span className="text-[10px] text-slate-500 dark:text-slate-500 mt-0.5 block">{t('schedule.retentionHint')}</span>
-            </label>
-          </div>
-        )}
-      </div>
+      <ActionsBar processing={processing} count={backups.length} onCreate={create} onRefresh={load} />
 
-      {/* Remote backup destination (FTP/SFTP) */}
-      <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <div className="flex flex-col gap-3 mb-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('destination.heading')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
-              {t('destination.description')}
-            </p>
-          </div>
-          {!dest.missing && dest.last_status && (
-            <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded ${
-              dest.last_status === 'successful' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' :
-              dest.last_status === 'error' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-              'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 dark:text-slate-500'
-            }`}>{dest.last_status === 'successful' ? t('destination.statusSuccessful') : dest.last_status === 'error' ? t('destination.statusError') : dest.last_status}</span>
-          )}
-        </div>
-        {destinationUnread && <UnreadNotice text={t('destination.unread')} />}
+      <ProgressCard progress={progress} />
 
-        {!dest.missing && dest.last_upload && (
-          <div className="mb-3 text-xs text-slate-500 dark:text-slate-500">
-            {t('destination.lastUpload')} <span className="font-mono">{dest.last_upload}</span>
-            {dest.last_status === 'error' && dest.last_error && (
-              <div className="mt-1 text-[11px] text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2 font-mono whitespace-pre-wrap">{dest.last_error}</div>
-            )}
-          </div>
-        )}
+      <Banners error={error} success={success} />
 
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.typeLabel')}</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {([
-              { t: 'sftp' as const, label: t('destination.type.sftp'), port: 22 },
-              { t: 'ftp' as const, label: t('destination.type.ftp'), port: 21 },
-              { t: 's3' as const, label: t('destination.type.s3'), port: 443 },
-              { t: 'b2' as const, label: t('destination.type.b2'), port: 443 },
-            ]).map(o => {
-              const isSelected = destForm.type === o.t
-              return (
-                <button key={o.t} type="button"
-                  onClick={() => setDestForm(f => ({...f, type: o.t, port: o.port}))}
-                  className={`text-xs px-3 py-2 rounded border ${isSelected ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300 font-semibold' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800'}`}>
-                  {o.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {isObjectStorage ? (
-          <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-3">
-            <div className="sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.bucket')}</label>
-              <input type="text" value={destForm.bucket} placeholder="my-backups"
-                onChange={e => setDestForm(f => ({...f, bucket: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.region')} {destForm.type === 's3' && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.regionHint')}</span>}</label>
-              <input type="text" value={destForm.region} placeholder="us-east-1"
-                onChange={e => setDestForm(f => ({...f, region: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-6">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.endpoint')} {destForm.type === 's3' && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.endpointHint')}</span>}</label>
-              <input type="text" value={destForm.endpoint} placeholder={destForm.type === 'b2' ? 's3.us-west-002.backblazeb2.com' : 'https://s3.example.com'}
-                onChange={e => setDestForm(f => ({...f, endpoint: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.accessKeyId')}</label>
-              <input type="text" value={destForm.username} autoComplete="off"
-                onChange={e => setDestForm(f => ({...f, username: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.secretAccessKey')} {!dest.missing && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.secretKeepHint')}</span>}</label>
-              <input type="password" value={destForm.password} autoComplete="new-password"
-                onChange={e => setDestForm(f => ({...f, password: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-4">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.keyPrefix')}</label>
-              <input type="text" value={destForm.remote_dir} placeholder="/"
-                onChange={e => setDestForm(f => ({...f, remote_dir: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-2 flex items-end">
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={destForm.path_style}
-                  onChange={e => setDestForm(f => ({...f, path_style: e.target.checked}))}
-                  className="cursor-pointer"/>
-                {t('destination.pathStyle')}
-              </label>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-3">
-            <div className="sm:col-span-4">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.host')}</label>
-              <input type="text" value={destForm.host} placeholder="backup.firma.com"
-                onChange={e => setDestForm(f => ({...f, host: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.port')}</label>
-              <input type="number" value={destForm.port}
-                onChange={e => setDestForm(f => ({...f, port: Number(e.target.value)||0}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.username')}</label>
-              <input type="text" value={destForm.username} autoComplete="off"
-                onChange={e => setDestForm(f => ({...f, username: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.password')} {!dest.missing && <span className="text-[10px] text-slate-400 dark:text-slate-500">{t('destination.passwordKeepHint')}</span>}</label>
-              <input type="password" value={destForm.password} autoComplete="new-password"
-                onChange={e => setDestForm(f => ({...f, password: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('destination.remoteDir')}</label>
-              <input type="text" value={destForm.remote_dir}
-                onChange={e => setDestForm(f => ({...f, remote_dir: e.target.value}))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono"/>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input type="checkbox" checked={destForm.active}
-              onChange={e => setDestForm(f => ({...f, active: e.target.checked}))}
-              className="cursor-pointer"/>
-            {t('destination.activeLabel')}
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {destTest && (
-              <span className={`text-xs px-2 py-1 rounded font-medium ${destTest.ok ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'}`}>
-                {destTest.ok ? t('destination.testSuccess') : t('destination.testError') + (destTest.error?.slice(0, 80) || t('destination.testErrorFallback'))}
-              </span>
-            )}
-            <button type="button" onClick={testDestination} disabled={destinationSaving || destIncomplete}
-              className="text-xs px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 disabled:opacity-50">
-              {destinationSaving ? t('destination.testing') : t('destination.testConnection')}
-            </button>
-            <button type="button" onClick={saveDest} disabled={destinationSaving || destIncomplete}
-              className="text-xs px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 rounded font-medium">
-              {t('destination.save')}
-            </button>
-            {!dest.missing && (
-              <button type="button" onClick={destDelete} disabled={destinationSaving}
-                className="text-xs px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 rounded">
-                {t('destination.deleteDestination')}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2 mb-4 sm:flex-row sm:items-center">
-        <button onClick={create} disabled={processing} className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
-          {processing ? t('backingUp') : t('backupNow')}
-        </button>
-        <button onClick={load} className="px-3 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm rounded-md">{t('refresh')}</button>
-        <span className="text-sm text-slate-500 dark:text-slate-500 sm:ml-auto">{t('backupCount', { count: backups.length })}</span>
-      </div>
-
-      {progress && (
-        <div className="mb-4 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60">
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <span className={`w-2 h-2 rounded-full ${progress.done ? (progress.error ? 'bg-red-500' : 'bg-emerald-500') : 'bg-amber-500 animate-pulse'}`} />
-            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              {progress.op === 'restore' ? t('progress.restoring') : t('progress.backingUp')}
-            </span>
-            <span className="text-sm text-slate-500 dark:text-slate-400">· {t(`progress.stage.${progress.stage}`, progress.stage)}</span>
-            <span className="ml-auto text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
-              {progress.percent > 0 ? `${progress.percent}%` : ''}
-              {progress.done_bytes > 0 ? ` · ${formatBytes(progress.done_bytes)}${progress.total_bytes > 0 ? ' / ' + formatBytes(progress.total_bytes) : ''}` : ''}
-              {` · ${progress.elapsed_s}s`}
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
-            {progress.percent > 0 ? (
-              <div className={`h-full rounded-full transition-all duration-700 ${progress.error ? 'bg-red-500' : progress.done ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${progress.percent}%` }} />
-            ) : (
-              <div className="h-full w-1/3 rounded-full bg-amber-400 animate-pulse" />
-            )}
-          </div>
-        </div>
-      )}
-
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
-
-      <div className={responsiveTableContainerClass}>
-        {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> :
-         backups.length === 0 ? <div className="py-16 text-center text-sm text-slate-500 dark:text-slate-500">{t('empty')}</div> :
-        <table className={responsiveTableClass}>
-          <thead className={responsiveTableHeadClass}>
-            <tr>
-              <th className="text-left px-4 py-2.5">{t('columns.file')}</th>
-              <th className="text-left px-4 py-2.5">{t('columns.type')}</th>
-              <th className="text-left px-4 py-2.5">{t('columns.size')}</th>
-              <th className="text-left px-4 py-2.5">{t('columns.created')}</th>
-              <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
-            </tr>
-          </thead>
-          <tbody className={responsiveTableBodyClass}>
-            {backups.map(y => (
-              <tr key={y.id} className={responsiveTableRowClass}>
-                <td data-label={t('columns.file')} className={responsiveTableCodeCellClass}>
-                  {y.file}
-                  {y.verification === 'corrupt' && (
-                    <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded font-semibold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">{t('verify.corrupt')}</span>
-                  )}
-                  {y.verification === 'remote' && (
-                    <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded font-medium bg-slate-100 text-slate-600 dark:bg-slate-700/40 dark:text-slate-300">{t('verify.remote')}</span>
-                  )}
-                </td>
-                <td data-label={t('columns.type')} className={responsiveTableCellClass}>
-                  <span className={`text-xs px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold ${
-                    y.type === 'scheduled' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 dark:text-slate-500'
-                  }`}>{y.type === 'scheduled' ? t('typeScheduled') : y.type}</span>
-                </td>
-                <td data-label={t('columns.size')} className={responsiveTableCodeCellClass}>{formatSize(y.size_b)}</td>
-                <td data-label={t('columns.created')} className={responsiveTableCellClass}>{y.created_at}</td>
-                <td className={responsiveTableActionCellClass}>
-                  <button onClick={() => download(y)} className="text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/30 dark:bg-brand-900/20 px-2 py-1 rounded">{t('row.download')}</button>
-                  <button onClick={() => setRestoreBackup(y)} className="text-sm text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 dark:bg-amber-900/20 px-2 py-1 rounded">{t('row.restore')}</button>
-                  <button onClick={() => setBackupToDelete(y)} className="text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 px-2 py-1 rounded">{t('row.delete')}</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>}
-      </div>
+      <BackupsTable backups={backups} loading={loading}
+        onDownload={download} onRestore={setRestoreBackup} onDelete={setBackupToDelete} />
 
       <ConfirmDialog
         open={!!backupToDelete}
