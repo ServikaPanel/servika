@@ -36,6 +36,280 @@ function sourceLabel(source: string, t: (key: string) => string) {
   }
 }
 
+type Translate = (key: string, options?: Record<string, unknown>) => string
+
+type InstallResult = Record<string, string | undefined> & {
+  web_ssl_skipped?: Record<string, string>
+  mail_ssl_skipped?: Record<string, string>
+  mail_ssl?: { hosts?: string[] }
+}
+
+// A name left out of the certificate is not a failure, so it is reported
+// whether the issuance succeeded or fell back. Without it the only symptom is a
+// mail client that keeps asking for a password.
+function skippedNoteOf(result: InstallResult, t: Translate): string {
+  const skipped = Object.entries(result.web_ssl_skipped ?? {})
+    .map(([host, code]) => `${host} (${t(`reasons.${code}`, { defaultValue: code })})`)
+    .join(', ')
+  return skipped ? ` ${t('warning.namesSkipped', { skipped })}` : ''
+}
+
+// result.type is what was ACTUALLY installed, which is not always what was
+// asked for: a Let's Encrypt request that fails falls back to a self-signed
+// certificate so port 443 keeps serving. Reporting the requested type here is
+// what let the panel say "Let's Encrypt installed" while the browser said the
+// site was not secure.
+function webOutcome(result: InstallResult, t: Translate): { success: string | null; warning: string | null } {
+  const note = skippedNoteOf(result, t)
+  if (result.warning) {
+    const reason = result.reason ? t(`reasons.${result.reason}`, { defaultValue: result.reason }) : ''
+    const fallback = t('warning.letsencryptFallback')
+    return { success: null, warning: (reason ? `${fallback} ${reason}` : fallback) + note }
+  }
+  const installed = result.type ?? result.requested_type ?? ''
+  return {
+    success: t('success.installed', { type: installed, expires: result.expires_at }),
+    warning: note ? note.trim() : null,
+  }
+}
+
+// The mail certificate is a separate order, so it is reported separately. The
+// backend returns reason CODES, never sentences: the API is English and this
+// interface ships twelve languages.
+function mailNoteOf(result: InstallResult, t: Translate): string | null {
+  if (result.mail_ssl_error) {
+    return t(`mailSSL.errors.${result.mail_ssl_error}`, { defaultValue: t('mailSSL.errors.generic') })
+  }
+  if (!result.mail_ssl) return null
+  const hosts = (result.mail_ssl.hosts ?? []).join(', ')
+  const skipped = Object.entries(result.mail_ssl_skipped ?? {})
+  if (skipped.length === 0) return t('mailSSL.secured', { hosts })
+  return t('mailSSL.securedPartly', {
+    hosts,
+    skipped: skipped.map(([host, code]) => `${host} (${t(`mailSSL.reasons.${code}`, { defaultValue: code })})`).join(', '),
+  })
+}
+
+function Banners({ error, success, warning, running }: {
+  error: string | null; success: string | null; warning: string | null; running: boolean
+}) {
+  const { t } = useTranslation('DomainSSLPage')
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      {warning && <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-300">{warning}</div>}
+      {running && (
+        <div className="mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md text-sm text-blue-700 dark:text-blue-300">
+          {t('status.issuingNotice')}
+        </div>
+      )}
+    </>
+  )
+}
+
+function stepDotClass(state: string): string {
+  switch (state) {
+    case 'done': return 'bg-emerald-500'
+    case 'warning': return 'bg-amber-400'
+    case 'failed': return 'bg-red-500'
+    default: return 'bg-blue-500 animate-pulse'
+  }
+}
+
+function StepRow({ step }: { step: SSLStep }) {
+  const { t } = useTranslation('DomainSSLPage')
+  return (
+    <li className="flex items-start gap-2.5 text-sm">
+      <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${stepDotClass(step.state)}`}></span>
+      <div className="min-w-0">
+        <div className="text-slate-800 dark:text-slate-200">
+          {t(`steps.names.${step.name}`, { defaultValue: step.name })}
+          <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
+            {t(`steps.states.${step.state}`, { defaultValue: step.state })}
+            {step.seconds >= 1 ? ` · ${Math.round(step.seconds)}s` : ''}
+          </span>
+        </div>
+        {step.reason && (
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            {t(`reasons.${step.reason}`, {
+              defaultValue: t(`mailSSL.errors.${step.reason}`, { defaultValue: step.reason }),
+            })}
+          </div>
+        )}
+      </div>
+    </li>
+  )
+}
+
+function StepsCard({ steps }: { steps: SSLStep[] }) {
+  const { t } = useTranslation('DomainSSLPage')
+  // What the installation is doing. It runs on the server, so this survives the
+  // page being closed and reopened.
+  if (steps.length === 0) return null
+  return (
+    <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('steps.title')}</h2>
+      <ol className="space-y-2">
+        {steps.map((step, index) => <StepRow key={`${step.name}-${index}`} step={step} />)}
+      </ol>
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: SSLStatus }) {
+  const { t } = useTranslation('DomainSSLPage')
+  // Only a real CA is trusted by a browser. A self-signed certificate encrypts
+  // the connection and still shows the visitor a warning page, so a green
+  // "protected" badge would report the fail-safe as the outcome the customer
+  // asked for. The test is which SOURCE it came from, not whether it is Let's
+  // Encrypt: a certificate carried over from a cPanel migration is as real as
+  // one ordered here, and calling it self-signed was the same false report in
+  // reverse.
+  if (sslState(status.active, status.source) === 'trusted') {
+    return (
+      <span className="text-xs px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded uppercase font-semibold tracking-wider flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        {t('status.protected')}
+      </span>
+    )
+  }
+  return (
+    <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded uppercase font-semibold tracking-wider flex items-center gap-1.5">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+      {status.active ? t('status.selfSignedBadge') : t('status.unprotected')}
+    </span>
+  )
+}
+
+function StatusBody({ status, busy, onDisable }: { status: SSLStatus | null; busy: boolean; onDisable: () => void }) {
+  const { t } = useTranslation('DomainSSLPage')
+  if (!status) return <div className="text-sm text-slate-400 dark:text-slate-500">{t('status.loading')}</div>
+  if (!status.active) {
+    return <div className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">{t('status.noCert')}</div>
+  }
+  return (
+    <div className="space-y-2 text-sm">
+      <DetailRow label={t('status.sourceLabel')} value={sourceLabel(status.source, t)} />
+      {status.expires_at && <DetailRow label={t('status.expiryLabel')} value={new Date(status.expires_at).toLocaleDateString('en-US', { dateStyle: 'long' })} />}
+      <button
+        onClick={onDisable}
+        disabled={busy}
+        className="mt-4 px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 disabled:opacity-50 rounded-md text-sm font-medium transition"
+      >
+        {t('status.remove')}
+      </button>
+    </div>
+  )
+}
+
+function StatusCard({ status, busy, onDisable }: { status: SSLStatus | null; busy: boolean; onDisable: () => void }) {
+  const { t } = useTranslation('DomainSSLPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 mb-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('status.title')}</h2>
+        {status && <StatusBadge status={status} />}
+      </div>
+      <StatusBody status={status} busy={busy} onDisable={onDisable} />
+    </div>
+  )
+}
+
+function SelfSignedCard({ busy, onIssue }: { busy: boolean; onIssue: () => void }) {
+  const { t } = useTranslation('DomainSSLPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        </div>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('selfSigned.title')}</h3>
+      </div>
+      <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">{t('selfSigned.description')}</p>
+      <ul className="text-xs text-slate-500 dark:text-slate-500 mb-4 space-y-1">
+        <li>{t('selfSigned.bullet1')}</li>
+        <li>{t('selfSigned.bullet2')}</li>
+        <li>{t('selfSigned.bullet3')}</li>
+      </ul>
+      <button
+        onClick={onIssue}
+        disabled={busy}
+        className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md transition"
+      >
+        {busy ? t('selfSigned.installing') : t('selfSigned.install')}
+      </button>
+    </div>
+  )
+}
+
+function LetsEncryptCard({ busy, domainName, alsoSecureMail, onAlsoSecureMail, onIssue }: {
+  busy: boolean; domainName: string; alsoSecureMail: boolean
+  onAlsoSecureMail: (value: boolean) => void; onIssue: () => void
+}) {
+  const { t } = useTranslation('DomainSSLPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-6">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('letsencrypt.title')}</h3>
+      </div>
+      <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">{t('letsencrypt.description')}</p>
+      <ul className="text-xs text-slate-500 dark:text-slate-500 mb-4 space-y-1">
+        <li>{t('letsencrypt.bullet1')}</li>
+        <li>{t('letsencrypt.bullet2')}</li>
+        <li>{t('letsencrypt.bullet3')}</li>
+      </ul>
+      <label className="flex items-start gap-2 mb-4 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={alsoSecureMail}
+          onChange={e => onAlsoSecureMail(e.target.checked)}
+          className="mt-0.5 cursor-pointer"
+        />
+        <span className="text-xs text-slate-700 dark:text-slate-300">
+          <b>{t('mailSSL.option')}</b>
+          <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+            {t('mailSSL.optionHint', { domain: domainName })}
+          </span>
+        </span>
+      </label>
+      <button
+        onClick={onIssue}
+        disabled={busy}
+        className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium rounded-md transition"
+      >
+        {busy ? t('letsencrypt.installing') : t('letsencrypt.install')}
+      </button>
+    </div>
+  )
+}
+
+function PageHeader({ domain, id }: { domain: Domain | null; id?: string }) {
+  const { t } = useTranslation('DomainSSLPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
+        { label: t('breadcrumb.sslCertificates') },
+      ]} />
+
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      {domain && (
+        <p className="text-sm text-slate-500 dark:text-slate-500 mb-6">
+          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
+          {' · '}
+          {t('ipLabel')} <span className="font-mono">{domain.ipv4}</span>
+        </p>
+      )}
+    </>
+  )
+}
+
 export default function DomainSSLPage() {
   const { t } = useTranslation('DomainSSLPage')
   const { confirm } = useDialog()
@@ -69,54 +343,17 @@ export default function DomainSSLPage() {
   // same fields the synchronous response used to carry, so what the customer is
   // told did not change when the work moved off the request.
   const applyResult = useCallback((progress: SSLProgress) => {
-    const result = (progress.result ?? {}) as Record<string, string | undefined> &
-      { web_ssl_skipped?: Record<string, string>; mail_ssl_skipped?: Record<string, string>; mail_ssl?: { hosts?: string[] } }
+    const result = (progress.result ?? {}) as InstallResult
 
     if (progress.state === 'failed') {
       setError(t(`reasons.${progress.reason}`, { defaultValue: t('errors.installFailed') }))
       return
     }
 
-    // A name left out of the certificate is not a failure, so it is reported
-    // whether the issuance succeeded or fell back. Without it the only symptom
-    // is a mail client that keeps asking for a password.
-    const webSkipped = Object.entries(result.web_ssl_skipped ?? {})
-      .map(([host, code]) => `${host} (${t(`reasons.${code}`, { defaultValue: code })})`)
-      .join(', ')
-    const skippedNote = webSkipped ? ` ${t('warning.namesSkipped', { skipped: webSkipped })}` : ''
-
-    // result.type is what was ACTUALLY installed, which is not always what was
-    // asked for: a Let's Encrypt request that fails falls back to a self-signed
-    // certificate so port 443 keeps serving. Reporting the requested type here
-    // is what let the panel say "Let's Encrypt installed" while the browser said
-    // the site was not secure.
-    const installed = result.type ?? result.requested_type ?? ''
-    if (result.warning) {
-      const reason = result.reason
-        ? t(`reasons.${result.reason}`, { defaultValue: result.reason })
-        : ''
-      const fallback = t('warning.letsencryptFallback')
-      setWarning((reason ? `${fallback} ${reason}` : fallback) + skippedNote)
-    } else {
-      setSuccess(t('success.installed', { type: installed, expires: result.expires_at }))
-      if (skippedNote) setWarning(skippedNote.trim())
-    }
-
-    // The mail certificate is a separate order, so it is reported separately.
-    // The backend returns reason CODES, never sentences: the API is English and
-    // this interface ships twelve languages.
-    if (result.mail_ssl_error) {
-      setMailNote(t(`mailSSL.errors.${result.mail_ssl_error}`, { defaultValue: t('mailSSL.errors.generic') }))
-    } else if (result.mail_ssl) {
-      const skipped = Object.entries(result.mail_ssl_skipped ?? {})
-      setMailNote(skipped.length === 0
-        ? t('mailSSL.secured', { hosts: (result.mail_ssl.hosts ?? []).join(', ') })
-        : t('mailSSL.securedPartly', {
-            hosts: (result.mail_ssl.hosts ?? []).join(', '),
-            skipped: skipped.map(([host, code]) =>
-              `${host} (${t(`mailSSL.reasons.${code}`, { defaultValue: code })})`).join(', '),
-          }))
-    }
+    const outcome = webOutcome(result, t)
+    setSuccess(outcome.success)
+    setWarning(outcome.warning)
+    setMailNote(mailNoteOf(result, t))
   }, [t])
 
   // Polling replaces waiting on the request. It also runs on mount, so opening
@@ -191,183 +428,22 @@ export default function DomainSSLPage() {
 
   return (
     <div className="w-full px-6 py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.sslCertificates') },
-      ]} />
+      <PageHeader domain={domain} id={id} />
 
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-      {domain && (
-        <p className="text-sm text-slate-500 dark:text-slate-500 mb-6">
-          <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{domain.domain_name}</Link>
-          {' · '}
-          {t('ipLabel')} <span className="font-mono">{domain.ipv4}</span>
-        </p>
-      )}
+      <Banners error={error} success={success} warning={warning} running={jobState === 'running'} />
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
-      {warning && <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-300">{warning}</div>}
-      {jobState === 'running' && (
-        <div className="mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md text-sm text-blue-700 dark:text-blue-300">
-          {t('status.issuingNotice')}
-        </div>
-      )}
+      <StepsCard steps={steps} />
 
-      {/* What the installation is doing. It runs on the server, so this survives
-          the page being closed and reopened. */}
-      {steps.length > 0 && (
-        <div className="mb-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('steps.title')}</h2>
-          <ol className="space-y-2">
-            {steps.map((step, index) => (
-              <li key={`${step.name}-${index}`} className="flex items-start gap-2.5 text-sm">
-                <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
-                  step.state === 'done' ? 'bg-emerald-500'
-                  : step.state === 'warning' ? 'bg-amber-400'
-                  : step.state === 'failed' ? 'bg-red-500'
-                  : 'bg-blue-500 animate-pulse'
-                }`}></span>
-                <div className="min-w-0">
-                  <div className="text-slate-800 dark:text-slate-200">
-                    {t(`steps.names.${step.name}`, { defaultValue: step.name })}
-                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">
-                      {t(`steps.states.${step.state}`, { defaultValue: step.state })}
-                      {step.seconds >= 1 ? ` · ${Math.round(step.seconds)}s` : ''}
-                    </span>
-                  </div>
-                  {step.reason && (
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                      {t(`reasons.${step.reason}`, {
-                        defaultValue: t(`mailSSL.errors.${step.reason}`, { defaultValue: step.reason }),
-                      })}
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
       {mailNote && <div className="mb-3 px-3 py-2 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-md text-sm text-sky-800 dark:text-sky-300">{mailNote}</div>}
 
-      {/* Status card */}
-      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 mb-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('status.title')}</h2>
-          {status && (
-            // Only a real CA is trusted by a browser. A self-signed certificate
-            // encrypts the connection and still shows the visitor a warning
-            // page, so a green "protected" badge would report the fail-safe as
-            // the outcome the customer asked for. The test is which SOURCE it
-            // came from, not whether it is Let's Encrypt: a certificate carried
-            // over from a cPanel migration is as real as one ordered here, and
-            // calling it self-signed was the same false report in reverse.
-            sslState(status.active, status.source) === 'trusted' ? (
-              <span className="text-xs px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded uppercase font-semibold tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                {t('status.protected')}
-              </span>
-            ) : status.active ? (
-              <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded uppercase font-semibold tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                {t('status.selfSignedBadge')}
-              </span>
-            ) : (
-              <span className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded uppercase font-semibold tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                {t('status.unprotected')}
-              </span>
-            )
-          )}
-        </div>
-        {!status ? (
-          <div className="text-sm text-slate-400 dark:text-slate-500">{t('status.loading')}</div>
-        ) : status.active ? (
-          <div className="space-y-2 text-sm">
-            <DetailRow label={t('status.sourceLabel')} value={sourceLabel(status.source, t)} />
-            {status.expires_at && <DetailRow label={t('status.expiryLabel')} value={new Date(status.expires_at).toLocaleDateString('en-US', { dateStyle: 'long' })} />}
-            <button
-              onClick={disable}
-              disabled={isProcessing}
-              className="mt-4 px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30 dark:bg-red-900/20 disabled:opacity-50 rounded-md text-sm font-medium transition"
-            >
-              {t('status.remove')}
-            </button>
-          </div>
-        ) : (
-          <div className="text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
-            {t('status.noCert')}
-          </div>
-        )}
-      </div>
+      <StatusCard status={status} busy={isProcessing} onDisable={disable} />
 
-      {/* Action cards */}
       {status && !status.active && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-              </div>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('selfSigned.title')}</h3>
-            </div>
-            <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">
-              {t('selfSigned.description')}
-            </p>
-            <ul className="text-xs text-slate-500 dark:text-slate-500 mb-4 space-y-1">
-              <li>{t('selfSigned.bullet1')}</li>
-              <li>{t('selfSigned.bullet2')}</li>
-              <li>{t('selfSigned.bullet3')}</li>
-            </ul>
-            <button
-              onClick={() => issue('self-signed')}
-              disabled={isProcessing}
-              className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md transition"
-            >
-              {isProcessing ? t('selfSigned.installing') : t('selfSigned.install')}
-            </button>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-              </div>
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('letsencrypt.title')}</h3>
-            </div>
-            <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">
-              {t('letsencrypt.description')}
-            </p>
-            <ul className="text-xs text-slate-500 dark:text-slate-500 mb-4 space-y-1">
-              <li>{t('letsencrypt.bullet1')}</li>
-              <li>{t('letsencrypt.bullet2')}</li>
-              <li>{t('letsencrypt.bullet3')}</li>
-            </ul>
-            <label className="flex items-start gap-2 mb-4 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={alsoSecureMail}
-                onChange={e => setAlsoSecureMail(e.target.checked)}
-                className="mt-0.5 cursor-pointer"
-              />
-              <span className="text-xs text-slate-700 dark:text-slate-300">
-                <b>{t('mailSSL.option')}</b>
-                <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  {t('mailSSL.optionHint', { domain: domain?.domain_name ?? '' })}
-                </span>
-              </span>
-            </label>
-            <button
-              onClick={() => issue('letsencrypt')}
-              disabled={isProcessing}
-              className="w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium rounded-md transition"
-            >
-              {isProcessing ? t('letsencrypt.installing') : t('letsencrypt.install')}
-            </button>
-          </div>
+          <SelfSignedCard busy={isProcessing} onIssue={() => issue('self-signed')} />
+          <LetsEncryptCard busy={isProcessing} domainName={domain?.domain_name ?? ''}
+            alsoSecureMail={alsoSecureMail} onAlsoSecureMail={setAlsoSecureMail}
+            onIssue={() => issue('letsencrypt')} />
         </div>
       )}
     </div>
