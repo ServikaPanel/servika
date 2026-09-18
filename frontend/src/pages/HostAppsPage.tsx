@@ -241,7 +241,7 @@ type ActFn = (app: Installed, action: 'start' | 'stop' | 'restart') => void
 function FeatureSection({ enabled, busy, ready, onToggle }: {
   enabled: boolean; busy: string; ready: boolean; onToggle: (enabled: boolean) => void
 }) {
-  const { t } = useTranslation('HostAppsPage')
+  const { t } = useTranslation('HostApps')
   return (
       <section className="mb-6 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('feature.title')}</h2>
@@ -268,7 +268,7 @@ function FeatureSection({ enabled, busy, ready, onToggle }: {
 function RowActions({ app, enabled, busy, act, remove }: {
   app: Installed; enabled: boolean; busy: string; act: ActFn; remove: (app: Installed) => void
 }) {
-  const { t } = useTranslation('HostAppsPage')
+  const { t } = useTranslation('HostApps')
   const off = !enabled || busy === app.code
   return (
     <div className="flex flex-wrap gap-1">
@@ -288,7 +288,7 @@ function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall }: {
   app: Installed; enabled: boolean; busy: string; act: ActFn
   remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
 }) {
-  const { t } = useTranslation('HostAppsPage')
+  const { t } = useTranslation('HostApps')
   return (
                 <tr key={app.id}>
                   <td className="py-2 pr-4 align-top">
@@ -333,7 +333,7 @@ function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall }: 
   data: Overview | null; enabled: boolean; busy: string; act: ActFn
   remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
 }) {
-  const { t } = useTranslation('HostAppsPage')
+  const { t } = useTranslation('HostApps')
   return (
       <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('installed.title')}</h2>
@@ -368,7 +368,7 @@ function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall }: 
 function CatalogSection({ data, enabled, busy, installedCodes, install }: {
   data: Overview | null; enabled: boolean; busy: string; installedCodes: Set<string>; install: (item: Offered) => void
 }) {
-  const { t } = useTranslation('HostAppsPage')
+  const { t } = useTranslation('HostApps')
   return (
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('catalog.title')}</h2>
