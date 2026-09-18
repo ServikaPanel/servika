@@ -213,6 +213,7 @@ The installer writes every persistent production setting it owns into `/etc/serv
 | `SERVIKA_HOST_APP_LOG_DIR`      | `/var/log/servika-hostapps`                        | Root-owned directory holding one log per server-level application. |
 | `SERVIKA_HOST_APP_ENV_DIR`      | `/etc/servika/host-apps`                           | Directory of per-application 0600 `EnvironmentFile`s for server-level applications. |
 | `SERVIKA_HOST_APP_BACKUP_DIR`   | `/var/lib/servika/host-app-backups`                | Archives of an application's data directory, taken before removal and kept outside the tree removal deletes. |
+| `SERVIKA_APP_BACKUP_DIR`        | `/var/lib/servika/app-backups`                     | Archives of a tenant's own applications, one directory per application, outside every home so the account being protected cannot replace them. |
 | `SERVIKA_ENV_FILE`              | `/etc/servika/env`                                 | The panel's own environment file, the one the installer writes and the systemd unit loads. Read by `internal/panelport` when it rewrites the listen address and by the scan worker when it hands the same configuration to a detached scan. |
 | `SERVIKA_INSTALLATION_ID`       | `/etc/servika/installation-id`                     | Random installation ID storage path for version checks. |
 | `SERVIKA_VERSION_CACHE`         | `/opt/servika/version-cache.json`                  | Cached version manifest path.                           |

@@ -126,6 +126,11 @@ const (
 	// cannot be undone, and the data belongs to the operator rather than to the
 	// panel, so it is kept outside the tree that removal deletes.
 	DefaultHostAppBackupDir = "/var/lib/servika/host-app-backups"
+	// DefaultAppBackupDir holds the archives of a tenant's own applications,
+	// one directory per application. Deliberately outside every tenant home:
+	// the tree being archived is writable by the account that owns it, and an
+	// archive kept inside it could be replaced by the account it protects.
+	DefaultAppBackupDir = "/var/lib/servika/app-backups"
 	// DefaultMariaDBSlowLog is the panel's OWN slow query log, deliberately not
 	// MariaDB's default mariadb-slow.log name: an operator who already turned the
 	// slow log on keeps their file and their logrotate rule, and the panel never
@@ -347,6 +352,11 @@ func HostAppBackupDir() string {
 	return mustAbsPath("SERVIKA_HOST_APP_BACKUP_DIR", DefaultHostAppBackupDir)
 }
 
+// AppBackupDir is where a tenant application's archives are kept.
+func AppBackupDir() string {
+	return mustAbsPath("SERVIKA_APP_BACKUP_DIR", DefaultAppBackupDir)
+}
+
 // MariaDBSlowLog is where the panel asks MariaDB to write slow queries, and the
 // only file internal/slowquery reads.
 func MariaDBSlowLog() string {
@@ -475,6 +485,7 @@ func ValidateRuntimePaths() error {
 		{"SERVIKA_HOST_APP_LOG_DIR", DefaultHostAppLogDir, false},
 		{"SERVIKA_HOST_APP_ENV_DIR", DefaultHostAppEnvDir, false},
 		{"SERVIKA_HOST_APP_BACKUP_DIR", DefaultHostAppBackupDir, false},
+		{"SERVIKA_APP_BACKUP_DIR", DefaultAppBackupDir, false},
 		{"SERVIKA_LARAVEL_LOG_DIR", DefaultLaravelLogDir, false},
 		{"SERVIKA_PLUGIN_ROOT", DefaultPluginRoot, false},
 		{"SERVIKA_LOG_DIR", DefaultLogDir, false},

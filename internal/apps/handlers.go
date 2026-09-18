@@ -15,7 +15,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"servika/internal/apphealth"
+	"servika/internal/bgjob"
 	"servika/internal/httpx"
+	"servika/internal/logx"
+	"servika/internal/middleware"
+	"servika/internal/notifications"
 	"servika/internal/quota"
 )
 
@@ -467,6 +471,160 @@ func waitForApp(ctx context.Context, action string, app App) string {
 		return err.Error()
 	}
 	return ""
+}
+
+// BackupList returns the application's archives, newest first.
+// GET /domains/{id}/apps/{aid}/backups
+func (h *Handlers) BackupList(w http.ResponseWriter, r *http.Request) {
+	s, app, ok := h.scopedApp(w, r)
+	if !ok {
+		return
+	}
+	list, err := ListBackups(r.Context(), h.DB, s.DomainID, app.ID)
+	if err != nil {
+		httpx.LogR(r, "apps: list the backups of application %d: %v", app.ID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the backups could not be listed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"backups": list})
+}
+
+// BackupCreate archives the application.
+// POST /domains/{id}/apps/{aid}/backups
+//
+// Answered with 202. The unit is stopped, a tree of any size is archived and
+// the unit is started again; the server's own write timeout is six minutes and
+// a tenant application with its dependency tree can take longer than that, so
+// the work outlives the request and the result arrives as a notification.
+func (h *Handlers) BackupCreate(w http.ResponseWriter, r *http.Request) {
+	s, app, ok := h.scopedApp(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Note string `json:"note"`
+	}
+	// An empty body is a backup with no note, not a bad request.
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body)
+	note := body.Note
+	if len(note) > 255 {
+		note = note[:255]
+	}
+	actor := actorOf(r)
+	h.detach(app, "backup", func(ctx context.Context) error {
+		_, err := CreateBackup(ctx, h.DB, app, s.SystemUser, note, actor)
+		return err
+	})
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"ok": true})
+}
+
+// BackupRestore puts one archive back.
+// POST /domains/{id}/apps/{aid}/backups/{bid}/restore
+func (h *Handlers) BackupRestore(w http.ResponseWriter, r *http.Request) {
+	s, app, ok := h.scopedApp(w, r)
+	if !ok {
+		return
+	}
+	backupID, ok := backupIDOf(w, r)
+	if !ok {
+		return
+	}
+	h.detach(app, "restore", func(ctx context.Context) error {
+		return RestoreBackup(ctx, h.DB, app, s.SystemUser, backupID)
+	})
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"ok": true})
+}
+
+// BackupDelete removes one archive.
+// DELETE /domains/{id}/apps/{aid}/backups/{bid}
+//
+// Deleting a file is quick enough to answer inline, unlike the two above.
+func (h *Handlers) BackupDelete(w http.ResponseWriter, r *http.Request) {
+	_, app, ok := h.scopedApp(w, r)
+	if !ok {
+		return
+	}
+	backupID, ok := backupIDOf(w, r)
+	if !ok {
+		return
+	}
+	if err := DeleteBackup(r.Context(), h.DB, app, backupID); err != nil {
+		httpx.LogR(r, "apps: delete backup %d of application %d: %v", backupID, app.ID, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "the backup could not be deleted")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// detach runs one long backup operation past the end of the request and tells
+// the tenant how it went.
+//
+// The notification is the ONLY report: there is no job table for a tenant
+// application, so an operation that failed silently would leave the screen
+// looking exactly like one that worked.
+func (h *Handlers) detach(app App, action string, run func(context.Context) error) {
+	// #nosec G118 -- asynchronous by design; internal/appbackup applies its own deadlines.
+	bgjob.Go("apps: "+action, nil, func() {
+		ctx := context.Background()
+		err := run(ctx)
+		h.notifyBackup(ctx, app, action, err)
+	})
+}
+
+func (h *Handlers) notifyBackup(ctx context.Context, app App, action string, cause error) {
+	event := notifications.Event{
+		Level: "info", Category: "apps", DomainID: &app.DomainID,
+		RefType: "app", RefID: app.ID,
+		Key:    "app." + action + ".done",
+		Title:  "Application " + action + " finished",
+		Params: map[string]any{"name": app.Name},
+	}
+	if cause != nil {
+		reason := cause.Error()
+		if len(reason) > 300 {
+			reason = reason[:300]
+		}
+		event.Level = "error"
+		event.Key = "app." + action + ".failed"
+		event.Title = "Application " + action + " failed"
+		event.Message = reason
+		event.Params = map[string]any{"name": app.Name, "reason": reason}
+	}
+	if err := notifications.Write(ctx, h.DB, event); err != nil {
+		logx.Errorf("apps: record the %s result of application %d: %v", action, app.ID, err)
+	}
+}
+
+// scopedApp resolves the domain and the application in one step, answering the
+// request itself when either is missing.
+func (h *Handlers) scopedApp(w http.ResponseWriter, r *http.Request) (scope, App, bool) {
+	s, ok := h.lookup(r)
+	if !ok {
+		httpx.WriteError(w, http.StatusNotFound, "domain not found")
+		return scope{}, App{}, false
+	}
+	app, ok := h.loadApp(r, s)
+	if !ok {
+		httpx.WriteError(w, http.StatusNotFound, "application not found")
+		return scope{}, App{}, false
+	}
+	return s, app, true
+}
+
+func backupIDOf(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "bid"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid backup id")
+		return 0, false
+	}
+	return id, true
+}
+
+func actorOf(r *http.Request) any {
+	if claims := middleware.ClaimsFrom(r); claims != nil && claims.UserID > 0 {
+		return claims.UserID
+	}
+	return nil
 }
 
 // StatusOf reports what systemd says about one application.
