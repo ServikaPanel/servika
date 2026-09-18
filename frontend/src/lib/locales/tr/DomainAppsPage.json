@@ -30,7 +30,8 @@
     "env": "Ortam",
     "installDeps": "Bağımlılıkları kur",
     "edit": "Düzenle",
-    "delete": "Sil"
+    "delete": "Sil",
+    "backups": "Yedekler"
   },
   "confirm": {
     "delete": "{{name}} uygulaması silinsin mi? Dosyaları yerinde kalır, ama süreç ve ters vekili kaldırılır.",

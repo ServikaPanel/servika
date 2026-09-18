@@ -322,6 +322,16 @@
       "diskGate": "Los backups automáticos se detuvieron por la protección de disco: {{reason}}.",
       "corruptMissing": "No se pudo leer el backup más reciente de {{domain}} ({{file}}); puede no ser válido para la recuperación.",
       "bitRot": "El backup más reciente de {{domain}} ({{file}}) ya no coincide con su checksum de cuando se escribió; la restauración puede fallar."
+    },
+    "app": {
+      "backup": {
+        "done": "La copia de seguridad de {{name}} está lista.",
+        "failed": "La copia de seguridad de {{name}} falló: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} se restauró desde su copia de seguridad.",
+        "failed": "{{name}} no se pudo restaurar: {{reason}}"
+      }
     }
   }
 }

@@ -1,0 +1,21 @@
+{
+  "title": "Backup di {{name}}",
+  "explain": "Un backup ferma l'applicazione, archivia i suoi file e la sua unit, poi la riavvia. Vengono conservati i cinque più recenti.",
+  "notePlaceholder": "A cosa serve questo backup?",
+  "take": "Esegui un backup",
+  "started": "Il backup è iniziato. Riceverai una notifica quando sarà pronto.",
+  "restore": "Ripristina",
+  "restoreStarted": "Il ripristino è iniziato. Riceverai una notifica al termine.",
+  "delete": "Elimina",
+  "loading": "Caricamento...",
+  "empty": "Non c'è ancora nessun backup.",
+  "unverified": "Questo archivio non ha un digest, quindi non può essere ripristinato.",
+  "confirmRestore": {
+    "title": "Ripristinare questo backup?",
+    "message": "{{name}} verrà fermata e i suoi file sostituiti da questo archivio. Se poi non risponde, i file precedenti vengono rimessi al loro posto."
+  },
+  "confirmDelete": {
+    "title": "Eliminare questo backup?",
+    "message": "L'archivio viene rimosso dal disco. L'operazione non è reversibile."
+  }
+}

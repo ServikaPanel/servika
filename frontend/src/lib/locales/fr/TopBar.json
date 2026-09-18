@@ -322,6 +322,16 @@
       "diskGate": "Les backups automatiques ont été arrêtés par la protection disque : {{reason}}.",
       "corruptMissing": "Le backup le plus récent de {{domain}} n'a pas pu être lu ({{file}}) ; il peut être invalide pour la récupération.",
       "bitRot": "Le backup le plus récent de {{domain}} ({{file}}) ne correspond plus à sa somme de contrôle d'origine ; la restauration peut échouer."
+    },
+    "app": {
+      "backup": {
+        "done": "La sauvegarde de {{name}} est prête.",
+        "failed": "La sauvegarde de {{name}} a échoué : {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} a été restauré depuis sa sauvegarde.",
+        "failed": "{{name}} n'a pas pu être restauré : {{reason}}"
+      }
     }
   }
 }

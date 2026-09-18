@@ -1,0 +1,21 @@
+{
+  "title": "Copiile de siguranță ale {{name}}",
+  "explain": "O copie oprește aplicația, arhivează fișierele și unit-ul ei, apoi o pornește din nou. Se păstrează cele mai noi cinci.",
+  "notePlaceholder": "La ce folosește această copie?",
+  "take": "Creează o copie",
+  "started": "Copia a pornit. Veți primi o notificare când este gata.",
+  "restore": "Restaurează",
+  "restoreStarted": "Restaurarea a pornit. Veți primi o notificare când se termină.",
+  "delete": "Șterge",
+  "loading": "Se încarcă...",
+  "empty": "Nu există încă nicio copie.",
+  "unverified": "Această arhivă nu are digest, deci nu poate fi restaurată.",
+  "confirmRestore": {
+    "title": "Restaurați această copie?",
+    "message": "{{name}} va fi oprită, iar fișierele înlocuite cu această arhivă. Dacă apoi nu răspunde, fișierele anterioare sunt puse la loc."
+  },
+  "confirmDelete": {
+    "title": "Ștergeți această copie?",
+    "message": "Arhiva este eliminată de pe disc. Această acțiune nu poate fi anulată."
+  }
+}

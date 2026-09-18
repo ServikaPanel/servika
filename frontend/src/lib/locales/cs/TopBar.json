@@ -322,6 +322,16 @@
       "diskGate": "Automatické backupy byly zastaveny ochranou disku: {{reason}}.",
       "corruptMissing": "Nejnovější backup pro {{domain}} nešlo přečíst ({{file}}); pro obnovu může být neplatný.",
       "bitRot": "Nejnovější backup pro {{domain}} ({{file}}) už neodpovídá svému checksumu z doby zápisu; obnova z něj může selhat."
+    },
+    "app": {
+      "backup": {
+        "done": "Záloha {{name}} je připravena.",
+        "failed": "Záloha {{name}} selhala: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} byla obnovena ze zálohy.",
+        "failed": "{{name}} se nepodařilo obnovit: {{reason}}"
+      }
     }
   }
 }

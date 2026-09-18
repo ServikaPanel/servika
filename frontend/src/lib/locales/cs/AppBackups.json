@@ -1,0 +1,21 @@
+{
+  "title": "Zálohy {{name}}",
+  "explain": "Záloha zastaví aplikaci, archivuje její soubory a unit, a znovu ji spustí. Uchovává se pět nejnovějších.",
+  "notePlaceholder": "K čemu je tato záloha?",
+  "take": "Vytvořit zálohu",
+  "started": "Záloha byla spuštěna. Až bude hotová, dostanete oznámení.",
+  "restore": "Obnovit",
+  "restoreStarted": "Obnovení bylo spuštěno. Až bude hotové, dostanete oznámení.",
+  "delete": "Smazat",
+  "loading": "Načítání...",
+  "empty": "Zatím tu není žádná záloha.",
+  "unverified": "Tento archiv nemá digest, proto jej nelze obnovit.",
+  "confirmRestore": {
+    "title": "Obnovit tuto zálohu?",
+    "message": "{{name}} bude zastavena a její soubory nahrazeny tímto archivem. Pokud poté neodpoví, vrátí se původní soubory."
+  },
+  "confirmDelete": {
+    "title": "Smazat tuto zálohu?",
+    "message": "Archiv bude odstraněn z disku. Tuto akci nelze vrátit."
+  }
+}

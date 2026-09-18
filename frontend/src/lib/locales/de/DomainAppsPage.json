@@ -30,7 +30,8 @@
     "env": "Umgebung",
     "installDeps": "Abhängigkeiten installieren",
     "edit": "Bearbeiten",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "backups": "Sicherungen"
   },
   "confirm": {
     "delete": "Die Anwendung {{name}} löschen? Die Dateien bleiben bestehen, aber der Prozess und sein Proxy werden entfernt.",

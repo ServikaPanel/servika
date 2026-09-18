@@ -322,6 +322,16 @@
       "diskGate": "Otomatik backup'lar disk koruması nedeniyle durduruldu: {{reason}}.",
       "corruptMissing": "{{domain}} için en yeni backup okunamadı ({{file}}); kurtarma için geçersiz olabilir.",
       "bitRot": "{{domain}} için en yeni backup ({{file}}) yazıldığı andaki checksum ile artık uyuşmuyor; bundan geri yükleme başarısız olabilir."
+    },
+    "app": {
+      "backup": {
+        "done": "{{name}} yedeği hazır.",
+        "failed": "{{name}} yedeği alınamadı: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} yedeğinden geri yüklendi.",
+        "failed": "{{name}} geri yüklenemedi: {{reason}}"
+      }
     }
   }
 }

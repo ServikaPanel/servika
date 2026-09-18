@@ -1,0 +1,21 @@
+{
+  "title": "Copias de seguridad de {{name}}",
+  "explain": "Una copia detiene la aplicación, archiva sus archivos y su unit, y la vuelve a iniciar. Se conservan las cinco más recientes.",
+  "notePlaceholder": "¿Para qué es esta copia?",
+  "take": "Crear una copia",
+  "started": "La copia se inició. Recibirá una notificación cuando esté lista.",
+  "restore": "Restaurar",
+  "restoreStarted": "La restauración se inició. Recibirá una notificación cuando termine.",
+  "delete": "Eliminar",
+  "loading": "Cargando...",
+  "empty": "Todavía no hay ninguna copia.",
+  "unverified": "Este archivo no tiene digest, así que no se puede restaurar.",
+  "confirmRestore": {
+    "title": "¿Restaurar esta copia?",
+    "message": "{{name}} se detendrá y sus archivos se reemplazarán por este archivo. Si después no responde, se devuelven los archivos anteriores."
+  },
+  "confirmDelete": {
+    "title": "¿Eliminar esta copia?",
+    "message": "El archivo se quita del disco. Esto no se puede deshacer."
+  }
+}

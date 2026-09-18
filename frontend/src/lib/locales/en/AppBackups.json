@@ -1,0 +1,21 @@
+{
+  "title": "Backups of {{name}}",
+  "explain": "A backup stops the application, archives its files and its unit, and starts it again. The newest five are kept.",
+  "notePlaceholder": "What is this backup for?",
+  "take": "Take a backup",
+  "started": "The backup was started. You will be notified when it is ready.",
+  "restore": "Restore",
+  "restoreStarted": "The restore was started. You will be notified when it is done.",
+  "delete": "Delete",
+  "loading": "Loading...",
+  "empty": "There is no backup yet.",
+  "unverified": "This archive has no digest, so it cannot be restored.",
+  "confirmRestore": {
+    "title": "Restore this backup?",
+    "message": "{{name}} will be stopped and its files replaced by this archive. If it does not answer afterwards, the previous files are put back."
+  },
+  "confirmDelete": {
+    "title": "Delete this backup?",
+    "message": "The archive is removed from the disk. This cannot be undone."
+  }
+}

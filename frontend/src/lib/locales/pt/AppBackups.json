@@ -1,0 +1,21 @@
+{
+  "title": "Cópias de segurança de {{name}}",
+  "explain": "Uma cópia para a aplicação, arquiva os seus ficheiros e a sua unit, e volta a iniciá-la. São guardadas as cinco mais recentes.",
+  "notePlaceholder": "Para que serve esta cópia?",
+  "take": "Criar uma cópia",
+  "started": "A cópia foi iniciada. Será notificado quando estiver pronta.",
+  "restore": "Repor",
+  "restoreStarted": "A reposição foi iniciada. Será notificado quando terminar.",
+  "delete": "Eliminar",
+  "loading": "A carregar...",
+  "empty": "Ainda não existe nenhuma cópia.",
+  "unverified": "Este arquivo não tem digest, por isso não pode ser reposto.",
+  "confirmRestore": {
+    "title": "Repor esta cópia?",
+    "message": "{{name}} será parada e os ficheiros substituídos por este arquivo. Se depois não responder, os ficheiros anteriores são repostos."
+  },
+  "confirmDelete": {
+    "title": "Eliminar esta cópia?",
+    "message": "O arquivo é removido do disco. Isto não pode ser anulado."
+  }
+}

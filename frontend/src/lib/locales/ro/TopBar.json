@@ -322,6 +322,16 @@
       "diskGate": "Backupurile automate au fost oprite de protecția discului: {{reason}}.",
       "corruptMissing": "Cel mai recent backup pentru {{domain}} nu a putut fi citit ({{file}}); poate fi invalid pentru recuperare.",
       "bitRot": "Cel mai recent backup pentru {{domain}} ({{file}}) nu mai corespunde cu checksumul de la scriere; restaurarea din el poate eșua."
+    },
+    "app": {
+      "backup": {
+        "done": "Copia de siguranță a {{name}} este gata.",
+        "failed": "Copia de siguranță a {{name}} a eșuat: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} a fost restaurată din copia de siguranță.",
+        "failed": "{{name}} nu a putut fi restaurată: {{reason}}"
+      }
     }
   }
 }

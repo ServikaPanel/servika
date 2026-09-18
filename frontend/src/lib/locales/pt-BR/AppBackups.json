@@ -1,0 +1,21 @@
+{
+  "title": "Backups de {{name}}",
+  "explain": "Um backup para o aplicativo, arquiva seus arquivos e sua unit, e o inicia novamente. Os cinco mais recentes são mantidos.",
+  "notePlaceholder": "Para que serve este backup?",
+  "take": "Criar um backup",
+  "started": "O backup foi iniciado. Você será notificado quando estiver pronto.",
+  "restore": "Restaurar",
+  "restoreStarted": "A restauração foi iniciada. Você será notificado quando terminar.",
+  "delete": "Excluir",
+  "loading": "Carregando...",
+  "empty": "Ainda não há nenhum backup.",
+  "unverified": "Este arquivo não tem digest, por isso não pode ser restaurado.",
+  "confirmRestore": {
+    "title": "Restaurar este backup?",
+    "message": "{{name}} será parado e seus arquivos substituídos por este arquivo. Se depois não responder, os arquivos anteriores são restaurados."
+  },
+  "confirmDelete": {
+    "title": "Excluir este backup?",
+    "message": "O arquivo é removido do disco. Isso não pode ser desfeito."
+  }
+}

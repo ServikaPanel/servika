@@ -56,7 +56,8 @@
     "start": "Pornește",
     "stop": "Oprește",
     "restart": "Repornește",
-    "failedTitle": "Aplicația nu a răspuns"
+    "failedTitle": "Aplicația nu a răspuns",
+    "backups": "Copii"
   },
   "firewall": {
     "isOpen": "Deschis",

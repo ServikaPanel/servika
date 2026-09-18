@@ -322,6 +322,16 @@
       "diskGate": "Automatische Backups wurden vom Festplattenschutz gestoppt: {{reason}}.",
       "corruptMissing": "Das neueste Backup für {{domain}} konnte nicht gelesen werden ({{file}}); es ist möglicherweise für die Wiederherstellung ungültig.",
       "bitRot": "Das neueste Backup für {{domain}} ({{file}}) stimmt nicht mehr mit seiner Prüfsumme vom Schreibzeitpunkt überein; eine Wiederherstellung daraus kann fehlschlagen."
+    },
+    "app": {
+      "backup": {
+        "done": "Die Sicherung von {{name}} ist fertig.",
+        "failed": "Die Sicherung von {{name}} ist fehlgeschlagen: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} wurde aus der Sicherung wiederhergestellt.",
+        "failed": "{{name}} konnte nicht wiederhergestellt werden: {{reason}}"
+      }
     }
   }
 }

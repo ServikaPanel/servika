@@ -1,0 +1,21 @@
+{
+  "title": "Sauvegardes de {{name}}",
+  "explain": "Une sauvegarde arrête l'application, archive ses fichiers et son unit, puis la redémarre. Les cinq plus récentes sont conservées.",
+  "notePlaceholder": "À quoi sert cette sauvegarde ?",
+  "take": "Créer une sauvegarde",
+  "started": "La sauvegarde a démarré. Vous serez averti lorsqu'elle sera prête.",
+  "restore": "Restaurer",
+  "restoreStarted": "La restauration a démarré. Vous serez averti lorsqu'elle sera terminée.",
+  "delete": "Supprimer",
+  "loading": "Chargement...",
+  "empty": "Il n'y a pas encore de sauvegarde.",
+  "unverified": "Cette archive n'a pas de digest, elle ne peut pas être restaurée.",
+  "confirmRestore": {
+    "title": "Restaurer cette sauvegarde ?",
+    "message": "{{name}} sera arrêtée et ses fichiers remplacés par cette archive. Si elle ne répond pas ensuite, les fichiers précédents sont remis en place."
+  },
+  "confirmDelete": {
+    "title": "Supprimer cette sauvegarde ?",
+    "message": "L'archive est retirée du disque. Cette action est irréversible."
+  }
+}

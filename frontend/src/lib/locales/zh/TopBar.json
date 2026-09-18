@@ -322,6 +322,16 @@
       "diskGate": "自动 backup 因磁盘保护被停止：{{reason}}。",
       "corruptMissing": "无法读取 {{domain}} 的最新 backup（{{file}}）；用于恢复可能无效。",
       "bitRot": "{{domain}} 的最新 backup（{{file}}）已与写入时的 checksum 不再匹配；从中恢复可能失败。"
+    },
+    "app": {
+      "backup": {
+        "done": "{{name}} 的备份已完成。",
+        "failed": "{{name}} 的备份失败：{{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} 已从备份恢复。",
+        "failed": "{{name}} 无法恢复：{{reason}}"
+      }
     }
   }
 }

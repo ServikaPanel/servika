@@ -30,7 +30,8 @@
     "env": "Prostředí",
     "installDeps": "Nainstalovat závislosti",
     "edit": "Upravit",
-    "delete": "Smazat"
+    "delete": "Smazat",
+    "backups": "Zálohy"
   },
   "confirm": {
     "delete": "Smazat aplikaci {{name}}? Její soubory zůstanou na místě, ale proces i jeho proxy budou odstraněny.",

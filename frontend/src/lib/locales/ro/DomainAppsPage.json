@@ -30,7 +30,8 @@
     "env": "Mediu",
     "installDeps": "Instalează dependențele",
     "edit": "Editează",
-    "delete": "Șterge"
+    "delete": "Șterge",
+    "backups": "Copii"
   },
   "confirm": {
     "delete": "Ștergeți aplicația {{name}}? Fișierele rămân pe loc, dar procesul și proxy-ul său sunt eliminate.",

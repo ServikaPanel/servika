@@ -322,6 +322,16 @@
       "diskGate": "I backup automatici sono stati interrotti dalla protezione disco: {{reason}}.",
       "corruptMissing": "Il backup più recente di {{domain}} non è stato letto ({{file}}); potrebbe non essere valido per il ripristino.",
       "bitRot": "Il backup più recente di {{domain}} ({{file}}) non corrisponde più al checksum di quando è stato scritto; il ripristino potrebbe non riuscire."
+    },
+    "app": {
+      "backup": {
+        "done": "Il backup di {{name}} è pronto.",
+        "failed": "Il backup di {{name}} non è riuscito: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} è stato ripristinato dal suo backup.",
+        "failed": "{{name}} non è stato ripristinato: {{reason}}"
+      }
     }
   }
 }

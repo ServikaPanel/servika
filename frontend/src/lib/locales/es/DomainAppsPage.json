@@ -30,7 +30,8 @@
     "env": "Entorno",
     "installDeps": "Instalar dependencias",
     "edit": "Editar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "backups": "Copias"
   },
   "confirm": {
     "delete": "¿Eliminar la aplicación {{name}}? Sus archivos permanecen en su sitio, pero el proceso y su proxy se retiran.",

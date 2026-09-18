@@ -1,0 +1,21 @@
+{
+  "title": "{{name}} yedekleri",
+  "explain": "Yedek alma, uygulamayı durdurur, dosyalarını ve unit dosyasını arşivler, sonra tekrar başlatır. En yeni beş yedek saklanır.",
+  "notePlaceholder": "Bu yedek ne için?",
+  "take": "Yedek al",
+  "started": "Yedekleme başladı. Hazır olduğunda bildirim alacaksınız.",
+  "restore": "Geri yükle",
+  "restoreStarted": "Geri yükleme başladı. Bittiğinde bildirim alacaksınız.",
+  "delete": "Sil",
+  "loading": "Yükleniyor...",
+  "empty": "Henüz yedek yok.",
+  "unverified": "Bu arşivin digest değeri yok, geri yüklenemez.",
+  "confirmRestore": {
+    "title": "Bu yedek geri yüklensin mi?",
+    "message": "{{name}} durdurulur ve dosyaları bu arşivle değiştirilir. Sonrasında cevap vermezse önceki dosyalar geri konur."
+  },
+  "confirmDelete": {
+    "title": "Bu yedek silinsin mi?",
+    "message": "Arşiv diskten kaldırılır. Bu işlem geri alınamaz."
+  }
+}

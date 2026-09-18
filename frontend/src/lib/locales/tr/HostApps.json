@@ -56,7 +56,8 @@
     "start": "Başlat",
     "stop": "Durdur",
     "restart": "Yeniden başlat",
-    "failedTitle": "Uygulama yanıt vermedi"
+    "failedTitle": "Uygulama yanıt vermedi",
+    "backups": "Yedekler"
   },
   "firewall": {
     "isOpen": "Açık",

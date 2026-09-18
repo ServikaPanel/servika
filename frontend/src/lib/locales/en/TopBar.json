@@ -322,6 +322,16 @@
       "diskGate": "Automatic backups were stopped by the disk guard: {{reason}}.",
       "corruptMissing": "The newest backup for {{domain}} could not be read ({{file}}); it may be invalid for recovery.",
       "bitRot": "The newest backup for {{domain}} ({{file}}) no longer matches its checksum from when it was written; restoring from it may fail."
+    },
+    "app": {
+      "backup": {
+        "done": "The backup of {{name}} is ready.",
+        "failed": "The backup of {{name}} failed: {{reason}}"
+      },
+      "restore": {
+        "done": "{{name}} was restored from its backup.",
+        "failed": "{{name}} could not be restored: {{reason}}"
+      }
     }
   }
 }

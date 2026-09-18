@@ -1,0 +1,21 @@
+{
+  "title": "Sicherungen von {{name}}",
+  "explain": "Eine Sicherung stoppt die Anwendung, archiviert ihre Dateien und ihre Unit und startet sie wieder. Die neuesten fünf werden aufbewahrt.",
+  "notePlaceholder": "Wofür ist diese Sicherung?",
+  "take": "Sicherung erstellen",
+  "started": "Die Sicherung wurde gestartet. Sie werden benachrichtigt, sobald sie fertig ist.",
+  "restore": "Wiederherstellen",
+  "restoreStarted": "Die Wiederherstellung wurde gestartet. Sie werden benachrichtigt, sobald sie fertig ist.",
+  "delete": "Löschen",
+  "loading": "Wird geladen...",
+  "empty": "Es gibt noch keine Sicherung.",
+  "unverified": "Dieses Archiv hat keinen Digest und kann nicht wiederhergestellt werden.",
+  "confirmRestore": {
+    "title": "Diese Sicherung wiederherstellen?",
+    "message": "{{name}} wird gestoppt und die Dateien durch dieses Archiv ersetzt. Antwortet die Anwendung danach nicht, werden die vorherigen Dateien zurückgelegt."
+  },
+  "confirmDelete": {
+    "title": "Diese Sicherung löschen?",
+    "message": "Das Archiv wird von der Festplatte entfernt. Das kann nicht rückgängig gemacht werden."
+  }
+}

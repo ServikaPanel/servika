@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Breadcrumb from '@/components/Breadcrumb'
 import { api, apiError, apiReason } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
+import AppBackupsModal from '@/components/AppBackupsModal'
 
 type Status = {
   active_state: string
@@ -69,6 +70,7 @@ export default function HostAppsPage() {
   const [data, setData] = useState<Overview | null>(null)
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState('')
+  const [backupsOf, setBackupsOf] = useState<Installed | null>(null)
 
   const load = useCallback(() => {
     return api.get<Overview>('/system/host-apps')
@@ -229,9 +231,19 @@ export default function HostAppsPage() {
 
       <FeatureSection enabled={enabled} busy={busy} ready={data !== null} onToggle={setEnabled} />
 
-      <InstalledSection data={data} enabled={enabled} busy={busy} act={act} remove={remove} toggleFirewall={toggleFirewall} />
+      <InstalledSection data={data} enabled={enabled} busy={busy} act={act} remove={remove}
+        toggleFirewall={toggleFirewall} openBackups={setBackupsOf} />
 
       <CatalogSection data={data} enabled={enabled} busy={busy} installedCodes={installedCodes} install={install} />
+
+      {backupsOf && (
+        <AppBackupsModal
+          open
+          base={`/system/host-apps/${backupsOf.id}`}
+          name={backupsOf.name}
+          onClose={() => setBackupsOf(null)}
+        />
+      )}
     </div>
   )
 }
@@ -265,8 +277,9 @@ function FeatureSection({ enabled, busy, ready, onToggle }: {
   )
 }
 
-function RowActions({ app, enabled, busy, act, remove }: {
-  app: Installed; enabled: boolean; busy: string; act: ActFn; remove: (app: Installed) => void
+function RowActions({ app, enabled, busy, act, remove, openBackups }: {
+  app: Installed; enabled: boolean; busy: string; act: ActFn
+  remove: (app: Installed) => void; openBackups: (app: Installed) => void
 }) {
   const { t } = useTranslation('HostApps')
   const off = !enabled || busy === app.code
@@ -278,15 +291,18 @@ function RowActions({ app, enabled, busy, act, remove }: {
         className="rounded-lg bg-sky-600 px-2 py-1 text-white disabled:opacity-50">{t('action.restart')}</button>
       <button type="button" onClick={() => void act(app, 'stop')} disabled={off}
         className="rounded-lg bg-slate-600 px-2 py-1 text-white disabled:opacity-50">{t('action.stop')}</button>
+      <button type="button" onClick={() => openBackups(app)} disabled={busy === app.code}
+        className="rounded-lg bg-violet-600 px-2 py-1 text-white disabled:opacity-50">{t('action.backups')}</button>
       <button type="button" onClick={() => void remove(app)} disabled={off}
         className="rounded-lg bg-rose-600 px-2 py-1 text-white disabled:opacity-50">{t('remove.action')}</button>
     </div>
   )
 }
 
-function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall }: {
+function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall, openBackups }: {
   app: Installed; enabled: boolean; busy: string; act: ActFn
   remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
+  openBackups: (app: Installed) => void
 }) {
   const { t } = useTranslation('HostApps')
   return (
@@ -323,15 +339,17 @@ function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall }: {
                     </button>
                   </td>
                   <td className="py-2 align-top text-xs">
-                    <RowActions app={app} enabled={enabled} busy={busy} act={act} remove={remove} />
+                    <RowActions app={app} enabled={enabled} busy={busy} act={act}
+                      remove={remove} openBackups={openBackups} />
                   </td>
                 </tr>
   )
 }
 
-function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall }: {
+function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall, openBackups }: {
   data: Overview | null; enabled: boolean; busy: string; act: ActFn
   remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
+  openBackups: (app: Installed) => void
 }) {
   const { t } = useTranslation('HostApps')
   return (
@@ -353,7 +371,7 @@ function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall }: 
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {(data?.installed ?? []).map((app) => (
                 <InstalledRow key={app.id} app={app} enabled={enabled} busy={busy}
-                  act={act} remove={remove} toggleFirewall={toggleFirewall} />
+                  act={act} remove={remove} toggleFirewall={toggleFirewall} openBackups={openBackups} />
               ))}
             </tbody>
           </table>

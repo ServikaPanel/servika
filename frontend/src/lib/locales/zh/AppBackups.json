@@ -1,0 +1,21 @@
+{
+  "title": "{{name}} 的备份",
+  "explain": "备份会停止应用，归档其文件和 unit，然后重新启动。保留最新的五个。",
+  "notePlaceholder": "这个备份用于什么？",
+  "take": "创建备份",
+  "started": "备份已开始。完成后会通知您。",
+  "restore": "恢复",
+  "restoreStarted": "恢复已开始。完成后会通知您。",
+  "delete": "删除",
+  "loading": "加载中...",
+  "empty": "还没有备份。",
+  "unverified": "该归档没有 digest，无法恢复。",
+  "confirmRestore": {
+    "title": "恢复此备份？",
+    "message": "{{name}} 将被停止，其文件将被此归档替换。如果之后没有响应，会放回之前的文件。"
+  },
+  "confirmDelete": {
+    "title": "删除此备份？",
+    "message": "归档会从磁盘中移除。此操作无法撤销。"
+  }
+}
