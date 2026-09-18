@@ -26,6 +26,8 @@
 //	                                  print it once
 //	servika-agent fingerprint         print the certificate's SHA-256
 //	servika-agent version             print "<version> <channel>"
+//	servika-agent update <exe>        swap in a new binary, gated on its health,
+//	                                  rolling back automatically when it fails
 //	servika-agent clear-install-lock  clear a half-finished installation's lock
 //	servika-agent                     run in the foreground (development)
 //	servika-agent service             called by the service manager
@@ -108,6 +110,8 @@ func runCommand(command string) bool {
 		// A machine-readable line. The update command reads it back from the new
 		// binary as proof that it actually runs.
 		fmt.Println(platform.Version + " " + platform.Channel)
+	case "update":
+		runUpdateCommand()
 	case "clear-install-lock":
 		installer.LoadPending()
 		installer.ClearPending()
@@ -116,6 +120,19 @@ func runCommand(command string) bool {
 		return false
 	}
 	return true
+}
+
+// runUpdateCommand reads the replacement path and performs the update.
+func runUpdateCommand() {
+	newExe := ""
+	if len(os.Args) > 2 {
+		newExe = os.Args[2]
+	}
+	if newExe == "" {
+		fmt.Fprintln(os.Stderr, "usage: servika-agent update <path-to-new-exe>")
+		os.Exit(1)
+	}
+	exitOn(update(newExe), "UPDATE")
 }
 
 // exitOn prints the failure and stops when err is not nil.
