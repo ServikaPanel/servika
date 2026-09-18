@@ -22,6 +22,7 @@ import (
 
 	"servika/internal/httpx"
 	"servika/internal/logx"
+	"servika/internal/middleware"
 	"servika/internal/secret"
 )
 
@@ -186,6 +187,8 @@ func (h *Handlers) SessionDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "no such session")
 		return
 	}
+	// Only a real delete is audited, so the log does not carry a no-op.
+	middleware.RecordAudit(h.DB, r, "migration_session.delete", strconv.FormatInt(id, 10), true)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"deleted": true})
 }
 
