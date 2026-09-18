@@ -75,12 +75,16 @@ func readSettings(dir string) (settings, error) {
 	return s, nil
 }
 
+// marshalSettings encodes the settings the way they are stored, so a caller
+// that writes the file itself produces the same bytes.
+func marshalSettings(s settings) ([]byte, error) { return json.MarshalIndent(s, "", "  ") }
+
 // writeSettings saves the file with 0600.
 func writeSettings(dir string, s settings) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(s, "", "  ")
+	b, err := marshalSettings(s)
 	if err != nil {
 		return err
 	}

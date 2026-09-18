@@ -10,6 +10,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -55,11 +56,22 @@ func serve(servers *[2]*http.Server) error {
 			Certificates: []tls.Certificate{cert},
 		},
 	}
+	panel := panelServer(cert)
 	if servers != nil {
 		servers[0] = api
+		servers[1] = panel
 	}
 	log.Printf("servika-agent %s (%s) is listening over TLS on %s", platform.Version, platform.Channel, current.Listen)
 	log.Printf("certificate SHA-256 fingerprint: %s", fingerprintOf(cert))
+	log.Printf("local panel: https://%s", panel.Addr)
+	// THE LOCAL PANEL RUNS IN ITS OWN GOROUTINE. If 8443 is already taken, or
+	// the panel fails for any reason, the agent API on 8460 stays up: the panel
+	// layer never takes the core down with it.
+	go func() {
+		if err := panel.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("WARNING - the local panel stopped: %v", err)
+		}
+	}()
 	// The certificate comes from TLSConfig, so the file arguments are empty.
 	return api.ListenAndServeTLS("", "")
 }
