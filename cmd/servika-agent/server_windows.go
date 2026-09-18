@@ -69,7 +69,7 @@ func agentRoutes(provider platform.Provider, token string) http.Handler {
 	mux := http.NewServeMux()
 	guard := func(h http.HandlerFunc) http.HandlerFunc { return authorized(token, h) }
 	mux.HandleFunc("/health", guard(healthHandler(provider)))
-	mux.HandleFunc("/site", guard(siteHandler(provider)))
+	mux.HandleFunc("/site", guard(audited("site", siteHandler(provider))))
 	mux.HandleFunc("/events", guard(eventsHandler))
 	mux.HandleFunc("/tasks", guard(tasksHandler))
 	return mux
@@ -84,7 +84,7 @@ func siteHandler(provider platform.Provider) http.HandlerFunc {
 		case http.MethodDelete:
 			deleteSite(provider, w, r)
 		default:
-			writeFailure(w, http.StatusMethodNotAllowed, "that method is not supported")
+			methodFailure(w, r)
 		}
 	}
 }
@@ -100,7 +100,7 @@ func createSite(provider platform.Provider, w http.ResponseWriter, r *http.Reque
 	}
 	result, err := provider.CreateSite(platform.SiteRequest{Domain: request.Domain, PHPVersion: request.PHPVersion})
 	if err != nil {
-		writeFailure(w, statusFor(err), err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
 	log.Printf("site created: %s (%s)", request.Domain, result.SystemUser)
@@ -117,7 +117,7 @@ func deleteSite(provider platform.Provider, w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := provider.DeleteSite(platform.SiteID{Domain: request.Domain, SystemUser: request.SystemUser}); err != nil {
-		writeFailure(w, statusFor(err), err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
 	log.Printf("site deleted: %s", request.Domain)
@@ -130,21 +130,21 @@ func deleteSite(provider platform.Provider, w http.ResponseWriter, r *http.Reque
 // are NOT repeated here: one place to change means one place that can be wrong.
 func eventsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeFailure(w, http.StatusMethodNotAllowed, "that method is not supported")
+		methodFailure(w, r)
 		return
 	}
 	count := 50
 	if v := r.URL.Query().Get("count"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			writeFailure(w, http.StatusBadRequest, "count must be a number")
+			writeEnvelope(w, r, http.StatusBadRequest, CodeInvalidRequest, "count must be a number", false)
 			return
 		}
 		count = n
 	}
 	events, err := platform.ReadEvents(r.URL.Query().Get("log"), count)
 	if err != nil {
-		writeFailure(w, statusFor(err), err.Error())
+		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": events})
@@ -154,12 +154,12 @@ func eventsHandler(w http.ResponseWriter, r *http.Request) {
 // own tasks under \Microsoft\.
 func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeFailure(w, http.StatusMethodNotAllowed, "that method is not supported")
+		methodFailure(w, r)
 		return
 	}
 	tasks, err := platform.ReadTasks(r.URL.Query().Get("all") == "1")
 	if err != nil {
-		writeFailure(w, http.StatusInternalServerError, err.Error())
+		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tasks": tasks})

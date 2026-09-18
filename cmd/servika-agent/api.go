@@ -9,7 +9,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"servika/internal/platform"
@@ -41,15 +40,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// writeFailure writes an error answer in the same shape.
-func writeFailure(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
-}
-
 // readRequest decodes a bounded JSON body.
 func readRequest(w http.ResponseWriter, r *http.Request, into any) bool {
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, requestLimit)).Decode(into); err != nil {
-		writeFailure(w, http.StatusBadRequest, "the request body could not be read")
+		bodyFailure(w, r)
 		return false
 	}
 	return true
@@ -75,19 +69,4 @@ func healthHandler(provider platform.Provider) http.HandlerFunc {
 			"selftested":   provider.Capabilities().Has(platform.CapSite),
 		})
 	}
-}
-
-// statusFor maps a platform failure onto a status code.
-//
-// A bad request and an unsupported operation are the caller's problem; anything
-// else is this host's, and reporting them the same way would send the panel
-// looking in the wrong place.
-func statusFor(err error) int {
-	switch {
-	case errors.Is(err, platform.ErrInvalidRequest):
-		return http.StatusBadRequest
-	case errors.Is(err, platform.ErrUnsupported):
-		return http.StatusUnprocessableEntity
-	}
-	return http.StatusInternalServerError
 }

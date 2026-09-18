@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -171,35 +170,5 @@ func TestAnOrdinaryBodyIsRead(t *testing.T) {
 	}
 	if into.Domain != "shop.example.com" {
 		t.Fatalf("the body read as %+v", into)
-	}
-}
-
-func TestTheCallersProblemIsNotReportedAsTheHostsProblem(t *testing.T) {
-	// Sending the panel a 500 for a bad domain makes it look at the wrong place.
-	cases := map[error]int{
-		platform.ErrInvalidRequest:                            http.StatusBadRequest,
-		platform.ErrUnsupported:                               http.StatusUnprocessableEntity,
-		fmt.Errorf("wrapped: %w", platform.ErrInvalidRequest): http.StatusBadRequest,
-		errors.New("appcmd exited 1"):                         http.StatusInternalServerError,
-	}
-	for err, want := range cases {
-		if got := statusFor(err); got != want {
-			t.Errorf("%v mapped to %d, expected %d", err, got, want)
-		}
-	}
-}
-
-func TestAnErrorAnswerIsJSONWithNoStrayBody(t *testing.T) {
-	rec := httptest.NewRecorder()
-	writeFailure(rec, http.StatusBadRequest, "count must be a number")
-	if got := rec.Header().Get("Content-Type"); got != "application/json" {
-		t.Fatalf("the error answer is %q", got)
-	}
-	var body map[string]string
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("the error answer is not JSON: %v", err)
-	}
-	if body["error"] != "count must be a number" {
-		t.Fatalf("the error answer read %v", body)
 	}
 }
