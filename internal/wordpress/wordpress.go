@@ -560,6 +560,7 @@ func prepareTarget(w http.ResponseWriter, systemUser, root, subDir string) (targ
 	// with a symlink between MkdirAll and chown. The Lstat gate refuses a target
 	// that is no longer a directory, and -h makes chown change the link itself
 	// instead of descending into what it points at.
+	// #nosec G703 -- target is filepath.Join of the validated web root and a subdirectory the caller already restricted to lowercase letters, digits and hyphens, so it carries no separator and no dot segment.
 	if info, err := os.Lstat(target); err != nil || !info.IsDir() {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not verify the target directory")
 		return target, release, false

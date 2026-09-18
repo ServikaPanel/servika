@@ -104,6 +104,7 @@ func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP rules could not be read")
 		return
 	}
+	// #nosec G701 -- listQuery returns one of two compile-time constants; the scope decides WHICH table is read, never what the statement says, and the id is a placeholder.
 	rows, err := h.DB.QueryContext(r.Context(), scope.listQuery(), id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP rules could not be read")
@@ -168,6 +169,7 @@ func (h *Handlers) AddIPRule(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid IP or CIDR")
 		return
 	}
+	// #nosec G701 -- insertQuery returns one of two compile-time constants; both write only through placeholders, and ipCIDR has already passed net.ParseIP/ParseCIDR.
 	if _, err := h.DB.ExecContext(r.Context(), scope.insertQuery(), scope.id(), ipCIDR); err != nil {
 		httpx.WriteError(w, http.StatusConflict, "IP rule could not be added")
 		return
@@ -184,6 +186,7 @@ func (h *Handlers) DeleteIPRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ruleID, _ := strconv.ParseInt(chi.URLParam(r, "ruleID"), 10, 64)
+	// #nosec G701 -- deleteQuery returns one of two compile-time constants; both delete only through placeholders, and ruleID is an int64.
 	if _, err := h.DB.ExecContext(r.Context(), scope.deleteQuery(), ruleID, scope.id()); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP rule could not be deleted")
 		return
