@@ -2,7 +2,7 @@
 // loader / web-server screens into one step-by-step surface (EasyApache style).
 // Each step renders an existing management screen embedded, so there is one code
 // path and the same backend endpoints; only the chrome is the wizard's.
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -12,6 +12,10 @@ import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
 import PHPVersionsPage, { type VersionSelection } from './PHPVersionsPage'
 import PHPExtensionsPage, { type Selection } from './PHPExtensionsPage'
+
+// A runtime removal that the server never reports as finished stops being
+// polled after this long. The removal itself keeps running on the server.
+const RUNTIME_REMOVE_TIMEOUT_MS = 30 * 60 * 1000
 
 const STEPS = ['versions', 'extensions', 'runtimes', 'webserver', 'summary'] as const
 type Step = (typeof STEPS)[number]
@@ -198,6 +202,12 @@ function RuntimesStep({ selectedRuntimes, setSelectedRuntimes }: {
   const [pyInstalled, setPyInstalled] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [removing, setRemoving] = useState<string | null>(null)
+  // The removal poll below runs until the server reports it finished. Leaving
+  // the step used to leave that loop running: it kept requesting the status
+  // endpoint for as long as the tab was open and then wrote state into an
+  // unmounted component. The controller ends it on unmount.
+  const removalPoll = useRef<AbortController | null>(null)
+  useEffect(() => () => removalPoll.current?.abort(), [])
 
   // Settles only through promise callbacks, so the mount effect never writes
   // state synchronously (react-hooks/set-state-in-effect); loading starts true
@@ -236,6 +246,22 @@ function RuntimesStep({ selectedRuntimes, setSelectedRuntimes }: {
       }])
   }
 
+  // waitForRuntimeRemoval polls until the server reports the removal finished.
+  // It answers false when the caller left the step, so the caller stops without
+  // writing state into an unmounted component, and throws on the deadline.
+  async function waitForRuntimeRemoval(poll: AbortController, tr: TFunction): Promise<boolean> {
+    const deadline = Date.now() + RUNTIME_REMOVE_TIMEOUT_MS
+    for (;;) {
+      await new Promise(r => setTimeout(r, 2000))
+      if (poll.signal.aborted) return false
+      const s = await api.get<{ running: boolean }>('/app-runtimes/status', { signal: poll.signal })
+      if (!s.data?.running) return true
+      // A removal the server never finishes would otherwise poll for ever. The
+      // work continues on the server; only this screen stops waiting for it.
+      if (Date.now() >= deadline) throw new Error(tr('runtimes.removeTimeout'))
+    }
+  }
+
   async function remove(e: RuntimeEntry) {
     if (removing) return
     if (!(await confirm({ message: t('runtimes.confirmRemove', { name: e.name }), dangerous: true }))) return
@@ -246,13 +272,12 @@ function RuntimesStep({ selectedRuntimes, setSelectedRuntimes }: {
       } else {
         await api.post('/app-runtimes/remove', { kind: e.kind, version: e.version })
       }
-      for (;;) {
-        await new Promise(r => setTimeout(r, 2000))
-        const s = await api.get<{ running: boolean }>('/app-runtimes/status')
-        if (!s.data?.running) break
-      }
+      const poll = new AbortController()
+      removalPoll.current = poll
+      if (!(await waitForRuntimeRemoval(poll, t))) return
       load()
     } catch (err) {
+      if (removalPoll.current?.signal.aborted) return
       await notify({ message: apiError(err, t('runtimes.removeError')) })
     } finally {
       setRemoving(null)

@@ -93,6 +93,7 @@
     "pythonDesc": "Interpréteur Python parallèle",
     "confirmRemove": "{{name}} sera retiré du serveur. Continuer ?",
     "removeError": "Échec du retrait",
+    "removeTimeout": "La suppression ne s'est pas terminée en 30 minutes. Elle continue sur le serveur ; rouvrez cette étape plus tard.",
     "removeTitle": "Retirer",
     "selectTitle": {
       "add": "Ajouter à la liste d'installation",

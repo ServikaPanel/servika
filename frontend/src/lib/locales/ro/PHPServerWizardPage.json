@@ -93,6 +93,7 @@
     "pythonDesc": "Interpretor Python paralel",
     "confirmRemove": "{{name}} va fi eliminat de pe server. Continuați?",
     "removeError": "Eliminarea a eșuat",
+    "removeTimeout": "Eliminarea nu s-a încheiat în 30 de minute. Continuă pe server; redeschideți acest pas mai târziu.",
     "removeTitle": "Elimină",
     "selectTitle": {
       "add": "Adaugă în lista de instalare",

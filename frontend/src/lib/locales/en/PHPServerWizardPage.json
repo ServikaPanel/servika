@@ -62,6 +62,7 @@
     "pythonDesc": "Parallel Python interpreter",
     "confirmRemove": "{{name}} will be removed from the server. Continue?",
     "removeError": "Removal failed",
+    "removeTimeout": "The removal did not finish within 30 minutes. It continues on the server; reopen this step later.",
     "removeTitle": "Remove",
     "selectTitle": {
       "add": "Add to the install list",

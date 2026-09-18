@@ -93,6 +93,7 @@
     "pythonDesc": "并行 Python 解释器",
     "confirmRemove": "将从服务器移除 {{name}}。继续？",
     "removeError": "移除失败",
+    "removeTimeout": "移除未在 30 分钟内完成。它在服务器上继续进行；请稍后重新打开此步骤。",
     "removeTitle": "移除",
     "selectTitle": {
       "add": "加入安装列表",

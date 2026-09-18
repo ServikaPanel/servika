@@ -93,6 +93,7 @@
     "pythonDesc": "Paralel Python yorumlayıcısı",
     "confirmRemove": "{{name}} sunucudan kaldırılacak. Devam?",
     "removeError": "Kaldırma başarısız",
+    "removeTimeout": "Kaldırma 30 dakika içinde bitmedi. Sunucuda devam ediyor; bu adımı daha sonra tekrar açın.",
     "removeTitle": "Kaldır",
     "selectTitle": {
       "add": "Kurulacaklar listesine ekle",

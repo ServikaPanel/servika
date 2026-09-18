@@ -93,6 +93,7 @@
     "pythonDesc": "Paralleler Python-Interpreter",
     "confirmRemove": "{{name}} wird vom Server entfernt. Fortfahren?",
     "removeError": "Entfernen fehlgeschlagen",
+    "removeTimeout": "Die Entfernung wurde nicht innerhalb von 30 Minuten abgeschlossen. Sie läuft auf dem Server weiter; öffnen Sie diesen Schritt später erneut.",
     "removeTitle": "Entfernen",
     "selectTitle": {
       "add": "Zur Installationsliste hinzufügen",

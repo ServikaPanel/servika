@@ -93,6 +93,7 @@
     "pythonDesc": "Interpretador Python paralelo",
     "confirmRemove": "{{name}} será removido do servidor. Continuar?",
     "removeError": "Falha ao remover",
+    "removeTimeout": "A remoção não terminou em 30 minutos. Continua no servidor; reabra esta etapa mais tarde.",
     "removeTitle": "Remover",
     "selectTitle": {
       "add": "Adicionar à lista de instalação",
