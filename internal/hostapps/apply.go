@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"servika/internal/apphealth"
 )
 
 // working serialises the operations that change what is on the host.
@@ -117,7 +119,44 @@ func Install(db *sql.DB, entry Entry, app App, jobID int64) {
 		app.ID); err != nil {
 		complain("record the install: %v", err)
 	}
+	recordHealth(ctx, db, app)
 	reapplyFirewall()
+}
+
+// healthDelay is what an application takes to bind after systemd accepts the
+// unit. Grafana is the slowest in the catalog, measured at about four seconds on
+// a cold page cache, so the first attempt waits rather than being spent on a
+// port that was never going to answer yet.
+const healthDelay = 2 * time.Second
+
+// recordHealth waits for a freshly installed application to answer and stores
+// the reason when it does not.
+//
+// systemctl returning 0 says the unit was ACCEPTED, not that the program came
+// up. A binary that dies on its own configuration leaves the row reading
+// installed with nothing on screen to explain why the port is dead, and the
+// operator's only route to the reason was the log.
+//
+// The row STAYS installed either way: the files are on disk, the unit exists and
+// systemd keeps restarting it. Only last_error changes, so the screen can say
+// what happened without the install being reported as failed.
+func recordHealth(ctx context.Context, db *sql.DB, app App) {
+	if app.Port <= 0 {
+		return
+	}
+	err := apphealth.Wait(ctx, apphealth.Probe{Port: app.Port, InitialDelay: healthDelay})
+	if err == nil {
+		return
+	}
+	complain("install %d did not answer on port %d: %v", app.ID, app.Port, err)
+	message := err.Error()
+	if len(message) > 512 {
+		message = message[:512]
+	}
+	if _, execErr := db.ExecContext(ctx,
+		`UPDATE host_apps SET last_error=? WHERE id=?`, message, app.ID); execErr != nil {
+		complain("record the health result: %v", execErr)
+	}
 }
 
 func install(ctx context.Context, entry Entry, app App) error {

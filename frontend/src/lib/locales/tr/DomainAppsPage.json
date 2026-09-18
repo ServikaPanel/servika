@@ -84,6 +84,7 @@
     "deleteFailed": "Uygulama kaldırılamadı.",
     "installFailed": "Bağımlılık kurulumu başlatılamadı.",
     "saveFailed": "Uygulama kaydedilemedi.",
-    "envSaveFailed": "Ortam kaydedilemedi."
+    "envSaveFailed": "Ortam kaydedilemedi.",
+    "notAnswering": "Uygulama başladı ama port üzerinde cevap vermedi: {{reason}}"
   }
 }

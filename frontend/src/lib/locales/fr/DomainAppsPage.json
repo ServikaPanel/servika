@@ -84,6 +84,7 @@
     "deleteFailed": "L'application n'a pas pu être retirée.",
     "installFailed": "L'installation des dépendances n'a pas pu démarrer.",
     "saveFailed": "L'application n'a pas pu être enregistrée.",
-    "envSaveFailed": "L'environnement n'a pas pu être enregistré."
+    "envSaveFailed": "L'environnement n'a pas pu être enregistré.",
+    "notAnswering": "L'application a démarré mais n'a pas répondu sur son port : {{reason}}"
   }
 }

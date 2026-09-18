@@ -84,6 +84,7 @@
     "deleteFailed": "Aplicația nu a putut fi eliminată.",
     "installFailed": "Instalarea dependențelor nu a putut fi pornită.",
     "saveFailed": "Aplicația nu a putut fi salvată.",
-    "envSaveFailed": "Mediul nu a putut fi salvat."
+    "envSaveFailed": "Mediul nu a putut fi salvat.",
+    "notAnswering": "Aplicația a pornit dar nu a răspuns pe portul său: {{reason}}"
   }
 }

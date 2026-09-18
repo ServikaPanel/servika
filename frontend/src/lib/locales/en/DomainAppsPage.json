@@ -84,6 +84,7 @@
     "deleteFailed": "The application could not be removed.",
     "installFailed": "The dependency install could not be started.",
     "saveFailed": "The application could not be saved.",
-    "envSaveFailed": "The environment could not be saved."
+    "envSaveFailed": "The environment could not be saved.",
+    "notAnswering": "The application started but did not answer on its port: {{reason}}"
   }
 }

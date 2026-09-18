@@ -84,6 +84,7 @@
     "deleteFailed": "Não foi possível remover a aplicação.",
     "installFailed": "Não foi possível iniciar a instalação das dependências.",
     "saveFailed": "Não foi possível guardar a aplicação.",
-    "envSaveFailed": "Não foi possível guardar o ambiente."
+    "envSaveFailed": "Não foi possível guardar o ambiente.",
+    "notAnswering": "A aplicação arrancou mas não respondeu na sua porta: {{reason}}"
   }
 }

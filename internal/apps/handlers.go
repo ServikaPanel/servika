@@ -10,11 +10,25 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"servika/internal/apphealth"
 	"servika/internal/httpx"
 	"servika/internal/quota"
+)
+
+// The health-wait budget for one start.
+//
+// The delay is what a tenant runtime takes to bind: a Node process that has to
+// read its own dependency tree refuses the connection for the first second, and
+// without the delay three of the eight attempts are spent on a port that was
+// never going to answer yet. The ceiling is above the probe's own budget so a
+// slow start is reported as unhealthy rather than as a cancelled context.
+const (
+	appHealthDelay  = 1500 * time.Millisecond
+	appHealthBudget = 20 * time.Second
 )
 
 // Handlers provides per-domain application HTTP handlers.
@@ -369,12 +383,42 @@ func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "application not found")
 		return
 	}
+	action, enabled, ok := runUnitAction(w, r, app)
+	if !ok {
+		return
+	}
+	if enabled != app.Enabled {
+		if _, err := h.DB.ExecContext(r.Context(),
+			`UPDATE apps SET enabled=? WHERE id=? AND domain_id=?`,
+			map[bool]int{true: 1, false: 0}[enabled], app.ID, s.DomainID); err != nil {
+			httpx.LogR(r, "apps: record state of application %d: %v", app.ID, err)
+			httpx.WriteError(w, http.StatusInternalServerError,
+				"the application answered but its state could not be recorded")
+			return
+		}
+	}
+	answer := map[string]any{"ok": true, "status": UnitStatus(app.ID)}
+	if health := waitForApp(r.Context(), action, app); health != "" {
+		// Reported rather than refused. The unit IS started, the row IS correct,
+		// and systemd keeps restarting it; what the operator needs is to be told
+		// that nothing answered, instead of reading a screen that says running.
+		answer["health_error"] = health
+	}
+	httpx.WriteJSON(w, http.StatusOK, answer)
+}
+
+// runUnitAction decodes the requested action and applies it to the unit.
+//
+// It reports the action it ran and the resulting enabled state. The last value
+// is false when the request has already been answered, so the caller returns
+// without writing a second response.
+func runUnitAction(w http.ResponseWriter, r *http.Request, app App) (string, bool, bool) {
 	var req struct {
 		Action string `json:"action"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
-		return
+		return "", false, false
 	}
 
 	var err error
@@ -388,24 +432,41 @@ func (h *Handlers) Action(w http.ResponseWriter, r *http.Request) {
 		err = Restart(app.ID)
 	default:
 		httpx.WriteError(w, http.StatusBadRequest, "action must be start, stop or restart")
-		return
+		return "", false, false
 	}
 	if err != nil {
 		httpx.LogR(r, "apps: %s application %d: %v", req.Action, app.ID, err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the application did not answer the request")
-		return
+		return "", false, false
 	}
-	if enabled != app.Enabled {
-		if _, err := h.DB.ExecContext(r.Context(),
-			`UPDATE apps SET enabled=? WHERE id=? AND domain_id=?`,
-			map[bool]int{true: 1, false: 0}[enabled], app.ID, s.DomainID); err != nil {
-			httpx.LogR(r, "apps: record state of application %d: %v", app.ID, err)
-			httpx.WriteError(w, http.StatusInternalServerError,
-				"the application answered but its state could not be recorded")
-			return
-		}
+	return req.Action, enabled, true
+}
+
+// waitForApp waits for an application the caller just started to answer, and
+// returns the reason it did not.
+//
+// systemctl returning 0 says the unit was ACCEPTED, not that the program came
+// up: a Node process that dies on a missing environment variable leaves systemd
+// reporting activating for a moment, and the panel used to call that a
+// successful start.
+//
+// A stop is not waited on, and an application with no port cannot be probed.
+func waitForApp(ctx context.Context, action string, app App) string {
+	if action == "stop" || app.Port <= 0 {
+		return ""
 	}
-	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "status": UnitStatus(app.ID)})
+	// Detached from the request: the probe budget is about eight seconds and a
+	// client that walks away mid-start should not make the panel report an
+	// application as unhealthy.
+	probeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), appHealthBudget)
+	defer cancel()
+	if err := apphealth.Wait(probeCtx, apphealth.Probe{
+		Port:         app.Port,
+		InitialDelay: appHealthDelay,
+	}); err != nil {
+		return err.Error()
+	}
+	return ""
 }
 
 // StatusOf reports what systemd says about one application.

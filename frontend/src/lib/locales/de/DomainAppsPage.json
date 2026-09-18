@@ -84,6 +84,7 @@
     "deleteFailed": "Die Anwendung konnte nicht entfernt werden.",
     "installFailed": "Die Installation der Abhängigkeiten konnte nicht gestartet werden.",
     "saveFailed": "Die Anwendung konnte nicht gespeichert werden.",
-    "envSaveFailed": "Die Umgebung konnte nicht gespeichert werden."
+    "envSaveFailed": "Die Umgebung konnte nicht gespeichert werden.",
+    "notAnswering": "Die Anwendung wurde gestartet, antwortete aber nicht auf ihrem Port: {{reason}}"
   }
 }

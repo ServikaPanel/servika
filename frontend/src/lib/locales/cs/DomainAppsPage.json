@@ -84,6 +84,7 @@
     "deleteFailed": "Aplikaci se nepodařilo odstranit.",
     "installFailed": "Instalaci závislostí se nepodařilo spustit.",
     "saveFailed": "Aplikaci se nepodařilo uložit.",
-    "envSaveFailed": "Prostředí se nepodařilo uložit."
+    "envSaveFailed": "Prostředí se nepodařilo uložit.",
+    "notAnswering": "Aplikace se spustila, ale neodpověděla na svém portu: {{reason}}"
   }
 }

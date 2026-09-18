@@ -243,8 +243,16 @@ export default function DomainAppsPage() {
   async function act(app: App, action: 'start' | 'stop' | 'restart') {
     setBusy(app.id)
     try {
-      await api.post(`/domains/${id}/apps/${app.id}/action`, { action })
+      const r = await api.post<{ ok: boolean; health_error?: string }>(
+        `/domains/${id}/apps/${app.id}/action`, { action })
       fetchApps()
+      // systemd accepted the unit but nothing answered on the port. The
+      // application is still started and still restarting, so this is a warning
+      // rather than a failure: without it the screen says running while the
+      // port is dead.
+      if (r.data.health_error) {
+        await notify({ message: t('errors.notAnswering', { reason: r.data.health_error }), tone: 'error' })
+      }
     } catch (e) {
       await notify({ message: apiError(e, t('errors.actionFailed')), tone: 'error' })
     } finally {

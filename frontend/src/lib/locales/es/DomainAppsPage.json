@@ -84,6 +84,7 @@
     "deleteFailed": "No se pudo retirar la aplicación.",
     "installFailed": "No se pudo iniciar la instalación de dependencias.",
     "saveFailed": "No se pudo guardar la aplicación.",
-    "envSaveFailed": "No se pudo guardar el entorno."
+    "envSaveFailed": "No se pudo guardar el entorno.",
+    "notAnswering": "La aplicación se inició pero no respondió en su puerto: {{reason}}"
   }
 }

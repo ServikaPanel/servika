@@ -84,6 +84,7 @@
     "deleteFailed": "アプリケーションを削除できませんでした。",
     "installFailed": "依存関係のインストールを開始できませんでした。",
     "saveFailed": "アプリケーションを保存できませんでした。",
-    "envSaveFailed": "環境変数を保存できませんでした。"
+    "envSaveFailed": "環境変数を保存できませんでした。",
+    "notAnswering": "アプリケーションは起動しましたが、ポートで応答しませんでした: {{reason}}"
   }
 }

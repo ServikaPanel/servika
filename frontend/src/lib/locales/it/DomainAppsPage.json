@@ -84,6 +84,7 @@
     "deleteFailed": "L'applicazione non è stata rimossa.",
     "installFailed": "L'installazione delle dipendenze non è stata avviata.",
     "saveFailed": "L'applicazione non è stata salvata.",
-    "envSaveFailed": "L'ambiente non è stato salvato."
+    "envSaveFailed": "L'ambiente non è stato salvato.",
+    "notAnswering": "L'applicazione è stata avviata ma non ha risposto sulla sua porta: {{reason}}"
   }
 }
