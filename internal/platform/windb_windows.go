@@ -40,6 +40,31 @@ func sqlcmd() string {
 	return "sqlcmd"
 }
 
+// childEnvKeys are the only host variables a database client inherits.
+//
+// A client started with os.Environ() would receive the agent's whole
+// environment, which carries SERVIKA_AGENT_TOKEN and the panel's secrets, and
+// on Windows a child's environment is readable by anyone who can open the
+// process. These are the variables a console program needs to find its own
+// libraries and a temporary directory, and nothing else.
+var childEnvKeys = []string{
+	"SystemRoot", "SystemDrive", "windir", "PATH", "PATHEXT", "ComSpec",
+	"TEMP", "TMP", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
+	"NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE",
+}
+
+// childEnv builds a client's environment from the allowlist plus the caller's
+// own entries. It never reads os.Environ().
+func childEnv(extra []string) []string {
+	env := make([]string, 0, len(childEnvKeys)+len(extra))
+	for _, key := range childEnvKeys {
+		if value, found := os.LookupEnv(key); found {
+			env = append(env, key+"="+value)
+		}
+	}
+	return append(env, extra...)
+}
+
 // dbRun executes a database client with a timeout and returns its stdout.
 //
 // The callers also pass the client's own connection timeouts (-l,
@@ -51,7 +76,7 @@ func dbRun(timeoutSec int, env []string, name string, arg ...string) (string, er
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, arg...)
 	if len(env) > 0 {
-		cmd.Env = append(os.Environ(), env...)
+		cmd.Env = childEnv(env)
 	}
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
