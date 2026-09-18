@@ -309,8 +309,7 @@ export default function DomainLaravelPage() {
         <Link to={`/subscriptions/${id}`} className="text-sm text-brand-600 dark:text-brand-400">{t('backToSubscription')}</Link>
       </div>
 
-      {error && <div className="mb-3 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      <Banners error={error} success={success} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {tabs.map(tab => (
@@ -318,120 +317,360 @@ export default function DomainLaravelPage() {
         ))}
       </div>
 
-      {active === 'overview' && status && (
-        <Card title={t('overview.title')}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-            <Metric label={t('overview.installed')} value={status.installed ? t('overview.yes') : t('overview.no')} />
-            <Metric label={t('overview.appRoot')} value={status.app_root} />
-            <Metric label={t('overview.documentPath')} value={status.directory} mono />
-            <Metric label={t('overview.php')} value={`${status.php_version} (${status.php_binary})`} />
-            <Metric label={t('overview.composerManifest')} value={status.composer_json ? t('overview.found') : t('overview.missing')} />
-            <Metric label={t('overview.git')} value={status.git_present ? status.last_commit || t('overview.repositoryFound') : t('overview.notConnected')} />
-            <Metric label={t('overview.maintenance')} value={status.maintenance ? t('overview.enabled') : t('overview.disabled')} />
-            <Metric label={t('overview.schedule')} value={status.schedule_enabled ? t('overview.enabled') : t('overview.disabled')} />
-            <Metric label={t('overview.queue')} value={t('overview.workerSummary', { total: status.worker_count, running: status.workers_running })} />
-          </div>
-        </Card>
-      )}
+      {active === 'overview' && <OverviewTab status={status} />}
 
       {active === 'install' && (
-        <Card title={t('install.title')}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label={t('install.mode')}><select value={installMode} onChange={e => setInstallMode(e.target.value as InstallMode)} className={fieldClass}><option value="remote">{t('install.modeRemote')}</option><option value="scaffold">{t('install.modeScaffold')}</option><option value="local">{t('install.modeLocal')}</option></select></Field>
-            <Field label={t('install.appRoot')}><RootSelect value={appRoot} candidates={candidates?.candidates || []} onChange={setAppRoot} onSave={saveAppRoot} /></Field>
-            {installMode === 'remote' && <Field label={t('install.repositoryUrl')}><input value={repoURL} onChange={e => setRepoURL(e.target.value)} className={fieldClass} placeholder={t('install.repositoryUrlPlaceholder')} /></Field>}
-            {installMode === 'remote' && <Field label={t('install.branch')}><input value={branch} onChange={e => setBranch(e.target.value)} className={fieldClass} placeholder={t('install.branchPlaceholder')} /></Field>}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2"><Button disabled={!!running} onClick={startInstall}>{t('install.startInstall')}</Button><Button variant="secondary" disabled={!!running} onClick={pollInstall}>{t('install.checkInstallStatus')}</Button></div>
-        </Card>
+        <InstallTab
+          mode={installMode}
+          onMode={setInstallMode}
+          appRoot={appRoot}
+          onAppRoot={setAppRoot}
+          onSaveRoot={saveAppRoot}
+          candidates={candidates}
+          repoURL={repoURL}
+          onRepoURL={setRepoURL}
+          branch={branch}
+          onBranch={setBranch}
+          busy={!!running}
+          onInstall={startInstall}
+          onPollInstall={pollInstall}
+        />
       )}
 
       {active === 'commands' && (
-        <Card title={t('commands.title')}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <CommandBox title="Artisan" value={artisanCommand} setValue={setArtisanCommand} options={['about','migrate','migrate:status','config:cache','cache:clear','queue:restart','storage:link']} onRun={runArtisan} />
-            <CommandBox title="Composer" value={composerCommand} setValue={setComposerCommand} options={['install','update','dump-autoload','validate','show','diagnose','require','remove']} onRun={runComposer}><input value={composerPackage} onChange={e => setComposerPackage(e.target.value)} className={`${fieldClass} mt-2`} placeholder={t('commands.packagePlaceholder')} /></CommandBox>
-            <CommandBox title="npm" value={npmCommand} setValue={setNpmCommand} options={['install','ci','run','prune','ls','outdated','audit','--version']} onRun={runNpm}><input value={npmScript} onChange={e => setNpmScript(e.target.value)} className={`${fieldClass} mt-2`} placeholder={t('commands.scriptPlaceholder')} /><NodeSelect value={nodeVersion} versions={nodeVersions} onChange={setNodeVersion} /></CommandBox>
-          </div>
-        </Card>
+        <CommandsTab
+          artisanCommand={artisanCommand}
+          onArtisanCommand={setArtisanCommand}
+          onRunArtisan={runArtisan}
+          composerCommand={composerCommand}
+          onComposerCommand={setComposerCommand}
+          composerPackage={composerPackage}
+          onComposerPackage={setComposerPackage}
+          onRunComposer={runComposer}
+          npmCommand={npmCommand}
+          onNpmCommand={setNpmCommand}
+          npmScript={npmScript}
+          onNpmScript={setNpmScript}
+          nodeVersion={nodeVersion}
+          nodeVersions={nodeVersions}
+          onNodeVersion={setNodeVersion}
+          onRunNpm={runNpm}
+        />
       )}
 
       {active === 'env' && (
-        <Card title={t('env.title')}>
-          {!envLoaded ? <Button disabled={!!running} onClick={loadEnv}>{t('env.load')}</Button> : <><textarea value={envContent} onChange={e => setEnvContent(e.target.value)} rows={16} className={`${fieldClass} font-mono text-xs`} /><div className="mt-3"><Button disabled={!!running} onClick={saveEnv}>{t('env.save')}</Button></div></>}
-        </Card>
+        <EnvTab
+          loaded={envLoaded}
+          content={envContent}
+          onContent={setEnvContent}
+          onLoad={loadEnv}
+          onSave={saveEnv}
+          busy={!!running}
+        />
       )}
 
       {active === 'deploy' && (
-        <Card title={t('deploy.title')}>
-          <div className="flex flex-wrap gap-2 mb-4"><NodeSelect value={nodeVersion} versions={nodeVersions} onChange={setNodeVersion} /><Button disabled={!!running} onClick={startDeploy}>{t('deploy.deployWithMigrate')}</Button><Button variant="secondary" disabled={!!running} onClick={pollDeploy}>{t('deploy.checkDeployStatus')}</Button><Button variant="secondary" disabled={!!running} onClick={() => setMaintenance(!status?.maintenance)}>{status?.maintenance ? t('deploy.disableMaintenance') : t('deploy.enableMaintenance')}</Button></div>
-        </Card>
+        <DeployTab
+          status={status}
+          nodeVersion={nodeVersion}
+          nodeVersions={nodeVersions}
+          onNodeVersion={setNodeVersion}
+          busy={!!running}
+          onDeploy={startDeploy}
+          onPollDeploy={pollDeploy}
+          onMaintenance={setMaintenance}
+        />
       )}
 
-      {active === 'workers' && status && (
-        <>
-          <Card title={t('workers.scheduleTitle')}>
-            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('workers.scheduleHint')}</p>
-            <Button disabled={!!running} onClick={() => setSchedule(!status.schedule_enabled)}>
-              {status.schedule_enabled ? t('workers.disableSchedule') : t('workers.enableSchedule')}
-            </Button>
-          </Card>
-
-          <Card title={t('workers.title')}>
-            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('workers.hint')}</p>
-            {workersFailed ? (
-              <div className="py-6 text-center text-sm text-red-600 dark:text-red-400">{t('workers.loadFailed')}</div>
-            ) : workers.length === 0 ? (
-              <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('workers.empty')}</div>
-            ) : (
-              <div className="space-y-3">
-                {workers.map(worker => (
-                  <WorkerRow
-                    key={worker.id}
-                    worker={worker}
-                    busy={!!running}
-                    onEdit={() => setDraft({ ...worker, id: worker.id })}
-                    onToggle={() => toggleWorker(worker)}
-                    onRestart={() => restartWorker(worker)}
-                    onDelete={() => removeWorker(worker)}
-                    onLog={() => showWorkerLog(worker)}
-                  />
-                ))}
-              </div>
-            )}
-            {!draft && (
-              <div className="mt-4">
-                <Button disabled={!!running} onClick={() => setDraft({ ...newWorker })}>{t('workers.add')}</Button>
-              </div>
-            )}
-          </Card>
-
-          {draft && (
-            <Card title={draft.id === null ? t('workers.addTitle') : t('workers.editTitle', { name: draft.name })}>
-              <WorkerForm
-                draft={draft}
-                maxProcesses={maxProcesses}
-                onChange={setDraft}
-              />
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button disabled={!!running} onClick={() => saveWorker(draft)}>{t('common.save')}</Button>
-                <Button variant="secondary" disabled={!!running} onClick={() => setDraft(null)}>{t('workers.cancel')}</Button>
-              </div>
-            </Card>
-          )}
-
-          {workerLog && (
-            <Card title={t('workers.logTitle')}>
-              <pre className="bg-slate-950 text-slate-100 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap break-words max-h-[360px] overflow-auto">
-                {workerLog.text || t('workers.logEmpty')}
-              </pre>
-            </Card>
-          )}
-        </>
+      {active === 'workers' && (
+        <WorkersTab
+          status={status}
+          busy={!!running}
+          onSchedule={setSchedule}
+          workers={workers}
+          workersFailed={workersFailed}
+          maxProcesses={maxProcesses}
+          draft={draft}
+          onDraft={setDraft}
+          onSaveWorker={saveWorker}
+          onToggleWorker={toggleWorker}
+          onRestartWorker={restartWorker}
+          onDeleteWorker={removeWorker}
+          onShowWorkerLog={showWorkerLog}
+          workerLog={workerLog}
+        />
       )}
 
       {output && <pre className="mt-4 bg-slate-950 text-slate-100 rounded-2xl p-4 text-xs font-mono whitespace-pre-wrap break-words max-h-[420px] overflow-auto">{output}</pre>}
     </div>
+  )
+}
+
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function OverviewTab({ status }: { status: Status | null }) {
+  const { t } = useTranslation('DomainLaravelPage')
+  if (!status) return null
+  return (
+    <Card title={t('overview.title')}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <Metric label={t('overview.installed')} value={status.installed ? t('overview.yes') : t('overview.no')} />
+        <Metric label={t('overview.appRoot')} value={status.app_root} />
+        <Metric label={t('overview.documentPath')} value={status.directory} mono />
+        <Metric label={t('overview.php')} value={`${status.php_version} (${status.php_binary})`} />
+        <Metric label={t('overview.composerManifest')} value={status.composer_json ? t('overview.found') : t('overview.missing')} />
+        <Metric label={t('overview.git')} value={status.git_present ? status.last_commit || t('overview.repositoryFound') : t('overview.notConnected')} />
+        <Metric label={t('overview.maintenance')} value={status.maintenance ? t('overview.enabled') : t('overview.disabled')} />
+        <Metric label={t('overview.schedule')} value={status.schedule_enabled ? t('overview.enabled') : t('overview.disabled')} />
+        <Metric label={t('overview.queue')} value={t('overview.workerSummary', { total: status.worker_count, running: status.workers_running })} />
+      </div>
+    </Card>
+  )
+}
+
+type InstallTabProps = {
+  mode: InstallMode
+  onMode: (mode: InstallMode) => void
+  appRoot: string
+  onAppRoot: (value: string) => void
+  onSaveRoot: (value: string) => void
+  candidates: AppCandidates | null
+  repoURL: string
+  onRepoURL: (value: string) => void
+  branch: string
+  onBranch: (value: string) => void
+  busy: boolean
+  onInstall: () => void
+  onPollInstall: () => void
+}
+
+function InstallTab(p: InstallTabProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  return (
+    <Card title={t('install.title')}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Field label={t('install.mode')}><select value={p.mode} onChange={e => p.onMode(e.target.value as InstallMode)} className={fieldClass}><option value="remote">{t('install.modeRemote')}</option><option value="scaffold">{t('install.modeScaffold')}</option><option value="local">{t('install.modeLocal')}</option></select></Field>
+        <Field label={t('install.appRoot')}><RootSelect value={p.appRoot} candidates={p.candidates?.candidates || []} onChange={p.onAppRoot} onSave={p.onSaveRoot} /></Field>
+        {p.mode === 'remote' && <Field label={t('install.repositoryUrl')}><input value={p.repoURL} onChange={e => p.onRepoURL(e.target.value)} className={fieldClass} placeholder={t('install.repositoryUrlPlaceholder')} /></Field>}
+        {p.mode === 'remote' && <Field label={t('install.branch')}><input value={p.branch} onChange={e => p.onBranch(e.target.value)} className={fieldClass} placeholder={t('install.branchPlaceholder')} /></Field>}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2"><Button disabled={p.busy} onClick={p.onInstall}>{t('install.startInstall')}</Button><Button variant="secondary" disabled={p.busy} onClick={p.onPollInstall}>{t('install.checkInstallStatus')}</Button></div>
+    </Card>
+  )
+}
+
+type CommandsTabProps = {
+  artisanCommand: string
+  onArtisanCommand: (value: string) => void
+  onRunArtisan: () => void
+  composerCommand: string
+  onComposerCommand: (value: string) => void
+  composerPackage: string
+  onComposerPackage: (value: string) => void
+  onRunComposer: () => void
+  npmCommand: string
+  onNpmCommand: (value: string) => void
+  npmScript: string
+  onNpmScript: (value: string) => void
+  nodeVersion: string
+  nodeVersions: string[]
+  onNodeVersion: (value: string) => void
+  onRunNpm: () => void
+}
+
+function CommandsTab(p: CommandsTabProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  return (
+    <Card title={t('commands.title')}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <CommandBox title="Artisan" value={p.artisanCommand} setValue={p.onArtisanCommand} options={['about','migrate','migrate:status','config:cache','cache:clear','queue:restart','storage:link']} onRun={p.onRunArtisan} />
+        <CommandBox title="Composer" value={p.composerCommand} setValue={p.onComposerCommand} options={['install','update','dump-autoload','validate','show','diagnose','require','remove']} onRun={p.onRunComposer}><input value={p.composerPackage} onChange={e => p.onComposerPackage(e.target.value)} className={`${fieldClass} mt-2`} placeholder={t('commands.packagePlaceholder')} /></CommandBox>
+        <CommandBox title="npm" value={p.npmCommand} setValue={p.onNpmCommand} options={['install','ci','run','prune','ls','outdated','audit','--version']} onRun={p.onRunNpm}><input value={p.npmScript} onChange={e => p.onNpmScript(e.target.value)} className={`${fieldClass} mt-2`} placeholder={t('commands.scriptPlaceholder')} /><NodeSelect value={p.nodeVersion} versions={p.nodeVersions} onChange={p.onNodeVersion} /></CommandBox>
+      </div>
+    </Card>
+  )
+}
+
+type EnvTabProps = {
+  loaded: boolean
+  content: string
+  onContent: (value: string) => void
+  onLoad: () => void
+  onSave: () => void
+  busy: boolean
+}
+
+function EnvTab({ loaded, content, onContent, onLoad, onSave, busy }: EnvTabProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  return (
+    <Card title={t('env.title')}>
+      {!loaded ? <Button disabled={busy} onClick={onLoad}>{t('env.load')}</Button> : <><textarea value={content} onChange={e => onContent(e.target.value)} rows={16} className={`${fieldClass} font-mono text-xs`} /><div className="mt-3"><Button disabled={busy} onClick={onSave}>{t('env.save')}</Button></div></>}
+    </Card>
+  )
+}
+
+type DeployTabProps = {
+  status: Status | null
+  nodeVersion: string
+  nodeVersions: string[]
+  onNodeVersion: (value: string) => void
+  busy: boolean
+  onDeploy: () => void
+  onPollDeploy: () => void
+  onMaintenance: (enabled: boolean) => void
+}
+
+function DeployTab(p: DeployTabProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  const maintenance = !!p.status?.maintenance
+  return (
+    <Card title={t('deploy.title')}>
+      <div className="flex flex-wrap gap-2 mb-4"><NodeSelect value={p.nodeVersion} versions={p.nodeVersions} onChange={p.onNodeVersion} /><Button disabled={p.busy} onClick={p.onDeploy}>{t('deploy.deployWithMigrate')}</Button><Button variant="secondary" disabled={p.busy} onClick={p.onPollDeploy}>{t('deploy.checkDeployStatus')}</Button><Button variant="secondary" disabled={p.busy} onClick={() => p.onMaintenance(!maintenance)}>{maintenance ? t('deploy.disableMaintenance') : t('deploy.enableMaintenance')}</Button></div>
+    </Card>
+  )
+}
+
+type WorkersTabProps = {
+  status: Status | null
+  busy: boolean
+  onSchedule: (enabled: boolean) => void
+  workers: Worker[]
+  workersFailed: boolean | null
+  maxProcesses: number
+  draft: WorkerDraft | null
+  onDraft: (draft: WorkerDraft | null) => void
+  onSaveWorker: (draft: WorkerDraft) => void
+  onToggleWorker: (worker: Worker) => void
+  onRestartWorker: (worker: Worker) => void
+  onDeleteWorker: (worker: Worker) => void
+  onShowWorkerLog: (worker: Worker) => void
+  workerLog: { id: number; text: string } | null
+}
+
+function WorkersTab(p: WorkersTabProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  const status = p.status
+  if (!status) return null
+  return (
+    <>
+      <Card title={t('workers.scheduleTitle')}>
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('workers.scheduleHint')}</p>
+        <Button disabled={p.busy} onClick={() => p.onSchedule(!status.schedule_enabled)}>
+          {status.schedule_enabled ? t('workers.disableSchedule') : t('workers.enableSchedule')}
+        </Button>
+      </Card>
+
+      <Card title={t('workers.title')}>
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">{t('workers.hint')}</p>
+        <WorkerList
+          workers={p.workers}
+          workersFailed={p.workersFailed}
+          busy={p.busy}
+          onEdit={worker => p.onDraft({ ...worker, id: worker.id })}
+          onToggle={p.onToggleWorker}
+          onRestart={p.onRestartWorker}
+          onDelete={p.onDeleteWorker}
+          onLog={p.onShowWorkerLog}
+        />
+        {!p.draft && (
+          <div className="mt-4">
+            <Button disabled={p.busy} onClick={() => p.onDraft({ ...newWorker })}>{t('workers.add')}</Button>
+          </div>
+        )}
+      </Card>
+
+      {p.draft && (
+        <WorkerEditor
+          draft={p.draft}
+          maxProcesses={p.maxProcesses}
+          onChange={p.onDraft}
+          onSave={p.onSaveWorker}
+          busy={p.busy}
+        />
+      )}
+
+      {p.workerLog && <WorkerLogCard text={p.workerLog.text} />}
+    </>
+  )
+}
+
+type WorkerListProps = {
+  workers: Worker[]
+  workersFailed: boolean | null
+  busy: boolean
+  onEdit: (worker: Worker) => void
+  onToggle: (worker: Worker) => void
+  onRestart: (worker: Worker) => void
+  onDelete: (worker: Worker) => void
+  onLog: (worker: Worker) => void
+}
+
+function WorkerList(p: WorkerListProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  if (p.workersFailed) {
+    return <div className="py-6 text-center text-sm text-red-600 dark:text-red-400">{t('workers.loadFailed')}</div>
+  }
+  if (p.workers.length === 0) {
+    return <div className="py-6 text-center text-sm text-slate-500 dark:text-slate-400">{t('workers.empty')}</div>
+  }
+  return (
+    <div className="space-y-3">
+      {p.workers.map(worker => (
+        <WorkerRow
+          key={worker.id}
+          worker={worker}
+          busy={p.busy}
+          onEdit={() => p.onEdit(worker)}
+          onToggle={() => p.onToggle(worker)}
+          onRestart={() => p.onRestart(worker)}
+          onDelete={() => p.onDelete(worker)}
+          onLog={() => p.onLog(worker)}
+        />
+      ))}
+    </div>
+  )
+}
+
+type WorkerEditorProps = {
+  draft: WorkerDraft
+  maxProcesses: number
+  onChange: (draft: WorkerDraft | null) => void
+  onSave: (draft: WorkerDraft) => void
+  busy: boolean
+}
+
+function WorkerEditor({ draft, maxProcesses, onChange, onSave, busy }: WorkerEditorProps) {
+  const { t } = useTranslation('DomainLaravelPage')
+  return (
+    <Card title={draft.id === null ? t('workers.addTitle') : t('workers.editTitle', { name: draft.name })}>
+      <WorkerForm
+        draft={draft}
+        maxProcesses={maxProcesses}
+        onChange={onChange}
+      />
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button disabled={busy} onClick={() => onSave(draft)}>{t('common.save')}</Button>
+        <Button variant="secondary" disabled={busy} onClick={() => onChange(null)}>{t('workers.cancel')}</Button>
+      </div>
+    </Card>
+  )
+}
+
+function WorkerLogCard({ text }: { text: string }) {
+  const { t } = useTranslation('DomainLaravelPage')
+  return (
+    <Card title={t('workers.logTitle')}>
+      <pre className="bg-slate-950 text-slate-100 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap break-words max-h-[360px] overflow-auto">
+        {text || t('workers.logEmpty')}
+      </pre>
+    </Card>
   )
 }
 
@@ -461,6 +700,26 @@ function NodeSelect({ value, versions, onChange }: { value: string; versions: st
   return <select value={value} onChange={e => onChange(e.target.value)} className={`${fieldClass} max-w-[180px]`}>{list.map(version => <option key={version} value={version}>{version}</option>)}</select>
 }
 
+// A worker with even one failed instance is drawn as failing. The others
+// carrying the load is exactly what hides the process that is not.
+function workerStateClass(worker: Worker): string {
+  if (worker.status.failed > 0) return 'text-red-600 dark:text-red-400'
+  if (worker.enabled && worker.status.running < worker.processes) return 'text-amber-600 dark:text-amber-400'
+  if (worker.enabled) return 'text-emerald-600 dark:text-emerald-400'
+  return 'text-slate-500 dark:text-slate-400'
+}
+
+function WorkerState({ worker }: { worker: Worker }) {
+  const { t } = useTranslation('DomainLaravelPage')
+  return (
+    <span className={`text-xs ${workerStateClass(worker)}`}>
+      {worker.status.failed > 0 ? t('workers.stateFailed', { failed: worker.status.failed })
+        : worker.enabled ? t('workers.stateRunning', { running: worker.status.running, total: worker.processes })
+          : t('workers.stateStopped')}
+    </span>
+  )
+}
+
 function WorkerRow({ worker, busy, onEdit, onToggle, onRestart, onDelete, onLog }: {
   worker: Worker
   busy: boolean
@@ -471,14 +730,6 @@ function WorkerRow({ worker, busy, onEdit, onToggle, onRestart, onDelete, onLog 
   onLog: () => void
 }) {
   const { t } = useTranslation('DomainLaravelPage')
-  // A worker with even one failed instance is drawn as failing. The others
-  // carrying the load is exactly what hides the process that is not.
-  const failing = worker.status.failed > 0
-  const short = worker.enabled && worker.status.running < worker.processes
-  const stateClass = failing ? 'text-red-600 dark:text-red-400'
-    : short ? 'text-amber-600 dark:text-amber-400'
-      : worker.enabled ? 'text-emerald-600 dark:text-emerald-400'
-        : 'text-slate-500 dark:text-slate-400'
 
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
@@ -486,11 +737,7 @@ function WorkerRow({ worker, busy, onEdit, onToggle, onRestart, onDelete, onLog 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-slate-900 dark:text-slate-100">{worker.name}</span>
-            <span className={`text-xs ${stateClass}`}>
-              {failing ? t('workers.stateFailed', { failed: worker.status.failed })
-                : worker.enabled ? t('workers.stateRunning', { running: worker.status.running, total: worker.processes })
-                  : t('workers.stateStopped')}
-            </span>
+            <WorkerState worker={worker} />
           </div>
           <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {t('workers.summary', {
