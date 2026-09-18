@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Histórico de recursos",
+    "cpu": "CPU",
+    "memory": "Memória",
+    "swap": "Swap",
+    "disk": "Disco"
+  },
+  "network": {
+    "title": "Histórico de rede",
+    "rx": "Descarregamento",
+    "tx": "Envio"
+  },
+  "noData": "Ainda não foram recolhidos dados. As amostras são registadas a cada minuto."
+}

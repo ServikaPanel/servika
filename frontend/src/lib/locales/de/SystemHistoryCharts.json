@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Ressourcenverlauf",
+    "cpu": "CPU",
+    "memory": "Arbeitsspeicher",
+    "swap": "Swap",
+    "disk": "Festplatte"
+  },
+  "network": {
+    "title": "Netzwerkverlauf",
+    "rx": "Download",
+    "tx": "Upload"
+  },
+  "noData": "Noch keine Daten erfasst. Messwerte werden jede Minute aufgezeichnet."
+}

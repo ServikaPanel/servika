@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Resource history",
+    "cpu": "CPU",
+    "memory": "Memory",
+    "swap": "Swap",
+    "disk": "Disk"
+  },
+  "network": {
+    "title": "Network history",
+    "rx": "Download",
+    "tx": "Upload"
+  },
+  "noData": "No data collected yet. Samples are recorded every minute."
+}

@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Cronologia risorse",
+    "cpu": "CPU",
+    "memory": "Memoria",
+    "swap": "Swap",
+    "disk": "Disco"
+  },
+  "network": {
+    "title": "Cronologia rete",
+    "rx": "Download",
+    "tx": "Upload"
+  },
+  "noData": "Nessun dato raccolto finora. I campioni vengono registrati ogni minuto."
+}

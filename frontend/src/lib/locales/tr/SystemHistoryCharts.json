@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Kaynak geçmişi",
+    "cpu": "CPU",
+    "memory": "Bellek",
+    "swap": "Swap",
+    "disk": "Disk"
+  },
+  "network": {
+    "title": "Ağ geçmişi",
+    "rx": "İndirme",
+    "tx": "Yükleme"
+  },
+  "noData": "Henüz veri toplanmadı. Örnekler dakikada bir kaydedilir."
+}

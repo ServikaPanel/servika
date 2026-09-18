@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "资源历史",
+    "cpu": "CPU",
+    "memory": "内存",
+    "swap": "Swap",
+    "disk": "磁盘"
+  },
+  "network": {
+    "title": "网络历史",
+    "rx": "下载",
+    "tx": "上传"
+  },
+  "noData": "尚未采集到数据。样本每分钟记录一次。"
+}

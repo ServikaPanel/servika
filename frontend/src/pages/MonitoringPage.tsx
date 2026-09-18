@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
+import SystemHistoryCharts from '@/components/SystemHistoryCharts'
 import {
   responsiveTableBodyClass,
   responsiveTableCellClass,
@@ -171,6 +172,11 @@ function ServerMonitoring() {
           suffix="KB/s"
         />
       </Card>
+
+      <div className="h-5" />
+
+      {/* Stored history — survives a reload, unlike the two live charts above */}
+      <SystemHistoryCharts />
 
       <div className="h-5" />
 

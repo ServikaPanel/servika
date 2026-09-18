@@ -38,7 +38,7 @@ type loadRows struct {
 	at   int
 }
 
-func (r *loadRows) Columns() []string { return make([]string, 5) }
+func (r *loadRows) Columns() []string { return make([]string, 10) }
 func (r *loadRows) Close() error      { return nil }
 func (r *loadRows) Next(dest []driver.Value) error {
 	if r.at >= len(r.rows) {
@@ -69,11 +69,13 @@ func readHistory(t *testing.T, rows [][]driver.Value) *httptest.ResponseRecorder
 	return recorder
 }
 
-// A sample of the right shape reaches the chart.
+// A sample of the right shape reaches the chart, with every series the row
+// carries. A point that answered only the load average and the memory would
+// render the CPU, swap, disk and network charts as a flat zero line.
 func TestTheReadableSamplesReachTheChart(t *testing.T) {
 	recorder := readHistory(t, [][]driver.Value{
-		{"2026-09-12 10:00:00", 0.5, 0.4, 0.3, 41.5},
-		{"2026-09-12 10:05:00", 0.7, 0.6, 0.5, 42.0},
+		{"2026-09-12 10:00:00", 0.5, 0.4, 0.3, 41.5, 17.0, 2.5, 63.0, int64(120000), int64(45000)},
+		{"2026-09-12 10:05:00", 0.7, 0.6, 0.5, 42.0, 31.5, 3.0, 63.1, int64(980000), int64(76000)},
 	})
 
 	if recorder.Code != http.StatusOK {
@@ -85,8 +87,31 @@ func TestTheReadableSamplesReachTheChart(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("the answer is not JSON: %s", recorder.Body.String())
 	}
-	if len(body.Points) != 2 || body.Points[1].Load1 != 0.7 {
-		t.Errorf("the chart carries %v", body.Points)
+	if len(body.Points) != 2 {
+		t.Fatalf("the chart carries %v", body.Points)
+	}
+	assertSecondPoint(t, body.Points[1])
+}
+
+// assertSecondPoint checks every series of the later bucket.
+func assertSecondPoint(t *testing.T, point LoadPoint) {
+	t.Helper()
+	for _, field := range []struct {
+		name string
+		got  float64
+		want float64
+	}{
+		{name: "load1", got: point.Load1, want: 0.7},
+		{name: "memory", got: point.Memory, want: 42.0},
+		{name: "cpu", got: point.CPU, want: 31.5},
+		{name: "swap", got: point.Swap, want: 3.0},
+		{name: "disk", got: point.Disk, want: 63.1},
+		{name: "net_rx_bps", got: float64(point.NetRx), want: 980000},
+		{name: "net_tx_bps", got: float64(point.NetTx), want: 76000},
+	} {
+		if field.got != field.want {
+			t.Errorf("%s = %v, want %v", field.name, field.got, field.want)
+		}
 	}
 }
 
@@ -94,8 +119,8 @@ func TestTheReadableSamplesReachTheChart(t *testing.T) {
 // no way to show that a point is missing rather than absent.
 func TestASampleThatCannotBeReadIsRefusedRatherThanDropped(t *testing.T) {
 	recorder := readHistory(t, [][]driver.Value{
-		{"2026-09-12 10:00:00", 0.5, 0.4, 0.3, 41.5},
-		{"2026-09-12 10:05:00", "not a load average", 0.6, 0.5, 42.0},
+		{"2026-09-12 10:00:00", 0.5, 0.4, 0.3, 41.5, 17.0, 2.5, 63.0, int64(120000), int64(45000)},
+		{"2026-09-12 10:05:00", "not a load average", 0.6, 0.5, 42.0, 17.0, 2.5, 63.0, int64(1), int64(2)},
 	})
 
 	if recorder.Code != http.StatusInternalServerError {

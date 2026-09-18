@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Istoric resurse",
+    "cpu": "CPU",
+    "memory": "Memorie",
+    "swap": "Swap",
+    "disk": "Disc"
+  },
+  "network": {
+    "title": "Istoric rețea",
+    "rx": "Descărcare",
+    "tx": "Încărcare"
+  },
+  "noData": "Nu au fost colectate încă date. Eșantioanele sunt înregistrate în fiecare minut."
+}

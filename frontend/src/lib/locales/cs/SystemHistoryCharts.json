@@ -1,0 +1,15 @@
+{
+  "resources": {
+    "title": "Historie zdrojů",
+    "cpu": "CPU",
+    "memory": "Paměť",
+    "swap": "Swap",
+    "disk": "Disk"
+  },
+  "network": {
+    "title": "Historie sítě",
+    "rx": "Stahování",
+    "tx": "Odesílání"
+  },
+  "noData": "Zatím nebyla shromážděna žádná data. Vzorky se zaznamenávají každou minutu."
+}
