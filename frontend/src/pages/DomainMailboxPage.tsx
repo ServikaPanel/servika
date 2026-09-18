@@ -107,6 +107,386 @@ function formatBytes(value: number): string {
   return `${power === 0 ? scaled : scaled.toFixed(1)} ${units[power]}`
 }
 
+function isJobRunning(job: MigrationJob | null): boolean {
+  return job?.status === 'running' || job?.status === 'queued'
+}
+
+function canVerifyNow(verifying: boolean, host: string, user: string, password: string): boolean {
+  return !verifying && host !== '' && user !== '' && password !== ''
+}
+
+function exportFileName(mailbox: Mailbox | null): string {
+  return `${mailbox?.local_part || 'mailbox'}-maildir.tar.gz`
+}
+
+function MailboxHeader({ domain, mailbox, id }: { domain: Domain | null; mailbox: Mailbox | null; id?: string }) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
+        { label: t('breadcrumb.email'), href: `/subscriptions/${id}/mail` },
+        { label: mailbox?.email || '...' },
+      ]} />
+      <h1 className="mt-4 text-xl font-semibold text-slate-900 dark:text-slate-100">{mailbox?.email || t('title')}</h1>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('subtitle')}</p>
+    </>
+  )
+}
+
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mt-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function TabBar({ tab, onTab }: { tab: Tab; onTab: (value: Tab) => void }) {
+  const { t } = useTranslation('DomainMailboxPage')
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'general', label: t('tabs.general') },
+    { key: 'autoresponder', label: t('tabs.autoresponder') },
+    { key: 'forwarding', label: t('tabs.forwarding') },
+    { key: 'migration', label: t('tabs.migration') },
+    { key: 'transfer', label: t('tabs.transfer') },
+  ]
+  return (
+    <div className="mt-5 inline-flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+      {tabs.map(entry => (
+        <button key={entry.key} type="button" onClick={() => onTab(entry.key)}
+          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${tab === entry.key ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+          {entry.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function QuotaCard({ mailbox, recalculating, onRecalculate }: {
+  mailbox: Mailbox; recalculating: boolean; onRecalculate: () => void
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  const percent = quotaPercent(mailbox.used_bytes, mailbox.quota_bytes)
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('quota.title')}</h3>
+      <p className="text-sm text-slate-700 dark:text-slate-300">
+        {percent === null
+          ? t('quota.unlimited', { used: formatBytes(mailbox.used_bytes) })
+          : t('quota.used', { used: formatBytes(mailbox.used_bytes), quota: formatBytes(mailbox.quota_bytes) })}
+      </p>
+      {percent !== null && (
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+          <div className={`h-full ${percent >= 90 ? 'bg-red-500' : 'bg-brand-500'}`} style={{ width: `${percent}%` }} />
+        </div>
+      )}
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        {mailbox.usage_checked_at ? t('quota.checkedAt', { when: new Date(mailbox.usage_checked_at).toLocaleString() }) : t('quota.neverChecked')}
+      </p>
+      <button type="button" onClick={onRecalculate} disabled={recalculating}
+        className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+        {recalculating ? t('quota.recalculating') : t('quota.recalculate')}
+      </button>
+    </div>
+  )
+}
+
+function ConnectionRows({ connection, onCopy }: { connection: Connection; onCopy: (value: string) => void }) {
+  const { t } = useTranslation('DomainMailboxPage')
+  const rows = [
+    { label: t('connection.server'), value: connection.hostname || '' },
+    { label: t('connection.username'), value: connection.username || '' },
+    { label: t('connection.imap'), value: `${connection.imap_port} (${connection.security})` },
+    { label: t('connection.submission'), value: `${connection.submission_port} (${connection.security})` },
+    ...(connection.covered?.length
+      ? [{ label: t('connection.coveredLabel'), value: connection.covered.join(', ') }]
+      : []),
+  ]
+  return (
+    <dl className="space-y-2 text-sm">
+      {rows.map(row => (
+        <div key={row.label} className="flex items-center justify-between gap-3">
+          <dt className="text-slate-500 dark:text-slate-400">{row.label}</dt>
+          <dd className="flex items-center gap-2">
+            <span className="font-mono text-slate-800 dark:text-slate-200">{row.value}</span>
+            <button type="button" onClick={() => onCopy(row.value)}
+              className="text-xs text-brand-600 hover:underline dark:text-brand-400">{t('connection.copy')}</button>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function ConnectionCard({ connection, onCopy }: { connection: Connection | null; onCopy: (value: string) => void }) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('connection.title')}</h3>
+      <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('connection.description')}</p>
+      {connection?.reason === 'no_mail_hostname' ? (
+        <>
+          <p className="text-sm text-amber-700 dark:text-amber-300">{t('connection.hostnamePending')}</p>
+          {/* Which names the certificate does carry separates the two ways of
+              being pending: names present but none usable is a DNS problem,
+              an empty list means nothing was ever issued. */}
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {t('connection.covered', {
+              names: connection.covered?.length
+                ? connection.covered.join(', ')
+                : t('connection.coveredNone'),
+            })}
+          </p>
+        </>
+      ) : connection && <ConnectionRows connection={connection} onCopy={onCopy} />}
+    </div>
+  )
+}
+
+function AutoresponderTab({ autoresponder, onChange, saving, onSubmit }: {
+  autoresponder: Autoresponder | null; onChange: (value: Autoresponder) => void
+  saving: boolean; onSubmit: (event: React.SubmitEvent) => void
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  if (!autoresponder) return null
+  return (
+    <form onSubmit={onSubmit} className="mt-5 max-w-xl space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input type="checkbox" checked={autoresponder.enabled}
+          onChange={event => onChange({ ...autoresponder, enabled: event.target.checked })} />
+        {t('autoresponder.enabled')}
+      </label>
+      <input value={autoresponder.subject} onChange={event => onChange({ ...autoresponder, subject: event.target.value })}
+        placeholder={t('autoresponder.subject')}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
+      <textarea value={autoresponder.body} onChange={event => onChange({ ...autoresponder, body: event.target.value })}
+        rows={6} placeholder={t('autoresponder.body')}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
+      <label className="block text-sm text-slate-700 dark:text-slate-300">
+        {t('autoresponder.intervalDays')}
+        <input type="number" min={1} value={autoresponder.interval_days}
+          onChange={event => onChange({ ...autoresponder, interval_days: Number(event.target.value) })}
+          className="ml-2 w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900" />
+      </label>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{t('autoresponder.intervalHint')}</p>
+      <button disabled={saving}
+        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+        {saving ? t('saving') : t('save')}
+      </button>
+    </form>
+  )
+}
+
+function ForwardingTab({ forwarding, onForwarding, destinationText, onDestinationText, saving, onSubmit }: {
+  forwarding: Forwarding; onForwarding: (value: Forwarding) => void
+  destinationText: string; onDestinationText: (value: string) => void
+  saving: boolean; onSubmit: (event: React.SubmitEvent) => void
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <form onSubmit={onSubmit} className="mt-5 max-w-xl space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{t('forwarding.description')}</p>
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input type="checkbox" checked={forwarding.enabled}
+          onChange={event => onForwarding({ ...forwarding, enabled: event.target.checked })} />
+        {t('forwarding.enabled')}
+      </label>
+      <textarea value={destinationText} onChange={event => onDestinationText(event.target.value)}
+        rows={4} placeholder={t('forwarding.destinationsPlaceholder')} disabled={!forwarding.enabled}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900" />
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+        <input type="checkbox" checked={forwarding.keep_copy} disabled={!forwarding.enabled}
+          onChange={event => onForwarding({ ...forwarding, keep_copy: event.target.checked })} />
+        {t('forwarding.keepCopy')}
+      </label>
+      <button disabled={saving}
+        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+        {saving ? t('saving') : t('save')}
+      </button>
+    </form>
+  )
+}
+
+function JobCard({ job, running, reasonText, onCancel }: {
+  job: MigrationJob | null; running: boolean; reasonText: (code: string) => string; onCancel: () => void
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  if (!job) return null
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('migration.jobTitle')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        {t(`migration.status.${job.status}`, { defaultValue: job.status })} · {job.remote_user} @ {job.remote_host}
+      </p>
+      <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+        {t('migration.progress', {
+          messages: job.messages_done, total: job.messages_total,
+          folders: job.folders_done, folderTotal: job.folders_total,
+        })}
+      </p>
+      {job.error_code && (
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{reasonText(job.error_code)}</p>
+      )}
+      {running && (
+        <button type="button" onClick={onCancel}
+          className="mt-3 rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">
+          {t('migration.cancel')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function CandidateRow({ candidate, onChoose }: { candidate: Candidate; onChoose: (candidate: Candidate) => void }) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <li className="flex items-center justify-between py-2">
+      <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
+        {candidate.host}:{candidate.port}
+        <span className="ml-2 text-xs text-slate-400">{candidate.security} · {t(`migration.source.${candidate.source}`, { defaultValue: candidate.source })}</span>
+        {/* A published record can outlive the server it names, so whether it
+            actually answered is worth its own mark. */}
+        {candidate.responds && (
+          <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+            {t('migration.answers')}
+          </span>
+        )}
+      </span>
+      <button type="button" onClick={() => onChoose(candidate)}
+        className="text-xs text-brand-600 hover:underline dark:text-brand-400">{t('migration.use')}</button>
+    </li>
+  )
+}
+
+function StepFind({ remoteUser, onRemoteUser, placeholder, discovering, onDiscover, providerNotice, reasonText, candidates, onChoose }: {
+  remoteUser: string; onRemoteUser: (value: string) => void; placeholder: string
+  discovering: boolean; onDiscover: () => void
+  providerNotice: string; reasonText: (code: string) => string
+  candidates: Candidate[]; onChoose: (candidate: Candidate) => void
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <li>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t('migration.stepFind')}</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input value={remoteUser} onChange={event => onRemoteUser(event.target.value)}
+          placeholder={placeholder} autoComplete="off"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
+        <button type="button" onClick={onDiscover} disabled={discovering}
+          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+          {discovering ? t('migration.searching') : t('migration.search')}
+        </button>
+      </div>
+      {providerNotice && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+          {reasonText(providerNotice)}
+        </p>
+      )}
+      {candidates.length > 0 && (
+        <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-700/50">
+          {candidates.map(candidate => (
+            <CandidateRow key={`${candidate.host}:${candidate.port}:${candidate.security}`} candidate={candidate} onChoose={onChoose} />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+type ServerFields = {
+  host: string; onHost: (value: string) => void
+  port: number; onPort: (value: number) => void
+  security: string; onSecurity: (value: string) => void
+  password: string; onPassword: (value: string) => void
+}
+
+function StepVerify({ fields, canVerify, verifying, onVerify, verified, verifyReason, reasonText }: {
+  fields: ServerFields; canVerify: boolean; verifying: boolean; onVerify: () => void
+  verified: boolean; verifyReason: string; reasonText: (code: string) => string
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <li>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t('migration.stepVerify')}</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <input value={fields.host} onChange={event => fields.onHost(event.target.value)}
+          placeholder={t('migration.host')} autoComplete="off"
+          className="rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900 sm:col-span-2" />
+        <input value={fields.port} onChange={event => fields.onPort(Number(event.target.value))}
+          type="number" min={1} max={65535} placeholder={t('migration.port')}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
+        <select value={fields.security} onChange={event => fields.onSecurity(event.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-600 dark:bg-slate-900">
+          <option value="ssl">{t('migration.security.ssl')}</option>
+          <option value="starttls">{t('migration.security.starttls')}</option>
+          <option value="plain">{t('migration.security.plain')}</option>
+        </select>
+        <input value={fields.password} onChange={event => fields.onPassword(event.target.value)}
+          type="password" placeholder={t('migration.password')} autoComplete="new-password"
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900 sm:col-span-2" />
+      </div>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('migration.passwordHint')}</p>
+      <button type="button" onClick={onVerify} disabled={!canVerify}
+        className="mt-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50">
+        {verifying ? t('migration.verifying') : t('migration.verify')}
+      </button>
+      {verified && <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">{t('migration.verified')}</p>}
+      {verifyReason && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{reasonText(verifyReason)}</p>}
+    </li>
+  )
+}
+
+function StepStart({ canStart, starting, onStart }: { canStart: boolean; starting: boolean; onStart: () => void }) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <li>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t('migration.stepStart')}</p>
+      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t('migration.startHint')}</p>
+      <button type="button" onClick={onStart} disabled={!canStart}
+        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+        {starting ? t('migration.starting') : t('migration.start')}
+      </button>
+    </li>
+  )
+}
+
+function TransferTab({ formats, onExport, uploadFile, onFile, importing, onImport }: {
+  formats: ImportFormats | null; onExport: () => void
+  uploadFile: File | null; onFile: (file: File | null) => void
+  importing: boolean; onImport: (event: React.SubmitEvent) => void
+}) {
+  const { t } = useTranslation('DomainMailboxPage')
+  return (
+    <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('transfer.exportTitle')}</h3>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('transfer.exportDescription')}</p>
+        <button type="button" onClick={onExport}
+          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+          {t('transfer.export')}
+        </button>
+      </div>
+
+      <form onSubmit={onImport} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('transfer.importTitle')}</h3>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+          {formats?.pst_supported ? t('transfer.importFormatsWithPst') : t('transfer.importFormats')}
+        </p>
+        <input type="file" onChange={event => onFile(event.target.files?.[0] || null)}
+          className="w-full text-sm text-slate-700 dark:text-slate-300" />
+        <button disabled={importing || !uploadFile}
+          className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+          {importing ? t('transfer.importing') : t('transfer.import')}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export default function DomainMailboxPage() {
   const { t } = useTranslation('DomainMailboxPage')
   const { notify, confirm } = useDialog()
@@ -200,12 +580,14 @@ export default function DomainMailboxPage() {
 
   useEffect(() => { fetchJob() }, [fetchJob])
 
+  const jobRunning = isJobRunning(job)
+
   // While a copy runs the page asks again, so progress moves without a reload.
   useEffect(() => {
-    if (job?.status !== 'running' && job?.status !== 'queued') return
+    if (!jobRunning) return
     const timer = setInterval(fetchJob, 5000)
     return () => clearInterval(timer)
-  }, [job?.status, fetchJob])
+  }, [jobRunning, fetchJob])
 
   function rememberDraft(next: Partial<MigrationDraft>) {
     const draft: MigrationDraft = {
@@ -380,7 +762,7 @@ export default function DomainMailboxPage() {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `${mailbox?.local_part || 'mailbox'}-maildir.tar.gz`
+      anchor.download = exportFileName(mailbox)
       anchor.click()
       URL.revokeObjectURL(url)
     } catch (cause) {
@@ -388,31 +770,13 @@ export default function DomainMailboxPage() {
     }
   }
 
-  const percent = mailbox ? quotaPercent(mailbox.used_bytes, mailbox.quota_bytes) : null
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'general', label: t('tabs.general') },
-    { key: 'autoresponder', label: t('tabs.autoresponder') },
-    { key: 'forwarding', label: t('tabs.forwarding') },
-    { key: 'migration', label: t('tabs.migration') },
-    { key: 'transfer', label: t('tabs.transfer') },
-  ]
-  const jobRunning = job?.status === 'running' || job?.status === 'queued'
+  const canVerify = canVerifyNow(isVerifying, remoteHost, remoteUser, remotePassword)
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-        { label: t('breadcrumb.email'), href: `/subscriptions/${id}/mail` },
-        { label: mailbox?.email || '...' },
-      ]} />
+      <MailboxHeader domain={domain} mailbox={mailbox} id={id} />
 
-      <h1 className="mt-4 text-xl font-semibold text-slate-900 dark:text-slate-100">{mailbox?.email || t('title')}</h1>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('subtitle')}</p>
-
-      {error && <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {success && <div className="mt-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      <Banners error={error} success={success} />
 
       {loading ? (
         <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">{t('loading')}</p>
@@ -420,156 +784,29 @@ export default function DomainMailboxPage() {
         <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">{t('notFound')}</p>
       ) : (
         <>
-          <div className="mt-5 inline-flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            {tabs.map(entry => (
-              <button key={entry.key} type="button" onClick={() => { setTab(entry.key); setSuccess(null) }}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${tab === entry.key ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-                {entry.label}
-              </button>
-            ))}
-          </div>
+          <TabBar tab={tab} onTab={value => { setTab(value); setSuccess(null) }} />
 
           {tab === 'general' && (
             <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('quota.title')}</h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300">
-                  {percent === null
-                    ? t('quota.unlimited', { used: formatBytes(mailbox.used_bytes) })
-                    : t('quota.used', { used: formatBytes(mailbox.used_bytes), quota: formatBytes(mailbox.quota_bytes) })}
-                </p>
-                {percent !== null && (
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                    <div className={`h-full ${percent >= 90 ? 'bg-red-500' : 'bg-brand-500'}`} style={{ width: `${percent}%` }} />
-                  </div>
-                )}
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  {mailbox.usage_checked_at ? t('quota.checkedAt', { when: new Date(mailbox.usage_checked_at).toLocaleString() }) : t('quota.neverChecked')}
-                </p>
-                <button type="button" onClick={recalculateQuota} disabled={isRecalculating}
-                  className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                  {isRecalculating ? t('quota.recalculating') : t('quota.recalculate')}
-                </button>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('connection.title')}</h3>
-                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('connection.description')}</p>
-                {connection?.reason === 'no_mail_hostname' ? (
-                  <>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">{t('connection.hostnamePending')}</p>
-                    {/* Which names the certificate does carry separates the two ways of
-                        being pending: names present but none usable is a DNS problem,
-                        an empty list means nothing was ever issued. */}
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      {t('connection.covered', {
-                        names: connection.covered?.length
-                          ? connection.covered.join(', ')
-                          : t('connection.coveredNone'),
-                      })}
-                    </p>
-                  </>
-                ) : (
-                  <dl className="space-y-2 text-sm">
-                    {[
-                      { label: t('connection.server'), value: connection?.hostname || '' },
-                      { label: t('connection.username'), value: connection?.username || '' },
-                      { label: t('connection.imap'), value: `${connection?.imap_port} (${connection?.security})` },
-                      { label: t('connection.submission'), value: `${connection?.submission_port} (${connection?.security})` },
-                      ...(connection?.covered?.length
-                        ? [{ label: t('connection.coveredLabel'), value: connection.covered.join(', ') }]
-                        : []),
-                    ].map(row => (
-                      <div key={row.label} className="flex items-center justify-between gap-3">
-                        <dt className="text-slate-500 dark:text-slate-400">{row.label}</dt>
-                        <dd className="flex items-center gap-2">
-                          <span className="font-mono text-slate-800 dark:text-slate-200">{row.value}</span>
-                          <button type="button" onClick={() => copy(row.value)}
-                            className="text-xs text-brand-600 hover:underline dark:text-brand-400">{t('connection.copy')}</button>
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </div>
+              <QuotaCard mailbox={mailbox} recalculating={isRecalculating} onRecalculate={recalculateQuota} />
+              <ConnectionCard connection={connection} onCopy={copy} />
             </div>
           )}
 
-          {tab === 'autoresponder' && autoresponder && (
-            <form onSubmit={saveAutoresponder} className="mt-5 max-w-xl space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" checked={autoresponder.enabled}
-                  onChange={event => setAutoresponder({ ...autoresponder, enabled: event.target.checked })} />
-                {t('autoresponder.enabled')}
-              </label>
-              <input value={autoresponder.subject} onChange={event => setAutoresponder({ ...autoresponder, subject: event.target.value })}
-                placeholder={t('autoresponder.subject')}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
-              <textarea value={autoresponder.body} onChange={event => setAutoresponder({ ...autoresponder, body: event.target.value })}
-                rows={6} placeholder={t('autoresponder.body')}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
-              <label className="block text-sm text-slate-700 dark:text-slate-300">
-                {t('autoresponder.intervalDays')}
-                <input type="number" min={1} value={autoresponder.interval_days}
-                  onChange={event => setAutoresponder({ ...autoresponder, interval_days: Number(event.target.value) })}
-                  className="ml-2 w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-900" />
-              </label>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{t('autoresponder.intervalHint')}</p>
-              <button disabled={isSavingAutoresponder}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                {isSavingAutoresponder ? t('saving') : t('save')}
-              </button>
-            </form>
+          {tab === 'autoresponder' && (
+            <AutoresponderTab autoresponder={autoresponder} onChange={setAutoresponder}
+              saving={isSavingAutoresponder} onSubmit={saveAutoresponder} />
           )}
 
           {tab === 'forwarding' && (
-            <form onSubmit={saveForwarding} className="mt-5 max-w-xl space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <p className="text-xs text-slate-500 dark:text-slate-400">{t('forwarding.description')}</p>
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" checked={forwarding.enabled}
-                  onChange={event => setForwarding({ ...forwarding, enabled: event.target.checked })} />
-                {t('forwarding.enabled')}
-              </label>
-              <textarea value={destinationText} onChange={event => setDestinationText(event.target.value)}
-                rows={4} placeholder={t('forwarding.destinationsPlaceholder')} disabled={!forwarding.enabled}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900" />
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input type="checkbox" checked={forwarding.keep_copy} disabled={!forwarding.enabled}
-                  onChange={event => setForwarding({ ...forwarding, keep_copy: event.target.checked })} />
-                {t('forwarding.keepCopy')}
-              </label>
-              <button disabled={isSavingForwarding}
-                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                {isSavingForwarding ? t('saving') : t('save')}
-              </button>
-            </form>
+            <ForwardingTab forwarding={forwarding} onForwarding={setForwarding}
+              destinationText={destinationText} onDestinationText={setDestinationText}
+              saving={isSavingForwarding} onSubmit={saveForwarding} />
           )}
 
           {tab === 'migration' && (
             <div className="mt-5 max-w-2xl space-y-5">
-              {job && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                  <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('migration.jobTitle')}</h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t(`migration.status.${job.status}`, { defaultValue: job.status })} · {job.remote_user} @ {job.remote_host}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
-                    {t('migration.progress', {
-                      messages: job.messages_done, total: job.messages_total,
-                      folders: job.folders_done, folderTotal: job.folders_total,
-                    })}
-                  </p>
-                  {job.error_code && (
-                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{reasonText(job.error_code)}</p>
-                  )}
-                  {jobRunning && (
-                    <button type="button" onClick={cancelMigration}
-                      className="mt-3 rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">
-                      {t('migration.cancel')}
-                    </button>
-                  )}
-                </div>
-              )}
+              <JobCard job={job} running={jobRunning} reasonText={reasonText} onCancel={cancelMigration} />
 
               {!jobRunning && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -577,81 +814,34 @@ export default function DomainMailboxPage() {
                   <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">{t('migration.description')}</p>
 
                   <ol className="space-y-5">
-                    <li>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t('migration.stepFind')}</p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input value={remoteUser} onChange={event => { setRemoteUser(event.target.value); setVerified(false) }}
-                          placeholder={mailbox.email} autoComplete="off"
-                          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
-                        <button type="button" onClick={discover} disabled={isDiscovering}
-                          className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                          {isDiscovering ? t('migration.searching') : t('migration.search')}
-                        </button>
-                      </div>
-                      {providerNotice && (
-                        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                          {reasonText(providerNotice)}
-                        </p>
-                      )}
-                      {candidates.length > 0 && (
-                        <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-700/50">
-                          {candidates.map(candidate => (
-                            <li key={`${candidate.host}:${candidate.port}:${candidate.security}`} className="flex items-center justify-between py-2">
-                              <span className="font-mono text-sm text-slate-700 dark:text-slate-300">
-                                {candidate.host}:{candidate.port}
-                                <span className="ml-2 text-xs text-slate-400">{candidate.security} · {t(`migration.source.${candidate.source}`, { defaultValue: candidate.source })}</span>
-                                {/* A published record can outlive the server it names, so
-                                    whether it actually answered is worth its own mark. */}
-                                {candidate.responds && (
-                                  <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                                    {t('migration.answers')}
-                                  </span>
-                                )}
-                              </span>
-                              <button type="button" onClick={() => chooseCandidate(candidate)}
-                                className="text-xs text-brand-600 hover:underline dark:text-brand-400">{t('migration.use')}</button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
+                    <StepFind
+                      remoteUser={remoteUser}
+                      onRemoteUser={value => { setRemoteUser(value); setVerified(false) }}
+                      placeholder={mailbox.email}
+                      discovering={isDiscovering}
+                      onDiscover={discover}
+                      providerNotice={providerNotice}
+                      reasonText={reasonText}
+                      candidates={candidates}
+                      onChoose={chooseCandidate}
+                    />
 
-                    <li>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t('migration.stepVerify')}</p>
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <input value={remoteHost} onChange={event => { setRemoteHost(event.target.value); setVerified(false) }}
-                          placeholder={t('migration.host')} autoComplete="off"
-                          className="rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900 sm:col-span-2" />
-                        <input value={remotePort} onChange={event => { setRemotePort(Number(event.target.value)); setVerified(false) }}
-                          type="number" min={1} max={65535} placeholder={t('migration.port')}
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900" />
-                        <select value={remoteSecurity} onChange={event => { setRemoteSecurity(event.target.value); setVerified(false) }}
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-slate-600 dark:bg-slate-900">
-                          <option value="ssl">{t('migration.security.ssl')}</option>
-                          <option value="starttls">{t('migration.security.starttls')}</option>
-                          <option value="plain">{t('migration.security.plain')}</option>
-                        </select>
-                        <input value={remotePassword} onChange={event => { setRemotePassword(event.target.value); setVerified(false) }}
-                          type="password" placeholder={t('migration.password')} autoComplete="new-password"
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-slate-600 dark:bg-slate-900 sm:col-span-2" />
-                      </div>
-                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('migration.passwordHint')}</p>
-                      <button type="button" onClick={verify} disabled={isVerifying || !remoteHost || !remoteUser || !remotePassword}
-                        className="mt-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 disabled:opacity-50 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50">
-                        {isVerifying ? t('migration.verifying') : t('migration.verify')}
-                      </button>
-                      {verified && <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">{t('migration.verified')}</p>}
-                      {verifyReason && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{reasonText(verifyReason)}</p>}
-                    </li>
+                    <StepVerify
+                      fields={{
+                        host: remoteHost, onHost: value => { setRemoteHost(value); setVerified(false) },
+                        port: remotePort, onPort: value => { setRemotePort(value); setVerified(false) },
+                        security: remoteSecurity, onSecurity: value => { setRemoteSecurity(value); setVerified(false) },
+                        password: remotePassword, onPassword: value => { setRemotePassword(value); setVerified(false) },
+                      }}
+                      canVerify={canVerify}
+                      verifying={isVerifying}
+                      onVerify={verify}
+                      verified={verified}
+                      verifyReason={verifyReason}
+                      reasonText={reasonText}
+                    />
 
-                    <li>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t('migration.stepStart')}</p>
-                      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{t('migration.startHint')}</p>
-                      <button type="button" onClick={startMigration} disabled={isStarting || !verified}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                        {isStarting ? t('migration.starting') : t('migration.start')}
-                      </button>
-                    </li>
+                    <StepStart canStart={!isStarting && verified} starting={isStarting} onStart={startMigration} />
                   </ol>
                 </div>
               )}
@@ -659,29 +849,8 @@ export default function DomainMailboxPage() {
           )}
 
           {tab === 'transfer' && (
-            <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('transfer.exportTitle')}</h3>
-                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">{t('transfer.exportDescription')}</p>
-                <button type="button" onClick={exportMailbox}
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                  {t('transfer.export')}
-                </button>
-              </div>
-
-              <form onSubmit={runImport} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <h3 className="mb-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{t('transfer.importTitle')}</h3>
-                <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-                  {formats?.pst_supported ? t('transfer.importFormatsWithPst') : t('transfer.importFormats')}
-                </p>
-                <input type="file" onChange={event => setUploadFile(event.target.files?.[0] || null)}
-                  className="w-full text-sm text-slate-700 dark:text-slate-300" />
-                <button disabled={isImporting || !uploadFile}
-                  className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
-                  {isImporting ? t('transfer.importing') : t('transfer.import')}
-                </button>
-              </form>
-            </div>
+            <TransferTab formats={formats} onExport={exportMailbox} uploadFile={uploadFile}
+              onFile={setUploadFile} importing={isImporting} onImport={runImport} />
           )}
         </>
       )}
