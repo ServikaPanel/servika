@@ -31,7 +31,8 @@
     "installDeps": "依存関係をインストール",
     "edit": "編集",
     "delete": "削除",
-    "backups": "バックアップ"
+    "backups": "バックアップ",
+    "metrics": "使用量"
   },
   "confirm": {
     "delete": "アプリケーション {{name}} を削除しますか。ファイルはそのまま残りますが、プロセスとその proxy は削除されます。",

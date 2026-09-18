@@ -31,7 +31,8 @@
     "installDeps": "Abhängigkeiten installieren",
     "edit": "Bearbeiten",
     "delete": "Löschen",
-    "backups": "Sicherungen"
+    "backups": "Sicherungen",
+    "metrics": "Verbrauch"
   },
   "confirm": {
     "delete": "Die Anwendung {{name}} löschen? Die Dateien bleiben bestehen, aber der Prozess und sein Proxy werden entfernt.",

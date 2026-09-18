@@ -31,7 +31,8 @@
     "installDeps": "Bağımlılıkları kur",
     "edit": "Düzenle",
     "delete": "Sil",
-    "backups": "Yedekler"
+    "backups": "Yedekler",
+    "metrics": "Kullanım"
   },
   "confirm": {
     "delete": "{{name}} uygulaması silinsin mi? Dosyaları yerinde kalır, ama süreç ve ters vekili kaldırılır.",

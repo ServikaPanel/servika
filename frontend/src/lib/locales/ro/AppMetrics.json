@@ -1,0 +1,20 @@
+{
+  "title": "Consumul {{name}}",
+  "loading": "Se citește...",
+  "memory": "Memorie",
+  "memoryPeak": "Memorie maximă",
+  "cpu": "CPU",
+  "tasks": "Taskuri",
+  "disk": "Disc",
+  "uptime": "Rulează de",
+  "state": "Stare",
+  "restarts": "Reporniri",
+  "unlimited": "fără limită",
+  "cpuNote": "Valoarea CPU este partea folosită de la citirea anterioară, de aceea prima este întotdeauna zero.",
+  "unit": {
+    "d": "z",
+    "h": "h",
+    "m": "min",
+    "s": "s"
+  }
+}

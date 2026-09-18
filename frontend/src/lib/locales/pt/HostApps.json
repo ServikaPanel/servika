@@ -25,7 +25,8 @@
     "port": "Porta",
     "reachable": "Do exterior",
     "actions": "Ações",
-    "firewallNote": "As portas {{min}} a {{max}} estão reservadas a estas aplicações e são descartadas na firewall. É a abertura aqui que torna uma aplicação acessível a partir do exterior."
+    "firewallNote": "As portas {{min}} a {{max}} estão reservadas a estas aplicações e são descartadas na firewall. É a abertura aqui que torna uma aplicação acessível a partir do exterior.",
+    "usage": "Consumo"
   },
   "catalog": {
     "title": "Disponíveis",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "O arquivo não contém o programa onde o catálogo indica.",
     "host_app_port_taken": "Essa porta já está em uso.",
     "host_apps_switched_off": "As aplicações do servidor estão desativadas neste servidor."
+  },
+  "usage": {
+    "unlimited": "sem limite",
+    "restarts_one": "{{count}} reinício",
+    "restarts_other": "{{count}} reinícios",
+    "d": "d",
+    "h": "h",
+    "m": "min",
+    "s": "s"
   }
 }

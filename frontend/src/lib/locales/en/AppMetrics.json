@@ -1,0 +1,20 @@
+{
+  "title": "{{name}} usage",
+  "loading": "Reading...",
+  "memory": "Memory",
+  "memoryPeak": "Peak memory",
+  "cpu": "CPU",
+  "tasks": "Tasks",
+  "disk": "Disk",
+  "uptime": "Running for",
+  "state": "State",
+  "restarts": "Restarts",
+  "unlimited": "no limit",
+  "cpuNote": "The CPU figure is the share used since the previous reading, so the first one is always zero.",
+  "unit": {
+    "d": "d",
+    "h": "h",
+    "m": "m",
+    "s": "s"
+  }
+}

@@ -31,7 +31,8 @@
     "installDeps": "安装依赖",
     "edit": "编辑",
     "delete": "删除",
-    "backups": "备份"
+    "backups": "备份",
+    "metrics": "用量"
   },
   "confirm": {
     "delete": "删除应用 {{name}} 吗？其文件会保留，但进程及其 proxy 会被移除。",

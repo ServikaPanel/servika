@@ -31,7 +31,8 @@
     "installDeps": "Instalar dependencias",
     "edit": "Editar",
     "delete": "Eliminar",
-    "backups": "Copias"
+    "backups": "Copias",
+    "metrics": "Consumo"
   },
   "confirm": {
     "delete": "¿Eliminar la aplicación {{name}}? Sus archivos permanecen en su sitio, pero el proceso y su proxy se retiran.",

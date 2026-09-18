@@ -1,0 +1,20 @@
+{
+  "title": "Consumo de {{name}}",
+  "loading": "A ler...",
+  "memory": "Memória",
+  "memoryPeak": "Memória máxima",
+  "cpu": "CPU",
+  "tasks": "Tarefas",
+  "disk": "Disco",
+  "uptime": "Em execução há",
+  "state": "Estado",
+  "restarts": "Reinícios",
+  "unlimited": "sem limite",
+  "cpuNote": "O valor de CPU é a parte usada desde a leitura anterior, por isso a primeira é sempre zero.",
+  "unit": {
+    "d": "d",
+    "h": "h",
+    "m": "min",
+    "s": "s"
+  }
+}

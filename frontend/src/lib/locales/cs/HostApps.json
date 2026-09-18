@@ -25,7 +25,8 @@
     "port": "Port",
     "reachable": "Zvenčí",
     "actions": "Akce",
-    "firewallNote": "Porty {{min}} až {{max}} jsou vyhrazeny těmto aplikacím a firewall je zahazuje. Teprve otevření zde zpřístupní aplikaci zvenčí."
+    "firewallNote": "Porty {{min}} až {{max}} jsou vyhrazeny těmto aplikacím a firewall je zahazuje. Teprve otevření zde zpřístupní aplikaci zvenčí.",
+    "usage": "Spotřeba"
   },
   "catalog": {
     "title": "Dostupné",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "Archiv neobsahuje program tam, kde uvádí katalog.",
     "host_app_port_taken": "Tento port je už obsazený.",
     "host_apps_switched_off": "Serverové aplikace jsou na tomto serveru vypnuté."
+  },
+  "usage": {
+    "unlimited": "bez limitu",
+    "restarts_one": "{{count}} restart",
+    "restarts_other": "{{count}} restartů",
+    "d": "d",
+    "h": "h",
+    "m": "m",
+    "s": "s"
   }
 }

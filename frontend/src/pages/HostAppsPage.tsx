@@ -4,6 +4,9 @@ import Breadcrumb from '@/components/Breadcrumb'
 import { api, apiError, apiReason } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import AppBackupsModal from '@/components/AppBackupsModal'
+import {
+  type HostAppMetrics, formatBytes, formatPercent, formatTasks, formatUptime,
+} from '@/lib/appMetrics'
 
 type Status = {
   active_state: string
@@ -71,6 +74,7 @@ export default function HostAppsPage() {
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState('')
   const [backupsOf, setBackupsOf] = useState<Installed | null>(null)
+  const [metrics, setMetrics] = useState<Record<number, HostAppMetrics>>({})
 
   const load = useCallback(() => {
     return api.get<Overview>('/system/host-apps')
@@ -84,6 +88,27 @@ export default function HostAppsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // The whole table is answered in one call, on a timer. A CPU percentage is
+  // the difference between two readings of the same unit, so the first tick
+  // after opening the screen reports 0% whatever the applications are doing.
+  const fetchMetrics = useCallback(() => {
+    api.get<{ metrics: HostAppMetrics[] }>('/system/host-apps/metrics')
+      .then((response) => {
+        const byID: Record<number, HostAppMetrics> = {}
+        for (const item of response.data.metrics || []) byID[item.app_id] = item
+        setMetrics(byID)
+      })
+      // A failed metrics read must not take the installed table off the screen,
+      // so it is recorded nowhere: the row simply shows no figures.
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    fetchMetrics()
+    const timer = setInterval(fetchMetrics, 5000)
+    return () => clearInterval(timer)
+  }, [fetchMetrics])
 
   // An install downloads and unpacks, so its result arrives after the request
   // that started it. Polling stops as soon as nothing is in flight.
@@ -232,7 +257,7 @@ export default function HostAppsPage() {
       <FeatureSection enabled={enabled} busy={busy} ready={data !== null} onToggle={setEnabled} />
 
       <InstalledSection data={data} enabled={enabled} busy={busy} act={act} remove={remove}
-        toggleFirewall={toggleFirewall} openBackups={setBackupsOf} />
+        toggleFirewall={toggleFirewall} openBackups={setBackupsOf} metrics={metrics} />
 
       <CatalogSection data={data} enabled={enabled} busy={busy} installedCodes={installedCodes} install={install} />
 
@@ -299,10 +324,30 @@ function RowActions({ app, enabled, busy, act, remove, openBackups }: {
   )
 }
 
-function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall, openBackups }: {
+// UsageCell shows what one application is consuming, or nothing at all while
+// the first reading is still outstanding.
+function UsageCell({ metrics }: { metrics?: HostAppMetrics }) {
+  const { t } = useTranslation('HostApps')
+  if (!metrics) return <span className="text-slate-400 dark:text-slate-500">—</span>
+  const words = { d: t('usage.d'), h: t('usage.h'), m: t('usage.m'), s: t('usage.s') }
+  return (
+    <>
+      <span className="block">{formatBytes(metrics.memory_bytes)} · {formatPercent(metrics.cpu_percent)}</span>
+      <span className="block text-slate-500 dark:text-slate-400">
+        {formatTasks(metrics.tasks, metrics.tasks_max, t('usage.unlimited'))} · {formatBytes(metrics.disk_bytes)}
+      </span>
+      <span className="block text-slate-500 dark:text-slate-400">
+        {formatUptime(metrics.uptime_seconds, words) || '—'}
+        {metrics.restarts > 0 && ` · ${t('usage.restarts', { count: metrics.restarts })}`}
+      </span>
+    </>
+  )
+}
+
+function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall, openBackups, metrics }: {
   app: Installed; enabled: boolean; busy: string; act: ActFn
   remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
-  openBackups: (app: Installed) => void
+  openBackups: (app: Installed) => void; metrics?: HostAppMetrics
 }) {
   const { t } = useTranslation('HostApps')
   return (
@@ -324,6 +369,9 @@ function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall, openBac
                     )}
                   </td>
                   <td className="py-2 pr-4 align-top font-mono text-xs">{app.port || '—'}</td>
+                  <td className="py-2 pr-4 align-top font-mono text-xs">
+                    <UsageCell metrics={metrics} />
+                  </td>
                   <td className="py-2 pr-4 align-top text-xs">
                     <button
                       type="button"
@@ -346,10 +394,10 @@ function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall, openBac
   )
 }
 
-function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall, openBackups }: {
+function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall, openBackups, metrics }: {
   data: Overview | null; enabled: boolean; busy: string; act: ActFn
   remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
-  openBackups: (app: Installed) => void
+  openBackups: (app: Installed) => void; metrics: Record<number, HostAppMetrics>
 }) {
   const { t } = useTranslation('HostApps')
   return (
@@ -364,6 +412,7 @@ function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall, op
                 <th className="py-2 pr-4">{t('installed.application')}</th>
                 <th className="py-2 pr-4">{t('installed.state')}</th>
                 <th className="py-2 pr-4">{t('installed.port')}</th>
+                <th className="py-2 pr-4">{t('installed.usage')}</th>
                 <th className="py-2 pr-4">{t('installed.reachable')}</th>
                 <th className="py-2">{t('installed.actions')}</th>
               </tr>
@@ -371,7 +420,8 @@ function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall, op
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
               {(data?.installed ?? []).map((app) => (
                 <InstalledRow key={app.id} app={app} enabled={enabled} busy={busy}
-                  act={act} remove={remove} toggleFirewall={toggleFirewall} openBackups={openBackups} />
+                  act={act} remove={remove} toggleFirewall={toggleFirewall} openBackups={openBackups}
+                  metrics={metrics[app.id]} />
               ))}
             </tbody>
           </table>

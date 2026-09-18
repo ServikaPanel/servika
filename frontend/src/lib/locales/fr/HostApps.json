@@ -25,7 +25,8 @@
     "port": "Port",
     "reachable": "Depuis l'extérieur",
     "actions": "Actions",
-    "firewallNote": "Les ports {{min}} à {{max}} sont réservés à ces applications et rejetés par le pare-feu. C'est l'ouverture ici qui rend une application accessible depuis l'extérieur."
+    "firewallNote": "Les ports {{min}} à {{max}} sont réservés à ces applications et rejetés par le pare-feu. C'est l'ouverture ici qui rend une application accessible depuis l'extérieur.",
+    "usage": "Consommation"
   },
   "catalog": {
     "title": "Disponibles",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "L'archive ne contient pas le programme à l'emplacement indiqué par le catalogue.",
     "host_app_port_taken": "Ce port est déjà utilisé.",
     "host_apps_switched_off": "Les applications serveur sont désactivées sur ce serveur."
+  },
+  "usage": {
+    "unlimited": "sans limite",
+    "restarts_one": "{{count}} redémarrage",
+    "restarts_other": "{{count}} redémarrages",
+    "d": "j",
+    "h": "h",
+    "m": "min",
+    "s": "s"
   }
 }

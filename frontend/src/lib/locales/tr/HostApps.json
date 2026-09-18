@@ -25,7 +25,8 @@
     "port": "Port",
     "reachable": "Dışarıdan",
     "actions": "İşlemler",
-    "firewallNote": "{{min}} ile {{max}} arası portlar bu uygulamalara ayrılmıştır ve firewall'da düşürülür. Buradan bir portu açmak, onu sunucu dışından erişilebilir yapan şeydir."
+    "firewallNote": "{{min}} ile {{max}} arası portlar bu uygulamalara ayrılmıştır ve firewall'da düşürülür. Buradan bir portu açmak, onu sunucu dışından erişilebilir yapan şeydir.",
+    "usage": "Kullanım"
   },
   "catalog": {
     "title": "Kurulabilir",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "Arşiv, programı kataloğun söylediği yerde içermiyor.",
     "host_app_port_taken": "Bu port zaten kullanımda.",
     "host_apps_switched_off": "Bu sunucuda sunucu uygulamaları kapalı."
+  },
+  "usage": {
+    "unlimited": "sınırsız",
+    "restarts_one": "{{count}} restart",
+    "restarts_other": "{{count}} restart",
+    "d": "g",
+    "h": "sa",
+    "m": "dk",
+    "s": "sn"
   }
 }

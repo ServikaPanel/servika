@@ -31,7 +31,8 @@
     "installDeps": "Install dependencies",
     "edit": "Edit",
     "delete": "Delete",
-    "backups": "Backups"
+    "backups": "Backups",
+    "metrics": "Usage"
   },
   "confirm": {
     "delete": "Delete the application {{name}}? Its files stay in place, but the process and its proxy are removed.",

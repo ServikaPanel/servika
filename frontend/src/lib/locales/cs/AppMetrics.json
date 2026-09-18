@@ -1,0 +1,20 @@
+{
+  "title": "Spotřeba {{name}}",
+  "loading": "Načítání...",
+  "memory": "Paměť",
+  "memoryPeak": "Maximální paměť",
+  "cpu": "CPU",
+  "tasks": "Tasky",
+  "disk": "Disk",
+  "uptime": "Běží",
+  "state": "Stav",
+  "restarts": "Restarty",
+  "unlimited": "bez limitu",
+  "cpuNote": "Hodnota CPU je podíl použitý od předchozího čtení, proto je první vždy nula.",
+  "unit": {
+    "d": "d",
+    "h": "h",
+    "m": "m",
+    "s": "s"
+  }
+}

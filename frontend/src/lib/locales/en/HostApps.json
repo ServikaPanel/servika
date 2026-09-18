@@ -25,7 +25,8 @@
     "port": "Port",
     "reachable": "From outside",
     "actions": "Actions",
-    "firewallNote": "Ports {{min}} to {{max}} are reserved for these applications and dropped at the firewall. Opening one here is what makes it reachable from outside the server."
+    "firewallNote": "Ports {{min}} to {{max}} are reserved for these applications and dropped at the firewall. Opening one here is what makes it reachable from outside the server.",
+    "usage": "Usage"
   },
   "catalog": {
     "title": "Available",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "The archive does not contain the program where the catalog says it does.",
     "host_app_port_taken": "That port is already in use.",
     "host_apps_switched_off": "Server applications are switched off on this server."
+  },
+  "usage": {
+    "unlimited": "no limit",
+    "restarts_one": "{{count}} restart",
+    "restarts_other": "{{count}} restarts",
+    "d": "d",
+    "h": "h",
+    "m": "m",
+    "s": "s"
   }
 }

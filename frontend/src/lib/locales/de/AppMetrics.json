@@ -1,0 +1,20 @@
+{
+  "title": "Verbrauch von {{name}}",
+  "loading": "Wird gelesen...",
+  "memory": "Speicher",
+  "memoryPeak": "Spitzenspeicher",
+  "cpu": "CPU",
+  "tasks": "Tasks",
+  "disk": "Festplatte",
+  "uptime": "Läuft seit",
+  "state": "Zustand",
+  "restarts": "Neustarts",
+  "unlimited": "kein Limit",
+  "cpuNote": "Der CPU-Wert ist der Anteil seit der vorherigen Messung, deshalb ist die erste immer null.",
+  "unit": {
+    "d": "T",
+    "h": "Std",
+    "m": "Min",
+    "s": "Sek"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "title": "{{name}} kullanımı",
+  "loading": "Okunuyor...",
+  "memory": "Bellek",
+  "memoryPeak": "Tepe bellek",
+  "cpu": "CPU",
+  "tasks": "Task",
+  "disk": "Disk",
+  "uptime": "Çalışma süresi",
+  "state": "Durum",
+  "restarts": "Restart",
+  "unlimited": "sınırsız",
+  "cpuNote": "CPU değeri önceki okumadan bu yana kullanılan paydır, bu yüzden ilk okuma her zaman sıfırdır.",
+  "unit": {
+    "d": "g",
+    "h": "sa",
+    "m": "dk",
+    "s": "sn"
+  }
+}

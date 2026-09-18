@@ -7,6 +7,7 @@ import { useReportError } from '@/lib/errors'
 import Breadcrumb from '@/components/Breadcrumb'
 import Modal from '@/components/Modal'
 import AppBackupsModal from '@/components/AppBackupsModal'
+import AppMetricsModal from '@/components/AppMetricsModal'
 
 type App = {
   id: number
@@ -83,7 +84,7 @@ function AppsHeader({ domain, domainId }: { domain: Domain | null; domainId?: st
 }
 
 // AppCard is one application: its state, its unit facts and its actions.
-function AppCard({ app, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, onRemove }: {
+function AppCard({ app, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, onMetrics, onRemove }: {
   app: App
   busy: number | null
   onAct: (app: App, action: 'start' | 'stop' | 'restart') => void
@@ -92,6 +93,7 @@ function AppCard({ app, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, 
   onInstall: (app: App) => void
   onEdit: (app: App) => void
   onBackup: (app: App) => void
+  onMetrics: (app: App) => void
   onRemove: (app: App) => void
 }) {
   const { t } = useTranslation('DomainAppsPage')
@@ -155,6 +157,9 @@ function AppCard({ app, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, 
         <button onClick={() => onBackup(app)} className={CARD_BUTTON_CLASS}>
           {t('actions.backups')}
         </button>
+        <button onClick={() => onMetrics(app)} className={CARD_BUTTON_CLASS}>
+          {t('actions.metrics')}
+        </button>
         <button onClick={() => onRemove(app)} disabled={locked}
           className="ml-auto rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30">
           {t('actions.delete')}
@@ -165,7 +170,7 @@ function AppCard({ app, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, 
 }
 
 // AppsBody answers with the spinner, the empty state or the cards.
-function AppsBody({ apps, loading, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, onRemove }: {
+function AppsBody({ apps, loading, busy, onAct, onLog, onEnv, onInstall, onEdit, onBackup, onMetrics, onRemove }: {
   apps: App[]
   loading: boolean
   busy: number | null
@@ -175,6 +180,7 @@ function AppsBody({ apps, loading, busy, onAct, onLog, onEnv, onInstall, onEdit,
   onInstall: (app: App) => void
   onEdit: (app: App) => void
   onBackup: (app: App) => void
+  onMetrics: (app: App) => void
   onRemove: (app: App) => void
 }) {
   const { t } = useTranslation('DomainAppsPage')
@@ -196,7 +202,7 @@ function AppsBody({ apps, loading, busy, onAct, onLog, onEnv, onInstall, onEdit,
       {apps.map(app => (
         <AppCard key={app.id} app={app} busy={busy}
           onAct={onAct} onLog={onLog} onEnv={onEnv} onInstall={onInstall}
-          onEdit={onEdit} onBackup={onBackup} onRemove={onRemove} />
+          onEdit={onEdit} onBackup={onBackup} onMetrics={onMetrics} onRemove={onRemove} />
       ))}
     </div>
   )
@@ -219,6 +225,7 @@ export default function DomainAppsPage() {
   const [envOf, setEnvOf] = useState<App | null>(null)
   const [logOf, setLogOf] = useState<App | null>(null)
   const [backupsOf, setBackupsOf] = useState<App | null>(null)
+  const [metricsOf, setMetricsOf] = useState<App | null>(null)
 
   // Split so the mount effect never writes state synchronously: fetchApps
   // settles only through promise callbacks, and load() adds the spinner for the
@@ -319,7 +326,7 @@ export default function DomainAppsPage() {
       <AppsBody
         apps={apps} loading={loading} busy={busy}
         onAct={act} onLog={setLogOf} onEnv={setEnvOf} onInstall={install}
-        onEdit={setEditing} onBackup={setBackupsOf} onRemove={remove}
+        onEdit={setEditing} onBackup={setBackupsOf} onMetrics={setMetricsOf} onRemove={remove}
       />
 
       {(creating || editing) && (
@@ -345,6 +352,13 @@ export default function DomainAppsPage() {
           base={`/domains/${id}/apps/${backupsOf.id}`}
           name={backupsOf.name}
           onClose={() => setBackupsOf(null)}
+        />
+      )}
+      {metricsOf && (
+        <AppMetricsModal
+          url={`/domains/${id}/apps/${metricsOf.id}/metrics`}
+          name={metricsOf.name}
+          onClose={() => setMetricsOf(null)}
         />
       )}
     </div>

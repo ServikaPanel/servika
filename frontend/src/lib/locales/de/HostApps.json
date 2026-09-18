@@ -25,7 +25,8 @@
     "port": "Port",
     "reachable": "Von außen",
     "actions": "Aktionen",
-    "firewallNote": "Die Ports {{min}} bis {{max}} sind für diese Anwendungen reserviert und werden in der Firewall verworfen. Erst das Öffnen hier macht eine Anwendung von außen erreichbar."
+    "firewallNote": "Die Ports {{min}} bis {{max}} sind für diese Anwendungen reserviert und werden in der Firewall verworfen. Erst das Öffnen hier macht eine Anwendung von außen erreichbar.",
+    "usage": "Verbrauch"
   },
   "catalog": {
     "title": "Verfügbar",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "Das Archiv enthält das Programm nicht an der Stelle, die der Katalog nennt.",
     "host_app_port_taken": "Dieser Port ist bereits belegt.",
     "host_apps_switched_off": "Serveranwendungen sind auf diesem Server ausgeschaltet."
+  },
+  "usage": {
+    "unlimited": "kein Limit",
+    "restarts_one": "{{count}} Neustart",
+    "restarts_other": "{{count}} Neustarts",
+    "d": "T",
+    "h": "Std",
+    "m": "Min",
+    "s": "Sek"
   }
 }

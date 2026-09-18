@@ -31,7 +31,8 @@
     "installDeps": "Installer les dépendances",
     "edit": "Modifier",
     "delete": "Supprimer",
-    "backups": "Sauvegardes"
+    "backups": "Sauvegardes",
+    "metrics": "Consommation"
   },
   "confirm": {
     "delete": "Supprimer l'application {{name}} ? Ses fichiers restent en place, mais le processus et son proxy sont retirés.",

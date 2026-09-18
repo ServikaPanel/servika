@@ -25,7 +25,8 @@
     "port": "Port",
     "reachable": "Din exterior",
     "actions": "Acțiuni",
-    "firewallNote": "Porturile {{min}} până la {{max}} sunt rezervate acestor aplicații și sunt aruncate în firewall. Deschiderea de aici este ceea ce face o aplicație accesibilă din exterior."
+    "firewallNote": "Porturile {{min}} până la {{max}} sunt rezervate acestor aplicații și sunt aruncate în firewall. Deschiderea de aici este ceea ce face o aplicație accesibilă din exterior.",
+    "usage": "Consum"
   },
   "catalog": {
     "title": "Disponibile",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "Arhiva nu conține programul acolo unde indică catalogul.",
     "host_app_port_taken": "Acel port este deja folosit.",
     "host_apps_switched_off": "Aplicațiile de server sunt dezactivate pe acest server."
+  },
+  "usage": {
+    "unlimited": "fără limită",
+    "restarts_one": "{{count}} repornire",
+    "restarts_other": "{{count}} reporniri",
+    "d": "z",
+    "h": "h",
+    "m": "min",
+    "s": "s"
   }
 }

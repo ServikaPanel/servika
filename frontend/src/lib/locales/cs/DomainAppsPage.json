@@ -31,7 +31,8 @@
     "installDeps": "Nainstalovat závislosti",
     "edit": "Upravit",
     "delete": "Smazat",
-    "backups": "Zálohy"
+    "backups": "Zálohy",
+    "metrics": "Spotřeba"
   },
   "confirm": {
     "delete": "Smazat aplikaci {{name}}? Její soubory zůstanou na místě, ale proces i jeho proxy budou odstraněny.",

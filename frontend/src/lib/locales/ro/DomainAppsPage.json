@@ -31,7 +31,8 @@
     "installDeps": "Instalează dependențele",
     "edit": "Editează",
     "delete": "Șterge",
-    "backups": "Copii"
+    "backups": "Copii",
+    "metrics": "Consum"
   },
   "confirm": {
     "delete": "Ștergeți aplicația {{name}}? Fișierele rămân pe loc, dar procesul și proxy-ul său sunt eliminate.",

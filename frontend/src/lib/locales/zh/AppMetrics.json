@@ -1,0 +1,20 @@
+{
+  "title": "{{name}} 的用量",
+  "loading": "读取中...",
+  "memory": "内存",
+  "memoryPeak": "峰值内存",
+  "cpu": "CPU",
+  "tasks": "任务",
+  "disk": "磁盘",
+  "uptime": "已运行",
+  "state": "状态",
+  "restarts": "重启次数",
+  "unlimited": "无限制",
+  "cpuNote": "CPU 数值是自上次读取以来的占用比例，因此第一次读取始终为零。",
+  "unit": {
+    "d": "天",
+    "h": "小时",
+    "m": "分",
+    "s": "秒"
+  }
+}

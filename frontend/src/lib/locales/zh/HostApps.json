@@ -25,7 +25,8 @@
     "port": "端口",
     "reachable": "来自外部",
     "actions": "操作",
-    "firewallNote": "端口 {{min}} 至 {{max}} 保留给这些应用，并在防火墙中被丢弃。只有在此开放，应用才能从服务器外部访问。"
+    "firewallNote": "端口 {{min}} 至 {{max}} 保留给这些应用，并在防火墙中被丢弃。只有在此开放，应用才能从服务器外部访问。",
+    "usage": "用量"
   },
   "catalog": {
     "title": "可安装",
@@ -92,5 +93,14 @@
     "host_app_binary_missing": "归档中没有目录所指位置的程序。",
     "host_app_port_taken": "该端口已被占用。",
     "host_apps_switched_off": "本服务器上的服务器应用已停用。"
+  },
+  "usage": {
+    "unlimited": "无限制",
+    "restarts_one": "重启 {{count}} 次",
+    "restarts_other": "重启 {{count}} 次",
+    "d": "天",
+    "h": "小时",
+    "m": "分",
+    "s": "秒"
   }
 }

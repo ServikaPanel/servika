@@ -31,7 +31,8 @@
     "installDeps": "Instalar dependências",
     "edit": "Editar",
     "delete": "Excluir",
-    "backups": "Backups"
+    "backups": "Backups",
+    "metrics": "Consumo"
   },
   "confirm": {
     "delete": "Excluir a aplicação {{name}}? Os arquivos permanecem no lugar, mas o processo e o proxy dele são removidos.",
