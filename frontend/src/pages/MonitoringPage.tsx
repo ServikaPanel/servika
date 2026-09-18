@@ -340,24 +340,38 @@ function DomainMonitoring() {
         </div>
       )}
 
-      {/* Logs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Card title={t('domain.accessLog')} right={t('domain.lastLines', { count: accessLog.length })}>
-          <div ref={accessRef} className="bg-slate-950 text-emerald-300 font-mono text-[11px] p-3 rounded h-80 overflow-auto whitespace-pre">
-            {accessLog.length === 0
-              ? <div className="text-slate-500 dark:text-slate-500 italic">{t('domain.noAccessEntries')}</div>
-              : accessLog.join('\n')}
-          </div>
-        </Card>
-        <Card title={t('domain.errorLog')} right={t('domain.lastLines', { count: errorLog.length })}>
-          <div ref={errorRef} className="bg-slate-950 text-rose-300 font-mono text-[11px] p-3 rounded h-80 overflow-auto whitespace-pre">
-            {errorLog.length === 0
-              ? <div className="text-slate-500 dark:text-slate-500 italic">{logError || t('domain.noErrorEntries')}</div>
-              : errorLog.join('\n')}
-          </div>
-        </Card>
-      </div>
+      <DomainLogPanels accessLog={accessLog} errorLog={errorLog} logError={logError} accessRef={accessRef} errorRef={errorRef} />
     </>
+  )
+}
+
+type DomainLogPanelsProps = {
+  accessLog: string[]
+  errorLog: string[]
+  logError: string | null
+  accessRef: React.RefObject<HTMLDivElement | null>
+  errorRef: React.RefObject<HTMLDivElement | null>
+}
+
+function DomainLogPanels({ accessLog, errorLog, logError, accessRef, errorRef }: DomainLogPanelsProps) {
+  const { t } = useTranslation('MonitoringPage')
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <Card title={t('domain.accessLog')} right={t('domain.lastLines', { count: accessLog.length })}>
+        <div ref={accessRef} className="bg-slate-950 text-emerald-300 font-mono text-[11px] p-3 rounded h-80 overflow-auto whitespace-pre">
+          {accessLog.length === 0
+            ? <div className="text-slate-500 dark:text-slate-500 italic">{t('domain.noAccessEntries')}</div>
+            : accessLog.join('\n')}
+        </div>
+      </Card>
+      <Card title={t('domain.errorLog')} right={t('domain.lastLines', { count: errorLog.length })}>
+        <div ref={errorRef} className="bg-slate-950 text-rose-300 font-mono text-[11px] p-3 rounded h-80 overflow-auto whitespace-pre">
+          {errorLog.length === 0
+            ? <div className="text-slate-500 dark:text-slate-500 italic">{logError || t('domain.noErrorEntries')}</div>
+            : errorLog.join('\n')}
+        </div>
+      </Card>
+    </div>
   )
 }
 
