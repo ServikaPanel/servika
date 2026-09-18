@@ -50,7 +50,8 @@ function Alert({ type, message }: { type: 'ok' | 'err'; message: string }) {
   return <div className={`text-sm px-3 py-2 rounded-lg border ${colorClasses}`}>{message}</div>
 }
 
-export default function SettingsPage() {
+/** Every piece of state this screen owns, so each card below is a component. */
+function useSettingsPage() {
   const { t } = useTranslation('SettingsPage')
   const updateName = useAuth((state) => state.updateName)
   const logout = useAuth((state) => state.logout)
@@ -138,6 +139,16 @@ export default function SettingsPage() {
   const buttonClasses = 'px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-50 inline-flex items-center gap-2'
   const groupedSecret = twoFactorSetup ? (twoFactorSetup.secret.match(/.{1,4}/g) || []).join(' ') : ''
 
+  return {
+    buttonClasses, changePassword, confirmDisableTwoFactor, confirmPassword, currentPassword, currentUser, disableCode, email, enableTwoFactor, fullName, groupedSecret, isDisablingTwoFactor, isPasswordLoading, isPreferenceLoading, isProfileLoading, isTwoFactorLoading, language, load, loadError, logout, newPassword, passwordError, passwordSuccess, preferenceSuccess, profileError, profileSuccess, revokeSessions, savePreferences, saveProfile, setConfirmPassword, setCurrentPassword, setCurrentUser, setDisableCode, setEmail, setFullName, setIsDisablingTwoFactor, setIsPasswordLoading, setIsPreferenceLoading, setIsProfileLoading, setIsTwoFactorLoading, setLanguage, setLoadError, setNewPassword, setPasswordError, setPasswordSuccess, setPreferenceSuccess, setProfileError, setProfileSuccess, setThemePreference, setTwoFactorCode, setTwoFactorError, setTwoFactorSetup, startTwoFactorSetup, theme, twoFactorCode, twoFactorError, twoFactorSetup, updateName,
+  }
+}
+
+export default function SettingsPage() {
+  const { t } = useTranslation('SettingsPage')
+  const ctx = useSettingsPage()
+  const { loadError } = ctx
+
   return (
     <div className="px-6 md:px-8 py-6">
       <Breadcrumb items={[{ label: t('breadcrumbHome'), href: '/' }, { label: t('pageTitle') }]} />
@@ -159,7 +170,25 @@ export default function SettingsPage() {
         <SessionReplaySetting />
         <ServerRebootButton />
 
-        {/* 1. Account information */}
+        <AccountCard ctx={ctx} />
+
+        <PasswordCard ctx={ctx} />
+
+        <TwoFactorCard ctx={ctx} />
+
+        <PreferencesCard ctx={ctx} />
+      </div>
+    </div>
+  )
+}
+
+type SettingsCtx = ReturnType<typeof useSettingsPage>
+
+// 1. Account information
+function AccountCard({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { buttonClasses, currentUser, email, fullName, isProfileLoading, profileError, profileSuccess, saveProfile, setEmail, setFullName } = ctx
+  return (
         <Card title={t('account.title')} description={t('account.description')}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}
         >
@@ -182,8 +211,14 @@ export default function SettingsPage() {
               </div>
             </form>
         </Card>
+  )
+}
 
-        {/* 2. Password */}
+// 2. Password
+function PasswordCard({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { buttonClasses, changePassword, confirmPassword, currentPassword, isPasswordLoading, newPassword, passwordError, passwordSuccess, revokeSessions, setConfirmPassword, setCurrentPassword, setNewPassword } = ctx
+  return (
         <Card title={t('password.title')} description={t('password.description')}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}
         >
@@ -200,23 +235,14 @@ export default function SettingsPage() {
               </div>
             </form>
         </Card>
+  )
+}
 
-        {/* 3. Two-factor authentication */}
-        <Card title={t('twoFa.title')} description={t('twoFa.description')}
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>}
-        >
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-600 dark:text-slate-400">{t('twoFa.status')}</span>
-                {currentUser?.two_fa
-                  ? <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">{t('twoFa.active')}</span>
-                  : <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{t('twoFa.disabled')}</span>}
-              </div>
-
-              {!currentUser?.two_fa && !twoFactorSetup && (
-                <button onClick={startTwoFactorSetup} className={buttonClasses}>{t('twoFa.enable')}</button>
-              )}
-
+function TwoFactorSetupPanel({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { buttonClasses, currentUser, enableTwoFactor, groupedSecret, isTwoFactorLoading, setTwoFactorCode, setTwoFactorSetup, twoFactorCode, twoFactorError, twoFactorSetup } = ctx
+  return (
+    <>
               {!currentUser?.two_fa && twoFactorSetup && (
                 <form onSubmit={enableTwoFactor} className="space-y-3 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
                   <p className="text-sm text-slate-700 dark:text-slate-300">{t('twoFa.step1')}</p>
@@ -243,7 +269,15 @@ export default function SettingsPage() {
                   <Alert type="err" message={twoFactorError} />
                 </form>
               )}
+    </>
+  )
+}
 
+function TwoFactorDisable({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { confirmDisableTwoFactor, currentUser, disableCode, isDisablingTwoFactor, isTwoFactorLoading, setDisableCode, setIsDisablingTwoFactor, setTwoFactorError, twoFactorError } = ctx
+  return (
+    <>
               {currentUser?.two_fa && !isDisablingTwoFactor && (
                 <button onClick={() => { setIsDisablingTwoFactor(true); setTwoFactorError('') }} className="px-4 py-2 text-sm font-medium rounded-lg border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">{t('twoFa.disable')}</button>
               )}
@@ -259,10 +293,52 @@ export default function SettingsPage() {
                   <Alert type="err" message={twoFactorError} />
                 </form>
               )}
+    </>
+  )
+}
+
+function TwoFactorBody({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { buttonClasses, currentUser, startTwoFactorSetup, twoFactorSetup } = ctx
+  return (
+    <>
+              {!currentUser?.two_fa && !twoFactorSetup && (
+                <button onClick={startTwoFactorSetup} className={buttonClasses}>{t('twoFa.enable')}</button>
+              )}
+
+              <TwoFactorSetupPanel ctx={ctx} />
+              <TwoFactorDisable ctx={ctx} />
+    </>
+  )
+}
+
+// 3. Two-factor authentication
+function TwoFactorCard({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { currentUser  } = ctx
+  return (
+        <Card title={t('twoFa.title')} description={t('twoFa.description')}
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>}
+        >
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-600 dark:text-slate-400">{t('twoFa.status')}</span>
+                {currentUser?.two_fa
+                  ? <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">{t('twoFa.active')}</span>
+                  : <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{t('twoFa.disabled')}</span>}
+              </div>
+
+              <TwoFactorBody ctx={ctx} />
             </div>
         </Card>
+  )
+}
 
-        {/* 4. Preferences */}
+// 4. Preferences
+function PreferencesCard({ ctx }: { ctx: SettingsCtx }) {
+  const { t } = useTranslation('SettingsPage')
+  const { buttonClasses, isPreferenceLoading, language, preferenceSuccess, savePreferences, setLanguage, setThemePreference, theme } = ctx
+  return (
         <Card title={t('preferences.title')} description={t('preferences.description')}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>}
         >
@@ -287,7 +363,5 @@ export default function SettingsPage() {
               </div>
             </div>
         </Card>
-      </div>
-    </div>
   )
 }
