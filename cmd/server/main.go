@@ -90,6 +90,7 @@ import (
 	"servika/internal/uievents"
 	"servika/internal/users"
 	"servika/internal/waf"
+	"servika/internal/winagent"
 	"servika/internal/wordpress"
 
 	"github.com/go-chi/chi/v5"
@@ -788,6 +789,7 @@ func main() {
 	serverIPH := &serverip.Handlers{DB: d}
 	panelPortH := &panelport.Handlers{DB: d}
 	hostAppH := &hostapps.Handlers{DB: d}
+	winAgentH := winagent.New(d)
 	// An install runs in this process, so a job still marked running after a
 	// restart is one whose process is gone. Left alone it would show an install
 	// that never finishes and refuse a second attempt for good.
@@ -1111,6 +1113,16 @@ func main() {
 			r.With(middleware.AdminOnly).Post("/system/host-apps/{id}/backups", hostAppH.Backup)
 			r.With(middleware.AdminOnly).Post("/system/host-apps/{id}/backups/{backup}/restore", hostAppH.Restore)
 			r.With(middleware.AdminOnly).Delete("/system/host-apps/{id}/backups/{backup}", hostAppH.DropBackup)
+			// Windows agents. A Windows host is not managed from here the way
+			// the Linux host is; the panel registers an agent and talks to it
+			// over a pinned TLS link. Every route is AdminOnly: an agent is
+			// server-level infrastructure and belongs to no customer.
+			r.With(middleware.AdminOnly).Get("/system/windows-agents", winAgentH.List)
+			r.With(middleware.AdminOnly).Post("/system/windows-agents", winAgentH.Add)
+			r.With(middleware.AdminOnly).Post("/system/windows-agents/{id}/probe", winAgentH.Probe)
+			r.With(middleware.AdminOnly).Delete("/system/windows-agents/{id}", winAgentH.Delete)
+			r.With(middleware.AdminOnly).Get("/system/windows-agents/{id}/events", winAgentH.Events)
+			r.With(middleware.AdminOnly).Get("/system/windows-agents/{id}/tasks", winAgentH.Tasks)
 			r.With(middleware.AdminOnly).Get("/system/ssh-security", system.SSHSecurity)
 			r.With(middleware.AdminOnly).Get("/system/cve", system.CveStatus)
 			r.With(middleware.AdminOnly).Post("/system/cve/update", system.CveUpdate)
