@@ -271,6 +271,9 @@ func mustHash(t *testing.T, password string) string {
 	return hash
 }
 
+// totpSeed is the base32 seed the TOTP tests share.
+const totpSeed = "JBSWY3DPEHPK3PXP"
+
 // totpCodeFor produces the code an authenticator would show right now, from the
 // package's own generator rather than by searching the six-digit space.
 func totpCodeFor(seed string) (string, error) {

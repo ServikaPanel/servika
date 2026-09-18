@@ -112,18 +112,20 @@ func twoFactorAccount(t *testing.T, enabled int, stored string) *totpScript {
 // written all deny the login rather than issuing a token.
 func TestTheSecondFactorFailsClosed(t *testing.T) {
 	initSecret(t)
-	sealed, err := SealTOTPSecret("JBSWY3DPEHPK3PXP", 7)
+	sealed, err := SealTOTPSecret(totpSeed, 7)
 	if err != nil {
 		t.Fatalf("SealTOTPSecret: %v", err)
 	}
-	code, err := totpCodeFor("JBSWY3DPEHPK3PXP")
-	if err != nil {
-		t.Fatalf("build a valid code: %v", err)
-	}
 	for _, tc := range []struct {
-		name    string
-		script  func() *totpScript
-		body    string
+		name   string
+		script func() *totpScript
+		body   string
+		// code asks for a freshly generated valid code in the body. It is a
+		// flag rather than a string because the code has to be built INSIDE the
+		// subtest: the package accepts the previous, current and next 30 second
+		// step, and each case here costs a bcrypt, so a code built once for the
+		// whole test is already outside that window by the last case.
+		code    bool
 		status  int
 		message string
 	}{
@@ -144,7 +146,7 @@ func TestTheSecondFactorFailsClosed(t *testing.T) {
 		{
 			name:    "the stored seed cannot be opened",
 			script:  func() *totpScript { return twoFactorAccount(t, 1, "enc:v1:not-a-sealed-value") },
-			body:    `,"code":"` + code + `"`,
+			code:    true,
 			status:  http.StatusInternalServerError,
 			message: "2FA configuration is invalid",
 		},
@@ -162,7 +164,7 @@ func TestTheSecondFactorFailsClosed(t *testing.T) {
 				script.fail = map[string]error{"totp_last_step=?": errors.New("disk full")}
 				return script
 			},
-			body:    `,"code":"` + code + `"`,
+			code:    true,
 			status:  http.StatusInternalServerError,
 			message: "could not update 2FA state",
 		},
@@ -170,9 +172,17 @@ func TestTheSecondFactorFailsClosed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			initSecret(t)
 			script := tc.script()
+			body := tc.body
+			if tc.code {
+				code, err := totpCodeFor(totpSeed)
+				if err != nil {
+					t.Fatalf("build a valid code: %v", err)
+				}
+				body = `,"code":"` + code + `"`
+			}
 
 			recorder := loginBody(t, script,
-				`{"username":"operator","password":"correct-horse"`+tc.body+`}`)
+				`{"username":"operator","password":"correct-horse"`+body+`}`)
 
 			assertLogin(t, recorder, tc.status, tc.message)
 			if managementSessionCookie(recorder) != nil {
