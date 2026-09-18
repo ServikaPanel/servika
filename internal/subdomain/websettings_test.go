@@ -139,3 +139,27 @@ func TestSubdomainWithNoCeilingStatesNoDirective(t *testing.T) {
 		t.Error("a subdomain with no plan ceiling still states client_max_body_size")
 	}
 }
+
+// The subdomain's own IP rules must reach both server blocks. A rule saved in
+// the panel and missing from the vhost is a restriction the customer believes
+// is in force and is not.
+func TestTheSubdomainIPRulesReachBothVhosts(t *testing.T) {
+	web := renderWebSettings(nginxset.Defaults(), "app.example.com", false)
+	web.IPRules = "    allow 203.0.113.7;\n    deny all;\n"
+	docroot := "/home/c_example_com/subdomains/app.example.com"
+	socket := "/run/php-fpm-c_example_com/sub-3.sock"
+	plain := vhost("app.example.com", docroot, socket, "", web)
+	secure := vhostSSL("app.example.com", docroot, socket, "/c.crt", "/c.key", "", web)
+	for name, config := range map[string]string{"http": plain, "https": secure} {
+		if !strings.Contains(config, "allow 203.0.113.7;") {
+			t.Errorf("the %s vhost does not carry the subdomain IP rules", name)
+		}
+	}
+	// The negative half: a subdomain that restricts nothing must not gain a
+	// stray allow or deny of its own. The dotfile location's own `deny all` is
+	// always there, so the rule line is what this checks.
+	web.IPRules = ""
+	if config := vhost("app.example.com", docroot, socket, "", web); strings.Contains(config, "allow 203.0.113.7;") {
+		t.Error("an unrestricted subdomain vhost carries an IP rule")
+	}
+}

@@ -1,0 +1,24 @@
+{
+  "title": "Acces după IP",
+  "note": "Această listă se aplică doar acestui subdomeniu. Domeniul părinte o păstrează pe a sa.",
+  "empty": "Nu există încă nicio adresă.",
+  "addLabel": "Adresă IP sau CIDR",
+  "modes": {
+    "off": "Fără restricție",
+    "block": "Respinge adresele listate",
+    "allow": "Permite doar adresele listate"
+  },
+  "actions": {
+    "add": "Adaugă",
+    "delete": "Șterge"
+  },
+  "confirm": {
+    "delete": "Ștergeți regula {{rule}}?"
+  },
+  "errors": {
+    "loadFailed": "Regulile IP nu au putut fi încărcate",
+    "modeFailed": "Modul nu a putut fi salvat",
+    "addFailed": "Regula nu a putut fi adăugată",
+    "deleteFailed": "Regula nu a putut fi ștearsă"
+  }
+}

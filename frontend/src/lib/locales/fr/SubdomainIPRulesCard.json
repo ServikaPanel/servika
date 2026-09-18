@@ -1,0 +1,24 @@
+{
+  "title": "Accès IP",
+  "note": "Cette liste ne s'applique qu'à ce sous-domaine. Le domaine parent conserve la sienne.",
+  "empty": "Aucune adresse enregistrée.",
+  "addLabel": "Adresse IP ou CIDR",
+  "modes": {
+    "off": "Aucune restriction",
+    "block": "Refuser les adresses listées",
+    "allow": "Autoriser uniquement les adresses listées"
+  },
+  "actions": {
+    "add": "Ajouter",
+    "delete": "Supprimer"
+  },
+  "confirm": {
+    "delete": "Supprimer la règle {{rule}} ?"
+  },
+  "errors": {
+    "loadFailed": "Les règles IP n'ont pas pu être chargées",
+    "modeFailed": "Le mode n'a pas pu être enregistré",
+    "addFailed": "La règle n'a pas pu être ajoutée",
+    "deleteFailed": "La règle n'a pas pu être supprimée"
+  }
+}

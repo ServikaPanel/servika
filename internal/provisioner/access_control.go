@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"database/sql"
+	"errors"
 	"net"
 	"regexp"
 	"strings"
@@ -20,7 +21,7 @@ func buildIPRules(domainName string) string {
 	err := packageDB.QueryRow(
 		`SELECT id, COALESCE(ip_access_mode,'off') FROM domains WHERE domain_name=? LIMIT 1`, domainName).
 		Scan(&domainID, &mode)
-	if err != nil || mode == "off" {
+	if err != nil {
 		return ""
 	}
 	rows, err := packageDB.Query(`SELECT ip_cidr FROM domain_ip_rules WHERE domain_id=? ORDER BY id`, domainID)
@@ -28,11 +29,56 @@ func buildIPRules(domainName string) string {
 		return ""
 	}
 	defer func() { _ = rows.Close() }()
+	return ipRuleBlock(rows, domainID, mode)
+}
+
+// SubdomainIPRules is buildSubdomainIPRules for callers outside this package.
+// internal/subdomain renders its own vhost and needs the block; it takes the
+// database handle rather than using packageDB, because that caller already
+// holds one and a subdomain render must not depend on provisioner.Init.
+func SubdomainIPRules(db *sql.DB, subdomainID int64) string {
+	return buildSubdomainIPRules(db, subdomainID)
+}
+
+// buildSubdomainIPRules renders the same block for one subdomain. The subdomain
+// keeps its own mode and its own rules; the parent domain's list never applies
+// to it, because a customer who restricts the main site does not thereby
+// restrict an API host that must stay open to a payment provider.
+func buildSubdomainIPRules(db *sql.DB, subdomainID int64) string {
+	if db == nil || subdomainID <= 0 {
+		return ""
+	}
+	var mode string
+	err := db.QueryRow(
+		`SELECT ip_access_mode FROM subdomain_ip_access WHERE subdomain_id=?`, subdomainID).Scan(&mode)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "" // no row yet: the subdomain restricts nothing
+	}
+	if err != nil {
+		logx.Errorf("access control: could not read the IP access mode for subdomain %d: %v", subdomainID, err)
+		return ""
+	}
+	rows, err := db.Query(`SELECT ip_cidr FROM subdomain_ip_rules WHERE subdomain_id=? ORDER BY id`, subdomainID)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = rows.Close() }()
+	return ipRuleBlock(rows, subdomainID, mode)
+}
+
+// ipRuleBlock turns a scope's mode and its rule rows into the nginx block. The
+// mode decides the direction: `block` denies the listed addresses, `allow`
+// admits only them and shuts out the rest.
+func ipRuleBlock(rows *sql.Rows, scopeID int64, mode string) string {
+	mode = accessMode(mode)
+	if mode == "off" {
+		return ""
+	}
 	directive := "deny"
 	if mode == "allow" {
 		directive = "allow"
 	}
-	lines, count := ipRuleLines(rows, domainID, directive)
+	lines, count := ipRuleLines(rows, scopeID, directive)
 	if count == 0 {
 		return ""
 	}
@@ -41,6 +87,21 @@ func buildIPRules(domainName string) string {
 		out += "    deny all;\n"
 	}
 	return out
+}
+
+// accessMode maps a stored mode onto the two directions the renderer knows.
+// `off` restricts nothing and `allow` admits only the listed addresses;
+// everything else denies them and admits the rest. The column is an ENUM, so
+// only a database written around the panel can hold a value that is neither.
+func accessMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "off":
+		return "off"
+	case "allow":
+		return "allow"
+	default:
+		return "block"
+	}
 }
 
 // ipRuleLines renders every usable stored rule as one directive line and counts

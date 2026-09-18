@@ -1,0 +1,24 @@
+{
+  "title": "IP 访问",
+  "note": "此列表仅适用于该子域名。父域名保留自己的列表。",
+  "empty": "尚未添加地址。",
+  "addLabel": "IP 地址或 CIDR",
+  "modes": {
+    "off": "不限制",
+    "block": "拒绝列表中的地址",
+    "allow": "仅允许列表中的地址"
+  },
+  "actions": {
+    "add": "添加",
+    "delete": "删除"
+  },
+  "confirm": {
+    "delete": "删除规则 {{rule}}？"
+  },
+  "errors": {
+    "loadFailed": "无法加载 IP 规则",
+    "modeFailed": "无法保存模式",
+    "addFailed": "无法添加规则",
+    "deleteFailed": "无法删除规则"
+  }
+}

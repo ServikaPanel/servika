@@ -1,0 +1,24 @@
+{
+  "title": "IP erişimi",
+  "note": "Bu liste yalnız bu subdomain için geçerlidir. Üst domain kendi listesini korur.",
+  "empty": "Henüz adres eklenmedi.",
+  "addLabel": "IP adresi veya CIDR",
+  "modes": {
+    "off": "Kısıt yok",
+    "block": "Listedekileri engelle",
+    "allow": "Yalnız listedekilere izin ver"
+  },
+  "actions": {
+    "add": "Ekle",
+    "delete": "Sil"
+  },
+  "confirm": {
+    "delete": "{{rule}} kuralı silinsin mi?"
+  },
+  "errors": {
+    "loadFailed": "IP kuralları yüklenemedi",
+    "modeFailed": "Mode kaydedilemedi",
+    "addFailed": "Kural eklenemedi",
+    "deleteFailed": "Kural silinemedi"
+  }
+}

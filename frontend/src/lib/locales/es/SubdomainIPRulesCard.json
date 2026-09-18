@@ -1,0 +1,24 @@
+{
+  "title": "Acceso por IP",
+  "note": "Esta lista se aplica solo a este subdominio. El dominio principal mantiene la suya.",
+  "empty": "Todavía no hay ninguna dirección.",
+  "addLabel": "Dirección IP o CIDR",
+  "modes": {
+    "off": "Sin restricción",
+    "block": "Denegar las listadas",
+    "allow": "Permitir solo las listadas"
+  },
+  "actions": {
+    "add": "Añadir",
+    "delete": "Eliminar"
+  },
+  "confirm": {
+    "delete": "¿Eliminar la regla {{rule}}?"
+  },
+  "errors": {
+    "loadFailed": "No se pudieron cargar las reglas de IP",
+    "modeFailed": "No se pudo guardar el modo",
+    "addFailed": "No se pudo añadir la regla",
+    "deleteFailed": "No se pudo eliminar la regla"
+  }
+}

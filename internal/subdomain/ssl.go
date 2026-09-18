@@ -265,11 +265,12 @@ server {
 %[5]s
     location /.well-known/acme-challenge/ { auth_basic off; root /var/www/_acme; try_files $uri =404; }
 
+%[11]s
 %[7]s
 %[8]s
     location ~ /\.(?!well-known) { deny all; }
 
 %[9]s}
 `, fqdn, docroot, certPath, keyPath, protected, web.Headers,
-		backendBlock(socket, web, true), web.BrowserCache, web.Extra, web.ClientMaxBody)
+		backendBlock(socket, web, true), web.BrowserCache, web.Extra, web.ClientMaxBody, web.IPRules)
 }

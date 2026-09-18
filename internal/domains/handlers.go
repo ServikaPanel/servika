@@ -93,6 +93,11 @@ func SSLSourceIsTrusted(source string) bool {
 type Handlers struct {
 	DB   *sql.DB
 	IPv4 string
+	// RerenderSubdomain publishes one subdomain's vhost after its own settings
+	// change. It is injected because internal/subdomain reaches this package's
+	// neighbours, and a direct import would close the cycle; main supplies
+	// subdomain.ReRender.
+	RerenderSubdomain func(db *sql.DB, subdomainID int64) error
 }
 
 const selectAll = `SELECT d.id, d.domain_name, d.system_user, d.php_version, d.ssl_enabled,

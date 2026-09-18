@@ -1,0 +1,24 @@
+{
+  "title": "IP-Zugriff",
+  "note": "Diese Liste gilt nur für diese Subdomain. Die übergeordnete Domain behält ihre eigene.",
+  "empty": "Noch keine Adresse eingetragen.",
+  "addLabel": "IP-Adresse oder CIDR",
+  "modes": {
+    "off": "Keine Einschränkung",
+    "block": "Aufgeführte sperren",
+    "allow": "Nur Aufgeführte zulassen"
+  },
+  "actions": {
+    "add": "Hinzufügen",
+    "delete": "Löschen"
+  },
+  "confirm": {
+    "delete": "Regel {{rule}} löschen?"
+  },
+  "errors": {
+    "loadFailed": "Die IP-Regeln konnten nicht geladen werden",
+    "modeFailed": "Der Modus konnte nicht gespeichert werden",
+    "addFailed": "Die Regel konnte nicht hinzugefügt werden",
+    "deleteFailed": "Die Regel konnte nicht gelöscht werden"
+  }
+}

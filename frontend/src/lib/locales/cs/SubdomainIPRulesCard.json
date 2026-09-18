@@ -1,0 +1,24 @@
+{
+  "title": "Přístup podle IP",
+  "note": "Tento seznam platí jen pro tuto subdoménu. Nadřazená doména má vlastní.",
+  "empty": "Zatím není zadána žádná adresa.",
+  "addLabel": "IP adresa nebo CIDR",
+  "modes": {
+    "off": "Bez omezení",
+    "block": "Zakázat uvedené",
+    "allow": "Povolit jen uvedené"
+  },
+  "actions": {
+    "add": "Přidat",
+    "delete": "Smazat"
+  },
+  "confirm": {
+    "delete": "Smazat pravidlo {{rule}}?"
+  },
+  "errors": {
+    "loadFailed": "Pravidla IP se nepodařilo načíst",
+    "modeFailed": "Režim se nepodařilo uložit",
+    "addFailed": "Pravidlo se nepodařilo přidat",
+    "deleteFailed": "Pravidlo se nepodařilo smazat"
+  }
+}

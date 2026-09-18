@@ -698,7 +698,9 @@ func main() {
 	customerH := &customer.Handlers{DB: d, Secret: cfg.JWTSecret, LifetimeSec: cfg.JWTLifetime}
 	authH := &auth.Handlers{DB: d, Secret: cfg.JWTSecret, LifetimeSec: cfg.JWTLifetime}
 	usersH := &users.Handlers{DB: d}
-	domainsH := &domains.Handlers{DB: d, IPv4: ipv4}
+	// RerenderSubdomain is injected for the same reason nginxset takes it: a
+	// direct import of internal/subdomain from here would close a cycle.
+	domainsH := &domains.Handlers{DB: d, IPv4: ipv4, RerenderSubdomain: subdomain.ReRender}
 	filesH := &files.Handlers{DB: d}
 	cronH := &cron.Handlers{DB: d, SecretKey: cfg.SecretKey}
 	logsH := &logs.Handlers{DB: d}
@@ -1631,6 +1633,11 @@ func main() {
 				r.With(middleware.CustomerScope).Put("/domains/{id}/ip-rules/mode", domainsH.SetIPRulesMode)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/ip-rules", domainsH.AddIPRule)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/ip-rules/{ruleID}", domainsH.DeleteIPRule)
+				// The same four handlers, scoped to one subdomain by {sid}.
+				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain/{sid}/ip-rules", domainsH.ListIPRules)
+				r.With(middleware.CustomerScope).Put("/domains/{id}/subdomain/{sid}/ip-rules/mode", domainsH.SetIPRulesMode)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/subdomain/{sid}/ip-rules", domainsH.AddIPRule)
+				r.With(middleware.CustomerScope).Delete("/domains/{id}/subdomain/{sid}/ip-rules/{ruleID}", domainsH.DeleteIPRule)
 				// Country rules and the request ceiling sit beside the IP rules:
 				// same screen, same scope, same re-render.
 				r.With(middleware.CustomerScope).Get("/domains/{id}/geo", domainsH.GetGeo)

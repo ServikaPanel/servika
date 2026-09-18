@@ -471,6 +471,7 @@ func vhost(fqdn, docroot, socket, protected string, web webRender) string {
         try_files $uri =404;
     }
 
+%[9]s
     error_page 404 /_srv_404.html;
     location = /_srv_404.html {
         root /usr/share/servika/errors;
@@ -492,7 +493,7 @@ func vhost(fqdn, docroot, socket, protected string, web webRender) string {
 %[7]s    # Servika subdomain — %[1]s
 }
 `, fqdn, docroot, protected, web.Headers,
-		backendBlock(socket, web, false), web.BrowserCache, web.Extra, web.ClientMaxBody)
+		backendBlock(socket, web, false), web.BrowserCache, web.Extra, web.ClientMaxBody, web.IPRules)
 }
 
 // backendBlock renders the request-serving locations for a scope. A static backend

@@ -1,0 +1,24 @@
+{
+  "title": "IP access",
+  "note": "This list applies to this subdomain only. The parent domain keeps its own.",
+  "empty": "No address is listed yet.",
+  "addLabel": "IP address or CIDR",
+  "modes": {
+    "off": "No restriction",
+    "block": "Deny the listed",
+    "allow": "Allow only the listed"
+  },
+  "actions": {
+    "add": "Add",
+    "delete": "Delete"
+  },
+  "confirm": {
+    "delete": "Delete the rule {{rule}}?"
+  },
+  "errors": {
+    "loadFailed": "The IP rules could not be loaded",
+    "modeFailed": "The mode could not be saved",
+    "addFailed": "The rule could not be added",
+    "deleteFailed": "The rule could not be deleted"
+  }
+}

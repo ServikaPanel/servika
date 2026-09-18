@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
 import ToolCard from '@/components/ToolCard'
+import SubdomainIPRulesCard from '@/components/SubdomainIPRulesCard'
 import { Icon } from '@/components/Icon'
 import { ICON } from '@/components/iconPaths'
 
@@ -238,6 +239,10 @@ export default function DomainSubdomainPage() {
                 <DetailsCard detail={detail} sslActive={sslActive} />
                 <PHPCard detail={detail} versions={versions} selected={selectedVersion}
                   onSelect={setSelectedVersion} saving={saving} onSave={savePHP} />
+              </div>
+
+              <div className="mb-5">
+                <SubdomainIPRulesCard domainID={id || ''} subdomainID={sid || ''} />
               </div>
 
               <ToolsCard toolBase={toolBase} />

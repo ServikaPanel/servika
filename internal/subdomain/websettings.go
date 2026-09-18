@@ -41,6 +41,10 @@ type webRender struct {
 	// already computed once and threaded through every call site.
 	AppBlocks   string
 	AppOwnsRoot bool
+	// IPRules is the subdomain's own allow/deny block, empty when it restricts
+	// nothing. The parent domain's rules never appear here: a customer who
+	// restricts the main site does not thereby restrict an API host.
+	IPRules string
 	// MaxExecutionTime is this scope's php_settings value, in seconds, RAW. The
 	// renderer puts it through provisioner.FastCgiReadTimeout, so a webRender
 	// built by hand keeps the timeout the vhost has always carried. Storing the
@@ -81,6 +85,7 @@ func loadWebRender(ctx context.Context, db *sql.DB, domainID, subdomainID int64,
 	out.Static = backend == "static"
 	if db != nil && subdomainID > 0 {
 		out.AppBlocks, out.AppOwnsRoot = provisioner.AppProxyBlocks(db, domainID, subdomainID)
+		out.IPRules = provisioner.SubdomainIPRules(db, subdomainID)
 	}
 	return out
 }

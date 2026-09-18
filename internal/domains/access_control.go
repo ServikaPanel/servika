@@ -1,6 +1,7 @@
 package domains
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -93,17 +94,17 @@ func (h *Handlers) SetHotlink(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.accessControlDomainInfo(w, r)
+	scope, ok := h.ipScope(w, r)
 	if !ok {
 		return
 	}
-	var mode string
-	if err := h.DB.QueryRowContext(r.Context(), `SELECT COALESCE(ip_access_mode,'off') FROM domains WHERE id=?`, id).Scan(&mode); err != nil {
+	id := scope.id()
+	mode, err := scope.readMode(r.Context(), h.DB)
+	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP rules could not be read")
 		return
 	}
-	rows, err := h.DB.QueryContext(r.Context(),
-		`SELECT id, ip_cidr, DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') FROM domain_ip_rules WHERE domain_id=? ORDER BY id`, id)
+	rows, err := h.DB.QueryContext(r.Context(), scope.listQuery(), id)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP rules could not be read")
 		return
@@ -129,7 +130,7 @@ func (h *Handlers) ListIPRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) SetIPRulesMode(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.accessControlDomainInfo(w, r)
+	scope, ok := h.ipScope(w, r)
 	if !ok {
 		return
 	}
@@ -140,19 +141,18 @@ func (h *Handlers) SetIPRulesMode(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid mode")
 		return
 	}
-	if _, err := h.DB.ExecContext(r.Context(), `UPDATE domains SET ip_access_mode=? WHERE id=?`, req.Mode, id); err != nil {
+	if err := scope.saveMode(r.Context(), h.DB, req.Mode); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP access mode could not be saved")
 		return
 	}
-	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+	if !h.republish(w, scope) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h *Handlers) AddIPRule(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.accessControlDomainInfo(w, r)
+	scope, ok := h.ipScope(w, r)
 	if !ok {
 		return
 	}
@@ -168,33 +168,146 @@ func (h *Handlers) AddIPRule(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid IP or CIDR")
 		return
 	}
-	if _, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO domain_ip_rules(domain_id, ip_cidr) VALUES(?,?)`, id, ipCIDR); err != nil {
+	if _, err := h.DB.ExecContext(r.Context(), scope.insertQuery(), scope.id(), ipCIDR); err != nil {
 		httpx.WriteError(w, http.StatusConflict, "IP rule could not be added")
 		return
 	}
-	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+	if !h.republish(w, scope) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"ok": true})
 }
 
 func (h *Handlers) DeleteIPRule(w http.ResponseWriter, r *http.Request) {
-	id, _, _, ok := h.accessControlDomainInfo(w, r)
+	scope, ok := h.ipScope(w, r)
 	if !ok {
 		return
 	}
 	ruleID, _ := strconv.ParseInt(chi.URLParam(r, "ruleID"), 10, 64)
-	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM domain_ip_rules WHERE id=? AND domain_id=?`, ruleID, id); err != nil {
+	if _, err := h.DB.ExecContext(r.Context(), scope.deleteQuery(), ruleID, scope.id()); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "IP rule could not be deleted")
 		return
 	}
-	if err := provisioner.RerenderVhost(h.DB, id); err != nil {
-		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+	if !h.republish(w, scope) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ipAccessScope names the site one IP access request acts on: the domain
+// itself, or one of its subdomains. A subdomain keeps its own mode and its own
+// rules, because a customer who restricts the main site does not thereby
+// restrict an API host that must stay open to a payment provider.
+type ipAccessScope struct {
+	domainID    int64
+	subdomainID int64 // 0 means the domain itself
+}
+
+// id returns the key every query in this file is parameterised by.
+func (s ipAccessScope) id() int64 {
+	if s.subdomainID > 0 {
+		return s.subdomainID
+	}
+	return s.domainID
+}
+
+func (s ipAccessScope) listQuery() string {
+	if s.subdomainID > 0 {
+		return `SELECT id, ip_cidr, DATE_FORMAT(created_at,'%Y-%m-%d %H:%i')
+		          FROM subdomain_ip_rules WHERE subdomain_id=? ORDER BY id`
+	}
+	return `SELECT id, ip_cidr, DATE_FORMAT(created_at,'%Y-%m-%d %H:%i')
+	          FROM domain_ip_rules WHERE domain_id=? ORDER BY id`
+}
+
+func (s ipAccessScope) insertQuery() string {
+	if s.subdomainID > 0 {
+		return `INSERT INTO subdomain_ip_rules(subdomain_id, ip_cidr) VALUES(?,?)`
+	}
+	return `INSERT INTO domain_ip_rules(domain_id, ip_cidr) VALUES(?,?)`
+}
+
+func (s ipAccessScope) deleteQuery() string {
+	if s.subdomainID > 0 {
+		return `DELETE FROM subdomain_ip_rules WHERE id=? AND subdomain_id=?`
+	}
+	return `DELETE FROM domain_ip_rules WHERE id=? AND domain_id=?`
+}
+
+// readMode returns the stored mode. A subdomain that has never been restricted
+// has no row at all, which is `off`.
+func (s ipAccessScope) readMode(ctx context.Context, db *sql.DB) (string, error) {
+	var mode string
+	if s.subdomainID > 0 {
+		err := db.QueryRowContext(ctx,
+			`SELECT ip_access_mode FROM subdomain_ip_access WHERE subdomain_id=?`, s.subdomainID).Scan(&mode)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "off", nil
+		}
+		return mode, err
+	}
+	err := db.QueryRowContext(ctx,
+		`SELECT COALESCE(ip_access_mode,'off') FROM domains WHERE id=?`, s.domainID).Scan(&mode)
+	return mode, err
+}
+
+func (s ipAccessScope) saveMode(ctx context.Context, db *sql.DB, mode string) error {
+	if s.subdomainID > 0 {
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO subdomain_ip_access(subdomain_id, ip_access_mode) VALUES(?,?)
+			 ON DUPLICATE KEY UPDATE ip_access_mode=VALUES(ip_access_mode)`, s.subdomainID, mode)
+		return err
+	}
+	_, err := db.ExecContext(ctx, `UPDATE domains SET ip_access_mode=? WHERE id=?`, mode, s.domainID)
+	return err
+}
+
+// ipScope resolves the request onto a scope and proves the caller owns it. A
+// {sid} that names a subdomain of another domain is a 404, so the URL cannot be
+// used to read or change a site the caller's domain scope does not cover.
+func (h *Handlers) ipScope(w http.ResponseWriter, r *http.Request) (ipAccessScope, bool) {
+	id, _, _, ok := h.accessControlDomainInfo(w, r)
+	if !ok {
+		return ipAccessScope{}, false
+	}
+	raw := chi.URLParam(r, "sid")
+	if raw == "" {
+		return ipAccessScope{domainID: id}, true
+	}
+	sid, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid subdomain")
+		return ipAccessScope{}, false
+	}
+	var found int64
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT id FROM subdomains WHERE id=? AND domain_id=?`, sid, id).Scan(&found); err != nil {
+		httpx.WriteError(w, http.StatusNotFound, "subdomain not found")
+		return ipAccessScope{}, false
+	}
+	return ipAccessScope{domainID: id, subdomainID: found}, true
+}
+
+// republish rewrites the vhost the change belongs to and answers the caller when
+// it fails. A saved rule that never reached nginx is a restriction the operator
+// believes is in force and is not.
+func (h *Handlers) republish(w http.ResponseWriter, scope ipAccessScope) bool {
+	if scope.subdomainID > 0 {
+		if h.RerenderSubdomain == nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+			return false
+		}
+		if err := h.RerenderSubdomain(h.DB, scope.subdomainID); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+			return false
+		}
+		return true
+	}
+	if err := provisioner.RerenderVhost(h.DB, scope.domainID); err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "virtual host update failed")
+		return false
+	}
+	return true
 }
 
 func (h *Handlers) accessControlDomainInfo(w http.ResponseWriter, r *http.Request) (int64, string, string, bool) {

@@ -1,0 +1,24 @@
+{
+  "title": "Acesso por IP",
+  "note": "Esta lista vale apenas para este subdomínio. O domínio principal mantém a sua.",
+  "empty": "Ainda não há nenhum endereço.",
+  "addLabel": "Endereço IP ou CIDR",
+  "modes": {
+    "off": "Sem restrição",
+    "block": "Bloquear os listados",
+    "allow": "Permitir apenas os listados"
+  },
+  "actions": {
+    "add": "Adicionar",
+    "delete": "Excluir"
+  },
+  "confirm": {
+    "delete": "Excluir a regra {{rule}}?"
+  },
+  "errors": {
+    "loadFailed": "Não foi possível carregar as regras de IP",
+    "modeFailed": "Não foi possível salvar o modo",
+    "addFailed": "Não foi possível adicionar a regra",
+    "deleteFailed": "Não foi possível excluir a regra"
+  }
+}
