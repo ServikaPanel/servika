@@ -146,17 +146,35 @@ function RetryOption(
   )
 }
 
-export default function SiteMigrationPage() {
+/** The source form's opening values, taken from the last discovery this browser ran. */
+function initialSource(stored: StoredSource): {
+  type: string; host: string; port: number; user: string; authMode: 'password' | 'key'
+} {
+  return {
+    type: stored.type && PANELS.includes(stored.type) ? stored.type : 'plesk',
+    host: stored.host || '',
+    port: stored.port || 22,
+    user: stored.user || 'root',
+    authMode: stored.auth === 'key' ? 'key' : 'password',
+  }
+}
+
+/**
+ * Every piece of state this wizard owns, so each step below is a component
+ * that reads what it needs rather than a branch of one giant render.
+ */
+function useSiteMigration() {
   const { t } = useTranslation('SiteMigrationPage')
   const report = useReportError()
   const stored = useMemo(() => readStoredSource(), [])
 
   // --- source server ---
-  const [type, setType] = useState(stored.type && PANELS.includes(stored.type) ? stored.type : 'plesk')
-  const [host, setHost] = useState(stored.host || '')
-  const [port, setPort] = useState(stored.port || 22)
-  const [user, setUser] = useState(stored.user || 'root')
-  const [authMode, setAuthMode] = useState<'password' | 'key'>(stored.auth === 'key' ? 'key' : 'password')
+  const initial = useMemo(() => initialSource(stored), [stored])
+  const [type, setType] = useState(initial.type)
+  const [host, setHost] = useState(initial.host)
+  const [port, setPort] = useState(initial.port)
+  const [user, setUser] = useState(initial.user)
+  const [authMode, setAuthMode] = useState<'password' | 'key'>(initial.authMode)
   const [password, setPassword] = useState('')
   const [privateKey, setPrivateKey] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -440,6 +458,16 @@ export default function SiteMigrationPage() {
 
   const stepTitles = [t('steps.source'), t('steps.sitesAndSettings'), t('steps.migration')]
 
+  return {
+    accounts, activeItem, authMode, canOpenStep, cancel, credsStored, customerID, customers, discover, discovering, elapsed, error, eta, finishedCount, forgetSession, formatBytes, formatDuration, formatMB, history, host, items, jobID, loadJobs, loadSessions, logRef, logText, newMigration, nowMS, overwrite, password, percent, planID, plans, port, privateKey, resumeSession, retry, retryOpen, running, savedSessions, selected, selectedCount, sessionID, setAccounts, setAuthMode, setCredsStored, setCustomerID, setCustomers, setDiscovering, setError, setHistory, setHost, setItems, setJobID, setLogText, setNowMS, setOverwrite, setPassword, setPlanID, setPlans, setPort, setPrivateKey, setRetryOpen, setRunning, setSavedSessions, setSelected, setSessionID, setShowPassword, setStartedAt, setStep, setSummary, setTargetPHP, setTestResult, setTesting, setType, setUser, setWithDNS, setWithDatabases, setWithFiles, setWithMail, setWithSSL, showPassword, sourceBody, start, startedAt, statusLabel, step, stepTitles, stored, summary, targetPHP, testConnection, testResult, testing, toggles, type, user, withDNS, withDatabases, withFiles, withMail, withSSL,
+  }
+}
+
+export default function SiteMigrationPage() {
+  const { t } = useTranslation('SiteMigrationPage')
+  const ctx = useSiteMigration()
+  const { error, step, jobID, accounts, savedSessions } = ctx
+
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-6">
       <Breadcrumb items={[
@@ -452,6 +480,105 @@ export default function SiteMigrationPage() {
         <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-500 dark:text-slate-400">{t('subtitle')}</p>
       </div>
 
+      <Stepper ctx={ctx} />
+
+      {error && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-300">
+          <span className="mt-0.5 shrink-0"><Icon d={ICON.warning} /></span>
+          <span className="min-w-0 break-words">{error}</span>
+        </div>
+      )}
+
+      {step === 1 && !jobID && savedSessions.length > 0 && <ResumeBanner ctx={ctx} />}
+
+      {step === 1 && <SourceStep ctx={ctx} />}
+
+      {step === 2 && accounts && <SitesStep ctx={ctx} />}
+
+      {step === 3 && jobID && <MigrationStep ctx={ctx} />}
+    </div>
+  )
+}
+
+function StatusBadge({ status, label }: { status: string; label: (s: string) => string }) {
+  const tone =
+    status === 'done' ? 'border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-300 dark:bg-emerald-900/20'
+    : status === 'failed' ? 'border-red-200 text-red-700 bg-red-50 dark:border-red-800/60 dark:text-red-300 dark:bg-red-900/20'
+    : status === 'running' ? 'border-brand-200 text-brand-700 bg-brand-50 dark:border-brand-800/60 dark:text-brand-300 dark:bg-brand-900/20'
+    : 'border-slate-200 text-slate-600 bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:bg-slate-800'
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tone}`}>
+      {status === 'running' && <span className="h-2.5 w-2.5 shrink-0 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />}
+      {label(status)}
+    </span>
+  )
+}
+
+function StatTile({ label, value, tone }: { label: string; value: ReactNode; tone: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 px-3.5 py-3 dark:bg-slate-900/40">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</div>
+      <div className={`mt-0.5 text-lg font-semibold tabular-nums ${tone}`}>{value}</div>
+    </div>
+  )
+}
+
+function SelectCard({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/70 p-3.5 dark:border-slate-700/60">
+      <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+function HistoryCard({ history, statusLabel, onSelect }: {
+  history: MigrationJob[]; statusLabel: (s: string) => string; onSelect: (job: MigrationJob) => void
+}) {
+  const { t } = useTranslation('SiteMigrationPage')
+  return (
+    <Card>
+      <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('history.title')}</h2>
+      <div className={`mt-4 ${responsiveTableContainerClass}`}>
+        <table className={responsiveTableClass}>
+          <thead className={responsiveTableHeadClass}>
+            <tr>
+              <th className={tableHeadCellClass}>#</th>
+              <th className={tableHeadCellClass}>{t('history.columns.source')}</th>
+              <th className={tableHeadCellClass}>{t('history.columns.panel')}</th>
+              <th className={tableHeadCellClass}>{t('history.columns.status')}</th>
+              <th className={tableHeadCellClass}>{t('history.columns.result')}</th>
+              <th className={tableHeadCellClass}>{t('history.columns.startedBy')}</th>
+            </tr>
+          </thead>
+          <tbody className={responsiveTableBodyClass}>
+            {history.map(job => (
+              <tr key={job.id} className={`${responsiveTableRowClass} cursor-pointer`} onClick={() => onSelect(job)}>
+                <td className={responsiveTableCellClass} data-label="#">{job.id}</td>
+                <td className={responsiveTableCellClass} data-label={t('history.columns.source')}>{job.host}</td>
+                <td className={responsiveTableCellClass} data-label={t('history.columns.panel')}>{t(`panels.${job.type}`, { defaultValue: job.type })}</td>
+                <td className={responsiveTableCellClass} data-label={t('history.columns.status')}>
+                  <StatusBadge status={job.status} label={statusLabel} />
+                </td>
+                <td className={responsiveTableCellClass} data-label={t('history.columns.result')}>
+                  {job.completed}/{job.total}{job.failed ? ` (${t('history.failedSuffix', { n: job.failed })})` : ''}
+                </td>
+                <td className={responsiveTableCellClass} data-label={t('history.columns.startedBy')}>{job.started_by || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+type MigrationCtx = ReturnType<typeof useSiteMigration>
+
+function Stepper({ ctx }: { ctx: MigrationCtx }) {
+  const { canOpenStep, setStep, step, stepTitles } = ctx
+  return (
+    <>
       {/* Stepper */}
       <div className="mb-6 flex items-center">
         {stepTitles.map((title, i) => {
@@ -475,16 +602,16 @@ export default function SiteMigrationPage() {
           )
         })}
       </div>
+    </>
+  )
+}
 
-      {error && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-300">
-          <span className="mt-0.5 shrink-0"><Icon d={ICON.warning} /></span>
-          <span className="min-w-0 break-words">{error}</span>
-        </div>
-      )}
+function ResumeBanner({ ctx }: { ctx: MigrationCtx }) {
+  const { t } = useTranslation('SiteMigrationPage')
+  const { forgetSession, resumeSession, savedSessions } = ctx
+  return (
+    <>
 
-      {/* Resume banner — a saved discovery can be continued without re-typing. */}
-      {step === 1 && !jobID && savedSessions.length > 0 && (
         <div className="mb-5 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 dark:border-brand-800/60 dark:bg-brand-900/20">
           <div className="flex items-center gap-2 text-sm font-medium text-brand-800 dark:text-brand-200">
             <Icon d={ICON.clock} />
@@ -510,99 +637,17 @@ export default function SiteMigrationPage() {
             ))}
           </ul>
         </div>
-      )}
+    </>
+  )
+}
 
-      {/* ==================== STEP 1 — source ==================== */}
-      {step === 1 && (
+function SourceStep({ ctx }: { ctx: MigrationCtx }) {
+  const { history, setJobID, setNowMS, setRunning, setStartedAt, setStep, statusLabel } = ctx
+  return (
+    <>
+
         <div className="space-y-5">
-          <Card>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('step1.title')}</h2>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('step1.description')}</p>
-            <div className="mt-5 grid max-w-4xl gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-6">
-              <label className="block lg:col-span-2">
-                <span className={labelCls}>{t('step1.panel')}</span>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.panel} /></span>
-                  <select value={type} onChange={e => setType(e.target.value)} className={inputCls + ' pl-9'}>
-                    {PANELS.map(p => <option key={p} value={p}>{t(`panels.${p}`)}</option>)}
-                  </select>
-                </div>
-              </label>
-              <label className="block sm:col-span-2 lg:col-span-3">
-                <span className={labelCls}>{t('step1.host')}</span>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.server} /></span>
-                  <input value={host} onChange={e => setHost(e.target.value)} placeholder={t('step1.hostPlaceholder')} className={inputCls + ' pl-9'} />
-                </div>
-              </label>
-              <label className="block lg:col-span-1">
-                <span className={labelCls}>{t('step1.port')}</span>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.hash} /></span>
-                  <input type="number" value={port} onChange={e => setPort(Number(e.target.value))} className={inputCls + ' pl-9'} />
-                </div>
-              </label>
-              <label className="block lg:col-span-2">
-                <span className={labelCls}>{t('step1.user')}</span>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.user} /></span>
-                  <input value={user} onChange={e => setUser(e.target.value)} placeholder="root" className={inputCls + ' pl-9'} />
-                </div>
-              </label>
-              <label className="block lg:col-span-2">
-                <span className={labelCls}>{t('step1.auth')}</span>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.key} /></span>
-                  <select value={authMode} onChange={e => setAuthMode(e.target.value as 'password' | 'key')} className={inputCls + ' pl-9'}>
-                    <option value="password">{t('step1.authPassword')}</option>
-                    <option value="key">{t('step1.authKey')}</option>
-                  </select>
-                </div>
-              </label>
-              {authMode === 'password' ? (
-                <label className="block lg:col-span-2">
-                  <span className={labelCls}>{t('step1.password')}</span>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.lock} /></span>
-                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                      autoComplete="new-password" placeholder="********" className={inputCls + ' pl-9 pr-10'} />
-                    <button type="button" onClick={() => setShowPassword(v => !v)}
-                      title={showPassword ? t('step1.hide') : t('step1.show')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">
-                      <Icon d={showPassword ? ICON.eyeOff : ICON.eye} />
-                    </button>
-                  </div>
-                </label>
-              ) : (
-                <label className="block sm:col-span-2 lg:col-span-4">
-                  <span className={labelCls}>{t('step1.privateKey')}</span>
-                  <textarea value={privateKey} onChange={e => setPrivateKey(e.target.value)} rows={3}
-                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" className={`${inputCls} font-mono text-xs`} />
-                </label>
-              )}
-            </div>
-
-            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-              <span className="text-emerald-500"><Icon d={ICON.ssl} /></span>
-              {t('step1.credentialNote')}
-            </div>
-
-            {testResult && (
-              <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300">
-                <span className="mt-0.5 shrink-0"><Icon d={ICON.check} /></span>
-                <span className="min-w-0 break-words">{testResult}</span>
-              </div>
-            )}
-
-            <div className="mt-5 flex flex-wrap gap-2.5">
-              <button type="button" onClick={testConnection} disabled={testing || !host} className={btnSecondary}>
-                {testing ? t('step1.testing') : t('step1.testButton')}
-              </button>
-              <button type="button" onClick={discover} disabled={discovering || !host} className={btnPrimary}>
-                <Icon d={ICON.server} />{discovering ? t('step1.discovering') : t('step1.discoverButton')}
-              </button>
-            </div>
-          </Card>
+          <SourceForm ctx={ctx} />
 
           {history.length > 0 && (
             <HistoryCard history={history} statusLabel={statusLabel} onSelect={job => {
@@ -614,10 +659,17 @@ export default function SiteMigrationPage() {
             }} />
           )}
         </div>
-      )}
+    </>
+  )
+}
 
-      {/* ==================== STEP 2 — sites + settings ==================== */}
-      {step === 2 && accounts && (
+function SitesStep({ ctx }: { ctx: MigrationCtx }) {
+  const { t } = useTranslation('SiteMigrationPage')
+  if (!ctx.accounts) return null
+  const { accounts, credsStored, customerID, customers, formatMB, overwrite, planID, plans, selected, selectedCount, setCustomerID, setPlanID, setSelected, setStep, setTargetPHP, start, targetPHP, toggles } = ctx
+  return (
+    <>
+
         <div className="space-y-5">
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -746,12 +798,127 @@ export default function SiteMigrationPage() {
             </div>
           </Card>
         </div>
-      )}
+    </>
+  )
+}
 
-      {/* ==================== STEP 3 — live migration ==================== */}
-      {step === 3 && jobID && (
+function MigrationStep({ ctx }: { ctx: MigrationCtx }) {
+  const { history, setJobID, setRunning, statusLabel } = ctx
+  return (
+    <>
+
         <div className="space-y-5">
+          <MigrationBody ctx={ctx} />
+
+          {history.length > 0 && (
+            <HistoryCard history={history} statusLabel={statusLabel} onSelect={job => {
+              setJobID(job.id); setRunning(job.status === 'running')
+            }} />
+          )}
+        </div>
+    </>
+  )
+}
+
+function SourceForm({ ctx }: { ctx: MigrationCtx }) {
+  const { t } = useTranslation('SiteMigrationPage')
+  const { authMode, discover, discovering, host, password, port, privateKey, setAuthMode, setHost, setPassword, setPort, setPrivateKey, setShowPassword, setType, setUser, showPassword, testConnection, testResult, testing, type, user } = ctx
+  return (
           <Card>
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('step1.title')}</h2>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{t('step1.description')}</p>
+            <div className="mt-5 grid max-w-4xl gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-6">
+              <label className="block lg:col-span-2">
+                <span className={labelCls}>{t('step1.panel')}</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.panel} /></span>
+                  <select value={type} onChange={e => setType(e.target.value)} className={inputCls + ' pl-9'}>
+                    {PANELS.map(p => <option key={p} value={p}>{t(`panels.${p}`)}</option>)}
+                  </select>
+                </div>
+              </label>
+              <label className="block sm:col-span-2 lg:col-span-3">
+                <span className={labelCls}>{t('step1.host')}</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.server} /></span>
+                  <input value={host} onChange={e => setHost(e.target.value)} placeholder={t('step1.hostPlaceholder')} className={inputCls + ' pl-9'} />
+                </div>
+              </label>
+              <label className="block lg:col-span-1">
+                <span className={labelCls}>{t('step1.port')}</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.hash} /></span>
+                  <input type="number" value={port} onChange={e => setPort(Number(e.target.value))} className={inputCls + ' pl-9'} />
+                </div>
+              </label>
+              <label className="block lg:col-span-2">
+                <span className={labelCls}>{t('step1.user')}</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.user} /></span>
+                  <input value={user} onChange={e => setUser(e.target.value)} placeholder="root" className={inputCls + ' pl-9'} />
+                </div>
+              </label>
+              <label className="block lg:col-span-2">
+                <span className={labelCls}>{t('step1.auth')}</span>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.key} /></span>
+                  <select value={authMode} onChange={e => setAuthMode(e.target.value as 'password' | 'key')} className={inputCls + ' pl-9'}>
+                    <option value="password">{t('step1.authPassword')}</option>
+                    <option value="key">{t('step1.authKey')}</option>
+                  </select>
+                </div>
+              </label>
+              {authMode === 'password' ? (
+                <label className="block lg:col-span-2">
+                  <span className={labelCls}>{t('step1.password')}</span>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><Icon d={ICON.lock} /></span>
+                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
+                      autoComplete="new-password" placeholder="********" className={inputCls + ' pl-9 pr-10'} />
+                    <button type="button" onClick={() => setShowPassword(v => !v)}
+                      title={showPassword ? t('step1.hide') : t('step1.show')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 transition hover:text-slate-600 dark:hover:text-slate-200">
+                      <Icon d={showPassword ? ICON.eyeOff : ICON.eye} />
+                    </button>
+                  </div>
+                </label>
+              ) : (
+                <label className="block sm:col-span-2 lg:col-span-4">
+                  <span className={labelCls}>{t('step1.privateKey')}</span>
+                  <textarea value={privateKey} onChange={e => setPrivateKey(e.target.value)} rows={3}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" className={`${inputCls} font-mono text-xs`} />
+                </label>
+              )}
+            </div>
+
+            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              <span className="text-emerald-500"><Icon d={ICON.ssl} /></span>
+              {t('step1.credentialNote')}
+            </div>
+
+            {testResult && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300">
+                <span className="mt-0.5 shrink-0"><Icon d={ICON.check} /></span>
+                <span className="min-w-0 break-words">{testResult}</span>
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-2.5">
+              <button type="button" onClick={testConnection} disabled={testing || !host} className={btnSecondary}>
+                {testing ? t('step1.testing') : t('step1.testButton')}
+              </button>
+              <button type="button" onClick={discover} disabled={discovering || !host} className={btnPrimary}>
+                <Icon d={ICON.server} />{discovering ? t('step1.discovering') : t('step1.discoverButton')}
+              </button>
+            </div>
+          </Card>
+  )
+}
+
+function MigrationHeader({ ctx }: { ctx: MigrationCtx }) {
+  const { t } = useTranslation('SiteMigrationPage')
+  const { accounts, cancel, jobID, newMigration, overwrite, retry, retryOpen, running, setOverwrite, setRetryOpen, setWithDNS, setWithDatabases, setWithFiles, setWithMail, setWithSSL, statusLabel, summary, withDNS, withDatabases, withFiles, withMail, withSSL } = ctx
+  return (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('step3.title', { id: jobID })}</h2>
@@ -797,7 +964,15 @@ export default function SiteMigrationPage() {
                     <button type="button" onClick={newMigration} className={btnSmall}>{t('step3.newMigration')}</button>
                   </div>}
             </div>
+  )
+}
 
+function MigrationBody({ ctx }: { ctx: MigrationCtx }) {
+  const { t } = useTranslation('SiteMigrationPage')
+  const { activeItem, elapsed, eta, finishedCount, formatBytes, formatDuration, items, logRef, logText, percent, running, statusLabel, summary } = ctx
+  return (
+          <Card>
+            <MigrationHeader ctx={ctx} />
             {running && (
               <div className="mt-4 flex flex-wrap items-center gap-4 rounded-2xl border border-brand-200/60 bg-brand-50/50 px-4 py-3 dark:border-brand-800/40 dark:bg-brand-900/10">
                 <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
@@ -874,87 +1049,5 @@ export default function SiteMigrationPage() {
               {logText || t('step3.waitingForLog')}
             </pre>
           </Card>
-
-          {history.length > 0 && (
-            <HistoryCard history={history} statusLabel={statusLabel} onSelect={job => {
-              setJobID(job.id); setRunning(job.status === 'running')
-            }} />
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function StatusBadge({ status, label }: { status: string; label: (s: string) => string }) {
-  const tone =
-    status === 'done' ? 'border-emerald-200 text-emerald-700 bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-300 dark:bg-emerald-900/20'
-    : status === 'failed' ? 'border-red-200 text-red-700 bg-red-50 dark:border-red-800/60 dark:text-red-300 dark:bg-red-900/20'
-    : status === 'running' ? 'border-brand-200 text-brand-700 bg-brand-50 dark:border-brand-800/60 dark:text-brand-300 dark:bg-brand-900/20'
-    : 'border-slate-200 text-slate-600 bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:bg-slate-800'
-  return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tone}`}>
-      {status === 'running' && <span className="h-2.5 w-2.5 shrink-0 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />}
-      {label(status)}
-    </span>
-  )
-}
-
-function StatTile({ label, value, tone }: { label: string; value: ReactNode; tone: string }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 px-3.5 py-3 dark:bg-slate-900/40">
-      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">{label}</div>
-      <div className={`mt-0.5 text-lg font-semibold tabular-nums ${tone}`}>{value}</div>
-    </div>
-  )
-}
-
-function SelectCard({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/70 p-3.5 dark:border-slate-700/60">
-      <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{label}</span>
-      {children}
-    </div>
-  )
-}
-
-function HistoryCard({ history, statusLabel, onSelect }: {
-  history: MigrationJob[]; statusLabel: (s: string) => string; onSelect: (job: MigrationJob) => void
-}) {
-  const { t } = useTranslation('SiteMigrationPage')
-  return (
-    <Card>
-      <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{t('history.title')}</h2>
-      <div className={`mt-4 ${responsiveTableContainerClass}`}>
-        <table className={responsiveTableClass}>
-          <thead className={responsiveTableHeadClass}>
-            <tr>
-              <th className={tableHeadCellClass}>#</th>
-              <th className={tableHeadCellClass}>{t('history.columns.source')}</th>
-              <th className={tableHeadCellClass}>{t('history.columns.panel')}</th>
-              <th className={tableHeadCellClass}>{t('history.columns.status')}</th>
-              <th className={tableHeadCellClass}>{t('history.columns.result')}</th>
-              <th className={tableHeadCellClass}>{t('history.columns.startedBy')}</th>
-            </tr>
-          </thead>
-          <tbody className={responsiveTableBodyClass}>
-            {history.map(job => (
-              <tr key={job.id} className={`${responsiveTableRowClass} cursor-pointer`} onClick={() => onSelect(job)}>
-                <td className={responsiveTableCellClass} data-label="#">{job.id}</td>
-                <td className={responsiveTableCellClass} data-label={t('history.columns.source')}>{job.host}</td>
-                <td className={responsiveTableCellClass} data-label={t('history.columns.panel')}>{t(`panels.${job.type}`, { defaultValue: job.type })}</td>
-                <td className={responsiveTableCellClass} data-label={t('history.columns.status')}>
-                  <StatusBadge status={job.status} label={statusLabel} />
-                </td>
-                <td className={responsiveTableCellClass} data-label={t('history.columns.result')}>
-                  {job.completed}/{job.total}{job.failed ? ` (${t('history.failedSuffix', { n: job.failed })})` : ''}
-                </td>
-                <td className={responsiveTableCellClass} data-label={t('history.columns.startedBy')}>{job.started_by || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
   )
 }
