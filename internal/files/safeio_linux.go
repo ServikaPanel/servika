@@ -295,6 +295,9 @@ func restoreconFd(home string, f *os.File) {
 	if err != nil || !withinHome(home, real) {
 		return
 	}
+	// #nosec G702 -- restorecon takes an argument LIST, not a shell string, and
+	// `real` is the kernel's own answer for an open fd that withinHome has just
+	// confined to the tenant home. No part of it is interpreted.
 	_, _ = exec.Command("restorecon", real).CombinedOutput()
 }
 

@@ -175,8 +175,10 @@ func waitHealthy(wantVersion string, within time.Duration) error {
 	// our own agent over loopback, not remote authentication. The panel's
 	// fingerprint pinning is a separate path and is untouched by this.
 	client := &http.Client{
-		Timeout:   5 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, //nolint:gosec // local loopback liveness check, not authentication
+		Timeout: 5 * time.Second,
+		// #nosec G402 -- a loopback liveness check against the agent's own
+		// self-signed certificate; it carries no token and authenticates nothing.
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}},
 	}
 	url := localHealthURL(current.Listen)
 	deadline := time.Now().Add(within)

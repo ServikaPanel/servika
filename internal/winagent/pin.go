@@ -100,7 +100,7 @@ func validAddress(address string) error {
 // fingerprint.
 func readFingerprint(address string) (string, error) {
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialTimeout}, "tcp", address, &tls.Config{
-		InsecureSkipVerify: true, //nolint:gosec // G402: this connection only READS the certificate; no token or request travels over it.
+		InsecureSkipVerify: true, // #nosec G402 -- this connection only READS the certificate; no token or request travels over it.
 		MinVersion:         tls.VersionTLS12,
 	})
 	if err != nil {
@@ -141,7 +141,7 @@ func pinnedClient(fingerprint string) *http.Client {
 		Timeout: callTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, //nolint:gosec // G402: deliberate certificate pinning against a self-signed agent; the leaf digest is compared below and a mismatch aborts the handshake before the token is sent.
+				InsecureSkipVerify: true, // #nosec G402 -- deliberate certificate pinning against a self-signed agent; the leaf digest is compared below and a mismatch aborts the handshake before the token is sent.
 				MinVersion:         tls.VersionTLS12,
 
 				SessionTicketsDisabled: true,

@@ -278,12 +278,17 @@ func (h *Handlers) forward(w http.ResponseWriter, r *http.Request, pathAndQuery 
 		httpx.WriteError(w, http.StatusConflict, "this agent has no pinned certificate - probe it first")
 		return
 	}
+	// #nosec G704 -- the address is not request data: it comes from the
+	// windows_agents row an admin wrote, the route is AdminOnly, and the
+	// client below refuses any host whose leaf certificate does not match the
+	// pin recorded for that row. pathAndQuery is a caller constant.
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, "https://"+c.address+pathAndQuery, nil)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not build the request")
 		return
 	}
 	req.Header.Set(tokenHeader, c.token)
+	// #nosec G704 -- same request as above; the pin is the boundary.
 	resp, err := pinnedClient(c.fingerprint).Do(req)
 	if err != nil {
 		if isFingerprintError(err) {
