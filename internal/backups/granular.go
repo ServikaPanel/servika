@@ -653,6 +653,11 @@ func pathEscapes(p string) bool {
 // target != "in_place" -> /home/<systemUser>/restore-<stamp>/ (nothing overwritten).
 // target == "in_place" -> original location (only the selected paths; home not wiped).
 func restoreSelectedFiles(ctx context.Context, tmp, systemUser string, paths []string, target string) (int, string, error) {
+	// The same gate restoreHome takes: the *Beneath primitives pin the root they
+	// are given, so a tampered name would move that root before they help.
+	if !validSystemUser(systemUser) {
+		return 0, "", fmt.Errorf("file restore refused: invalid system user")
+	}
 	src := filepath.Join(tmp, systemUser)
 	home := "/home/" + systemUser
 	subDir := ""
@@ -669,31 +674,38 @@ func restoreSelectedFiles(ctx context.Context, tmp, systemUser string, paths []s
 		if ctx.Err() != nil {
 			break
 		}
-		rel, ok := safeMemberPath(y)
-		if !ok {
-			continue
+		if copyOneMember(src, home, subDir, systemUser, y) {
+			n++
 		}
-		s := filepath.Join(src, rel)
-		if s != src && !strings.HasPrefix(s, src+string(os.PathSeparator)) {
-			continue
-		}
-		if _, err := os.Lstat(s); err != nil {
-			continue
-		}
-		// The whole destination path is tenant-controlled, and this runs as root, so
-		// the copy goes through openat2 instead of `cp`: `cp` follows a symlink at the
-		// destination, and a symlinked parent component would let a tenant redirect the
-		// write anywhere on the filesystem.
-		if err := files.ImportBeneath(home, filepath.Join(subDir, rel), s, systemUser); err != nil {
-			continue
-		}
-		n++
 	}
 	// No path-based `chown -R` here: ImportBeneath already chowns every entry it
 	// creates through its pinned fd, and a recursive chown by path would follow a
 	// tenant symlink and hand an unrelated tree to the tenant.
 	files.RestoreconBeneath(home, subDir)
 	return n, subDir, nil
+}
+
+// copyOneMember copies one selected archive member into the tenant home and
+// reports whether it landed. Every refusal is silent on purpose: a member the
+// archive does not hold, or a path that leaves the extracted tree, is skipped
+// and the rest of the selection still restores.
+func copyOneMember(src, home, subDir, systemUser, member string) bool {
+	rel, ok := safeMemberPath(member)
+	if !ok {
+		return false
+	}
+	s := filepath.Join(src, rel)
+	if s != src && !strings.HasPrefix(s, src+string(os.PathSeparator)) {
+		return false
+	}
+	if _, err := os.Lstat(s); err != nil {
+		return false
+	}
+	// The whole destination path is tenant-controlled, and this runs as root, so
+	// the copy goes through openat2 instead of `cp`: `cp` follows a symlink at the
+	// destination, and a symlinked parent component would let a tenant redirect the
+	// write anywhere on the filesystem.
+	return files.ImportBeneath(home, filepath.Join(subDir, rel), s, systemUser) == nil
 }
 
 // restoreHome restores the whole home. clean=false -> no --delete (active files
@@ -706,6 +718,13 @@ func restoreSelectedFiles(ctx context.Context, tmp, systemUser string, paths []s
 // outside their own home. `cp` does follow both, so a cp fallback would reopen that
 // hole whenever rsync happened to be missing; a failure is reported instead.
 func restoreHome(ctx context.Context, tmp, systemUser string, clean bool) error {
+	// The name comes from the database and every caller checks it, but this
+	// function is what hands "/home/"+systemUser to a root rsync, chown and
+	// restorecon. The gate stands here as well, so a value carrying a separator
+	// or ".." is refused once for every caller.
+	if !validSystemUser(systemUser) {
+		return fmt.Errorf("home directory copy refused: invalid system user")
+	}
 	extractedHome := filepath.Join(tmp, systemUser)
 	if _, err := os.Stat(extractedHome); err != nil {
 		return nil
