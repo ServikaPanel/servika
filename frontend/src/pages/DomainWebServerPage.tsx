@@ -71,6 +71,359 @@ const HEADERS = [
     description: 'Automatically upgrades HTTP links to HTTPS' },
 ] as const
 
+function PageHeader({ response, backHref }: { response: Response | null; backHref: string }) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: response?.domain_name || '...', href: backHref },
+        { label: t('breadcrumb.settings') },
+      ]} />
+
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      {response && <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
+        <Link to={backHref} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{response.domain_name}</Link>
+        {' · '}{t('subtitle')}
+      </p>}
+    </>
+  )
+}
+
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function BackendButton({ backendKey, enabled, changing, onSelect }: {
+  backendKey: string; enabled: boolean; changing: boolean; onSelect: () => void
+}) {
+  const { t } = useTranslation('DomainWebServerPage')
+  const b = BACKEND_INFO[backendKey]
+  const colorClasses: Record<string, string> = {
+    emerald: enabled ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 dark:bg-emerald-900/20',
+    indigo:  enabled ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-500/20'    : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:bg-indigo-900/20',
+    slate:   enabled ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-400/20'      : 'border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800',
+  }
+  return (
+    <button type="button" onClick={onSelect} disabled={changing || enabled}
+      className={`text-left p-4 border rounded-lg transition disabled:cursor-default ${colorClasses[b.color]}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-slate-600 dark:text-slate-300"><Icon d={b.icon} className="h-5 w-5" /></span>
+        {enabled && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-300">{t('stack.active')}</span>}
+      </div>
+      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(`backend.${backendKey}.name`, { defaultValue: b.name })}</div>
+      <div className="text-[11px] text-slate-600 dark:text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">{t(`backend.${backendKey}.description`, { defaultValue: b.description })}</div>
+    </button>
+  )
+}
+
+function StackCard({ backend, changing, isSubdomain, onSelect }: {
+  backend: string; changing: boolean; isSubdomain: boolean; onSelect: (value: string) => void
+}) {
+  const { t } = useTranslation('DomainWebServerPage')
+  const keys = isSubdomain ? ['php-fpm', 'static'] : ['php-fpm', 'apache', 'static']
+  return (
+    <div className="mb-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('stack.title')}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{t('stack.description')}</p>
+        </div>
+        {changing && <span className="text-xs text-slate-400 dark:text-slate-500">{t('applying')}</span>}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {keys.map(k => (
+          <BackendButton key={k} backendKey={k} enabled={backend === k} changing={changing} onSelect={() => onSelect(k)} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DocRootCard({ path, subdirectory, onSubdirectory, candidates, changing, onSave }: {
+  path: string; subdirectory: string; onSubdirectory: (value: string) => void
+  candidates: string[]; changing: boolean; onSave: () => void
+}) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <div className="mb-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('docRoot.title')}</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">{t('docRoot.description')}</p>
+        </div>
+        {changing && <span className="text-xs text-slate-400 dark:text-slate-500">{t('applying')}</span>}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
+        <label className="block text-sm">
+          <span className="block mb-1 text-slate-600 dark:text-slate-400">{t('docRoot.subdirLabel')}</span>
+          <input
+            list="web-root-candidates"
+            value={subdirectory}
+            onChange={event => onSubdirectory(event.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
+            placeholder={t('docRoot.placeholder')}
+          />
+          <datalist id="web-root-candidates">
+            {candidates.map(candidate => <option key={candidate || 'public_html'} value={candidate} />)}
+          </datalist>
+        </label>
+        <button onClick={onSave} disabled={changing}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-white dark:bg-white dark:text-slate-900 disabled:opacity-50">
+          {t('docRoot.save')}
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+        {t('docRoot.currentLabel')} <code className="font-mono text-slate-700 dark:text-slate-300 break-all">{path || 'public_html'}</code>
+      </p>
+    </div>
+  )
+}
+
+function CustomVhostNotice({ show }: { show: boolean }) {
+  const { t } = useTranslation('DomainWebServerPage')
+  if (!show) return null
+  return (
+    <div className="mb-5 flex items-start gap-1.5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
+      <Icon d={ICON.warning} className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span><strong>{t('customVhostActive.boldPre')}</strong>{t('customVhostActive.post')}<strong>{t('customVhostActive.boldNot')}</strong>{t('customVhostActive.tail')}</span>
+    </div>
+  )
+}
+
+function HeadersCard({ settings, update }: { settings: Settings; update: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <Card title={t('cards.securityHeaders')}>
+      <div className="space-y-3">
+        {HEADERS.map(h => (
+          <RowToggle
+            key={h.key}
+            label={h.label}
+            value={h.value}
+            description={t(`headers.${h.key}`, { defaultValue: h.description })}
+            enabled={settings[h.key] as boolean}
+            onToggle={() => update(h.key as keyof Settings, !settings[h.key] as never)}
+          />
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function hstsValue(settings: Settings): string {
+  const subdomains = settings.hsts_subdomains ? '; includeSubDomains' : ''
+  const preload = settings.hsts_preload ? '; preload' : ''
+  return `max-age=${settings.hsts_max_age}${subdomains}${preload}`
+}
+
+function HstsCard({ settings, update }: { settings: Settings; update: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <Card title={t('cards.hsts')}>
+      <RowToggle
+        label="Strict-Transport-Security"
+        value={hstsValue(settings)}
+        description={t('hsts.description')}
+        enabled={settings.hdr_hsts}
+        onToggle={() => update('hdr_hsts', !settings.hdr_hsts)}
+      />
+      {settings.hdr_hsts && (
+        <div className="mt-3 pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-2">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('hsts.maxAgeLabel')}</label>
+            <select value={settings.hsts_max_age} onChange={event => update('hsts_max_age', parseInt(event.target.value))}
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono">
+              <option value={300}>{t('hsts.maxAge300')}</option>
+              <option value={86400}>{t('hsts.maxAge86400')}</option>
+              <option value={604800}>{t('hsts.maxAge604800')}</option>
+              <option value={2592000}>{t('hsts.maxAge2592000')}</option>
+              <option value={15768000}>{t('hsts.maxAge15768000')}</option>
+              <option value={31536000}>{t('hsts.maxAge31536000')}</option>
+              <option value={63072000}>{t('hsts.maxAge63072000')}</option>
+            </select>
+          </div>
+          <CheckboxRow
+            label="includeSubDomains"
+            description={t('hsts.includeSubDomainsDesc')}
+            checked={settings.hsts_subdomains}
+            onChange={v => update('hsts_subdomains', v)}
+          />
+          <CheckboxRow
+            label="preload"
+            description={t('hsts.preloadDesc')}
+            checked={settings.hsts_preload}
+            onChange={v => update('hsts_preload', v)}
+          />
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function CacheCard({ settings, update }: { settings: Settings; update: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <Card title={t('cards.performanceCache')}>
+      <RowToggle
+        label="nginx FastCGI Cache"
+        value={t('cache.fastcgiValue', { minutes: settings.fastcgi_cache_minutes })}
+        description={t('cache.fastcgiDesc')}
+        enabled={settings.fastcgi_cache}
+        onToggle={() => update('fastcgi_cache', !settings.fastcgi_cache)}
+      />
+      {settings.fastcgi_cache && (
+        <div className="mt-3 pl-4 border-l-2 border-slate-200 dark:border-slate-700">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('cache.durationMinutes')}</label>
+          <select value={settings.fastcgi_cache_minutes} onChange={event => update('fastcgi_cache_minutes', parseInt(event.target.value))}
+            className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono">
+            <option value={5}>{t('cache.min5')}</option>
+            <option value={15}>{t('cache.min15')}</option>
+            <option value={60}>{t('cache.min60')}</option>
+            <option value={360}>{t('cache.min360')}</option>
+            <option value={1440}>{t('cache.min1440')}</option>
+          </select>
+        </div>
+      )}
+
+      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <RowToggle
+          label={t('cache.browserLabel')}
+          value={t('cache.browserValue', { days: settings.browser_cache_days })}
+          description={t('cache.browserDesc')}
+          enabled={settings.browser_cache}
+          onToggle={() => update('browser_cache', !settings.browser_cache)}
+        />
+        {settings.browser_cache && (
+          <div className="mt-3 pl-4 border-l-2 border-slate-200 dark:border-slate-700">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('cache.durationDays')}</label>
+            <select value={settings.browser_cache_days} onChange={event => update('browser_cache_days', parseInt(event.target.value))}
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono">
+              <option value={1}>{t('cache.day1')}</option>
+              <option value={7}>{t('cache.day7')}</option>
+              <option value={30}>{t('cache.day30')}</option>
+              <option value={90}>{t('cache.day90')}</option>
+              <option value={365}>{t('cache.day365')}</option>
+            </select>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function VhostCard({ vhost, content, onContent, dirty, changing, saving, onSave, onReturn }: {
+  vhost: CustomVhostResponse; content: string; onContent: (value: string) => void
+  dirty: boolean; changing: boolean; saving: boolean; onSave: () => void; onReturn: () => void
+}) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <Card title={t('cards.vhostFile')}>
+      <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
+        {t('vhost.warningPre')}<strong>{t('vhost.warningBoldActually')}</strong>{t('vhost.warningMid')}<strong>{t('vhost.warningBoldEntire')}</strong>{t('vhost.warningPost')}
+        <code className="font-mono">/.well-known/acme-challenge/</code>{t('vhost.warningTail')}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          {vhost.enabled ? t('vhost.activeState') : t('vhost.managedState')}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {dirty && <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">{t('vhost.unsaved')}</span>}
+          {vhost.enabled && (
+            <button onClick={onReturn} disabled={changing}
+              className="px-3 py-1.5 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 text-xs rounded-md">
+              {changing ? t('vhost.working') : t('vhost.returnToPanel')}
+            </button>
+          )}
+          <button onClick={onSave} disabled={saving || !dirty}
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium rounded-md">
+            {saving ? t('vhost.saving') : t('saveApply')}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg overflow-hidden border border-slate-700">
+        <CodeMirror
+          value={content}
+          height="480px"
+          theme={oneDark}
+          onChange={onContent}
+          basicSetup={{
+            lineNumbers: true,
+            foldGutter: true,
+            highlightActiveLine: true,
+            highlightActiveLineGutter: true,
+            bracketMatching: true,
+            tabSize: 2,
+          }}
+          style={{ fontSize: '13px' }}
+        />
+      </div>
+    </Card>
+  )
+}
+
+function DirectivesCard({ settings, update }: { settings: Settings; update: <K extends keyof Settings>(key: K, value: Settings[K]) => void }) {
+  const { t } = useTranslation('DomainWebServerPage')
+  return (
+    <Card title={t('cards.additionalDirectives')}>
+      {/* The request-body ceiling comes from the plan and is rendered by the
+          panel, so it is shown here rather than left as a value that simply
+          vanished from the editable text. */}
+      {settings.client_max_body && (
+        <div className="flex items-baseline gap-2 mb-3 pb-3 border-b border-slate-200 dark:border-slate-700">
+          <span className="text-xs text-slate-500 dark:text-slate-500">{t('uploadLimit.label')}</span>
+          <code className="font-mono text-sm text-slate-900 dark:text-slate-100">{settings.client_max_body}</code>
+          <span className="text-xs text-slate-400 dark:text-slate-500">{t('uploadLimit.fromPlan')}</span>
+        </div>
+      )}
+      <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
+        {t('directives.pre')}<code className="font-mono">server</code>{t('directives.mid')}<code className="font-mono">expires 7d;</code>
+      </p>
+      <textarea value={settings.extra_directives} onChange={event => update('extra_directives', event.target.value)}
+        rows={6}
+        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-xs font-mono"
+        placeholder={t('directives.placeholder')} />
+    </Card>
+  )
+}
+
+function SettingsSection({ loading, settings, isSubdomain, isAdmin, update, customVhost, customVhostContent,
+  onCustomVhostContent, customVhostDirty, customVhostChanging, customVhostSaving, onSaveCustomVhost,
+  onReturnToManagedVhost, children }: {
+  loading: boolean; settings: Settings | null; isSubdomain: boolean; isAdmin: boolean
+  update: <K extends keyof Settings>(key: K, value: Settings[K]) => void
+  customVhost: CustomVhostResponse | null; customVhostContent: string; onCustomVhostContent: (value: string) => void
+  customVhostDirty: boolean; customVhostChanging: boolean; customVhostSaving: boolean
+  onSaveCustomVhost: () => void; onReturnToManagedVhost: () => void; children: ReactNode
+}) {
+  const { t } = useTranslation('DomainWebServerPage')
+  if (loading || !settings) {
+    return <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+  }
+  const showVhost = isAdmin && !isSubdomain && customVhost !== null
+  return (
+    <>
+      <CustomVhostNotice show={!isSubdomain && customVhost?.enabled === true} />
+      <HeadersCard settings={settings} update={update} />
+      <HstsCard settings={settings} update={update} />
+      <CacheCard settings={settings} update={update} />
+      {showVhost && customVhost && (
+        <VhostCard vhost={customVhost} content={customVhostContent} onContent={onCustomVhostContent}
+          dirty={customVhostDirty} changing={customVhostChanging} saving={customVhostSaving}
+          onSave={onSaveCustomVhost} onReturn={onReturnToManagedVhost} />
+      )}
+      <DirectivesCard settings={settings} update={update} />
+      {children}
+    </>
+  )
+}
+
 export default function DomainWebServerPage() {
   const { t } = useTranslation('DomainWebServerPage')
   const { confirm } = useDialog()
@@ -229,276 +582,27 @@ export default function DomainWebServerPage() {
 
   return (
     <div className="w-full px-6 py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: response?.domain_name || '...', href: backHref },
-        { label: t('breadcrumb.settings') },
-      ]} />
+      <PageHeader response={response} backHref={backHref} />
 
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-      {response && <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
-        <Link to={backHref} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">{response.domain_name}</Link>
-        {' · '}{t('subtitle')}
-      </p>}
+      <Banners error={error} success={success} />
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      <StackCard backend={backend} changing={backendChanging} isSubdomain={isSubdomain} onSelect={saveBackend} />
 
-      {/* Web server stack selector */}
-      <div className="mb-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('stack.title')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
-              {t('stack.description')}
-            </p>
-          </div>
-          {backendChanging && <span className="text-xs text-slate-400 dark:text-slate-500">{t('applying')}</span>}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {(isSubdomain ? (['php-fpm','static'] as const) : (['php-fpm','apache','static'] as const)).map(k => {
-            const b = BACKEND_INFO[k]
-            const enabled = backend === k
-            const colorClasses: Record<string, string> = {
-              emerald: enabled ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 dark:bg-emerald-900/20',
-              indigo:  enabled ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-500/20'    : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 hover:bg-indigo-50 dark:bg-indigo-900/20',
-              slate:   enabled ? 'border-slate-500 bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-400/20'      : 'border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800',
-            }
-            return (
-              <button key={k} type="button"
-                onClick={() => saveBackend(k)}
-                disabled={backendChanging || enabled}
-                className={`text-left p-4 border rounded-lg transition disabled:cursor-default ${colorClasses[b.color]}`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-slate-600 dark:text-slate-300"><Icon d={b.icon} className="h-5 w-5" /></span>
-                  {enabled && <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 dark:text-emerald-300">{t('stack.active')}</span>}
-                </div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(`backend.${k}.name`, { defaultValue: b.name })}</div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-400 dark:text-slate-500 mt-1.5 leading-snug">{t(`backend.${k}.description`, { defaultValue: b.description })}</div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {!isSubdomain && <div className="mb-6 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('docRoot.title')}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mt-0.5">
-              {t('docRoot.description')}
-            </p>
-          </div>
-          {webRootChanging && <span className="text-xs text-slate-400 dark:text-slate-500">{t('applying')}</span>}
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
-          <label className="block text-sm">
-            <span className="block mb-1 text-slate-600 dark:text-slate-400">{t('docRoot.subdirLabel')}</span>
-            <input
-              list="web-root-candidates"
-              value={webRootSubdirectory}
-              onChange={event => setWebRootSubdirectory(event.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-              placeholder={t('docRoot.placeholder')}
-            />
-            <datalist id="web-root-candidates">
-              {webRootCandidates.map(candidate => <option key={candidate || 'public_html'} value={candidate} />)}
-            </datalist>
-          </label>
-          <button onClick={saveWebRoot} disabled={webRootChanging}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-white dark:bg-white dark:text-slate-900 disabled:opacity-50">
-            {t('docRoot.save')}
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
-          {t('docRoot.currentLabel')} <code className="font-mono text-slate-700 dark:text-slate-300 break-all">{webRootPath || 'public_html'}</code>
-        </p>
-      </div>}
+      {!isSubdomain && (
+        <DocRootCard path={webRootPath} subdirectory={webRootSubdirectory}
+          onSubdirectory={setWebRootSubdirectory} candidates={webRootCandidates}
+          changing={webRootChanging} onSave={saveWebRoot} />
+      )}
 
       <div className="mb-5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
         <strong>HSTS</strong>{t('hstsNote.pre')}<code className="font-mono">nginx -t</code>{t('hstsNote.mid')}<code className="font-mono">reload</code>{t('hstsNote.post')}
       </div>
 
-      {loading || !settings ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
-        <>
-          {!isSubdomain && customVhost?.enabled && (
-            <div className="mb-5 flex items-start gap-1.5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
-              <Icon d={ICON.warning} className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span><strong>{t('customVhostActive.boldPre')}</strong>{t('customVhostActive.post')}<strong>{t('customVhostActive.boldNot')}</strong>{t('customVhostActive.tail')}</span>
-            </div>
-          )}
-
-          {/* General security headers */}
-          <Card title={t('cards.securityHeaders')}>
-            <div className="space-y-3">
-              {HEADERS.map(h => (
-                <RowToggle
-                  key={h.key}
-                  label={h.label}
-                  value={h.value}
-                  description={t(`headers.${h.key}`, { defaultValue: h.description })}
-                  enabled={settings[h.key] as boolean}
-                  onToggle={() => updateSetting(h.key as keyof Settings, !settings[h.key] as never)}
-                />
-              ))}
-            </div>
-          </Card>
-
-          {/* HSTS-specific settings */}
-          <Card title={t('cards.hsts')}>
-            <RowToggle
-              label="Strict-Transport-Security"
-              value={`max-age=${settings.hsts_max_age}${settings.hsts_subdomains ? '; includeSubDomains' : ''}${settings.hsts_preload ? '; preload' : ''}`}
-              description={t('hsts.description')}
-              enabled={settings.hdr_hsts}
-              onToggle={() => updateSetting('hdr_hsts', !settings.hdr_hsts)}
-            />
-            {settings.hdr_hsts && (
-              <div className="mt-3 pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('hsts.maxAgeLabel')}</label>
-                  <select value={settings.hsts_max_age} onChange={event => updateSetting('hsts_max_age', parseInt(event.target.value))}
-                    className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono">
-                    <option value={300}>{t('hsts.maxAge300')}</option>
-                    <option value={86400}>{t('hsts.maxAge86400')}</option>
-                    <option value={604800}>{t('hsts.maxAge604800')}</option>
-                    <option value={2592000}>{t('hsts.maxAge2592000')}</option>
-                    <option value={15768000}>{t('hsts.maxAge15768000')}</option>
-                    <option value={31536000}>{t('hsts.maxAge31536000')}</option>
-                    <option value={63072000}>{t('hsts.maxAge63072000')}</option>
-                  </select>
-                </div>
-                <CheckboxRow
-                  label="includeSubDomains"
-                  description={t('hsts.includeSubDomainsDesc')}
-                  checked={settings.hsts_subdomains}
-                  onChange={v => updateSetting('hsts_subdomains', v)}
-                />
-                <CheckboxRow
-                  label="preload"
-                  description={t('hsts.preloadDesc')}
-                  checked={settings.hsts_preload}
-                  onChange={v => updateSetting('hsts_preload', v)}
-                />
-              </div>
-            )}
-          </Card>
-
-          {/* Performance cache */}
-          <Card title={t('cards.performanceCache')}>
-            <RowToggle
-              label="nginx FastCGI Cache"
-              value={t('cache.fastcgiValue', { minutes: settings.fastcgi_cache_minutes })}
-              description={t('cache.fastcgiDesc')}
-              enabled={settings.fastcgi_cache}
-              onToggle={() => updateSetting('fastcgi_cache', !settings.fastcgi_cache)}
-            />
-            {settings.fastcgi_cache && (
-              <div className="mt-3 pl-4 border-l-2 border-slate-200 dark:border-slate-700">
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('cache.durationMinutes')}</label>
-                <select value={settings.fastcgi_cache_minutes} onChange={event => updateSetting('fastcgi_cache_minutes', parseInt(event.target.value))}
-                  className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono">
-                  <option value={5}>{t('cache.min5')}</option>
-                  <option value={15}>{t('cache.min15')}</option>
-                  <option value={60}>{t('cache.min60')}</option>
-                  <option value={360}>{t('cache.min360')}</option>
-                  <option value={1440}>{t('cache.min1440')}</option>
-                </select>
-              </div>
-            )}
-
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <RowToggle
-                label={t('cache.browserLabel')}
-                value={t('cache.browserValue', { days: settings.browser_cache_days })}
-                description={t('cache.browserDesc')}
-                enabled={settings.browser_cache}
-                onToggle={() => updateSetting('browser_cache', !settings.browser_cache)}
-              />
-              {settings.browser_cache && (
-                <div className="mt-3 pl-4 border-l-2 border-slate-200 dark:border-slate-700">
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">{t('cache.durationDays')}</label>
-                  <select value={settings.browser_cache_days} onChange={event => updateSetting('browser_cache_days', parseInt(event.target.value))}
-                    className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono">
-                    <option value={1}>{t('cache.day1')}</option>
-                    <option value={7}>{t('cache.day7')}</option>
-                    <option value={30}>{t('cache.day30')}</option>
-                    <option value={90}>{t('cache.day90')}</option>
-                    <option value={365}>{t('cache.day365')}</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {isAdmin && !isSubdomain && customVhost && (
-            <Card title={t('cards.vhostFile')}>
-              <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md text-xs text-amber-800 dark:text-amber-200">
-                {t('vhost.warningPre')}<strong>{t('vhost.warningBoldActually')}</strong>{t('vhost.warningMid')}<strong>{t('vhost.warningBoldEntire')}</strong>{t('vhost.warningPost')}
-                <code className="font-mono">/.well-known/acme-challenge/</code>{t('vhost.warningTail')}
-              </div>
-
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {customVhost.enabled ? t('vhost.activeState') : t('vhost.managedState')}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {customVhostDirty && <span className="text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">{t('vhost.unsaved')}</span>}
-                  {customVhost.enabled && (
-                    <button onClick={returnToManagedVhost} disabled={customVhostChanging}
-                      className="px-3 py-1.5 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 text-xs rounded-md">
-                      {customVhostChanging ? t('vhost.working') : t('vhost.returnToPanel')}
-                    </button>
-                  )}
-                  <button onClick={saveCustomVhost} disabled={customVhostSaving || !customVhostDirty}
-                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-medium rounded-md">
-                    {customVhostSaving ? t('vhost.saving') : t('saveApply')}
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-lg overflow-hidden border border-slate-700">
-                <CodeMirror
-                  value={customVhostContent}
-                  height="480px"
-                  theme={oneDark}
-                  onChange={setCustomVhostContent}
-                  basicSetup={{
-                    lineNumbers: true,
-                    foldGutter: true,
-                    highlightActiveLine: true,
-                    highlightActiveLineGutter: true,
-                    bracketMatching: true,
-                    tabSize: 2,
-                  }}
-                  style={{ fontSize: '13px' }}
-                />
-              </div>
-            </Card>
-          )}
-
-          {/* Additional directives */}
-          <Card title={t('cards.additionalDirectives')}>
-            {/* The request-body ceiling comes from the plan and is rendered by the
-                panel, so it is shown here rather than left as a value that simply
-                vanished from the editable text. */}
-            {settings.client_max_body && (
-              <div className="flex items-baseline gap-2 mb-3 pb-3 border-b border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-500 dark:text-slate-500">{t('uploadLimit.label')}</span>
-                <code className="font-mono text-sm text-slate-900 dark:text-slate-100">{settings.client_max_body}</code>
-                <span className="text-xs text-slate-400 dark:text-slate-500">{t('uploadLimit.fromPlan')}</span>
-              </div>
-            )}
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
-              {t('directives.pre')}<code className="font-mono">server</code>{t('directives.mid')}<code className="font-mono">expires 7d;</code>
-            </p>
-            <textarea value={settings.extra_directives} onChange={event => updateSetting('extra_directives', event.target.value)}
-              rows={6}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md text-xs font-mono"
-              placeholder={t('directives.placeholder')} />
-          </Card>
-
-          <div className="flex gap-3 mt-6">
+      <SettingsSection loading={loading} settings={settings} isSubdomain={isSubdomain} isAdmin={isAdmin} update={updateSetting}
+        customVhost={customVhost} customVhostContent={customVhostContent} onCustomVhostContent={setCustomVhostContent}
+        customVhostDirty={customVhostDirty} customVhostChanging={customVhostChanging} customVhostSaving={customVhostSaving}
+        onSaveCustomVhost={saveCustomVhost} onReturnToManagedVhost={returnToManagedVhost}>
+        <div className="flex gap-3 mt-6">
             <button onClick={save} disabled={processing}
               className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm font-medium rounded-md">
               {processing ? t('applying') : t('saveApply')}
@@ -508,8 +612,7 @@ export default function DomainWebServerPage() {
               {t('reload')}
             </button>
           </div>
-        </>
-      )}
+      </SettingsSection>
     </div>
   )
 }
