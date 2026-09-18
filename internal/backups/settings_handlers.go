@@ -52,8 +52,12 @@ func validateRemoteSettings(s *BackupSettings) string {
 	if !validGlobalRemoteType(s.RemoteType) {
 		return "remote_type must be ftp or sftp"
 	}
-	if strings.TrimSpace(s.RemoteHost) == "" {
-		return "remote_host cannot be empty"
+	// The host reaches an lftp script and an ssh argument list. The per-domain
+	// destination has always refused a value carrying a meta-character here; this
+	// path only refused an empty one, so the admin form was the looser of two
+	// doors into the same commands.
+	if !validHost(strings.TrimSpace(s.RemoteHost)) {
+		return "remote_host may contain only letters, digits, dots and hyphens (the port is a separate field)"
 	}
 	if s.RemotePort < 1 || s.RemotePort > 65535 {
 		return "remote_port must be between 1 and 65535"

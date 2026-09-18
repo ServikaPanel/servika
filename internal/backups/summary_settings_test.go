@@ -123,6 +123,10 @@ func TestSetScheduleRaisesARetentionBelowOne(t *testing.T) {
 	}
 }
 
+// remoteHostRefusal is what the admin form answers for a host outside the
+// allowlist.
+const remoteHostRefusal = "remote_host may contain only letters, digits, dots and hyphens (the port is a separate field)"
+
 func TestValidateBackupSettingsNamesEachRemoteField(t *testing.T) {
 	remote := func(mutate func(s *BackupSettings)) *BackupSettings {
 		s := &BackupSettings{RemoteEnabled: true, RemoteType: "ftp", RemoteHost: "backup.example.com", RemotePort: 21, RemoteUsername: "u", RemoteDir: "/"}
@@ -136,6 +140,12 @@ func TestValidateBackupSettingsNamesEachRemoteField(t *testing.T) {
 		{&BackupSettings{MinFreeGB: 10001}, "min_free_gb must be between 0 and 10000"},
 		{&BackupSettings{MaxStoreGB: -1}, "max_store_gb must be between 0 and 1000000"},
 		{remote(func(s *BackupSettings) { s.RemotePort = 65536 }), "remote_port must be between 1 and 65535"},
+		// The host reaches an lftp script and an ssh argument list, so the admin
+		// form takes the same allowlist the per-domain destination takes.
+		{remote(func(s *BackupSettings) { s.RemoteHost = "" }), remoteHostRefusal},
+		{remote(func(s *BackupSettings) { s.RemoteHost = "backup.example.com;id" }), remoteHostRefusal},
+		{remote(func(s *BackupSettings) { s.RemoteHost = `back"up` }), remoteHostRefusal},
+		{remote(func(s *BackupSettings) { s.RemoteHost = "host with space" }), remoteHostRefusal},
 		{remote(func(s *BackupSettings) { s.RemoteUsername = " " }), "remote_username cannot be empty"},
 		{remote(func(s *BackupSettings) { s.RemotePassword = "a\x00b" }), "the fields cannot contain a line break or control character"},
 		{remote(func(s *BackupSettings) { s.RemoteDir = "/a\rb" }), "the fields cannot contain a line break or control character"},
