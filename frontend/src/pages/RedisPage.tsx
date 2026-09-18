@@ -19,6 +19,77 @@ type Status = {
   wp_connected?: number
 }
 
+function DisabledPanel({ busy, enable }: { busy: boolean; enable: () => void }) {
+  const { t } = useTranslation('RedisPage')
+  return (
+        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 text-center">
+          <div className="mb-2 flex justify-center text-amber-500 dark:text-amber-400"><Icon d={ICON.bolt} className="h-8 w-8" /></div>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('empty.message')}</p>
+          <p className="text-xs text-slate-400 mb-4">{t('empty.hint')}</p>
+          {/* The cache process is shared by the whole server, so its cost is not
+              charged to the domain being configured. */}
+          <div className="flex justify-center mb-4">
+            <ResourceNotice>{t('empty.resourceWarning')}</ResourceNotice>
+          </div>
+          <button onClick={enable} disabled={busy}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+            {busy ? t('empty.enabling') : t('empty.enable')}
+          </button>
+        </div>
+  )
+}
+
+type EnabledPanelsProps = {
+  status: Status
+  busy: boolean
+  copied: string | null
+  copy: (text: string, label: string) => void
+  disable: () => void
+}
+
+function EnabledPanels({ status, busy, copied, copy, disable }: EnabledPanelsProps) {
+  const { t } = useTranslation('RedisPage')
+  return (
+        <>
+          {/* Connection details */}
+          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden mb-4">
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('connection.title')}</h3>
+              <button onClick={disable} disabled={busy}
+                className="text-xs px-2.5 py-1 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50">
+                {t('connection.disable')}
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
+              <CopyRow label={t('connection.host')} value={`${status.host}:${status.port}`} onCopy={copy} copied={copied} />
+              <CopyRow label={t('connection.username')} value={status.username} onCopy={copy} copied={copied} />
+              <CopyRow label={t('connection.password')} value={status.password || ''} secret onCopy={copy} copied={copied} />
+              <CopyRow label={t('connection.keyPrefix')} value={status.prefix} onCopy={copy} copied={copied} />
+            </div>
+          </div>
+
+          {/* WordPress snippet */}
+          {status.wp_snippet && (
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('wp.title')}</h3>
+                <button onClick={() => copy(status.wp_snippet!, 'wp')}
+                  className="text-xs px-2.5 py-1 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-md">
+                  {copied === 'wp' ? t('wp.copied') : t('wp.copy')}
+                </button>
+              </div>
+              <div className="p-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  {t('wp.instructionsPre')}<code className="font-mono bg-slate-100 dark:bg-slate-900 px-1 rounded">{t('wp.instructionsFile')}</code>{t('wp.instructionsMid')}<strong>{t('wp.instructionsBold')}</strong>{t('wp.instructionsPost')}
+                </p>
+                <pre className="text-[11px] font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 overflow-x-auto text-slate-700 dark:text-slate-200 whitespace-pre">{status.wp_snippet}</pre>
+              </div>
+            </div>
+          )}
+        </>
+  )
+}
+
 export default function RedisPage() {
   const { t } = useTranslation('RedisPage')
   const { confirm } = useDialog()
@@ -99,58 +170,9 @@ export default function RedisPage() {
       {loading ? (
         <div className="py-12 text-center text-sm text-slate-400">{t('loading')}</div>
       ) : !status?.enabled ? (
-        <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-6 text-center">
-          <div className="mb-2 flex justify-center text-amber-500 dark:text-amber-400"><Icon d={ICON.bolt} className="h-8 w-8" /></div>
-          <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('empty.message')}</p>
-          <p className="text-xs text-slate-400 mb-4">{t('empty.hint')}</p>
-          {/* The cache process is shared by the whole server, so its cost is not
-              charged to the domain being configured. */}
-          <div className="flex justify-center mb-4">
-            <ResourceNotice>{t('empty.resourceWarning')}</ResourceNotice>
-          </div>
-          <button onClick={enable} disabled={busy}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-            {busy ? t('empty.enabling') : t('empty.enable')}
-          </button>
-        </div>
+        <DisabledPanel busy={busy} enable={enable} />
       ) : (
-        <>
-          {/* Connection details */}
-          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden mb-4">
-            <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('connection.title')}</h3>
-              <button onClick={disable} disabled={busy}
-                className="text-xs px-2.5 py-1 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50">
-                {t('connection.disable')}
-              </button>
-            </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
-              <CopyRow label={t('connection.host')} value={`${status.host}:${status.port}`} onCopy={copy} copied={copied} />
-              <CopyRow label={t('connection.username')} value={status.username} onCopy={copy} copied={copied} />
-              <CopyRow label={t('connection.password')} value={status.password || ''} secret onCopy={copy} copied={copied} />
-              <CopyRow label={t('connection.keyPrefix')} value={status.prefix} onCopy={copy} copied={copied} />
-            </div>
-          </div>
-
-          {/* WordPress snippet */}
-          {status.wp_snippet && (
-            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('wp.title')}</h3>
-                <button onClick={() => copy(status.wp_snippet!, 'wp')}
-                  className="text-xs px-2.5 py-1 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-md">
-                  {copied === 'wp' ? t('wp.copied') : t('wp.copy')}
-                </button>
-              </div>
-              <div className="p-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                  {t('wp.instructionsPre')}<code className="font-mono bg-slate-100 dark:bg-slate-900 px-1 rounded">{t('wp.instructionsFile')}</code>{t('wp.instructionsMid')}<strong>{t('wp.instructionsBold')}</strong>{t('wp.instructionsPost')}
-                </p>
-                <pre className="text-[11px] font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 overflow-x-auto text-slate-700 dark:text-slate-200 whitespace-pre">{status.wp_snippet}</pre>
-              </div>
-            </div>
-          )}
-        </>
+        <EnabledPanels status={status} busy={busy} copied={copied} copy={copy} disable={disable} />
       )}
     </div>
   )
