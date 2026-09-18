@@ -59,7 +59,8 @@ type ResellerLimit = {
   current_traffic_mb: number
 }
 
-export default function UsersPage() {
+/** Every piece of state this screen owns, so each block below is a component. */
+function useUsersPage() {
   const { t } = useTranslation('UsersPage')
   const myRole = useAuth((s) => s.username?.role)
   const myID = useAuth((s) => s.username?.id)
@@ -210,9 +211,41 @@ export default function UsersPage() {
   // too; hiding the button avoids a pointless error message.
   const protectedRow = (k: User) => k.id === 1 || k.id === myID
 
+  return {
+    appliedQueryParam, create, creating, error, fetchList, filtered, isAdmin, limit, limitLoading, limitTarget, list, loading, myID, myRole, newPassword, openLimits, protectedRow, pwTarget, query, queryParam, reload, remove, resetPassword, saveLimits, saving, setAppliedQueryParam, setCreating, setError, setLimit, setLimitLoading, setLimitTarget, setList, setLoading, setNewPassword, setPwTarget, setQuery, setSaving, setSuccess, setToDelete, success, toDelete, toggleStatus,
+  }
+}
+
+export default function UsersPage() {
+  const { t } = useTranslation('UsersPage')
+  const ctx = useUsersPage()
+
   return (
     <div className="w-full px-6 py-5">
       <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.users') }]} />
+      <UsersHeader ctx={ctx} />
+
+      <UsersTable ctx={ctx} />
+
+      <CreateModal ctx={ctx} />
+
+      <PasswordModal ctx={ctx} />
+
+      <LimitsModal ctx={ctx} />
+
+      <DeleteConfirm ctx={ctx} />
+
+    </div>
+  )
+}
+
+type UsersCtx = ReturnType<typeof useUsersPage>
+
+function UsersHeader({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { error, isAdmin, query, setCreating, setQuery, success } = ctx
+  return (
+    <>
 
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
@@ -229,29 +262,42 @@ export default function UsersPage() {
 
       {error && <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">{error}</div>}
       {success && <div className="mb-4 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm">{success}</div>}
+    </>
+  )
+}
 
-      {loading ? (
-        <div className="py-16 text-center text-sm text-slate-400">{t('loading')}</div>
-      ) : list.length === 0 ? (
-        <EmptyState
-          title={isAdmin ? t('empty.titleAdmin') : t('empty.titleReseller')}
-          description={t('empty.description')}
-          button={{ label: t('newAccount'), onClick: () => setCreating({ ...EMPTY, role: isAdmin ? 'reseller' : 'user' }) }}
-        />
-      ) : filtered.length === 0 ? (
-        <div className="py-12 text-center text-sm text-slate-400">{t('noMatch')}</div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/60">
-              <tr>
-                {[t('columns.user'), t('columns.fullName'), t('columns.role'), t('columns.status'), t('columns.twoFa'), t('columns.lastLogin'), ''].map((b, i) => (
-                  <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap">{b}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
-              {filtered.map((k) => (
+function RowActions({ k, ctx }: { k: User; ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { isAdmin, openLimits, protectedRow, setNewPassword, setPwTarget, setToDelete, toggleStatus } = ctx
+  if (k.id === 1) return <span className="text-xs text-slate-400">{t('systemAccount')}</span>
+  return (
+    <>
+      <button onClick={() => { setPwTarget(k); setNewPassword('') }} className="text-xs text-brand-600 dark:text-brand-400 hover:underline mr-3">
+        {t('actions.password')}
+      </button>
+      {/* Quota is meaningful only for resellers and only admins manage it. */}
+      {isAdmin && k.role === 'reseller' && (
+        <button onClick={() => openLimits(k)} className="text-xs text-sky-600 dark:text-sky-400 hover:underline mr-3">
+          {t('actions.limits')}
+        </button>
+      )}
+      {!protectedRow(k) && (
+        <>
+          <button onClick={() => toggleStatus(k)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline mr-3">
+            {k.status === 'active' ? t('actions.suspend') : t('actions.enable')}
+          </button>
+          <button onClick={() => setToDelete(k)} className="text-xs text-red-600 dark:text-red-400 hover:underline">
+            {t('actions.delete')}
+          </button>
+        </>
+      )}
+    </>
+  )
+}
+
+function UserRow({ k, ctx }: { k: User; ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  return (
                 <tr key={k.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/60 transition">
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <span className="font-mono text-slate-900 dark:text-slate-100">{k.username}</span>
@@ -281,40 +327,51 @@ export default function UsersPage() {
                     {k.last_login || '—'}
                     {k.last_login_ip && <span className="ml-1 opacity-60">({k.last_login_ip})</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                    {k.id === 1 ? (
-                      <span className="text-xs text-slate-400">{t('systemAccount')}</span>
-                    ) : (
-                      <>
-                        <button onClick={() => { setPwTarget(k); setNewPassword('') }} className="text-xs text-brand-600 dark:text-brand-400 hover:underline mr-3">
-                          {t('actions.password')}
-                        </button>
-                        {/* Quota is meaningful only for resellers and only admins manage it. */}
-                        {isAdmin && k.role === 'reseller' && (
-                          <button onClick={() => openLimits(k)} className="text-xs text-sky-600 dark:text-sky-400 hover:underline mr-3">
-                            {t('actions.limits')}
-                          </button>
-                        )}
-                        {!protectedRow(k) && (
-                          <>
-                            <button onClick={() => toggleStatus(k)} className="text-xs text-amber-600 dark:text-amber-400 hover:underline mr-3">
-                              {k.status === 'active' ? t('actions.suspend') : t('actions.enable')}
-                            </button>
-                            <button onClick={() => setToDelete(k)} className="text-xs text-red-600 dark:text-red-400 hover:underline">
-                              {t('actions.delete')}
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </td>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap"><RowActions k={k} ctx={ctx} /></td>
                 </tr>
-              ))}
+  )
+}
+
+function UsersTable({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { filtered, isAdmin, list, loading, setCreating } = ctx
+  return (
+    <>
+      {loading ? (
+        <div className="py-16 text-center text-sm text-slate-400">{t('loading')}</div>
+      ) : list.length === 0 ? (
+        <EmptyState
+          title={isAdmin ? t('empty.titleAdmin') : t('empty.titleReseller')}
+          description={t('empty.description')}
+          button={{ label: t('newAccount'), onClick: () => setCreating({ ...EMPTY, role: isAdmin ? 'reseller' : 'user' }) }}
+        />
+      ) : filtered.length === 0 ? (
+        <div className="py-12 text-center text-sm text-slate-400">{t('noMatch')}</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 dark:bg-slate-900/60">
+              <tr>
+                {[t('columns.user'), t('columns.fullName'), t('columns.role'), t('columns.status'), t('columns.twoFa'), t('columns.lastLogin'), ''].map((b, i) => (
+                  <th key={i} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap">{b}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
+              {filtered.map((k) => <UserRow key={k.id} k={k} ctx={ctx} />)}
             </tbody>
           </table>
         </div>
       )}
+    </>
+  )
+}
 
+function CreateModal({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { create, creating, isAdmin, saving, setCreating } = ctx
+  return (
+    <>
       {/* New account */}
       <Modal open={creating !== null} title={isAdmin ? t('createModal.titleAdmin') : t('createModal.titleReseller')} onClose={() => setCreating(null)}>
         {creating && (
@@ -381,7 +438,15 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
+    </>
+  )
+}
 
+function PasswordModal({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { newPassword, pwTarget, resetPassword, saving, setNewPassword, setPwTarget } = ctx
+  return (
+    <>
       {/* Password reset */}
       <Modal open={pwTarget !== null} title={t('passwordModal.title')} onClose={() => setPwTarget(null)}>
         {pwTarget && (
@@ -410,20 +475,15 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
+    </>
+  )
+}
 
-      {/* Reseller limits */}
-      <Modal open={limitTarget !== null} title={t('limitsModal.title')} onClose={() => { setLimitTarget(null); setLimit(null) }}>
-        {limitLoading ? (
-          <div className="py-8 text-center text-sm text-slate-400">{t('limitsModal.loading')}</div>
-        ) : limit && limitTarget ? (
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              {t('limitsModal.upperBounds')}<span className="font-mono">{limitTarget.username}</span>.
-              <span className="block mt-1 text-xs text-slate-500">
-                {t('limitsModal.unlimitedNote')}
-              </span>
-            </p>
-
+function LimitFields({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { limit, setLimit } = ctx
+  if (!limit) return null
+  return (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
@@ -498,7 +558,28 @@ export default function UsersPage() {
                 </p>
               </div>
             </div>
+  )
+}
 
+function LimitsModal({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { limit, limitLoading, limitTarget, saveLimits, saving, setLimit, setLimitTarget } = ctx
+  return (
+    <>
+      {/* Reseller limits */}
+      <Modal open={limitTarget !== null} title={t('limitsModal.title')} onClose={() => { setLimitTarget(null); setLimit(null) }}>
+        {limitLoading ? (
+          <div className="py-8 text-center text-sm text-slate-400">{t('limitsModal.loading')}</div>
+        ) : limit && limitTarget ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {t('limitsModal.upperBounds')}<span className="font-mono">{limitTarget.username}</span>.
+              <span className="block mt-1 text-xs text-slate-500">
+                {t('limitsModal.unlimitedNote')}
+              </span>
+            </p>
+
+            <LimitFields ctx={ctx} />
             {!limit.defined && (
               <div className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400">
                 {t('limitsModal.noLimit')}
@@ -520,7 +601,15 @@ export default function UsersPage() {
           </div>
         ) : null}
       </Modal>
+    </>
+  )
+}
 
+function DeleteConfirm({ ctx }: { ctx: UsersCtx }) {
+  const { t } = useTranslation('UsersPage')
+  const { remove, setToDelete, toDelete } = ctx
+  return (
+    <>
       <ConfirmDialog
         open={toDelete !== null}
         title={t('delete.title')}
@@ -530,6 +619,6 @@ export default function UsersPage() {
         onConfirm={remove}
         onCancel={() => setToDelete(null)}
       />
-    </div>
+    </>
   )
 }
