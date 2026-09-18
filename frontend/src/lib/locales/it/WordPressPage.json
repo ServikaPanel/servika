@@ -13,8 +13,8 @@
     "site": "Sito",
     "admin": "Amministratore",
     "user": "Utente",
-    "password": "Password",
-    "savePassword": "⚠ Salva ora la password. Non verrà mostrata di nuovo."
+    "passwordWaiting": "La password di amministratore è salvata. Mostrala una volta dalla schermata WordPress del sito.",
+    "passwordLost": "Non è stato possibile salvare la password di amministratore. Reimpostala in WordPress."
   },
   "installedSites": "Siti WordPress Installati",
   "refresh": "↻ Aggiorna",

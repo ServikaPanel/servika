@@ -18,7 +18,9 @@ import {
 } from '@/lib/table'
 
 type Domain = { id: number; domain_name: string }
-type InstallationResult = { site_url: string; admin_url: string; admin_user: string; admin_password: string; version: string }
+// The install response carries no password. password_stored says the generated
+// one waits behind the reveal endpoint on the domain's own WordPress screen.
+type InstallationResult = { site_url: string; admin_url: string; admin_user: string; password_stored: boolean; version: string }
 type Installation = {
   domain_id: number; domain_name: string; dir: string; version: string
   last_version: string; status: 'current' | 'outdated' | 'unknown'; install_date: string
@@ -221,9 +223,10 @@ export default function WordPressPage() {
             <Info label={t('result.site')} value={result.site_url} link />
             <Info label={t('result.admin')} value={result.admin_url} link />
             <Info label={t('result.user')} value={result.admin_user} mono />
-            <Info label={t('result.password')} value={result.admin_password} mono />
           </div>
-          <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-2">{t('result.savePassword')}</p>
+          <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-2">
+            {result.password_stored ? t('result.passwordWaiting') : t('result.passwordLost')}
+          </p>
         </div>
       )}
 

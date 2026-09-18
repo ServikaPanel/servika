@@ -14,8 +14,8 @@
     "site": "Web",
     "admin": "Administrace",
     "user": "Uživatel",
-    "password": "Heslo",
-    "savePassword": "⚠ Heslo si nyní uložte. Znovu se nezobrazí."
+    "passwordWaiting": "Heslo správce je uloženo. Zobrazte je jednou na obrazovce WordPressu daného webu.",
+    "passwordLost": "Heslo správce se nepodařilo uložit. Obnovte je ve WordPressu."
   },
   "installedSites": "Nainstalované weby WordPress",
   "refresh": "↻ Obnovit",

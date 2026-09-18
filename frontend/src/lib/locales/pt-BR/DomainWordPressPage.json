@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Painel admin",
-    "remove": "Remover"
+    "remove": "Remover",
+    "revealPassword": "Exibir senha"
   },
   "metrics": {
     "version": "Versão",
@@ -66,7 +67,8 @@
     "operationFailed": "Falha na operação",
     "resetFailed": "Não foi possível redefinir a senha",
     "removeFailed": "Não foi possível remover a instalação",
-    "listUnavailable": "Não foi possível carregar esta lista."
+    "listUnavailable": "Não foi possível carregar esta lista.",
+    "revealFailed": "Não foi possível exibir a senha"
   },
   "output": {
     "title": "Saída da operação"
@@ -118,8 +120,8 @@
     "site": "Site",
     "admin": "Admin",
     "username": "Nome de usuário",
-    "password": "Senha",
-    "savePassword": "Salve a senha agora. Não será exibida novamente."
+    "passwordWaiting": "A senha de administrador está armazenada. Exiba-a uma vez na tela do WordPress do site.",
+    "passwordLost": "Não foi possível armazenar a senha de administrador. Redefina-a no WordPress."
   },
   "passwordModal": {
     "title": "Nova senha criada",

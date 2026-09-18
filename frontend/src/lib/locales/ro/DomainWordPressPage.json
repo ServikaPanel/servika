@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Panou de administrare",
-    "remove": "Eliminare"
+    "remove": "Eliminare",
+    "revealPassword": "Afișați parola"
   },
   "metrics": {
     "version": "Versiune",
@@ -66,7 +67,8 @@
     "operationFailed": "Operațiunea a eșuat",
     "resetFailed": "Nu s-a putut reseta parola",
     "removeFailed": "Nu s-a putut elimina instalarea",
-    "listUnavailable": "Această listă nu a putut fi încărcată."
+    "listUnavailable": "Această listă nu a putut fi încărcată.",
+    "revealFailed": "Parola nu a putut fi afișată"
   },
   "output": {
     "title": "Rezultat operațiune"
@@ -118,8 +120,8 @@
     "site": "Site",
     "admin": "Admin",
     "username": "Nume de utilizator",
-    "password": "Parolă",
-    "savePassword": "Salvați parola acum. Nu va mai fi afișată din nou."
+    "passwordWaiting": "Parola de administrator este stocată. Afișați-o o singură dată din ecranul WordPress al site-ului.",
+    "passwordLost": "Parola de administrator nu a putut fi stocată. Resetați-o din WordPress."
   },
   "passwordModal": {
     "title": "Parolă nouă creată",

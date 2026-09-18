@@ -13,8 +13,8 @@
     "site": "Site",
     "admin": "Admin",
     "user": "Utilisateur",
-    "password": "Mot de passe",
-    "savePassword": "⚠ Enregistrez le mot de passe maintenant. Il ne sera plus affiché."
+    "passwordWaiting": "Le mot de passe administrateur est enregistré. Affichez-le une fois depuis l'écran WordPress du site.",
+    "passwordLost": "Le mot de passe administrateur n'a pas pu être enregistré. Réinitialisez-le dans WordPress."
   },
   "installedSites": "Sites WordPress installés",
   "refresh": "↻ Actualiser",

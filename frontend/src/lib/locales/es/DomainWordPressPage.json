@@ -7,15 +7,35 @@
   "title": "WordPress Toolkit",
   "subtitle": "Gestione versiones, complementos, temas y usuarios en un solo lugar.",
   "loading": "Cargando…",
-  "actions": { "new": "Nuevo WordPress",
-    "retry": "Reintentar" },
+  "actions": {
+    "new": "Nuevo WordPress",
+    "retry": "Reintentar"
+  },
   "empty": {
     "title": "Aún no existe ninguna instalación de WordPress en este dominio",
     "subtitle": "Instálelo con un clic usando el formulario de abajo."
   },
-  "tabs": { "overview": "Vista general", "extensions": "Complementos", "themes": "Temas", "users": "Usuarios" },
-  "toolkit": { "adminPanel": "Panel de administración", "remove": "Eliminar" },
-  "metrics": { "version": "Versión", "php": "PHP", "database": "Base de datos", "maintenance": "Modo mantenimiento", "upToDate": "al día", "active": "activo", "on": "Activado", "off": "Desactivado" },
+  "tabs": {
+    "overview": "Vista general",
+    "extensions": "Complementos",
+    "themes": "Temas",
+    "users": "Usuarios"
+  },
+  "toolkit": {
+    "adminPanel": "Panel de administración",
+    "remove": "Eliminar",
+    "revealPassword": "Mostrar contraseña"
+  },
+  "metrics": {
+    "version": "Versión",
+    "php": "PHP",
+    "database": "Base de datos",
+    "maintenance": "Modo mantenimiento",
+    "upToDate": "al día",
+    "active": "activo",
+    "on": "Activado",
+    "off": "Desactivado"
+  },
   "overview": {
     "verifyCore": "Verificar el núcleo",
     "updateVersion": "Actualizar versión · v{{version}}",
@@ -42,10 +62,20 @@
     "activated": "{{name}} activado.",
     "deactivated": "{{name}} desactivado."
   },
-  "errors": { "installFailed": "La instalación falló", "operationFailed": "La operación falló", "resetFailed": "No se pudo restablecer la contraseña", "removeFailed": "No se pudo eliminar la instalación",
-    "listUnavailable": "No se pudo cargar esta lista." },
-  "output": { "title": "Salida de la operación" },
-  "btn": { "processing": "Procesando…" },
+  "errors": {
+    "installFailed": "La instalación falló",
+    "operationFailed": "La operación falló",
+    "resetFailed": "No se pudo restablecer la contraseña",
+    "removeFailed": "No se pudo eliminar la instalación",
+    "listUnavailable": "No se pudo cargar esta lista.",
+    "revealFailed": "No se pudo mostrar la contraseña"
+  },
+  "output": {
+    "title": "Salida de la operación"
+  },
+  "btn": {
+    "processing": "Procesando…"
+  },
   "packages": {
     "loading": "Cargando…",
     "noPlugins": "No se encontraron complementos.",
@@ -62,7 +92,11 @@
     "deactivate": "Desactivar",
     "activeTheme": "Tema activo"
   },
-  "usersTab": { "loading": "Cargando…", "empty": "No se encontraron usuarios.", "resetPassword": "Restablecer contraseña" },
+  "usersTab": {
+    "loading": "Cargando…",
+    "empty": "No se encontraron usuarios.",
+    "resetPassword": "Restablecer contraseña"
+  },
   "confirm": {
     "resetPassword": "¿Generar una nueva contraseña para «{{user}}»?\nLa contraseña actual quedará inválida.",
     "rootRemove": "Las instalaciones de WordPress en el directorio raíz no pueden eliminarse desde el panel.",
@@ -81,6 +115,19 @@
     "installing": "Instalando… (~30 seg)",
     "install": "Instalar WordPress"
   },
-  "result": { "installed": "WordPress {{version}} instalado", "site": "Sitio", "admin": "Administrador", "username": "Usuario", "password": "Contraseña", "savePassword": "Guarde la contraseña ahora. No se mostrará de nuevo." },
-  "passwordModal": { "title": "Nueva contraseña creada", "user": "Usuario:", "copy": "Copiar", "notice": "Esta contraseña no se mostrará de nuevo. Guárdela ahora.", "ok": "OK" }
+  "result": {
+    "installed": "WordPress {{version}} instalado",
+    "site": "Sitio",
+    "admin": "Administrador",
+    "username": "Usuario",
+    "passwordWaiting": "La contraseña de administrador está guardada. Muéstrela una vez desde la pantalla de WordPress del sitio.",
+    "passwordLost": "No se pudo guardar la contraseña de administrador. Restablézcala en WordPress."
+  },
+  "passwordModal": {
+    "title": "Nueva contraseña creada",
+    "user": "Usuario:",
+    "copy": "Copiar",
+    "notice": "Esta contraseña no se mostrará de nuevo. Guárdela ahora.",
+    "ok": "OK"
+  }
 }

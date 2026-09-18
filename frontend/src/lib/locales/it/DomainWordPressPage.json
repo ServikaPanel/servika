@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Pannello di amministrazione",
-    "remove": "Rimuovi"
+    "remove": "Rimuovi",
+    "revealPassword": "Mostra password"
   },
   "metrics": {
     "version": "Versione",
@@ -66,7 +67,8 @@
     "operationFailed": "Operazione non riuscita",
     "resetFailed": "Impossibile reimpostare la password",
     "removeFailed": "Impossibile rimuovere l'installazione",
-    "listUnavailable": "Impossibile caricare questo elenco."
+    "listUnavailable": "Impossibile caricare questo elenco.",
+    "revealFailed": "Impossibile mostrare la password"
   },
   "output": {
     "title": "Output dell'operazione"
@@ -118,8 +120,8 @@
     "site": "Sito",
     "admin": "Amministratore",
     "username": "Nome utente",
-    "password": "Password",
-    "savePassword": "Salva la password ora. Non verrà mostrata di nuovo."
+    "passwordWaiting": "La password di amministratore è salvata. Mostrala una volta dalla schermata WordPress del sito.",
+    "passwordLost": "Non è stato possibile salvare la password di amministratore. Reimpostala in WordPress."
   },
   "passwordModal": {
     "title": "Nuova password creata",

@@ -12,8 +12,8 @@
     "site": "站点",
     "admin": "管理后台",
     "user": "用户",
-    "password": "密码",
-    "savePassword": "⚠ 请立即保存密码。它不会再次显示。"
+    "passwordWaiting": "管理员密码已保存。可在站点的 WordPress 页面显示一次。",
+    "passwordLost": "无法保存管理员密码。请在 WordPress 中重置。"
   },
   "installedSites": "已安装的 WordPress 站点",
   "refresh": "↻ 刷新",

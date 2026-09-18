@@ -13,8 +13,8 @@
     "site": "Site",
     "admin": "Admin",
     "user": "Usuário",
-    "password": "Senha",
-    "savePassword": "⚠ Salve a senha agora. Não será exibida novamente."
+    "passwordWaiting": "A senha de administrador está armazenada. Exiba-a uma vez na tela do WordPress do site.",
+    "passwordLost": "Não foi possível armazenar a senha de administrador. Redefina-a no WordPress."
   },
   "installedSites": "Sites WordPress instalados",
   "refresh": "↻ Atualizar",

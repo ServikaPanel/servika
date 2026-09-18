@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Administrace",
-    "remove": "Odebrat"
+    "remove": "Odebrat",
+    "revealPassword": "Zobrazit heslo"
   },
   "metrics": {
     "version": "Verze",
@@ -66,7 +67,8 @@
     "operationFailed": "Operace se nezdařila",
     "resetFailed": "Heslo nelze obnovit",
     "removeFailed": "Instalaci nelze odebrat",
-    "listUnavailable": "Tento seznam se nepodařilo načíst."
+    "listUnavailable": "Tento seznam se nepodařilo načíst.",
+    "revealFailed": "Heslo se nepodařilo zobrazit"
   },
   "output": {
     "title": "Výstup operace"
@@ -118,8 +120,8 @@
     "site": "Web",
     "admin": "Administrace",
     "username": "Uživatelské jméno",
-    "password": "Heslo",
-    "savePassword": "Heslo si nyní uložte. Znovu se nezobrazí."
+    "passwordWaiting": "Heslo správce je uloženo. Zobrazte je jednou na obrazovce WordPressu daného webu.",
+    "passwordLost": "Heslo správce se nepodařilo uložit. Obnovte je ve WordPressu."
   },
   "passwordModal": {
     "title": "Nové heslo vytvořeno",

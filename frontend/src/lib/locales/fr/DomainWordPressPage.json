@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Panneau d'administration",
-    "remove": "Supprimer"
+    "remove": "Supprimer",
+    "revealPassword": "Afficher le mot de passe"
   },
   "metrics": {
     "version": "Version",
@@ -66,7 +67,8 @@
     "operationFailed": "Échec de l'opération",
     "resetFailed": "Impossible de réinitialiser le mot de passe",
     "removeFailed": "Impossible de supprimer l'installation",
-    "listUnavailable": "Cette liste n’a pas pu être chargée."
+    "listUnavailable": "Cette liste n’a pas pu être chargée.",
+    "revealFailed": "Impossible d'afficher le mot de passe"
   },
   "output": {
     "title": "Sortie de l'opération"
@@ -118,8 +120,8 @@
     "site": "Site",
     "admin": "Admin",
     "username": "Nom d'utilisateur",
-    "password": "Mot de passe",
-    "savePassword": "Enregistrez le mot de passe maintenant. Il ne sera plus affiché."
+    "passwordWaiting": "Le mot de passe administrateur est enregistré. Affichez-le une fois depuis l'écran WordPress du site.",
+    "passwordLost": "Le mot de passe administrateur n'a pas pu être enregistré. Réinitialisez-le dans WordPress."
   },
   "passwordModal": {
     "title": "Nouveau mot de passe créé",

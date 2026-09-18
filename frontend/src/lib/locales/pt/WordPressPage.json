@@ -13,8 +13,8 @@
     "site": "Site",
     "admin": "Admin",
     "user": "Utilizador",
-    "password": "Palavra-passe",
-    "savePassword": "⚠ Guarde a palavra-passe agora. Não será mostrada novamente."
+    "passwordWaiting": "A palavra-passe de administrador está guardada. Mostre-a uma vez no ecrã WordPress do site.",
+    "passwordLost": "Não foi possível guardar a palavra-passe de administrador. Reponha-a no WordPress."
   },
   "installedSites": "Sites WordPress Instalados",
   "refresh": "↻ Atualizar",

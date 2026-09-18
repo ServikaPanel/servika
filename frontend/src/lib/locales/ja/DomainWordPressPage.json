@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "管理パネル",
-    "remove": "削除"
+    "remove": "削除",
+    "revealPassword": "パスワードを表示"
   },
   "metrics": {
     "version": "バージョン",
@@ -66,7 +67,8 @@
     "operationFailed": "操作に失敗しました",
     "resetFailed": "パスワードをリセットできませんでした",
     "removeFailed": "インストールを削除できませんでした",
-    "listUnavailable": "この一覧を読み込めませんでした。"
+    "listUnavailable": "この一覧を読み込めませんでした。",
+    "revealFailed": "パスワードを表示できませんでした"
   },
   "output": {
     "title": "操作の出力"
@@ -118,8 +120,8 @@
     "site": "サイト",
     "admin": "管理者",
     "username": "ユーザー名",
-    "password": "パスワード",
-    "savePassword": "今すぐパスワードを保存してください。再度表示されません。"
+    "passwordWaiting": "管理者パスワードは保存されています。サイトの WordPress 画面から一度だけ表示できます。",
+    "passwordLost": "管理者パスワードを保存できませんでした。WordPress で再設定してください。"
   },
   "passwordModal": {
     "title": "新しいパスワードを作成しました",

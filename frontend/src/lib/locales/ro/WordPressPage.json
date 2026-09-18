@@ -14,8 +14,8 @@
     "site": "Site",
     "admin": "Admin",
     "user": "Utilizator",
-    "password": "Parolă",
-    "savePassword": "⚠ Salvați parola acum. Nu va mai fi afișată din nou."
+    "passwordWaiting": "Parola de administrator este stocată. Afișați-o o singură dată din ecranul WordPress al site-ului.",
+    "passwordLost": "Parola de administrator nu a putut fi stocată. Resetați-o din WordPress."
   },
   "installedSites": "Site-uri WordPress instalate",
   "refresh": "↻ Reîmprospătare",

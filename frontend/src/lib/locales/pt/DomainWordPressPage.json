@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Painel de administração",
-    "remove": "Remover"
+    "remove": "Remover",
+    "revealPassword": "Mostrar palavra-passe"
   },
   "metrics": {
     "version": "Versão",
@@ -66,7 +67,8 @@
     "operationFailed": "Operação falhou",
     "resetFailed": "Não foi possível redefinir a palavra-passe",
     "removeFailed": "Não foi possível remover a instalação",
-    "listUnavailable": "Não foi possível carregar esta lista."
+    "listUnavailable": "Não foi possível carregar esta lista.",
+    "revealFailed": "Não foi possível mostrar a palavra-passe"
   },
   "output": {
     "title": "Saída da operação"
@@ -118,8 +120,8 @@
     "site": "Site",
     "admin": "Admin",
     "username": "Utilizador",
-    "password": "Palavra-passe",
-    "savePassword": "Guarde a palavra-passe agora. Não será mostrada novamente."
+    "passwordWaiting": "A palavra-passe de administrador está guardada. Mostre-a uma vez no ecrã WordPress do site.",
+    "passwordLost": "Não foi possível guardar a palavra-passe de administrador. Reponha-a no WordPress."
   },
   "passwordModal": {
     "title": "Nova palavra-passe criada",

@@ -12,8 +12,8 @@
     "site": "Site",
     "admin": "Yönetim",
     "user": "Kullanıcı",
-    "password": "Parola",
-    "savePassword": "⚠ Parolayı şimdi kaydedin. Tekrar gösterilmeyecek."
+    "passwordWaiting": "Yönetici parolası saklandı. Sitenin WordPress ekranından bir kez gösterebilirsiniz.",
+    "passwordLost": "Yönetici parolası saklanamadı. WordPress üzerinden sıfırlayın."
   },
   "installedSites": "Kurulu WordPress Siteleri",
   "refresh": "↻ Yenile",

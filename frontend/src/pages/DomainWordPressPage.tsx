@@ -10,8 +10,10 @@ import { ICON } from '@/components/iconPaths'
 import { useResourceScope } from '@/lib/scope'
 import { safeHref } from '@/lib/safeUrl'
 
-type Install = { dir: string; site_url: string; admin_url: string; version: string }
-type Result = { site_url: string; admin_url: string; admin_user: string; admin_password: string; version: string }
+type Install = { dir: string; site_url: string; admin_url: string; version: string; has_password: boolean }
+// The install response carries no password. password_stored says the generated
+// one is waiting behind the reveal endpoint, which answers once.
+type Result = { site_url: string; admin_url: string; admin_user: string; password_stored: boolean; version: string }
 type Status = { version: string; update_available: boolean; target_version: string; php: string; db_mb: string; maintenance: boolean }
 type Package = { name: string; status: string; version: string; update: string; update_version: string }
 type User = { ID: number; user_login: string; user_email: string; display_name: string; roles: string }
@@ -164,8 +166,9 @@ export default function DomainWordPressPage() {
 type ToolkitTab = 'overview' | 'extensions' | 'themes' | 'users'
 const TAB_KEYS: ToolkitTab[] = ['overview', 'extensions', 'themes', 'users']
 
-function ToolkitHeader({ installation, dir, isRoot, busy, onRemove }: {
-  installation: Install; dir: string; isRoot: boolean; busy: string | null; onRemove: () => void
+function ToolkitHeader({ installation, dir, isRoot, busy, onRemove, onRevealPassword }: {
+  installation: Install; dir: string; isRoot: boolean; busy: string | null
+  onRemove: () => void; onRevealPassword: () => void
 }) {
   const { t } = useTranslation('DomainWordPressPage')
   return (
@@ -178,6 +181,12 @@ function ToolkitHeader({ installation, dir, isRoot, busy, onRemove }: {
         </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {installation.has_password && (
+          <button disabled={!!busy} onClick={onRevealPassword}
+            className="px-3 py-2 rounded-full border border-amber-300 dark:border-amber-700 text-xs text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50 transition">
+            {busy === 'install-password' ? '…' : t('toolkit.revealPassword')}
+          </button>
+        )}
         {safeHref(installation.admin_url) && (
           <a href={installation.admin_url} target="_blank" rel="noreferrer"
             className="inline-flex items-center gap-1 px-3.5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition">
@@ -384,6 +393,19 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
     finally { setBusy(null) }
   }
 
+  // The install password is handed over once and forgotten. onChange refreshes
+  // the list so the button disappears with the row that backed it.
+  async function revealInstallPassword() {
+    setBusy('install-password'); setError(null); setSuccess(null)
+    try {
+      const { data } = await api.post<{ admin_user: string; admin_password: string }>(
+        `${base}/wordpress/install-password`, { dir })
+      setPasswordResult({ username: data.admin_user, password: data.admin_password })
+      onChange()
+    } catch (error) { setError(apiError(error, t('errors.revealFailed'))) }
+    finally { setBusy(null) }
+  }
+
   async function remove() {
     if (isRoot) { await notify({ message: t('confirm.rootRemove'), tone: 'error' }); return }
     if (!(await confirm({ message: t('confirm.remove', { dir }), dangerous: true }))) return
@@ -401,7 +423,8 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
 
   return (
     <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 overflow-hidden">
-      <ToolkitHeader installation={installation} dir={dir} isRoot={isRoot} busy={busy} onRemove={remove} />
+      <ToolkitHeader installation={installation} dir={dir} isRoot={isRoot} busy={busy} onRemove={remove}
+        onRevealPassword={revealInstallPassword} />
 
       <ToolkitMetrics status={status} />
 
@@ -668,9 +691,10 @@ function InstallResult({ s, close }: { s: Result; close: () => void }) {
         <ResultRow label={t('result.site')} value={s.site_url} link />
         <ResultRow label={t('result.admin')} value={s.admin_url} link />
         <ResultRow label={t('result.username')} value={s.admin_user} mono />
-        <ResultRow label={t('result.password')} value={s.admin_password} mono />
       </div>
-      <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">{t('result.savePassword')}</p>
+      <p className="text-xs text-amber-700 dark:text-amber-400 mt-3">
+        {s.password_stored ? t('result.passwordWaiting') : t('result.passwordLost')}
+      </p>
     </div>
   )
 }

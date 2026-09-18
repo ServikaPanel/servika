@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Yönetim paneli",
-    "remove": "Kaldır"
+    "remove": "Kaldır",
+    "revealPassword": "Parolayı göster"
   },
   "metrics": {
     "version": "Sürüm",
@@ -66,7 +67,8 @@
     "operationFailed": "İşlem başarısız oldu",
     "resetFailed": "Parola sıfırlanamadı",
     "removeFailed": "Kurulum kaldırılamadı",
-    "listUnavailable": "Bu liste yüklenemedi."
+    "listUnavailable": "Bu liste yüklenemedi.",
+    "revealFailed": "Parola gösterilemedi"
   },
   "output": {
     "title": "İşlem çıktısı"
@@ -118,8 +120,8 @@
     "site": "Site",
     "admin": "Yönetim",
     "username": "Kullanıcı adı",
-    "password": "Parola",
-    "savePassword": "Parolayı şimdi kaydedin. Tekrar gösterilmeyecek."
+    "passwordWaiting": "Yönetici parolası saklandı. Sitenin WordPress ekranından bir kez gösterebilirsiniz.",
+    "passwordLost": "Yönetici parolası saklanamadı. WordPress üzerinden sıfırlayın."
   },
   "passwordModal": {
     "title": "Yeni parola oluşturuldu",

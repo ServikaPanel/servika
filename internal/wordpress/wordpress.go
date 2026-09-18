@@ -50,6 +50,9 @@ type Installation struct {
 	SiteURL  string `json:"site_url"`
 	AdminURL string `json:"admin_url"`
 	Version  string `json:"version"`
+	// HasPassword reports that the generated administrator password is still
+	// stored and the owner can reveal it once.
+	HasPassword bool `json:"has_password"`
 }
 
 // domain resolves the site the request targets. A {sid} URL parameter selects that
@@ -218,11 +221,12 @@ func scheme(ssl bool) string {
 
 // GET /domains/{id}/wordpress discovers installations in public_html and one directory level below.
 func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
-	_, systemUser, _, root, _, ok := h.domain(r)
+	id, systemUser, _, root, _, ok := h.domain(r)
 	if !ok {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
+	withPassword := storedPasswordTargets(r.Context(), h.DB, id)
 	out := []Installation{}
 	candidates := []string{root}
 	if entries, err := os.ReadDir(root); err == nil {
@@ -237,7 +241,10 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		if _, err := os.Stat(filepath.Join(dir, "wp-config.php")); err != nil {
 			continue
 		}
-		installation := Installation{Dir: "/" + strings.TrimPrefix(strings.TrimPrefix(dir, root), "/")}
+		installation := Installation{
+			Dir:         "/" + strings.TrimPrefix(strings.TrimPrefix(dir, root), "/"),
+			HasPassword: withPassword[dir],
+		}
 		if installation.Dir == "/" {
 			installation.Dir = "/ (root)"
 		}
@@ -474,9 +481,14 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	if b, err := runWP(systemUser, "core", "version", "--path="+target); err == nil {
 		version = strings.TrimSpace(string(b))
 	}
+	// The password leaves through the reveal endpoint, never in this body. A
+	// failure to seal it is reported rather than swallowed, because the caller
+	// would otherwise be told the site is ready and then find no password to
+	// take.
+	stored := h.rememberInstallPassword(r, id, target, req.AdminUser, adminPassword)
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "site_url": url, "admin_url": url + "/wp-admin",
-		"admin_user": req.AdminUser, "admin_password": adminPassword,
+		"admin_user": req.AdminUser, "password_stored": stored,
 		"version": version, "db_name": site.name,
 	})
 }
@@ -726,6 +738,9 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if deleteRequest.DBDelete {
 		h.dropSiteDatabase(r, id, dir)
 	}
+	// Drop the stored password before the files go, so a later install into the
+	// same directory cannot reveal the previous site's password.
+	forgetInstallPassword(r.Context(), h.DB, id, dir)
 	// The root path was rejected above, so this is a subdirectory.
 	if err := removeInstall(systemUser, dir, "wordpress delete"); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "could not delete record")

@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Admin-Panel",
-    "remove": "Entfernen"
+    "remove": "Entfernen",
+    "revealPassword": "Passwort anzeigen"
   },
   "metrics": {
     "version": "Version",
@@ -66,7 +67,8 @@
     "operationFailed": "Vorgang fehlgeschlagen",
     "resetFailed": "Passwort konnte nicht zurückgesetzt werden",
     "removeFailed": "Installation konnte nicht entfernt werden",
-    "listUnavailable": "Diese Liste konnte nicht geladen werden."
+    "listUnavailable": "Diese Liste konnte nicht geladen werden.",
+    "revealFailed": "Passwort konnte nicht angezeigt werden"
   },
   "output": {
     "title": "Vorgangsausgabe"
@@ -118,8 +120,8 @@
     "site": "Website",
     "admin": "Admin",
     "username": "Benutzername",
-    "password": "Passwort",
-    "savePassword": "Speichern Sie das Passwort jetzt. Es wird nicht erneut angezeigt."
+    "passwordWaiting": "Das Administrator-Passwort ist gespeichert. Zeigen Sie es einmal im WordPress-Bereich der Website an.",
+    "passwordLost": "Das Administrator-Passwort konnte nicht gespeichert werden. Setzen Sie es in WordPress zurück."
   },
   "passwordModal": {
     "title": "Neues Passwort erstellt",

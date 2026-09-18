@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "管理面板",
-    "remove": "移除"
+    "remove": "移除",
+    "revealPassword": "显示密码"
   },
   "metrics": {
     "version": "版本",
@@ -66,7 +67,8 @@
     "operationFailed": "操作失败",
     "resetFailed": "无法重置密码",
     "removeFailed": "无法移除安装",
-    "listUnavailable": "无法加载此列表。"
+    "listUnavailable": "无法加载此列表。",
+    "revealFailed": "无法显示密码"
   },
   "output": {
     "title": "操作输出"
@@ -118,8 +120,8 @@
     "site": "站点",
     "admin": "管理员",
     "username": "用户名",
-    "password": "密码",
-    "savePassword": "请立即保存密码。它不会再次显示。"
+    "passwordWaiting": "管理员密码已保存。可在站点的 WordPress 页面显示一次。",
+    "passwordLost": "无法保存管理员密码。请在 WordPress 中重置。"
   },
   "passwordModal": {
     "title": "已创建新密码",

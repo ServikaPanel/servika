@@ -13,8 +13,8 @@
     "site": "Website",
     "admin": "Admin",
     "user": "Benutzer",
-    "password": "Passwort",
-    "savePassword": "⚠ Speichern Sie das Passwort jetzt. Es wird nicht erneut angezeigt."
+    "passwordWaiting": "Das Administrator-Passwort ist gespeichert. Zeigen Sie es einmal im WordPress-Bereich der Website an.",
+    "passwordLost": "Das Administrator-Passwort konnte nicht gespeichert werden. Setzen Sie es in WordPress zurück."
   },
   "installedSites": "Installierte WordPress-Websites",
   "refresh": "↻ Aktualisieren",

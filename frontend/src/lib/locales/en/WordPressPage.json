@@ -13,8 +13,8 @@
     "site": "Site",
     "admin": "Admin",
     "user": "User",
-    "password": "Password",
-    "savePassword": "⚠ Save the password now. It will not be shown again."
+    "passwordWaiting": "The administrator password is stored. Reveal it once from the site's WordPress screen.",
+    "passwordLost": "The administrator password could not be stored. Reset it from WordPress."
   },
   "installedSites": "Installed WordPress Sites",
   "refresh": "↻ Refresh",

@@ -14,13 +14,14 @@ import (
 
 // installResponse is the body a completed install returns.
 type installResponse struct {
-	OK            bool   `json:"ok"`
-	SiteURL       string `json:"site_url"`
-	AdminURL      string `json:"admin_url"`
-	AdminUser     string `json:"admin_user"`
-	AdminPassword string `json:"admin_password"`
-	Version       string `json:"version"`
-	DBName        string `json:"db_name"`
+	OK             bool   `json:"ok"`
+	SiteURL        string `json:"site_url"`
+	AdminURL       string `json:"admin_url"`
+	AdminUser      string `json:"admin_user"`
+	AdminPassword  string `json:"admin_password"`
+	PasswordStored bool   `json:"password_stored"`
+	Version        string `json:"version"`
+	DBName         string `json:"db_name"`
 }
 
 // installBody is the request body the install endpoint takes.
@@ -228,6 +229,7 @@ func TestInstallTruncatesALongFailureToItsTail(t *testing.T) {
 }
 
 func TestInstallRunsTheWholeSequenceAndReportsTheCredentials(t *testing.T) {
+	sealingKey(t)
 	root := tenantRoot(t)
 	rec := recordWP(t, map[string]wpAnswer{"core version": {out: "7.1\n"}})
 	host := recordHost(t)
@@ -261,6 +263,22 @@ func TestInstallRunsTheWholeSequenceAndReportsTheCredentials(t *testing.T) {
 	}
 }
 
+// assertNoPasswordInResponse checks the one credential the install response
+// must NOT carry. The password is sealed into wp_install_passwords instead, and
+// the owner takes it once from the reveal endpoint.
+func assertNoPasswordInResponse(t *testing.T, got installResponse, rec *wpRecorder) {
+	t.Helper()
+	if got.AdminPassword != "" {
+		t.Errorf("admin_password = %q, want the response to carry no password", got.AdminPassword)
+	}
+	if !got.PasswordStored {
+		t.Errorf("password_stored = false, want the generated password to be stored")
+	}
+	if rec.adminPass == "" {
+		t.Errorf("no password went in on stdin, so the install generated none")
+	}
+}
+
 // assertInstallResponse checks the body a completed install returns.
 func assertInstallResponse(t *testing.T, got installResponse, rec *wpRecorder) {
 	t.Helper()
@@ -270,9 +288,7 @@ func assertInstallResponse(t *testing.T, got installResponse, rec *wpRecorder) {
 	if got.AdminUser != "admin" || got.Version != "7.1" {
 		t.Errorf("response = %+v, want the requested administrator and the installed version", got)
 	}
-	if got.AdminPassword != rec.adminPass {
-		t.Errorf("admin_password = %q, want the password that went in on stdin (%q)", got.AdminPassword, rec.adminPass)
-	}
+	assertNoPasswordInResponse(t, got, rec)
 	if !strings.HasPrefix(got.DBName, "wp_") || len(got.DBName) != 11 {
 		t.Errorf("db_name = %q, want wp_ and eight hexadecimal characters", got.DBName)
 	}

@@ -23,7 +23,8 @@
   },
   "toolkit": {
     "adminPanel": "Admin panel",
-    "remove": "Remove"
+    "remove": "Remove",
+    "revealPassword": "Reveal password"
   },
   "metrics": {
     "version": "Version",
@@ -66,7 +67,8 @@
     "operationFailed": "Operation failed",
     "resetFailed": "Could not reset password",
     "removeFailed": "Could not remove installation",
-    "listUnavailable": "This list could not be loaded."
+    "listUnavailable": "This list could not be loaded.",
+    "revealFailed": "Could not reveal the password"
   },
   "output": {
     "title": "Operation output"
@@ -118,8 +120,8 @@
     "site": "Site",
     "admin": "Admin",
     "username": "Username",
-    "password": "Password",
-    "savePassword": "Save the password now. It will not be shown again."
+    "passwordWaiting": "The administrator password is stored. Reveal it once from the site's WordPress screen.",
+    "passwordLost": "The administrator password could not be stored. Reset it from WordPress."
   },
   "passwordModal": {
     "title": "New password created",

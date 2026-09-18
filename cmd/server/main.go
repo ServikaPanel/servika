@@ -1314,6 +1314,7 @@ func main() {
 				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress", wpH.Install)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress/update", wpH.Update)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/wordpress", wpH.Delete)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/wordpress/install-password", wpH.RevealInstallPassword)
 				// WordPress Toolkit — plugin/theme/user management + repair + tools
 				r.With(middleware.CustomerScope).Get("/domains/{id}/wordpress/status", wpH.Status)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/wordpress/plugins", wpH.Plugins)
@@ -1333,6 +1334,7 @@ func main() {
 				r.With(middleware.CustomerScope).Post("/domains/{id}/subdomain/{sid}/wordpress", wpH.Install)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/subdomain/{sid}/wordpress/update", wpH.Update)
 				r.With(middleware.CustomerScope).Delete("/domains/{id}/subdomain/{sid}/wordpress", wpH.Delete)
+				r.With(middleware.CustomerScope).Post("/domains/{id}/subdomain/{sid}/wordpress/install-password", wpH.RevealInstallPassword)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain/{sid}/wordpress/status", wpH.Status)
 				r.With(middleware.CustomerScope).Get("/domains/{id}/subdomain/{sid}/wordpress/plugins", wpH.Plugins)
 				r.With(middleware.CustomerScope).Post("/domains/{id}/subdomain/{sid}/wordpress/plugin", wpH.PluginAction)
