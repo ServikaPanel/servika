@@ -18,11 +18,13 @@ package platform
 // catalog_windows.go.
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -99,7 +101,7 @@ var catalog = []Item{
 	{Key: "phpmyadmin", Name: "phpMyAdmin", Summary: "The web interface for MySQL; needs PHP and MySQL first", Tier: TierExperimental, TimeToRun: "2 minutes"},
 	{Key: "node", Name: "Node.js LTS", Summary: "The runtime an application written in JavaScript needs", Tier: TierProven, TimeToRun: "2-3 minutes"},
 	{Key: "git", Name: "Git", Summary: "Deploys a site from a repository", Tier: TierProven, TimeToRun: "1-2 minutes"},
-	{Key: "redis", Name: "Memurai", Summary: "The Redis-compatible cache for Windows; the free edition's licence has to be read before this is offered", Tier: TierUndecided, TimeToRun: "unknown"},
+	{Key: "redis", Name: "Memurai", Summary: "The Redis-compatible cache for Windows; there is no official Redis build for this platform", Tier: TierExperimental, TimeToRun: "1-2 minutes"},
 }
 
 // Catalog returns the catalog rows with what is installed marked.
@@ -422,4 +424,37 @@ func runGuarded(job *Job, item Item, install func(*Job) error) (err error) {
 	}()
 	job.Logf("installation started: %s [%s]", item.Name, item.Tier)
 	return install(job)
+}
+
+// logWriter turns a command's output into log lines as they arrive.
+//
+// Only one goroutine writes to a running command's pipes, so the partial-line
+// buffer needs no lock of its own.
+type logWriter struct {
+	job  *Job
+	rest []byte
+}
+
+func (w *logWriter) Write(p []byte) (int, error) {
+	w.rest = append(w.rest, p...)
+	for {
+		at := bytes.IndexByte(w.rest, '\n')
+		if at < 0 {
+			break
+		}
+		line := strings.TrimSpace(strings.TrimRight(string(w.rest[:at]), "\r"))
+		w.rest = w.rest[at+1:]
+		if line != "" {
+			w.job.Logf("  %s", line)
+		}
+	}
+	return len(p), nil
+}
+
+// flush writes the last partial line once the command has ended.
+func (w *logWriter) flush() {
+	if line := strings.TrimSpace(string(w.rest)); line != "" {
+		w.job.Logf("  %s", line)
+	}
+	w.rest = nil
 }

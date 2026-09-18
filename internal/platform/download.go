@@ -40,6 +40,13 @@ const (
 	gitURL           = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe"
 	rewriteURL       = "https://download.microsoft.com/download/1/2/8/128E2E22-C1B9-44A4-BE2A-5859ED1D4592/rewrite_amd64_en-US.msi"
 	phpMyAdminURL    = "https://files.phpmyadmin.net/phpMyAdmin/5.2.1/phpMyAdmin-5.2.1-all-languages.zip"
+
+	// memuraiURL is served from dist.memurai.com on purpose. The address the
+	// vendor's own download page links to, download.memurai.com, sits behind a
+	// CloudFront signed cookie and answers "MissingKey" 403 to every unattended
+	// request, whatever User-Agent it carries. dist.memurai.com is the host the
+	// winget manifest uses and it serves the file plainly.
+	memuraiURL = "https://dist.memurai.com/releases/Memurai-Developer/4.3.2/Memurai-Developer-v4.3.2.msi"
 )
 
 const (
@@ -85,6 +92,7 @@ var downloadSums = map[string]string{
 	nodeURL:       "658930e6136d01bf244146a6436d8ea146cd50557c1b2a2617a60bcd9dce0da1",
 	gitURL:        "25527923debc06515b3016f2d6bca0820656e8281a23be2f43bfb658bd5dda70",
 	pgsqlURL:      "f4bf0ac4b33471f18aad7d1d9cc52613003f3a3a612aae167366bf7f7840b2bc",
+	memuraiURL:    "5642cbe181d6a2dbce97300f44b5d58505bf592fc2879d75852a792dda946100",
 	// NOT pinned, on purpose: mssqlURL and dotnetHostingURL are redirects whose
 	// target file changes when the vendor publishes an update.
 }

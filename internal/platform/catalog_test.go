@@ -19,20 +19,17 @@ func allOff(Item) bool { return false }
 
 func TestAnUndecidedItemIsListedButNeverOffered(t *testing.T) {
 	// Hiding it would only make someone install it by hand; offering it would
-	// promise a path nobody has finished.
-	rows := Catalog(allOff)
-	var seen bool
-	for _, row := range rows {
-		if row.Tier != TierUndecided {
-			continue
-		}
-		seen = true
-		if row.Installable {
-			t.Fatalf("the undecided item %q was offered for installation", row.Key)
-		}
+	// promise a path nobody has finished. The item is built here rather than
+	// taken from the catalog, so the rule stays measured on a day when every
+	// real item has a decided tier.
+	rows := entriesFor([]Item{{Key: "later", Tier: TierUndecided}}, allOff)
+	if !rows[0].Installed && rows[0].Installable {
+		t.Fatal("an undecided item was offered for installation")
 	}
-	if !seen {
-		t.Fatal("the catalog carries no undecided item, so this rule is not measured")
+	for _, row := range Catalog(allOff) {
+		if row.Tier == TierUndecided && row.Installable {
+			t.Fatalf("the undecided catalog item %q was offered", row.Key)
+		}
 	}
 }
 
@@ -295,5 +292,59 @@ func TestTheCleanupRunsAfterEveryOutcome(t *testing.T) {
 		if !ran {
 			t.Fatalf("the cleanup was skipped for outcome %v", outcome)
 		}
+	}
+}
+
+func TestCommandOutputReachesTheLogLineByLine(t *testing.T) {
+	// A fifteen-minute installation has to show live progress, so the output is
+	// streamed rather than collected and written once at the end.
+	job := &Job{ID: "x", state: JobRunning}
+	w := &logWriter{job: job}
+	if _, err := w.Write([]byte("first line\r\nsecond ")); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(job.view().Log); got != 1 {
+		t.Fatalf("after one complete line the log held %d lines", got)
+	}
+	if _, err := w.Write([]byte("line\n")); err != nil {
+		t.Fatal(err)
+	}
+	log := job.view().Log
+	if len(log) != 2 || !strings.HasSuffix(log[1], "  second line") {
+		t.Fatalf("a line split across two writes read as %v", log)
+	}
+}
+
+func TestTheLastPartialLineIsNotLost(t *testing.T) {
+	// An installer that dies without a trailing newline still has to show its
+	// last words, which are usually the reason it died.
+	job := &Job{ID: "x", state: JobRunning}
+	w := &logWriter{job: job}
+	if _, err := w.Write([]byte("Error 1603: fatal error during installation")); err != nil {
+		t.Fatal(err)
+	}
+	if len(job.view().Log) != 0 {
+		t.Fatal("an incomplete line was written before the command ended")
+	}
+	w.flush()
+	log := job.view().Log
+	if len(log) != 1 || !strings.Contains(log[0], "Error 1603") {
+		t.Fatalf("the last partial line read as %v", log)
+	}
+	w.flush()
+	if len(job.view().Log) != 1 {
+		t.Fatal("a second flush wrote the same line again")
+	}
+}
+
+func TestABlankOutputLineIsNotLogged(t *testing.T) {
+	job := &Job{ID: "x", state: JobRunning}
+	w := &logWriter{job: job}
+	if _, err := w.Write([]byte("\n\r\n   \n")); err != nil {
+		t.Fatal(err)
+	}
+	w.flush()
+	if got := len(job.view().Log); got != 0 {
+		t.Fatalf("blank output produced %d log lines", got)
 	}
 }
