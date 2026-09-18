@@ -47,6 +47,14 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Parses every workflow and checked-in JSON file, refuses an ambiguous
+      # migration name, and verifies go.sum. None of it needs the database, so
+      # it runs before the long gates and fails in seconds.
+      - name: config-check
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check pyyaml
+          bash scripts/config-check.sh
+
       - name: gofmt
         run: |
           unformatted="$(gofmt -l .)"
@@ -83,6 +91,13 @@ jobs:
       - name: Apply migrations to the test database
         run: go run scripts/migrate_test_db.go
 
+      # The panel calls the same runner on EVERY boot, and what keeps that safe
+      # is the ledger. A change that breaks the ledger passes a clean install
+      # and then fails the next restart of every server in the field, naming a
+      # migration that is correct. Only a second pass sees it.
+      - name: Migrations are idempotent
+        run: go run scripts/migrate_idempotency.go
+
       # -count=1 because a cached PASS is not a test run.
       #
       # -race because the concurrency tests (the SSL job map, the upload slot,
@@ -95,6 +110,24 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
+
+      # golangci-lint runs staticcheck's SA checks with its own defaults. This
+      # runs the tool itself, which also carries the S, ST and QF check groups,
+      # and it is pinned rather than @latest so a new check cannot turn a green
+      # pipeline red without anyone changing this repository.
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          "$(go env GOPATH)/bin/staticcheck" ./...
+
+      # The panel runs as root against tenant-writable paths, so the taint
+      # analysis is the point: command injection, path traversal and SQL built
+      # from a request. HIGH/HIGH only, because that is the band that is worth
+      # blocking on; a proven false positive carries a #nosec with its reason.
+      - name: gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+          "$(go env GOPATH)/bin/gosec" -quiet -severity high -confidence high ./...
 
   frontend:
     name: Frontend
@@ -138,6 +171,51 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      # Production dependencies only: a CVE in a build tool does not ship to a
+      # tenant's browser. It still runs on this runner with repository
+      # credentials, which is a supply-chain risk rather than a runtime one, so
+      # it is reported by `npm audit` without --omit=dev and not blocked here.
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: frontend
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 because the history pass is the one that matters. A
+      # credential that was committed and then removed is still in the history,
+      # still reachable by anyone who clones, and still compromised.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Downloaded rather than taken from an action, so the bytes are checked
+      # against the release's own checksum file before anything runs.
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          cd /tmp
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${version}"
+          curl -fsSL -o gitleaks.tar.gz "${base}/gitleaks_${version}_linux_x64.tar.gz"
+          curl -fsSL -o checksums.txt   "${base}/gitleaks_${version}_checksums.txt"
+          want="$(awk '/linux_x64\.tar\.gz/{print $1}' checksums.txt)"
+          got="$(sha256sum gitleaks.tar.gz | awk '{print $1}')"
+          if [ "$want" != "$got" ]; then
+            echo "gitleaks checksum mismatch: want $want, got $got"
+            exit 1
+          fi
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Working tree
+        run: gitleaks detect --source . --config .gitleaks.toml --no-git --redact -v --exit-code 1
+
+      - name: Git history
+        run: gitleaks detect --source . --config .gitleaks.toml --redact -v --exit-code 1
+
   lint:
     name: Shell and PHP
     runs-on: ubuntu-latest
@@ -166,8 +244,10 @@ jobs:
             exit 1
           fi
 
+      # scripts/ is covered too: config-check.sh is itself a gate, and a gate
+      # that cannot run reports nothing rather than failing.
       - name: shellcheck
-        run: shellcheck -S warning assets/ops/*
+        run: shellcheck -S warning assets/ops/* scripts/*.sh
 
       - name: PHP syntax
         run: |

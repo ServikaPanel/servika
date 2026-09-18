@@ -1,0 +1,51 @@
+# gitleaks configuration for Servika.
+#
+# The CI gate runs the default rule set twice: once over the working tree and
+# once over the whole git history. A credential that was committed and later
+# removed is still in the history, still reachable by anyone who clones, and
+# still has to be treated as compromised, so the history pass is the one that
+# matters most.
+#
+# Everything allowlisted below was inspected line by line and is NOT a
+# credential. Each entry is as narrow as it can be while still matching the
+# thing it exists for. In particular the three source lines are matched by the
+# LINE they appear on, not by their file: a whole-file allowlist would hide the
+# next real leak in that same file.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Paths that carry no credential"
+paths = [
+  # Test fixtures. Every hit under these is a literal a test asserts against: a
+  # sentinel password, a scripted webhook token, a header value. None of them
+  # opens anything, and a test that could not name its own input would have to
+  # build it, which is what these constants avoid.
+  '''.*_test\.go$''',
+
+  # Not part of the repository: the upstream checkout, the Playwright output
+  # directory and the bug report are all gitignored. They are here only on a
+  # working copy, so a finding in one is noise the history pass never sees.
+  '''^helper-projects/''',
+  '''^\.playwright-mcp/''',
+  '''^BUG-REPORT\.md$''',
+]
+
+[[allowlists]]
+description = "Source lines verified not to carry a credential"
+regexTarget = "line"
+regexes = [
+  # The character set a generated password is drawn FROM. High entropy by
+  # construction, and public by necessity: it is in this file, in the binary and
+  # in every password it produces.
+  '''PasswordAlphabet\s*=\s*"''',
+
+  # A PEM header string literal. The key it wraps is generated at runtime by
+  # rsa.GenerateKey and never appears in the repository.
+  '''"-----BEGIN RSA PRIVATE KEY-----''',
+
+  # Fingerprints of nginx.org's PUBLIC signing keys. They are pinned here so the
+  # installer can refuse a substituted key; publishing them is the point.
+  '''NGINX_KEY_FPRS=''',
+]
