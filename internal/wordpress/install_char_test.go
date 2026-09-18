@@ -253,7 +253,7 @@ func TestInstallRunsTheWholeSequenceAndReportsTheCredentials(t *testing.T) {
 		t.Errorf("the target directory was not created: %v", err)
 	}
 	assertInstallSequence(t, rec, target, got.DBName)
-	if argv := host.argvOf("chown"); !equalStrings(argv, []string{"chown", "-R", "c_test:c_test", target}) {
+	if argv := host.argvOf("chown"); !equalStrings(argv, []string{"chown", "-Rh", "c_test:c_test", target}) {
 		t.Errorf("chown argv = %v", argv)
 	}
 	if argv := host.argvOf("restorecon"); !equalStrings(argv, []string{"restorecon", "-R", target}) {

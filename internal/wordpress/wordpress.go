@@ -464,8 +464,9 @@ func (h *Handlers) Install(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// -h: change a symlink itself rather than its target (see prepareTarget).
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = wpCommand("chown", "-R", systemUser+":"+systemUser, target).Run()
+	_ = wpCommand("chown", "-Rh", systemUser+":"+systemUser, target).Run()
 	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
 	_ = wpCommand("restorecon", "-R", target).Run()
 
@@ -543,8 +544,16 @@ func prepareTarget(w http.ResponseWriter, systemUser, root, subDir string) (targ
 		httpx.WriteError(w, http.StatusInternalServerError, "could not create target directory")
 		return target, release, false
 	}
+	// The tenant owns the parent and has a shell, so it can replace the target
+	// with a symlink between MkdirAll and chown. The Lstat gate refuses a target
+	// that is no longer a directory, and -h makes chown change the link itself
+	// instead of descending into what it points at.
+	if info, err := os.Lstat(target); err != nil || !info.IsDir() {
+		httpx.WriteError(w, http.StatusInternalServerError, "could not verify the target directory")
+		return target, release, false
+	}
 	// #nosec G204 G702 -- fixed binaries (chown/restorecon) with separate args (no shell); systemUser is validated and target is internal.
-	_ = wpCommand("chown", "-R", systemUser+":"+systemUser, target).Run()
+	_ = wpCommand("chown", "-Rh", systemUser+":"+systemUser, target).Run()
 	// #nosec G204 G702 -- fixed binary (restorecon) with separate args (no shell); systemUser is validated and target is internal.
 	_ = wpCommand("restorecon", "-R", target).Run()
 	return target, release, true
@@ -565,6 +574,10 @@ type siteDatabase struct {
 // creation.
 func (h *Handlers) createSiteDatabase(w http.ResponseWriter, r *http.Request, domainID int64) (siteDatabase, bool) {
 	slug := randSlug()
+	if slug == "" {
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return siteDatabase{}, false
+	}
 	site := siteDatabase{name: "wp_" + slug, user: "wpu_" + slug, pass: credentials.RandomPassword(24)}
 	dbErr := func() error {
 		unlock := quota.LockCustomerForDomain(r.Context(), h.DB, domainID)
@@ -592,11 +605,13 @@ func (h *Handlers) installSite(w http.ResponseWriter, systemUser, target, url st
 	req installRequest, site siteDatabase) (string, bool) {
 	fail := func(stage string, out []byte) {
 		_ = dropMySQLDB(h.DB, site.name, site.user)
+		// Best effort, and already logged inside: the install's own failure is
+		// what the caller is told, and a rollback that could not finish must not
+		// replace that message with its own.
 		if req.SubDir != "" { // Remove only the subdirectory created by this operation.
-			// Best effort, and already logged inside: the install's own failure
-			// is what the caller is told, and a rollback that could not finish
-			// must not replace that message with its own.
 			_ = removeInstall(systemUser, target, "wordpress install rollback")
+		} else {
+			removeDownloadedFiles(systemUser, target)
 		}
 		msg := strings.TrimSpace(string(out))
 		if len(msg) > 600 {
@@ -622,6 +637,10 @@ func (h *Handlers) installSite(w http.ResponseWriter, systemUser, target, url st
 		return "", false
 	}
 	adminPassword := randomPassword()
+	if adminPassword == "" {
+		fail("administrator password generation", nil)
+		return "", false
+	}
 	if out, err := runWPSecret(systemUser, "admin_password", adminPassword,
 		"core", "install", "--url="+url, "--title="+req.SiteTitle,
 		"--admin_user="+req.AdminUser, "--admin_email="+req.AdminEmail,
@@ -743,6 +762,28 @@ func (h *Handlers) dropSiteDatabase(r *http.Request, domainID int64, dir string)
 // resolveDirectory converts a directory value into a safe absolute path under root
 // containing wp-config.php. The caller supplies root so a subdomain request is confined
 // to the subdomain's document root instead of the parent domain's public_html.
+// removeDownloadedFiles clears what a failed install left in the document root.
+// The root itself is never removed, because the tenant's site lives there.
+//
+// Only a directory that held nothing but placeholder files reaches an install
+// (installAlreadyExists refuses the rest), so every entry that is not a
+// placeholder was downloaded by this install and is safe to take away. Without
+// this, a failed root install left the wp-* tree behind and the next attempt was
+// refused as "already installed".
+func removeDownloadedFiles(systemUser, target string) {
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		logx.Warnf("wordpress install rollback: could not read the target directory: %v", err)
+		return
+	}
+	for _, entry := range entries {
+		if placeholderName(entry.Name()) {
+			continue
+		}
+		_ = removeInstall(systemUser, filepath.Join(target, entry.Name()), "wordpress install rollback")
+	}
+}
+
 // removeBeneathHome deletes an absolute path inside a tenant's home through
 // openat2, and reports what it could not do.
 //
@@ -846,10 +887,20 @@ func (h *Handlers) dropAllowed(r *http.Request, domainID int64, dbAdi string) bo
 	return dbNameWPGuard(dbAdi) && h.dbOwnedBy(r, domainID, dbAdi)
 }
 
+// randSlug returns eight hexadecimal characters, or an empty string when the
+// draw failed.
+//
+// crypto/rand.Read is documented never to return an error and to crash the
+// program irrecoverably if the operating system fails it, so the empty return
+// is unreachable on this toolchain. The caller still refuses it, because a slug
+// names a database and a database user: a guessable one must never be built
+// from a partially filled buffer if that guarantee ever changes.
 func randSlug() string {
 	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b) // Eight hexadecimal characters.
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
 }
 
 // randomPassword returns a generated WordPress password.

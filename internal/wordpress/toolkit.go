@@ -329,7 +329,12 @@ func requestedPassword(w http.ResponseWriter, userID int, raw string) (string, b
 	}
 	password := strings.TrimSpace(raw)
 	if password == "" {
-		return randomPassword(), true
+		generated := randomPassword()
+		if generated == "" {
+			httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+			return "", false
+		}
+		return generated, true
 	}
 	if len(password) < 8 || len(password) > 100 {
 		httpx.WriteError(w, http.StatusBadRequest, "password must contain 8 to 100 characters")
