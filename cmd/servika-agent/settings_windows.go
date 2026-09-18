@@ -10,13 +10,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
+	"servika/internal/logx"
 	"servika/internal/platform"
 )
 
@@ -76,7 +76,7 @@ func changePasswordEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, err)
 		return
 	}
-	log.Printf("local panel: the admin password was changed (%s)", r.RemoteAddr)
+	logx.Infof("local panel: the admin password was changed (%s)", r.RemoteAddr)
 	panelJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

@@ -47,6 +47,7 @@ import (
 
 	"golang.org/x/sys/windows/svc"
 
+	"servika/internal/logx"
 	"servika/internal/platform"
 )
 
@@ -445,7 +446,7 @@ func (a *agentService) Execute(_ []string, requests <-chan svc.ChangeRequest, st
 	for {
 		select {
 		case err := <-failed:
-			log.Printf("the server stopped: %v", err)
+			logx.Errorf("the server stopped: %v", err)
 			status <- svc.Status{State: svc.StopPending}
 			return false, 1
 		case request := <-requests:
@@ -483,7 +484,7 @@ func runService() {
 		log.SetOutput(f)
 	}
 	if err := svc.Run(serviceName, &agentService{}); err != nil {
-		log.Fatalf("the service could not run: %v", err)
+		logx.Fatalf("the service could not run: %v", err)
 	}
 }
 
@@ -491,6 +492,6 @@ func runService() {
 func runForeground() {
 	var servers [2]*http.Server
 	if err := serve(&servers); err != nil {
-		log.Fatal(err)
+		logx.Fatalf("%v", err)
 	}
 }

@@ -15,10 +15,11 @@ package main
 import (
 	"encoding/json"
 	"io/fs"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"servika/internal/logx"
 )
 
 // failedLoginDelay is a FIXED wait after every failed login.
@@ -65,7 +66,7 @@ func loginHandler(sessions *sessionStore, currentHash func() string) http.Handle
 		}
 		if !checkPanelLogin(currentHash(), request.User, request.Password) {
 			time.Sleep(failedLoginDelay)
-			log.Printf("local panel: a login attempt FAILED (%s)", r.RemoteAddr)
+			logx.Warnf("local panel: a login attempt FAILED (%s)", r.RemoteAddr)
 			// The message is deliberately ONE: which of the two was wrong is not
 			// said, because saying it would confirm the user name exists.
 			panelJSON(w, http.StatusUnauthorized, map[string]string{"error": "the user name or the password is wrong"})
@@ -78,7 +79,7 @@ func loginHandler(sessions *sessionStore, currentHash func() string) http.Handle
 		}
 		sessions.add(token)
 		http.SetCookie(w, sessionCookieFor(token))
-		log.Printf("local panel: admin logged in (%s)", r.RemoteAddr)
+		logx.Infof("local panel: admin logged in (%s)", r.RemoteAddr)
 		panelJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	}
 }

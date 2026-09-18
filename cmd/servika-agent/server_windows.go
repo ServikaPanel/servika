@@ -12,10 +12,10 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
+	"servika/internal/logx"
 	"servika/internal/platform"
 )
 
@@ -34,13 +34,13 @@ func serve(servers *[2]*http.Server) error {
 	if err := provider.Verify(); err != nil {
 		// A broken environment still comes up, but /health says so plainly: the
 		// panel has to tell "unreachable" apart from "not ready".
-		log.Printf("WARNING - environment check: %v", err)
+		logx.Warnf("environment check: %v", err)
 	}
 	// A previous installation cut short by an agent restart is picked up from
 	// disk, and new installations are refused until an operator clears it.
 	installer.LoadPending()
 	if pending, key := installer.Pending(); pending {
-		log.Printf("WARNING - the previous installation (%s) was LEFT HALF-FINISHED; installations are refused until it is cleared", key)
+		logx.Warnf("the previous installation (%s) was LEFT HALF-FINISHED; installations are refused until it is cleared", key)
 	}
 
 	cert, err := loadCertificate(dataDir)
@@ -61,15 +61,15 @@ func serve(servers *[2]*http.Server) error {
 		servers[0] = api
 		servers[1] = panel
 	}
-	log.Printf("servika-agent %s (%s) is listening over TLS on %s", platform.Version, platform.Channel, current.Listen)
-	log.Printf("certificate SHA-256 fingerprint: %s", fingerprintOf(cert))
-	log.Printf("local panel: https://%s", panel.Addr)
+	logx.Infof("servika-agent %s (%s) is listening over TLS on %s", platform.Version, platform.Channel, current.Listen)
+	logx.Infof("certificate SHA-256 fingerprint: %s", fingerprintOf(cert))
+	logx.Infof("local panel: https://%s", panel.Addr)
 	// THE LOCAL PANEL RUNS IN ITS OWN GOROUTINE. If 8443 is already taken, or
 	// the panel fails for any reason, the agent API on 8460 stays up: the panel
 	// layer never takes the core down with it.
 	go func() {
 		if err := panel.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("WARNING - the local panel stopped: %v", err)
+			logx.Warnf("the local panel stopped: %v", err)
 		}
 	}()
 	// The certificate comes from TLSConfig, so the file arguments are empty.
@@ -115,7 +115,7 @@ func createSite(provider platform.Provider, w http.ResponseWriter, r *http.Reque
 		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
-	log.Printf("site created: %s (%s)", request.Domain, result.SystemUser)
+	logx.Infof("site created: %s (%s)", request.Domain, result.SystemUser)
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -132,7 +132,7 @@ func deleteSite(provider platform.Provider, w http.ResponseWriter, r *http.Reque
 		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
-	log.Printf("site deleted: %s", request.Domain)
+	logx.Infof("site deleted: %s", request.Domain)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

@@ -20,12 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/platform"
 )
 
@@ -115,7 +115,13 @@ func writeEnvelope(w http.ResponseWriter, r *http.Request, status int, code Code
 	if r != nil {
 		method, path = r.Method, r.URL.Path
 	}
-	log.Printf("[%s] %s %s -> %d %s: %s", id, method, path, status, code, message)
+	// A 5xx is the agent failing; a 4xx is a request the agent refused and
+	// continued past, which is what warning means here.
+	if status >= http.StatusInternalServerError {
+		logx.Errorf("[%s] %s %s -> %d %s: %s", id, method, path, status, code, message)
+	} else {
+		logx.Warnf("[%s] %s %s -> %d %s: %s", id, method, path, status, code, message)
+	}
 	w.Header().Set(requestIDHeader, id)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -192,14 +198,14 @@ func audited(name string, next http.HandlerFunc) http.HandlerFunc {
 		r.Header.Set(requestIDHeader, id)
 		w.Header().Set(requestIDHeader, id)
 		if err := checkCSRF(r); err != nil {
-			log.Printf("[%s] AUDIT %s CSRF-REFUSED actor=%s: %v", id, name, r.RemoteAddr, err)
+			logx.Warnf("[%s] AUDIT %s CSRF-REFUSED actor=%s: %v", id, name, r.RemoteAddr, err)
 			writeEnvelope(w, r, http.StatusForbidden, CodeCSRF, err.Error(), false)
 			return
 		}
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		started := time.Now()
-		log.Printf("[%s] AUDIT %s STARTED actor=%s %s %s", id, name, r.RemoteAddr, r.Method, r.URL.Path)
+		logx.Infof("[%s] AUDIT %s STARTED actor=%s %s %s", id, name, r.RemoteAddr, r.Method, r.URL.Path)
 		next(recorder, r)
-		log.Printf("[%s] AUDIT %s ENDED status=%d took=%v", id, name, recorder.status, time.Since(started).Round(time.Millisecond))
+		logx.Infof("[%s] AUDIT %s ENDED status=%d took=%v", id, name, recorder.status, time.Since(started).Round(time.Millisecond))
 	}
 }

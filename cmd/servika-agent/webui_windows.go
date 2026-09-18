@@ -12,8 +12,9 @@ package main
 import (
 	"embed"
 	"io/fs"
-	"log"
 	"net/http"
+
+	"servika/internal/logx"
 )
 
 //go:embed webui
@@ -27,7 +28,7 @@ var webFiles embed.FS
 func mountInterface(mux *http.ServeMux) {
 	sub, err := fs.Sub(webFiles, "webui")
 	if err != nil {
-		log.Printf("WARNING - the local panel's interface could not be mounted: %v", err)
+		logx.Warnf("the local panel's interface could not be mounted: %v", err)
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusInternalServerError)

@@ -10,12 +10,12 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
+	"servika/internal/logx"
 	"servika/internal/platform"
 )
 
@@ -147,7 +147,7 @@ func createPanelSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
-	log.Printf("local panel: site created: %s (%s)", request.Domain, result.SystemUser)
+	logx.Infof("local panel: site created: %s (%s)", request.Domain, result.SystemUser)
 	panelJSON(w, http.StatusOK, result)
 }
 
@@ -163,7 +163,7 @@ func deletePanelSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
-	log.Printf("local panel: site deleted: %s", domain)
+	logx.Infof("local panel: site deleted: %s", domain)
 	_ = plans.Forget(domain) // drop the now orphaned plan assignment
 	panelJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -194,7 +194,7 @@ func catalogInstallEndpoint(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
-	log.Printf("local panel: installation started: %s (job %s)", request.Key, id)
+	logx.Infof("local panel: installation started: %s (job %s)", request.Key, id)
 	panelJSON(w, http.StatusAccepted, map[string]string{"job_id": id})
 }
 
