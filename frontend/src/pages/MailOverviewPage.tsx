@@ -305,6 +305,59 @@ export default function MailOverviewPage() {
         }}
       />
 
+      <ServerSettingsCard settings={settings} setSettings={setSettings} saveSettings={saveSettings}
+        saving={settingsSaving} error={settingsError} saved={settingsSaved} primaryAddress={primaryAddress} />
+
+      <FiltersCard filters={filters} addFilter={addFilter} removeFilter={removeFilter} busy={filterBusy} error={filterError}
+        kind={filterKind} setKind={setFilterKind} matchType={filterMatchType} setMatchType={setFilterMatchType}
+        value={filterValue} setValue={setFilterValue} note={filterNote} setNote={setFilterNote} />
+
+      <PoolCard pool={pool} addPoolAddress={addPoolAddress} togglePoolAddress={togglePoolAddress}
+        removePoolAddress={removePoolAddress} busy={poolBusy} error={poolError}
+        ip={poolIP} setIP={setPoolIP} note={poolNote} setNote={setPoolNote} />
+
+      <QueueCard queue={queue} loading={queueLoading} busy={queueBusy} error={queueError}
+        loadQueue={loadQueue} queueAction={queueAction} />
+    </>
+  )
+}
+
+type QueueAction = (action: 'flush' | 'delete' | 'hold' | 'release' | 'requeue', queueID?: string) => void
+
+function PrimaryAddressNotice({ address }: { address: PrimaryAddress | null }) {
+  const { t } = useTranslation('MailOverviewPage')
+  if (!address?.ip) return null
+  return (
+    <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+      address.dnsbl_listed
+        ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'
+        : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'
+    }`}>
+      <div className="font-medium">{t('primaryAddress.title', { ip: address.ip })}</div>
+      <div className="mt-1">{dnsblLine(address, t)}</div>
+      <div className="mt-0.5 font-mono text-[11px] opacity-80">
+        {address.ptr_ok ? t('primaryAddress.ptrOk', { name: address.ptr_name }) : t('primaryAddress.ptrMissing')}
+        {address.scan_at ? ' · ' + t('primaryAddress.scannedAt', { at: address.scan_at }) : ''}
+      </div>
+    </div>
+  )
+}
+
+/** An address the scanner never queried is not the same as one found clean. */
+function dnsblLine(address: PrimaryAddress, t: TFunction): string {
+  if (!address.dnsbl_scanned) return t('primaryAddress.notScanned')
+  if (address.dnsbl_listed) return t('primaryAddress.listed', { zones: address.dnsbl_zones })
+  return t('primaryAddress.clean')
+}
+
+function ServerSettingsCard({ settings, setSettings, saveSettings, saving, error, saved, primaryAddress }: {
+  settings: ServerSettings | null; setSettings: (settings: ServerSettings) => void
+  saveSettings: (event: React.SubmitEvent) => void; saving: boolean
+  error: string | null; saved: boolean; primaryAddress: PrimaryAddress | null
+}) {
+  const { t } = useTranslation('MailOverviewPage')
+  const settingsError = error, settingsSaved = saved, settingsSaving = saving
+  return (
       <div className="w-full px-6 pb-8">
         <form onSubmit={saveSettings} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('serverSettings.title')}</h2>
@@ -337,28 +390,7 @@ export default function MailOverviewPage() {
               </label>
               <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">{t('serverSettings.zeroNote')}</p>
 
-              {primaryAddress?.ip && (
-                <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
-                  primaryAddress.dnsbl_listed
-                    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300'
-                }`}>
-                  <div className="font-medium">{t('primaryAddress.title', { ip: primaryAddress.ip })}</div>
-                  <div className="mt-1">
-                    {!primaryAddress.dnsbl_scanned
-                      ? t('primaryAddress.notScanned')
-                      : primaryAddress.dnsbl_listed
-                        ? t('primaryAddress.listed', { zones: primaryAddress.dnsbl_zones })
-                        : t('primaryAddress.clean')}
-                  </div>
-                  <div className="mt-0.5 font-mono text-[11px] opacity-80">
-                    {primaryAddress.ptr_ok
-                      ? t('primaryAddress.ptrOk', { name: primaryAddress.ptr_name })
-                      : t('primaryAddress.ptrMissing')}
-                    {primaryAddress.scan_at ? ' · ' + t('primaryAddress.scannedAt', { at: primaryAddress.scan_at }) : ''}
-                  </div>
-                </div>
-              )}
+              <PrimaryAddressNotice address={primaryAddress} />
 
               {settingsError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{settingsError}</p>}
               {settingsSaved && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{t('serverSettings.saved')}</p>}
@@ -369,7 +401,21 @@ export default function MailOverviewPage() {
           )}
         </form>
       </div>
+  )
+}
 
+function FiltersCard({ filters, addFilter, removeFilter, busy, error, kind, setKind, matchType, setMatchType, value, setValue, note, setNote }: {
+  filters: FilterEntry[]; addFilter: (event: React.SubmitEvent) => void; removeFilter: (entry: FilterEntry) => void
+  busy: boolean; error: string | null
+  kind: 'allow' | 'block'; setKind: (value: 'allow' | 'block') => void
+  matchType: 'address' | 'domain' | 'ip'; setMatchType: (value: 'address' | 'domain' | 'ip') => void
+  value: string; setValue: (value: string) => void; note: string; setNote: (value: string) => void
+}) {
+  const { t } = useTranslation('MailOverviewPage')
+  const filterKind = kind, setFilterKind = setKind, filterMatchType = matchType, setFilterMatchType = setMatchType
+  const filterValue = value, setFilterValue = setValue, filterNote = note, setFilterNote = setNote
+  const filterBusy = busy, filterError = error
+  return (
       <div className="w-full px-6 pb-8">
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('filters.title')}</h2>
@@ -420,7 +466,65 @@ export default function MailOverviewPage() {
           )}
         </div>
       </div>
+  )
+}
 
+/** An address that has never been scanned is not the same as one found clean. */
+function scanBadgeClass(address: PoolAddress): string {
+  if (!address.last_scan_at) return 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+  if (address.dnsbl_listed) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+  return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+}
+
+function scanBadgeText(address: PoolAddress, t: TFunction): string {
+  if (!address.last_scan_at) return t('pool.notScanned')
+  if (address.dnsbl_listed) return t('pool.listed', { zones: address.dnsbl_zones })
+  return t('pool.clean')
+}
+
+function PoolRow({ address, onToggle, onRemove }: {
+  address: PoolAddress; onToggle: (address: PoolAddress) => void; onRemove: (address: PoolAddress) => void
+}) {
+  const { t } = useTranslation('MailOverviewPage')
+  return (
+    <li className="py-2 flex flex-wrap items-center gap-3">
+      <span className="font-mono text-sm text-slate-800 dark:text-slate-200">{address.ip}</span>
+      {!address.enabled && (
+        <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+          {t('pool.disabled')}
+        </span>
+      )}
+      <span className={`text-[11px] px-1.5 py-0.5 rounded ${address.ptr_ok
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
+        {address.ptr_ok ? t('pool.ptrOk') : t('pool.ptrBad')}
+      </span>
+      <span className={`text-[11px] px-1.5 py-0.5 rounded ${scanBadgeClass(address)}`}>{scanBadgeText(address, t)}</span>
+      <span className="text-xs text-slate-400 dark:text-slate-500">{t('pool.domainCount', { count: address.domains })}</span>
+      {address.ptr_name && <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500 break-all">{address.ptr_name}</span>}
+      {address.note && <span className="text-xs text-slate-400 dark:text-slate-500 break-all flex-1">{address.note}</span>}
+      <div className="ml-auto flex gap-2">
+        <button onClick={() => onToggle(address)} className="text-xs px-2 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
+          {address.enabled ? t('pool.disable') : t('pool.enable')}
+        </button>
+        <button onClick={() => onRemove(address)} className="text-xs px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded">
+          {t('pool.delete')}
+        </button>
+      </div>
+    </li>
+  )
+}
+
+function PoolCard({ pool, addPoolAddress, togglePoolAddress, removePoolAddress, busy, error, ip, setIP, note, setNote }: {
+  pool: PoolAddress[]; addPoolAddress: (event: React.SubmitEvent) => void
+  togglePoolAddress: (address: PoolAddress) => void; removePoolAddress: (address: PoolAddress) => void
+  busy: boolean; error: string | null
+  ip: string; setIP: (value: string) => void; note: string; setNote: (value: string) => void
+}) {
+  const { t } = useTranslation('MailOverviewPage')
+  const poolIP = ip, setPoolIP = setIP, poolNote = note, setPoolNote = setNote
+  const poolBusy = busy, poolError = error
+  return (
       <div className="w-full px-6 pb-8">
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('pool.title')}</h2>
@@ -442,46 +546,46 @@ export default function MailOverviewPage() {
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-700/60">
               {pool.map(address => (
-                <li key={address.id} className="py-2 flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-sm text-slate-800 dark:text-slate-200">{address.ip}</span>
-                  {!address.enabled && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                      {t('pool.disabled')}
-                    </span>
-                  )}
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded ${address.ptr_ok
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}`}>
-                    {address.ptr_ok ? t('pool.ptrOk') : t('pool.ptrBad')}
-                  </span>
-                  {/* An address that has never been scanned is not the same as
-                      one that was scanned and found clean. */}
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded ${!address.last_scan_at
-                    ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-                    : address.dnsbl_listed
-                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>
-                    {!address.last_scan_at ? t('pool.notScanned')
-                      : address.dnsbl_listed ? t('pool.listed', { zones: address.dnsbl_zones })
-                        : t('pool.clean')}
-                  </span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">{t('pool.domainCount', { count: address.domains })}</span>
-                  {address.ptr_name && <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500 break-all">{address.ptr_name}</span>}
-                  {address.note && <span className="text-xs text-slate-400 dark:text-slate-500 break-all flex-1">{address.note}</span>}
-                  <div className="ml-auto flex gap-2">
-                    <button onClick={() => togglePoolAddress(address)} className="text-xs px-2 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
-                      {address.enabled ? t('pool.disable') : t('pool.enable')}
-                    </button>
-                    <button onClick={() => removePoolAddress(address)} className="text-xs px-2 py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded">
-                      {t('pool.delete')}
-                    </button>
-                  </div>
-                </li>
+                <PoolRow key={address.id} address={address} onToggle={togglePoolAddress} onRemove={removePoolAddress} />
               ))}
             </ul>
           )}
         </div>
       </div>
+  )
+}
+
+function QueueRow({ message, queueAction }: { message: QueueMessage; queueAction: QueueAction }) {
+  const { t } = useTranslation('MailOverviewPage')
+  const delayed = message.recipients.find(recipient => recipient.delay_reason)
+  const held = message.queue_name === 'hold'
+  return (
+    <tr>
+      <td className="p-3 font-mono">{message.queue_id}<div className="text-[10px] text-slate-400">{message.queue_name}</div></td>
+      <td className="p-3">
+        <div className="font-mono text-xs">{message.sender || '<>'}</div>
+        <div className="font-mono text-xs text-slate-500">→ {message.recipients.map(recipient => recipient.address).join(', ')}</div>
+        {delayed?.delay_reason && <div className="mt-1 text-[10px] text-amber-600 max-w-xl">{delayed.delay_reason}</div>}
+      </td>
+      <td className="p-3 text-xs text-slate-500">{formatSize(message.message_size)}<div>{new Date(message.arrival_time * 1000).toLocaleString()}</div></td>
+      <td className="p-3 text-right whitespace-nowrap">
+        {held
+          ? <button onClick={() => queueAction('release', message.queue_id)} className="text-xs text-emerald-600 px-2">{t('queue.release')}</button>
+          : <button onClick={() => queueAction('hold', message.queue_id)} className="text-xs text-amber-600 px-2">{t('queue.hold')}</button>}
+        <button onClick={() => queueAction('requeue', message.queue_id)} className="text-xs text-brand-600 px-2">{t('queue.requeue')}</button>
+        <button onClick={() => queueAction('delete', message.queue_id)} className="text-xs text-red-600 px-2">{t('queue.delete')}</button>
+      </td>
+    </tr>
+  )
+}
+
+function QueueCard({ queue, loading, busy, error, loadQueue, queueAction }: {
+  queue: QueueMessage[]; loading: boolean; busy: string; error: string | null
+  loadQueue: () => void; queueAction: QueueAction
+}) {
+  const { t } = useTranslation('MailOverviewPage')
+  const queueLoading = loading, queueBusy = busy, queueError = error
+  return (
       <div className="w-full px-6 pb-8">
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
           <div className="p-5 flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700">
@@ -507,28 +611,11 @@ export default function MailOverviewPage() {
                  <tr><th className="text-left p-3">{t('queue.colId')}</th><th className="text-left p-3">{t('queue.colRoute')}</th><th className="text-left p-3">{t('queue.colSizeTime')}</th><th className="text-right p-3">{t('queue.colActions')}</th></tr>
                </thead>
                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                 {queue.map(message => <tr key={message.queue_id}>
-                   <td className="p-3 font-mono">{message.queue_id}<div className="text-[10px] text-slate-400">{message.queue_name}</div></td>
-                   <td className="p-3">
-                     <div className="font-mono text-xs">{message.sender || '<>'}</div>
-                     <div className="font-mono text-xs text-slate-500">→ {message.recipients.map(recipient => recipient.address).join(', ')}</div>
-                     {message.recipients.find(recipient => recipient.delay_reason)?.delay_reason &&
-                       <div className="mt-1 text-[10px] text-amber-600 max-w-xl">{message.recipients.find(recipient => recipient.delay_reason)?.delay_reason}</div>}
-                   </td>
-                   <td className="p-3 text-xs text-slate-500">{formatSize(message.message_size)}<div>{new Date(message.arrival_time * 1000).toLocaleString()}</div></td>
-                   <td className="p-3 text-right whitespace-nowrap">
-                     {message.queue_name === 'hold' ?
-                       <button onClick={() => queueAction('release', message.queue_id)} className="text-xs text-emerald-600 px-2">{t('queue.release')}</button> :
-                       <button onClick={() => queueAction('hold', message.queue_id)} className="text-xs text-amber-600 px-2">{t('queue.hold')}</button>}
-                     <button onClick={() => queueAction('requeue', message.queue_id)} className="text-xs text-brand-600 px-2">{t('queue.requeue')}</button>
-                     <button onClick={() => queueAction('delete', message.queue_id)} className="text-xs text-red-600 px-2">{t('queue.delete')}</button>
-                   </td>
-                 </tr>)}
+                 {queue.map(message => <QueueRow key={message.queue_id} message={message} queueAction={queueAction} />)}
                </tbody>
              </table>
            </div>}
         </div>
       </div>
-    </>
   )
 }
