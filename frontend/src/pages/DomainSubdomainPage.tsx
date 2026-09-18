@@ -36,6 +36,128 @@ function formatDisk(diskKB: number): string {
   return `${diskKB} KB`
 }
 
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function SubdomainTitle({ detail, sslActive, id }: { detail: Detail; sslActive: boolean | null; id?: string }) {
+  const { t } = useTranslation('DomainSubdomainPage')
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-1">
+        <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.globe} className="h-6 w-6" /></span>
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 font-mono">{detail.fqdn}</h1>
+        {sslActive !== null && (
+          <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${sslActive
+            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
+            {sslActive ? t('ssl.active') : t('ssl.none')}
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
+        {t('intro.pre')} <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400">{detail.parent_name}</Link>{t('intro.post')}
+      </p>
+    </>
+  )
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  )
+}
+
+function DetailsCard({ detail, sslActive }: { detail: Detail; sslActive: boolean | null }) {
+  const { t } = useTranslation('DomainSubdomainPage')
+  const scheme = sslActive ? 'https' : 'http'
+  return (
+    <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4">
+      <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('details.title')}</h3>
+      <dl className="space-y-2 text-sm">
+        <DetailRow label={t('details.address')}>
+          <a href={`${scheme}://${detail.fqdn}`} target="_blank" rel="noreferrer" className="font-mono text-brand-600 dark:text-brand-400 hover:underline">{detail.fqdn}</a>
+        </DetailRow>
+        <DetailRow label={t('details.documentRoot')}>
+          <span className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate">{detail.docroot}</span>
+        </DetailRow>
+        <DetailRow label={t('details.diskUsage')}>
+          <span className="text-slate-700 dark:text-slate-300">{formatDisk(detail.disk_kb)}</span>
+        </DetailRow>
+        <DetailRow label={t('details.phpVersion')}>
+          <span className="text-slate-700 dark:text-slate-300">{detail.php_version}</span>
+        </DetailRow>
+        <DetailRow label={t('details.created')}>
+          <span className="text-slate-700 dark:text-slate-300">{detail.created_at}</span>
+        </DetailRow>
+        <DetailRow label={t('details.serverIp')}>
+          <span className="font-mono text-xs text-slate-700 dark:text-slate-300">{detail.ipv4}</span>
+        </DetailRow>
+      </dl>
+    </div>
+  )
+}
+
+function PHPCard({ detail, versions, selected, onSelect, saving, onSave }: {
+  detail: Detail; versions: Version[]; selected: string; onSelect: (value: string) => void
+  saving: boolean; onSave: () => void
+}) {
+  const { t } = useTranslation('DomainSubdomainPage')
+  const cannotApply = saving || detail.php_locked || !selected || selected === detail.php_version
+  return (
+    <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4">
+      <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('php.title')}</h3>
+      {/* The standing note is only true of an account on the shared master. On
+          its own service the subdomain shares the parent's interpreter, so the
+          note is REPLACED rather than added to. */}
+      {detail.php_locked
+        ? <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">{t('php.locked')}</p>
+        : <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('php.note')}</p>}
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t('php.versionLabel')}</span>
+          <select value={selected} onChange={event => onSelect(event.target.value)}
+            disabled={detail.php_locked}
+            className="mt-1 w-56 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none disabled:opacity-60">
+            {versions.length === 0 && <option value={detail.php_version}>{detail.php_version}</option>}
+            {versions.map(version => (
+              <option key={version.version} value={version.version}>{version.version}{version.description ? ` — ${version.description}` : ''}</option>
+            ))}
+          </select>
+        </label>
+        <button onClick={onSave} disabled={cannotApply}
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+          {saving ? t('php.applying') : t('php.apply')}
+        </button>
+      </div>
+      {!detail.php_locked && <p className="text-[11px] text-slate-400 mt-2">{t('php.validationNote')}</p>}
+    </div>
+  )
+}
+
+function ToolsCard({ toolBase }: { toolBase: string }) {
+  const { t } = useTranslation('DomainSubdomainPage')
+  return (
+    <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4">
+      <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('toolsSection.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('toolsSection.note')}</p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {TOOLS.map(tool => (
+          <ToolCard key={tool.slug} label={t(`tools.${tool.slug}.label`)} description={t(`tools.${tool.slug}.description`)} icon={tool.icon} color={tool.color} to={`${toolBase}/${tool.slug}`} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function DomainSubdomainPage() {
   const { t } = useTranslation('DomainSubdomainPage')
   const { id, sid } = useParams()
@@ -104,97 +226,21 @@ export default function DomainSubdomainPage() {
         { label: detail?.fqdn || t('breadcrumb.subdomain') },
       ]} />
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      <Banners error={error} success={success} />
 
       {loading ? <div className="text-sm text-slate-400 py-4">{t('loading')}</div>
         : !detail ? <div className="text-sm text-slate-500 dark:text-slate-400 py-4">{t('notFound')}</div>
           : (
             <>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.globe} className="h-6 w-6" /></span>
-                <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 font-mono">{detail.fqdn}</h1>
-                {sslActive !== null && (
-                  <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${sslActive
-                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>
-                    {sslActive ? t('ssl.active') : t('ssl.none')}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
-                {t('intro.pre')} <Link to={`/subscriptions/${id}`} className="text-brand-600 dark:text-brand-400">{detail.parent_name}</Link>{t('intro.post')}
-              </p>
+              <SubdomainTitle detail={detail} sslActive={sslActive} id={id} />
 
               <div className="grid gap-4 md:grid-cols-2 mb-5">
-                <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('details.title')}</h3>
-                  <dl className="space-y-2 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500 dark:text-slate-400">{t('details.address')}</dt>
-                      <dd><a href={`${sslActive ? 'https' : 'http'}://${detail.fqdn}`} target="_blank" rel="noreferrer" className="font-mono text-brand-600 dark:text-brand-400 hover:underline">{detail.fqdn}</a></dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500 dark:text-slate-400">{t('details.documentRoot')}</dt>
-                      <dd className="font-mono text-xs text-slate-700 dark:text-slate-300 truncate">{detail.docroot}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500 dark:text-slate-400">{t('details.diskUsage')}</dt>
-                      <dd className="text-slate-700 dark:text-slate-300">{formatDisk(detail.disk_kb)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500 dark:text-slate-400">{t('details.phpVersion')}</dt>
-                      <dd className="text-slate-700 dark:text-slate-300">{detail.php_version}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500 dark:text-slate-400">{t('details.created')}</dt>
-                      <dd className="text-slate-700 dark:text-slate-300">{detail.created_at}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-slate-500 dark:text-slate-400">{t('details.serverIp')}</dt>
-                      <dd className="font-mono text-xs text-slate-700 dark:text-slate-300">{detail.ipv4}</dd>
-                    </div>
-                  </dl>
-                </div>
-
-                <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4">
-                  <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('php.title')}</h3>
-                  {/* The standing note is only true of an account on the shared
-                      master. On its own service the subdomain shares the parent's
-                      interpreter, so the note is REPLACED rather than added to. */}
-                  {detail.php_locked
-                    ? <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">{t('php.locked')}</p>
-                    : <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('php.note')}</p>}
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="block">
-                      <span className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold">{t('php.versionLabel')}</span>
-                      <select value={selectedVersion} onChange={event => setSelectedVersion(event.target.value)}
-                        disabled={detail.php_locked}
-                        className="mt-1 w-56 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none disabled:opacity-60">
-                        {versions.length === 0 && <option value={detail.php_version}>{detail.php_version}</option>}
-                        {versions.map(version => (
-                          <option key={version.version} value={version.version}>{version.version}{version.description ? ` — ${version.description}` : ''}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <button onClick={savePHP} disabled={saving || detail.php_locked || !selectedVersion || selectedVersion === detail.php_version}
-                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                      {saving ? t('php.applying') : t('php.apply')}
-                    </button>
-                  </div>
-                  {!detail.php_locked && <p className="text-[11px] text-slate-400 mt-2">{t('php.validationNote')}</p>}
-                </div>
+                <DetailsCard detail={detail} sslActive={sslActive} />
+                <PHPCard detail={detail} versions={versions} selected={selectedVersion}
+                  onSelect={setSelectedVersion} saving={saving} onSave={savePHP} />
               </div>
 
-              <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4">
-                <h3 className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-3">{t('toolsSection.title')}</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('toolsSection.note')}</p>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {TOOLS.map(tool => (
-                    <ToolCard key={tool.slug} label={t(`tools.${tool.slug}.label`)} description={t(`tools.${tool.slug}.description`)} icon={tool.icon} color={tool.color} to={`${toolBase}/${tool.slug}`} />
-                  ))}
-                </div>
-              </div>
+              <ToolsCard toolBase={toolBase} />
 
               <div className="mt-4">
                 <Link to={`/subscriptions/${id}/subdomains`} className="text-sm text-brand-600 dark:text-brand-400">{t('backToSubdomains')}</Link>
