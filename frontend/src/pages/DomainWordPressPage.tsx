@@ -23,6 +23,57 @@ type User = { ID: number; user_login: string; user_email: string; display_name: 
 // in place for the life of the page.
 type Loaded<T> = T[] | 'failed' | null
 
+function WordPressBreadcrumb({ domainName, backHref }: { domainName: string; backHref: string }) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <Breadcrumb items={[
+      { label: t('breadcrumb.home'), href: '/' },
+      { label: domainName || t('breadcrumb.subscription'), href: backHref },
+      { label: t('breadcrumb.wordpress') },
+    ]} />
+  )
+}
+
+function WordPressHeader({ showNew, onNew }: { showNew: boolean; onNew: () => void }) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{t('title')}</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('subtitle')}</p>
+      </div>
+      {showNew && (
+        <button onClick={onNew}
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition">
+          <span className="text-base leading-none">+</span> {t('actions.new')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function InstallList({ loading, listFailed, emptyState, installations, base, onChange }: {
+  loading: boolean; listFailed: boolean; emptyState: boolean; installations: Install[]; base: string; onChange: () => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  if (loading) return <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 p-10 text-center text-sm text-slate-400">{t('loading')}</div>
+  if (listFailed) return <LoadFailed onRetry={onChange} />
+  if (emptyState) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-12 text-center mb-5">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-3"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
+        <p className="text-base font-medium text-slate-800 dark:text-slate-100">{t('empty.title')}</p>
+        <p className="text-sm text-slate-400 mt-1">{t('empty.subtitle')}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-5">
+      {installations.map(k => <Toolkit key={k.dir} base={base} installation={k} onChange={onChange} />)}
+    </div>
+  )
+}
+
 export default function DomainWordPressPage() {
   const { t } = useTranslation('DomainWordPressPage')
   const report = useReportError()
@@ -86,43 +137,14 @@ export default function DomainWordPressPage() {
 
   return (
     <div className="w-full px-6 py-6">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: domainName || t('breadcrumb.subscription'), href: backHref },
-        { label: t('breadcrumb.wordpress') },
-      ]} />
-      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{t('title')}</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('subtitle')}</p>
-        </div>
-        {!emptyState && !formOpen && (
-          <button onClick={() => { setFormOpen(true); setResult(null) }}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition">
-            <span className="text-base leading-none">+</span> {t('actions.new')}
-          </button>
-        )}
-      </div>
+      <WordPressBreadcrumb domainName={domainName} backHref={backHref} />
+      <WordPressHeader showNew={!emptyState && !formOpen} onNew={() => { setFormOpen(true); setResult(null) }} />
 
       {error && <div className="mb-4 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/60 rounded-2xl text-sm text-red-600 dark:text-red-300">{error}</div>}
 
       {result && <InstallResult s={result} close={() => setResult(null)} />}
 
-      {loading ? (
-        <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 p-10 text-center text-sm text-slate-400">{t('loading')}</div>
-      ) : listFailed ? (
-        <LoadFailed onRetry={list} />
-      ) : emptyState ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-12 text-center mb-5">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-3"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
-          <p className="text-base font-medium text-slate-800 dark:text-slate-100">{t('empty.title')}</p>
-          <p className="text-sm text-slate-400 mt-1">{t('empty.subtitle')}</p>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {installations.map(k => <Toolkit key={k.dir} base={base} installation={k} onChange={list} />)}
-        </div>
-      )}
+      <InstallList loading={loading} listFailed={listFailed} emptyState={emptyState} installations={installations} base={base} onChange={list} />
 
       {(emptyState || formOpen) && (
         <div className="mt-5">
@@ -141,6 +163,102 @@ export default function DomainWordPressPage() {
 
 type ToolkitTab = 'overview' | 'extensions' | 'themes' | 'users'
 const TAB_KEYS: ToolkitTab[] = ['overview', 'extensions', 'themes', 'users']
+
+function ToolkitHeader({ installation, dir, isRoot, busy, onRemove }: {
+  installation: Install; dir: string; isRoot: boolean; busy: string | null; onRemove: () => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 flex-wrap">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center shrink-0"><Icon d={ICON.pencil} className="h-5 w-5" /></div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">WordPress <span className="text-slate-400 font-normal font-mono text-xs">· {dir}</span></div>
+          <div className="text-xs text-slate-400 mt-0.5 truncate">{installation.site_url}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {safeHref(installation.admin_url) && (
+          <a href={installation.admin_url} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 px-3.5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition">
+            {t('toolkit.adminPanel')} <span className="opacity-70">↗</span>
+          </a>
+        )}
+        {!isRoot && <button disabled={!!busy} onClick={onRemove} className="px-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-xs text-slate-500 hover:border-red-300 hover:text-red-600 dark:hover:border-red-800 dark:hover:text-red-400 disabled:opacity-50 transition">{busy === 'remove' ? '…' : t('toolkit.remove')}</button>}
+      </div>
+    </div>
+  )
+}
+
+function versionPill(status: Status | null, upToDate: string): { t: string; c: 'green' | 'amber' } | undefined {
+  if (!status) return undefined
+  if (status.update_available) return { t: `↑ ${status.target_version}`, c: 'amber' }
+  return { t: upToDate, c: 'green' }
+}
+
+function ToolkitMetrics({ status }: { status: Status | null }) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <div className="px-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Metric label={t('metrics.version')} v={status?.version || '…'} pill={versionPill(status, t('metrics.upToDate'))} />
+      <Metric label={t('metrics.php')} v={status?.php || '…'} />
+      <Metric label={t('metrics.database')} v={status ? `${status.db_mb} MB` : '…'} />
+      <Metric label={t('metrics.maintenance')} v={status?.maintenance ? t('metrics.on') : t('metrics.off')}
+        pill={status?.maintenance ? { t: t('metrics.active'), c: 'amber' } : undefined} />
+    </div>
+  )
+}
+
+function ToolkitTabs({ tab, setTab, badge }: { tab: ToolkitTab; setTab: (tab: ToolkitTab) => void; badge: Record<string, number> }) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <div className="px-5 pt-5">
+      <div className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-900/50">
+        {TAB_KEYS.map(k => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition ${tab === k
+              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
+            {t(`tabs.${k}`)}
+            {badge[k] > 0 && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-semibold align-middle">{badge[k]}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ToolkitBanners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-4 px-3.5 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/60 rounded-xl text-xs text-red-600 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-4 px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/60 rounded-xl text-xs text-emerald-600 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function OverviewTab({ status, busy, output, onUpdateVersion, onUpdateAll, onMaintenance, onClearCache, onVerify, onRepair }: {
+  status: Status | null; busy: string | null; output: string | null
+  onUpdateVersion: () => void; onUpdateAll: () => void; onMaintenance: () => void
+  onClearCache: () => void; onVerify: () => void; onRepair: () => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  const updateAvailable = status?.update_available === true
+  const maintenance = status?.maintenance === true
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {updateAvailable && <Btn onClick={onUpdateVersion} waiting={busy === 'version'} type="primary">{t('overview.updateVersion', { version: status?.target_version })}</Btn>}
+        <Btn onClick={onUpdateAll} waiting={busy === 'all'} type={updateAvailable ? 'outline' : 'primary'}>{t('overview.updateAll')}</Btn>
+        <Btn onClick={onMaintenance} waiting={busy === 'maintenance'}>{maintenance ? t('overview.disableMaintenance') : t('overview.enableMaintenance')}</Btn>
+        <Btn onClick={onClearCache} waiting={busy === 'cache'}>{t('overview.clearCache')}</Btn>
+        <Btn onClick={onVerify} waiting={busy === 'verify'}>{t('overview.verifyCore')}</Btn>
+        <Btn onClick={onRepair} waiting={busy === 'repair'}>{t('overview.repairCore')}</Btn>
+      </div>
+      {output ? <Output text={output} /> : <p className="text-xs text-slate-400 mt-4">{t('overview.hint')}</p>}
+    </div>
+  )
+}
 
 function Toolkit({ base, installation, onChange }: { base: string; installation: Install; onChange: () => void }) {
   const { t } = useTranslation('DomainWordPressPage')
@@ -283,68 +401,18 @@ function Toolkit({ base, installation, onChange }: { base: string; installation:
 
   return (
     <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-800/40 overflow-hidden">
-      {/* Header strip */}
-      <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 flex-wrap">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center shrink-0"><Icon d={ICON.pencil} className="h-5 w-5" /></div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">WordPress <span className="text-slate-400 font-normal font-mono text-xs">· {dir}</span></div>
-            <div className="text-xs text-slate-400 mt-0.5 truncate">{installation.site_url}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {safeHref(installation.admin_url) && (
-            <a href={installation.admin_url} target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 px-3.5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-medium hover:bg-slate-800 dark:hover:bg-slate-100 transition">
-              {t('toolkit.adminPanel')} <span className="opacity-70">↗</span>
-            </a>
-          )}
-          {!isRoot && <button disabled={!!busy} onClick={remove} className="px-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-xs text-slate-500 hover:border-red-300 hover:text-red-600 dark:hover:border-red-800 dark:hover:text-red-400 disabled:opacity-50 transition">{busy === 'remove' ? '…' : t('toolkit.remove')}</button>}
-        </div>
-      </div>
+      <ToolkitHeader installation={installation} dir={dir} isRoot={isRoot} busy={busy} onRemove={remove} />
 
-      {/* Metrics */}
-      <div className="px-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Metric label={t('metrics.version')} v={status?.version ? status.version : '…'}
-          pill={status ? (status.update_available ? { t: `↑ ${status.target_version}`, c: 'amber' } : { t: t('metrics.upToDate'), c: 'green' }) : undefined} />
-        <Metric label={t('metrics.php')} v={status?.php || '…'} />
-        <Metric label={t('metrics.database')} v={status ? `${status.db_mb} MB` : '…'} />
-        <Metric label={t('metrics.maintenance')} v={status?.maintenance ? t('metrics.on') : t('metrics.off')}
-          pill={status?.maintenance ? { t: t('metrics.active'), c: 'amber' } : undefined} />
-      </div>
+      <ToolkitMetrics status={status} />
 
-      {/* Segmented tabs */}
-      <div className="px-5 pt-5">
-        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-100 dark:bg-slate-900/50">
-          {TAB_KEYS.map(k => (
-            <button key={k} onClick={() => setTab(k)}
-              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition ${tab === k
-                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
-              {t(`tabs.${k}`)}
-              {!!badge[k] && badge[k] > 0 && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-semibold align-middle">{badge[k]}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ToolkitTabs tab={tab} setTab={setTab} badge={badge} />
 
       <div className="p-5">
-        {error && <div className="mb-4 px-3.5 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/60 rounded-xl text-xs text-red-600 dark:text-red-300">{error}</div>}
-        {success && <div className="mb-4 px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/60 rounded-xl text-xs text-emerald-600 dark:text-emerald-300">{success}</div>}
+        <ToolkitBanners error={error} success={success} />
 
         {tab === 'overview' && (
-          <div>
-            <div className="flex flex-wrap gap-2">
-              {status?.update_available && <Btn onClick={updateVersion} waiting={busy === 'version'} type="primary">{t('overview.updateVersion', { version: status.target_version })}</Btn>}
-              <Btn onClick={updateAll} waiting={busy === 'all'} type={status?.update_available ? 'outline' : 'primary'}>{t('overview.updateAll')}</Btn>
-              <Btn onClick={maintenanceToggle} waiting={busy === 'maintenance'}>{status?.maintenance ? t('overview.disableMaintenance') : t('overview.enableMaintenance')}</Btn>
-              <Btn onClick={clearCache} waiting={busy === 'cache'}>{t('overview.clearCache')}</Btn>
-              <Btn onClick={verify} waiting={busy === 'verify'}>{t('overview.verifyCore')}</Btn>
-              <Btn onClick={repair} waiting={busy === 'repair'}>{t('overview.repairCore')}</Btn>
-            </div>
-            {output && <Output text={output} />}
-            {!output && <p className="text-xs text-slate-400 mt-4">{t('overview.hint')}</p>}
-          </div>
+          <OverviewTab status={status} busy={busy} output={output} onUpdateVersion={updateVersion} onUpdateAll={updateAll}
+            onMaintenance={maintenanceToggle} onClearCache={clearCache} onVerify={verify} onRepair={repair} />
         )}
 
         {tab === 'extensions' && (
@@ -446,31 +514,80 @@ function PackageTable({ type, items, busy, onRetry, onUpdateAll, onUpdate, onTog
         </div>
       )}
       <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
-        {items.map(p => {
-          const enabled = p.status === 'active'
-          const updateAvailable = p.update === 'available'
-          return (
-            <div key={p.name} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{p.name}</span>
-                  <StatusPill t={enabled ? t('packages.active') : t('packages.inactive')} c={enabled ? 'green' : 'slate'} />
-                </div>
-                <div className="text-xs text-slate-400 mt-0.5">
-                  {t('packages.version', { version: p.version })}{updateAvailable && <span className="text-amber-600 dark:text-amber-400">{t('packages.updateAvailable', { version: p.update_version })}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {updateAvailable && <button disabled={!!busy} onClick={() => onUpdate(p)} className="text-xs px-3 py-1.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-medium disabled:opacity-50 transition">{busy === `${type}:${p.name}` ? '…' : t('packages.update')}</button>}
-                {onToggle && <button disabled={!!busy} onClick={() => onToggle(p)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 transition">{busy === `plugin:${p.name}` ? '…' : enabled ? t('packages.deactivate') : t('packages.activate')}</button>}
-                {onActivate && !enabled && <button disabled={!!busy} onClick={() => onActivate(p)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 transition">{busy === `theme:${p.name}` ? '…' : t('packages.activate')}</button>}
-                {onActivate && enabled && <StatusPill t={t('packages.activeTheme')} c="green" />}
-              </div>
-            </div>
-          )
-        })}
+        {items.map(p => (
+          <PackageRow key={p.name} p={p} type={type} busy={busy} onUpdate={onUpdate} onToggle={onToggle} onActivate={onActivate} />
+        ))}
       </div>
     </div>
+  )
+}
+
+function PackageRow({ p, type, busy, onUpdate, onToggle, onActivate }: {
+  p: Package; type: 'plugin' | 'theme'; busy: string | null
+  onUpdate: (p: Package) => void; onToggle?: (p: Package) => void; onActivate?: (p: Package) => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  const enabled = p.status === 'active'
+  const updateAvailable = p.update === 'available'
+  return (
+    <div className="flex items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{p.name}</span>
+          <StatusPill t={enabled ? t('packages.active') : t('packages.inactive')} c={enabled ? 'green' : 'slate'} />
+        </div>
+        <div className="text-xs text-slate-400 mt-0.5">
+          {t('packages.version', { version: p.version })}{updateAvailable && <span className="text-amber-600 dark:text-amber-400">{t('packages.updateAvailable', { version: p.update_version })}</span>}
+        </div>
+      </div>
+      <PackageActions p={p} type={type} busy={busy} enabled={enabled} updateAvailable={updateAvailable}
+        onUpdate={onUpdate} onToggle={onToggle} onActivate={onActivate} />
+    </div>
+  )
+}
+
+const PKG_BTN = 'text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 transition'
+
+function PackageActions({ p, type, busy, enabled, updateAvailable, onUpdate, onToggle, onActivate }: {
+  p: Package; type: 'plugin' | 'theme'; busy: string | null; enabled: boolean; updateAvailable: boolean
+  onUpdate: (p: Package) => void; onToggle?: (p: Package) => void; onActivate?: (p: Package) => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      {updateAvailable && (
+        <button disabled={!!busy} onClick={() => onUpdate(p)}
+          className="text-xs px-3 py-1.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-medium disabled:opacity-50 transition">
+          {busy === `${type}:${p.name}` ? '…' : t('packages.update')}
+        </button>
+      )}
+      {onToggle && <PluginToggleButton p={p} busy={busy} enabled={enabled} onToggle={onToggle} />}
+      {onActivate && <ThemeActivateButton p={p} busy={busy} enabled={enabled} onActivate={onActivate} />}
+    </div>
+  )
+}
+
+function PluginToggleButton({ p, busy, enabled, onToggle }: {
+  p: Package; busy: string | null; enabled: boolean; onToggle: (p: Package) => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  const label = enabled ? t('packages.deactivate') : t('packages.activate')
+  return (
+    <button disabled={!!busy} onClick={() => onToggle(p)} className={PKG_BTN}>
+      {busy === `plugin:${p.name}` ? '…' : label}
+    </button>
+  )
+}
+
+function ThemeActivateButton({ p, busy, enabled, onActivate }: {
+  p: Package; busy: string | null; enabled: boolean; onActivate: (p: Package) => void
+}) {
+  const { t } = useTranslation('DomainWordPressPage')
+  if (enabled) return <StatusPill t={t('packages.activeTheme')} c="green" />
+  return (
+    <button disabled={!!busy} onClick={() => onActivate(p)} className={PKG_BTN}>
+      {busy === `theme:${p.name}` ? '…' : t('packages.activate')}
+    </button>
   )
 }
 
