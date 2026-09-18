@@ -179,32 +179,72 @@ function formatLimit(value: number, unit: string, unlimited: string) {
   return `${value.toLocaleString('en-US')} ${unit}`
 }
 
+const PLAN_DEFAULTS = {
+  name: '',
+  description: '',
+  disk_quota_mb: 1024,
+  traffic_quota_mb: 10240,
+  max_domain: 1,
+  max_db: 1,
+  max_email: 0,
+  mailbox_quota_mb: 0,
+  mail_send_limit_hour: 0,
+  mail_send_limit_day: 0,
+  max_ftp: 2,
+  max_app: 0,
+  php_version: '8.3',
+  fastcgi_cache: false,
+  client_max_body_mb: 64,
+  nginx_extra_directives: '',
+  waf_enabled: false,
+  waf_mode: 'on',
+  waf_paranoia: 1,
+  is_default: false,
+}
+
+// A falsy stored value takes the default, which is what the field-by-field
+// `plan.x || default` form did before; the loop keeps it to one branch.
+function initialForm(plan: Plan): Plan {
+  const filled: Record<string, unknown> = {}
+  for (const [key, fallback] of Object.entries(PLAN_DEFAULTS)) {
+    filled[key] = (plan as unknown as Record<string, unknown>)[key] || fallback
+  }
+  return { ...(filled as unknown as Plan), id: plan.id || 0, created_at: '' }
+}
+
+function WafSection({ form, setForm }: { form: Plan; setForm: (plan: Plan) => void }) {
+  const { t } = useTranslation('ServicePlansPage')
+  // WAF (ModSecurity + OWASP CRS) plan default
+  return (
+        <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('modal.wafHeading')}</h4>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="flex items-center gap-2 h-[38px] px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50/60 dark:bg-slate-900/40 cursor-pointer">
+              <input type="checkbox" checked={form.waf_enabled} onChange={e => setForm({ ...form, waf_enabled: e.target.checked })} className="rounded" />
+              <span className="text-sm text-slate-700 dark:text-slate-300">{t('modal.wafEnabled')}</span>
+            </label>
+            <select value={form.waf_mode} onChange={e => setForm({ ...form, waf_mode: e.target.value })}
+              disabled={!form.waf_enabled}
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 rounded text-sm disabled:opacity-50">
+              <option value="on">{t('modal.wafMode.block')}</option>
+              <option value="detect">{t('modal.wafMode.detect')}</option>
+            </select>
+            <select value={form.waf_paranoia} onChange={e => setForm({ ...form, waf_paranoia: Number(e.target.value) || 1 })}
+              disabled={!form.waf_enabled}
+              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 rounded text-sm disabled:opacity-50">
+              <option value={1}>{t('modal.wafParanoia.level1')}</option>
+              <option value={2}>{t('modal.wafParanoia.level2')}</option>
+              <option value={3}>{t('modal.wafParanoia.level3')}</option>
+              <option value={4}>{t('modal.wafParanoia.level4')}</option>
+            </select>
+          </div>
+        </div>
+  )
+}
+
 function PlanModal({ plan, versions, onClose, onSave }: { plan: Plan; versions: Version[]; onClose: () => void; onSave: () => void }) {
   const newItem = !plan.id
-  const [form, setForm] = useState<Plan>({
-    id: plan.id || 0,
-    name: plan.name || '',
-    description: plan.description || '',
-    disk_quota_mb: plan.disk_quota_mb || 1024,
-    traffic_quota_mb: plan.traffic_quota_mb || 10240,
-    max_domain: plan.max_domain || 1,
-    max_db: plan.max_db || 1,
-    max_email: plan.max_email || 0,
-    mailbox_quota_mb: plan.mailbox_quota_mb || 0,
-    mail_send_limit_hour: plan.mail_send_limit_hour || 0,
-    mail_send_limit_day: plan.mail_send_limit_day || 0,
-    max_ftp: plan.max_ftp || 2,
-    max_app: plan.max_app || 0,
-    php_version: plan.php_version || '8.3',
-    fastcgi_cache: plan.fastcgi_cache || false,
-    client_max_body_mb: plan.client_max_body_mb || 64,
-    nginx_extra_directives: plan.nginx_extra_directives || '',
-    waf_enabled: plan.waf_enabled || false,
-    waf_mode: plan.waf_mode || 'on',
-    waf_paranoia: plan.waf_paranoia || 1,
-    is_default: plan.is_default || false,
-    created_at: '',
-  })
+  const [form, setForm] = useState<Plan>(() => initialForm(plan))
   const { t } = useTranslation('ServicePlansPage')
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -263,30 +303,7 @@ function PlanModal({ plan, versions, onClose, onSave }: { plan: Plan; versions: 
           {t('modal.isDefault')}
         </label>
 
-        {/* WAF (ModSecurity + OWASP CRS) plan default */}
-        <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('modal.wafHeading')}</h4>
-          <div className="grid grid-cols-3 gap-3">
-            <label className="flex items-center gap-2 h-[38px] px-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50/60 dark:bg-slate-900/40 cursor-pointer">
-              <input type="checkbox" checked={form.waf_enabled} onChange={e => setForm({ ...form, waf_enabled: e.target.checked })} className="rounded" />
-              <span className="text-sm text-slate-700 dark:text-slate-300">{t('modal.wafEnabled')}</span>
-            </label>
-            <select value={form.waf_mode} onChange={e => setForm({ ...form, waf_mode: e.target.value })}
-              disabled={!form.waf_enabled}
-              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 rounded text-sm disabled:opacity-50">
-              <option value="on">{t('modal.wafMode.block')}</option>
-              <option value="detect">{t('modal.wafMode.detect')}</option>
-            </select>
-            <select value={form.waf_paranoia} onChange={e => setForm({ ...form, waf_paranoia: Number(e.target.value) || 1 })}
-              disabled={!form.waf_enabled}
-              className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 rounded text-sm disabled:opacity-50">
-              <option value={1}>{t('modal.wafParanoia.level1')}</option>
-              <option value={2}>{t('modal.wafParanoia.level2')}</option>
-              <option value={3}>{t('modal.wafParanoia.level3')}</option>
-              <option value={4}>{t('modal.wafParanoia.level4')}</option>
-            </select>
-          </div>
-        </div>
+        <WafSection form={form} setForm={setForm} />
         <p className="text-xs text-slate-500 dark:text-slate-500">{t('modal.hint')}</p>
 
         {error && <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-700 dark:text-red-300">{error}</div>}
