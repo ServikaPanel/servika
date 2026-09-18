@@ -36,6 +36,8 @@ type DatabaseStatus = {
 
 type GeoResponse = { countries: string[]; database: DatabaseStatus }
 
+type RuleType = Rule['type']
+
 // Presets for closing commonly exposed ports with one click. Text is resolved via i18n.
 const TEMPLATES = [
   { key: 'close_mysql', icon: ICON.database, ports: '3306' },
@@ -43,6 +45,8 @@ const TEMPLATES = [
   { key: 'close_mail', icon: ICON.mail, ports: '25, 465, 587, 110, 143' },
   { key: 'close_rpc', icon: ICON.link, ports: '111, 2049' },
 ] as const
+
+type Template = (typeof TEMPLATES)[number]
 
 // Manual rule modes; icons and colors are structural, text is resolved via i18n.
 const MODES = {
@@ -224,6 +228,31 @@ export default function FirewallPage() {
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-5">
       <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.firewall') }]} />
+      <PageHeader protectedPortsText={protectedPortsText} />
+
+      <Banners error={error} success={success} />
+
+      <TemplatesSection busy={busy} applyTemplate={applyTemplate} />
+
+      <ManualRuleSection add={add} busy={busy} type={type} setType={setType} ip={ip} setIp={setIp}
+        port={port} setPort={setPort} protocol={protocol} setProtocol={setProtocol}
+        description={description} setDescription={setDescription} preview={preview}
+        ipRequired={ipRequired} restrictionWarning={restrictionWarning} />
+
+      <GeoSection database={database} busy={busy} saveCredentials={saveCredentials}
+        accountId={accountId} setAccountId={setAccountId} licenseKey={licenseKey} setLicenseKey={setLicenseKey}
+        updateDatabase={updateDatabase} blockCountry={blockCountry} unblockCountry={unblockCountry}
+        newCountry={newCountry} setNewCountry={setNewCountry} selectable={selectable} blocked={blocked} nameOf={nameOf} />
+
+      <RulesSection rules={rules} loading={loading} busy={busy} load={load} remove={remove} />
+    </div>
+  )
+}
+
+function PageHeader({ protectedPortsText }: { protectedPortsText: string }) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
       <div className="flex items-center gap-3 mb-1">
         <span className="text-brand-600 dark:text-brand-400"><Icon d={ICON.shield} className="h-6 w-6" /></span>
         <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>
@@ -232,13 +261,27 @@ export default function FirewallPage() {
         {t('subtitle.pre')}<strong>{t('subtitle.bold')}</strong>{t('subtitle.post')}
       </p>
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
       <div className="mb-5 flex items-start gap-1.5 px-4 py-2.5 rounded-lg bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 text-xs text-sky-800 dark:text-sky-200">
         <Icon d={ICON.info} className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{t('info.pre')}<strong>{t('info.bold')}</strong>{t('info.mid')}<span className="font-mono">{protectedPortsText || t('protectedPortsFallback')}</span>{t('info.post')}</span>
       </div>
+    </>
+  )
+}
 
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function TemplatesSection({ busy, applyTemplate }: { busy: string | null; applyTemplate: (template: Template) => void }) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
       {/* ---------- PRESETS ---------- */}
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.bolt} className="h-4 w-4" /> {t('templates.sectionTitle')} <span className="text-xs font-normal text-slate-400">{t('templates.sectionHint')}</span></h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -257,7 +300,22 @@ export default function FirewallPage() {
           </div>
         ))}
       </div>
+    </>
+  )
+}
 
+function ManualRuleSection({ add, busy, type, setType, ip, setIp, port, setPort, protocol, setProtocol,
+  description, setDescription, preview, ipRequired, restrictionWarning }: {
+  add: (event: React.SubmitEvent) => void; busy: string | null
+  type: RuleType; setType: (value: RuleType) => void
+  ip: string; setIp: (value: string) => void; port: string; setPort: (value: string) => void
+  protocol: 'tcp' | 'udp'; setProtocol: (value: 'tcp' | 'udp') => void
+  description: string; setDescription: (value: string) => void
+  preview: string; ipRequired: boolean; restrictionWarning: boolean
+}) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
       {/* ---------- MANUAL RULE ---------- */}
       <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.pencil} className="h-4 w-4" /> {t('form.sectionTitle')}</h2>
       <form onSubmit={add} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-6">
@@ -326,39 +384,37 @@ export default function FirewallPage() {
           {busy === 'manual' ? t('form.submitting') : t('form.submit')}
         </button>
       </form>
+    </>
+  )
+}
 
-      {/* ---------- COUNTRY BLOCKING ---------- */}
-      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.globe} className="h-4 w-4" /> {t('geo.sectionTitle')}</h2>
-      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-6">
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('geo.sectionHint')}</p>
+function databaseStateLabel(database: DatabaseStatus | null, t: (key: string) => string): string {
+  if (database?.available) return t('geo.status.ready')
+  if (database?.configured) return t('geo.status.notDownloaded')
+  return t('geo.status.notConfigured')
+}
 
-        <form onSubmit={saveCredentials} className="mb-4">
-          <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">{t('geo.credentials.title')}</div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{t('geo.credentials.hint')}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="block">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.credentials.accountLabel')}</span>
-              <input value={accountId} onChange={e => setAccountId(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" placeholder="123456"
-                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-            </label>
-            <label className="block sm:col-span-2">
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.credentials.keyLabel')}</span>
-              <input type="password" autoComplete="off" value={licenseKey} onChange={e => setLicenseKey(e.target.value)}
-                placeholder={database?.configured ? t('geo.credentials.keyStored') : t('geo.credentials.keyPlaceholder')}
-                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-            </label>
+function GeoCoverageCell({ database }: { database: DatabaseStatus | null }) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+          <div>
+            <div className="text-[11px] text-slate-400">{t('geo.status.coverage')}</div>
+            <div className="text-sm text-slate-800 dark:text-slate-100">
+              {database?.available ? t('geo.status.countryCount', { n: database.countries.length }) : '-'}
+              {database?.available && !database.ipv6 && <span className="ml-1 text-amber-600 dark:text-amber-400">{t('geo.status.ipv4Only')}</span>}
+            </div>
           </div>
-          <button disabled={busy === 'credentials'} className="mt-3 px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-            {busy === 'credentials' ? t('geo.credentials.saving') : t('geo.credentials.save')}
-          </button>
-        </form>
+  )
+}
 
+function GeoDatabaseStatus({ database }: { database: DatabaseStatus | null }) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 mb-3">
           <div>
             <div className="text-[11px] text-slate-400">{t('geo.status.database')}</div>
-            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              {database?.available ? t('geo.status.ready') : database?.configured ? t('geo.status.notDownloaded') : t('geo.status.notConfigured')}
-            </div>
+            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">{databaseStateLabel(database, t)}</div>
           </div>
           <div>
             <div className="text-[11px] text-slate-400">{t('geo.status.buildDate')}</div>
@@ -368,13 +424,7 @@ export default function FirewallPage() {
             <div className="text-[11px] text-slate-400">{t('geo.status.updatedAt')}</div>
             <div className="text-sm font-mono text-slate-800 dark:text-slate-100">{database?.updated_at || '-'}</div>
           </div>
-          <div>
-            <div className="text-[11px] text-slate-400">{t('geo.status.coverage')}</div>
-            <div className="text-sm text-slate-800 dark:text-slate-100">
-              {database?.available ? t('geo.status.countryCount', { n: database.countries.length }) : '-'}
-              {database?.available && !database.ipv6 && <span className="ml-1 text-amber-600 dark:text-amber-400">{t('geo.status.ipv4Only')}</span>}
-            </div>
-          </div>
+          <GeoCoverageCell database={database} />
         </div>
 
         {database?.last_error && (
@@ -382,12 +432,19 @@ export default function FirewallPage() {
             {t('geo.status.lastError', { message: database.last_error })}
           </div>
         )}
+    </>
+  )
+}
 
-        <button type="button" onClick={updateDatabase} disabled={!database?.configured || busy === 'update'}
-          className="mb-4 px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">
-          {busy === 'update' ? t('geo.updating') : t('geo.updateNow')}
-        </button>
-
+function GeoBlockedList({ database, busy, blockCountry, unblockCountry, newCountry, setNewCountry, selectable, blocked, nameOf }: {
+  database: DatabaseStatus | null; busy: string | null
+  blockCountry: (event: React.SubmitEvent) => void; unblockCountry: (code: string) => void
+  newCountry: string; setNewCountry: (value: string) => void; selectable: string[]; blocked: string[]
+  nameOf: (code: string) => string
+}) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
         <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">{t('geo.blocked.title')}</div>
         <form onSubmit={blockCountry} className="flex flex-wrap items-end gap-2 mb-3">
           <label className="block flex-1 min-w-[220px]">
@@ -415,6 +472,56 @@ export default function FirewallPage() {
             ))}
           </div>
         )}
+    </>
+  )
+}
+
+function GeoSection({ database, busy, saveCredentials, accountId, setAccountId, licenseKey, setLicenseKey,
+  updateDatabase, blockCountry, unblockCountry, newCountry, setNewCountry, selectable, blocked, nameOf }: {
+  database: DatabaseStatus | null; busy: string | null; saveCredentials: (event: React.SubmitEvent) => void
+  accountId: string; setAccountId: (value: string) => void; licenseKey: string; setLicenseKey: (value: string) => void
+  updateDatabase: () => void; blockCountry: (event: React.SubmitEvent) => void; unblockCountry: (code: string) => void
+  newCountry: string; setNewCountry: (value: string) => void; selectable: string[]; blocked: string[]
+  nameOf: (code: string) => string
+}) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
+      {/* ---------- COUNTRY BLOCKING ---------- */}
+      <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 flex items-center gap-2"><Icon d={ICON.globe} className="h-4 w-4" /> {t('geo.sectionTitle')}</h2>
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 mb-6">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('geo.sectionHint')}</p>
+
+        <form onSubmit={saveCredentials} className="mb-4">
+          <div className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-2">{t('geo.credentials.title')}</div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{t('geo.credentials.hint')}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.credentials.accountLabel')}</span>
+              <input value={accountId} onChange={e => setAccountId(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" placeholder="123456"
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{t('geo.credentials.keyLabel')}</span>
+              <input type="password" autoComplete="off" value={licenseKey} onChange={e => setLicenseKey(e.target.value)}
+                placeholder={database?.configured ? t('geo.credentials.keyStored') : t('geo.credentials.keyPlaceholder')}
+                className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+            </label>
+          </div>
+          <button disabled={busy === 'credentials'} className="mt-3 px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+            {busy === 'credentials' ? t('geo.credentials.saving') : t('geo.credentials.save')}
+          </button>
+        </form>
+
+        <GeoDatabaseStatus database={database} />
+
+        <button type="button" onClick={updateDatabase} disabled={!database?.configured || busy === 'update'}
+          className="mb-4 px-3 py-1.5 text-xs font-medium border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">
+          {busy === 'update' ? t('geo.updating') : t('geo.updateNow')}
+        </button>
+
+        <GeoBlockedList database={database} busy={busy} blockCountry={blockCountry} unblockCountry={unblockCountry}
+          newCountry={newCountry} setNewCountry={setNewCountry} selectable={selectable} blocked={blocked} nameOf={nameOf} />
 
         <ul className="mt-3 space-y-1 text-[11px] text-slate-500 dark:text-slate-400 list-disc list-inside">
           <li>{t('geo.noteAllPorts')}</li>
@@ -422,7 +529,16 @@ export default function FirewallPage() {
           <li>{t('geo.noteApproximate')}</li>
         </ul>
       </div>
+    </>
+  )
+}
 
+function RulesSection({ rules, loading, busy, load, remove }: {
+  rules: Rule[]; loading: boolean; busy: string | null; load: () => void; remove: (rule: Rule) => void
+}) {
+  const { t } = useTranslation('FirewallPage')
+  return (
+    <>
       {/* ---------- ACTIVE RULES ---------- */}
       <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
@@ -468,7 +584,7 @@ export default function FirewallPage() {
           </table>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
