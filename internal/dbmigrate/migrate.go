@@ -25,6 +25,13 @@ var ErrResumeRefused = errors.New("migration changed since it stopped part way t
 
 // Run applies every unapplied migration file in dir, in name order.
 func Run(d *sql.DB, dir string) error {
+	// A migration file is SQL run as the database superuser. Reading it from a
+	// path another account can write hands that account the whole database, so
+	// the runner refuses rather than applies (see trust.go).
+	if ok, reason := trustedDir(dir); !ok {
+		refuseMigrationDir(dir, reason)
+		return nil
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		logx.Errorf("migration directory could not be read: %v", err)
@@ -51,9 +58,17 @@ func Run(d *sql.DB, dir string) error {
 func migrationNames(entries []os.DirEntry) []string {
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
-			names = append(names, e.Name())
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
+			continue
 		}
+		// The same rule the directory took, per file: a single file swapped for a
+		// symlink, or left writable, is enough to run someone else's SQL as the
+		// database superuser.
+		if ok, reason := trustedFile(e); !ok {
+			logx.Errorf("migration %s skipped: %s", e.Name(), reason)
+			continue
+		}
+		names = append(names, e.Name())
 	}
 	sort.Strings(names)
 	return names
