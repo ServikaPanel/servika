@@ -37,6 +37,86 @@ function displayDirectory(directory: string): string {
   return directory
 }
 
+type InstallationsTableProps = {
+  installations: Installation[]
+  loadingInstallations: boolean
+  busyKey: string | null
+  listAll: () => void
+  update: (installation: Installation) => void
+  remove: (installation: Installation) => void
+}
+
+function InstallationsTable({ installations, loadingInstallations, busyKey, listAll, update, remove }: InstallationsTableProps) {
+  const { t } = useTranslation('WordPressPage')
+  return (
+      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden mb-6">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('installedSites')} {!loadingInstallations && <span className="text-slate-400 font-normal">({installations.length})</span>}</h3>
+          <button onClick={listAll} disabled={loadingInstallations} className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">{t('refresh')}</button>
+        </div>
+        <div className={responsiveTableContainerClass}>
+          <table className={responsiveTableClass}>
+            <thead className={responsiveTableHeadClass}>
+              <tr>
+                <th className="text-left font-medium px-4 py-2.5">{t('table.domain')}</th>
+                <th className="text-left font-medium px-4 py-2.5">{t('table.directory')}</th>
+                <th className="text-left font-medium px-4 py-2.5">{t('table.version')}</th>
+                <th className="text-left font-medium px-4 py-2.5">{t('table.status')}</th>
+                <th className="text-left font-medium px-4 py-2.5 whitespace-nowrap">{t('table.installed')}</th>
+                <th className="text-right font-medium px-4 py-2.5">{t('table.actions')}</th>
+              </tr>
+            </thead>
+            <tbody className={responsiveTableBodyClass}>
+              {loadingInstallations ? (
+                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{t('scanning')}</td></tr>
+              ) : installations.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-10 text-center">
+                  <div className="mb-1"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">{t('emptyTitle')}</p>
+                  <p className="text-xs text-slate-400 mt-1">{t('emptyHint')}</p>
+                </td></tr>
+              ) : (
+                installations.map(installation => {
+                  const key = installation.domain_id + installation.dir
+                  const isOutdated = installation.status === 'outdated'
+                  return (
+                    <tr key={key} className={`${responsiveTableRowClass} ${isOutdated ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
+                      <td data-label={t('table.domain')} className={responsiveTableCellClass}>
+                        {safeHref(installation.site_url)
+                          ? <a href={installation.site_url} target="_blank" rel="noreferrer" className="font-medium text-slate-800 dark:text-slate-100 hover:text-brand-600 dark:hover:text-brand-400">{installation.domain_name}</a>
+                          : <span className="font-medium text-slate-800 dark:text-slate-100">{installation.domain_name}</span>}
+                      </td>
+                      <td data-label={t('table.directory')} className={responsiveTableCodeCellClass}>{displayDirectory(installation.dir)}</td>
+                      <td data-label={t('table.version')} className={responsiveTableCellClass}>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono font-semibold">{installation.version ? `v${installation.version}` : '-'}</span>
+                      </td>
+                      <td data-label={t('table.status')} className={responsiveTableCellClass}><StatusBadge installation={installation} /></td>
+                      <td data-label={t('table.installed')} className={responsiveTableCodeCellClass}>{installation.install_date || '-'}</td>
+                      <td className={responsiveTableActionCellClass}>
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {safeHref(installation.admin_url) && (
+                            <a href={installation.admin_url} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">{t('adminButton')}</a>
+                          )}
+                          <button disabled={!!busyKey} onClick={() => update(installation)}
+                            className={`text-xs px-2.5 py-1 rounded-md disabled:opacity-50 ${isOutdated ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                            {busyKey === key ? '...' : isOutdated ? t('updateToVersion', { version: installation.last_version }) : t('update')}
+                          </button>
+                          {!isRootDirectory(installation.dir) && (
+                            <button disabled={!!busyKey} onClick={() => remove(installation)} className="text-xs px-2.5 py-1 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50">{t('delete')}</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+  )
+}
+
 export default function WordPressPage() {
   const { t } = useTranslation('WordPressPage')
   const { confirm, notify } = useDialog()
@@ -148,71 +228,7 @@ export default function WordPressPage() {
       )}
 
       {/* Full-width table of all installations */}
-      <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden mb-6">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700/60">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t('installedSites')} {!loadingInstallations && <span className="text-slate-400 font-normal">({installations.length})</span>}</h3>
-          <button onClick={listAll} disabled={loadingInstallations} className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50">{t('refresh')}</button>
-        </div>
-        <div className={responsiveTableContainerClass}>
-          <table className={responsiveTableClass}>
-            <thead className={responsiveTableHeadClass}>
-              <tr>
-                <th className="text-left font-medium px-4 py-2.5">{t('table.domain')}</th>
-                <th className="text-left font-medium px-4 py-2.5">{t('table.directory')}</th>
-                <th className="text-left font-medium px-4 py-2.5">{t('table.version')}</th>
-                <th className="text-left font-medium px-4 py-2.5">{t('table.status')}</th>
-                <th className="text-left font-medium px-4 py-2.5 whitespace-nowrap">{t('table.installed')}</th>
-                <th className="text-right font-medium px-4 py-2.5">{t('table.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className={responsiveTableBodyClass}>
-              {loadingInstallations ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-slate-400">{t('scanning')}</td></tr>
-              ) : installations.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-10 text-center">
-                  <div className="mb-1"><Icon d={ICON.pencil} className="h-6 w-6" /></div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{t('emptyTitle')}</p>
-                  <p className="text-xs text-slate-400 mt-1">{t('emptyHint')}</p>
-                </td></tr>
-              ) : (
-                installations.map(installation => {
-                  const key = installation.domain_id + installation.dir
-                  const isOutdated = installation.status === 'outdated'
-                  return (
-                    <tr key={key} className={`${responsiveTableRowClass} ${isOutdated ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}>
-                      <td data-label={t('table.domain')} className={responsiveTableCellClass}>
-                        {safeHref(installation.site_url)
-                          ? <a href={installation.site_url} target="_blank" rel="noreferrer" className="font-medium text-slate-800 dark:text-slate-100 hover:text-brand-600 dark:hover:text-brand-400">{installation.domain_name}</a>
-                          : <span className="font-medium text-slate-800 dark:text-slate-100">{installation.domain_name}</span>}
-                      </td>
-                      <td data-label={t('table.directory')} className={responsiveTableCodeCellClass}>{displayDirectory(installation.dir)}</td>
-                      <td data-label={t('table.version')} className={responsiveTableCellClass}>
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono font-semibold">{installation.version ? `v${installation.version}` : '-'}</span>
-                      </td>
-                      <td data-label={t('table.status')} className={responsiveTableCellClass}><StatusBadge installation={installation} /></td>
-                      <td data-label={t('table.installed')} className={responsiveTableCodeCellClass}>{installation.install_date || '-'}</td>
-                      <td className={responsiveTableActionCellClass}>
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {safeHref(installation.admin_url) && (
-                            <a href={installation.admin_url} target="_blank" rel="noreferrer" className="text-xs px-2.5 py-1 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">{t('adminButton')}</a>
-                          )}
-                          <button disabled={!!busyKey} onClick={() => update(installation)}
-                            className={`text-xs px-2.5 py-1 rounded-md disabled:opacity-50 ${isOutdated ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                            {busyKey === key ? '...' : isOutdated ? t('updateToVersion', { version: installation.last_version }) : t('update')}
-                          </button>
-                          {!isRootDirectory(installation.dir) && (
-                            <button disabled={!!busyKey} onClick={() => remove(installation)} className="text-xs px-2.5 py-1 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50">{t('delete')}</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <InstallationsTable installations={installations} loadingInstallations={loadingInstallations} busyKey={busyKey} listAll={listAll} update={update} remove={remove} />
 
       {/* New installation */}
       <form onSubmit={install} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 max-w-2xl">
