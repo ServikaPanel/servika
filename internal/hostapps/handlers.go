@@ -302,6 +302,119 @@ func (h *Handlers) SetEnabled(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"enabled": body.Enabled})
 }
 
+// Backups — GET /system/host-apps/{id}/backups (AdminOnly).
+func (h *Handlers) Backups(w http.ResponseWriter, r *http.Request) {
+	app, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	list, err := ListBackups(r.Context(), h.DB, app.ID)
+	if err != nil {
+		complain("list the backups of %s: %v", app.Code, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database query failed")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"backups": list})
+}
+
+// Backup — POST /system/host-apps/{id}/backups (AdminOnly).
+//
+// Answered with 202 and run in the background for the same reason as an
+// install: the application is stopped, a tree of any size is archived, and a
+// browser that walks away must not cancel that halfway.
+func (h *Handlers) Backup(w http.ResponseWriter, r *http.Request) {
+	if !h.requireEnabled(w, r) {
+		return
+	}
+	app, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&body); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	h.runBackupJob(w, r, app, "backup", func(ctx context.Context) error {
+		_, err := CreateBackup(ctx, h.DB, app, trim(body.Note, 255), actorOf(r))
+		return err
+	})
+}
+
+// Restore — POST /system/host-apps/{id}/backups/{backup}/restore (AdminOnly).
+func (h *Handlers) Restore(w http.ResponseWriter, r *http.Request) {
+	if !h.requireEnabled(w, r) {
+		return
+	}
+	app, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	backupID, ok := backupIDOf(w, r)
+	if !ok {
+		return
+	}
+	h.runBackupJob(w, r, app, "restore", func(ctx context.Context) error {
+		return RestoreBackup(ctx, h.DB, app, backupID)
+	})
+}
+
+// DropBackup — DELETE /system/host-apps/{id}/backups/{backup} (AdminOnly).
+//
+// Deleting a file is quick enough to answer inline, unlike the two above.
+func (h *Handlers) DropBackup(w http.ResponseWriter, r *http.Request) {
+	app, ok := h.load(w, r)
+	if !ok {
+		return
+	}
+	backupID, ok := backupIDOf(w, r)
+	if !ok {
+		return
+	}
+	if err := DeleteBackup(r.Context(), h.DB, app, backupID); err != nil {
+		h.fail(w, err, "the backup could not be deleted")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// runBackupJob starts one long backup operation and answers 202.
+//
+// The job row is what the screen polls, and it is the same row install and
+// remove write, so one jobs list covers every slow operation on this screen.
+func (h *Handlers) runBackupJob(w http.ResponseWriter, r *http.Request,
+	app App, action string, run func(context.Context) error) {
+	jobID, err := startJob(r.Context(), h.DB, &app.ID, app.Code, action, actorOf(r))
+	if err != nil {
+		complain("start the %s job: %v", action, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "database write failed")
+		return
+	}
+	// #nosec G118 -- asynchronous by design; internal/appbackup applies its own deadlines.
+	bgjob.Go("hostapps: "+action,
+		func(err error) { finishJob(context.Background(), h.DB, jobID, err) },
+		func() { finishJob(context.Background(), h.DB, jobID, run(context.Background())) })
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{"job_id": jobID, "action": action})
+}
+
+func backupIDOf(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "backup"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid backup id")
+		return 0, false
+	}
+	return id, true
+}
+
+func trim(text string, limit int) string {
+	if len(text) > limit {
+		return text[:limit]
+	}
+	return text
+}
+
 // Logs — GET /system/host-apps/{id}/logs (AdminOnly).
 func (h *Handlers) Logs(w http.ResponseWriter, r *http.Request) {
 	app, ok := h.load(w, r)
