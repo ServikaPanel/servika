@@ -65,6 +65,183 @@ const PRESET_GROUPS: Group[] = [
     packages: ['gnupg2', 'openssl', 'fail2ban'] },
 ]
 
+type GroupsSectionProps = {
+  open: Set<string>
+  groupStatus: Record<string, boolean>
+  processing: string | null
+  toggleGroup: (g: Group) => void
+  togglePackage: (pkg: string, installed: boolean) => void
+}
+
+function GroupsSection({ open, groupStatus, processing, toggleGroup, togglePackage }: GroupsSectionProps) {
+  const { t } = useTranslation('PackagesPage')
+  return (
+      <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/60">
+        <div className="mb-3 flex items-center gap-2">
+          <IconSvg d={ICONS.cube} className="h-4 w-4 text-slate-400" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('quickInstallGroups')}</h2>
+        </div>
+        <div className="space-y-2">
+          {PRESET_GROUPS.map(group => {
+            const isOpen = open.has(group.key)
+            const installedCount = group.packages.filter(p => groupStatus[p]).length
+            return (
+              <div key={group.key} className="overflow-hidden rounded-xl border border-slate-100 dark:border-slate-800">
+                <button onClick={() => toggleGroup(group)}
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <IconSvg d={group.icon} className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(`groups.${group.key}.name`)}</div>
+                      <div className="truncate text-[11px] text-slate-400 dark:text-slate-500">{t(`groups.${group.key}.description`)}</div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    {isOpen && (
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">{installedCount}</span>
+                        <span> / {group.packages.length}</span>
+                      </span>
+                    )}
+                    <IconSvg d={ICONS.chevron} className={`h-4 w-4 text-slate-300 transition-transform dark:text-slate-600 ${isOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="space-y-1 border-t border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+                    {group.packages.map(p => {
+                      const isInstalled = !!groupStatus[p]
+                      const pending = processing === p
+                      return (
+                        <div key={p} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white dark:hover:bg-slate-800/50">
+                          <div className="min-w-0 flex-1">
+                            <code className="text-sm font-mono text-slate-900 dark:text-slate-100">{p}</code>
+                            {isInstalled && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('badges.installed')}</span>}
+                          </div>
+                          <button onClick={() => togglePackage(p, isInstalled)}
+                            disabled={pending}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
+                              isInstalled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                            } ${pending ? 'cursor-wait opacity-50' : ''}`}
+                            title={pending ? t('actions.processing') : (isInstalled ? t('actions.remove') : t('actions.install'))}>
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition dark:bg-slate-800 ${isInstalled ? 'translate-x-5' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </section>
+  )
+}
+
+type SearchSectionProps = {
+  tab: Tab
+  setTab: (tab: Tab) => void
+  query: string
+  setQuery: (query: string) => void
+  results: Package[]
+  setResults: (results: Package[]) => void
+  searched: boolean
+  setSearched: (searched: boolean) => void
+  loading: boolean
+  processing: string | null
+  search: () => void
+  installPackage: (pkg: string) => void
+  removePackage: (pkg: string) => void
+}
+
+function SearchSection({ tab, setTab, query, setQuery, results, setResults, searched, setSearched, loading, processing, search, installPackage, removePackage }: SearchSectionProps) {
+  const { t } = useTranslation('PackagesPage')
+  return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/60">
+        <div className="mb-3 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-800 dark:bg-slate-800/60">
+          <button onClick={() => { setTab('search'); setResults([]); setSearched(false) }}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${tab === 'search' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+            <IconSvg d={ICONS.search} className="mr-1.5 inline h-3.5 w-3.5" />
+            {t('tabs.search')}
+          </button>
+          <button onClick={() => { setTab('installed'); setResults([]); setSearched(false) }}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${tab === 'installed' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
+            <IconSvg d={ICONS.server} className="mr-1.5 inline h-3.5 w-3.5" />
+            {t('tabs.installed')}
+          </button>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+          <input type="text" value={query} onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && search()}
+            placeholder={tab === 'search' ? t('searchPlaceholder') : t('installedPlaceholder')}
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-mono placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100" />
+          <button onClick={search} disabled={loading || !query.trim()}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 sm:w-auto">
+            {loading ? t('actions.searching') : t('actions.search')}
+          </button>
+        </div>
+
+        {searched && !loading && results.length === 0 && (
+          <div className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">{t('noResults')}</div>
+        )}
+
+        {results.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="mb-2 text-xs text-slate-400 dark:text-slate-500">{t('resultsCount', { count: results.length })}</div>
+            {results.map(p => (
+              <div key={p.name}
+                className={`flex flex-col gap-3 rounded-xl px-3 py-2 sm:flex-row sm:items-center ${
+                  p.installed ? 'border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40'}`}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
+                    {p.version && <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{p.version}</span>}
+                    {p.installed && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('badges.installed')}</span>}
+                    {p.protected && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{t('badges.protected')}</span>}
+                  </div>
+                  {p.description && <div className="truncate text-xs text-slate-500 dark:text-slate-400">{p.description}</div>}
+                </div>
+                {p.installed ? (
+                  <button onClick={() => removePackage(p.name)}
+                    disabled={p.protected || processing === p.name}
+                    className="w-full rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-900/20 sm:w-auto">
+                    {processing === p.name ? t('actions.removing') : t('actions.remove')}
+                  </button>
+                ) : (
+                  <button onClick={() => installPackage(p.name)}
+                    disabled={processing === p.name}
+                    className="w-full rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 sm:w-auto">
+                    {processing === p.name ? t('actions.installing') : t('actions.install')}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+  )
+}
+
+function OutputModal({ modal, close }: { modal: { title: string; output: string }; close: () => void }) {
+  const { t } = useTranslation('PackagesPage')
+  return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => close()}>
+          <div className="flex max-h-[80vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{modal.title}</h3>
+              <button onClick={() => close()} className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"><Icon d={ICON.close} className="h-4 w-4" /></button>
+            </div>
+            <pre className="flex-1 overflow-auto bg-slate-900 p-3 font-mono text-xs text-slate-100 whitespace-pre-wrap">{modal.output}</pre>
+            <div className="border-t border-slate-200 px-4 py-2 text-right dark:border-slate-700">
+              <button onClick={() => close()}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">{t('actions.close')}</button>
+            </div>
+          </div>
+        </div>
+  )
+}
+
 export default function PackagesPage() {
   const { t } = useTranslation('PackagesPage')
   const { confirm } = useDialog()
@@ -196,146 +373,11 @@ export default function PackagesPage() {
       {success && <div className="mb-3 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/15 dark:text-emerald-300">{success}</div>}
 
       {/* Group accordion */}
-      <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/60">
-        <div className="mb-3 flex items-center gap-2">
-          <IconSvg d={ICONS.cube} className="h-4 w-4 text-slate-400" />
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('quickInstallGroups')}</h2>
-        </div>
-        <div className="space-y-2">
-          {PRESET_GROUPS.map(group => {
-            const isOpen = open.has(group.key)
-            const installedCount = group.packages.filter(p => groupStatus[p]).length
-            return (
-              <div key={group.key} className="overflow-hidden rounded-xl border border-slate-100 dark:border-slate-800">
-                <button onClick={() => toggleGroup(group)}
-                  className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <IconSvg d={group.icon} className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(`groups.${group.key}.name`)}</div>
-                      <div className="truncate text-[11px] text-slate-400 dark:text-slate-500">{t(`groups.${group.key}.description`)}</div>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    {isOpen && (
-                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">{installedCount}</span>
-                        <span> / {group.packages.length}</span>
-                      </span>
-                    )}
-                    <IconSvg d={ICONS.chevron} className={`h-4 w-4 text-slate-300 transition-transform dark:text-slate-600 ${isOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                </button>
-                {isOpen && (
-                  <div className="space-y-1 border-t border-slate-100 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/40">
-                    {group.packages.map(p => {
-                      const isInstalled = !!groupStatus[p]
-                      const pending = processing === p
-                      return (
-                        <div key={p} className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white dark:hover:bg-slate-800/50">
-                          <div className="min-w-0 flex-1">
-                            <code className="text-sm font-mono text-slate-900 dark:text-slate-100">{p}</code>
-                            {isInstalled && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('badges.installed')}</span>}
-                          </div>
-                          <button onClick={() => togglePackage(p, isInstalled)}
-                            disabled={pending}
-                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
-                              isInstalled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                            } ${pending ? 'cursor-wait opacity-50' : ''}`}
-                            title={pending ? t('actions.processing') : (isInstalled ? t('actions.remove') : t('actions.install'))}>
-                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition dark:bg-slate-800 ${isInstalled ? 'translate-x-5' : 'translate-x-1'}`} />
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </section>
+      <GroupsSection open={open} groupStatus={groupStatus} processing={processing} toggleGroup={toggleGroup} togglePackage={togglePackage} />
 
-      {/* Search */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/60">
-        <div className="mb-3 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-800 dark:bg-slate-800/60">
-          <button onClick={() => { setTab('search'); setResults([]); setSearched(false) }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${tab === 'search' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-            <IconSvg d={ICONS.search} className="mr-1.5 inline h-3.5 w-3.5" />
-            {t('tabs.search')}
-          </button>
-          <button onClick={() => { setTab('installed'); setResults([]); setSearched(false) }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${tab === 'installed' ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'}`}>
-            <IconSvg d={ICONS.server} className="mr-1.5 inline h-3.5 w-3.5" />
-            {t('tabs.installed')}
-          </button>
-        </div>
+      <SearchSection tab={tab} setTab={setTab} query={query} setQuery={setQuery} results={results} setResults={setResults} setSearched={setSearched} searched={searched} loading={loading} processing={processing} search={search} installPackage={installPackage} removePackage={removePackage} />
 
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-          <input type="text" value={query} onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search()}
-            placeholder={tab === 'search' ? t('searchPlaceholder') : t('installedPlaceholder')}
-            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-mono placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-100" />
-          <button onClick={search} disabled={loading || !query.trim()}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 sm:w-auto">
-            {loading ? t('actions.searching') : t('actions.search')}
-          </button>
-        </div>
-
-        {searched && !loading && results.length === 0 && (
-          <div className="py-8 text-center text-sm text-slate-400 dark:text-slate-500">{t('noResults')}</div>
-        )}
-
-        {results.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="mb-2 text-xs text-slate-400 dark:text-slate-500">{t('resultsCount', { count: results.length })}</div>
-            {results.map(p => (
-              <div key={p.name}
-                className={`flex flex-col gap-3 rounded-xl px-3 py-2 sm:flex-row sm:items-center ${
-                  p.installed ? 'border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20' : 'border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40'}`}>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
-                    {p.version && <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">{p.version}</span>}
-                    {p.installed && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('badges.installed')}</span>}
-                    {p.protected && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{t('badges.protected')}</span>}
-                  </div>
-                  {p.description && <div className="truncate text-xs text-slate-500 dark:text-slate-400">{p.description}</div>}
-                </div>
-                {p.installed ? (
-                  <button onClick={() => removePackage(p.name)}
-                    disabled={p.protected || processing === p.name}
-                    className="w-full rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400 dark:hover:bg-red-900/20 sm:w-auto">
-                    {processing === p.name ? t('actions.removing') : t('actions.remove')}
-                  </button>
-                ) : (
-                  <button onClick={() => installPackage(p.name)}
-                    disabled={processing === p.name}
-                    className="w-full rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-60 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 sm:w-auto">
-                    {processing === p.name ? t('actions.installing') : t('actions.install')}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {outputModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOutputModal(null)}>
-          <div className="flex max-h-[80vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-xl dark:bg-slate-800" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{outputModal.title}</h3>
-              <button onClick={() => setOutputModal(null)} className="text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"><Icon d={ICON.close} className="h-4 w-4" /></button>
-            </div>
-            <pre className="flex-1 overflow-auto bg-slate-900 p-3 font-mono text-xs text-slate-100 whitespace-pre-wrap">{outputModal.output}</pre>
-            <div className="border-t border-slate-200 px-4 py-2 text-right dark:border-slate-700">
-              <button onClick={() => setOutputModal(null)}
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">{t('actions.close')}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {outputModal && <OutputModal modal={outputModal} close={() => setOutputModal(null)} />}
     </div>
   )
 }
