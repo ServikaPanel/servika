@@ -227,6 +227,22 @@ export default function HostAppsPage() {
         </p>
       )}
 
+      <FeatureSection enabled={enabled} busy={busy} ready={data !== null} onToggle={setEnabled} />
+
+      <InstalledSection data={data} enabled={enabled} busy={busy} act={act} remove={remove} toggleFirewall={toggleFirewall} />
+
+      <CatalogSection data={data} enabled={enabled} busy={busy} installedCodes={installedCodes} install={install} />
+    </div>
+  )
+}
+
+type ActFn = (app: Installed, action: 'start' | 'stop' | 'restart') => void
+
+function FeatureSection({ enabled, busy, ready, onToggle }: {
+  enabled: boolean; busy: string; ready: boolean; onToggle: (enabled: boolean) => void
+}) {
+  const { t } = useTranslation('HostAppsPage')
+  return (
       <section className="mb-6 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('feature.title')}</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -234,8 +250,8 @@ export default function HostAppsPage() {
         </p>
         <button
           type="button"
-          onClick={() => void setEnabled(!enabled)}
-          disabled={busy === 'feature' || data === null}
+          onClick={() => onToggle(!enabled)}
+          disabled={busy === 'feature' || !ready}
           className={`mt-3 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
             enabled ? 'bg-slate-600' : 'bg-sky-600'
           }`}
@@ -246,24 +262,34 @@ export default function HostAppsPage() {
           <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('feature.offNote')}</p>
         )}
       </section>
+  )
+}
 
-      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('installed.title')}</h2>
-        {(data?.installed.length ?? 0) === 0 ? (
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{t('installed.none')}</p>
-        ) : (
-          <table className="mt-3 min-w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              <tr>
-                <th className="py-2 pr-4">{t('installed.application')}</th>
-                <th className="py-2 pr-4">{t('installed.state')}</th>
-                <th className="py-2 pr-4">{t('installed.port')}</th>
-                <th className="py-2 pr-4">{t('installed.reachable')}</th>
-                <th className="py-2">{t('installed.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {data?.installed.map((app) => (
+function RowActions({ app, enabled, busy, act, remove }: {
+  app: Installed; enabled: boolean; busy: string; act: ActFn; remove: (app: Installed) => void
+}) {
+  const { t } = useTranslation('HostAppsPage')
+  const off = !enabled || busy === app.code
+  return (
+    <div className="flex flex-wrap gap-1">
+      <button type="button" onClick={() => void act(app, 'start')} disabled={off}
+        className="rounded-lg bg-emerald-600 px-2 py-1 text-white disabled:opacity-50">{t('action.start')}</button>
+      <button type="button" onClick={() => void act(app, 'restart')} disabled={off}
+        className="rounded-lg bg-sky-600 px-2 py-1 text-white disabled:opacity-50">{t('action.restart')}</button>
+      <button type="button" onClick={() => void act(app, 'stop')} disabled={off}
+        className="rounded-lg bg-slate-600 px-2 py-1 text-white disabled:opacity-50">{t('action.stop')}</button>
+      <button type="button" onClick={() => void remove(app)} disabled={off}
+        className="rounded-lg bg-rose-600 px-2 py-1 text-white disabled:opacity-50">{t('remove.action')}</button>
+    </div>
+  )
+}
+
+function InstalledRow({ app, enabled, busy, act, remove, toggleFirewall }: {
+  app: Installed; enabled: boolean; busy: string; act: ActFn
+  remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
+}) {
+  const { t } = useTranslation('HostAppsPage')
+  return (
                 <tr key={app.id}>
                   <td className="py-2 pr-4 align-top">
                     <span className="font-medium text-slate-900 dark:text-slate-100">{app.name}</span>
@@ -297,18 +323,37 @@ export default function HostAppsPage() {
                     </button>
                   </td>
                   <td className="py-2 align-top text-xs">
-                    <div className="flex flex-wrap gap-1">
-                      <button type="button" onClick={() => void act(app, 'start')} disabled={!enabled || busy === app.code}
-                        className="rounded-lg bg-emerald-600 px-2 py-1 text-white disabled:opacity-50">{t('action.start')}</button>
-                      <button type="button" onClick={() => void act(app, 'restart')} disabled={!enabled || busy === app.code}
-                        className="rounded-lg bg-sky-600 px-2 py-1 text-white disabled:opacity-50">{t('action.restart')}</button>
-                      <button type="button" onClick={() => void act(app, 'stop')} disabled={!enabled || busy === app.code}
-                        className="rounded-lg bg-slate-600 px-2 py-1 text-white disabled:opacity-50">{t('action.stop')}</button>
-                      <button type="button" onClick={() => void remove(app)} disabled={!enabled || busy === app.code}
-                        className="rounded-lg bg-rose-600 px-2 py-1 text-white disabled:opacity-50">{t('remove.action')}</button>
-                    </div>
+                    <RowActions app={app} enabled={enabled} busy={busy} act={act} remove={remove} />
                   </td>
                 </tr>
+  )
+}
+
+function InstalledSection({ data, enabled, busy, act, remove, toggleFirewall }: {
+  data: Overview | null; enabled: boolean; busy: string; act: ActFn
+  remove: (app: Installed) => void; toggleFirewall: (app: Installed) => void
+}) {
+  const { t } = useTranslation('HostAppsPage')
+  return (
+      <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('installed.title')}</h2>
+        {(data?.installed.length ?? 0) === 0 ? (
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{t('installed.none')}</p>
+        ) : (
+          <table className="mt-3 min-w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <tr>
+                <th className="py-2 pr-4">{t('installed.application')}</th>
+                <th className="py-2 pr-4">{t('installed.state')}</th>
+                <th className="py-2 pr-4">{t('installed.port')}</th>
+                <th className="py-2 pr-4">{t('installed.reachable')}</th>
+                <th className="py-2">{t('installed.actions')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {(data?.installed ?? []).map((app) => (
+                <InstalledRow key={app.id} app={app} enabled={enabled} busy={busy}
+                  act={act} remove={remove} toggleFirewall={toggleFirewall} />
               ))}
             </tbody>
           </table>
@@ -317,7 +362,14 @@ export default function HostAppsPage() {
           {t('installed.firewallNote', { min: data?.port_min ?? 31000, max: data?.port_max ?? 31999 })}
         </p>
       </section>
+  )
+}
 
+function CatalogSection({ data, enabled, busy, installedCodes, install }: {
+  data: Overview | null; enabled: boolean; busy: string; installedCodes: Set<string>; install: (item: Offered) => void
+}) {
+  const { t } = useTranslation('HostAppsPage')
+  return (
       <section className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('catalog.title')}</h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -349,6 +401,5 @@ export default function HostAppsPage() {
           ))}
         </div>
       </section>
-    </div>
   )
 }
