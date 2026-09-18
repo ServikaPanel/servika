@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { api, apiError } from '@/lib/api'
 import { useDialog } from '@/lib/dialog'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -30,6 +31,112 @@ export type VersionSelection = { version: string; resource: string }
 // selectedVersions/setSelectedVersions switch an uninstalled version's toggle
 // from immediate install to "pick now, install in bulk from the Summary step".
 // Removal stays immediate in both modes; only install is deferred.
+type VersionCardProps = {
+  v: Version
+  activeOp: ActiveOp | null
+  selecting: boolean
+  selected: boolean
+  install: (v: Version) => void
+  remove: (v: Version) => void
+  toggleVersionSelection: (v: Version) => void
+}
+
+function toggleClass(thisOp: boolean, loaded: boolean, selected: boolean): string {
+  if (thisOp) return 'bg-sky-400 animate-pulse'
+  if (loaded) return 'bg-emerald-500'
+  if (selected) return 'bg-brand-500'
+  return 'bg-slate-300 dark:bg-slate-600'
+}
+
+function VersionToggle({ v, activeOp, selecting, selected, install, remove, toggleVersionSelection }: VersionCardProps) {
+  const { t } = useTranslation('PHPVersionsPage')
+  // An AppStream version is the system default and cannot be removed, so its
+  // toggle stays locked on.
+  const fixed = v.resource === 'appstream' && v.loaded
+  const thisOp = activeOp?.version === v.version
+  // An uninstalled toggle in wizard mode is pure selection, so a running op does
+  // not lock it; a removal or a standalone immediate install does.
+  const locked = fixed || (!!activeOp && (v.loaded || !selecting))
+  const on = v.loaded || selected
+  function act() {
+    if (fixed) return
+    if (v.loaded) { if (!activeOp) remove(v); return }
+    if (selecting) { toggleVersionSelection(v) } else if (!activeOp) { install(v) }
+  }
+  return (
+    <button onClick={act} disabled={locked} title={toggleTitle(v, fixed, selecting, selected, t)}
+      className={`flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition ${toggleClass(thisOp, v.loaded, selected)} ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}>
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${on ? 'translate-x-6' : 'translate-x-1'}`} />
+    </button>
+  )
+}
+
+function toggleTitle(v: Version, fixed: boolean, selecting: boolean, selected: boolean, t: TFunction): string {
+  if (fixed) return t('actions.fixed')
+  if (v.loaded) return t('actions.remove')
+  if (!selecting) return t('actions.install')
+  return selected ? t('selectTitle.remove') : t('selectTitle.add')
+}
+
+function VersionBadges({ v }: { v: Version }) {
+  const { t } = useTranslation('PHPVersionsPage')
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+        v.resource === 'appstream' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+          : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
+      }`}>{v.resource}</span>
+      {v.loaded && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('badges.installed')}</span>}
+      {parseInt(v.version) < 8 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{t('badges.eol')}</span>}
+    </div>
+  )
+}
+
+function VersionFacts({ v }: { v: Version }) {
+  const { t } = useTranslation('PHPVersionsPage')
+  if (!v.loaded) return null
+  return (
+    <div className="mb-3 space-y-0.5 rounded-lg border border-slate-200 bg-white p-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+      {v.real_version && <div>{t('card.version')} <span className="text-slate-900 dark:text-slate-100">{v.real_version}</span></div>}
+      {v.module_count !== undefined && <div>{t('card.extensions')} <span className="text-slate-900 dark:text-slate-100">{v.module_count}</span></div>}
+      {v.service && <div className="truncate">{t('card.service')} <span className="text-slate-700 dark:text-slate-300">{v.service}</span></div>}
+    </div>
+  )
+}
+
+function VersionHint({ v, thisOp, selected }: { v: Version; thisOp: boolean; selected: boolean }) {
+  const { t } = useTranslation('PHPVersionsPage')
+  if (thisOp) return <>{t('hint.processing')}</>
+  if (v.loaded) return <>{v.resource === 'appstream' ? t('hint.appstream') : t('hint.installed')}</>
+  if (selected) return <span className="text-brand-600 dark:text-brand-400">{t('hint.selected')}</span>
+  return <>{t('hint.install')}</>
+}
+
+function VersionCard(props: VersionCardProps) {
+  const { v, activeOp, selected } = props
+  return (
+    <div className={`rounded-2xl border p-4 transition ${
+      v.loaded ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
+        : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60'}`}>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">PHP {v.version}</div>
+          <VersionBadges v={v} />
+        </div>
+        <VersionToggle {...props} />
+      </div>
+
+      {v.description && <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">{v.description}</div>}
+
+      <VersionFacts v={v} />
+
+      <div className="text-xs text-slate-500 dark:text-slate-400">
+        <VersionHint v={v} thisOp={activeOp?.version === v.version} selected={selected} />
+      </div>
+    </div>
+  )
+}
+
 export default function PHPVersionsPage({ embedded, selectedVersions, setSelectedVersions }: {
   embedded?: boolean
   selectedVersions?: VersionSelection[]
@@ -204,73 +311,11 @@ export default function PHPVersionsPage({ embedded, selectedVersions, setSelecte
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(v => {
-            const key = v.version + ':' + v.resource
-            // Toggle state: on = installed OR (in the wizard) marked to install.
-            // An AppStream version is the system default and cannot be removed, so
-            // its toggle stays locked on. selecting = wizard bulk mode.
-            const thisOp = activeOp?.version === v.version
-            const fixed = v.resource === 'appstream' && v.loaded
-            const selecting = !!setSelectedVersions
-            const selected = !v.loaded && (selectedVersions?.some(x => x.version === v.version && x.resource === v.resource) ?? false)
-            const on = v.loaded || selected
-            // An uninstalled toggle in wizard mode is pure selection, so a running
-            // op does not lock it; a removal or a standalone immediate install does.
-            const locked = fixed || (!!activeOp && (v.loaded || !selecting))
-            return (
-              <div key={key}
-                className={`rounded-2xl border p-4 transition ${
-                  v.loaded ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20'
-                    : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60'}`}>
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">PHP {v.version}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                        v.resource === 'appstream' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
-                          : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'
-                      }`}>{v.resource}</span>
-                      {v.loaded && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{t('badges.installed')}</span>}
-                      {parseInt(v.version) < 8 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{t('badges.eol')}</span>}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (fixed) return
-                      if (v.loaded) { if (!activeOp) remove(v); return }
-                      if (selecting) { toggleVersionSelection(v) } else if (!activeOp) { install(v) }
-                    }}
-                    disabled={locked}
-                    title={fixed ? t('actions.fixed')
-                      : v.loaded ? t('actions.remove')
-                        : selecting ? (selected ? t('selectTitle.remove') : t('selectTitle.add'))
-                          : t('actions.install')}
-                    className={`flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      thisOp ? 'bg-sky-400 animate-pulse' : v.loaded ? 'bg-emerald-500' : selected ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'
-                    } ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${on ? 'translate-x-6' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-
-                {v.description && <div className="mb-2 text-xs text-slate-500 dark:text-slate-400">{v.description}</div>}
-
-                {v.loaded && (
-                  <div className="mb-3 space-y-0.5 rounded-lg border border-slate-200 bg-white p-2 font-mono text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                    {v.real_version && <div>{t('card.version')} <span className="text-slate-900 dark:text-slate-100">{v.real_version}</span></div>}
-                    {v.module_count !== undefined && <div>{t('card.extensions')} <span className="text-slate-900 dark:text-slate-100">{v.module_count}</span></div>}
-                    {v.service && <div className="truncate">{t('card.service')} <span className="text-slate-700 dark:text-slate-300">{v.service}</span></div>}
-                  </div>
-                )}
-
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {thisOp ? t('hint.processing')
-                    : v.loaded ? (v.resource === 'appstream' ? t('hint.appstream') : t('hint.installed'))
-                      : selected ? <span className="text-brand-600 dark:text-brand-400">{t('hint.selected')}</span>
-                        : t('hint.install')}
-                </div>
-              </div>
-            )
-          })}
+          {filtered.map(v => (
+            <VersionCard key={v.version + ':' + v.resource} v={v} activeOp={activeOp} selecting={!!setSelectedVersions}
+              selected={!v.loaded && (selectedVersions?.some(x => x.version === v.version && x.resource === v.resource) ?? false)}
+              install={install} remove={remove} toggleVersionSelection={toggleVersionSelection} />
+          ))}
         </div>
       )}
     </div>
