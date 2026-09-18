@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { api, apiError } from '@/lib/api'
 import { getCookie, setCookie } from '@/lib/cookies'
 import { useDialog } from '@/lib/dialog'
@@ -274,36 +275,57 @@ function RuntimesStep({ selectedRuntimes, setSelectedRuntimes }: {
         <section key={g.key}>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{g.label}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {g.items.map(e => {
-              const key = runtimeSelKey(e)
-              const sel = !e.installed && isSelected(e)
-              const busy = removing === key
-              return (
-                <div key={key}
-                  className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${
-                    e.installed ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
-                      : sel ? 'bg-brand-50 dark:bg-brand-900/15 border-brand-300 dark:border-brand-700'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                  }`}>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{e.name}</div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-500 truncate">{t(e.descKey)}</div>
-                  </div>
-                  <button
-                    onClick={() => { if (e.installed) { remove(e) } else { toggleSelection(e) } }}
-                    disabled={busy}
-                    title={e.installed ? t('runtimes.removeTitle') : sel ? t('runtimes.selectTitle.remove') : t('runtimes.selectTitle.add')}
-                    className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${
-                      busy ? 'bg-sky-400 animate-pulse' : e.installed ? 'bg-emerald-500' : sel ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'
-                    } ${busy ? 'opacity-60 cursor-not-allowed' : ''}`}>
-                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${(e.installed || sel) ? 'translate-x-5' : 'translate-x-1'}`} />
-                  </button>
-                </div>
-              )
-            })}
+            {g.items.map(e => (
+              <RuntimeCard key={runtimeSelKey(e)} item={e} selected={!e.installed && isSelected(e)} busy={removing === runtimeSelKey(e)}
+                remove={remove} toggleSelection={toggleSelection} />
+            ))}
           </div>
         </section>
       ))}
+    </div>
+  )
+}
+
+type RuntimeCardProps = {
+  item: RuntimeEntry
+  selected: boolean
+  busy: boolean
+  remove: (item: RuntimeEntry) => void
+  toggleSelection: (item: RuntimeEntry) => void
+}
+
+function runtimeToggleClass(busy: boolean, installed: boolean, selected: boolean): string {
+  if (busy) return 'bg-sky-400 animate-pulse'
+  if (installed) return 'bg-emerald-500'
+  if (selected) return 'bg-brand-500'
+  return 'bg-slate-300 dark:bg-slate-600'
+}
+
+function runtimeToggleTitle(installed: boolean, selected: boolean, t: TFunction): string {
+  if (installed) return t('runtimes.removeTitle')
+  return selected ? t('runtimes.selectTitle.remove') : t('runtimes.selectTitle.add')
+}
+
+function RuntimeCard({ item, selected, busy, remove, toggleSelection }: RuntimeCardProps) {
+  const { t } = useTranslation('PHPServerWizardPage')
+  const frame = item.installed
+    ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
+    : selected
+      ? 'bg-brand-50 dark:bg-brand-900/15 border-brand-300 dark:border-brand-700'
+      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+  return (
+    <div className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${frame}`}>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
+        <div className="text-[11px] text-slate-500 dark:text-slate-500 truncate">{t(item.descKey)}</div>
+      </div>
+      <button
+        onClick={() => { if (item.installed) { remove(item) } else { toggleSelection(item) } }}
+        disabled={busy}
+        title={runtimeToggleTitle(item.installed, selected, t)}
+        className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${runtimeToggleClass(busy, item.installed, selected)} ${busy ? 'opacity-60 cursor-not-allowed' : ''}`}>
+        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${(item.installed || selected) ? 'translate-x-5' : 'translate-x-1'}`} />
+      </button>
     </div>
   )
 }
@@ -407,6 +429,77 @@ function installRuntimeJob(sel: RuntimeSelection, onProgress: (step: string, per
 // SummaryStep lists the installed PHP versions and installs the components the
 // operator picked in the earlier steps, one after another (versions, then
 // extensions, then runtimes) with a live progress bar and a per-row status badge.
+function InstalledVersions({ versions, loading }: { versions: Version[]; loading: boolean }) {
+  const { t } = useTranslation(['PHPServerWizardPage', 'PHPExtensionsPage'])
+  return (
+    <>
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('summary.installedLabel')}</div>
+        {loading ? <div className="text-sm text-slate-400 dark:text-slate-500">{t('summary.loading')}</div> : versions.length === 0 ? (
+          <div className="text-sm text-slate-500 dark:text-slate-500">{t('summary.empty')}</div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {versions.map(v => (
+              <span key={v.version} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700/60 text-sm font-mono text-slate-800 dark:text-slate-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />PHP {v.version}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+type CurrentBulk = { name: string; kind: BulkKind; step: string; percent: number }
+
+function BulkProgressPanel({ current }: { current: CurrentBulk | null }) {
+  const { t } = useTranslation(['PHPServerWizardPage', 'PHPExtensionsPage'])
+  return (
+    <>
+      {current && (
+        <div className="rounded-lg border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-950/40 px-4 py-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-sm font-medium text-brand-800 dark:text-brand-200">
+              <span className="inline-block w-3.5 h-3.5 mr-2 align-[-2px] rounded-full border-2 border-brand-400 border-t-transparent animate-spin" />
+              {t('summary.installingName', { name: current.name })}
+            </span>
+            <span className="text-xs tabular-nums text-brand-700 dark:text-brand-300">%{current.percent}</span>
+          </div>
+          <div className="text-xs text-brand-700 dark:text-brand-300 mb-2">
+            {current.kind === 'extension'
+              ? t(`pecl.step.${current.step}`, { ns: 'PHPExtensionsPage', defaultValue: current.step })
+              : t(`summary.versionStep.${current.step}`, { defaultValue: current.step })}
+          </div>
+          <div className="h-2 rounded-full bg-brand-100 dark:bg-brand-900 overflow-hidden">
+            <div className="h-full rounded-full bg-brand-500 transition-all duration-500" style={{ width: `${Math.min(100, current.percent)}%` }} />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+type BulkProgress = (step: string, percent: number) => void
+
+function runBulkRow(row: BulkRow, onProgress: BulkProgress): Promise<void> {
+  if (row.kind === 'version') {
+    return installVersionJob({ version: row.version, resource: row.resource || 'remi' }, onProgress)
+  }
+  if (row.kind === 'runtime' && row.runtime) {
+    return installRuntimeJob(row.runtime, onProgress)
+  }
+  return installExtensionJob({ version: row.version, key: row.key, name: row.name }, onProgress)
+}
+
+function bulkFailureMessage(cause: unknown, row: BulkRow, t: TFunction): string {
+  if ((cause as { versionError?: boolean })?.versionError) return t('summary.versionInstallFailed', { name: row.name })
+  const fallback = t('PHPExtensionsPage:errors.peclInstallFailed')
+  const code = (cause as { peclError?: string })?.peclError
+  if (code) return t(`pecl.error.${code}`, { ns: 'PHPExtensionsPage', defaultValue: fallback })
+  return apiError(cause, fallback)
+}
+
 function SummaryStep({ selected, selectedVersions, selectedRuntimes, onClear }: { selected: Selection[]; selectedVersions: VersionSelection[]; selectedRuntimes: RuntimeSelection[]; onClear: () => void }) {
   const { t } = useTranslation(['PHPServerWizardPage', 'PHPExtensionsPage'])
   const [versions, setVersions] = useState<Version[]>([])
@@ -446,22 +539,10 @@ function SummaryStep({ selected, selectedVersions, selectedRuntimes, onClear }: 
       setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'installing' } : x))
       setCurrent({ name: s.name, kind: s.kind, step: 'starting', percent: 2 })
       try {
-        if (s.kind === 'version') {
-          await installVersionJob({ version: s.version, resource: s.resource || 'remi' }, (step, percent) => setCurrent({ name: s.name, kind: 'version', step, percent }))
-        } else if (s.kind === 'runtime' && s.runtime) {
-          await installRuntimeJob(s.runtime, (step, percent) => setCurrent({ name: s.name, kind: 'runtime', step, percent }))
-        } else {
-          await installExtensionJob({ version: s.version, key: s.key, name: s.name }, (step, percent) => setCurrent({ name: s.name, kind: 'extension', step, percent }))
-        }
+        await runBulkRow(s, (step, percent) => setCurrent({ name: s.name, kind: s.kind, step, percent }))
         setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'done' } : x))
       } catch (e) {
-        const code = (e as { peclError?: string })?.peclError
-        const versionFailed = (e as { versionError?: boolean })?.versionError
-        const message = versionFailed
-          ? t('summary.versionInstallFailed', { name: s.name })
-          : code
-            ? t(`pecl.error.${code}`, { ns: 'PHPExtensionsPage', defaultValue: t('PHPExtensionsPage:errors.peclInstallFailed') })
-            : apiError(e, t('PHPExtensionsPage:errors.peclInstallFailed'))
+        const message = bulkFailureMessage(e, s, t)
         setRows(prev => prev.map((x, j) => j === i ? { ...x, state: 'error', message } : x))
       }
     }
@@ -477,20 +558,7 @@ function SummaryStep({ selected, selectedVersions, selectedRuntimes, onClear }: 
       <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('summary.heading')}</h2>
       <p className="text-sm text-slate-500 dark:text-slate-500">{t('summary.subtitle')}</p>
 
-      <div>
-        <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('summary.installedLabel')}</div>
-        {loading ? <div className="text-sm text-slate-400 dark:text-slate-500">{t('summary.loading')}</div> : versions.length === 0 ? (
-          <div className="text-sm text-slate-500 dark:text-slate-500">{t('summary.empty')}</div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {versions.map(v => (
-              <span key={v.version} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700/60 text-sm font-mono text-slate-800 dark:text-slate-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />PHP {v.version}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      <InstalledVersions versions={versions} loading={loading} />
 
       <div>
         <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('summary.toInstallLabel', { count: total })}</div>
@@ -515,25 +583,7 @@ function SummaryStep({ selected, selectedVersions, selectedRuntimes, onClear }: 
         )}
       </div>
 
-      {current && (
-        <div className="rounded-lg border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-950/40 px-4 py-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-medium text-brand-800 dark:text-brand-200">
-              <span className="inline-block w-3.5 h-3.5 mr-2 align-[-2px] rounded-full border-2 border-brand-400 border-t-transparent animate-spin" />
-              {t('summary.installingName', { name: current.name })}
-            </span>
-            <span className="text-xs tabular-nums text-brand-700 dark:text-brand-300">%{current.percent}</span>
-          </div>
-          <div className="text-xs text-brand-700 dark:text-brand-300 mb-2">
-            {current.kind === 'extension'
-              ? t(`pecl.step.${current.step}`, { ns: 'PHPExtensionsPage', defaultValue: current.step })
-              : t(`summary.versionStep.${current.step}`, { defaultValue: current.step })}
-          </div>
-          <div className="h-2 rounded-full bg-brand-100 dark:bg-brand-900 overflow-hidden">
-            <div className="h-full rounded-full bg-brand-500 transition-all duration-500" style={{ width: `${Math.min(100, current.percent)}%` }} />
-          </div>
-        </div>
-      )}
+      <BulkProgressPanel current={current} />
 
       {done && <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/15 p-4 text-sm text-emerald-800 dark:text-emerald-200">{t('summary.bulkDone')}</div>}
 
