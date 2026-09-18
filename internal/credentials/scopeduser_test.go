@@ -18,7 +18,10 @@ func TestMySQLCreateScopedUserGrantsOneSchemaOnly(t *testing.T) {
 	}
 
 	statements := readStub(t, stdinPath)
-	if !strings.Contains(statements, "GRANT ALL PRIVILEGES ON `c_example_main`.* TO 'svk_imp_abc123'@'localhost';") {
+	// The name is escaped, because MariaDB reads the schema position of a GRANT
+	// as a pattern: an unescaped `_` would widen the account to every schema the
+	// pattern matches, which is exactly what this account must not reach.
+	if !strings.Contains(statements, "GRANT ALL PRIVILEGES ON `c\\_example\\_main`.* TO 'svk_imp_abc123'@'localhost';") {
 		t.Errorf("the grant is not scoped to the target schema:\n%s", statements)
 	}
 	if strings.Contains(statements, "ON *.*") {

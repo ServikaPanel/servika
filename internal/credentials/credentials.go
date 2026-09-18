@@ -380,6 +380,23 @@ func hasLetterAndDigit(password string) bool {
 	return hasLetter && hasDigit
 }
 
+// GrantSchema renders a database name for the schema position of a GRANT or a
+// REVOKE.
+//
+// MariaDB reads that position as a PATTERN even inside backticks: `_` matches
+// any single character and `%` any string. A panel database is named
+// c_<system_user>_<suffix>, so it is full of underscores, and an unescaped
+// `GRANT ALL PRIVILEGES ON `c_acme_wp`.*` also grants c_acmeXwp, which is
+// another tenant's schema. The escape makes each one literal.
+//
+// Use it ONLY in the schema position of GRANT and REVOKE. CREATE DATABASE, DROP
+// DATABASE and USE take the name literally, and an escaped name would create or
+// drop the wrong schema there.
+func GrantSchema(dbName string) string {
+	dbName = strings.ReplaceAll(dbName, "_", `\_`)
+	return strings.ReplaceAll(dbName, "%", `\%`)
+}
+
 func escapeSQLString(value string) string {
 	value = strings.ReplaceAll(value, `\`, `\\`)
 	return strings.ReplaceAll(value, `'`, `\'`)
@@ -523,7 +540,7 @@ func MySQLCreateScopedUser(dbUser, dbPass, dbName string) error {
 	}
 	return runRootSQL(
 		fmt.Sprintf("CREATE USER '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
-		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
+		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", GrantSchema(dbName), dbUser),
 		"FLUSH PRIVILEGES;",
 	)
 }
@@ -543,7 +560,7 @@ func MySQLAddUser(dbName, dbUser, dbPass string) error {
 	return runRootSQL(
 		fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
 		fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
-		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
+		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", GrantSchema(dbName), dbUser),
 		"FLUSH PRIVILEGES;",
 	)
 }
@@ -598,7 +615,7 @@ func MySQLCreateDB(db *sql.DB, domainID int64, dbName, dbUser, dbPass string) er
 		fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", dbName),
 		fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
 		fmt.Sprintf("ALTER USER '%s'@'localhost' IDENTIFIED BY '%s';", dbUser, escapeSQLString(dbPass)),
-		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
+		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", GrantSchema(dbName), dbUser),
 		"FLUSH PRIVILEGES;",
 	); err != nil {
 		return err
@@ -646,10 +663,10 @@ func MySQLCreateDBForUser(db *sql.DB, domainID int64, dbName, dbUser string) err
 	// they just created.
 	statements := []string{
 		fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;", dbName),
-		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", dbName, dbUser),
+		fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'localhost';", GrantSchema(dbName), dbUser),
 	}
 	remote, err := remoteHostStatements(db, dbUser, func(host string) []string {
-		return []string{fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", dbName, dbUser, host)}
+		return []string{fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", GrantSchema(dbName), dbUser, host)}
 	})
 	if err != nil {
 		return fmt.Errorf("remote hosts: %w", err)

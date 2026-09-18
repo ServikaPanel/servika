@@ -66,7 +66,7 @@ func MySQLGrantRemote(dbUser, mysqlHost, dbPass string, dbNames []string) error 
 			return fmt.Errorf("%w: database name", ErrInvalidMySQLCredentials)
 		}
 		statements = append(statements,
-			fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", dbName, dbUser, mysqlHost))
+			fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", GrantSchema(dbName), dbUser, mysqlHost))
 	}
 	statements = append(statements, "FLUSH PRIVILEGES;")
 	return runRootSQL(statements...)

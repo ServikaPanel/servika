@@ -186,8 +186,8 @@ func TestARemoteAccountIsGrantedEveryDatabaseTheUserOwns(t *testing.T) {
 	for _, want := range []string{
 		"CREATE USER IF NOT EXISTS 'c_site_app'@'203.0.113.7'",
 		"ALTER USER 'c_site_app'@'203.0.113.7'",
-		"GRANT ALL PRIVILEGES ON `c_site_shop`.* TO 'c_site_app'@'203.0.113.7'",
-		"GRANT ALL PRIVILEGES ON `c_site_blog`.* TO 'c_site_app'@'203.0.113.7'",
+		"GRANT ALL PRIVILEGES ON `c\\_site\\_shop`.* TO 'c_site_app'@'203.0.113.7'",
+		"GRANT ALL PRIVILEGES ON `c\\_site\\_blog`.* TO 'c_site_app'@'203.0.113.7'",
 	} {
 		if !strings.Contains(stdin, want) {
 			t.Errorf("missing %q in:\n%s", want, stdin)
@@ -247,8 +247,8 @@ func TestANewDatabaseIsGrantedToTheRemoteAccountsToo(t *testing.T) {
 	}
 	stdin := readStub(t, stdinPath)
 	for _, want := range []string{
-		"GRANT ALL PRIVILEGES ON `c_site_new`.* TO 'c_site_app'@'localhost'",
-		"GRANT ALL PRIVILEGES ON `c_site_new`.* TO 'c_site_app'@'203.0.113.7'",
+		"GRANT ALL PRIVILEGES ON `c\\_site\\_new`.* TO 'c_site_app'@'localhost'",
+		"GRANT ALL PRIVILEGES ON `c\\_site\\_new`.* TO 'c_site_app'@'203.0.113.7'",
 	} {
 		if !strings.Contains(stdin, want) {
 			t.Errorf("missing %q in:\n%s", want, stdin)

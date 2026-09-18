@@ -334,6 +334,11 @@ func backfillCredentials(d *sql.DB) {
 	// when 2FA is enabled, so nothing else would ever rewrite a legacy one.
 	// Idempotent.
 	datamigrate.EncryptTOTPSecrets(context.Background(), d)
+	// Rewrite the grants written before the schema name was escaped. Their `_`
+	// still matches any character, so one tenant's account reaches a neighbour's
+	// database until the row is rewritten. Idempotent, and in the background
+	// because it runs one mysql client per repaired grant.
+	go credentials.HealGrantWildcards(context.Background(), d)
 }
 
 // healInterruptedWork repairs the state a restart strands. Every lock these
