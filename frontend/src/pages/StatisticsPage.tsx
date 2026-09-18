@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { api, apiError } from '@/lib/api'
 import Breadcrumb from '@/components/Breadcrumb'
 
@@ -22,9 +23,123 @@ function formatBytes(bytes: number) {
   return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB'
 }
 
+const DASH = '–'
+
 // Convert undefined, null, and NaN values to zero.
 function numberOrZero(value: number | undefined | null): number {
   return typeof value === 'number' && isFinite(value) ? value : 0
+}
+
+/** The core count the metric cards divide by; never zero. */
+function coreCount(usage: Usage | null): number {
+  return numberOrZero(usage?.cpu?.cores) || numberOrZero(usage?.system?.cpu_cores) || 1
+}
+
+function CpuCard({ usage }: { usage: Usage | null }) {
+  const { t } = useTranslation('StatisticsPage')
+  const cpu = numberOrZero(usage?.cpu?.percent)
+  return <Metric title={t('metric.cpu')} value={usage ? cpu.toFixed(1) + '%' : DASH}
+    subtitle={usage ? t('coresValue', { cores: coreCount(usage) }) : ''} color="indigo" ratio={cpu} />
+}
+
+function MemoryCard({ usage }: { usage: Usage | null }) {
+  const { t } = useTranslation('StatisticsPage')
+  const memory = numberOrZero(usage?.memory?.percent)
+  const subtitle = usage ? `${formatBytes(numberOrZero(usage.memory?.used_kb) * 1024)} / ${formatBytes(numberOrZero(usage.memory?.total_kb) * 1024)}` : ''
+  return <Metric title={t('metric.memory')} value={usage ? memory.toFixed(1) + '%' : DASH} subtitle={subtitle} color="emerald" ratio={memory} />
+}
+
+function DiskCard({ usage }: { usage: Usage | null }) {
+  const { t } = useTranslation('StatisticsPage')
+  const disk = numberOrZero(usage?.disk?.percent)
+  const subtitle = usage ? `${formatBytes(numberOrZero(usage.disk?.used_byte))} / ${formatBytes(numberOrZero(usage.disk?.total_byte))}` : ''
+  return <Metric title={t('metric.disk')} value={usage ? disk.toFixed(1) + '%' : DASH} subtitle={subtitle} color="violet" ratio={disk} />
+}
+
+function LoadCard({ usage }: { usage: Usage | null }) {
+  const { t } = useTranslation('StatisticsPage')
+  const oneMinuteLoad = numberOrZero(usage?.cpu?.load_1m)
+  const subtitle = usage
+    ? t('loadSub', { five: numberOrZero(usage.cpu?.load_5m).toFixed(2), fifteen: numberOrZero(usage.cpu?.load_15m).toFixed(2) })
+    : ''
+  return <Metric title={t('metric.load')} value={usage ? oneMinuteLoad.toFixed(2) : DASH} subtitle={subtitle}
+    color="amber" ratio={Math.min(100, (oneMinuteLoad / coreCount(usage)) * 100)} />
+}
+
+function MetricCards({ usage }: { usage: Usage | null }) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <CpuCard usage={usage} />
+      <MemoryCard usage={usage} />
+      <DiskCard usage={usage} />
+      <LoadCard usage={usage} />
+    </div>
+  )
+}
+
+function processorValue(usage: Usage | null, t: TFunction): string {
+  const model = usage?.system?.cpu_model
+  if (!model) return DASH
+  return t('processorValue', { model, cores: coreCount(usage) })
+}
+
+function swapValue(usage: Usage | null, t: TFunction): string {
+  const swap = usage?.swap
+  if (!swap) return DASH
+  return t('swapValue', {
+    percent: numberOrZero(swap.percent).toFixed(1),
+    used: formatBytes(numberOrZero(swap.used_kb) * 1024),
+    total: formatBytes(numberOrZero(swap.total_kb) * 1024),
+  })
+}
+
+/** One string field of the system block, or the dash when it is not reported. */
+function systemField(usage: Usage | null, key: 'hostname' | 'os_name' | 'kernel' | 'panel_version'): string {
+  return usage?.system?.[key] || DASH
+}
+
+function SystemCard({ usage }: { usage: Usage | null }) {
+  const { t } = useTranslation('StatisticsPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('system.title')}</h3>
+      <div className="space-y-1.5 text-sm">
+        <Row label={t('system.hostname')} value={systemField(usage, 'hostname')} />
+        <Row label={t('system.os')} value={systemField(usage, 'os_name')} />
+        <Row label={t('system.kernel')} value={systemField(usage, 'kernel')} />
+        <Row label={t('system.processor')} value={processorValue(usage, t)} />
+        <Row label={t('system.swap')} value={swapValue(usage, t)} />
+        <Row label={t('system.panelVersion')} value={systemField(usage, 'panel_version')} />
+      </div>
+    </div>
+  )
+}
+
+function DomainCountCard({ counts }: { counts: Counts | null }) {
+  const { t } = useTranslation('StatisticsPage')
+  const total = counts?.domains ?? 0
+  const active = counts?.activeDomains ?? 0
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('domains.title')}</h3>
+      <div className="space-y-1.5 text-sm">
+        <Row label={t('domains.total')} value={counts ? String(total) : DASH} />
+        <Row label={t('domains.active')} value={
+          <span className="text-emerald-700 dark:text-emerald-300 font-semibold">{active}</span>
+        } />
+        <Row label={t('domains.inactive')} value={String(total - active)} />
+      </div>
+    </div>
+  )
+}
+
+function SummaryCards({ usage, counts }: { usage: Usage | null; counts: Counts | null }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+      <SystemCard usage={usage} />
+      <DomainCountCard counts={counts} />
+    </div>
+  )
 }
 
 export default function StatisticsPage() {
@@ -47,11 +162,6 @@ export default function StatisticsPage() {
   }
   useEffect(() => { load(); const timer = setInterval(load, 10000); return () => clearInterval(timer) }, [])
 
-  const cpu = numberOrZero(usage?.cpu?.percent)
-  const memory = numberOrZero(usage?.memory?.percent)
-  const disk = numberOrZero(usage?.disk?.percent)
-  const cores = numberOrZero(usage?.cpu?.cores) || numberOrZero(usage?.system?.cpu_cores) || 1
-  const oneMinuteLoad = numberOrZero(usage?.cpu?.load_1m)
 
   return (
     <div className="px-6 py-5">
@@ -67,45 +177,9 @@ export default function StatisticsPage() {
 
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
 
-      {/* Four system metric cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <Metric title={t('metric.cpu')} value={usage ? cpu.toFixed(1) + '%' : '–'}
-          subtitle={usage ? t('coresValue', { cores }) : ''} color="indigo" ratio={cpu} />
-        <Metric title={t('metric.memory')} value={usage ? memory.toFixed(1) + '%' : '–'}
-          subtitle={usage ? `${formatBytes(numberOrZero(usage?.memory?.used_kb) * 1024)} / ${formatBytes(numberOrZero(usage?.memory?.total_kb) * 1024)}` : ''}
-          color="emerald" ratio={memory} />
-        <Metric title={t('metric.disk')} value={usage ? disk.toFixed(1) + '%' : '–'}
-          subtitle={usage ? `${formatBytes(numberOrZero(usage?.disk?.used_byte))} / ${formatBytes(numberOrZero(usage?.disk?.total_byte))}` : ''}
-          color="violet" ratio={disk} />
-        <Metric title={t('metric.load')} value={usage ? oneMinuteLoad.toFixed(2) : '–'}
-          subtitle={usage ? t('loadSub', { five: numberOrZero(usage?.cpu?.load_5m).toFixed(2), fifteen: numberOrZero(usage?.cpu?.load_15m).toFixed(2) }) : ''}
-          color="amber" ratio={Math.min(100, (oneMinuteLoad / cores) * 100)} />
-      </div>
+      <MetricCards usage={usage} />
 
-      {/* System summary and counters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('system.title')}</h3>
-          <div className="space-y-1.5 text-sm">
-            <Row label={t('system.hostname')} value={usage?.system?.hostname || '–'} />
-            <Row label={t('system.os')} value={usage?.system?.os_name || '–'} />
-            <Row label={t('system.kernel')} value={usage?.system?.kernel || '–'} />
-            <Row label={t('system.processor')} value={usage?.system?.cpu_model ? t('processorValue', { model: usage.system.cpu_model, cores }) : '–'} />
-            <Row label={t('system.swap')} value={usage?.swap ? t('swapValue', { percent: numberOrZero(usage.swap.percent).toFixed(1), used: formatBytes(numberOrZero(usage.swap.used_kb) * 1024), total: formatBytes(numberOrZero(usage.swap.total_kb) * 1024) }) : '–'} />
-            <Row label={t('system.panelVersion')} value={usage?.system?.panel_version || '–'} />
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('domains.title')}</h3>
-          <div className="space-y-1.5 text-sm">
-            <Row label={t('domains.total')} value={counts ? String(counts.domains) : '–'} />
-            <Row label={t('domains.active')} value={
-              <span className="text-emerald-700 dark:text-emerald-300 font-semibold">{counts ? counts.activeDomains : 0}</span>
-            } />
-            <Row label={t('domains.inactive')} value={String(counts ? counts.domains - counts.activeDomains : 0)} />
-          </div>
-        </div>
-      </div>
+      <SummaryCards usage={usage} counts={counts} />
 
       <div className="text-xs text-slate-400 dark:text-slate-500 text-center mt-6">
         {t('footer.pre')}<a href="/monitoring" className="text-brand-600 dark:text-brand-400 hover:underline">{t('footer.link')}</a>{t('footer.post')}
