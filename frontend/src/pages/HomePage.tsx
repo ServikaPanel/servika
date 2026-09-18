@@ -94,19 +94,25 @@ const QUOTA_WARNING_DISMISSED_KEY = 'servika-quota-fs-warning-dismissed'
 // later release differs from the stored value and shows the notice again.
 const PANEL_UPDATE_DISMISSED_KEY = 'servika-panel-update-dismissed'
 
+/** The widget ids of one saved column, filtered to known ids not already placed. */
+function acceptedColumn(source: unknown, placed: Set<string>): string[] {
+  const out: string[] = []
+  const arr = Array.isArray(source) ? (source as unknown[]) : []
+  for (const id of arr) {
+    if (typeof id === 'string' && WIDGET_SET.has(id) && !placed.has(id)) {
+      out.push(id); placed.add(id)
+    }
+  }
+  return out
+}
+
 function mergeLayout(saved: unknown): Layout {
   const src = (saved as { columns?: unknown })?.columns
   const source: unknown[] = Array.isArray(src) ? src : []
-  const cols: string[][] = [[], [], []]
   const placed = new Set<string>()
-  for (let i = 0; i < 3; i++) {
-    const arr = Array.isArray(source[i]) ? (source[i] as unknown[]) : []
-    for (const id of arr) {
-      if (typeof id === 'string' && WIDGET_SET.has(id) && !placed.has(id)) {
-        cols[i].push(id); placed.add(id)
-      }
-    }
-  }
+  const cols: string[][] = [0, 1, 2].map((i) => acceptedColumn(source[i], placed))
+  // A widget the saved layout never mentioned (a release added it) lands in the
+  // column the default layout puts it in, so nothing silently disappears.
   for (const id of WIDGET_IDS) {
     if (!placed.has(id)) { cols[DEFAULT_COL[id]].push(id); placed.add(id) }
   }
@@ -129,6 +135,47 @@ function usePrefersReducedMotion(): boolean {
     return () => mq.removeEventListener('change', on)
   }, [])
   return r
+}
+
+/** The disk the live-resources widget draws, or null while usage is unknown. */
+function primaryDisk(s: SystemUsage | null): DiskInfo | null {
+  if (!s) return null
+  const first = s.disks?.[0]
+  return first || s.disk
+}
+
+function serviceCounts(s: SystemUsage | null): { active: number; total: number; down: number } {
+  if (!s) return { active: 0, total: 0, down: 0 }
+  const active = s.services.filter((x) => x.active).length
+  return { active, total: s.services.length, down: s.services.length - active }
+}
+
+function isolationLosses(s: SystemUsage | null): number {
+  return s?.isolation_losses ?? 0
+}
+
+function displayNameOf(user: { full_name?: string; name?: string } | null | undefined): string {
+  const full = user?.full_name
+  if (full) return full.trim()
+  return (user?.name || '').trim()
+}
+
+/** The quota notice the host earned, worst first, or null when the quota is fine. */
+function quotaWarningOf(s: SystemUsage | null, t: TFunction): QuotaWarning | null {
+  if (s?.quota_fs_unsupported) {
+    return { title: t('quota.unsupportedTitle'), body: t('quota.unsupportedBody'), dismissible: true }
+  }
+  if (s?.quota_reboot_required) {
+    return { title: t('quota.rebootTitle'), body: t('quota.rebootBody'), dismissible: false }
+  }
+  return null
+}
+
+/** A newer release the operator has not dismissed, or null. */
+function pendingPanelUpdate(versionCheck: VersionCheck | null, dismissedVersion: string): VersionCheck | null {
+  if (!versionCheck?.update_available) return null
+  if (versionCheck.latest === dismissedVersion) return null
+  return versionCheck
 }
 
 export default function HomePage() {
@@ -232,40 +279,13 @@ export default function HomePage() {
 
   const active = domains.filter((d) => d.status === 'active').length
   const sslCount = domains.filter((d) => d.ssl).length
-  const diskList = s ? (s.disks?.length ? s.disks : [s.disk]) : []
-  const mainDisk = s ? (diskList[0] || s.disk) : null
-  const svcActive = s ? s.services.filter((x) => x.active).length : 0
-  const svcTotal = s ? s.services.length : 0
-  const svcDown = svcTotal - svcActive
-  const isoCount = s?.isolation_losses ?? 0
+  const mainDisk = primaryDisk(s)
+  const { active: svcActive, total: svcTotal, down: svcDown } = serviceCounts(s)
 
-  const displayName = (user?.full_name || user?.name || '').trim()
-  const health = calcHealth(t, s, svcDown, isoCount)
-  const quotaWarning = s?.quota_fs_unsupported
-    ? {
-        title: t('quota.unsupportedTitle'),
-        body: t('quota.unsupportedBody'),
-        dismissible: true,
-      }
-    : s?.quota_reboot_required
-      ? {
-          title: t('quota.rebootTitle'),
-          body: t('quota.rebootBody'),
-          dismissible: false,
-        }
-      : null
-
-  const panelUpdate = versionCheck?.update_available && versionCheck.latest !== dismissedVersion
-    ? versionCheck
-    : null
-
-  const lastBackup = backup?.domains?.reduce((a, r) => (r.last_backup > a ? r.last_backup : a), '') || ''
-  const backedUpDomains = backup?.domains?.filter((r) => r.count > 0).length ?? 0
-
-  const wpTotal = wp?.length ?? 0
-  const wpOutdated = wp?.filter((x) => x.status === 'outdated').length ?? 0
-  const wpCurrent = wp?.filter((x) => x.status === 'current').length ?? 0
-  const wpUnknown = wp?.filter((x) => x.status === 'unknown').length ?? 0
+  const displayName = displayNameOf(user)
+  const health = calcHealth(t, s, svcDown, isolationLosses(s))
+  const quotaWarning = quotaWarningOf(s, t)
+  const panelUpdate = pendingPanelUpdate(versionCheck, dismissedVersion)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -354,85 +374,286 @@ export default function HomePage() {
     'load-chart': <LoadHistoryChart />,
     'memory-chart': <MemoryHistoryChart />,
     'cve-security': <CveWidget />,
+    'wordpress': <WordPressWidget wp={wp} />,
+    'panel-update': <PanelUpdateWidget update={update} />,
+    'last-backup': <LastBackupWidget backup={backup} />,
+    'performance': <PerformanceWidget optimize={optimize} />,
+    'services': <ServicesWidget s={s} svcActive={svcActive} svcTotal={svcTotal} svcDown={svcDown} />,
+    'domains': <DomainsWidget domains={domains} active={active} sslCount={sslCount} />,
+    'server-info': <ServerInfoWidget s={s} />,
+    'health': <HealthWidget s={s} health={health} />,
+    'live-resources': <LiveResourcesWidget s={s} mainDisk={mainDisk} />,
+    'subscriptions': <SubscriptionsWidget />,
+    'network': <NetworkWidget />,
+  }
 
-    'wordpress': (
-      <Card title={t('widgets.wordpress')} subtitle={t('wp.subtitle')} icon={I.wp}
-        right={<Link to="/wordpress" className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">{t('shared.more')}</Link>}>
-        {wp === null ? (
-          <Spinner />
-        ) : (
-          <>
-            <div className="mb-3 grid grid-cols-3 gap-2.5">
-              <MiniStat value={wpTotal} label={t('wp.installs')} color="slate" />
-              <MiniStat value={wpOutdated} label={t('wp.updates')} color={wpOutdated > 0 ? 'amber' : 'emerald'} />
-              <MiniStat value={wpCurrent} label={t('wp.current')} color="emerald" />
+  return (
+    <div className="px-5 py-5">
+      <HomeHeader displayName={displayName} saveState={saveState} resetLayout={resetLayout} />
+
+      <QuotaWarningBanner warning={quotaWarning} dismissed={quotaWarningDismissed} onDismiss={dismissQuotaWarning} />
+
+      <PanelUpdateBanner panelUpdate={panelUpdate} role={role} onDismiss={dismissPanelUpdate} />
+
+      <DashboardGrid sensors={sensors} layout={layout} widgets={widgets} reduced={reduced} activeId={activeId}
+        onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} />
+    </div>
+  )
+}
+
+type QuotaWarning = { title: string; body: string; dismissible: boolean }
+
+function HomeHeader({ displayName, saveState, resetLayout }: {
+  displayName: string; saveState: 'idle' | 'saving' | 'saved' | 'error'; resetLayout: () => void
+}) {
+  const { t } = useTranslation('HomePage')
+  return (
+    <>
+      {/* Header */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            {displayName ? t('header.welcome', { name: displayName }) : t('header.dashboard')}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('header.subtitle')}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {saveState !== 'idle' && (
+            <span className={`text-[11px] font-medium ${saveState === 'saving' ? 'text-slate-400' : saveState === 'saved' ? 'text-emerald-500' : 'text-red-500'}`}>
+              {saveState === 'saving' ? t('header.saving') : saveState === 'saved' ? t('header.saved') : t('header.saveFailed')}
+            </span>
+          )}
+          <button onClick={resetLayout} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">{t('header.resetLayout')}</button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function QuotaWarningBanner({ warning, dismissed, onDismiss }: {
+  warning: QuotaWarning | null; dismissed: boolean; onDismiss: () => void
+}) {
+  if (!warning) return null
+  if (warning.dismissible && dismissed) return null
+  return <QuotaWarningBody warning={warning} onDismiss={onDismiss} />
+}
+
+function QuotaWarningBody({ warning, onDismiss }: { warning: QuotaWarning; onDismiss: () => void }) {
+  const { t } = useTranslation('HomePage')
+  const quotaWarning = warning
+  const dismissQuotaWarning = onDismiss
+  return (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200">
+          <div className="flex items-start gap-3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="mt-0.5 h-5 w-5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M10.36 3.6 2.26 17.66A1.5 1.5 0 0 0 3.56 19.9h16.88a1.5 1.5 0 0 0 1.3-2.25L13.64 3.6a1.5 1.5 0 0 0-2.6 0Z" /></svg>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">{quotaWarning.title}</div>
+              <div className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-300">{quotaWarning.body}</div>
             </div>
-            {wpOutdated > 0 && (
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/15 dark:text-amber-300">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="mt-0.5 h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M10.36 3.6 2.26 17.66A1.5 1.5 0 0 0 3.56 19.9h16.88a1.5 1.5 0 0 0 1.3-2.25L13.64 3.6a1.5 1.5 0 0 0-2.6 0Z" /></svg>
-                <span><strong>{wpOutdated}</strong>{t('wp.pendingUpdatesText', { count: wpOutdated })}</span>
-              </div>
+            {quotaWarning.dismissible && (
+              <button type="button" onClick={dismissQuotaWarning} className="text-xs font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-300">
+                {t('quota.dismiss')}
+              </button>
             )}
-            {wpTotal === 0 ? (
-              <div className="py-5 text-center text-xs text-slate-400">{t('wp.empty')}</div>
-            ) : (
-              <div className="space-y-0.5">
-                {wp!.slice(0, 5).map((k) => (
-                  <Link key={`${k.domain_id}-${k.dir}`} to="/wordpress"
-                    className="-mx-2 flex items-center justify-between rounded-xl px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}
-                        className={`h-4 w-4 shrink-0 ${k.status === 'outdated' ? 'text-amber-500' : k.status === 'current' ? 'text-emerald-500' : 'text-slate-400'}`}><path d={I.wp} /></svg>
-                      <span className="min-w-0">
-                        <span className="block truncate font-mono text-[13px] text-slate-700 dark:text-slate-200">{k.domain_name}</span>
-                        <span className="block truncate text-[10px] text-slate-400 dark:text-slate-500">{k.dir === '/ (root)' ? t('wp.rootDir') : k.dir}{k.version ? ` · v${k.version}` : ''}</span>
-                      </span>
-                    </span>
-                    <span className="shrink-0">
-                      {k.status === 'outdated'
-                        ? <Badge color="amber" text={k.latest_version ? `→ v${k.latest_version}` : t('wp.badgeUpdate')} />
-                        : k.status === 'current'
-                          ? <Badge color="emerald" text={t('wp.badgeCurrent')} />
-                          : <Badge color="slate" text={t('wp.badgeUnknown')} />}
-                    </span>
-                  </Link>
-                ))}
-                {wpTotal > 5 && (
-                  <Link to="/wordpress" className="block pt-1.5 text-center text-[11px] text-slate-400 transition-colors hover:text-brand-600 dark:hover:text-brand-400">
-                    {t('wp.more', { count: wpTotal - 5 })}
-                  </Link>
-                )}
-              </div>
-            )}
-            {wpUnknown > 0 && (
-              <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">{t('wp.unknownNote', { count: wpUnknown })}</div>
-            )}
-          </>
-        )}
-      </Card>
-    ),
+          </div>
+        </div>
+  )
+}
 
-    'panel-update': (
+// A released version the host has not taken yet. Colour is never the only
+// signal: a critical release also says so in its announcement text. Only an
+// admin gets the link, because the update page's actions are admin-only.
+function PanelUpdateBanner({ panelUpdate, role, onDismiss }: {
+  panelUpdate: VersionCheck | null; role?: string; onDismiss: () => void
+}) {
+  const { t } = useTranslation('HomePage')
+  const dismissPanelUpdate = onDismiss
+  if (!panelUpdate) return null
+  return (
+        <div className={`mb-4 rounded-2xl border p-4 ${panelUpdate.critical
+          ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800/50 dark:bg-rose-900/20 dark:text-rose-200'
+          : 'border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-800/50 dark:bg-brand-900/20 dark:text-brand-200'}`}>
+          <div className="flex items-start gap-3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="mt-0.5 h-5 w-5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">
+                {t('panelVersion.title')}
+                <span className="ml-2 text-xs font-normal opacity-80">
+                  {t('panelVersion.versions', { current: panelUpdate.current || '—', latest: panelUpdate.latest })}
+                </span>
+              </div>
+              {panelUpdate.announcement && (
+                <div className={`mt-1 text-xs leading-relaxed ${panelUpdate.critical ? 'text-rose-700 dark:text-rose-300' : 'text-brand-700 dark:text-brand-300'}`}>
+                  {panelUpdate.announcement}
+                </div>
+              )}
+            </div>
+            {role === 'admin' && (
+              <Link to="/tools/update" className="shrink-0 text-xs font-medium underline-offset-2 hover:underline">
+                {t('panelVersion.action')}
+              </Link>
+            )}
+            <button type="button" onClick={dismissPanelUpdate} className="shrink-0 text-xs font-medium underline-offset-2 opacity-80 hover:underline">
+              {t('panelVersion.dismiss')}
+            </button>
+          </div>
+        </div>
+  )
+}
+
+function DashboardGrid({ sensors, layout, widgets, reduced, activeId, onDragStart, onDragOver, onDragEnd }: {
+  sensors: ReturnType<typeof useSensors>; layout: Layout; widgets: Record<string, React.ReactNode>
+  reduced: boolean; activeId: string | null
+  onDragStart: (event: DragStartEvent) => void; onDragOver: (event: DragOverEvent) => void; onDragEnd: (event: DragEndEvent) => void
+}) {
+  const { t } = useTranslation('HomePage')
+  return (
+      <DndContext sensors={sensors} collisionDetection={closestCorners}
+        onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}
+        modifiers={[restrictToWindowEdges]}>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          {layout.columns.map((col, ci) => (
+            <SortableContext key={ci} id={`col-${ci}`} items={col} strategy={verticalListSortingStrategy}>
+              <DroppableColumn id={`col-${ci}`} items={col}>
+                <div className="space-y-5">
+                  {col.map((id) => (
+                    <SortableWidget key={id} id={id} reduced={reduced}>
+                      {widgets[id] || <Card title={id} subtitle=""><div className="py-4 text-center text-xs text-slate-400">{t('widgetNotFound')}</div></Card>}
+                    </SortableWidget>
+                  ))}
+                </div>
+              </DroppableColumn>
+            </SortableContext>
+          ))}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeId ? (
+            <div className="rounded-2xl border-2 border-brand-300 bg-white/95 p-4 shadow-2xl backdrop-blur-sm dark:border-brand-700 dark:bg-slate-900/95">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t(`widgets.${activeId}`, { defaultValue: WIDGET_NAME[activeId] || activeId })}</p>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+  )
+}
+
+function WpInstallList({ wp, wpTotal }: { wp: WpInstall[]; wpTotal: number }) {
+  const { t } = useTranslation('HomePage')
+  if (wpTotal === 0) return <div className="py-5 text-center text-xs text-slate-400">{t('wp.empty')}</div>
+  return (
+    <div className="space-y-0.5">
+      {wp.slice(0, 5).map((k) => <WpInstallRow key={`${k.domain_id}-${k.dir}`} k={k} />)}
+      {wpTotal > 5 && (
+        <Link to="/wordpress" className="block pt-1.5 text-center text-[11px] text-slate-400 transition-colors hover:text-brand-600 dark:hover:text-brand-400">
+          {t('wp.more', { count: wpTotal - 5 })}
+        </Link>
+      )}
+    </div>
+  )
+}
+
+const WP_STATUS_COLOR: Record<string, string> = {
+  outdated: 'text-amber-500', current: 'text-emerald-500', unknown: 'text-slate-400',
+}
+
+function WpInstallBadge({ k }: { k: WpInstall }) {
+  const { t } = useTranslation('HomePage')
+  if (k.status === 'outdated') return <Badge color="amber" text={k.latest_version ? `→ v${k.latest_version}` : t('wp.badgeUpdate')} />
+  if (k.status === 'current') return <Badge color="emerald" text={t('wp.badgeCurrent')} />
+  return <Badge color="slate" text={t('wp.badgeUnknown')} />
+}
+
+function WpInstallRow({ k }: { k: WpInstall }) {
+  const { t } = useTranslation('HomePage')
+  return (
+    <Link to="/wordpress"
+      className="-mx-2 flex items-center justify-between rounded-xl px-2 py-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}
+          className={`h-4 w-4 shrink-0 ${WP_STATUS_COLOR[k.status] || WP_STATUS_COLOR.unknown}`}><path d={I.wp} /></svg>
+        <span className="min-w-0">
+          <span className="block truncate font-mono text-[13px] text-slate-700 dark:text-slate-200">{k.domain_name}</span>
+          <span className="block truncate text-[10px] text-slate-400 dark:text-slate-500">{k.dir === '/ (root)' ? t('wp.rootDir') : k.dir}{k.version ? ` · v${k.version}` : ''}</span>
+        </span>
+      </span>
+      <span className="shrink-0"><WpInstallBadge k={k} /></span>
+    </Link>
+  )
+}
+
+function WordPressBody({ wp }: { wp: WpInstall[] }) {
+  const { t } = useTranslation('HomePage')
+  const outdated = wp.filter((x) => x.status === 'outdated').length
+  const current = wp.filter((x) => x.status === 'current').length
+  const unknown = wp.filter((x) => x.status === 'unknown').length
+  return (
+    <>
+      <div className="mb-3 grid grid-cols-3 gap-2.5">
+        <MiniStat value={wp.length} label={t('wp.installs')} color="slate" />
+        <MiniStat value={outdated} label={t('wp.updates')} color={outdated > 0 ? 'amber' : 'emerald'} />
+        <MiniStat value={current} label={t('wp.current')} color="emerald" />
+      </div>
+      {outdated > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/15 dark:text-amber-300">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="mt-0.5 h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M10.36 3.6 2.26 17.66A1.5 1.5 0 0 0 3.56 19.9h16.88a1.5 1.5 0 0 0 1.3-2.25L13.64 3.6a1.5 1.5 0 0 0-2.6 0Z" /></svg>
+          <span><strong>{outdated}</strong>{t('wp.pendingUpdatesText', { count: outdated })}</span>
+        </div>
+      )}
+      <WpInstallList wp={wp} wpTotal={wp.length} />
+      {unknown > 0 && (
+        <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">{t('wp.unknownNote', { count: unknown })}</div>
+      )}
+    </>
+  )
+}
+
+function WordPressWidget({ wp }: { wp: WpInstall[] | null }) {
+  const { t } = useTranslation('HomePage')
+  return (
+    <Card title={t('widgets.wordpress')} subtitle={t('wp.subtitle')} icon={I.wp}
+      right={<Link to="/wordpress" className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">{t('shared.more')}</Link>}>
+      {wp === null ? <Spinner /> : <WordPressBody wp={wp} />}
+    </Card>
+  )
+}
+
+type UpdateTone = 'running' | 'missing' | 'current'
+
+function updateTone(update: UpdateStatus | null): UpdateTone {
+  if (update?.running) return 'running'
+  if (update?.tool_available === false) return 'missing'
+  return 'current'
+}
+
+const UPDATE_TONE_CLASS: Record<UpdateTone, string> = {
+  running: 'bg-sky-50 text-sky-600 dark:bg-sky-900/25 dark:text-sky-300',
+  missing: 'bg-amber-50 text-amber-600 dark:bg-amber-900/25 dark:text-amber-300',
+  current: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300',
+}
+const UPDATE_TONE_BADGE: Record<UpdateTone, string> = { running: 'sky', missing: 'amber', current: 'emerald' }
+
+function PanelUpdateWidget({ update }: { update: UpdateStatus | null }) {
+  const { t } = useTranslation('HomePage')
+  const tone = updateTone(update)
+  const headline = { running: t('update.running'), missing: t('update.toolMissing'), current: t('update.upToDate') }[tone]
+  const badge = { running: t('update.badgeRunning'), missing: t('update.badgeMissing'), current: t('update.badgeCurrent') }[tone]
+  return (
+
       <Card title={t('widgets.panel-update')} subtitle={t('update.subtitle')} icon={I.update}
         right={<Link to="/tools/packages" className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">{t('shared.more')}</Link>}>
         <div className="flex items-center gap-3">
-          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
-            update?.running ? 'bg-sky-50 text-sky-600 dark:bg-sky-900/25 dark:text-sky-300'
-              : update?.tool_available === false ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/25 dark:text-amber-300'
-                : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300'}`}>
+          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${UPDATE_TONE_CLASS[tone]}`}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d={I.update} /></svg>
           </span>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              {update?.running ? t('update.running') : update?.tool_available === false ? t('update.toolMissing') : t('update.upToDate')}
-            </div>
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{headline}</div>
             <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400" title={update?.status}>
               {update?.status || (update ? t('update.noStatus') : t('shared.loading'))}
             </div>
           </div>
           <span className="ml-auto shrink-0">
-            <Badge color={update?.running ? 'sky' : update?.tool_available === false ? 'amber' : 'emerald'}
-              text={update?.running ? t('update.badgeRunning') : update?.tool_available === false ? t('update.badgeMissing') : t('update.badgeCurrent')} />
+            <Badge color={UPDATE_TONE_BADGE[tone]} text={badge} />
           </span>
         </div>
         <Link to="/tools/packages" className="-mx-2 mt-3 flex items-center justify-between rounded-xl border-t border-slate-100 px-2 pt-3 text-xs transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
@@ -443,9 +664,21 @@ export default function HomePage() {
           <span className="text-brand-600 dark:text-brand-400">{t('shared.manage')}</span>
         </Link>
       </Card>
-    ),
+  )
+}
 
-    'last-backup': (
+function scheduleLabel(backup: BackupSummary, t: TFunction): string {
+  if (backup.automatic_domains === 0) return t('backup.scheduleOff')
+  if (backup.schedule_hour < 0) return t('backup.scheduleMixed')
+  return String(backup.schedule_hour).padStart(2, '0') + ':00'
+}
+
+function LastBackupWidget({ backup }: { backup: BackupSummary | null }) {
+  const { t } = useTranslation('HomePage')
+  const lastBackup = backup?.domains?.reduce((a, r) => (r.last_backup > a ? r.last_backup : a), '') || ''
+  const backedUpDomains = backup?.domains?.filter((r) => r.count > 0).length ?? 0
+  return (
+
       <Card title={t('widgets.last-backup')} subtitle={t('backup.subtitle')} icon={I.backup}
         right={<Link to="/backup-management" className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">{t('shared.more')}</Link>}>
         {!backup ? (
@@ -460,42 +693,48 @@ export default function HomePage() {
               <KV label={t('backup.lastBackup')} value={lastBackup || '—'} />
               <KV label={t('backup.sitesBackedUp')} value={`${backedUpDomains} / ${backup.domains.length}`} />
               <KV label={t('backup.remoteTarget')} value={backup.destination_count > 0 ? t('backup.remoteActive', { count: backup.destination_count }) : t('backup.remoteNone')} />
-              <KV label={t('backup.schedule')} value={
-                backup.automatic_domains === 0
-                  ? t('backup.scheduleOff')
-                  : backup.schedule_hour < 0
-                    ? t('backup.scheduleMixed')
-                    : String(backup.schedule_hour).padStart(2, '0') + ':00'
-              } />
+              <KV label={t('backup.schedule')} value={scheduleLabel(backup, t)} />
             </div>
           </>
         )}
       </Card>
-    ),
+  )
+}
 
-    'performance': (
+function PerformanceWidget({ optimize }: { optimize: OptimizeStatus | null }) {
+  const { t } = useTranslation('HomePage')
+  const running = optimize?.running === true
+  const status = optimize?.status || (optimize ? t('performance.defaultStatus') : t('shared.loading'))
+  return (
+
       <Card title={t('widgets.performance')} subtitle={t('performance.subtitle')} icon={I.optimize}
         right={<Link to="/tools/optimize" className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">{t('shared.more')}</Link>}>
         <div className="flex items-center gap-3">
-          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${optimize?.running ? 'bg-sky-50 text-sky-600 dark:bg-sky-900/25 dark:text-sky-300' : 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-300'}`}>
+          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${running ? 'bg-sky-50 text-sky-600 dark:bg-sky-900/25 dark:text-sky-300' : 'bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-300'}`}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d={I.optimize} /></svg>
           </span>
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              {optimize?.running ? t('performance.running') : t('performance.ready')}
+              {running ? t('performance.running') : t('performance.ready')}
             </div>
             <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400" title={optimize?.status}>
-              {optimize?.status || (optimize ? t('performance.defaultStatus') : t('shared.loading'))}
+              {status}
             </div>
           </div>
           <span className="ml-auto shrink-0">
-            <Badge color={optimize?.running ? 'sky' : 'slate'} text={optimize?.running ? t('performance.badgeRunning') : t('performance.badgeIdle')} />
+            <Badge color={running ? 'sky' : 'slate'} text={running ? t('performance.badgeRunning') : t('performance.badgeIdle')} />
           </span>
         </div>
       </Card>
-    ),
+  )
+}
 
-    'services': (
+function ServicesWidget({ s, svcActive, svcTotal, svcDown }: {
+  s: SystemUsage | null; svcActive: number; svcTotal: number; svcDown: number
+}) {
+  const { t } = useTranslation('HomePage')
+  return (
+
       <Card title={t('widgets.services')} subtitle={s ? t('services.subtitleCount', { active: svcActive, total: svcTotal }) : t('services.subtitleStatus')} icon={I.service}
         right={s ? <Badge color={svcDown === 0 ? 'emerald' : 'amber'} text={svcDown === 0 ? t('services.allActive') : t('services.down', { count: svcDown })} /> : undefined}>
         {!s ? <Spinner /> : (
@@ -515,9 +754,13 @@ export default function HomePage() {
           </div>
         )}
       </Card>
-    ),
+  )
+}
 
-    'domains': (
+function DomainsWidget({ domains, active, sslCount }: { domains: Domain[]; active: number; sslCount: number }) {
+  const { t } = useTranslation('HomePage')
+  return (
+
       <Card title={t('widgets.domains')} subtitle={t('domains.subtitle')} icon={I.domain}
         right={<Link to="/domains" className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">{t('shared.more')}</Link>}>
         <div className="mb-4 grid grid-cols-3 gap-2.5">
@@ -559,9 +802,13 @@ export default function HomePage() {
           </div>
         )}
       </Card>
-    ),
+  )
+}
 
-    'server-info': (
+function ServerInfoWidget({ s }: { s: SystemUsage | null }) {
+  const { t } = useTranslation('HomePage')
+  return (
+
       <Card title={t('widgets.server-info')} subtitle={t('serverInfo.subtitle')} icon={I.server}>
         {!s ? <Spinner /> : (
           <div className="space-y-0">
@@ -574,9 +821,13 @@ export default function HomePage() {
           </div>
         )}
       </Card>
-    ),
+  )
+}
 
-    'health': (
+function HealthWidget({ s, health }: { s: SystemUsage | null; health: HealthReport }) {
+  const { t } = useTranslation('HomePage')
+  return (
+
       <Card title={t('widgets.health')} subtitle={t('health.subtitle')} icon={I.health}>
         {!s ? <Spinner /> : (
           <>
@@ -595,9 +846,24 @@ export default function HomePage() {
           </>
         )}
       </Card>
-    ),
+  )
+}
 
-    'live-resources': !s ? <Spinner /> : (
+function DiskUsageBar({ disk }: { disk: DiskInfo }) {
+  const { t } = useTranslation('HomePage')
+  return (
+    <div>
+      <div className="mb-1 flex justify-between text-[11px]"><span className="text-slate-500">{t('live.disk', { mount: disk.mount })}</span><span className="font-mono text-slate-700 dark:text-slate-300">{t('live.freeGb', { value: disk.free_gb?.toFixed(1) })}</span></div>
+      <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(disk.pct ?? 0, 100)}%` }} /></div>
+    </div>
+  )
+}
+
+function LiveResourcesWidget({ s, mainDisk }: { s: SystemUsage | null; mainDisk: DiskInfo | null }) {
+  const { t } = useTranslation('HomePage')
+  if (!s) return <Spinner />
+  return (
+
       <Card title={t('widgets.live-resources')} subtitle={t('live.subtitle')} icon={I.chart}>
         <div className="space-y-3">
           <div>
@@ -608,129 +874,30 @@ export default function HomePage() {
             <div className="mb-1 flex justify-between text-[11px]"><span className="text-slate-500">{t('live.memory')}</span><span className="font-mono text-slate-700 dark:text-slate-300">{fmtBytesGB((s.memory_used_gb ?? 0) * 1e9)} / {fmtBytesGB((s.memory_total_gb ?? 0) * 1e9)}</span></div>
             <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-sky-500 transition-all" style={{ width: `${Math.min(s.memory_pct ?? 0, 100)}%` }} /></div>
           </div>
-          {mainDisk && (
-            <div>
-              <div className="mb-1 flex justify-between text-[11px]"><span className="text-slate-500">{t('live.disk', { mount: mainDisk.mount })}</span><span className="font-mono text-slate-700 dark:text-slate-300">{t('live.freeGb', { value: mainDisk.free_gb?.toFixed(1) })}</span></div>
-              <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-2 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(mainDisk.pct ?? 0, 100)}%` }} /></div>
-            </div>
-          )}
+          {mainDisk && <DiskUsageBar disk={mainDisk} />}
         </div>
       </Card>
-    ),
+    
+  )
+}
 
-    'subscriptions': (
+function SubscriptionsWidget() {
+  const { t } = useTranslation('HomePage')
+  return (
+
       <Card title={t('widgets.subscriptions')} subtitle={t('subscriptions.subtitle')} icon={I.subscription}>
         <div className="py-5 text-center text-xs text-slate-400">{t('subscriptions.body')}</div>
       </Card>
-    ),
+  )
+}
 
-    'network': (
+function NetworkWidget() {
+  const { t } = useTranslation('HomePage')
+  return (
+
       <Card title={t('widgets.network')} subtitle={t('network.subtitle')} icon={I.network}>
         <div className="py-5 text-center text-xs text-slate-400">{t('network.body')}</div>
       </Card>
-    ),
-  }
-
-  return (
-    <div className="px-5 py-5">
-      {/* Header */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            {displayName ? t('header.welcome', { name: displayName }) : t('header.dashboard')}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('header.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {saveState !== 'idle' && (
-            <span className={`text-[11px] font-medium ${saveState === 'saving' ? 'text-slate-400' : saveState === 'saved' ? 'text-emerald-500' : 'text-red-500'}`}>
-              {saveState === 'saving' ? t('header.saving') : saveState === 'saved' ? t('header.saved') : t('header.saveFailed')}
-            </span>
-          )}
-          <button onClick={resetLayout} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">{t('header.resetLayout')}</button>
-        </div>
-      </div>
-
-      {quotaWarning && (!quotaWarning.dismissible || !quotaWarningDismissed) && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-200">
-          <div className="flex items-start gap-3">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="mt-0.5 h-5 w-5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M10.36 3.6 2.26 17.66A1.5 1.5 0 0 0 3.56 19.9h16.88a1.5 1.5 0 0 0 1.3-2.25L13.64 3.6a1.5 1.5 0 0 0-2.6 0Z" /></svg>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">{quotaWarning.title}</div>
-              <div className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-300">{quotaWarning.body}</div>
-            </div>
-            {quotaWarning.dismissible && (
-              <button type="button" onClick={dismissQuotaWarning} className="text-xs font-medium text-amber-700 underline-offset-2 hover:underline dark:text-amber-300">
-                {t('quota.dismiss')}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* A released version the host has not taken yet. Colour is never the only
-          signal: a critical release also says so in its announcement text. Only an
-          admin gets the link, because the update page's actions are admin-only. */}
-      {panelUpdate && (
-        <div className={`mb-4 rounded-2xl border p-4 ${panelUpdate.critical
-          ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800/50 dark:bg-rose-900/20 dark:text-rose-200'
-          : 'border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-800/50 dark:bg-brand-900/20 dark:text-brand-200'}`}>
-          <div className="flex items-start gap-3">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="mt-0.5 h-5 w-5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">
-                {t('panelVersion.title')}
-                <span className="ml-2 text-xs font-normal opacity-80">
-                  {t('panelVersion.versions', { current: panelUpdate.current || '—', latest: panelUpdate.latest })}
-                </span>
-              </div>
-              {panelUpdate.announcement && (
-                <div className={`mt-1 text-xs leading-relaxed ${panelUpdate.critical ? 'text-rose-700 dark:text-rose-300' : 'text-brand-700 dark:text-brand-300'}`}>
-                  {panelUpdate.announcement}
-                </div>
-              )}
-            </div>
-            {role === 'admin' && (
-              <Link to="/tools/update" className="shrink-0 text-xs font-medium underline-offset-2 hover:underline">
-                {t('panelVersion.action')}
-              </Link>
-            )}
-            <button type="button" onClick={dismissPanelUpdate} className="shrink-0 text-xs font-medium underline-offset-2 opacity-80 hover:underline">
-              {t('panelVersion.dismiss')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Drag-and-drop grid */}
-      <DndContext sensors={sensors} collisionDetection={closestCorners}
-        onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}
-        modifiers={[restrictToWindowEdges]}>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          {layout.columns.map((col, ci) => (
-            <SortableContext key={ci} id={`col-${ci}`} items={col} strategy={verticalListSortingStrategy}>
-              <DroppableColumn id={`col-${ci}`} items={col}>
-                <div className="space-y-5">
-                  {col.map((id) => (
-                    <SortableWidget key={id} id={id} reduced={reduced}>
-                      {widgets[id] || <Card title={id} subtitle=""><div className="py-4 text-center text-xs text-slate-400">{t('widgetNotFound')}</div></Card>}
-                    </SortableWidget>
-                  ))}
-                </div>
-              </DroppableColumn>
-            </SortableContext>
-          ))}
-        </div>
-
-        <DragOverlay dropAnimation={null}>
-          {activeId ? (
-            <div className="rounded-2xl border-2 border-brand-300 bg-white/95 p-4 shadow-2xl backdrop-blur-sm dark:border-brand-700 dark:bg-slate-900/95">
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{t(`widgets.${activeId}`, { defaultValue: WIDGET_NAME[activeId] || activeId })}</p>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-    </div>
   )
 }
 
@@ -824,19 +991,42 @@ function KV({ label, value }: { label: string; value: string }) {
   )
 }
 
-function calcHealth(t: TFunction, s: SystemUsage | null, svcDown: number, isoCount: number): { score: number; label: string; issues: { severity: string; text: string }[] } {
-  const issues: { severity: string; text: string }[] = []
+type HealthIssue = { severity: string; text: string }
+type HealthReport = { score: number; label: string; issues: HealthIssue[] }
+
+/** Adds the worst matching band for one measured resource, or nothing. */
+function pushBand(issues: HealthIssue[], percent: number, high: number, medium: number, text: (percent: string) => string) {
+  if (percent > high) issues.push({ severity: 'high', text: text(percent.toFixed(0)) })
+  else if (percent > medium) issues.push({ severity: 'medium', text: text(percent.toFixed(0)) })
+}
+
+function memoryPercent(s: SystemUsage | null): number {
+  return s?.memory_pct ?? 0
+}
+
+function diskPercent(s: SystemUsage | null): number {
+  const primary = s?.disk?.pct
+  if (primary !== undefined) return primary
+  return s?.disks?.[0]?.pct ?? 0
+}
+
+function healthLabel(score: number, t: TFunction): string {
+  if (score >= 90) return t('health.healthy')
+  if (score >= 70) return t('health.fair')
+  if (score >= 50) return t('health.degraded')
+  return t('health.critical')
+}
+
+function calcHealth(t: TFunction, s: SystemUsage | null, svcDown: number, isoCount: number): HealthReport {
+  const issues: HealthIssue[] = []
   if (svcDown > 0) issues.push({ severity: 'high', text: t('health.servicesDown', { count: svcDown }) })
   if (isoCount > 0) issues.push({ severity: 'high', text: t('health.isolationLoss', { count: isoCount }) })
-  const memPct = s?.memory_pct ?? 0
-  if (memPct > 90) issues.push({ severity: 'high', text: t('health.memoryAt', { percent: memPct.toFixed(0) }) })
-  else if (memPct > 75) issues.push({ severity: 'medium', text: t('health.memoryAt', { percent: memPct.toFixed(0) }) })
-  const diskPct = s?.disk?.pct ?? (s?.disks?.[0]?.pct ?? 0)
-  if (diskPct > 90) issues.push({ severity: 'high', text: t('health.diskAt', { percent: diskPct.toFixed(0) }) })
-  else if (diskPct > 80) issues.push({ severity: 'medium', text: t('health.diskAt', { percent: diskPct.toFixed(0) }) })
-  const score = Math.max(0, 100 - issues.filter(i => i.severity === 'high').length * 25 - issues.filter(i => i.severity === 'medium').length * 10)
-  const label = score >= 90 ? t('health.healthy') : score >= 70 ? t('health.fair') : score >= 50 ? t('health.degraded') : t('health.critical')
-  return { score, label, issues }
+  pushBand(issues, memoryPercent(s), 90, 75, (percent) => t('health.memoryAt', { percent }))
+  pushBand(issues, diskPercent(s), 90, 80, (percent) => t('health.diskAt', { percent }))
+  const high = issues.filter(i => i.severity === 'high').length
+  const medium = issues.filter(i => i.severity === 'medium').length
+  const score = Math.max(0, 100 - high * 25 - medium * 10)
+  return { score, label: healthLabel(score, t), issues }
 }
 
 function fmtBytesGB(b: number): string {
