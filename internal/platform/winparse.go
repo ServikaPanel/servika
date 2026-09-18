@@ -98,31 +98,49 @@ func ownerConflict(marker []byte, domain string) bool {
 	return owner != "" && owner != strings.ToLower(strings.TrimSpace(domain))
 }
 
-// serviceNames reads the Name fields out of a ConvertTo-Json answer.
+// decodeRecords reads a ConvertTo-Json answer into a list.
 //
 // ConvertTo-Json writes a bare OBJECT for a single result and an ARRAY for
-// several. Both shapes are accepted by looking at the first byte; assuming the
-// array shape loses every host that has exactly one of the candidate services.
-func serviceNames(out []byte) []string {
+// several. Both shapes are accepted by looking at the first byte. Assuming the
+// array shape loses every host that happens to have exactly one of whatever was
+// asked for, which is the common case for a service query.
+//
+// An empty answer is an empty list, not a failure: it means nothing matched.
+func decodeRecords[T any](out []byte) ([]T, error) {
 	raw := bytes.TrimSpace(out)
 	if len(raw) == 0 {
-		return nil
+		return nil, nil
 	}
-	type record struct{ Name string }
 	if raw[0] == '{' {
-		var one record
-		if json.Unmarshal(raw, &one) == nil && one.Name != "" {
-			return []string{one.Name}
+		var one T
+		if err := json.Unmarshal(raw, &one); err != nil {
+			return nil, fmt.Errorf("could not decode the answer: %w", err)
 		}
-		return nil
+		return []T{one}, nil
 	}
-	var list []record
-	if json.Unmarshal(raw, &list) != nil {
+	var list []T
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return nil, fmt.Errorf("could not decode the answer: %w", err)
+	}
+	return list, nil
+}
+
+// serviceNames reads the Name fields out of a service query.
+//
+// A decode failure answers no names rather than an error: this feeds capability
+// discovery, where an unreadable answer means "nothing proven", and failing the
+// whole probe over it would take the readable capabilities down with it.
+func serviceNames(out []byte) []string {
+	type record struct{ Name string }
+	list, err := decodeRecords[record](out)
+	if err != nil {
 		return nil
 	}
 	names := make([]string, 0, len(list))
 	for _, r := range list {
-		names = append(names, r.Name)
+		if r.Name != "" {
+			names = append(names, r.Name)
+		}
 	}
 	return names
 }
@@ -284,25 +302,10 @@ type TaskRecord struct {
 
 // parseTasks reads the task listing and drops the operating system's own tasks
 // unless all is set.
-//
-// ConvertTo-Json writes a bare object for a single task, so both shapes are
-// accepted here for the same reason as in serviceNames.
 func parseTasks(out []byte, all bool) ([]TaskRecord, error) {
-	raw := bytes.TrimSpace(out)
-	var records []TaskRecord
-	switch {
-	case len(raw) == 0:
-		// No tasks at all. An empty list, not a failure.
-	case raw[0] == '{':
-		var one TaskRecord
-		if err := json.Unmarshal(raw, &one); err != nil {
-			return nil, fmt.Errorf("could not decode the task list: %w", err)
-		}
-		records = []TaskRecord{one}
-	default:
-		if err := json.Unmarshal(raw, &records); err != nil {
-			return nil, fmt.Errorf("could not decode the task list: %w", err)
-		}
+	records, err := decodeRecords[TaskRecord](out)
+	if err != nil {
+		return nil, err
 	}
 	tasks := make([]TaskRecord, 0, len(records))
 	for _, t := range records {

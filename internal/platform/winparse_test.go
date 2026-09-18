@@ -83,7 +83,7 @@ func TestSeveralServicesComeBackAsAnArray(t *testing.T) {
 }
 
 func TestNoServiceAtAllIsNotAFailure(t *testing.T) {
-	if names := serviceNames([]byte("   \r\n ")); names != nil {
+	if names := serviceNames([]byte("   \r\n ")); len(names) != 0 {
 		t.Fatalf("an empty answer read as %v", names)
 	}
 }
