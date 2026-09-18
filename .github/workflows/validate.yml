@@ -70,6 +70,20 @@ jobs:
       - name: go vet (linux/arm64)
         run: GOOS=linux GOARCH=arm64 go vet ./...
 
+      # The Windows agent's own half of the tree is behind `//go:build windows`,
+      # so a linux vet never compiles it and `go test ./...` never links it. A
+      # commit that breaks the agent would pass every gate above and only fail
+      # on the day somebody built the release. This is the gate that sees it.
+      #
+      # It builds rather than only vets, because the interface is embedded with
+      # go:embed: a missing or renamed webui file is a link-time failure, not a
+      # vet finding.
+      - name: go build (windows/amd64, the agent)
+        run: GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/servika-agent
+
+      - name: go vet (windows/amd64)
+        run: GOOS=windows GOARCH=amd64 go vet ./cmd/servika-agent/ ./internal/platform/
+
       # The vhost tests shell out to `nginx -t` and skip themselves when no nginx
       # is on PATH, so without this the configuration gates pass by not running.
       #
