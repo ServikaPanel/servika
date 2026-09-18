@@ -174,9 +174,16 @@ func (h *Handlers) SessionDelete(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid session")
 		return
 	}
-	if _, err := h.DB.ExecContext(r.Context(), `DELETE FROM migration_sessions WHERE id=?`, id); err != nil {
+	res, err := h.DB.ExecContext(r.Context(), `DELETE FROM migration_sessions WHERE id=?`, id)
+	if err != nil {
 		httpx.LogR(r, "migration session delete: %v", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "the session could not be deleted")
+		return
+	}
+	// A session that is already gone reports 404 rather than deleted:true, so the
+	// operator does not read a no-op as a completed delete.
+	if affected, err := res.RowsAffected(); err == nil && affected == 0 {
+		httpx.WriteError(w, http.StatusNotFound, "no such session")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"deleted": true})

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { isAxiosError } from 'axios'
 import Breadcrumb from '@/components/Breadcrumb'
 import { api, apiError } from '@/lib/api'
 import { useReportError } from '@/lib/errors'
@@ -285,7 +286,12 @@ function useSiteMigration() {
   function forgetSession(id: number) {
     api.delete(`/admin/migrations/sessions/${id}`)
       .then(() => loadSessions())
-      .catch(e => setError(apiError(e, t('errors.forgetFailed'))))
+      .catch(e => {
+        // A 404 means the session expired between the list and the click. The row
+        // is stale, so refresh the list instead of showing a failure.
+        if (isAxiosError(e) && e.response?.status === 404) { loadSessions(); return }
+        setError(apiError(e, t('errors.forgetFailed')))
+      })
   }
 
   // Advance the clock only while a job runs, so a finished job's elapsed time
