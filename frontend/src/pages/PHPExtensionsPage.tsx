@@ -108,6 +108,201 @@ export type Selection = { version: string; key: string; name: string }
 // render this page as one of its steps without a page-within-a-page chrome.
 // selected/setSelected switch the uninstalled-extension button from immediate
 // install to "pick now, install in bulk from the Summary step".
+type ExtensionsHeaderProps = {
+  embedded?: boolean
+  versions: Version[]
+  activeVersion: string
+  setActiveVersion: (version: string) => void
+  ionCubeInstalled: boolean
+  installIonCube: () => void
+  removeIonCube: () => void
+}
+
+function ExtensionsHeader({ embedded, versions, activeVersion, setActiveVersion, ionCubeInstalled, installIonCube, removeIonCube }: ExtensionsHeaderProps) {
+  const { t } = useTranslation('PHPExtensionsPage')
+  return (
+    <>
+      {!embedded && (
+        <Breadcrumb items={[
+          { label: t('breadcrumb.home'), href: '/' },
+          { label: t('breadcrumb.system') },
+          { label: t('breadcrumb.current') },
+        ]} />
+      )}
+
+      <div className="flex items-center justify-between mb-1">
+        {!embedded && <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>}
+        <button onClick={() => ionCubeInstalled ? removeIonCube() : installIonCube()}
+          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-md self-start">
+          {ionCubeInstalled ? t('removeIonCube') : t('installIonCube')}
+        </button>
+      </div>
+      <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
+        {t('subtitle.pre')}<strong>{t('subtitle.bold')}</strong>{t('subtitle.post')}
+      </p>
+
+      {/* Version tabs */}
+      <div className="flex gap-2 mb-4 border-b border-slate-200 dark:border-slate-700">
+        {versions.map(version => (
+          <button key={version.version} onClick={() => setActiveVersion(version.version)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+              activeVersion === version.version
+                ? 'border-brand-500 text-brand-700 dark:text-brand-300'
+                : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}>
+            {t('versionTab', { version: version.version })}
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
+type ExtensionsBannersProps = {
+  error: string | null
+  success: string | null
+  selectedCount: number
+  peclProgress: { step: string; percent: number } | null
+}
+
+function ExtensionsBanners({ error, success, selectedCount, peclProgress }: ExtensionsBannersProps) {
+  const { t } = useTranslation('PHPExtensionsPage')
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+
+      {selectedCount > 0 && (
+        <div className="mb-3 px-3 py-2 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-md text-sm text-brand-700 dark:text-brand-300">
+          {t('catalog.selectedBanner', { count: selectedCount })}
+        </div>
+      )}
+
+      {peclProgress && (
+        <div className="mb-3 px-3 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+          <div className="flex items-center justify-between text-sm text-blue-700 dark:text-blue-300 mb-2">
+            <span>{t(`pecl.step.${peclProgress.step}`, { defaultValue: peclProgress.step })}</span>
+            <span className="font-mono">{peclProgress.percent}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${peclProgress.percent}%` }} />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+type CatalogCardProps = {
+  item: CatalogItem
+  installed?: Extension
+  selected: boolean
+  selecting: boolean
+  toggle: (extension: Extension) => void
+  toggleSelection: (item: CatalogItem) => void
+  install: (item: CatalogItem) => void
+  peclBusy: boolean
+}
+
+function cardClass(installed: Extension | undefined, selected: boolean): string {
+  if (installed?.active) return 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
+  if (installed) return 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+  if (selected) return 'bg-brand-50 dark:bg-brand-900/15 border-brand-300 dark:border-brand-700'
+  return 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+}
+
+function CatalogCardAction({ item, installed, selected, selecting, toggle, toggleSelection, install, peclBusy }: CatalogCardProps) {
+  const { t } = useTranslation('PHPExtensionsPage')
+  if (installed) {
+    return (
+      <button onClick={() => toggle(installed)} title={installed.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
+        className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${installed.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${installed.active ? 'translate-x-5' : 'translate-x-1'}`} />
+      </button>
+    )
+  }
+  if (selecting) {
+    // Wizard mode: toggle marks the extension "to install"; the Summary step
+    // installs the whole selection in bulk.
+    return (
+      <button onClick={() => toggleSelection(item)} title={selected ? t('catalog.selectTitle.remove') : t('catalog.selectTitle.add')}
+        className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${selected ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+        <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${selected ? 'translate-x-5' : 'translate-x-1'}`} />
+      </button>
+    )
+  }
+  return (
+    <button onClick={() => install(item)} disabled={peclBusy}
+      className="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50">{t('catalog.install')}</button>
+  )
+}
+
+function CatalogCard(props: CatalogCardProps) {
+  const { t } = useTranslation('PHPExtensionsPage')
+  const { item, installed, selected } = props
+  return (
+    <div className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${cardClass(installed, selected)}`}>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{item.name} <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{item.key}</span></div>
+        <div className="text-[11px] text-slate-500 dark:text-slate-500 truncate">{t(`catalog.desc.${item.key}`)}</div>
+      </div>
+      <CatalogCardAction {...props} />
+    </div>
+  )
+}
+
+type CatalogGroup = { category: string; items: CatalogItem[] }
+
+type CatalogSectionProps = {
+  loading: boolean
+  groups: CatalogGroup[]
+  extraInstalled: Extension[]
+  findInstalled: (key: string) => Extension | undefined
+  isSelected: (key: string) => boolean
+  selecting: boolean
+  toggle: (extension: Extension) => void
+  toggleSelection: (item: CatalogItem) => void
+  install: (item: CatalogItem) => void
+  peclBusy: boolean
+}
+
+function CatalogSection({ loading, groups, extraInstalled, findInstalled, isSelected, selecting, toggle, toggleSelection, install, peclBusy }: CatalogSectionProps) {
+  const { t } = useTranslation('PHPExtensionsPage')
+  if (loading) return <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+  return (
+        <div className="space-y-6">
+          {groups.map(group => (
+            <section key={group.category}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t(`catalog.category.${group.category}`)}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {group.items.map(item => (
+                  <CatalogCard key={item.key} item={item} installed={findInstalled(item.key)} selected={isSelected(item.key)}
+                    selecting={selecting} toggle={toggle} toggleSelection={toggleSelection} install={install} peclBusy={peclBusy} />
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {extraInstalled.length > 0 && (
+            <section>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('catalog.extraInstalled')}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {extraInstalled.map(extension => (
+                  <div key={extension.ini_file} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${extension.active ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
+                    <div className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{extension.name}</div>
+                    <button onClick={() => toggle(extension)} title={extension.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
+                      className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${extension.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${extension.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+  )
+}
+
 export default function PHPExtensionsPage({ embedded, selected, setSelected }: {
   embedded?: boolean
   selected?: Selection[]
@@ -305,38 +500,7 @@ export default function PHPExtensionsPage({ embedded, selected, setSelected }: {
 
   return (
     <div className={embedded ? '' : 'px-6 py-5'}>
-      {!embedded && (
-        <Breadcrumb items={[
-          { label: t('breadcrumb.home'), href: '/' },
-          { label: t('breadcrumb.system') },
-          { label: t('breadcrumb.current') },
-        ]} />
-      )}
-
-      <div className="flex items-center justify-between mb-1">
-        {!embedded && <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{t('title')}</h1>}
-        <button onClick={() => ionCubeInstalled ? removeIonCube() : installIonCube()}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-md self-start">
-          {ionCubeInstalled ? t('removeIonCube') : t('installIonCube')}
-        </button>
-      </div>
-      <p className="text-sm text-slate-500 dark:text-slate-500 mb-5">
-        {t('subtitle.pre')}<strong>{t('subtitle.bold')}</strong>{t('subtitle.post')}
-      </p>
-
-      {/* Version tabs */}
-      <div className="flex gap-2 mb-4 border-b border-slate-200 dark:border-slate-700">
-        {versions.map(version => (
-          <button key={version.version} onClick={() => setActiveVersion(version.version)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
-              activeVersion === version.version
-                ? 'border-brand-500 text-brand-700 dark:text-brand-300'
-                : 'border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}>
-            {t('versionTab', { version: version.version })}
-          </button>
-        ))}
-      </div>
+      <ExtensionsHeader embedded={embedded} versions={versions} activeVersion={activeVersion} setActiveVersion={setActiveVersion} ionCubeInstalled={ionCubeInstalled} installIonCube={installIonCube} removeIonCube={removeIonCube} />
 
       <div className="flex items-center justify-end mb-4">
         <input
@@ -348,88 +512,9 @@ export default function PHPExtensionsPage({ embedded, selected, setSelected }: {
         />
       </div>
 
-      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap">{error}</div>}
-      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+      <ExtensionsBanners error={error} success={success} selectedCount={selected?.length ?? 0} peclProgress={peclProgress} />
 
-      {(selected?.length ?? 0) > 0 && (
-        <div className="mb-3 px-3 py-2 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-md text-sm text-brand-700 dark:text-brand-300">
-          {t('catalog.selectedBanner', { count: selected!.length })}
-        </div>
-      )}
-
-      {peclProgress && (
-        <div className="mb-3 px-3 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-          <div className="flex items-center justify-between text-sm text-blue-700 dark:text-blue-300 mb-2">
-            <span>{t(`pecl.step.${peclProgress.step}`, { defaultValue: peclProgress.step })}</span>
-            <span className="font-mono">{peclProgress.percent}%</span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden">
-            <div className="h-full rounded-full bg-blue-500 transition-all duration-500" style={{ width: `${peclProgress.percent}%` }} />
-          </div>
-        </div>
-      )}
-
-      {loading ? <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div> : (
-        <div className="space-y-6">
-          {groups.map(group => (
-            <section key={group.category}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t(`catalog.category.${group.category}`)}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {group.items.map(item => {
-                  const installed = findInstalled(item.key)
-                  return (
-                    <div key={item.key}
-                      className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${
-                        installed?.active ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800'
-                        : installed ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'
-                        : isSelected(item.key) ? 'bg-brand-50 dark:bg-brand-900/15 border-brand-300 dark:border-brand-700'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                      }`}>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{item.name} <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">{item.key}</span></div>
-                        <div className="text-[11px] text-slate-500 dark:text-slate-500 truncate">{t(`catalog.desc.${item.key}`)}</div>
-                      </div>
-                      {installed ? (
-                        <button onClick={() => toggle(installed)} title={installed.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
-                          className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${installed.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${installed.active ? 'translate-x-5' : 'translate-x-1'}`} />
-                        </button>
-                      ) : setSelected ? (
-                        // Wizard mode: toggle marks the extension "to install"; the
-                        // Summary step installs the whole selection in bulk.
-                        <button onClick={() => toggleSelection(item)} title={isSelected(item.key) ? t('catalog.selectTitle.remove') : t('catalog.selectTitle.add')}
-                          className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${isSelected(item.key) ? 'bg-brand-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${isSelected(item.key) ? 'translate-x-5' : 'translate-x-1'}`} />
-                        </button>
-                      ) : (
-                        <button onClick={() => install(item)} disabled={!!peclProgress}
-                          className="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md bg-brand-600 hover:bg-brand-700 text-white disabled:opacity-50">{t('catalog.install')}</button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          ))}
-
-          {extraInstalled.length > 0 && (
-            <section>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-2">{t('catalog.extraInstalled')}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {extraInstalled.map(extension => (
-                  <div key={extension.ini_file} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${extension.active ? 'bg-emerald-50 dark:bg-emerald-900/15 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700'}`}>
-                    <div className="font-mono text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{extension.name}</div>
-                    <button onClick={() => toggle(extension)} title={extension.active ? t('toggleTitle.disable') : t('toggleTitle.enable')}
-                      className={`flex-shrink-0 relative inline-flex h-5 w-9 items-center rounded-full transition ${extension.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition ${extension.active ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
+      <CatalogSection loading={loading} groups={groups} extraInstalled={extraInstalled} findInstalled={findInstalled} isSelected={isSelected} selecting={!!setSelected} toggle={toggle} toggleSelection={toggleSelection} install={install} peclBusy={!!peclProgress} />
 
       {!embedded && (
         <p className="mt-6 text-xs text-slate-400 dark:text-slate-500">
