@@ -34,6 +34,617 @@ function deliveryBadge(status: string): string {
   }
 }
 
+function missingServicesOf(status: MailStatus | null): string {
+  return (status?.infrastructure_missing || []).join(', ')
+}
+
+function isEnabled(status: MailStatus | null): boolean {
+  return status?.enabled === true
+}
+
+function firstMailboxIDOf(mailboxes: Mailbox[]): number {
+  return mailboxes[0]?.id ?? 0
+}
+
+// Webmail is served from the customer's OWN domain, through the /webmail/ block
+// the panel renders into their vhost. The panel origin is only a fallback: it is
+// what the address was before, and it is still the only encrypted route while
+// the domain has no certificate, since the block is rendered onto the TLS vhost
+// alone.
+function webmailURLOf(domain: Domain | null): string {
+  return domain?.ssl ? `https://${domain.domain_name}/webmail/` : `${window.location.origin}/webmail/`
+}
+
+function MailHeader({ domain, id, showStackDown, missingServices }: {
+  domain: Domain | null; id?: string; showStackDown: boolean; missingServices: string
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <>
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
+        { label: t('breadcrumb.email') },
+      ]} />
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{t('subtitle')}</p>
+      {showStackDown && (
+        <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200">
+          {t('enable.deliveryStopped', { services: missingServices })}
+        </div>
+      )}
+    </>
+  )
+}
+
+function Banners({ error, success }: { error: string | null; success: string | null }) {
+  return (
+    <>
+      {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
+      {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
+    </>
+  )
+}
+
+function GeneratedPasswordCard({ value }: { value: { email: string; password: string } }) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <div className="mb-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
+      <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium mb-1">{t('generatedPassword.title', { email: value.email })}</p>
+      <p className="text-xs text-emerald-700 dark:text-emerald-300 mb-2">{t('generatedPassword.saveNote')}</p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 bg-white dark:bg-slate-800 px-3 py-2 font-mono text-sm text-slate-900 dark:text-slate-100 rounded border border-emerald-200 dark:border-emerald-800 break-all">{value.password}</code>
+        <button type="button" onClick={() => navigator.clipboard.writeText(value.password)} className="px-3 py-2 bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-200 text-xs rounded">{t('generatedPassword.copy')}</button>
+      </div>
+    </div>
+  )
+}
+
+function EnableCard({ stackDown, missingServices, saving, onEnable }: {
+  stackDown: boolean; missingServices: string; saving: boolean; onEnable: () => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 text-center">
+      <div className="mb-2"><Icon d={ICON.mail} className="h-8 w-8" /></div>
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('enable.notEnabled')}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">{t('enable.info')}</p>
+      {/* Enabling mail starts a whole stack on the server, not a setting on
+          this domain alone, so the cost is stated before the button. */}
+      <div className="flex justify-center mb-4">
+        <ResourceNotice>{t('enable.resourceWarning')}</ResourceNotice>
+      </div>
+      {/* The server refuses this while its mail services are down, and
+          enabling would otherwise publish MX for a service that never
+          runs. Saying so here beats letting the click fail. */}
+      {stackDown && (
+        <div className="mx-auto mb-4 max-w-lg px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200">
+          {t('enable.infrastructureMissing', { services: missingServices })}
+        </div>
+      )}
+      <button type="button" onClick={onEnable} disabled={saving || stackDown}
+        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+        {saving ? t('enable.enabling') : t('enable.button')}
+      </button>
+    </div>
+  )
+}
+
+function WebmailCard({ url, onCopy }: { url: string; onCopy: () => void }) {
+  const { t } = useTranslation('DomainMailPage')
+  // Roundcube is one shared installation reached under /webmail/ on the
+  // domain's own TLS vhost. It is NOT at mail.<domain>: that record exists to
+  // be the MX target and has no vhost, so a request to it falls through to the
+  // catch-all.
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5 shadow-sm flex flex-wrap items-center gap-4">
+      <div className="w-11 h-11 shrink-0 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 flex items-center justify-center">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+        </svg>
+      </div>
+      <div className="min-w-[200px] flex-1">
+        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('webmail.title')}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('webmail.description')}</div>
+        <code className="text-[11px] text-slate-500 dark:text-slate-500 font-mono break-all">{url}</code>
+      </div>
+      <div className="flex items-center gap-2">
+        <a href={url} target="_blank" rel="noopener noreferrer"
+          className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">
+          {t('webmail.open')}
+        </a>
+        <button type="button" onClick={onCopy}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm rounded-lg">
+          {t('webmail.copy')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function AddMailboxForm({ domainName, localPart, onLocalPart, password, onPassword, saving, onSubmit }: {
+  domainName?: string; localPart: string; onLocalPart: (value: string) => void
+  password: string; onPassword: (value: string) => void
+  saving: boolean; onSubmit: (event: React.SubmitEvent) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <form onSubmit={onSubmit} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('mailboxAdd.title')}</h3>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input value={localPart} onChange={event => onLocalPart(event.target.value)} required placeholder={t('mailboxAdd.localPlaceholder')}
+          className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+        <span className="text-slate-500 dark:text-slate-400 text-sm">@{domainName}</span>
+        <input value={password} onChange={event => onPassword(event.target.value)} type="password" placeholder={t('mailboxAdd.passwordPlaceholder')}
+          className="sm:w-60 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+        <button disabled={saving || !localPart} className="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+          {saving ? t('mailboxAdd.adding') : t('mailboxAdd.add')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function MailboxRow({ mailbox, subscriptionID, onWebmail, onToggle, onResetPassword, onRemove }: {
+  mailbox: Mailbox; subscriptionID?: string
+  onWebmail: (mailbox: Mailbox) => void; onToggle: (mailbox: Mailbox) => void
+  onResetPassword: (mailbox: Mailbox) => void; onRemove: (mailbox: Mailbox) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <li className="flex items-center justify-between py-2.5">
+      <div>
+        <span className="text-sm font-mono text-slate-800 dark:text-slate-200">{mailbox.email}</span>
+        {mailbox.status !== 'active' && (
+          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">{t('mailboxes.suspended')}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        <Link to={`/subscriptions/${subscriptionID}/mail/${mailbox.id}`} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">{t('mailboxes.details')}</Link>
+        {mailbox.status === 'active' && (
+          <button type="button" onClick={() => onWebmail(mailbox)} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">{t('mailboxes.openWebmail')}</button>
+        )}
+        <button type="button" onClick={() => onToggle(mailbox)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">
+          {mailbox.status === 'active' ? t('mailboxes.suspend') : t('mailboxes.activate')}
+        </button>
+        <button type="button" onClick={() => onResetPassword(mailbox)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">{t('mailboxes.resetPassword')}</button>
+        <button type="button" onClick={() => onRemove(mailbox)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{t('mailboxes.delete')}</button>
+      </div>
+    </li>
+  )
+}
+
+function MailboxListCard({ mailboxes, subscriptionID, onWebmail, onToggle, onResetPassword, onRemove }: {
+  mailboxes: Mailbox[]; subscriptionID?: string
+  onWebmail: (mailbox: Mailbox) => void; onToggle: (mailbox: Mailbox) => void
+  onResetPassword: (mailbox: Mailbox) => void; onRemove: (mailbox: Mailbox) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('mailboxes.title')}</h3>
+      {mailboxes.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('mailboxes.empty')}</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {mailboxes.map(mailbox => (
+            <MailboxRow key={mailbox.id} mailbox={mailbox} subscriptionID={subscriptionID}
+              onWebmail={onWebmail} onToggle={onToggle} onResetPassword={onResetPassword} onRemove={onRemove} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function AliasRow({ alias, domainName, onToggle, onRemove }: {
+  alias: Alias; domainName?: string; onToggle: (alias: Alias) => void; onRemove: (alias: Alias) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <li className="flex items-center justify-between py-2.5">
+      <div>
+        <span className="text-sm font-mono text-slate-800 dark:text-slate-200">
+          {alias.catch_all ? `*@${domainName}` : alias.source}
+        </span>
+        <span className="mx-1.5 text-slate-400">→</span>
+        <span className="text-sm font-mono text-slate-600 dark:text-slate-400">{alias.destination}</span>
+        {alias.status !== 'active' && (
+          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">{t('forwarders.suspended')}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => onToggle(alias)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">
+          {alias.status === 'active' ? t('forwarders.suspend') : t('forwarders.activate')}
+        </button>
+        <button type="button" onClick={() => onRemove(alias)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{t('forwarders.delete')}</button>
+      </div>
+    </li>
+  )
+}
+
+function ForwardersCard({ domainName, aliases, localPart, onLocalPart, destination, onDestination, catchAll, onCatchAll, saving, onSubmit, onToggle, onRemove }: {
+  domainName?: string; aliases: Alias[]
+  localPart: string; onLocalPart: (value: string) => void
+  destination: string; onDestination: (value: string) => void
+  catchAll: boolean; onCatchAll: (value: boolean) => void
+  saving: boolean; onSubmit: (event: React.SubmitEvent) => void
+  onToggle: (alias: Alias) => void; onRemove: (alias: Alias) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('forwarders.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('forwarders.description')}</p>
+      <form onSubmit={onSubmit} className="mb-4 space-y-2">
+        <div className="flex items-center gap-2">
+          {catchAll ? (
+            <span className="flex-1 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-500 dark:text-slate-400 font-mono">*@{domainName}</span>
+          ) : (
+            <>
+              <input value={localPart} onChange={event => onLocalPart(event.target.value)} required placeholder={t('forwarders.sourcePlaceholder')}
+                className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+              <span className="text-slate-500 dark:text-slate-400 text-sm">@{domainName}</span>
+            </>
+          )}
+        </div>
+        <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <input type="checkbox" checked={catchAll} onChange={event => onCatchAll(event.target.checked)} />
+          {t('forwarders.catchAll')}
+        </label>
+        <div className="flex items-center gap-2">
+          <input value={destination} onChange={event => onDestination(event.target.value)} required placeholder={t('forwarders.destinationPlaceholder')}
+            className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
+          <button disabled={saving || !destination || (!catchAll && !localPart)}
+            className="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+            {saving ? t('forwarders.adding') : t('forwarders.add')}
+          </button>
+        </div>
+      </form>
+
+      {aliases.length === 0 ? (
+        <div className="text-center py-6">
+          <p className="text-sm text-slate-500 dark:text-slate-400">{t('forwarders.empty')}</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {aliases.map(alias => (
+            <AliasRow key={alias.id} alias={alias} domainName={domainName} onToggle={onToggle} onRemove={onRemove} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function SpamForm({ spam, onSpam, rspamd, saving, onSubmit }: {
+  spam: SpamSettings; onSpam: (value: SpamSettings) => void; rspamd: boolean
+  saving: boolean; onSubmit: (event: React.SubmitEvent) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  const scores = [['greylist_score', t('spam.greylist')], ['add_header_score', t('spam.addHeader')], ['reject_score', t('spam.reject')]] as const
+  return (
+    <form onSubmit={onSubmit} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('spam.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        {t('spam.description')}
+        {!rspamd && <span className="text-amber-600 dark:text-amber-400">{t('spam.notInstalled')}</span>}
+      </p>
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 mb-3">
+        <input type="checkbox" checked={spam.enabled} onChange={event => onSpam({ ...spam, enabled: event.target.checked })} />
+        {t('spam.enable')}
+      </label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {scores.map(([key, label]) => (
+          <label key={key} className="text-xs text-slate-600 dark:text-slate-300">
+            {label}
+            <input type="number" step="0.5" min="0" max="50" value={spam[key]}
+              onChange={event => onSpam({ ...spam, [key]: Number(event.target.value) })}
+              className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm outline-none" />
+          </label>
+        ))}
+      </div>
+      <button disabled={saving} className="mt-3 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+        {saving ? t('spam.applying') : t('spam.apply')}
+      </button>
+    </form>
+  )
+}
+
+function AutoresponderForm({ mailboxes, autoresponder, onAutoresponder, onPickMailbox, saving, onSubmit, onDelete }: {
+  mailboxes: Mailbox[]; autoresponder: Autoresponder; onAutoresponder: (value: Autoresponder) => void
+  onPickMailbox: (mailboxID: number) => void; saving: boolean
+  onSubmit: (event: React.SubmitEvent) => void; onDelete: () => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  if (mailboxes.length === 0) return null
+  return (
+    <form onSubmit={onSubmit} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('autoresponder.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('autoresponder.description')}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <label className="text-xs text-slate-600 dark:text-slate-300">{t('autoresponder.mailbox')}
+          <select value={autoresponder.mailbox_id} onChange={event => onPickMailbox(Number(event.target.value))}
+            className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+            {mailboxes.map(mailbox => <option key={mailbox.id} value={mailbox.id}>{mailbox.email}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-slate-600 dark:text-slate-300">{t('autoresponder.interval')}
+          <input type="number" min="1" max="30" value={autoresponder.interval_days}
+            onChange={event => onAutoresponder({ ...autoresponder, interval_days: Number(event.target.value) })}
+            className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+        </label>
+      </div>
+      <input value={autoresponder.subject} onChange={event => onAutoresponder({ ...autoresponder, subject: event.target.value })}
+        placeholder={t('autoresponder.subjectPlaceholder')} className="w-full mb-2 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+      <textarea value={autoresponder.body} onChange={event => onAutoresponder({ ...autoresponder, body: event.target.value })}
+        placeholder={t('autoresponder.bodyPlaceholder')} rows={3} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+      <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 my-3">
+        <input type="checkbox" checked={autoresponder.enabled} onChange={event => onAutoresponder({ ...autoresponder, enabled: event.target.checked })} />
+        {t('autoresponder.enable')}
+      </label>
+      <div className="flex gap-2">
+        <button disabled={saving} className="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+          {saving ? t('autoresponder.saving') : t('autoresponder.save')}
+        </button>
+        <button type="button" onClick={onDelete} disabled={saving} className="px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:underline">{t('autoresponder.remove')}</button>
+      </div>
+    </form>
+  )
+}
+
+function FilterRow({ item, onDelete }: { item: MailFilter; onDelete: (item: MailFilter) => void }) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <li className="flex items-center justify-between py-2.5 text-sm">
+      <div>
+        <span className="font-mono text-xs text-slate-500">{item.email}</span>{' '}
+        <span className="text-slate-800 dark:text-slate-200">{item.name}</span>
+        <div className="text-xs text-slate-500">{item.match_field} ∋ “{item.match_value}” → {item.action_type} {item.action_value}</div>
+      </div>
+      <button type="button" onClick={() => onDelete(item)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{t('filters.delete')}</button>
+    </li>
+  )
+}
+
+type FilterDraft = Omit<MailFilter, 'id' | 'email'>
+
+function FiltersCard({ mailboxes, filters, filter, onFilter, saving, onSubmit, onDelete }: {
+  mailboxes: Mailbox[]; filters: MailFilter[]; filter: FilterDraft; onFilter: (value: FilterDraft) => void
+  saving: boolean; onSubmit: (event: React.SubmitEvent) => void; onDelete: (item: MailFilter) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  if (mailboxes.length === 0) return null
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('filters.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('filters.description')}</p>
+      <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+        <select value={filter.mailbox_id} onChange={event => onFilter({ ...filter, mailbox_id: Number(event.target.value) })}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+          {mailboxes.map(mailbox => <option key={mailbox.id} value={mailbox.id}>{mailbox.email}</option>)}
+        </select>
+        <input value={filter.name} onChange={event => onFilter({ ...filter, name: event.target.value })} required placeholder={t('filters.namePlaceholder')}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+        <select value={filter.match_field} onChange={event => onFilter({ ...filter, match_field: event.target.value as MailFilter['match_field'] })}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+          <option value="subject">{t('filters.subjectContains')}</option><option value="from">{t('filters.fromContains')}</option><option value="to">{t('filters.toContains')}</option>
+        </select>
+        <input value={filter.match_value} onChange={event => onFilter({ ...filter, match_value: event.target.value })} required placeholder={t('filters.matchedTextPlaceholder')}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+        <select value={filter.action_type} onChange={event => onFilter({ ...filter, action_type: event.target.value as MailFilter['action_type'] })}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+          <option value="move">{t('filters.moveToFolder')}</option><option value="redirect">{t('filters.redirectTo')}</option><option value="discard">{t('filters.discard')}</option>
+        </select>
+        {filter.action_type !== 'discard' &&
+          <input value={filter.action_value} onChange={event => onFilter({ ...filter, action_value: event.target.value })} required
+            placeholder={filter.action_type === 'move' ? t('filters.folderPlaceholder') : t('filters.targetPlaceholder')}
+            className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono" />}
+        <button disabled={saving} className="sm:col-span-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+          {saving ? t('filters.adding') : t('filters.add')}
+        </button>
+      </form>
+      {filters.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">{t('filters.empty')}</p> : (
+        <ul className="divide-y divide-slate-50 dark:divide-slate-700/50">
+          {filters.map(item => <FilterRow key={item.id} item={item} onDelete={onDelete} />)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function SendLimitsForm({ mailboxes, limits, onLimits, onPickMailbox, saving, onSubmit }: {
+  mailboxes: Mailbox[]; limits: SendLimits; onLimits: (value: SendLimits) => void
+  onPickMailbox: (mailboxID: number) => void; saving: boolean; onSubmit: (event: React.SubmitEvent) => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  if (mailboxes.length === 0) return null
+  return (
+    <form onSubmit={onSubmit} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('sendLimits.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('sendLimits.description')}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <label className="text-xs text-slate-600 dark:text-slate-300">{t('sendLimits.mailbox')}
+          <select value={limits.mailbox_id} onChange={event => onPickMailbox(Number(event.target.value))}
+            className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+            {mailboxes.map(mailbox => <option key={mailbox.id} value={mailbox.id}>{mailbox.email}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-slate-600 dark:text-slate-300">{t('sendLimits.hourly', { count: limits.sent_hour })}
+          <input type="number" min="0" max="100000" value={limits.hour_limit}
+            onChange={event => onLimits({ ...limits, hour_limit: Number(event.target.value) })}
+            className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+        </label>
+        <label className="text-xs text-slate-600 dark:text-slate-300">{t('sendLimits.daily', { count: limits.sent_day })}
+          <input type="number" min="0" max="100000" value={limits.day_limit}
+            onChange={event => onLimits({ ...limits, day_limit: Number(event.target.value) })}
+            className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+        </label>
+      </div>
+      {limits.spam_suspended_at &&
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{t('sendLimits.suspendedNote', { time: limits.spam_suspended_at })}</p>}
+      <button disabled={saving} className="mt-3 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
+        {saving ? t('sendLimits.saving') : t('sendLimits.save')}
+      </button>
+    </form>
+  )
+}
+
+function DeliveryRow({ entry }: { entry: DeliveryEntry }) {
+  const { t } = useTranslation('DomainMailPage')
+  return (
+    <tr className="border-b border-slate-100 dark:border-slate-700/60 last:border-0">
+      <td className="py-1.5 pr-3 font-mono text-xs whitespace-nowrap text-slate-600 dark:text-slate-300">{entry.timestamp}</td>
+      <td className="py-1.5 pr-3 break-all text-slate-700 dark:text-slate-200">{entry.sender || '-'}</td>
+      <td className="py-1.5 pr-3 break-all text-slate-700 dark:text-slate-200">{entry.recipient}</td>
+      <td className="py-1.5">
+        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${deliveryBadge(entry.status)}`}>
+          {t(`delivery.status.${entry.status}`)}
+        </span>
+        {entry.reason && <span className="ml-2 text-xs text-slate-400 dark:text-slate-500 break-all">{entry.reason}</span>}
+      </td>
+    </tr>
+  )
+}
+
+function DeliveryCard({ direction, onDirection, status, onStatus, search, onSearch, loading, deliveries }: {
+  direction: string; onDirection: (value: string) => void
+  status: string; onStatus: (value: string) => void
+  search: string; onSearch: (value: string) => void
+  loading: boolean; deliveries: DeliveryEntry[]
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  // Delivery history. The Postfix queue only shows what has not gone out yet;
+  // this answers "did it arrive?" after the fact.
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm mt-5">
+      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('delivery.title')}</h3>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('delivery.description')}</p>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <select value={direction} onChange={event => onDirection(event.target.value)}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+          <option value="">{t('delivery.anyDirection')}</option>
+          <option value="out">{t('delivery.outgoing')}</option>
+          <option value="in">{t('delivery.incoming')}</option>
+        </select>
+        <select value={status} onChange={event => onStatus(event.target.value)}
+          className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
+          <option value="">{t('delivery.anyStatus')}</option>
+          <option value="sent">{t('delivery.status.sent')}</option>
+          <option value="deferred">{t('delivery.status.deferred')}</option>
+          <option value="bounced">{t('delivery.status.bounced')}</option>
+          <option value="expired">{t('delivery.status.expired')}</option>
+        </select>
+        <input value={search} onChange={event => onSearch(event.target.value)}
+          placeholder={t('delivery.searchPlaceholder')}
+          className="flex-1 min-w-[12rem] px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
+      </div>
+      {loading ? (
+        <p className="text-xs text-slate-400 dark:text-slate-500">{t('delivery.loading')}</p>
+      ) : deliveries.length === 0 ? (
+        <p className="text-xs text-slate-400 dark:text-slate-500">{t('delivery.empty')}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                <th className="py-1.5 pr-3 font-medium">{t('delivery.column.time')}</th>
+                <th className="py-1.5 pr-3 font-medium">{t('delivery.column.from')}</th>
+                <th className="py-1.5 pr-3 font-medium">{t('delivery.column.to')}</th>
+                <th className="py-1.5 font-medium">{t('delivery.column.result')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.map((entry, index) => <DeliveryRow key={`${entry.timestamp}-${index}`} entry={entry} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ServiceControls({ busy, saving, purging, onDisable, onAskPurge }: {
+  busy: boolean; saving: boolean; purging: boolean; onDisable: () => void; onAskPurge: () => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  // The two ways to stop the service, side by side and outside the settings
+  // grid: both act on the whole service rather than one setting. The difference
+  // has to be legible before the click, so the reversible one is amber and
+  // outlined while the irreversible one is red and filled. In one colour they
+  // would read as equals.
+  return (
+    <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <div className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('disable.title')}</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('disable.description')}</p>
+        <button type="button" onClick={onDisable} disabled={busy}
+          className="mt-3 px-4 py-2 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 text-sm font-medium rounded-lg">
+          {saving ? t('disable.working') : t('disable.button')}
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 border border-red-300 dark:border-red-800 rounded-2xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">{t('purge.title')}</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('purge.description')}</p>
+        <ul className="mt-2 space-y-0.5 text-xs text-slate-500 dark:text-slate-400 list-disc list-inside">
+          <li>{t('purge.itemMailboxes')}</li>
+          <li>{t('purge.itemFiles')}</li>
+          <li>{t('purge.itemDNS')}</li>
+        </ul>
+        <button type="button" onClick={onAskPurge} disabled={busy}
+          className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 text-sm font-medium rounded-lg">
+          {purging ? t('purge.working') : t('purge.button')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PurgeModal({ domain, text, onText, purging, onPurge, onClose }: {
+  domain: Domain | null; text: string; onText: (value: string) => void
+  purging: boolean; onPurge: () => void; onClose: () => void
+}) {
+  const { t } = useTranslation('DomainMailPage')
+  // A single confirmation is not enough for something this final, so the domain
+  // name has to be typed, the same bar the panel already sets for deleting a
+  // subscription.
+  const expected = domain?.domain_name || ''
+  const confirmed = text.trim().toLowerCase() === expected.toLowerCase()
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={event => event.stopPropagation()}>
+        <h3 className="text-base font-semibold text-red-700 dark:text-red-300 mb-2">{t('purge.confirmTitle')}</h3>
+        <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">{t('purge.confirmBody', { domain: expected })}</p>
+        <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1.5">
+          {t('purge.typeLabel')}<span className="font-mono font-semibold text-red-700 dark:text-red-300">{expected}</span>
+        </label>
+        <input
+          type="text"
+          autoFocus
+          value={text}
+          onChange={event => onText(event.target.value)}
+          onKeyDown={event => { if (event.key === 'Enter' && confirmed && !purging) onPurge() }}
+          placeholder={expected}
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500" />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose}
+            className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('purge.cancel')}</button>
+          <button type="button" onClick={onPurge} disabled={purging || !confirmed}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded font-medium">
+            {purging ? t('purge.working') : t('purge.confirm')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DomainMailPage() {
   const { t } = useTranslation('DomainMailPage')
   const report = useReportError()
@@ -76,8 +687,9 @@ export default function DomainMailPage() {
   const [isSavingLimits, setIsSavingLimits] = useState(false)
 
   // Derived, not state: the server decides this and the page only reflects it.
-  const missingServices = (status?.infrastructure_missing || []).join(', ')
+  const missingServices = missingServicesOf(status)
   const stackDown = missingServices !== ''
+  const enabled = isEnabled(status)
 
   // Declared before the loaders that call them: a function hoisted past its own
   // use site cannot pick up a later definition, so the earlier call would keep
@@ -145,7 +757,7 @@ export default function DomainMailPage() {
 
   // Seed both pickers from the first mailbox once the list arrives; a picker the
   // user has already chosen keeps its own mailbox.
-  const firstMailboxID = mailboxes[0]?.id ?? 0
+  const firstMailboxID = firstMailboxIDOf(mailboxes)
   const autoresponderMailbox = autoresponder.mailbox_id
   const limitsMailbox = limits.mailbox_id
   useEffect(() => {
@@ -156,7 +768,7 @@ export default function DomainMailPage() {
 
   // Debounced so typing in the search box does not issue one query per keystroke.
   useEffect(() => {
-    if (!id || !status?.enabled) return
+    if (!id || !enabled) return
     const timer = setTimeout(() => {
       setDeliveryLoading(true)
       const params = new URLSearchParams()
@@ -169,7 +781,7 @@ export default function DomainMailPage() {
         .finally(() => setDeliveryLoading(false))
     }, 300)
     return () => clearTimeout(timer)
-  }, [id, status?.enabled, deliveryDirection, deliveryStatus, deliverySearch, report])
+  }, [id, enabled, deliveryDirection, deliveryStatus, deliverySearch, report])
 
   async function enableMail() {
     setIsSaving(true)
@@ -458,14 +1070,7 @@ export default function DomainMailPage() {
     }
   }
 
-  // Webmail is served from the customer's OWN domain, through the /webmail/
-  // block the panel renders into their vhost. The panel origin is only a
-  // fallback: it is what the address was before, and it is still the only
-  // encrypted route while the domain has no certificate, since the block is
-  // rendered onto the TLS vhost alone.
-  const webmailURL = domain?.ssl
-    ? `https://${domain.domain_name}/webmail/`
-    : `${window.location.origin}/webmail/`
+  const webmailURL = webmailURLOf(domain)
 
   async function copyWebmailURL() {
     setError(null)
@@ -487,137 +1092,38 @@ export default function DomainMailPage() {
   return (
     <div className="px-6 py-5">
       <div>
-        <Breadcrumb items={[
-          { label: t('breadcrumb.home'), href: '/' },
-          { label: t('breadcrumb.domains'), href: '/domains' },
-          { label: domain?.domain_name || '...', href: `/subscriptions/${id}` },
-          { label: t('breadcrumb.email') },
-        ]} />
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('title')}</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-          {t('subtitle')}
-        </p>
+        <MailHeader domain={domain} id={id} showStackDown={enabled && stackDown} missingServices={missingServices} />
 
-        {status?.enabled && stackDown && (
-          <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200">
-            {t('enable.deliveryStopped', { services: missingServices })}
-          </div>
-        )}
+        <Banners error={error} success={success} />
 
-        {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">{error}</div>}
-        {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
-
-        {generatedPassword && (
-          <div className="mb-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4">
-            <p className="text-sm text-emerald-800 dark:text-emerald-200 font-medium mb-1">{t('generatedPassword.title', { email: generatedPassword.email })}</p>
-            <p className="text-xs text-emerald-700 dark:text-emerald-300 mb-2">{t('generatedPassword.saveNote')}</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-white dark:bg-slate-800 px-3 py-2 font-mono text-sm text-slate-900 dark:text-slate-100 rounded border border-emerald-200 dark:border-emerald-800 break-all">{generatedPassword.password}</code>
-              <button type="button" onClick={() => navigator.clipboard.writeText(generatedPassword.password)} className="px-3 py-2 bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 text-emerald-800 dark:text-emerald-200 text-xs rounded">{t('generatedPassword.copy')}</button>
-            </div>
-          </div>
-        )}
+        {generatedPassword && <GeneratedPasswordCard value={generatedPassword} />}
 
         {loading ? (
           <div className="text-sm text-slate-400">{t('loading')}</div>
-        ) : !status?.enabled ? (
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 text-center">
-            <div className="mb-2"><Icon d={ICON.mail} className="h-8 w-8" /></div>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">{t('enable.notEnabled')}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">{t('enable.info')}</p>
-            {/* Enabling mail starts a whole stack on the server, not a setting on
-                this domain alone, so the cost is stated before the button. */}
-            <div className="flex justify-center mb-4">
-              <ResourceNotice>{t('enable.resourceWarning')}</ResourceNotice>
-            </div>
-            {/* The server refuses this while its mail services are down, and
-                enabling would otherwise publish MX for a service that never
-                runs. Saying so here beats letting the click fail. */}
-            {stackDown && (
-              <div className="mx-auto mb-4 max-w-lg px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-800 dark:text-amber-200">
-                {t('enable.infrastructureMissing', { services: missingServices })}
-              </div>
-            )}
-            <button type="button" onClick={enableMail} disabled={isSaving || stackDown}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-              {isSaving ? t('enable.enabling') : t('enable.button')}
-            </button>
-          </div>
+        ) : !enabled ? (
+          <EnableCard stackDown={stackDown} missingServices={missingServices} saving={isSaving} onEnable={enableMail} />
         ) : (
           <>
-            {/* Roundcube is one shared installation reached under /webmail/ on
-                the domain's own TLS vhost. It is NOT at mail.<domain>: that
-                record exists to be the MX target and has no vhost, so a request
-                to it falls through to the catch-all. */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5 shadow-sm flex flex-wrap items-center gap-4">
-              <div className="w-11 h-11 shrink-0 rounded-xl bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                </svg>
-              </div>
-              <div className="min-w-[200px] flex-1">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('webmail.title')}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('webmail.description')}</div>
-                <code className="text-[11px] text-slate-500 dark:text-slate-500 font-mono break-all">{webmailURL}</code>
-              </div>
-              <div className="flex items-center gap-2">
-                <a href={webmailURL} target="_blank" rel="noopener noreferrer"
-                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">
-                  {t('webmail.open')}
-                </a>
-                <button type="button" onClick={copyWebmailURL}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm rounded-lg">
-                  {t('webmail.copy')}
-                </button>
-              </div>
-            </div>
+            <WebmailCard url={webmailURL} onCopy={copyWebmailURL} />
 
-            <form onSubmit={addMailbox} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 mb-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('mailboxAdd.title')}</h3>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <input value={localPart} onChange={event => setLocalPart(event.target.value)} required placeholder={t('mailboxAdd.localPlaceholder')}
-                  className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-                <span className="text-slate-500 dark:text-slate-400 text-sm">@{domain?.domain_name}</span>
-                <input value={password} onChange={event => setPassword(event.target.value)} type="password" placeholder={t('mailboxAdd.passwordPlaceholder')}
-                  className="sm:w-60 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-                <button disabled={isSaving || !localPart} className="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                  {isSaving ? t('mailboxAdd.adding') : t('mailboxAdd.add')}
-                </button>
-              </div>
-            </form>
+            <AddMailboxForm
+              domainName={domain?.domain_name}
+              localPart={localPart}
+              onLocalPart={setLocalPart}
+              password={password}
+              onPassword={setPassword}
+              saving={isSaving}
+              onSubmit={addMailbox}
+            />
 
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">{t('mailboxes.title')}</h3>
-              {mailboxes.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{t('mailboxes.empty')}</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                  {mailboxes.map(mailbox => (
-                    <li key={mailbox.id} className="flex items-center justify-between py-2.5">
-                      <div>
-                        <span className="text-sm font-mono text-slate-800 dark:text-slate-200">{mailbox.email}</span>
-                        {mailbox.status !== 'active' && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">{t('mailboxes.suspended')}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Link to={`/subscriptions/${id}/mail/${mailbox.id}`} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">{t('mailboxes.details')}</Link>
-                        {mailbox.status === 'active' && (
-                          <button type="button" onClick={() => openWebmail(mailbox)} className="text-xs text-brand-600 dark:text-brand-400 hover:underline">{t('mailboxes.openWebmail')}</button>
-                        )}
-                        <button type="button" onClick={() => toggleMailboxStatus(mailbox)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">
-                          {mailbox.status === 'active' ? t('mailboxes.suspend') : t('mailboxes.activate')}
-                        </button>
-                        <button type="button" onClick={() => resetPassword(mailbox)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">{t('mailboxes.resetPassword')}</button>
-                        <button type="button" onClick={() => removeMailbox(mailbox)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{t('mailboxes.delete')}</button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <MailboxListCard
+              mailboxes={mailboxes}
+              subscriptionID={id}
+              onWebmail={openWebmail}
+              onToggle={toggleMailboxStatus}
+              onResetPassword={resetPassword}
+              onRemove={removeMailbox}
+            />
 
             {/* The settings cards pair up on a wide screen; gap-5 replaces the
                 per-card margin they carried while they were stacked, and
@@ -625,333 +1131,84 @@ export default function DomainMailPage() {
                 neighbour's height. The mailbox list and the delivery table stay
                 full width: both hold rows too wide for half a column. */}
             <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('forwarders.title')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                {t('forwarders.description')}
-              </p>
-              <form onSubmit={addAlias} className="mb-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  {aliasCatchAll ? (
-                    <span className="flex-1 px-3 py-2 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-500 dark:text-slate-400 font-mono">*@{domain?.domain_name}</span>
-                  ) : (
-                    <>
-                      <input value={aliasLocalPart} onChange={event => setAliasLocalPart(event.target.value)} required={!aliasCatchAll} placeholder={t('forwarders.sourcePlaceholder')}
-                        className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-                      <span className="text-slate-500 dark:text-slate-400 text-sm">@{domain?.domain_name}</span>
-                    </>
-                  )}
-                </div>
-                <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                  <input type="checkbox" checked={aliasCatchAll} onChange={event => setAliasCatchAll(event.target.checked)} />
-                  {t('forwarders.catchAll')}
-                </label>
-                <div className="flex items-center gap-2">
-                  <input value={aliasDestination} onChange={event => setAliasDestination(event.target.value)} required placeholder={t('forwarders.destinationPlaceholder')}
-                    className="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none" />
-                  <button disabled={isSavingAlias || !aliasDestination || (!aliasCatchAll && !aliasLocalPart)}
-                    className="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                    {isSavingAlias ? t('forwarders.adding') : t('forwarders.add')}
-                  </button>
-                </div>
-              </form>
+              <ForwardersCard
+                domainName={domain?.domain_name}
+                aliases={aliases}
+                localPart={aliasLocalPart}
+                onLocalPart={setAliasLocalPart}
+                destination={aliasDestination}
+                onDestination={setAliasDestination}
+                catchAll={aliasCatchAll}
+                onCatchAll={setAliasCatchAll}
+                saving={isSavingAlias}
+                onSubmit={addAlias}
+                onToggle={toggleAliasStatus}
+                onRemove={removeAlias}
+              />
 
-              {aliases.length === 0 ? (
-                <div className="text-center py-6">
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{t('forwarders.empty')}</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                  {aliases.map(alias => (
-                    <li key={alias.id} className="flex items-center justify-between py-2.5">
-                      <div>
-                        <span className="text-sm font-mono text-slate-800 dark:text-slate-200">
-                          {alias.catch_all ? `*@${domain?.domain_name}` : alias.source}
-                        </span>
-                        <span className="mx-1.5 text-slate-400">→</span>
-                        <span className="text-sm font-mono text-slate-600 dark:text-slate-400">{alias.destination}</span>
-                        {alias.status !== 'active' && (
-                          <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded">{t('forwarders.suspended')}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button type="button" onClick={() => toggleAliasStatus(alias)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">
-                          {alias.status === 'active' ? t('forwarders.suspend') : t('forwarders.activate')}
-                        </button>
-                        <button type="button" onClick={() => removeAlias(alias)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{t('forwarders.delete')}</button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <SpamForm spam={spam} onSpam={setSpam} rspamd={rspamd} saving={isSavingSpam} onSubmit={saveSpam} />
+
+              <AutoresponderForm
+                mailboxes={mailboxes}
+                autoresponder={autoresponder}
+                onAutoresponder={setAutoresponder}
+                onPickMailbox={loadAutoresponder}
+                saving={isSavingAutoresponder}
+                onSubmit={saveAutoresponder}
+                onDelete={deleteAutoresponder}
+              />
+
+              <FiltersCard
+                mailboxes={mailboxes}
+                filters={filters}
+                filter={filter}
+                onFilter={setFilter}
+                saving={isSavingFilter}
+                onSubmit={addFilter}
+                onDelete={deleteFilter}
+              />
+
+              <SendLimitsForm
+                mailboxes={mailboxes}
+                limits={limits}
+                onLimits={setLimits}
+                onPickMailbox={loadSendLimits}
+                saving={isSavingLimits}
+                onSubmit={saveSendLimits}
+              />
             </div>
 
-            <form onSubmit={saveSpam} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('spam.title')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                {t('spam.description')}
-                {!rspamd && <span className="text-amber-600 dark:text-amber-400">{t('spam.notInstalled')}</span>}
-              </p>
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 mb-3">
-                <input type="checkbox" checked={spam.enabled} onChange={event => setSpam({ ...spam, enabled: event.target.checked })} />
-                {t('spam.enable')}
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {([['greylist_score', t('spam.greylist')], ['add_header_score', t('spam.addHeader')], ['reject_score', t('spam.reject')]] as const).map(([key, label]) => (
-                  <label key={key} className="text-xs text-slate-600 dark:text-slate-300">
-                    {label}
-                    <input type="number" step="0.5" min="0" max="50" value={spam[key]}
-                      onChange={event => setSpam({ ...spam, [key]: Number(event.target.value) })}
-                      className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm outline-none" />
-                  </label>
-                ))}
-              </div>
-              <button disabled={isSavingSpam} className="mt-3 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                {isSavingSpam ? t('spam.applying') : t('spam.apply')}
-              </button>
-            </form>
+            <DeliveryCard
+              direction={deliveryDirection}
+              onDirection={setDeliveryDirection}
+              status={deliveryStatus}
+              onStatus={setDeliveryStatus}
+              search={deliverySearch}
+              onSearch={setDeliverySearch}
+              loading={deliveryLoading}
+              deliveries={deliveries}
+            />
 
-            {mailboxes.length > 0 && (
-            <form onSubmit={saveAutoresponder} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('autoresponder.title')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('autoresponder.description')}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <label className="text-xs text-slate-600 dark:text-slate-300">{t('autoresponder.mailbox')}
-                  <select value={autoresponder.mailbox_id} onChange={event => loadAutoresponder(Number(event.target.value))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                    {mailboxes.map(mailbox => <option key={mailbox.id} value={mailbox.id}>{mailbox.email}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-slate-600 dark:text-slate-300">{t('autoresponder.interval')}
-                  <input type="number" min="1" max="30" value={autoresponder.interval_days}
-                    onChange={event => setAutoresponder({ ...autoresponder, interval_days: Number(event.target.value) })}
-                    className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-                </label>
-              </div>
-              <input value={autoresponder.subject} onChange={event => setAutoresponder({ ...autoresponder, subject: event.target.value })}
-                placeholder={t('autoresponder.subjectPlaceholder')} className="w-full mb-2 px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-              <textarea value={autoresponder.body} onChange={event => setAutoresponder({ ...autoresponder, body: event.target.value })}
-                placeholder={t('autoresponder.bodyPlaceholder')} rows={3} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 my-3">
-                <input type="checkbox" checked={autoresponder.enabled} onChange={event => setAutoresponder({ ...autoresponder, enabled: event.target.checked })} />
-                {t('autoresponder.enable')}
-              </label>
-              <div className="flex gap-2">
-                <button disabled={isSavingAutoresponder} className="px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                  {isSavingAutoresponder ? t('autoresponder.saving') : t('autoresponder.save')}
-                </button>
-                <button type="button" onClick={deleteAutoresponder} disabled={isSavingAutoresponder} className="px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:underline">{t('autoresponder.remove')}</button>
-              </div>
-            </form>
-            )}
-
-            {mailboxes.length > 0 && (
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('filters.title')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('filters.description')}</p>
-              <form onSubmit={addFilter} className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                <select value={filter.mailbox_id} onChange={event => setFilter({ ...filter, mailbox_id: Number(event.target.value) })}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                  {mailboxes.map(mailbox => <option key={mailbox.id} value={mailbox.id}>{mailbox.email}</option>)}
-                </select>
-                <input value={filter.name} onChange={event => setFilter({ ...filter, name: event.target.value })} required placeholder={t('filters.namePlaceholder')}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-                <select value={filter.match_field} onChange={event => setFilter({ ...filter, match_field: event.target.value as MailFilter['match_field'] })}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                  <option value="subject">{t('filters.subjectContains')}</option><option value="from">{t('filters.fromContains')}</option><option value="to">{t('filters.toContains')}</option>
-                </select>
-                <input value={filter.match_value} onChange={event => setFilter({ ...filter, match_value: event.target.value })} required placeholder={t('filters.matchedTextPlaceholder')}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-                <select value={filter.action_type} onChange={event => setFilter({ ...filter, action_type: event.target.value as MailFilter['action_type'] })}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                  <option value="move">{t('filters.moveToFolder')}</option><option value="redirect">{t('filters.redirectTo')}</option><option value="discard">{t('filters.discard')}</option>
-                </select>
-                {filter.action_type !== 'discard' &&
-                  <input value={filter.action_value} onChange={event => setFilter({ ...filter, action_value: event.target.value })} required
-                    placeholder={filter.action_type === 'move' ? t('filters.folderPlaceholder') : t('filters.targetPlaceholder')}
-                    className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm font-mono" />}
-                <button disabled={isSavingFilter} className="sm:col-span-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                  {isSavingFilter ? t('filters.adding') : t('filters.add')}
-                </button>
-              </form>
-              {filters.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">{t('filters.empty')}</p> : (
-                <ul className="divide-y divide-slate-50 dark:divide-slate-700/50">
-                  {filters.map(item => (
-                    <li key={item.id} className="flex items-center justify-between py-2.5 text-sm">
-                      <div>
-                        <span className="font-mono text-xs text-slate-500">{item.email}</span>{' '}
-                        <span className="text-slate-800 dark:text-slate-200">{item.name}</span>
-                        <div className="text-xs text-slate-500">{item.match_field} ∋ “{item.match_value}” → {item.action_type} {item.action_value}</div>
-                      </div>
-                      <button type="button" onClick={() => deleteFilter(item)} className="text-xs text-red-600 dark:text-red-400 hover:underline">{t('filters.delete')}</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            )}
-
-            {mailboxes.length > 0 && (
-            <form onSubmit={saveSendLimits} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('sendLimits.title')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                {t('sendLimits.description')}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                <label className="text-xs text-slate-600 dark:text-slate-300">{t('sendLimits.mailbox')}
-                  <select value={limits.mailbox_id} onChange={event => loadSendLimits(Number(event.target.value))}
-                    className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                    {mailboxes.map(mailbox => <option key={mailbox.id} value={mailbox.id}>{mailbox.email}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-slate-600 dark:text-slate-300">{t('sendLimits.hourly', { count: limits.sent_hour })}
-                  <input type="number" min="0" max="100000" value={limits.hour_limit}
-                    onChange={event => setLimits({ ...limits, hour_limit: Number(event.target.value) })}
-                    className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-                </label>
-                <label className="text-xs text-slate-600 dark:text-slate-300">{t('sendLimits.daily', { count: limits.sent_day })}
-                  <input type="number" min="0" max="100000" value={limits.day_limit}
-                    onChange={event => setLimits({ ...limits, day_limit: Number(event.target.value) })}
-                    className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-                </label>
-              </div>
-              {limits.spam_suspended_at &&
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{t('sendLimits.suspendedNote', { time: limits.spam_suspended_at })}</p>}
-              <button disabled={isSavingLimits} className="mt-3 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium rounded-lg disabled:opacity-50">
-                {isSavingLimits ? t('sendLimits.saving') : t('sendLimits.save')}
-              </button>
-            </form>
-            )}
-            </div>
-
-            {/* Delivery history. The Postfix queue above only shows what has not
-                gone out yet; this answers "did it arrive?" after the fact. */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm mt-5">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('delivery.title')}</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{t('delivery.description')}</p>
-              <div className="flex flex-wrap gap-2 mb-3">
-                <select value={deliveryDirection} onChange={event => setDeliveryDirection(event.target.value)}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                  <option value="">{t('delivery.anyDirection')}</option>
-                  <option value="out">{t('delivery.outgoing')}</option>
-                  <option value="in">{t('delivery.incoming')}</option>
-                </select>
-                <select value={deliveryStatus} onChange={event => setDeliveryStatus(event.target.value)}
-                  className="px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm">
-                  <option value="">{t('delivery.anyStatus')}</option>
-                  <option value="sent">{t('delivery.status.sent')}</option>
-                  <option value="deferred">{t('delivery.status.deferred')}</option>
-                  <option value="bounced">{t('delivery.status.bounced')}</option>
-                  <option value="expired">{t('delivery.status.expired')}</option>
-                </select>
-                <input value={deliverySearch} onChange={event => setDeliverySearch(event.target.value)}
-                  placeholder={t('delivery.searchPlaceholder')}
-                  className="flex-1 min-w-[12rem] px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm" />
-              </div>
-              {deliveryLoading ? (
-                <p className="text-xs text-slate-400 dark:text-slate-500">{t('delivery.loading')}</p>
-              ) : deliveries.length === 0 ? (
-                <p className="text-xs text-slate-400 dark:text-slate-500">{t('delivery.empty')}</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
-                        <th className="py-1.5 pr-3 font-medium">{t('delivery.column.time')}</th>
-                        <th className="py-1.5 pr-3 font-medium">{t('delivery.column.from')}</th>
-                        <th className="py-1.5 pr-3 font-medium">{t('delivery.column.to')}</th>
-                        <th className="py-1.5 font-medium">{t('delivery.column.result')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deliveries.map((entry, index) => (
-                        <tr key={`${entry.timestamp}-${index}`} className="border-b border-slate-100 dark:border-slate-700/60 last:border-0">
-                          <td className="py-1.5 pr-3 font-mono text-xs whitespace-nowrap text-slate-600 dark:text-slate-300">{entry.timestamp}</td>
-                          <td className="py-1.5 pr-3 break-all text-slate-700 dark:text-slate-200">{entry.sender || '-'}</td>
-                          <td className="py-1.5 pr-3 break-all text-slate-700 dark:text-slate-200">{entry.recipient}</td>
-                          <td className="py-1.5">
-                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${deliveryBadge(entry.status)}`}>
-                              {t(`delivery.status.${entry.status}`)}
-                            </span>
-                            {entry.reason && <span className="ml-2 text-xs text-slate-400 dark:text-slate-500 break-all">{entry.reason}</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* The two ways to stop the service, side by side and outside the
-                settings grid: both act on the whole service rather than one
-                setting. The difference has to be legible before the click, so
-                the reversible one is amber and outlined while the irreversible
-                one is red and filled. In one colour they would read as equals. */}
-            <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <div className="bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('disable.title')}</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('disable.description')}</p>
-                <button type="button" onClick={disableMail} disabled={isSaving || isPurging}
-                  className="mt-3 px-4 py-2 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 disabled:opacity-50 text-sm font-medium rounded-lg">
-                  {isSaving ? t('disable.working') : t('disable.button')}
-                </button>
-              </div>
-
-              <div className="bg-white dark:bg-slate-800 border border-red-300 dark:border-red-800 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">{t('purge.title')}</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('purge.description')}</p>
-                <ul className="mt-2 space-y-0.5 text-xs text-slate-500 dark:text-slate-400 list-disc list-inside">
-                  <li>{t('purge.itemMailboxes')}</li>
-                  <li>{t('purge.itemFiles')}</li>
-                  <li>{t('purge.itemDNS')}</li>
-                </ul>
-                <button type="button" onClick={() => { setPurgeConfirmationText(''); setPurgeConfirmOpen(true) }}
-                  disabled={isSaving || isPurging}
-                  className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 text-sm font-medium rounded-lg">
-                  {isPurging ? t('purge.working') : t('purge.button')}
-                </button>
-              </div>
-            </div>
+            <ServiceControls
+              busy={isSaving || isPurging}
+              saving={isSaving}
+              purging={isPurging}
+              onDisable={disableMail}
+              onAskPurge={() => { setPurgeConfirmationText(''); setPurgeConfirmOpen(true) }}
+            />
           </>
         )}
 
-        {/* A single confirmation is not enough for something this final, so the
-            domain name has to be typed, the same bar the panel already sets for
-            deleting a subscription. */}
-        {purgeConfirmOpen && (() => {
-          const expected = domain?.domain_name || ''
-          const confirmed = purgeConfirmationText.trim().toLowerCase() === expected.toLowerCase()
-          return (
-            <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setPurgeConfirmOpen(false)}>
-              <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={event => event.stopPropagation()}>
-                <h3 className="text-base font-semibold text-red-700 dark:text-red-300 mb-2">{t('purge.confirmTitle')}</h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300 mb-4">{t('purge.confirmBody', { domain: expected })}</p>
-                <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1.5">
-                  {t('purge.typeLabel')}<span className="font-mono font-semibold text-red-700 dark:text-red-300">{expected}</span>
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  value={purgeConfirmationText}
-                  onChange={event => setPurgeConfirmationText(event.target.value)}
-                  onKeyDown={event => { if (event.key === 'Enter' && confirmed && !isPurging) purgeMail() }}
-                  placeholder={expected}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500" />
-                <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => setPurgeConfirmOpen(false)}
-                    className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('purge.cancel')}</button>
-                  <button type="button" onClick={purgeMail} disabled={isPurging || !confirmed}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded font-medium">
-                    {isPurging ? t('purge.working') : t('purge.confirm')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        })()}
+        {purgeConfirmOpen && (
+          <PurgeModal
+            domain={domain}
+            text={purgeConfirmationText}
+            onText={setPurgeConfirmationText}
+            purging={isPurging}
+            onPurge={purgeMail}
+            onClose={() => setPurgeConfirmOpen(false)}
+          />
+        )}
 
         <div className="mt-4"><Link to={`/subscriptions/${id}`} className="text-sm text-brand-600 dark:text-brand-400">{t('back')}</Link></div>
       </div>
