@@ -32,13 +32,72 @@ func blocked(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	return ip.IsLoopback() ||
+	// An IPv6 address that carries an IPv4 one is reduced to that address first.
+	// ::ffff:10.0.0.1, a NAT64 address and a 6to4 address all reach an IPv4
+	// destination, and none of the predicates below sees the embedded address.
+	ip = unwrapEmbeddedIPv4(ip)
+	if ip.IsLoopback() ||
 		ip.IsUnspecified() ||
 		ip.IsPrivate() ||
 		ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() ||
 		ip.IsInterfaceLocalMulticast() ||
-		ip.IsMulticast()
+		ip.IsMulticast() {
+		return true
+	}
+	return slices.ContainsFunc(reservedRanges, func(network *net.IPNet) bool {
+		return network.Contains(ip)
+	})
+}
+
+// unwrapEmbeddedIPv4 returns the IPv4 address an IPv6 address carries, or the
+// address itself when it carries none.
+func unwrapEmbeddedIPv4(ip net.IP) net.IP {
+	if v4 := ip.To4(); v4 != nil {
+		return v4
+	}
+	if v16 := ip.To16(); v16 != nil {
+		// NAT64 (64:ff9b::/96) holds the IPv4 address in its last four bytes.
+		if nat64Prefix.Contains(v16) {
+			return net.IPv4(v16[12], v16[13], v16[14], v16[15]).To4()
+		}
+		// 6to4 (2002::/16) holds it in the two bytes after the prefix.
+		if sixToFourPrefix.Contains(v16) {
+			return net.IPv4(v16[2], v16[3], v16[4], v16[5]).To4()
+		}
+	}
+	return ip
+}
+
+var (
+	nat64Prefix     = mustCIDR("64:ff9b::/96")
+	sixToFourPrefix = mustCIDR("2002::/16")
+
+	// reservedRanges are the ranges the net.IP predicates do NOT cover. Each one
+	// reaches something other than a customer's public host, so a name resolving
+	// into any of them is not a target the panel probes or clones from.
+	// The RFC 5737 documentation ranges (192.0.2.0/24, 198.51.100.0/24,
+	// 203.0.113.0/24) are deliberately NOT here. They reach nothing, so blocking
+	// them adds no protection, and this repository's tests use them as the
+	// address of a public remote host precisely because they are never real.
+	reservedRanges = []*net.IPNet{
+		mustCIDR("100.64.0.0/10"), // carrier-grade NAT, and the range Tailscale hands out
+		mustCIDR("192.0.0.0/24"),  // IETF protocol assignments
+		mustCIDR("198.18.0.0/15"), // benchmarking
+		mustCIDR("240.0.0.0/4"),   // reserved, and the broadcast address
+		mustCIDR("100::/64"),      // discard-only
+	}
+)
+
+// mustCIDR parses a range this package declares itself. A failure is a typo in
+// the literal above, which a panic reports at startup rather than leaving a
+// range silently unguarded.
+func mustCIDR(cidr string) *net.IPNet {
+	_, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic("netguard: bad reserved range " + cidr)
+	}
+	return network
 }
 
 // CheckHost resolves host and rejects it when any resolved IP is internal.
