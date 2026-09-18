@@ -41,6 +41,146 @@ type Change = {
  * that the panel goes away for a moment, because an operator who is not
  * expecting that will reach for the power button.
  */
+type ChangeFn = (kind: 'backend' | 'external', value: string) => void
+
+function OutcomeBanner({ outcome }: { outcome?: Outcome }) {
+  const { t } = useTranslation('PanelPort')
+  if (!outcome) return null
+  // An in-flight or just-finished change is reported at the top, because for a
+  // backend change this is the only place the result can appear.
+  return (
+        <div className={`mb-5 max-w-3xl rounded-lg px-3 py-2 text-sm ${
+          outcome.state === 'succeeded'
+            ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+            : outcome.state === 'running'
+              ? 'bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200'
+              : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
+        }`}>
+          <p className="font-medium">{t(`outcome.${outcome.state}`)}</p>
+          <p className="mt-1">
+            {t('outcome.detail', { kind: t(`kind.${outcome.kind}`), from: outcome.old_port, to: outcome.new_port })}
+          </p>
+          {outcome.error && <p className="mt-1">{outcome.error}</p>}
+        </div>
+  )
+}
+
+type PortSectionProps = {
+  port?: number
+  host?: string
+  value: string
+  setValue: (value: string) => void
+  disabled: boolean
+  change: ChangeFn
+}
+
+function PortSection({ port, value, setValue, disabled, change }: Omit<PortSectionProps, 'host'>) {
+  const { t } = useTranslation('PanelPort')
+  return (
+      <section className="mb-6 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('external.title')}</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('external.description')}</p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+          {t('current')}: <span className="font-mono">{port ?? '…'}</span>
+        </p>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            inputMode="numeric"
+            placeholder={String(port ?? '')}
+            className="w-32 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-900"
+          />
+          <button
+            type="button"
+            onClick={() => void change('external', value)}
+            disabled={disabled || value.trim() === ''}
+            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {t('change.button')}
+          </button>
+        </div>
+      </section>
+  )
+}
+
+function BackendSection({ port, host, value, setValue, disabled, change }: PortSectionProps) {
+  const { t } = useTranslation('PanelPort')
+  return (
+      <section className="mb-6 max-w-3xl rounded-xl border border-amber-300 bg-white p-5 dark:border-amber-800 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('backend.title')}</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('backend.description')}</p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+          {t('current')}: <span className="font-mono">{host}:{port ?? '…'}</span>
+        </p>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            inputMode="numeric"
+            placeholder={String(port ?? '')}
+            className="w-32 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-900"
+          />
+          <button
+            type="button"
+            onClick={() => void change('backend', value)}
+            disabled={disabled || value.trim() === ''}
+            className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {t('change.button')}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('backend.restartNote')}</p>
+      </section>
+  )
+}
+
+function HistorySection({ changes }: { changes: Change[] }) {
+  const { t } = useTranslation('PanelPort')
+  return (
+      <section className="max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('history.title')}</h2>
+        {changes.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{t('history.none')}</p>
+        ) : (
+          <table className="mt-3 min-w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <tr>
+                <th className="py-2 pr-4">{t('history.what')}</th>
+                <th className="py-2 pr-4">{t('history.from')}</th>
+                <th className="py-2 pr-4">{t('history.to')}</th>
+                <th className="py-2 pr-4">{t('history.result')}</th>
+                <th className="py-2">{t('history.when')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              {changes.map((item) => (
+                <tr key={item.id}>
+                  <td className="py-2 pr-4 align-top text-xs">{t(`kind.${item.kind}`)}</td>
+                  <td className="py-2 pr-4 align-top font-mono text-xs">{item.old_port}</td>
+                  <td className="py-2 pr-4 align-top font-mono text-xs">{item.new_port}</td>
+                  <td className="py-2 pr-4 align-top text-xs">
+                    {item.succeeded
+                      ? t('history.succeeded')
+                      : item.rolled_back
+                        ? t('history.rolledBack')
+                        : t('history.failed')}
+                    {item.last_error && (
+                      <span className="block text-slate-500 dark:text-slate-400">{item.last_error}</span>
+                    )}
+                  </td>
+                  <td className="py-2 align-top text-xs text-slate-500 dark:text-slate-400">
+                    {new Date(item.created_at).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+  )
+}
+
 export default function PanelPortPage() {
   const { t } = useTranslation('PanelPort')
   const dialog = useDialog()
@@ -142,115 +282,13 @@ export default function PanelPortPage() {
         </p>
       )}
 
-      {/* An in-flight or just-finished change is reported at the top, because
-          for a backend change this is the only place the result can appear. */}
-      {outcome && (
-        <div className={`mb-5 max-w-3xl rounded-lg px-3 py-2 text-sm ${
-          outcome.state === 'succeeded'
-            ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-            : outcome.state === 'running'
-              ? 'bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200'
-              : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
-        }`}>
-          <p className="font-medium">{t(`outcome.${outcome.state}`)}</p>
-          <p className="mt-1">
-            {t('outcome.detail', { kind: t(`kind.${outcome.kind}`), from: outcome.old_port, to: outcome.new_port })}
-          </p>
-          {outcome.error && <p className="mt-1">{outcome.error}</p>}
-        </div>
-      )}
+      <OutcomeBanner outcome={outcome} />
 
-      <section className="mb-6 max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('external.title')}</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('external.description')}</p>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          {t('current')}: <span className="font-mono">{status?.external ?? '…'}</span>
-        </p>
-        <div className="mt-3 flex gap-2">
-          <input
-            value={externalPort}
-            onChange={(event) => setExternalPort(event.target.value)}
-            inputMode="numeric"
-            placeholder={String(status?.external ?? '')}
-            className="w-32 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-900"
-          />
-          <button
-            type="button"
-            onClick={() => void change('external', externalPort)}
-            disabled={busy || running || externalPort.trim() === ''}
-            className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {t('change.button')}
-          </button>
-        </div>
-      </section>
+      <PortSection port={status?.external} value={externalPort} setValue={setExternalPort} disabled={busy || running} change={change} />
 
-      <section className="mb-6 max-w-3xl rounded-xl border border-amber-300 bg-white p-5 dark:border-amber-800 dark:bg-slate-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('backend.title')}</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('backend.description')}</p>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          {t('current')}: <span className="font-mono">{status?.host}:{status?.backend ?? '…'}</span>
-        </p>
-        <div className="mt-3 flex gap-2">
-          <input
-            value={backendPort}
-            onChange={(event) => setBackendPort(event.target.value)}
-            inputMode="numeric"
-            placeholder={String(status?.backend ?? '')}
-            className="w-32 rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-900"
-          />
-          <button
-            type="button"
-            onClick={() => void change('backend', backendPort)}
-            disabled={busy || running || backendPort.trim() === ''}
-            className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {t('change.button')}
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('backend.restartNote')}</p>
-      </section>
+      <BackendSection port={status?.backend} host={status?.host} value={backendPort} setValue={setBackendPort} disabled={busy || running} change={change} />
 
-      <section className="max-w-3xl rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t('history.title')}</h2>
-        {changes.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{t('history.none')}</p>
-        ) : (
-          <table className="mt-3 min-w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              <tr>
-                <th className="py-2 pr-4">{t('history.what')}</th>
-                <th className="py-2 pr-4">{t('history.from')}</th>
-                <th className="py-2 pr-4">{t('history.to')}</th>
-                <th className="py-2 pr-4">{t('history.result')}</th>
-                <th className="py-2">{t('history.when')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-              {changes.map((item) => (
-                <tr key={item.id}>
-                  <td className="py-2 pr-4 align-top text-xs">{t(`kind.${item.kind}`)}</td>
-                  <td className="py-2 pr-4 align-top font-mono text-xs">{item.old_port}</td>
-                  <td className="py-2 pr-4 align-top font-mono text-xs">{item.new_port}</td>
-                  <td className="py-2 pr-4 align-top text-xs">
-                    {item.succeeded
-                      ? t('history.succeeded')
-                      : item.rolled_back
-                        ? t('history.rolledBack')
-                        : t('history.failed')}
-                    {item.last_error && (
-                      <span className="block text-slate-500 dark:text-slate-400">{item.last_error}</span>
-                    )}
-                  </td>
-                  <td className="py-2 align-top text-xs text-slate-500 dark:text-slate-400">
-                    {new Date(item.created_at).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      <HistorySection changes={changes} />
     </div>
   )
 }
