@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -125,10 +126,23 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 // defaults. It answers the client itself when the record cannot be stored.
 func decodeRecordRequest(w http.ResponseWriter, r *http.Request) (Record, bool) {
 	var record Record
-	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return record, false
 	}
+	if err := json.Unmarshal(body, &record); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return record, false
+	}
+	// A record whose body carries no "active" field is ENABLED. Record.Enabled is
+	// a bool, so an absent field and an explicit false both decode to false, and
+	// the record was then stored disabled and left out of the zone the caller
+	// expected it in. The pointer tells the two apart.
+	var sent struct {
+		Enabled *bool `json:"active"`
+	}
+	record.Enabled = json.Unmarshal(body, &sent) != nil || sent.Enabled == nil || *sent.Enabled
 	record.Name = strings.TrimSpace(record.Name)
 	if record.Name == "" {
 		record.Name = "@"
@@ -158,25 +172,12 @@ func (h *Handlers) Update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusNotFound, "domain not found")
 		return
 	}
-	var record Record
-	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	// The same decoder Create uses, so an update body that carries no "active"
+	// field does not silently disable the record it rewrites.
+	record, ok := decodeRecordRequest(w, r)
+	if !ok {
 		return
 	}
-	record.Name = strings.TrimSpace(record.Name)
-	if record.Name == "" {
-		record.Name = "@"
-	}
-	record.Type = strings.ToUpper(strings.TrimSpace(record.Type))
-	if !validType(record.Type) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid DNS record type")
-		return
-	}
-	if !validRecordFields(record.Name, record.Value) {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid DNS record")
-		return
-	}
-	record.Priority = normalizePriority(record.Type, record.Priority)
 	enabledValue := 0
 	if record.Enabled {
 		enabledValue = 1
@@ -210,6 +211,15 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.DB.ExecContext(r.Context(),
 		`DELETE FROM dns_records WHERE id=? AND domain_id=?`, rid, id); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+	// Deleting a row is not enough: the zone file still carries the record until
+	// something rewrites it. Create, Update, BulkDelete, BulkStatus and
+	// ApplyTemplate all rewrite it; this one did not, so a deleted record stayed
+	// live in DNS until an unrelated change happened to rebuild the zone.
+	if err := writeZone(r.Context(), h.DB, id); err != nil {
+		httpx.LogR(r, "write DNS zone after record delete for domain %d: %v", id, err)
+		httpx.WriteError(w, http.StatusInternalServerError, "record deleted but DNS zone could not be updated")
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"ok": true})

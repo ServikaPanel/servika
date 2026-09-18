@@ -88,10 +88,19 @@ func TestCreateRecordRefusesWhatItCannotStore(t *testing.T) {
 			status: http.StatusCreated, want: `"id":42`,
 			writes: []sqlScriptExec{{query: recordInsert, args: []driver.Value{
 				int64(7), "@", "A", "192.0.2.10", int64(3600), int64(0), int64(1)}}}},
+		// A body with no "active" field stores the record ENABLED. It used to store
+		// it disabled, and WriteZone leaves a disabled record out, so the record the
+		// caller just added was missing from DNS.
 		{name: "an MX that keeps its priority", body: `{"name":"@","type":"MX","value":"mail.example.com","ttl":60,"priority":10}`,
 			status: http.StatusCreated, want: `"id":42`,
 			writes: []sqlScriptExec{{query: recordInsert, args: []driver.Value{
-				int64(7), "@", "MX", "mail.example.com", int64(60), int64(10), int64(0)}}}},
+				int64(7), "@", "MX", "mail.example.com", int64(60), int64(10), int64(1)}}}},
+		// The default must not swallow an explicit false, or a record can never be
+		// added disabled.
+		{name: "a record the caller asked to be disabled", body: `{"name":"www","type":"A","value":"192.0.2.10","active":false}`,
+			status: http.StatusCreated, want: `"id":42`,
+			writes: []sqlScriptExec{{query: recordInsert, args: []driver.Value{
+				int64(7), "www", "A", "192.0.2.10", int64(3600), int64(0), int64(0)}}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -162,4 +171,38 @@ func TestPutSOAFillsEveryFieldItWasNotGiven(t *testing.T) {
 			assertWrites(t, script, tc.writes)
 		})
 	}
+}
+
+// Deleting a record has to rewrite the zone. Without that the row is gone from
+// the database while the record is still served, until an unrelated change
+// happens to rebuild the zone.
+func TestDeleteRecordRewritesTheZone(t *testing.T) {
+	script := newScript()
+	script.rows[domainLookup] = [][]driver.Value{{"example.com"}}
+	rewritten := int64(0)
+	setForTest(t, &writeZone, func(_ context.Context, _ *sql.DB, id int64) error {
+		rewritten = id
+		return nil
+	})
+
+	recorder := httptest.NewRecorder()
+	(&Handlers{DB: scriptDB(t, script)}).Delete(recorder, dnsRequest(http.MethodDelete, "/api/v1/domains/7/dns/42", "", "7"))
+
+	assertResponse(t, recorder, http.StatusOK, `"ok":true`)
+	if rewritten != 7 {
+		t.Errorf("the zone of domain %d was rewritten, want domain 7", rewritten)
+	}
+}
+
+// A zone the panel could not rewrite is reported, so the operator is not told
+// the record is gone from DNS when it is still served.
+func TestDeleteReportsAZoneItCouldNotRewrite(t *testing.T) {
+	script := newScript()
+	script.rows[domainLookup] = [][]driver.Value{{"example.com"}}
+	zoneWriteReturns(t, errScripted)
+
+	recorder := httptest.NewRecorder()
+	(&Handlers{DB: scriptDB(t, script)}).Delete(recorder, dnsRequest(http.MethodDelete, "/api/v1/domains/7/dns/42", "", "7"))
+
+	assertResponse(t, recorder, http.StatusInternalServerError, "record deleted but DNS zone could not be updated")
 }
