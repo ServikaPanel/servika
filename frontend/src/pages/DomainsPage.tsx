@@ -74,6 +74,29 @@ function fmtKB(kb: number) {
   return (kb / 1024 / 1024).toFixed(2) + ' GB'
 }
 
+type Translate = (key: string, options?: Record<string, unknown>) => string
+
+/** Queues the certificate and answers the sentence appended to the create toast. */
+async function startSSL(domainID: number, setQueued: (queued: boolean) => void, t: Translate): Promise<string> {
+  try {
+    await api.post(`/domains/${domainID}/ssl/issue`, { type: 'letsencrypt' })
+    setQueued(true)
+    return t('toast.sslStarted')
+  } catch {
+    return t('toast.sslNotStarted')
+  }
+}
+
+/** Writes the canonical hostname and answers the sentence appended to the create toast. */
+async function applyWWWRedirect(domainID: number, mode: string, t: Translate): Promise<string> {
+  try {
+    await api.put(`/domains/${domainID}/www-redirect`, { mode })
+    return t('toast.wwwRedirectSet')
+  } catch (error) {
+    return t('toast.wwwRedirectFailed', { reason: apiError(error, '') })
+  }
+}
+
 export default function DomainsPage() {
   const { t } = useTranslation('DomainsPage')
   const copyOrOffer = useCopyOrOffer()
@@ -227,20 +250,13 @@ export default function DomainsPage() {
       fetchDomains()
       let successMsg = t('toast.created', { name: domainName })
       try {
+        // The SSL endpoint answers 202 and installs in the background: two ACME
+        // orders with a per-name pre-flight run for minutes. So this can only
+        // report that the work STARTED. What was actually installed, and whether
+        // it fell back to a self-signed certificate, is on the domain's SSL page.
         if (formIssueSSL) {
           setCreateStage('ssl')
-          try {
-            // The endpoint answers 202 and installs in the background: two ACME
-            // orders with a per-name pre-flight run for minutes. So this can only
-            // report that the work STARTED. What was actually installed, and
-            // whether it fell back to a self-signed certificate, is on the
-            // domain's SSL page, which polls the progress endpoint.
-            await api.post(`/domains/${response.data.id}/ssl/issue`, { type: 'letsencrypt' })
-            setSslQueued(true)
-            successMsg += t('toast.sslStarted')
-          } catch {
-            successMsg += t('toast.sslNotStarted')
-          }
+          successMsg += await startSSL(response.data.id, setSslQueued, t)
         }
         // After SSL, but note that SSL has only been QUEUED at this point, so the
         // certificate that would name the canonical hostname does not exist yet
@@ -250,12 +266,7 @@ export default function DomainsPage() {
         // from the domain's page.
         if (formWWWRedirect !== 'off') {
           setCreateStage('redirect')
-          try {
-            await api.put(`/domains/${response.data.id}/www-redirect`, { mode: formWWWRedirect })
-            successMsg += t('toast.wwwRedirectSet')
-          } catch (error) {
-            successMsg += t('toast.wwwRedirectFailed', { reason: apiError(error, '') })
-          }
+          successMsg += await applyWWWRedirect(response.data.id, formWWWRedirect, t)
         }
       } finally {
         // The form stays open until here so the operator watches the work
@@ -470,7 +481,288 @@ export default function DomainsPage() {
       {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">{error}</div>}
       {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md text-sm text-emerald-700 dark:text-emerald-300">{success}</div>}
 
-      {/* Toolbar */}
+      <DomainsToolbar query={query} setQuery={setQuery} filtered={filtered} items={items}
+        refreshing={refreshing} setRefreshing={setRefreshing} fetchDomains={fetchDomains} openCreate={openCreate} />
+
+      {/* Bulk action bar */}
+      <BulkBar selected={selected} setSelected={setSelected} processing={processing} changeStatus={changeStatus}
+        openDelete={() => { setDeleteConfirmationText(''); setDeleteConfirmationOpen(true) }} openOwnerDialog={openOwnerDialog} />
+
+      <SubBulkBar selectedSubs={selectedSubs} setSelectedSubs={setSelectedSubs} processing={processing}
+        openDelete={() => setSubDeleteOpen(true)} />
+
+      <DomainsTable loading={loading} items={items} filtered={filtered} selected={selected} selectedSubs={selectedSubs}
+        subdomainsByParent={subdomainsByParent} openCreate={openCreate} toggleSelection={toggleSelection}
+        toggleSubSelection={toggleSubSelection} selectAllItems={selectAllItems} />
+
+      {createOpen && (
+        <CreateModal creating={creating} error={error} close={() => setCreateOpen(false)} submitCreate={submitCreate}
+          formDomainName={formDomainName} setFormDomainName={setFormDomainName}
+          formSiteType={formSiteType} setFormSiteType={setFormSiteType}
+          formPhpVersion={formPhpVersion} setFormPhpVersion={setFormPhpVersion} phpVersions={phpVersions}
+          formPlanId={formPlanId} setFormPlanId={setFormPlanId} plans={plans}
+          isAdmin={isAdmin} modalLoading={modalLoading} createResellers={createResellers}
+          formOwnerUserID={formOwnerUserID} setFormOwnerUserID={setFormOwnerUserID}
+          formCustomerID={formCustomerID} setFormCustomerID={setFormCustomerID} ownerCustomerChoices={ownerCustomerChoices}
+          formIssueSSL={formIssueSSL} setFormIssueSSL={setFormIssueSSL}
+          formWWWRedirect={formWWWRedirect} setFormWWWRedirect={setFormWWWRedirect} createStage={createStage} />
+      )}
+
+      {creationResult && (
+        <ResultModal creationResult={creationResult} sslQueued={sslQueued} copyOrOffer={copyOrOffer}
+          resultCopied={resultCopied} setResultCopied={setResultCopied} resultText={resultText}
+          downloadResultText={downloadResultText} close={() => setCreationResult(null)} />
+      )}
+
+      {/* Bulk deletion confirmation */}
+      {/* Subdomain bulk delete confirmation. No typed name is demanded here: unlike a
+          domain this removes one document root and its vhost, not a whole tenant. */}
+      {subDeleteOpen && (
+        <SubDeleteModal subdomains={subdomains} selectedSubs={selectedSubs} processing={processing}
+          close={() => setSubDeleteOpen(false)} confirm={bulkDeleteSubdomains} />
+      )}
+
+      {ownerOpen && (
+        <OwnerModal isAdmin={isAdmin} selectedCount={selected.size} ownerCustomers={ownerCustomers}
+          ownerTarget={ownerTarget} setOwnerTarget={setOwnerTarget} processing={processing}
+          close={() => setOwnerOpen(false)} confirm={changeOwner} />
+      )}
+
+      {deleteConfirmationOpen && (
+        <DeleteModal items={items} selected={selected} processing={processing}
+          confirmationText={deleteConfirmationText} setConfirmationText={setDeleteConfirmationText}
+          close={() => setDeleteConfirmationOpen(false)} confirm={bulkDelete} />
+      )}
+    </div>
+  )
+}
+
+type CreateModalProps = {
+  creating: boolean; error: string | null; close: () => void; submitCreate: (event: React.SubmitEvent) => void
+  formDomainName: string; setFormDomainName: (value: string) => void
+  formSiteType: SiteType; setFormSiteType: (value: SiteType) => void
+  formPhpVersion: string; setFormPhpVersion: (value: string) => void; phpVersions: PHPVer[]
+  formPlanId: number | ''; setFormPlanId: (value: number | '') => void; plans: Plan[]
+  isAdmin: boolean; modalLoading: boolean; createResellers: PanelUser[]
+  formOwnerUserID: number | ''; setFormOwnerUserID: (value: number | '') => void
+  formCustomerID: number | ''; setFormCustomerID: (value: number | '') => void; ownerCustomerChoices: Customer[]
+  formIssueSSL: boolean; setFormIssueSSL: (value: boolean) => void
+  formWWWRedirect: 'off' | 'to_www' | 'to_apex'; setFormWWWRedirect: (value: 'off' | 'to_www' | 'to_apex') => void
+  createStage: 'domain' | 'ssl' | 'redirect'
+}
+
+function DomainsTable({ loading, items, filtered, selected, selectedSubs, subdomainsByParent, openCreate,
+  toggleSelection, toggleSubSelection, selectAllItems }: {
+  loading: boolean; items: Domain[]; filtered: Domain[]; selected: Set<number>; selectedSubs: Set<number>
+  subdomainsByParent: Map<number, Subdomain[]>; openCreate: () => void
+  toggleSelection: (id: number) => void; toggleSubSelection: (id: number) => void; selectAllItems: (selectAll: boolean) => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  if (loading) return <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+  if (items.length === 0) {
+    return (
+      <EmptyState title={t('empty.title')}
+        description={t('empty.description')}
+        button={{ label: t('empty.button'), onClick: openCreate }} />
+    )
+  }
+  return (
+    <div className={responsiveTableContainerClass}>
+      <table className={responsiveTableClass}>
+        <DomainsTableHead filtered={filtered} selected={selected} selectAllItems={selectAllItems} />
+        <tbody className={responsiveTableBodyClass}>
+          {filtered.map(d => (
+            <Fragment key={d.id}>
+              <DomainRow d={d} selected={selected} toggleSelection={toggleSelection} />
+              {(subdomainsByParent.get(d.id) || []).map(sub => (
+                <SubdomainRow key={`s${sub.id}`} sub={sub} parentID={d.id}
+                  selectedSubs={selectedSubs} toggleSubSelection={toggleSubSelection} />
+              ))}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function DomainsTableHead({ filtered, selected, selectAllItems }: {
+  filtered: Domain[]; selected: Set<number>; selectAllItems: (selectAll: boolean) => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+    <thead className={responsiveTableHeadClass}>
+      <tr>
+        <th className="px-3 py-2.5 w-10 text-center">
+          <input type="checkbox"
+            checked={filtered.length > 0 && selected.size === filtered.length}
+            ref={ref => { if (ref) ref.indeterminate = selected.size > 0 && selected.size < filtered.length }}
+            onChange={e => selectAllItems(e.target.checked)}
+            className="cursor-pointer" />
+        </th>
+        <th className="text-left px-4 py-2.5">{t('columns.domainName')}</th>
+        <th className="text-left px-4 py-2.5">{t('columns.systemUser')}</th>
+        <th className="text-left px-4 py-2.5">{t('columns.plan')}</th>
+        <th className="text-left px-4 py-2.5">{t('columns.php')}</th>
+        <th className="text-left px-4 py-2.5">{t('columns.disk')}</th>
+        <th className="text-left px-4 py-2.5">{t('columns.status')}</th>
+        <th className="text-left px-4 py-2.5">{t('columns.created')}</th>
+        <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
+      </tr>
+    </thead>
+  )
+}
+
+function DomainRow({ d, selected, toggleSelection }: { d: Domain; selected: Set<number>; toggleSelection: (id: number) => void }) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+    <tr className={`${responsiveTableRowClass} ${selected.has(d.id) ? 'bg-brand-50 dark:bg-brand-900/20' : ''}`}>
+      <td className={responsiveTableCellClass}>
+        <input type="checkbox" checked={selected.has(d.id)}
+          onChange={() => toggleSelection(d.id)} className="cursor-pointer" />
+      </td>
+      <td data-label={t('columns.domainName')} className={responsiveTableCellClass}>
+        <div className="text-right lg:text-left">
+          <Link to={`/subscriptions/${d.id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">
+            {d.domain_name}
+          </Link>
+          {' '}
+          <a href={`https://${d.domain_name}`} target="_blank" rel="noopener noreferrer" title={t('openInNewTab')} className="text-slate-400 dark:text-slate-500 hover:text-brand-500 dark:hover:text-brand-400 text-xs">↗</a>
+          <SslPill
+            enabled={d.ssl}
+            source={d.ssl_source}
+            trustedTitle={d.ssl_expiry ? t('sslExpires', { date: d.ssl_expiry }) : t('sslActive')}
+            selfSignedTitle={t('sslSelfSigned')}
+          />
+        </div>
+      </td>
+      <td data-label={t('columns.systemUser')} className={responsiveTableCodeCellClass}>
+        {d.system_user}
+        {d.reseller_name && <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{t('reseller', { name: d.reseller_name })}</div>}
+      </td>
+      <td data-label={t('columns.plan')} className={responsiveTableCellClass}>
+        {d.plan_name ? <span className="text-slate-700 dark:text-slate-300">{d.plan_name}</span> : <span className="text-slate-400 dark:text-slate-500 italic">{t('noPlan')}</span>}
+      </td>
+      <td data-label={t('columns.php')} className={responsiveTableCodeCellClass}>{d.php_version || '-'}</td>
+      <td data-label={t('columns.disk')} className={responsiveTableCodeCellClass}>{fmtKB(d.size_kb)}</td>
+      <td data-label={t('columns.status')} className={responsiveTableCellClass}>
+        <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold ${
+          d.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500'
+        }`}>{d.status}</span>
+      </td>
+      <td data-label={t('columns.created')} className={responsiveTableCodeCellClass}>{d.created_at || '-'}</td>
+      <td className={responsiveTableActionCellClass}>
+        <Link to={`/subscriptions/${d.id}/subdomains`} className="text-xs text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400">{t('addSubdomain')}</Link>
+        <Link to={`/subscriptions/${d.id}`} className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300">{t('manage')}</Link>
+      </td>
+    </tr>
+  )
+}
+
+function SubdomainRow({ sub, parentID, selectedSubs, toggleSubSelection }: {
+  sub: Subdomain; parentID: number; selectedSubs: Set<number>; toggleSubSelection: (id: number) => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+    <tr className={`${responsiveTableRowClass} bg-slate-50/60 dark:bg-slate-900/30`}>
+      <td className={responsiveTableCellClass}>
+        <input type="checkbox" checked={selectedSubs.has(sub.id)}
+          onChange={() => toggleSubSelection(sub.id)}
+          aria-label={t('bulkSub.selectOne', { name: sub.fqdn })}
+          className="rounded border-slate-300 dark:border-slate-600" />
+      </td>
+      <td data-label={t('columns.domainName')} className={responsiveTableCellClass}>
+        <div className="text-right lg:text-left lg:pl-5">
+          <span className="text-slate-300 dark:text-slate-600 mr-1 hidden lg:inline">└</span>
+          <Link to={`/domains/${parentID}/subdomain/${sub.id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">
+            {sub.fqdn}
+          </Link>
+          {/* The type badge stays. On the stacked mobile layout there is no indent
+              to read the nesting from, so removing it to make room would cost the
+              one thing that says what this row is. */}
+          <span className="ml-2 text-[10px] uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">{t('subdomain')}</span>
+          <SslPill
+            enabled={sub.ssl}
+            source={sub.ssl_source}
+            trustedTitle={t('sslActive')}
+            selfSignedTitle={t('sslSelfSigned')}
+          />
+        </div>
+      </td>
+      <td data-label={t('columns.systemUser')} className={responsiveTableCodeCellClass}>{sub.system_user}</td>
+      <td data-label={t('columns.plan')} className={responsiveTableCellClass}>
+        <span className="text-slate-400 dark:text-slate-500 italic">{t('subdomainParentPlan')}</span>
+      </td>
+      <td data-label={t('columns.php')} className={responsiveTableCodeCellClass}>{sub.php_version || '-'}</td>
+      <td data-label={t('columns.disk')} className={responsiveTableCodeCellClass}>-</td>
+      <td data-label={t('columns.status')} className={responsiveTableCellClass}>
+        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">{t('subdomainStatus')}</span>
+      </td>
+      <td data-label={t('columns.created')} className={responsiveTableCodeCellClass}>{sub.created_at || '-'}</td>
+      <td className={responsiveTableActionCellClass}>
+        <Link to={`/domains/${parentID}/subdomain/${sub.id}`} className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">{t('manage')}</Link>
+      </td>
+    </tr>
+  )
+}
+
+function DeleteModal({ items, selected, processing, confirmationText, setConfirmationText, close, confirm }: {
+  items: Domain[]; selected: Set<number>; processing: boolean; confirmationText: string
+  setConfirmationText: (value: string) => void; close: () => void; confirm: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  // A single selection is confirmed by typing that domain's own name; a bulk
+  // delete has no single name to type, so the literal DELETE stands in.
+  const selectedId = selected.size === 1 ? Array.from(selected)[0] : undefined
+  const selectedDomain = selectedId === undefined ? undefined : items.find(x => x.id === selectedId)?.domain_name
+  const expected = selectedDomain || 'DELETE'
+  const confirmed = confirmationText === expected
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={close}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-red-700 dark:text-red-300 mb-2">{t('deleteConfirm.title')}</h3>
+        <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
+          <span className="font-semibold">{selected.size}</span>{t('deleteConfirm.messageMid')}<strong>{t('deleteConfirm.messageBold')}</strong>{t('deleteConfirm.messagePost')}
+        </p>
+        <ul className="text-xs font-mono text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 rounded p-2 max-h-40 overflow-auto mb-4">
+          {Array.from(selected).slice(0, 8).map(id => (
+            <li key={id} className="truncate">{items.find(x => x.id === id)?.domain_name || '?'}</li>
+          ))}
+          {selected.size > 8 && <li className="text-slate-400 dark:text-slate-500 italic">{t('deleteConfirm.moreItems', { count: selected.size - 8 })}</li>}
+        </ul>
+        <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1.5">
+          {t('deleteConfirm.typeLabel')}<span className="font-mono font-semibold text-red-700 dark:text-red-300">{expected}</span>{t('deleteConfirm.typeSuffix')}
+        </label>
+        <input
+          type="text"
+          autoFocus
+          value={confirmationText}
+          onChange={e => setConfirmationText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && confirmed && !processing) confirm() }}
+          placeholder={expected}
+          autoComplete="off"
+          spellCheck={false}
+          className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={close}
+            className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('deleteConfirm.cancel')}</button>
+          <button onClick={confirm} disabled={processing || !confirmed}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded font-medium">
+            {t('deleteConfirm.confirm')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DomainsToolbar({ query, setQuery, filtered, items, refreshing, setRefreshing, fetchDomains, openCreate }: {
+  query: string; setQuery: (value: string) => void; filtered: Domain[]; items: Domain[]
+  refreshing: boolean; setRefreshing: (value: boolean) => void; fetchDomains: () => Promise<unknown>; openCreate: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
       <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:flex-wrap">
         <div className="w-full sm:max-w-md sm:flex-1">
           <input type="text" value={query} onChange={e => setQuery(e.target.value)}
@@ -492,9 +784,16 @@ export default function DomainsPage() {
           <span className="text-base leading-none">+</span> {t('newDomain')}
         </button>
       </div>
+  )
+}
 
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
+function BulkBar({ selected, setSelected, processing, changeStatus, openDelete, openOwnerDialog }: {
+  selected: Set<number>; setSelected: (value: Set<number>) => void; processing: boolean
+  changeStatus: (status: 'active' | 'passive') => void; openDelete: () => void; openOwnerDialog: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  if (selected.size === 0) return null
+  return (
         <div className="mb-3 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-md flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">{t('bulk.selected', { count: selected.size })}</span>
           <button onClick={() => changeStatus('active')} disabled={processing}
@@ -505,7 +804,7 @@ export default function DomainsPage() {
             className="text-xs px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white rounded">
             {t('bulk.deactivate')}
           </button>
-          <button onClick={() => { setDeleteConfirmationText(''); setDeleteConfirmationOpen(true) }} disabled={processing}
+          <button onClick={openDelete} disabled={processing}
             className="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium">
             {t('bulk.delete', { count: selected.size })}
           </button>
@@ -518,12 +817,18 @@ export default function DomainsPage() {
             {t('bulk.clear')}
           </button>
         </div>
-      )}
+  )
+}
 
-      {selectedSubs.size > 0 && (
+function SubBulkBar({ selectedSubs, setSelectedSubs, processing, openDelete }: {
+  selectedSubs: Set<number>; setSelectedSubs: (value: Set<number>) => void; processing: boolean; openDelete: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  if (selectedSubs.size === 0) return null
+  return (
         <div className="mb-3 px-3 py-2 bg-sky-50 dark:bg-sky-900/20 border border-sky-300 dark:border-sky-700 rounded-md flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-sky-800 dark:text-sky-200">{t('bulkSub.selected', { count: selectedSubs.size })}</span>
-          <button onClick={() => setSubDeleteOpen(true)} disabled={processing}
+          <button onClick={openDelete} disabled={processing}
             className="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium">
             {t('bulkSub.delete', { count: selectedSubs.size })}
           </button>
@@ -532,134 +837,144 @@ export default function DomainsPage() {
             {t('bulk.clear')}
           </button>
         </div>
-      )}
+  )
+}
 
-      {loading ? (
-        <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
-      ) : items.length === 0 ? (
-        <EmptyState title={t('empty.title')}
-          description={t('empty.description')}
-          button={{ label: t('empty.button'), onClick: openCreate }} />
-      ) : (
-        <div className={responsiveTableContainerClass}>
-          <table className={responsiveTableClass}>
-            <thead className={responsiveTableHeadClass}>
-              <tr>
-                <th className="px-3 py-2.5 w-10 text-center">
-                  <input type="checkbox"
-                    checked={filtered.length > 0 && selected.size === filtered.length}
-                    ref={ref => { if (ref) ref.indeterminate = selected.size > 0 && selected.size < filtered.length }}
-                    onChange={e => selectAllItems(e.target.checked)}
-                    className="cursor-pointer" />
-                </th>
-                <th className="text-left px-4 py-2.5">{t('columns.domainName')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.systemUser')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.plan')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.php')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.disk')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.status')}</th>
-                <th className="text-left px-4 py-2.5">{t('columns.created')}</th>
-                <th className="text-right px-4 py-2.5">{t('columns.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className={responsiveTableBodyClass}>
-              {filtered.map(d => {
-                const children = subdomainsByParent.get(d.id) || []
-                return (
-                  <Fragment key={d.id}>
-                  <tr className={`${responsiveTableRowClass} ${selected.has(d.id) ? 'bg-brand-50 dark:bg-brand-900/20' : ''}`}>
-                    <td className={responsiveTableCellClass}>
-                      <input type="checkbox" checked={selected.has(d.id)}
-                        onChange={() => toggleSelection(d.id)} className="cursor-pointer" />
-                    </td>
-                    <td data-label={t('columns.domainName')} className={responsiveTableCellClass}>
-                      <div className="text-right lg:text-left">
-                        <Link to={`/subscriptions/${d.id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300 font-medium">
-                          {d.domain_name}
-                        </Link>
-                        {' '}
-                        <a href={`https://${d.domain_name}`} target="_blank" rel="noopener noreferrer" title={t('openInNewTab')} className="text-slate-400 dark:text-slate-500 hover:text-brand-500 dark:hover:text-brand-400 text-xs">↗</a>
-                        <SslPill
-                          enabled={d.ssl}
-                          source={d.ssl_source}
-                          trustedTitle={d.ssl_expiry ? t('sslExpires', { date: d.ssl_expiry }) : t('sslActive')}
-                          selfSignedTitle={t('sslSelfSigned')}
-                        />
-                      </div>
-                    </td>
-                    <td data-label={t('columns.systemUser')} className={responsiveTableCodeCellClass}>
-                      {d.system_user}
-                      {d.reseller_name && <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{t('reseller', { name: d.reseller_name })}</div>}
-                    </td>
-                    <td data-label={t('columns.plan')} className={responsiveTableCellClass}>
-                      {d.plan_name ? <span className="text-slate-700 dark:text-slate-300">{d.plan_name}</span> : <span className="text-slate-400 dark:text-slate-500 italic">{t('noPlan')}</span>}
-                    </td>
-                    <td data-label={t('columns.php')} className={responsiveTableCodeCellClass}>{d.php_version || '-'}</td>
-                    <td data-label={t('columns.disk')} className={responsiveTableCodeCellClass}>{fmtKB(d.size_kb)}</td>
-                    <td data-label={t('columns.status')} className={responsiveTableCellClass}>
-                      <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold ${
-                        d.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500'
-                      }`}>{d.status}</span>
-                    </td>
-                    <td data-label={t('columns.created')} className={responsiveTableCodeCellClass}>{d.created_at || '-'}</td>
-                    <td className={responsiveTableActionCellClass}>
-                      <Link to={`/subscriptions/${d.id}/subdomains`} className="text-xs text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400">{t('addSubdomain')}</Link>
-                      <Link to={`/subscriptions/${d.id}`} className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-300">{t('manage')}</Link>
-                    </td>
-                  </tr>
-                  {children.map(sub => (
-                    <tr key={`s${sub.id}`} className={`${responsiveTableRowClass} bg-slate-50/60 dark:bg-slate-900/30`}>
-                      <td className={responsiveTableCellClass}>
-                        <input type="checkbox" checked={selectedSubs.has(sub.id)}
-                          onChange={() => toggleSubSelection(sub.id)}
-                          aria-label={t('bulkSub.selectOne', { name: sub.fqdn })}
-                          className="rounded border-slate-300 dark:border-slate-600" />
-                      </td>
-                      <td data-label={t('columns.domainName')} className={responsiveTableCellClass}>
-                        <div className="text-right lg:text-left lg:pl-5">
-                          <span className="text-slate-300 dark:text-slate-600 mr-1 hidden lg:inline">└</span>
-                          <Link to={`/domains/${d.id}/subdomain/${sub.id}`} className="text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">
-                            {sub.fqdn}
-                          </Link>
-                          {/* The type badge stays. On the stacked mobile layout
-                              there is no indent to read the nesting from, so
-                              removing it to make room would cost the one thing
-                              that says what this row is. */}
-                          <span className="ml-2 text-[10px] uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">{t('subdomain')}</span>
-                          <SslPill
-                            enabled={sub.ssl}
-                            source={sub.ssl_source}
-                            trustedTitle={t('sslActive')}
-                            selfSignedTitle={t('sslSelfSigned')}
-                          />
-                        </div>
-                      </td>
-                      <td data-label={t('columns.systemUser')} className={responsiveTableCodeCellClass}>{sub.system_user}</td>
-                      <td data-label={t('columns.plan')} className={responsiveTableCellClass}>
-                        <span className="text-slate-400 dark:text-slate-500 italic">{t('subdomainParentPlan')}</span>
-                      </td>
-                      <td data-label={t('columns.php')} className={responsiveTableCodeCellClass}>{sub.php_version || '-'}</td>
-                      <td data-label={t('columns.disk')} className={responsiveTableCodeCellClass}>-</td>
-                      <td data-label={t('columns.status')} className={responsiveTableCellClass}>
-                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">{t('subdomainStatus')}</span>
-                      </td>
-                      <td data-label={t('columns.created')} className={responsiveTableCodeCellClass}>{sub.created_at || '-'}</td>
-                      <td className={responsiveTableActionCellClass}>
-                        <Link to={`/domains/${d.id}/subdomain/${sub.id}`} className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300">{t('manage')}</Link>
-                      </td>
-                    </tr>
+function OwnerFields({ isAdmin, modalLoading, creating, createResellers, ownerCustomerChoices,
+  formOwnerUserID, setFormOwnerUserID, formCustomerID, setFormCustomerID }: {
+  isAdmin: boolean; modalLoading: boolean; creating: boolean; createResellers: PanelUser[]; ownerCustomerChoices: Customer[]
+  formOwnerUserID: number | ''; setFormOwnerUserID: (value: number | '') => void
+  formCustomerID: number | ''; setFormCustomerID: (value: number | '') => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  // Administrator only. A reseller must already name one of its own customers,
+  // which the server verifies, so the field would offer it nothing it is
+  // allowed to choose.
+  if (!isAdmin) return null
+  return (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
+                    {t('createModal.owner')}
+                    {modalLoading && createResellers.length === 0 && <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">{t('createModal.loading')}</span>}
+                  </label>
+                  <select
+                    value={formOwnerUserID}
+                    onChange={e => {
+                      setFormOwnerUserID(e.target.value === '' ? '' : Number(e.target.value))
+                      // The customer list below belongs to the previous owner, so
+                      // keeping the choice would send a customer the new owner
+                      // does not have.
+                      setFormCustomerID('')
+                    }}
+                    disabled={creating}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
+                  >
+                    <option value="">{t('createModal.ownerAdmin')}</option>
+                    {createResellers.map(reseller => (
+                      <option key={reseller.id} value={reseller.id}>{reseller.full_name || reseller.username}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={formCustomerID}
+                    onChange={e => setFormCustomerID(e.target.value === '' ? '' : Number(e.target.value))}
+                    disabled={creating}
+                    className="mt-2 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
+                  >
+                    <option value="">{t('createModal.customerNew')}</option>
+                    {ownerCustomerChoices.map(customer => (
+                      <option key={customer.id} value={customer.id}>{customer.name}</option>
+                    ))}
+                  </select>
+                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t('createModal.ownerHint')}</div>
+                </div>
+  )
+}
+
+function SslRedirectFields({ creating, formIssueSSL, setFormIssueSSL, formWWWRedirect, setFormWWWRedirect }: {
+  creating: boolean; formIssueSSL: boolean; setFormIssueSSL: (value: boolean) => void
+  formWWWRedirect: 'off' | 'to_www' | 'to_apex'; setFormWWWRedirect: (value: 'off' | 'to_www' | 'to_apex') => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+            <div className="mt-4">
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formIssueSSL} onChange={e => setFormIssueSSL(e.target.checked)} disabled={creating} className="rounded" />
+                {t('createModal.issueSsl')}
+              </label>
+              {formIssueSSL && (
+                <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                  {t('createModal.sslWarning')}
+                </p>
+              )}
+              <label className="block mt-3">
+                <span className="text-sm text-slate-600 dark:text-slate-300">{t('createModal.wwwRedirect')}</span>
+                <select value={formWWWRedirect} onChange={e => setFormWWWRedirect(e.target.value as 'off' | 'to_www' | 'to_apex')} disabled={creating}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none">
+                  <option value="off">{t('createModal.wwwRedirectOff')}</option>
+                  <option value="to_www">{t('createModal.wwwRedirectToWww')}</option>
+                  <option value="to_apex">{t('createModal.wwwRedirectToApex')}</option>
+                </select>
+                {formWWWRedirect === 'to_www' && (
+                  <span className="mt-1.5 block text-[11px] text-amber-600 dark:text-amber-400">{t('createModal.wwwRedirectWarning')}</span>
+                )}
+              </label>
+            </div>
+  )
+}
+
+function PhpAndPlanFields({ creating, modalLoading, formPhpVersion, setFormPhpVersion, phpVersions, formPlanId, setFormPlanId, plans }: {
+  creating: boolean; modalLoading: boolean
+  formPhpVersion: string; setFormPhpVersion: (value: string) => void; phpVersions: PHPVer[]
+  formPlanId: number | ''; setFormPlanId: (value: number | '') => void; plans: Plan[]
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+    <>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
+                  {t('createModal.phpVersion')}
+                  {modalLoading && phpVersions.length === 0 && <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">{t('createModal.loading')}</span>}
+                </label>
+                <select
+                  value={formPhpVersion}
+                  onChange={e => setFormPhpVersion(e.target.value)}
+                  disabled={creating}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
+                >
+                  {phpVersions.length === 0
+                    ? <option value="8.3">{t('createModal.phpDefault')}</option>
+                    : phpVersions.map(p => (
+                        <option key={p.version} value={p.version}>PHP {p.version}</option>
+                      ))
+                  }
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
+                  {t('createModal.servicePlan')}
+                  {modalLoading && plans.length === 0 && <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">{t('createModal.loading')}</span>}
+                </label>
+                <select
+                  value={formPlanId}
+                  onChange={e => setFormPlanId(e.target.value === '' ? '' : Number(e.target.value))}
+                  disabled={creating}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
+                >
+                  <option value="">{t('createModal.planNone')}</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </select>
+              </div>
+    </>
+  )
+}
 
-      {/* Domain creation modal */}
-      {createOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !creating && setCreateOpen(false)}>
+function CreateModal({ creating, error, close, submitCreate, formDomainName, setFormDomainName, formSiteType, setFormSiteType, formPhpVersion, setFormPhpVersion, phpVersions, formPlanId, setFormPlanId, plans, isAdmin, modalLoading, createResellers, formOwnerUserID, setFormOwnerUserID, formCustomerID, setFormCustomerID, ownerCustomerChoices, formIssueSSL, setFormIssueSSL, formWWWRedirect, setFormWWWRedirect, createStage }: CreateModalProps) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !creating && close()}>
           <form onSubmit={submitCreate} className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg p-5 shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">{t('createModal.title')}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">
@@ -712,109 +1027,18 @@ export default function DomainsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
-                  {t('createModal.phpVersion')}
-                  {modalLoading && phpVersions.length === 0 && <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">{t('createModal.loading')}</span>}
-                </label>
-                <select
-                  value={formPhpVersion}
-                  onChange={e => setFormPhpVersion(e.target.value)}
-                  disabled={creating}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
-                >
-                  {phpVersions.length === 0
-                    ? <option value="8.3">{t('createModal.phpDefault')}</option>
-                    : phpVersions.map(p => (
-                        <option key={p.version} value={p.version}>PHP {p.version}</option>
-                      ))
-                  }
-                </select>
-              </div>
+              <PhpAndPlanFields creating={creating} modalLoading={modalLoading}
+                formPhpVersion={formPhpVersion} setFormPhpVersion={setFormPhpVersion} phpVersions={phpVersions}
+                formPlanId={formPlanId} setFormPlanId={setFormPlanId} plans={plans} />
 
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
-                  {t('createModal.servicePlan')}
-                  {modalLoading && plans.length === 0 && <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">{t('createModal.loading')}</span>}
-                </label>
-                <select
-                  value={formPlanId}
-                  onChange={e => setFormPlanId(e.target.value === '' ? '' : Number(e.target.value))}
-                  disabled={creating}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
-                >
-                  <option value="">{t('createModal.planNone')}</option>
-                  {plans.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Administrator only. A reseller must already name one of its own
-                  customers, which the server verifies, so the field would offer
-                  it nothing it is allowed to choose. */}
-              {isAdmin && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 dark:text-slate-500 mb-1">
-                    {t('createModal.owner')}
-                    {modalLoading && createResellers.length === 0 && <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">{t('createModal.loading')}</span>}
-                  </label>
-                  <select
-                    value={formOwnerUserID}
-                    onChange={e => {
-                      setFormOwnerUserID(e.target.value === '' ? '' : Number(e.target.value))
-                      // The customer list below belongs to the previous owner, so
-                      // keeping the choice would send a customer the new owner
-                      // does not have.
-                      setFormCustomerID('')
-                    }}
-                    disabled={creating}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
-                  >
-                    <option value="">{t('createModal.ownerAdmin')}</option>
-                    {createResellers.map(reseller => (
-                      <option key={reseller.id} value={reseller.id}>{reseller.full_name || reseller.username}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={formCustomerID}
-                    onChange={e => setFormCustomerID(e.target.value === '' ? '' : Number(e.target.value))}
-                    disabled={creating}
-                    className="mt-2 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded text-sm focus:border-brand-500 outline-none bg-white dark:bg-slate-800"
-                  >
-                    <option value="">{t('createModal.customerNew')}</option>
-                    {ownerCustomerChoices.map(customer => (
-                      <option key={customer.id} value={customer.id}>{customer.name}</option>
-                    ))}
-                  </select>
-                  <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t('createModal.ownerHint')}</div>
-                </div>
-              )}
+              <OwnerFields isAdmin={isAdmin} modalLoading={modalLoading} creating={creating}
+                createResellers={createResellers} ownerCustomerChoices={ownerCustomerChoices}
+                formOwnerUserID={formOwnerUserID} setFormOwnerUserID={setFormOwnerUserID}
+                formCustomerID={formCustomerID} setFormCustomerID={setFormCustomerID} />
             </div>
 
-            <div className="mt-4">
-              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={formIssueSSL} onChange={e => setFormIssueSSL(e.target.checked)} disabled={creating} className="rounded" />
-                {t('createModal.issueSsl')}
-              </label>
-              {formIssueSSL && (
-                <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
-                  {t('createModal.sslWarning')}
-                </p>
-              )}
-              <label className="block mt-3">
-                <span className="text-sm text-slate-600 dark:text-slate-300">{t('createModal.wwwRedirect')}</span>
-                <select value={formWWWRedirect} onChange={e => setFormWWWRedirect(e.target.value as 'off' | 'to_www' | 'to_apex')} disabled={creating}
-                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none">
-                  <option value="off">{t('createModal.wwwRedirectOff')}</option>
-                  <option value="to_www">{t('createModal.wwwRedirectToWww')}</option>
-                  <option value="to_apex">{t('createModal.wwwRedirectToApex')}</option>
-                </select>
-                {formWWWRedirect === 'to_www' && (
-                  <span className="mt-1.5 block text-[11px] text-amber-600 dark:text-amber-400">{t('createModal.wwwRedirectWarning')}</span>
-                )}
-              </label>
-            </div>
+            <SslRedirectFields creating={creating} formIssueSSL={formIssueSSL} setFormIssueSSL={setFormIssueSSL}
+              formWWWRedirect={formWWWRedirect} setFormWWWRedirect={setFormWWWRedirect} />
 
             {/* Named stages, no percentage: the server reports no progress for
                 any of these calls, so a bar would be showing an invented
@@ -830,7 +1054,7 @@ export default function DomainsPage() {
             )}
 
             <div className="flex justify-end gap-2 mt-5">
-              <button type="button" onClick={() => setCreateOpen(false)} disabled={creating}
+              <button type="button" onClick={() => close()} disabled={creating}
                 className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('createModal.cancel')}</button>
               <button type="submit" disabled={creating || !formDomainName.trim()}
                 className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 disabled:opacity-60 text-sm rounded font-medium inline-flex items-center gap-2">
@@ -845,11 +1069,17 @@ export default function DomainsPage() {
             </div>
           </form>
         </div>
-      )}
+  )
+}
 
-      {/* Creation result modal with FTP and database passwords */}
-      {creationResult && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setCreationResult(null)}>
+function ResultModal({ creationResult, sslQueued, copyOrOffer, resultCopied, setResultCopied, resultText, downloadResultText, close }: {
+  creationResult: CreateResult; sslQueued: boolean; copyOrOffer: (text: string) => Promise<boolean>
+  resultCopied: boolean; setResultCopied: (value: boolean) => void
+  resultText: (result: CreateResult) => string; downloadResultText: (result: CreateResult) => void; close: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={close}>
           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-lg p-5 shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-emerald-700 dark:text-emerald-300 mb-1">{t('resultModal.title')}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-500 mb-4">
@@ -947,17 +1177,19 @@ export default function DomainsPage() {
                 className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm rounded">
                 {t('resultModal.saveTxt')}
               </button>
-              <button onClick={() => setCreationResult(null)}
+              <button onClick={close}
                 className="px-4 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm rounded">{t('resultModal.ok')}</button>
             </div>
           </div>
         </div>
-      )}
+  )
+}
 
-      {/* Bulk deletion confirmation */}
-      {/* Subdomain bulk delete confirmation. No typed name is demanded here: unlike a
-          domain this removes one document root and its vhost, not a whole tenant. */}
-      {subDeleteOpen && (
+function SubDeleteModal({ subdomains, selectedSubs, processing, close, confirm }: {
+  subdomains: Subdomain[]; selectedSubs: Set<number>; processing: boolean; close: () => void; confirm: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-xl p-5">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('subDeleteConfirm.title')}</h3>
@@ -973,24 +1205,30 @@ export default function DomainsPage() {
               )}
             </ul>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setSubDeleteOpen(false)} disabled={processing}
+              <button onClick={() => close()} disabled={processing}
                 className="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300">
                 {t('subDeleteConfirm.cancel')}
               </button>
-              <button onClick={bulkDeleteSubdomains} disabled={processing}
+              <button onClick={confirm} disabled={processing}
                 className="px-3 py-1.5 text-sm rounded bg-red-600 hover:bg-red-700 text-white font-medium disabled:opacity-50">
                 {processing ? t('subDeleteConfirm.working') : t('subDeleteConfirm.confirm')}
               </button>
             </div>
           </div>
         </div>
-      )}
+  )
+}
 
-      {ownerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setOwnerOpen(false)}>
+function OwnerModal({ isAdmin, selectedCount, ownerCustomers, ownerTarget, setOwnerTarget, processing, close, confirm }: {
+  isAdmin: boolean; selectedCount: number; ownerCustomers: Customer[]; ownerTarget: string
+  setOwnerTarget: (value: string) => void; processing: boolean; close: () => void; confirm: () => void
+}) {
+  const { t } = useTranslation('DomainsPage')
+  return (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => close()}>
           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{t('owner.title')}</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{t('owner.description', { count: selected.size })}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{t('owner.description', { count: selectedCount })}</p>
             <select value={ownerTarget} onChange={e => setOwnerTarget(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm mb-2">
               <option value="">{isAdmin ? t('owner.none') : t('owner.choose')}</option>
@@ -1002,63 +1240,15 @@ export default function DomainsPage() {
                 the domain out of every customer's hands and back to admin. */}
             {isAdmin && <p className="text-xs text-amber-700 dark:text-amber-400 mb-4">{t('owner.noneWarning')}</p>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setOwnerOpen(false)}
+              <button onClick={() => close()}
                 className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('owner.cancel')}</button>
-              <button onClick={changeOwner} disabled={processing || (!isAdmin && ownerTarget === '')}
+              <button onClick={confirm} disabled={processing || (!isAdmin && ownerTarget === '')}
                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded font-medium">
                 {t('owner.confirm')}
               </button>
             </div>
           </div>
         </div>
-      )}
-
-      {deleteConfirmationOpen && (() => {
-        const selectedId = selected.size === 1 ? Array.from(selected)[0] : undefined
-        const selectedDomain = selectedId !== undefined ? items.find(x => x.id === selectedId)?.domain_name : undefined
-        const expectedConfirmationText = selectedDomain || 'DELETE'
-        const deletionConfirmed = deleteConfirmationText === expectedConfirmationText
-        return (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setDeleteConfirmationOpen(false)}>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-5 shadow-xl" onClick={e => e.stopPropagation()}>
-              <h3 className="text-base font-semibold text-red-700 dark:text-red-300 mb-2">{t('deleteConfirm.title')}</h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">
-                <span className="font-semibold">{selected.size}</span>{t('deleteConfirm.messageMid')}<strong>{t('deleteConfirm.messageBold')}</strong>{t('deleteConfirm.messagePost')}
-              </p>
-              <ul className="text-xs font-mono text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-900 rounded p-2 max-h-40 overflow-auto mb-4">
-                {Array.from(selected).slice(0, 8).map(id => {
-                  const d = items.find(x => x.id === id)
-                  return <li key={id} className="truncate">{d?.domain_name || '?'}</li>
-                })}
-                {selected.size > 8 && <li className="text-slate-400 dark:text-slate-500 italic">{t('deleteConfirm.moreItems', { count: selected.size - 8 })}</li>}
-              </ul>
-              <label className="block text-xs text-slate-500 dark:text-slate-500 mb-1.5">
-                {t('deleteConfirm.typeLabel')}<span className="font-mono font-semibold text-red-700 dark:text-red-300">{expectedConfirmationText}</span>{t('deleteConfirm.typeSuffix')}
-              </label>
-              <input
-                type="text"
-                autoFocus
-                value={deleteConfirmationText}
-                onChange={e => setDeleteConfirmationText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && deletionConfirmed && !processing) bulkDelete() }}
-                placeholder={expectedConfirmationText}
-                autoComplete="off"
-                spellCheck={false}
-                className="w-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 rounded text-sm font-mono bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 mb-4 focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setDeleteConfirmationOpen(false)}
-                  className="px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-sm rounded">{t('deleteConfirm.cancel')}</button>
-                <button onClick={bulkDelete} disabled={processing || !deletionConfirmed}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded font-medium">
-                  {t('deleteConfirm.confirm')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-    </div>
   )
 }
 
