@@ -42,89 +42,18 @@ const ICONS = {
   apache:    'M13 10V3L4 14h7v7l9-11h-7z',
 }
 
-export default function SubscriptionDetailPage() {
+type DomainHeaderProps = {
+  domain: Domain
+  processing: boolean
+  menuOpen: boolean
+  setMenuOpen: (update: (open: boolean) => boolean) => void
+  navigate: (to: string) => void
+  toggleSuspension: () => void
+}
+
+function DomainHeader({ domain, processing, menuOpen, setMenuOpen, navigate, toggleSuspension }: DomainHeaderProps) {
   const { t } = useTranslation('SubscriptionDetailPage')
-  const { confirm } = useDialog()
-  const report = useReportError()
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const [domain, setDomain] = useState<Domain | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  // Read the remembered tab in a lazy initializer, not a mount effect
-  // (react-hooks/set-state-in-effect), and accept it only when it names a real tab.
-  const [tab, setTabState] = useState<Tab>(() => {
-    const saved = getCookie(TAB_COOKIE)
-    return saved === 'dashboard' || saved === 'hosting' ? saved : 'dashboard'
-  })
-  const setTab = useCallback((next: Tab) => {
-    setTabState(next)
-    setCookie(TAB_COOKIE, next, TAB_MAX_AGE)
-  }, [])
-  const [diskMB, setDiskMB] = useState<number | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [processing, setProcessing] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [noticeError, setNoticeError] = useState(false)
-
-  const loadDomain = useCallback(() => {
-    if (!id) return
-    api.get<Domain>(`/domains/${id}`)
-      .then(r => setDomain(r.data))
-      .catch(e => setError(apiError(e, t('errors.loadFailed'))))
-  }, [id, t])
-
-  useEffect(() => {
-    if (!id) return
-    loadDomain()
-    api.get<{ disk_mb: { usage: number } }>(`/domains/${id}/resources`)
-      .then(r => setDiskMB(r.data.disk_mb.usage))
-      .catch(report('diskUsage'))
-  }, [id, loadDomain, report])
-
-  async function toggleSuspension() {
-    if (!id || !domain) return
-    const suspend = !domain.suspended
-    if (suspend && !(await confirm({ message: t('confirmSuspend', { domain: domain.domain_name }), dangerous: true }))) return
-
-    setMenuOpen(false)
-    setProcessing(true)
-    setError(null)
-    setNotice(null)
-    setNoticeError(false)
-    try {
-      await api.post(`/domains/${id}/${suspend ? 'suspend' : 'resume'}`)
-      setNotice(suspend ? t('notice.suspended') : t('notice.resumed'))
-      setDomain(current => current ? { ...current, suspended: suspend, status: suspend ? 'passive' : 'active' } : current)
-    } catch (cause) {
-      setNoticeError(true)
-      setNotice(apiError(cause, t('errors.suspendFailed')))
-    } finally {
-      setProcessing(false)
-    }
-  }
-
-  if (error) return (
-    <div className="px-6 py-5">
-      <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' }, { label: t('breadcrumb.error') }]} />
-      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 text-sm text-red-700 dark:text-red-300">{error}</div>
-    </div>
-  )
-
-  if (!domain) return (
-    <div className="px-6 py-5">
-      <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' }]} />
-      <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
-    </div>
-  )
-
   return (
-    <div className="px-6 py-5">
-      <Breadcrumb items={[
-        { label: t('breadcrumb.home'), href: '/' },
-        { label: t('breadcrumb.domains'), href: '/domains' },
-        { label: domain.domain_name },
-      ]} />
-
       <div className="flex items-center gap-3 mb-1">
         <h1 className="text-2xl font-semibold text-brand-700 dark:text-brand-300">{domain.domain_name}</h1>
         <button
@@ -175,6 +104,123 @@ export default function SubscriptionDetailPage() {
           )}
         </div>
       </div>
+  )
+}
+
+function StatsCard({ domain, diskMB, refresh }: { domain: Domain; diskMB: number | null; refresh: () => void }) {
+  const { t } = useTranslation('SubscriptionDetailPage')
+  return (
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('stats.title')}</h3>
+              <button onClick={refresh} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300" title={t('stats.refresh')}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-2.5 text-sm">
+              <Stat label={t('stats.disk')} value={diskMB != null ? `${diskMB} MB` : '…'} />
+              <Stat label={t('stats.traffic')} value={`${Math.round(domain.traffic_kb / 1024)} MB`} />
+              <Stat label={t('stats.created')} value={domain.created_at} />
+              <Stat label={t('stats.phpVersion')} value={domain.php_version} />
+            </div>
+          </div>
+  )
+}
+
+export default function SubscriptionDetailPage() {
+  const { t } = useTranslation('SubscriptionDetailPage')
+  const { confirm } = useDialog()
+  const report = useReportError()
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [domain, setDomain] = useState<Domain | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  // Read the remembered tab in a lazy initializer, not a mount effect
+  // (react-hooks/set-state-in-effect), and accept it only when it names a real tab.
+  const [tab, setTabState] = useState<Tab>(() => {
+    const saved = getCookie(TAB_COOKIE)
+    return saved === 'dashboard' || saved === 'hosting' ? saved : 'dashboard'
+  })
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next)
+    setCookie(TAB_COOKIE, next, TAB_MAX_AGE)
+  }, [])
+  const [diskMB, setDiskMB] = useState<number | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [noticeError, setNoticeError] = useState(false)
+
+  const loadDomain = useCallback(() => {
+    if (!id) return
+    api.get<Domain>(`/domains/${id}`)
+      .then(r => setDomain(r.data))
+      .catch(e => setError(apiError(e, t('errors.loadFailed'))))
+  }, [id, t])
+
+  useEffect(() => {
+    if (!id) return
+    loadDomain()
+    api.get<{ disk_mb: { usage: number } }>(`/domains/${id}/resources`)
+      .then(r => setDiskMB(r.data.disk_mb.usage))
+      .catch(report('diskUsage'))
+  }, [id, loadDomain, report])
+
+  function refreshStats() {
+    if (!id) return
+    api.get<{ disk_mb: { usage: number } }>(`/domains/${id}/resources`)
+      .then(r => setDiskMB(r.data.disk_mb.usage))
+      .catch(report('diskUsage'))
+    loadDomain()
+  }
+
+  async function toggleSuspension() {
+    if (!id || !domain) return
+    const suspend = !domain.suspended
+    if (suspend && !(await confirm({ message: t('confirmSuspend', { domain: domain.domain_name }), dangerous: true }))) return
+
+    setMenuOpen(false)
+    setProcessing(true)
+    setError(null)
+    setNotice(null)
+    setNoticeError(false)
+    try {
+      await api.post(`/domains/${id}/${suspend ? 'suspend' : 'resume'}`)
+      setNotice(suspend ? t('notice.suspended') : t('notice.resumed'))
+      setDomain(current => current ? { ...current, suspended: suspend, status: suspend ? 'passive' : 'active' } : current)
+    } catch (cause) {
+      setNoticeError(true)
+      setNotice(apiError(cause, t('errors.suspendFailed')))
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  if (error) return (
+    <div className="px-6 py-5">
+      <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' }, { label: t('breadcrumb.error') }]} />
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 text-sm text-red-700 dark:text-red-300">{error}</div>
+    </div>
+  )
+
+  if (!domain) return (
+    <div className="px-6 py-5">
+      <Breadcrumb items={[{ label: t('breadcrumb.home'), href: '/' }, { label: t('breadcrumb.domains'), href: '/domains' }]} />
+      <div className="py-12 text-center text-sm text-slate-400 dark:text-slate-500">{t('loading')}</div>
+    </div>
+  )
+
+  return (
+    <div className="px-6 py-5">
+      <Breadcrumb items={[
+        { label: t('breadcrumb.home'), href: '/' },
+        { label: t('breadcrumb.domains'), href: '/domains' },
+        { label: domain.domain_name },
+      ]} />
+
+      <DomainHeader domain={domain} processing={processing} menuOpen={menuOpen} setMenuOpen={setMenuOpen} navigate={navigate} toggleSuspension={toggleSuspension} />
 
       {notice && (
         <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${noticeError ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300'}`}>
@@ -191,28 +237,7 @@ export default function SubscriptionDetailPage() {
         <aside className="col-span-12 lg:col-span-3 space-y-4">
           <WebSitePreview domainName={domain.domain_name} ssl={domain.ssl} />
 
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t('stats.title')}</h3>
-              <button onClick={() => {
-                if (!id) return;
-                api.get<{ disk_mb: { usage: number } }>(`/domains/${id}/resources`)
-                  .then(r => setDiskMB(r.data.disk_mb.usage))
-                  .catch(report('diskUsage'));
-                loadDomain();
-              }} className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 dark:text-slate-300" title={t('stats.refresh')}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
-            </div>
-            <div className="space-y-2.5 text-sm">
-              <Stat label={t('stats.disk')} value={diskMB != null ? `${diskMB} MB` : '…'} />
-              <Stat label={t('stats.traffic')} value={`${Math.round(domain.traffic_kb / 1024)} MB`} />
-              <Stat label={t('stats.created')} value={domain.created_at} />
-              <Stat label={t('stats.phpVersion')} value={domain.php_version} />
-            </div>
-          </div>
+          <StatsCard domain={domain} diskMB={diskMB} refresh={refreshStats} />
         </aside>
 
         <section className="col-span-12 lg:col-span-6">
