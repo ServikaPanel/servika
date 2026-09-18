@@ -15,6 +15,9 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"servika/internal/git"
+	"servika/internal/secret"
 )
 
 // Choosing a repository writes the two webhook values the deploy path depends
@@ -148,13 +151,36 @@ func (useDriver) Open(string) (driver.Conn, error) { return nil, errors.New("unu
 const (
 	qDomain   = "SELECT system_user FROM domains WHERE id=?"
 	qToken    = "SELECT pat FROM github_connections"
-	qSecrets  = "COALESCE(webhook_secret,'')"
+	qStored   = "COALESCE(webhook_secret,'')"
+	qSigning  = "COALESCE(webhook_signing_key,'')"
 	qPanel    = "FROM panel_settings WHERE id=1"
 	qOldHook  = "SELECT webhook_id FROM github_connections"
 	insRepo   = "INSERT INTO git_repos"
 	updRepo   = "UPDATE github_connections SET selected_repo"
 	updWebURL = "UPDATE github_connections SET webhook_id"
 )
+
+// the domain every request in this file names.
+const useDomainID = int64(7)
+
+// sealingKey installs a sealing key. The delivery token is stored sealed, so
+// without one the handler refuses to write the row at all.
+func sealingKey(t *testing.T) {
+	t.Helper()
+	if err := secret.Init([]byte("test-key-for-github-webhook-tokens")); err != nil {
+		t.Fatalf("init the sealing key: %v", err)
+	}
+}
+
+// storedToken scripts the sealed delivery token an existing row carries.
+func storedToken(t *testing.T, script *useScript, token string) {
+	t.Helper()
+	sealed, err := git.SealWebhookSecret(token, useDomainID)
+	if err != nil {
+		t.Fatalf("seal the stored token: %v", err)
+	}
+	script.rows[qStored] = []driver.Value{sealed}
+}
 
 // connected is a domain with a token and no repository chosen yet, on a panel
 // with no custom domain.
@@ -163,7 +189,8 @@ func connected() *useScript {
 		rows: map[string][]driver.Value{
 			qDomain:  {"c_shop"},
 			qToken:   {"ghp_token"},
-			qSecrets: {"", ""},
+			qStored:  {""},
+			qSigning: {""},
 			qPanel:   {nil, nil},
 			qOldHook: {int64(0)},
 		},
@@ -214,6 +241,9 @@ func (f *fakeGitHub) install(t *testing.T) {
 // useRepo posts a body for domain 7.
 func useRepo(t *testing.T, script *useScript, gh *fakeGitHub, body string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
+	// The handler seals the delivery token before it writes the row, so every
+	// request in this file needs a sealing key whether or not it inspects one.
+	sealingKey(t)
 	gh.install(t)
 	db := sql.OpenDB(useConn{script: script})
 	t.Cleanup(func() { _ = db.Close() })
@@ -279,6 +309,7 @@ func TestEveryRefusalStopsBeforeTheWrite(t *testing.T) {
 // A repository with no branch or directory takes the documented defaults, and
 // the stored URL carries no token.
 func TestTheStoredRepositoryTakesTheDefaults(t *testing.T) {
+	sealingKey(t)
 	script := connected()
 
 	recorder, _ := useRepo(t, script, &fakeGitHub{}, `{"repo":"acme/site"}`)
@@ -287,7 +318,7 @@ func TestTheStoredRepositoryTakesTheDefaults(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body)
 	}
 	args := script.argsOf(insRepo)
-	if len(args) != 6 {
+	if len(args) != 7 {
 		t.Fatalf("insert arguments = %v", args)
 	}
 	if args[1] != "https://github.com/acme/site.git" {
@@ -304,17 +335,46 @@ func TestTheStoredRepositoryTakesTheDefaults(t *testing.T) {
 // The URL path token and the signing key are two independent values, and a row
 // still carrying the pre-separation pair gets a fresh key.
 func TestTheURLTokenAndTheSigningKeyStayIndependent(t *testing.T) {
+	sealingKey(t)
 	fresh := connected()
 
 	args := storedPair(t, fresh, `{"repo":"acme/site"}`)
 
-	token, key := args[4].(string), args[5].(string)
+	token, key := openedToken(t, args), args[6].(string)
 	if len(token) != 40 || len(key) != 64 {
 		t.Errorf("token is %d characters and key %d, want 40 and 64", len(token), len(key))
 	}
 	if token == key {
 		t.Error("a fresh row got one value for both the URL token and the signing key")
 	}
+}
+
+// The delivery token never reaches the column in the clear, and the digest
+// beside it is the digest of that very token. The digest is what the delivery
+// path looks the row up by, so a mismatch makes every delivery 404.
+func TestTheStoredTokenIsSealedAndMatchesItsDigest(t *testing.T) {
+	sealingKey(t)
+	script := connected()
+
+	args := storedPair(t, script, `{"repo":"acme/site"}`)
+
+	sealed := args[4].(string)
+	if !secret.IsEncrypted(sealed) {
+		t.Errorf("the delivery token was stored in the clear: %q", sealed)
+	}
+	if args[5] != git.WebhookSecretHash(openedToken(t, args)) {
+		t.Errorf("the stored digest does not match the stored token: %v", args[5])
+	}
+}
+
+// openedToken returns the delivery token the write stored sealed.
+func openedToken(t *testing.T, args []driver.Value) string {
+	t.Helper()
+	token, err := git.OpenWebhookSecret(args[4].(string), useDomainID)
+	if err != nil {
+		t.Fatalf("open the stored token: %v", err)
+	}
+	return token
 }
 
 // storedPair runs the handler and returns the arguments of the git_repos write.
@@ -324,7 +384,7 @@ func storedPair(t *testing.T, script *useScript, body string) []driver.Value {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
 	args := script.argsOf(insRepo)
-	if len(args) != 6 {
+	if len(args) != 7 {
 		t.Fatalf("insert arguments = %v", args)
 	}
 	return args
@@ -333,12 +393,14 @@ func storedPair(t *testing.T, script *useScript, body string) []driver.Value {
 // A pair that is already two independent values is kept, so choosing another
 // branch does not break every configured delivery.
 func TestAnExistingPairIsKept(t *testing.T) {
+	sealingKey(t)
 	script := connected()
-	script.rows[qSecrets] = []driver.Value{"oldtoken", "oldkey"}
+	storedToken(t, script, "oldtoken")
+	script.rows[qSigning] = []driver.Value{"oldkey"}
 
 	args := storedPair(t, script, `{"repo":"acme/site"}`)
 
-	if args[4] != "oldtoken" || args[5] != "oldkey" {
+	if openedToken(t, args) != "oldtoken" || args[6] != "oldkey" {
 		t.Errorf("an existing pair was replaced: %v", args)
 	}
 }
@@ -346,16 +408,18 @@ func TestAnExistingPairIsKept(t *testing.T) {
 // A row still carrying the pre-separation pair gets a fresh signing key, and
 // keeps the URL token that configured deliveries already use.
 func TestASharedPairIsSplitApart(t *testing.T) {
+	sealingKey(t)
 	script := connected()
-	script.rows[qSecrets] = []driver.Value{"sameforboth", "sameforboth"}
+	storedToken(t, script, "sameforboth")
+	script.rows[qSigning] = []driver.Value{"sameforboth"}
 
 	args := storedPair(t, script, `{"repo":"acme/site"}`)
 
-	if args[4] != "sameforboth" {
+	if openedToken(t, args) != "sameforboth" {
 		t.Errorf("the URL token was rotated: %v", args[4])
 	}
-	if key, ok := args[5].(string); !ok || key == "sameforboth" || len(key) != 64 {
-		t.Errorf("the shared signing key was not replaced: %v", args[5])
+	if key, ok := args[6].(string); !ok || key == "sameforboth" || len(key) != 64 {
+		t.Errorf("the shared signing key was not replaced: %v", args[6])
 	}
 }
 
@@ -424,8 +488,10 @@ func trusted() *useScript {
 // The registered hook signs with the signing key, never with the URL token, and
 // requires GitHub to verify the certificate. A previous hook is removed first.
 func TestTheRegisteredHookSignsWithTheKeyAndTheOldOneIsRemoved(t *testing.T) {
+	sealingKey(t)
 	script := trusted()
-	script.rows[qSecrets] = []driver.Value{"urltoken", "signingkey"}
+	storedToken(t, script, "urltoken")
+	script.rows[qSigning] = []driver.Value{"signingkey"}
 	script.rows[qOldHook] = []driver.Value{int64(11)}
 	gh := &fakeGitHub{postOnly: true}
 

@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"servika/internal/secret"
 )
 
 // Connect stores the repository and hands back a deploy key. It writes two
@@ -62,6 +64,7 @@ func hostChecks(t *testing.T, keyErr, vetErr error) *[]string {
 // A connect stores the row and answers with the key the operator has to add to
 // the remote.
 func TestAConnectStoresTheRepositoryAndAnswersTheDeployKey(t *testing.T) {
+	sealingKey(t)
 	script := newScript()
 	ownedDomain(script, "c_acme")
 	storedRepo(script)
@@ -94,10 +97,21 @@ func TestAConnectStoresTheRepositoryAndAnswersTheDeployKey(t *testing.T) {
 //
 // They are two independent values. Deriving one from the other makes the
 // signature prove nothing beyond the URL, which is in the nginx access log on
-// every delivery.
+// every delivery. The token itself is stored sealed and matched by its digest,
+// so it is opened here rather than read.
 func assertTwoSecrets(t *testing.T, inserted []driver.Value) {
 	t.Helper()
-	token, signingKey := inserted[5].(string), inserted[6].(string)
+	sealed, hash, signingKey := inserted[5].(string), inserted[6].(string), inserted[7].(string)
+	if !secret.IsEncrypted(sealed) {
+		t.Errorf("the webhook token was stored in the clear: %q", sealed)
+	}
+	token, err := OpenWebhookSecret(sealed, 7)
+	if err != nil {
+		t.Fatalf("open the stored token: %v", err)
+	}
+	if hash != WebhookSecretHash(token) {
+		t.Errorf("the stored digest does not match the stored token: %q", hash)
+	}
 	if token == signingKey {
 		t.Errorf("the URL token and the signing key are the same value: %v", token)
 	}
@@ -106,9 +120,19 @@ func assertTwoSecrets(t *testing.T, inserted []driver.Value) {
 	}
 }
 
+// sealingKey installs a sealing key, which the connect path needs before it can
+// store a webhook token.
+func sealingKey(t *testing.T) {
+	t.Helper()
+	if err := secret.Init([]byte("test-key-for-git-webhook-tokens")); err != nil {
+		t.Fatalf("init the sealing key: %v", err)
+	}
+}
+
 // An empty branch and target directory take the defaults, so the common case is
 // one field on the form.
 func TestAConnectWithoutABranchTakesTheDefaults(t *testing.T) {
+	sealingKey(t)
 	script := newScript()
 	ownedDomain(script, "c_acme")
 	storedRepo(script)
@@ -191,6 +215,7 @@ func TestAConnectRefusesWhatItMustNotStore(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
+			sealingKey(t)
 			script := newScript()
 			ownedDomain(script, "c_acme")
 			storedRepo(script)

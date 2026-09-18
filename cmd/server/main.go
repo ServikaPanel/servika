@@ -334,6 +334,9 @@ func backfillCredentials(d *sql.DB) {
 	// when 2FA is enabled, so nothing else would ever rewrite a legacy one.
 	// Idempotent.
 	datamigrate.EncryptTOTPSecrets(context.Background(), d)
+	// So does the git webhook URL token, sealed against its domain id and matched
+	// through its own hash column, because a seal cannot be searched. Idempotent.
+	datamigrate.SealGitWebhookSecrets(context.Background(), d)
 	// Rewrite the grants written before the schema name was escaped. Their `_`
 	// still matches any character, so one tenant's account reaches a neighbour's
 	// database until the row is rewritten. Idempotent, and in the background

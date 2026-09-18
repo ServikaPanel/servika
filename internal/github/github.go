@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"servika/internal/config"
+	"servika/internal/git"
 	"servika/internal/httpx"
 	"servika/internal/secret"
 
@@ -379,11 +380,13 @@ func requestedRepo(w http.ResponseWriter, r *http.Request) (useReq, bool) {
 // the same request and can therefore rotate without leaving a delivery signing
 // with a value the panel no longer accepts.
 func (h *Handlers) webhookValues(ctx context.Context, id int64) (urlToken, signingKey string) {
-	var existingSecret, existingKey string
+	var existingKey string
 	_ = h.DB.QueryRowContext(ctx,
-		`SELECT COALESCE(webhook_secret,''), COALESCE(webhook_signing_key,'') FROM git_repos WHERE domain_id=?`,
-		id).Scan(&existingSecret, &existingKey)
-	urlToken = existingSecret
+		`SELECT COALESCE(webhook_signing_key,'') FROM git_repos WHERE domain_id=?`, id).Scan(&existingKey)
+	// The token is stored sealed, so it is opened rather than read. A row whose
+	// seal cannot be opened gets a fresh token, and the hook is re-registered
+	// with it in this same request.
+	urlToken = git.StoredWebhookToken(ctx, h.DB, id)
 	if urlToken == "" {
 		urlToken = randomHex(20)
 	}
@@ -401,14 +404,24 @@ func (h *Handlers) storeSelection(w http.ResponseWriter, r *http.Request, id int
 	// GIT_ASKPASS (see internal/git), so it never lands in .git/config.
 	cloneURL := fmt.Sprintf("https://github.com/%s.git", req.Repo)
 
+	// The token is stored sealed and matched by its digest. A failure to seal is
+	// refused rather than stored in the clear.
+	sealed, err := git.SealWebhookSecret(urlToken, id)
+	if err != nil {
+		httpx.LogR(r, "github use: seal the webhook token: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return false
+	}
+
 	// Create or update the git_repos record.
 	if _, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_signing_key, last_status)
-		 VALUES(?,?,?,?, '', ?,?, 'pending')
+		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_secret_hash, webhook_signing_key, last_status)
+		 VALUES(?,?,?,?, '', ?,?,?, 'pending')
 		 ON DUPLICATE KEY UPDATE repo_url=VALUES(repo_url), branch=VALUES(branch),
 		   target_dir=VALUES(target_dir), webhook_secret=VALUES(webhook_secret),
+		   webhook_secret_hash=VALUES(webhook_secret_hash),
 		   webhook_signing_key=VALUES(webhook_signing_key)`,
-		id, cloneURL, req.Branch, req.TargetDir, urlToken, signingKey); err != nil {
+		id, cloneURL, req.Branch, req.TargetDir, sealed, git.WebhookSecretHash(urlToken), signingKey); err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return false
 	}

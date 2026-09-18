@@ -71,6 +71,15 @@ func scan(rs interface{ Scan(...any) error }) (Repo, error) {
 	// before the Repo is serialized to an API response. The DB keeps the full URL for
 	// cloning; only the response value is scrubbed.
 	r.RepoURL = redactURLCredentials(r.RepoURL)
+	// The token is stored sealed. The owner needs the delivery URL, so it is
+	// opened here; a seal that cannot be opened answers empty rather than the
+	// ciphertext, which would otherwise be pasted into a webhook configuration
+	// and fail on every push with nothing on screen to explain it.
+	if token, openErr := OpenWebhookSecret(r.WebhookSecret, r.DomainID); openErr == nil {
+		r.WebhookSecret = token
+	} else {
+		r.WebhookSecret = ""
+	}
 	return r, err
 }
 
@@ -581,14 +590,23 @@ func (h *Handlers) Connect(w http.ResponseWriter, r *http.Request) {
 	// credential that proves the body came from the configured remote. Deriving
 	// one from the other, or reusing one for both, makes the signature prove
 	// nothing beyond the URL.
-	secret := randomHex(20)
+	token := randomHex(20)
 	signingKey := randomHex(32)
+	// The token is stored sealed and matched by its digest. A failure to seal is
+	// refused rather than stored in the clear: a row keeping the plaintext is the
+	// state this replaces.
+	sealed, err := SealWebhookSecret(token, id)
+	if err != nil {
+		httpx.LogR(r, "git connect: seal the webhook token: %v", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
+		return
+	}
 	res, err := h.DB.ExecContext(r.Context(),
-		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_signing_key, last_status)
-		 VALUES(?,?,?,?,?,?,?, 'pending')
+		`INSERT INTO git_repos(domain_id, repo_url, branch, target_dir, deploy_key_pub, webhook_secret, webhook_secret_hash, webhook_signing_key, last_status)
+		 VALUES(?,?,?,?,?,?,?,?, 'pending')
 		 ON DUPLICATE KEY UPDATE repo_url=VALUES(repo_url), branch=VALUES(branch),
 		   target_dir=VALUES(target_dir), deploy_key_pub=VALUES(deploy_key_pub)`,
-		id, req.RepoURL, req.Branch, req.TargetDir, pub, secret, signingKey)
+		id, req.RepoURL, req.Branch, req.TargetDir, pub, sealed, WebhookSecretHash(token), signingKey)
 	if err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, "operation failed")
 		return
@@ -679,17 +697,20 @@ func (h *Handlers) Delete(w http.ResponseWriter, r *http.Request) {
 // URL: POST /api/v1/git-webhook/:secret
 // Authentication is not required because the secret is in the URL. Only that secret is matched.
 func (h *Handlers) Webhook(w http.ResponseWriter, r *http.Request) {
-	secret := chi.URLParam(r, "secret")
-	if len(secret) < 16 {
+	token := chi.URLParam(r, "secret")
+	if len(token) < 16 {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid secret")
 		return
 	}
 	var gid, domainID int64
 	var systemUser, repoURL, branch, targetDir, signingKey string
+	// Matched by digest: the stored token is sealed and a seal cannot be
+	// searched, because it carries a fresh nonce on every write.
 	err := h.DB.QueryRowContext(r.Context(),
 		`SELECT g.id, g.domain_id, d.system_user, g.repo_url, g.branch, g.target_dir, g.webhook_signing_key
 		 FROM git_repos g JOIN domains d ON d.id=g.domain_id
-		 WHERE g.webhook_secret=? LIMIT 1`, secret).Scan(&gid, &domainID, &systemUser, &repoURL, &branch, &targetDir, &signingKey)
+		 WHERE g.webhook_secret_hash=? LIMIT 1`, WebhookSecretHash(token)).
+		Scan(&gid, &domainID, &systemUser, &repoURL, &branch, &targetDir, &signingKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, http.StatusNotFound, "secret did not match")
 		return

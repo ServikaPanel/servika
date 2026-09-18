@@ -35,8 +35,9 @@ type sqlScript struct {
 	// INSERT IGNORE whose zero rows mean "already there".
 	affected map[string]int64
 	// steps records every query and statement in order.
-	steps []string
-	execs []sqlScriptExec
+	steps   []string
+	execs   []sqlScriptExec
+	queries []sqlScriptExec
 }
 
 type sqlScriptExec struct {
@@ -78,10 +79,11 @@ func keysOf[V any](m map[string]V) map[string]bool {
 	return keys
 }
 
-func (s *sqlScript) query(query string, _ []driver.NamedValue) (driver.Rows, error) {
+func (s *sqlScript) query(query string, args []driver.NamedValue) (driver.Rows, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.steps = append(s.steps, query)
+	s.queries = append(s.queries, sqlScriptExec{query: query, args: plainValues(args)})
 	fragment, err := s.fragmentFor(query)
 	if err != nil {
 		return nil, err
