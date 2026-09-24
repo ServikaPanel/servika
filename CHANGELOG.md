@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-09-24
+
+### Added
+- Central logging. Every API request is recorded in the database, the panel's own log lines carry a syslog severity and are written to the database as well as the journal, the audit log records the row a change touched with its old and new values, and the operator reads the request and application logs from the panel and sets how long they are kept.
+- Session replay and interface events, off by default. The panel records what its own interface did and, when the operator turns it on and a user consents, a session replay with every text node and input masked, which an administrator can play back.
+- Application backups and metrics. A tenant application and a server application can be archived and restored on request, a started application is reported as running only once it answers, and each application shows what it is actually consuming. The monitor keeps CPU, swap, disk and network history.
+- A self-installing Windows agent (a separate `servika-agent` binary, built with `scripts/build-agent-windows.sh`) runs IIS sites on NTFS, manages MSSQL, MySQL and PostgreSQL databases, drives allowlisted services, installs catalog items from pinned downloads, updates itself behind a health gate with rollback, and serves a local panel; the main panel registers the Windows hosts it talks to. It has not yet been verified end to end on a real Windows host.
+- A subdomain can be restricted by IP address, `servika-verify` reports the state and freshness of the panel database and host backups, the host disaster-recovery archive gets an off-site copy, a restored database recovers its account from the site's own configuration, and a live migration keeps the source database name, user and password when they are free.
+
+### Changed
+- Seventy-two security commits. Tenant files are written through symlink-safe primitives (`authorized_keys`, deploy keys, WordPress maintenance files, the PHP debug log, Sieve scripts), passwords are kept out of argv and sealed at rest (Valkey ACL, TOTP seeds, webhook tokens), outbound clients pin the resolved address instead of checking a host up front, remote database accounts and FTP backup transports require TLS, pinned downloads (Roundcube, libmodsecurity, nginx source, GeoLite2, the update tool) are verified, cross-origin state-changing requests are refused, the 2FA step-up and change-password checks are throttled, and the Windows agent no longer hands its environment to a database client.
+- Complex frontend pages are split into per-card components to hold every function under the complexity limit of 10, CI compiles the Windows agent, and CI cleans stale artifacts and caches daily.
+
+### Fixed
+- A server installed before FTP passwords were hashed kept Pure-FTPd on `MYSQLCrypt=cleartext`, so every FTP login failed; `servika-update` now aligns the password mode with what the rows hold.
+- Backups select overdue domains instead of an exact hour match, alert when a scheduled backup fails, heal uploads stuck on startup, serialize every backup and restore for one tenant, fail a restore that restored no database, and stop reporting a stop as a failure.
+- Quotas and plans fail closed when a limit cannot be read and apply to addon domains, mailboxes, applications and domain creation; suspend, resume and ownership changes cascade to addon rows; logout, suspend and customer sessions are revoked server-side.
+- Migrations split SQL only outside string literals and resume a file that stopped part way, the panel DSN forces `parseTime` and UTC, every result-set loop reports a dropped row instead of skipping it, a large transfer gets its full handler deadline, and detached job goroutines recover a panic and record it as failed.
+- nginx hides its version and stops advertising protected content as publicly cacheable, the panel login limit counts IPv6 by /64, vhost rendering is serialized and rolled back on failure, a renewed mail certificate is served instead of the day-zero one, and a deleted DNS record is published.
+
 ## [1.4.0] - 2026-08-29
 
 ### Added
