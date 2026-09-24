@@ -706,6 +706,71 @@ if systemctl is-enabled --quiet servika-proc-watch.service 2>/dev/null; then
     && ok "process watcher restarted on the new binary" \
     || warn "the process watcher could not be restarted"
 fi
+# reconcile_ftp_crypt aligns Pure-FTPd's MYSQLCrypt with the format the panel
+# actually stores in ftp_accounts.password_md5.
+#
+# The panel stores a SHA-512-crypt ($6$) hash there and its startup backfill
+# rewrites every legacy cleartext row, but a server installed before that change
+# still carries MYSQLCrypt=cleartext, and this updater never touched the FTP
+# configuration. Pure-FTPd then compares the typed password against the hash
+# string itself, so EVERY account on the server gets 530 after `USER` succeeds.
+# Panel login does not go through FTP, so nothing in the panel shows it.
+#
+# It runs after the health check because the backfill runs before the panel
+# listens: by the time /healthz answers, the rows are already hashed. The
+# backfill only warns on a failure, though, so a server whose active rows are ALL
+# still cleartext keeps cleartext rather than losing working FTP. A partial
+# backfill (some rows hashed) takes crypt, which is where every row lands on the
+# next boot.
+#
+# A query that fails changes nothing. This acts on its own, and an unreadable
+# measurement must not rewrite a working configuration.
+reconcile_ftp_crypt() {
+  local conf=/etc/pure-ftpd/pureftpd-mysql.conf
+  command -v mysql >/dev/null 2>&1 || return 0
+  if [ ! -f "$conf" ]; then
+    # No configuration at all: the full setup is idempotent and keeps the
+    # existing pureftpd password when .pfsql_pass is present.
+    if command -v servika-ftp-setup >/dev/null 2>&1; then
+      servika-ftp-setup >/dev/null 2>&1 \
+        && ok "Pure-FTPd had no MySQL configuration; servika-ftp-setup installed it" \
+        || warn "Pure-FTPd has no MySQL configuration and servika-ftp-setup failed; run: servika-ftp-setup"
+    fi
+    return 0
+  fi
+
+  local hashed plain want current count
+  hashed=$(mysql -N -e "SELECT COUNT(*) FROM panel.ftp_accounts WHERE status='active' AND password_md5 LIKE '\$6\$%'" 2>/dev/null) || hashed=
+  plain=$(mysql -N -e "SELECT COUNT(*) FROM panel.ftp_accounts WHERE status='active' AND password_md5 <> '' AND password_md5 NOT LIKE '\$6\$%'" 2>/dev/null) || plain=
+  for count in "$hashed" "$plain"; do
+    case "$count" in
+      ''|*[!0-9]*) warn "could not read ftp_accounts; the Pure-FTPd password mode was left unchanged"; return 0 ;;
+    esac
+  done
+
+  if [ "$hashed" -eq 0 ] && [ "$plain" -gt 0 ]; then want=cleartext; else want=crypt; fi
+  current=$(awk 'tolower($1)=="mysqlcrypt"{print $2; exit}' "$conf")
+  if [ "$current" = "$want" ]; then
+    ok "Pure-FTPd password mode matches the stored passwords (MYSQLCrypt=$current)"
+    return 0
+  fi
+
+  # Only the MYSQLCrypt line changes; MYSQLPassword and .pfsql_pass are kept.
+  cp -a "$conf" "$conf.bak-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+  if awk 'tolower($1)=="mysqlcrypt"{found=1} END{exit !found}' "$conf"; then
+    sed -ri "s/^([[:space:]]*[Mm][Yy][Ss][Qq][Ll][Cc][Rr][Yy][Pp][Tt][[:space:]]+).*/\1$want/" "$conf"
+  else
+    printf 'MYSQLCrypt      %s\n' "$want" >> "$conf"
+  fi
+  if systemctl is-active --quiet pure-ftpd; then
+    systemctl restart pure-ftpd >/dev/null 2>&1 \
+      && ok "Pure-FTPd password mode corrected: MYSQLCrypt ${current:-unset} to $want (pure-ftpd restarted)" \
+      || warn "MYSQLCrypt set to $want but pure-ftpd did not restart; run: systemctl restart pure-ftpd"
+  else
+    ok "Pure-FTPd password mode corrected: MYSQLCrypt ${current:-unset} to $want (pure-ftpd is not running)"
+  fi
+}
+
 HEALTHY=0
 for _i in 1 2 3 4 5 6; do
   sleep 2
@@ -718,6 +783,7 @@ if [ "$HEALTHY" = 1 ]; then
   elif [ -x /usr/local/bin/servika-mail-setup ]; then
     warn "servika-mail-setup is installed but not resolvable on PATH, mail was not synchronized"
   fi
+  reconcile_ftp_crypt
   systemctl reload nginx >/dev/null 2>&1 || true
   rm -rf "$ROLLBACK_DIR" 2>/dev/null || true
   echo "$RELHASH" > "$MARKER" 2>/dev/null || true

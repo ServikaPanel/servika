@@ -67,6 +67,11 @@ ok "MySQL user 'pureftpd' (SELECT ftp_accounts)"
 umask 077; echo "$PFPW" > "$PFPW_FILE"; chmod 600 "$PFPW_FILE"
 
 # 3) Pure-FTPd MySQL configuration
+# MYSQLCrypt MUST stay `crypt`. ftp_accounts.password_md5 holds a SHA-512-crypt
+# ($6$) hash (credentials.HashPassword, plus the startup backfill for legacy
+# rows). Under `cleartext` Pure-FTPd compares the typed password against the hash
+# string itself, and every account on the server gets 530 after USER succeeds.
+# servika-update realigns an older server that still carries `cleartext`.
 SOCK=$(mysql -N -e "SHOW VARIABLES LIKE 'socket';" 2>/dev/null | awk '{print $2}'); [ -z "$SOCK" ] && SOCK=/var/lib/mysql/mysql.sock
 cat > /etc/pure-ftpd/pureftpd-mysql.conf <<EOF
 MYSQLSocket     $SOCK
